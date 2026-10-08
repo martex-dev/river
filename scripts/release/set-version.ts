@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 import { channelOfVersion } from '../../packages/release/src/channels.ts';
 
 const root = resolve(import.meta.dirname, '..', '..');
-const VERSIONED = ['package.json', 'apps/desktop/package.json'];
+const VERSIONED = ['package.json', 'apps/desktop/package.json', 'apps/server/package.json'];
 
 function read(path: string): { version: string } & Record<string, unknown> {
   return JSON.parse(readFileSync(resolve(root, path), 'utf8'));

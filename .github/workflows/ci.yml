@@ -16,6 +16,19 @@ jobs:
   checks:
     name: Lint, typecheck, unit tests, audit
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: river
+          POSTGRES_PASSWORD: river-ci-only
+          POSTGRES_DB: river
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U river" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # Runs the server database suite against PostgreSQL as well as SQLite.
+      RIVER_TEST_POSTGRES_URL: postgres://river:river-ci-only@localhost:5432/river
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -29,6 +42,31 @@ jobs:
       - run: npm test
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
+
+  server-image:
+    name: Server container image
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build image
+        run: docker build -f apps/server/Dockerfile -t river-server:ci .
+      - name: Run read-only and check health
+        run: |
+          docker run -d --name river -p 127.0.0.1:8787:8787 --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true -v river-data:/data river-server:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8787/v1/health; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8787/v1/version
+          docker logs river
+      - name: Logs contain no client addresses
+        run: |
+          curl -fsS -H 'X-Forwarded-For: 198.51.100.23' http://127.0.0.1:8787/v1/health > /dev/null
+          # 172.17.0.1 is the Docker gateway, i.e. the client address as seen by the server.
+          if docker logs river 2>&1 | grep -E '198\.51\.100\.23|172\.17\.0\.1'; then
+            echo "IP address found in server logs" && exit 1
+          fi
 
   desktop:
     name: Desktop build + end-to-end (${{ matrix.os }})
