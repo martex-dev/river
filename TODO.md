@@ -3,18 +3,6 @@
 Ordered by priority. The top unchecked item is the next thing to build.
 Milestone definitions: [ROADMAP.md](ROADMAP.md).
 
-## 0.0.2 — River server skeleton
-
-- [ ] `packages/protocol`: protocol version constant, zod schemas for `/v1/version` and `/v1/health`
-- [ ] `apps/server`: Fastify app factory, config from env (validated), structured logger without IPs/bodies
-- [ ] Kysely database layer: SQLite (better-sqlite3) default, PostgreSQL option
-- [ ] Server migration framework (`schema_migrations`, forward-only, transactional) + first migration
-- [ ] `/v1/version`, `/v1/health`, security headers, request size limits, rate-limit plugin
-- [ ] Tests: config validation, migrations up from empty, endpoint tests
-- [ ] Dockerfile (non-root, read-only FS) + docker-compose example; CI builds the image
-- [ ] Desktop: "Server" setting (URL, validated https) and connection check in Settings
-- [ ] Docs: `docs/backend/`, `docs/deployment/self-hosting.md`
-
 ## 0.0.3 — Encrypted local database
 
 - [ ] `better-sqlite3-multiple-ciphers` in main process (SQLCipher), electron-builder native rebuild in CI

@@ -21,9 +21,10 @@ by the preload script. Types: [`apps/desktop/src/shared/ipc.ts`](apps/desktop/sr
 
 Main rejects any IPC call whose sender is not River's own top-level UI frame.
 
-## 2. River server API — planned (0.0.2+)
+## 2. River server API
 
-HTTPS JSON API under `/v1` plus an authenticated WebSocket at `/v1/ws`.
+HTTPS JSON API under `/v1` plus an authenticated WebSocket at `/v1/ws` (0.2.0).
+Every response carries `X-River-Protocol`; errors are `{ "error": { "code", "message" } }`.
 The full specification will live in [`docs/protocol/`](docs/protocol/README.md)
 with machine-readable schemas in `packages/protocol`. Planned resources:
 

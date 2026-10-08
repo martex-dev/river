@@ -41,6 +41,8 @@ apps/desktop/
   src/renderer/     React UI (sandboxed, no Node)
   src/shared/       Types and schemas shared by all three
   test/             Unit tests     e2e/   Playwright end-to-end tests
+apps/server/        River server (see docs/backend)
+packages/protocol/  Protocol version and API schemas shared by client and server
 packages/release/   Release manifest format, Ed25519 signing/verification, channels
 scripts/release/    Version, signing, changelog and key-generation scripts
 ```

@@ -1,18 +1,20 @@
 # River Status
 
-_Last updated: 2026-10-08 · Current version: **0.0.1** · Stage 1 · Next: **0.0.2**_
+_Last updated: 2026-10-08 · Current version: **0.0.2** · Stage 1 · Next: **0.0.3**_
 
 ## Complete
 
-| Area              | What works                                                                                                                                                    | Tests                                               |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| Repository        | Monorepo (npm workspaces), AGPL-3.0, all governance docs                                                                                                      | —                                                   |
-| Release signing   | Ed25519 manifest format, sign/verify, pinned trust list, domain separation                                                                                    | `packages/release/test` (15)                        |
-| Desktop shell     | Electron + React, nine sections, River design language, reduced motion                                                                                        | `apps/desktop/test/renderer.test.tsx`, e2e          |
-| Desktop hardening | `river://` scheme with CSP, sandbox, context isolation, navigation/pop-up/permission blocking, trusted-sender IPC with zod validation                         | `url-policy.test.ts`, e2e                           |
-| Auto-update       | electron-updater + River verification, channels (stable/beta/nightly), no downgrades, install-on-quit only after verification, manual mode for unsigned macOS | `update-service.test.ts`, `verify-download.test.ts` |
-| Settings          | Validated, atomic, self-healing settings store                                                                                                                | `settings-store.test.ts`                            |
-| CI/CD             | CI (lint, format, typecheck, unit, e2e on 3 OSes, audit), CodeQL, Dependabot, tag-driven signed release pipeline                                              | —                                                   |
+| Area              | What works                                                                                                                                                    | Tests                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Repository        | Monorepo (npm workspaces), AGPL-3.0, all governance docs                                                                                                      | —                                                               |
+| Release signing   | Ed25519 manifest format, sign/verify, pinned trust list, domain separation                                                                                    | `packages/release/test` (15)                                    |
+| Desktop shell     | Electron + React, nine sections, River design language, reduced motion                                                                                        | `apps/desktop/test/renderer.test.tsx`, e2e                      |
+| Desktop hardening | `river://` scheme with CSP, sandbox, context isolation, navigation/pop-up/permission blocking, trusted-sender IPC with zod validation                         | `url-policy.test.ts`, e2e                                       |
+| Auto-update       | electron-updater + River verification, channels (stable/beta/nightly), no downgrades, install-on-quit only after verification, manual mode for unsigned macOS | `update-service.test.ts`, `verify-download.test.ts`             |
+| Settings          | Validated, atomic, self-healing settings store                                                                                                                | `settings-store.test.ts`                                        |
+| Server            | Fastify `/v1/health` + `/v1/version`, security headers, rate limit, IP-free logging, SQLite/PostgreSQL, transactional migrations, Docker image                | `apps/server/test` (config, database incl. Postgres in CI, app) |
+| Server setting    | Desktop Settings → Server with URL validation and compatibility check; Security Center shows configured server                                                | `server-check.test.ts`, `e2e/server.spec.ts`                    |
+| CI/CD             | CI (lint, format, typecheck, unit, e2e on 3 OSes, audit), CodeQL, Dependabot, tag-driven signed release pipeline                                              | —                                                               |
 
 ## Partially complete
 
@@ -34,4 +36,4 @@ _Last updated: 2026-10-08 · Current version: **0.0.1** · Stage 1 · Next: **0.
 
 ## Next
 
-See [TODO.md](TODO.md). Next milestone: **0.0.2 — River server skeleton**.
+See [TODO.md](TODO.md). Next milestone: **0.0.3 — Encrypted local database**.

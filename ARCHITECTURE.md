@@ -68,12 +68,12 @@ Three rules shape every decision:
 river/
 ├─ apps/
 │  ├─ desktop/            Electron app (main / preload / renderer)
-│  ├─ server/             River server (Fastify, ws, Kysely)          (0.0.2)
+│  ├─ server/             River server (Fastify, Kysely)
 │  ├─ ios/                Native iOS client                            (Stage 2)
 │  └─ android/            Native Android client                        (Stage 2)
 ├─ packages/
 │  ├─ release/            Release-manifest format, Ed25519 sign/verify
-│  ├─ protocol/           API + realtime schemas, protocol version     (0.0.2)
+│  ├─ protocol/           API schemas, protocol version
 │  ├─ crypto/             libsignal wrappers, fingerprints, KDFs       (0.0.4)
 │  └─ shared/             Small shared utilities
 ├─ docs/                  architecture/ security/ protocol/ desktop/ mobile/
@@ -101,7 +101,15 @@ camera/mic per-request), every IPC payload validated with zod in main.
 Renderer stack: React 19, Zustand for state, hand-written CSS design tokens
 (the River design language, see [docs/desktop/design-language.md](docs/desktop/design-language.md)).
 
-## 5. Server architecture (planned, 0.0.2+)
+## 5. Server architecture
+
+Implemented in 0.0.2: Fastify app factory (`apps/server/src/app.ts`), validated
+env config, Kysely over SQLite (WAL, `secure_delete`) or PostgreSQL, forward-only
+migrations that run in one transaction per batch on both databases, rate limiting
+with in-memory counters, IP-free request logging, Docker image. Runs directly
+from TypeScript on Node 24 (native type stripping) — no build step.
+
+Planned modules:
 
 Single deployable Node service with modules:
 
