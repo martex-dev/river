@@ -62,8 +62,15 @@ export function serveAppScheme(uiSession: Session, rendererDir: string): void {
  * renderer except to the dev server during development.
  */
 export function hardenSession(uiSession: Session, devServerUrl: string | undefined): void {
-  uiSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
-  uiSession.setPermissionCheckHandler(() => false);
+  // Only calls need permissions: microphone/camera ('media') and screen capture, and only for River's own UI.
+  const CALL_PERMISSIONS = new Set(['media', 'display-capture']);
+  uiSession.setPermissionRequestHandler((wc, permission, callback) =>
+    callback(CALL_PERMISSIONS.has(permission) && isAllowedAppUrl(wc.getURL(), devServerUrl)),
+  );
+  uiSession.setPermissionCheckHandler(
+    (_wc, permission, origin) =>
+      CALL_PERMISSIONS.has(permission) && isAllowedAppUrl(`${origin}/`, devServerUrl),
+  );
   uiSession.setDevicePermissionHandler(() => false);
   const devOrigin = devServerUrl ? safeOrigin(devServerUrl) : null;
   uiSession.webRequest.onBeforeRequest(

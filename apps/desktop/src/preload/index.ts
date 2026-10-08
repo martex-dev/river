@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import {
   IPC,
   type AccountStatus,
+  type CommunityEvent,
   type RiverApi,
   type StorageStatus,
   type UpdateStatus,
@@ -45,6 +46,30 @@ const api: RiverApi = {
         ipcRenderer.removeListener(IPC.accountStatusChanged, handler);
       };
     },
+  },
+  community: {
+    list: () => ipcRenderer.invoke(IPC.communityList),
+    create: (name) => ipcRenderer.invoke(IPC.communityCreate, name),
+    join: (link) => ipcRenderer.invoke(IPC.communityJoin, link),
+    invite: (id) => ipcRenderer.invoke(IPC.communityInvite, id),
+    createChannel: (id, kind, name) => ipcRenderer.invoke(IPC.communityCreateChannel, id, kind, name),
+    messages: (channelId) => ipcRenderer.invoke(IPC.communityMessages, channelId),
+    send: (channelId, text) => ipcRenderer.invoke(IPC.communitySend, channelId, text),
+    connection: () => ipcRenderer.invoke(IPC.communityList, 'connection-only'),
+    onEvent: (listener) => {
+      const handler = (_event: unknown, e: CommunityEvent): void => listener(e);
+      ipcRenderer.on(IPC.communityEvent, handler);
+      return () => {
+        ipcRenderer.removeListener(IPC.communityEvent, handler);
+      };
+    },
+  },
+  voice: {
+    join: (channelId) => ipcRenderer.invoke(IPC.voiceJoin, channelId),
+    leave: () => ipcRenderer.invoke(IPC.voiceLeave),
+    signal: (to, channelId, payload) => ipcRenderer.invoke(IPC.voiceSignal, to, channelId, payload),
+    screenSources: () => ipcRenderer.invoke(IPC.screenSources),
+    selectScreen: (id) => ipcRenderer.invoke(IPC.screenSelect, id),
   },
   storage: {
     status: () => ipcRenderer.invoke(IPC.storageStatus),

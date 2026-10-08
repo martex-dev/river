@@ -24,6 +24,19 @@ export const IPC = {
   accountRegister: 'river:account:register',
   accountConnect: 'river:account:connect',
   accountStatusChanged: 'river:account:status-changed',
+  communityList: 'river:community:list',
+  communityCreate: 'river:community:create',
+  communityJoin: 'river:community:join',
+  communityInvite: 'river:community:invite',
+  communityCreateChannel: 'river:community:create-channel',
+  communityMessages: 'river:community:messages',
+  communitySend: 'river:community:send',
+  voiceJoin: 'river:voice:join',
+  voiceLeave: 'river:voice:leave',
+  voiceSignal: 'river:voice:signal',
+  screenSources: 'river:voice:screen-sources',
+  screenSelect: 'river:voice:screen-select',
+  communityEvent: 'river:community:event',
   openLink: 'river:link:open',
 } as const;
 
@@ -106,6 +119,42 @@ export type AccountStatus =
       message?: string;
     };
 
+export interface CommunityView {
+  id: string;
+  name: string;
+  myRole: 'owner' | 'admin' | 'member';
+  channels: Array<{ id: string; kind: 'text' | 'voice'; name: string }>;
+  members: Array<{ riverId: string; role: 'owner' | 'admin' | 'member'; name: string }>;
+  /** voice channel ID → River IDs currently in it */
+  voice: Record<string, string[]>;
+}
+
+export interface ChatMessage {
+  id: string;
+  communityId: string;
+  channelId: string;
+  sender: string;
+  senderName: string;
+  text: string;
+  sentAt: string;
+  mine: boolean;
+}
+
+export type CommunityEvent =
+  | { t: 'communities'; communities: CommunityView[] }
+  | { t: 'message'; message: ChatMessage }
+  | { t: 'voice'; communityId: string; channelId: string; participants: string[] }
+  | { t: 'signal'; from: string; channelId: string; data: unknown }
+  | { t: 'connection'; state: 'online' | 'offline' | 'connecting' };
+
+export type Result<T> = { ok: true; value: T } | { ok: false; message: string };
+
+export interface ScreenSource {
+  id: string;
+  name: string;
+  thumbnail: string;
+}
+
 export type AccountActionResult = { ok: true; status: AccountStatus } | { ok: false; message: string };
 
 export type PassphraseResult =
@@ -139,6 +188,24 @@ export interface RiverApi {
     register(): Promise<AccountActionResult>;
     connect(): Promise<AccountStatus>;
     onStatus(listener: (status: AccountStatus) => void): () => void;
+  };
+  community: {
+    list(): Promise<Result<CommunityView[]>>;
+    create(name: string): Promise<Result<CommunityView>>;
+    join(inviteLink: string): Promise<Result<CommunityView>>;
+    invite(communityId: string): Promise<Result<string>>;
+    createChannel(communityId: string, kind: 'text' | 'voice', name: string): Promise<Result<null>>;
+    messages(channelId: string): Promise<Result<ChatMessage[]>>;
+    send(channelId: string, text: string): Promise<Result<ChatMessage>>;
+    connection(): Promise<'online' | 'offline' | 'connecting'>;
+    onEvent(listener: (event: CommunityEvent) => void): () => void;
+  };
+  voice: {
+    join(channelId: string): Promise<Result<null>>;
+    leave(): Promise<Result<null>>;
+    signal(to: string, channelId: string, payload: unknown): Promise<Result<null>>;
+    screenSources(): Promise<ScreenSource[]>;
+    selectScreen(sourceId: string): Promise<void>;
   };
   storage: {
     status(): Promise<StorageStatus>;

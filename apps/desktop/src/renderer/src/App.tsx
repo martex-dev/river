@@ -6,6 +6,8 @@ import { Onboarding } from './components/Onboarding.tsx';
 import { UpdateToast } from './components/UpdateToast.tsx';
 import { PLANNED } from './features.ts';
 import { HomePage } from './pages/HomePage.tsx';
+import { CommunitiesPage } from './pages/CommunitiesPage.tsx';
+import { useCommunity } from './community/store.ts';
 import { PlannedPage } from './pages/PlannedPage.tsx';
 import { SecurityPage } from './pages/SecurityPage.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
@@ -65,10 +67,12 @@ export function App(): ReactElement {
     const offUpdates = window.river.updates.onStatus(setUpdate);
     const offStorage = window.river.storage.onStatus((s) => void setStorage(s));
     const offAccount = window.river.account.onStatus((s) => void setAccount(s));
+    const offCommunity = window.river.community.onEvent((e) => useCommunity.getState().handle(e));
     return () => {
       offUpdates();
       offStorage();
       offAccount();
+      offCommunity();
     };
   }, [load, setUpdate, setStorage, setAccount]);
 
@@ -139,7 +143,7 @@ export function App(): ReactElement {
             </span>
           )}
         </header>
-        <main className="content" key={section}>
+        <main className={`content ${section === 'communities' ? 'content--full' : ''}`} key={section}>
           {loadError && (
             <div className="glass card card--error" role="alert">
               River could not load its settings: {loadError}
@@ -147,6 +151,7 @@ export function App(): ReactElement {
           )}
           {section === 'home' && <HomePage reducedMotion={reducedMotion} />}
           {section === 'security' && <SecurityPage />}
+          {section === 'communities' && <CommunitiesPage />}
           {section === 'settings' && <SettingsPage />}
           {planned && <PlannedPage section={section} feature={planned} />}
         </main>

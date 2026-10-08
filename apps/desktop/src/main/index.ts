@@ -1,10 +1,17 @@
 import { join } from 'node:path';
-import { BrowserWindow, app, net, session } from 'electron';
+import { BrowserWindow, app, desktopCapturer, net, session } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import { channelOfVersion } from '@river/release/channels';
 import type { AppInfo } from '../shared/ipc.ts';
-import { broadcastAccountStatus, broadcastStorageStatus, broadcastUpdateStatus, registerIpc } from './ipc.ts';
+import {
+  broadcastAccountStatus,
+  broadcastCommunityEvents,
+  broadcastStorageStatus,
+  broadcastUpdateStatus,
+  registerIpc,
+} from './ipc.ts';
+import { CommunityService } from './community/community-service.ts';
 import { createFileLogger } from './logger.ts';
 import {
   APP_ORIGIN,
@@ -60,10 +67,37 @@ async function start(): Promise<void> {
     requestJson: createRequestJson((input, init) => net.fetch(input as string, init)),
     log,
   });
+  const community = new CommunityService({
+    db: () => storage.db(),
+    account,
+    identity,
+    requestJson: createRequestJson((input, init) => net.fetch(input as string, init)),
+    log,
+  });
   // Connect whenever local data becomes available (now, or after the user unlocks).
-  if (storage.getStatus().state === 'open') void account.connect();
+  const connectAll = async (): Promise<void> => {
+    await account.connect();
+    community.ensureSocket();
+  };
+  if (storage.getStatus().state === 'open') void connectAll();
   storage.onStatus((s) => {
-    if (s.state === 'open') void account.connect();
+    if (s.state === 'open') void connectAll();
+  });
+  account.onStatus((s) => {
+    if (s.state === 'registered' && s.connection === 'online') community.ensureSocket();
+  });
+  app.on('will-quit', () => community.stop());
+
+  // Screen sharing: River shows its own picker; the chosen source is used for the next request.
+  let chosenScreen: string | null = null;
+  uiSession().setDisplayMediaRequestHandler((_request, callback) => {
+    void desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
+      const source =
+        sources.find((s) => s.id === chosenScreen) ?? sources.find((s) => s.id.startsWith('screen:'));
+      chosenScreen = null;
+      if (source) callback({ video: source });
+      else callback({});
+    });
   });
   app.on('will-quit', () => storage.close());
 
@@ -120,11 +154,16 @@ async function start(): Promise<void> {
     storage,
     identity,
     account,
+    community,
+    selectScreen: (id) => {
+      chosenScreen = id;
+    },
   });
 
   const window = createWindow();
   broadcastStorageStatus(window.webContents, storage);
   broadcastAccountStatus(window.webContents, account);
+  broadcastCommunityEvents(window.webContents, community);
   if (updates) {
     const service = updates;
     broadcastUpdateStatus(window.webContents, service);

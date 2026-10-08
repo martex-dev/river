@@ -9,6 +9,8 @@ import {
   type AppInfo,
   type IdentityInfo,
   type PassphraseResult,
+  type Result,
+  type CommunityEvent,
   type SecurityStatus,
   type StorageStatus,
 } from '../shared/ipc.ts';
@@ -20,6 +22,8 @@ import { MIN_PASSPHRASE_LENGTH, WrongPassphraseError } from './storage/key-file.
 import type { StorageService } from './storage/storage-service.ts';
 import type { IdentityService } from './identity/identity-service.ts';
 import { UserFacingError, type AccountService } from './account/account-service.ts';
+import { CommunityError, type CommunityService } from './community/community-service.ts';
+import { desktopCapturer } from 'electron';
 import type { UpdateService } from './updater/update-service.ts';
 import { releasePageUrl } from './updater/verify-download.ts';
 
@@ -34,6 +38,24 @@ export interface IpcDeps {
   storage: StorageService;
   identity: IdentityService;
   account: AccountService;
+  community: CommunityService;
+  /** Screen chosen in River's picker for the next screen share. */
+  selectScreen(sourceId: string): void;
+}
+
+/** Turns any error into a message that is safe to show. */
+function friendly(err: unknown): string {
+  if (err instanceof CommunityError || err instanceof UserFacingError) return err.message;
+  if (err instanceof z.ZodError) return 'Please check what you entered.';
+  return 'Something went wrong. Check your connection and try again.';
+}
+
+async function result<T>(fn: () => Promise<T> | T): Promise<Result<T>> {
+  try {
+    return { ok: true, value: await fn() };
+  } catch (err) {
+    return { ok: false, message: friendly(err) };
+  }
 }
 
 const passphraseSchema = z.string().max(1024);
@@ -88,6 +110,57 @@ export function registerIpc(deps: IpcDeps): void {
   );
 
   handle(IPC.storageStatus, () => deps.storage.getStatus());
+  handle(IPC.communityList, (_e, mode) =>
+    mode === 'connection-only' ? deps.community.connectionState() : result(() => deps.community.refresh()),
+  );
+  handle(IPC.communityCreate, (_e, name) => result(() => deps.community.create(name)));
+  handle(IPC.communityJoin, (_e, link) =>
+    result(() =>
+      deps.community.join(link, async (serverUrl) => {
+        deps.settings.update({ server: { url: serverUrl } });
+        await deps.account.register(serverUrl);
+      }),
+    ),
+  );
+  handle(IPC.communityInvite, (_e, id) => result(() => deps.community.invite(z.string().parse(id))));
+  handle(IPC.communityCreateChannel, (_e, id, kind, name) =>
+    result(async () => {
+      await deps.community.createChannel(z.string().parse(id), kind, name);
+      return null;
+    }),
+  );
+  handle(IPC.communityMessages, (_e, channelId) =>
+    result(() => deps.community.messages(z.string().parse(channelId))),
+  );
+  handle(IPC.communitySend, (_e, channelId, text) =>
+    result(() => deps.community.send(z.string().parse(channelId), text)),
+  );
+  handle(IPC.voiceJoin, (_e, channelId) =>
+    result(() => {
+      deps.community.voiceJoin(z.string().parse(channelId));
+      return null;
+    }),
+  );
+  handle(IPC.voiceLeave, () =>
+    result(() => {
+      deps.community.voiceLeave();
+      return null;
+    }),
+  );
+  handle(IPC.voiceSignal, (_e, to, channelId, payload) =>
+    result(() => {
+      deps.community.signal(z.string().parse(to), z.string().parse(channelId), payload);
+      return null;
+    }),
+  );
+  handle(IPC.screenSources, async () => {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen', 'window'],
+      thumbnailSize: { width: 320, height: 180 },
+    });
+    return sources.map((s) => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL() }));
+  });
+  handle(IPC.screenSelect, (_e, id) => deps.selectScreen(z.string().max(200).parse(id)));
   handle(IPC.accountStatus, () => deps.account.status());
   handle(IPC.accountConnect, () => deps.account.connect());
   handle(IPC.accountRegister, async (): Promise<AccountActionResult> => {
@@ -141,6 +214,12 @@ export function broadcastUpdateStatus(target: WebContents, updates: UpdateServic
 export function broadcastAccountStatus(target: WebContents, account: AccountService): () => void {
   return account.onStatus((status) => {
     if (!target.isDestroyed()) target.send(IPC.accountStatusChanged, status);
+  });
+}
+
+export function broadcastCommunityEvents(target: WebContents, community: CommunityService): () => void {
+  return community.onEvent((event: CommunityEvent) => {
+    if (!target.isDestroyed()) target.send(IPC.communityEvent, event);
   });
 }
 
@@ -202,10 +281,10 @@ export function securityStatus({
       {
         id: 'e2ee',
         label: 'End-to-end encryption',
-        indicator: 'planned',
-        value: 'Not active yet',
+        indicator: 'active',
+        value: 'Communities',
         detail:
-          'This version cannot send messages. River messages will be end-to-end encrypted from the first release that can send them (0.2.0).',
+          'Community names, channel names, member names, messages and call setup are encrypted on your device with the community key (AES-256-GCM) before they reach the server. The key travels only inside invite links, so anyone who has an invite link can read the community. Voice, video and screen sharing go directly between members, encrypted with DTLS-SRTP. Coming next: per-member keys with forward secrecy (libsignal) and direct messages.',
       },
       identity
         ? {

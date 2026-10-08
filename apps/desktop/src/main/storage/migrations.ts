@@ -56,4 +56,18 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 4,
+    name: '0004_communities',
+    up(db) {
+      // Community keys arrive only in invite links and never leave this database.
+      db.exec(`
+        CREATE TABLE communities (
+          id        TEXT PRIMARY KEY,
+          key       BLOB NOT NULL,
+          joined_at TEXT NOT NULL
+        ) STRICT;
+      `);
+    },
+  },
 ];

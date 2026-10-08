@@ -12,10 +12,10 @@ export const TEST_NAME = 'E2E Tester';
  */
 export async function launchRiver(
   userData: string,
-  options: { completeOnboarding?: boolean } = {},
+  options: { completeOnboarding?: boolean; name?: string; args?: string[] } = {},
 ): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
-    args: [resolve(__dirname, '..'), `--user-data-dir=${userData}`],
+    args: [resolve(__dirname, '..'), `--user-data-dir=${userData}`, ...(options.args ?? [])],
     env: { ...process.env, ELECTRON_RENDERER_URL: '' },
   });
   const page = await app.firstWindow();
@@ -29,7 +29,7 @@ export async function launchRiver(
   }
   if (options.completeOnboarding !== false && (await page.locator('.onboarding').isVisible())) {
     await page.getByRole('button', { name: 'Create my identity' }).click();
-    await page.getByPlaceholder('e.g. Alex').fill(TEST_NAME);
+    await page.getByPlaceholder('e.g. Alex').fill(options.name ?? TEST_NAME);
     await page.getByRole('button', { name: 'Continue' }).click();
     await page.getByRole('button', { name: 'Enter River' }).click({ timeout: 15_000 });
     await page.waitForSelector('.rail');

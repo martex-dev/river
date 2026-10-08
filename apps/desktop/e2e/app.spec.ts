@@ -62,7 +62,7 @@ test('content security policy is served and blocks inline and remote scripts', a
 });
 
 test('navigates every section', async () => {
-  for (const label of ['Messages', 'Communities', 'Social', 'Calls', 'Files', 'Contacts']) {
+  for (const label of ['Messages', 'Social', 'Calls', 'Files', 'Contacts']) {
     await page.getByRole('button', { name: label, exact: true }).click();
     await expect(page.locator('.page__title')).toHaveText(label);
     await expect(page.getByText('Nothing here works yet')).toBeVisible();
@@ -73,7 +73,7 @@ test('Security Center never claims encryption that is not active', async () => {
   await page.getByRole('button', { name: 'Security', exact: true }).click();
   await expect(page.getByText('What is protected, right now')).toBeVisible();
   const e2ee = page.locator('.board__row', { hasText: 'End-to-end encryption' });
-  await expect(e2ee.locator('.board__value')).toHaveText(/not active yet/i);
+  await expect(e2ee.locator('.board__value')).toHaveText(/communities/i);
   await expect(page.locator('.keylist__id').first()).toHaveText('626D B4CB B389 FC32');
   if (process.env.RIVER_SCREENSHOTS) await page.screenshot({ path: 'test-results/security.png' });
 });

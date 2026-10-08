@@ -24,19 +24,6 @@ export const PLANNED: Partial<Record<Section, PlannedFeature>> = {
     ],
     note: 'River will not ship a plaintext messaging phase. Messaging arrives together with end-to-end encryption.',
   },
-  communities: {
-    title: 'Communities',
-    tagline: 'Spaces with channels, roles and moderation — built for privacy from the start.',
-    arrives: '0.6.x',
-    capabilities: [
-      'Text, voice, announcement and discussion channels',
-      'Private channels encrypted for their members',
-      'Roles, permissions, moderators and owners',
-      'Invitations, bans, mutes and member lists',
-      'Pinned content and threads',
-    ],
-    note: 'The server needs to know who is a member in order to deliver messages. It never sees what is said.',
-  },
   social: {
     title: 'Social',
     tagline: 'Profiles, posts and stories shared with exactly the people you choose.',
