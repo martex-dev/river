@@ -81,7 +81,7 @@ River does **not** claim to defend against:
 | Tampering       | Modified ciphertext                    | AEAD/MAC in libsignal and attachment format                                                                 | 0.2.x           |
 | Tampering       | Malicious update                       | Ed25519 manifest signature verified before install                                                          | **0.0.1**       |
 | Repudiation     | —                                      | River intentionally offers deniable 1:1 messaging (Signal property)                                         | —               |
-| Info disclosure | DB stolen from disk                    | SQLCipher + OS keystore-wrapped key                                                                         | 0.0.3           |
+| Info disclosure | DB stolen from disk                    | SQLCipher + OS keystore-wrapped key, or Argon2id passphrase where no keystore exists                        | ✅ 0.0.3        |
 | Info disclosure | Notification previews on lock screen   | Previews off by default for sensitive content; content-free pushes                                          | 0.2.x / Stage 2 |
 | Info disclosure | Sensitive logging                      | Log scrubbing helpers, no content in logs, CI lint rule                                                     | ongoing         |
 | DoS             | Message flooding                       | Per-account/per-device rate limits, message requests                                                        | 0.2.x           |

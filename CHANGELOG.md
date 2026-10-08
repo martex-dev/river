@@ -6,6 +6,32 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-10-08
+
+River now has an encrypted place on your computer to keep things — the
+foundation for conversations, keys and media in the coming releases.
+
+### Added
+
+- **Encrypted local database** (SQLCipher, AES-256). River never writes its
+  local data in readable form.
+- The database key is 32 random bytes protected by your operating system:
+  **Windows DPAPI**, **macOS Keychain** or the **Linux Secret Service**
+  (GNOME Keyring / KWallet).
+- **Passphrase protection** where no real keyring exists (for example Linux
+  without a Secret Service): River asks you to choose a passphrase on first
+  start and to unlock on later starts. The key is sealed with Argon2id
+  (64 MiB, 3 passes, libsodium) and AES-256-GCM. Repeated wrong guesses are slowed down.
+- **Local data migrations**: upgrades are applied in one transaction, with an
+  encrypted backup copy before any destructive change; data written by a newer
+  River is never touched by an older one.
+- Security Center shows encrypted storage as active and how its key is protected.
+
+### Changed
+
+- Installers now contain only their own platform's native libraries.
+- The updater no longer considers web-installer packages.
+
 ## [0.0.2] - 2026-10-08
 
 The River server arrives, and the desktop app can connect to one. Still no
@@ -72,6 +98,7 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v0.0.2...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v0.0.3...HEAD
+[0.0.3]: https://github.com/martex-dev/river/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/martex-dev/river/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/martex-dev/river/releases/tag/v0.0.1

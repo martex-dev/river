@@ -12,7 +12,7 @@ possible.
 | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
 | [libsignal](https://github.com/signalapp/libsignal) (`@signalapp/libsignal-client`, `LibSignalClient` Swift, `libsignal-android`) | Identity keys, PQXDH session setup, Double Ratchet, Sender Keys, sealed sender, safety-number fingerprints          | Desktop, server (cert issuing), iOS, Android |
 | Node.js / Electron `crypto` (OpenSSL / BoringSSL)                                                                                 | Ed25519 (release signatures, device auth), AES-256-GCM, AES-256-CBC + HMAC-SHA256, HKDF-SHA256, SHA-256/512, CSPRNG | Desktop, server                              |
-| libsodium                                                                                                                         | Argon2id (passphrase-protected backups)                                                                             | Desktop, mobile                              |
+| libsodium                                                                                                                         | Argon2id (passphrase-protected local key, backups) — Electron's BoringSSL has no Argon2                             | Desktop, mobile                              |
 | SQLCipher                                                                                                                         | Encrypted local database (AES-256, HMAC-SHA512, PBKDF2 on a random key)                                             | Desktop, mobile                              |
 | WebRTC (DTLS-SRTP) + insertable streams / SFrame-style frame encryption                                                           | Calls                                                                                                               | All                                          |
 
@@ -76,13 +76,23 @@ Signal attachment format: random 64-byte key (32 AES-256-CBC + 32 HMAC-SHA256),
 random IV, PKCS#7, encrypt-then-MAC, SHA-256 digest of the ciphertext included
 in the pointer message. Blobs are addressed by random IDs.
 
-## 6. Local storage (planned, 0.0.3)
+## 6. Local storage (implemented, 0.0.3)
 
-- SQLCipher database key: 32 random bytes.
-- Key wrapping: Electron `safeStorage` (Windows DPAPI, macOS Keychain, Linux
-  libsecret/kwallet). If Linux has no secret service, River warns and offers a
-  passphrase (Argon2id) instead of storing a weakly protected key silently.
-- Media cache encrypted with per-file AES-256-GCM keys stored in the DB.
+- Database: SQLCipher 4 format (AES-256-CBC pages, HMAC-SHA512) via
+  `better-sqlite3-multiple-ciphers`, opened with a **raw 32-byte random key**
+  (`PRAGMA key = "x'…'"`, no password KDF since the key is already uniform).
+  `secure_delete` is on.
+- Key file `data/database.key`, one of:
+  - `os-keystore`: the key wrapped by Electron `safeStorage` — Windows DPAPI,
+    macOS Keychain, Linux Secret Service. On Linux, Electron's `basic_text`
+    fallback (a hard-coded password) is **not** accepted as protection.
+  - `passphrase`: KEK = Argon2id(passphrase NFKC, 16-byte random salt,
+    64 MiB, 3 passes, 1 lane) via libsodium `crypto_pwhash`; the database key is
+    sealed with AES-256-GCM (96-bit random nonce, AAD `river-db-key-v1`).
+    A unit test checks libsodium's output equals OpenSSL's Argon2id.
+- A damaged key file is never overwritten; a database without a key file is
+  moved aside, not deleted.
+- Planned: media cache encrypted with per-file AES-256-GCM keys stored in the DB.
 
 ## 7. Backups and recovery (planned, 0.1.4)
 

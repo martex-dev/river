@@ -162,7 +162,7 @@ See [CRYPTOGRAPHY.md](CRYPTOGRAPHY.md) §3. Summary:
 no contact lists, no social graph beyond what routing/ACLs need (community
 membership is necessarily visible to the server; 1:1 contacts are not).
 
-**Client (planned, 0.0.3):** SQLCipher database with `identity`, `sessions`,
+**Client (0.0.3, extended per milestone):** SQLCipher database (`apps/desktop/src/main/storage/`) with `identity`, `sessions`,
 `prekeys`, `sender_keys`, `conversations`, `messages`, `attachments`,
 `contacts`, `profiles`, `settings`, plus an FTS5 index for local search.
 
