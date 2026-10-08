@@ -1,16 +1,18 @@
 # River server image. Build from the repository root:
 #   docker build -f apps/server/Dockerfile -t river-server .
-FROM node:24-alpine AS deps
+# Debian (glibc) because libsignal ships prebuilt binaries for glibc only.
+FROM node:24-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 COPY packages/protocol/package.json packages/protocol/
+COPY packages/crypto/package.json packages/crypto/
 COPY packages/release/package.json packages/release/
 COPY apps/server/package.json apps/server/
 COPY apps/desktop/package.json apps/desktop/
 RUN npm ci --omit=dev --workspace @river/server --include-workspace-root=false --ignore-scripts \
   && npm cache clean --force
 
-FROM node:24-alpine
+FROM node:24-bookworm-slim
 ENV NODE_ENV=production \
     RIVER_HOST=0.0.0.0 \
     RIVER_PORT=8787 \
@@ -19,6 +21,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY packages/protocol ./packages/protocol
+COPY packages/crypto ./packages/crypto
 COPY apps/server/package.json ./apps/server/package.json
 COPY apps/server/src ./apps/server/src
 RUN mkdir -p /data && chown node:node /data

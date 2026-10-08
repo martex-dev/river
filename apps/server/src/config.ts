@@ -21,6 +21,14 @@ const envSchema = z.object({
   RIVER_TRUST_PROXY: bool.default(false),
   /** Requests per minute per client before 429. Counted in memory only; never stored. */
   RIVER_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(100_000).default(300),
+  /** 'open': anyone may create an account; 'closed': no new accounts. */
+  RIVER_REGISTRATION: z.enum(['open', 'closed']).default('open'),
+  RIVER_SESSION_TTL_HOURS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 30)
+    .default(24),
   /** Public https URL of this server; enables HSTS. */
   RIVER_PUBLIC_URL: z.url({ protocol: /^https$/ }).optional(),
 });
@@ -33,6 +41,8 @@ export interface ServerConfig {
   trustProxy: boolean;
   rateLimitPerMinute: number;
   publicUrl: string | undefined;
+  registration: 'open' | 'closed';
+  sessionTtlMs: number;
 }
 
 export class ConfigError extends Error {
@@ -61,5 +71,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     trustProxy: e.RIVER_TRUST_PROXY,
     rateLimitPerMinute: e.RIVER_RATE_LIMIT_PER_MINUTE,
     publicUrl: e.RIVER_PUBLIC_URL,
+    registration: e.RIVER_REGISTRATION,
+    sessionTtlMs: e.RIVER_SESSION_TTL_HOURS * 60 * 60 * 1000,
   };
 }

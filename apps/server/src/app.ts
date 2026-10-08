@@ -4,6 +4,7 @@ import Fastify, { LogController, type FastifyInstance } from 'fastify';
 import { API_PREFIX, MIN_PROTOCOL_VERSION, PROTOCOL_VERSION, type ErrorResponse } from '@river/protocol';
 import type { ServerConfig } from './config.ts';
 import type { RiverDatabase } from './db/database.ts';
+import { registerAccountRoutes } from './routes/accounts.ts';
 import serverPackage from '../package.json' with { type: 'json' };
 
 export const SERVER_VERSION: string = serverPackage.version;
@@ -13,6 +14,8 @@ export interface AppDeps {
   database: RiverDatabase;
   /** Log destination (default stdout). Tests capture it to prove no IPs or identifiers are written. */
   logStream?: Writable;
+  /** Clock (tests). */
+  now?: () => Date;
 }
 
 function errorBody(code: string, message: string): ErrorResponse {
@@ -105,6 +108,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     version: SERVER_VERSION,
     protocol: { current: PROTOCOL_VERSION, min: MIN_PROTOCOL_VERSION },
   }));
+
+  registerAccountRoutes(app, { config, database: deps.database, now: deps.now ?? (() => new Date()) });
 
   return app;
 }

@@ -21,7 +21,15 @@ const pgUrl = process.env.RIVER_TEST_POSTGRES_URL;
 if (pgUrl) targets.push(['postgres', () => openDatabase(pgUrl)]);
 
 async function reset(db: Kysely<Database>): Promise<void> {
-  for (const t of ['server_meta', 'schema_migrations', 'schema_migrations_lock']) {
+  for (const t of [
+    'sessions',
+    'devices',
+    'accounts',
+    'auth_challenges',
+    'server_meta',
+    'schema_migrations',
+    'schema_migrations_lock',
+  ]) {
     await sql`drop table if exists ${sql.table(t)}`.execute(db);
   }
 }
