@@ -1,0 +1,26 @@
+# Minimal self-hosted River server (SQLite). See docs/deployment/self-hosting.md.
+#   docker compose -f deploy/docker-compose.yml up -d
+# Put a TLS-terminating reverse proxy (e.g. Caddy) in front before exposing it.
+services:
+  river:
+    build:
+      context: ..
+      dockerfile: apps/server/Dockerfile
+    image: river-server:local
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    environment:
+      RIVER_LOG_LEVEL: info
+      # RIVER_PUBLIC_URL: https://river.example.org
+      # RIVER_TRUST_PROXY: 'true'   # only when behind your own reverse proxy
+    volumes:
+      - river-data:/data
+    tmpfs:
+      - /tmp
+    ports:
+      - '127.0.0.1:8787:8787'
+
+volumes:
+  river-data:

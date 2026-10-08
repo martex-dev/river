@@ -23,6 +23,7 @@ Thumbs.db
 release-keys/
 
 # Local data
+apps/server/data/
 *.sqlite
 *.sqlite-journal
 *.db
