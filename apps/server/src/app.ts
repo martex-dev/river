@@ -5,6 +5,7 @@ import { API_PREFIX, MIN_PROTOCOL_VERSION, PROTOCOL_VERSION, type ErrorResponse 
 import type { ServerConfig } from './config.ts';
 import type { RiverDatabase } from './db/database.ts';
 import { registerAccountRoutes } from './routes/accounts.ts';
+import { registerCommunityRoutes } from './routes/communities.ts';
 import serverPackage from '../package.json' with { type: 'json' };
 
 export const SERVER_VERSION: string = serverPackage.version;
@@ -62,7 +63,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     reply.header('x-content-type-options', 'nosniff');
     reply.header('referrer-policy', 'no-referrer');
     reply.header('x-frame-options', 'DENY');
-    reply.header('content-security-policy', "default-src 'none'; frame-ancestors 'none'");
+    if (!reply.hasHeader('content-security-policy')) {
+      reply.header('content-security-policy', "default-src 'none'; frame-ancestors 'none'");
+    }
     reply.header('cache-control', 'no-store');
     reply.header('x-river-protocol', String(PROTOCOL_VERSION));
     if (config.publicUrl) reply.header('strict-transport-security', 'max-age=31536000; includeSubDomains');
@@ -109,7 +112,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     protocol: { current: PROTOCOL_VERSION, min: MIN_PROTOCOL_VERSION },
   }));
 
-  registerAccountRoutes(app, { config, database: deps.database, now: deps.now ?? (() => new Date()) });
+  const now = deps.now ?? (() => new Date());
+  registerAccountRoutes(app, { config, database: deps.database, now });
+  await registerCommunityRoutes(app, { config, database: deps.database, now });
 
   return app;
 }

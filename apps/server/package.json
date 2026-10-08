@@ -1,6 +1,6 @@
 {
   "name": "@river/server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "River server â€” routes and stores ciphertext; never sees content or private keys.",
   "license": "AGPL-3.0-only",
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@fastify/rate-limit": "11.2.1",
+    "@fastify/websocket": "11.3.3",
     "@river/crypto": "*",
     "@river/protocol": "*",
     "better-sqlite3": "13.0.3",
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "9.6.0",
-    "@types/pg": "8.23.1"
+    "@types/pg": "8.23.1",
+    "@types/ws": "8.18.2"
   }
 }

@@ -6,6 +6,7 @@ import { Migrator, type Migration, type MigrationResultSet } from 'kysely/migrat
 import pg from 'pg';
 import * as m0001 from './migrations/0001_server_meta.ts';
 import * as m0002 from './migrations/0002_accounts.ts';
+import * as m0003 from './migrations/0003_communities.ts';
 import type { Database } from './schema.ts';
 
 export type Dialect = 'sqlite' | 'postgres';
@@ -23,6 +24,7 @@ export interface RiverDatabase {
 export const MIGRATIONS: Record<string, Migration> = {
   '0001_server_meta': m0001,
   '0002_accounts': m0002,
+  '0003_communities': m0003,
 };
 
 /**
