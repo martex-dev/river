@@ -32,15 +32,22 @@ possible.
 
 ## 3. Identity (identity key: implemented in 0.0.4; device keys and device list: 0.1.0)
 
-| Key              | Type                                                        | Scope                              | Purpose                                                                                     |
-| ---------------- | ----------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------- |
-| Identity key     | libsignal `IdentityKeyPair` (Curve25519, XEdDSA signatures) | Account (shared by linked devices) | Long-term identity; fingerprints; signs prekeys and the device list — **implemented 0.0.4** |
-| Device auth key  | Ed25519                                                     | Per device                         | Authenticates the device to the server (challenge–response). Never used for content         |
-| Signed prekey    | Curve25519                                                  | Per device, rotated ≤ 7 days       | PQXDH                                                                                       |
-| Kyber prekeys    | ML-KEM-1024 (libsignal)                                     | Per device                         | Post-quantum component of PQXDH                                                             |
-| One-time prekeys | Curve25519                                                  | Per device, batches of 100         | PQXDH                                                                                       |
-| Profile key      | 256-bit random                                              | Account                            | Encrypts profile fields; shared with contacts                                               |
-| Recovery secret  | 256-bit random, shown as 24 BIP-39 words                    | Account                            | Derives backup key and recovery auth key (HKDF-SHA256 with distinct `info` labels)          |
+| Key              | Type                                                        | Scope                              | Purpose                                                                                                     |
+| ---------------- | ----------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Identity key     | libsignal `IdentityKeyPair` (Curve25519, XEdDSA signatures) | Account (shared by linked devices) | Long-term identity; fingerprints; signs prekeys and the device list — **implemented 0.0.4**                 |
+| Device auth key  | libsignal Curve25519 (XEdDSA)                               | Per device                         | Authenticates the device to the server (challenge–response). Never used for content — **implemented 0.1.0** |
+| Signed prekey    | Curve25519                                                  | Per device, rotated ≤ 7 days       | PQXDH                                                                                                       |
+| Kyber prekeys    | ML-KEM-1024 (libsignal)                                     | Per device                         | Post-quantum component of PQXDH                                                                             |
+| One-time prekeys | Curve25519                                                  | Per device, batches of 100         | PQXDH                                                                                                       |
+| Profile key      | 256-bit random                                              | Account                            | Encrypts profile fields; shared with contacts                                                               |
+| Recovery secret  | 256-bit random, shown as 24 BIP-39 words                    | Account                            | Derives backup key and recovery auth key (HKDF-SHA256 with distinct `info` labels)                          |
+
+**Signatures.** All River protocol signatures are libsignal XEdDSA over a
+distinct ASCII context followed by the payload (`river-device-list-v1`,
+`river-register-v1`, `river-session-v1`); see
+[docs/protocol/accounts.md](docs/protocol/accounts.md). Using libsignal for
+signing (instead of a separate Ed25519 library) keeps one reviewed
+implementation on desktop, server, iOS and Android.
 
 **Device list signing.** The account's device list
 `{ accountId, version, devices: [{ deviceId, authKey, registrationId, addedAt }] }`

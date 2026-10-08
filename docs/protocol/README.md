@@ -7,7 +7,7 @@ with cross-language test vectors for the desktop, iOS and Android clients.
 Planned documents:
 
 - `transport.md` — HTTPS/WSS, versioning, authentication (0.0.2–0.1.0)
-- `identity.md` — River ID, identity key, signed device lists (0.1.0)
+- [`accounts.md`](accounts.md) — River ID, keys, signed device lists, registration and sessions (**0.1.0, implemented**)
 - `messaging.md` — envelopes, prekeys, sessions, receipts (0.2.0)
 - `groups.md` — sender keys, membership changes (0.4.0)
 - `attachments.md` — encrypted blobs (0.5.0)

@@ -3,15 +3,19 @@
 Ordered by priority. The top unchecked item is the next thing to build.
 Milestone definitions: [ROADMAP.md](ROADMAP.md).
 
-## 0.1.0 — Accounts and device authentication
+## 0.1.1 — Encrypted profiles
 
-- [ ] Protocol: `POST /v1/accounts` (River ID, identity key, device ID, device Ed25519 auth key, registration ID), schemas + test vectors
-- [ ] Server: `accounts` and `devices` tables (migration 0002), registration with proof the client holds the identity key (signature over a server challenge)
-- [ ] Challenge–response login (`/v1/auth/challenge`, `/v1/auth/session`), opaque session tokens stored hashed, short expiry
-- [ ] Identity-signed device list v1 (`PUT /v1/devices/list`), monotonic version, client-side verification
-- [ ] Per-account rate limits; abuse controls for registration (configurable: open / invite codes)
-- [ ] Desktop: device auth key in the encrypted DB; "Create account on <server>" flow in Settings → Server; Security Center devices
-- [ ] Tests: registration replay, wrong signature, stale device-list version, token expiry; e2e desktop ↔ server registration
+- [ ] Profile key (256-bit) in the identity record; profile fields (name, bio, avatar, links) encrypted with AES-256-GCM under it
+- [ ] Server: `PUT/GET /v1/profile/:riverId` storing only ciphertext + version; size limits
+- [ ] Desktop: profile editor (Settings → Profile), avatar crop/resize locally, upload on change
+- [ ] Tests: server stores no plaintext; wrong profile key cannot decrypt; size/tamper checks
+
+## 0.1.x — Account hardening (before 0.2.0)
+
+- [ ] Registration abuse controls: invite codes (`RIVER_REGISTRATION=invite`), per-account rate limits
+- [ ] `PUT /v1/devices/list` for list updates (monotonic version) — needed for device linking
+- [ ] Session refresh before expiry; reconnect on network change
+- [ ] Delete account (server-side) and leave server (client-side)
 
 ## Later in 0.0.x / ongoing
 

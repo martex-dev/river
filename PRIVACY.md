@@ -30,10 +30,15 @@ privacy policy applies to these requests.
 Your identity key pair, display name and settings, inside River's encrypted
 local database. Nothing about your identity is sent anywhere in 0.0.x.
 
-## What a River server stores (planned, from 0.1.0)
+## What a River server stores (from 0.1.0)
 
 See the full table in [THREAT_MODEL.md §5](THREAT_MODEL.md#5-what-the-server-can-see).
-In short: account ID, optional username, public keys, device list, encrypted
+Today (0.1.0): your River ID, your public identity key, your signed device list
+(device IDs and public device keys), the day the account and each device were
+created, hashed session tokens until they expire, and one-time login challenges
+for five minutes. No name, phone number, e-mail, IP address or last-seen time.
+
+Planned as features arrive: account ID, optional username, public keys, device list, encrypted
 profile, queued encrypted messages until delivered (max 30 days), encrypted
 attachments until expiry, and community/group membership needed for delivery.
 

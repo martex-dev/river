@@ -6,6 +6,35 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-09
+
+**Accounts.** Create an account on a River server with nothing but your
+cryptographic identity — no phone number, e-mail or name.
+
+### Added
+
+- **Account registration** in Settings → Server. River proves to the server
+  that it holds your identity key and a new key for this device, and registers
+  a **device list signed by your identity key**.
+- **Device sessions** by challenge–response with the device key; the session
+  token is kept only in memory and the server stores only its hash.
+- **Server-tamper detection**: every time River connects it checks that the
+  server's copy of your account is signed by your own identity. If not, River
+  stops talking to that server and shows a security warning.
+- Server: accounts, devices, sessions and one-time challenges (SQLite and
+  PostgreSQL), stricter rate limits on authentication routes, `RIVER_REGISTRATION`
+  (open/closed) and `RIVER_SESSION_TTL_HOURS`. No IP addresses, names or
+  last-seen times are stored; dates are kept to the day.
+- Security Center: server and devices rows reflect your account; top bar shows
+  the connection.
+- Protocol specification: [docs/protocol/accounts.md](docs/protocol/accounts.md).
+- Integration test suite (`tests/integration`) running the desktop account code
+  against the real server, including a malicious-server scenario.
+
+### Changed
+
+- Server Docker image is now based on Debian slim (libsignal needs glibc).
+
 ## [0.0.4] - 2026-10-08
 
 You now have a River identity: a key pair created on your computer, with a
@@ -122,7 +151,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v0.0.4...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/martex-dev/river/compare/v0.0.4...v0.1.0
 [0.0.4]: https://github.com/martex-dev/river/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/martex-dev/river/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/martex-dev/river/compare/v0.0.1...v0.0.2

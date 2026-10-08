@@ -74,20 +74,20 @@ River does **not** claim to defend against:
 
 ## 6. Key threats and mitigations (STRIDE summary)
 
-| Threat          | Example                                | Mitigation                                                                                                  | Status          |
-| --------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------- |
-| Spoofing        | Server injects a fake device for Alice | Device list signed by Alice's identity key; other clients reject unsigned changes and warn                  | 0.1.0           |
-| Spoofing        | Server swaps Bob's identity key        | Safety numbers, key-change warnings, blocking re-send on unverified change for verified contacts            | 0.3.x           |
-| Tampering       | Modified ciphertext                    | AEAD/MAC in libsignal and attachment format                                                                 | 0.2.x           |
-| Tampering       | Malicious update                       | Ed25519 manifest signature verified before install                                                          | **0.0.1**       |
-| Repudiation     | —                                      | River intentionally offers deniable 1:1 messaging (Signal property)                                         | —               |
-| Info disclosure | DB stolen from disk                    | SQLCipher + OS keystore-wrapped key, or Argon2id passphrase where no keystore exists                        | ✅ 0.0.3        |
-| Info disclosure | Notification previews on lock screen   | Previews off by default for sensitive content; content-free pushes                                          | 0.2.x / Stage 2 |
-| Info disclosure | Sensitive logging                      | Log scrubbing helpers, no content in logs, CI lint rule                                                     | ongoing         |
-| DoS             | Message flooding                       | Per-account/per-device rate limits, message requests                                                        | 0.2.x           |
-| Elevation       | Renderer XSS → key theft               | Sandboxed renderer, CSP, keys only in main process, validated IPC                                           | **0.0.1**       |
-| Elevation       | Malicious file/attachment              | Attachments never auto-executed; previews rendered in sandbox; filename sanitisation; path traversal checks | 0.5.x           |
-| Elevation       | Remote-assistance abuse                | Consent flow, visible banner, scam warnings ("River staff will never ask for remote access")                | Stage 2         |
+| Threat          | Example                                | Mitigation                                                                                                                          | Status                                                 |
+| --------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Spoofing        | Server injects a fake device for Alice | Device list signed by Alice's identity key; clients verify on every connect and stop trusting a server that serves an unsigned list | ✅ 0.1.0 (own list); other users' lists with messaging |
+| Spoofing        | Server swaps Bob's identity key        | Safety numbers, key-change warnings, blocking re-send on unverified change for verified contacts                                    | 0.3.x                                                  |
+| Tampering       | Modified ciphertext                    | AEAD/MAC in libsignal and attachment format                                                                                         | 0.2.x                                                  |
+| Tampering       | Malicious update                       | Ed25519 manifest signature verified before install                                                                                  | **0.0.1**                                              |
+| Repudiation     | —                                      | River intentionally offers deniable 1:1 messaging (Signal property)                                                                 | —                                                      |
+| Info disclosure | DB stolen from disk                    | SQLCipher + OS keystore-wrapped key, or Argon2id passphrase where no keystore exists                                                | ✅ 0.0.3                                               |
+| Info disclosure | Notification previews on lock screen   | Previews off by default for sensitive content; content-free pushes                                                                  | 0.2.x / Stage 2                                        |
+| Info disclosure | Sensitive logging                      | Log scrubbing helpers, no content in logs, CI lint rule                                                                             | ongoing                                                |
+| DoS             | Message flooding                       | Per-account/per-device rate limits, message requests                                                                                | 0.2.x                                                  |
+| Elevation       | Renderer XSS → key theft               | Sandboxed renderer, CSP, keys only in main process, validated IPC                                                                   | **0.0.1**                                              |
+| Elevation       | Malicious file/attachment              | Attachments never auto-executed; previews rendered in sandbox; filename sanitisation; path traversal checks                         | 0.5.x                                                  |
+| Elevation       | Remote-assistance abuse                | Consent flow, visible banner, scam warnings ("River staff will never ask for remote access")                                        | Stage 2                                                |
 
 ## 7. Residual risks (current)
 
