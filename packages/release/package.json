@@ -1,0 +1,22 @@
+{
+  "name": "@river/release",
+  "version": "0.0.0",
+  "private": true,
+  "description": "River release-manifest format and Ed25519 signing/verification.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./channels": "./src/channels.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "semver": "7.8.5",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/semver": "7.8.0"
+  }
+}
