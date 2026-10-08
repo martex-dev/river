@@ -47,3 +47,4 @@ export function checkCompatibility(
   return 'compatible';
 }
 export * from './accounts.ts';
+export * from './communities.ts';
