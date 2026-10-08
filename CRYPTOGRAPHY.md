@@ -30,17 +30,17 @@ possible.
   Key rotation: a new key is added to the list in release N, used from release
   N+1; the old key is removed once supported upgrade paths no longer need it.
 
-## 3. Identity (planned, 0.0.4 – 0.1.0)
+## 3. Identity (identity key: implemented in 0.0.4; device keys and device list: 0.1.0)
 
-| Key              | Type                                                        | Scope                              | Purpose                                                                             |
-| ---------------- | ----------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------- |
-| Identity key     | libsignal `IdentityKeyPair` (Curve25519, XEdDSA signatures) | Account (shared by linked devices) | Long-term identity; fingerprints; signs prekeys and the device list                 |
-| Device auth key  | Ed25519                                                     | Per device                         | Authenticates the device to the server (challenge–response). Never used for content |
-| Signed prekey    | Curve25519                                                  | Per device, rotated ≤ 7 days       | PQXDH                                                                               |
-| Kyber prekeys    | ML-KEM-1024 (libsignal)                                     | Per device                         | Post-quantum component of PQXDH                                                     |
-| One-time prekeys | Curve25519                                                  | Per device, batches of 100         | PQXDH                                                                               |
-| Profile key      | 256-bit random                                              | Account                            | Encrypts profile fields; shared with contacts                                       |
-| Recovery secret  | 256-bit random, shown as 24 BIP-39 words                    | Account                            | Derives backup key and recovery auth key (HKDF-SHA256 with distinct `info` labels)  |
+| Key              | Type                                                        | Scope                              | Purpose                                                                                     |
+| ---------------- | ----------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------- |
+| Identity key     | libsignal `IdentityKeyPair` (Curve25519, XEdDSA signatures) | Account (shared by linked devices) | Long-term identity; fingerprints; signs prekeys and the device list — **implemented 0.0.4** |
+| Device auth key  | Ed25519                                                     | Per device                         | Authenticates the device to the server (challenge–response). Never used for content         |
+| Signed prekey    | Curve25519                                                  | Per device, rotated ≤ 7 days       | PQXDH                                                                                       |
+| Kyber prekeys    | ML-KEM-1024 (libsignal)                                     | Per device                         | Post-quantum component of PQXDH                                                             |
+| One-time prekeys | Curve25519                                                  | Per device, batches of 100         | PQXDH                                                                                       |
+| Profile key      | 256-bit random                                              | Account                            | Encrypts profile fields; shared with contacts                                               |
+| Recovery secret  | 256-bit random, shown as 24 BIP-39 words                    | Account                            | Derives backup key and recovery auth key (HKDF-SHA256 with distinct `info` labels)          |
 
 **Device list signing.** The account's device list
 `{ accountId, version, devices: [{ deviceId, authKey, registrationId, addedAt }] }`
@@ -53,11 +53,16 @@ about. This prevents the server from silently adding an eavesdropping device.
 - _Safety number_: libsignal `Fingerprint` (60 digits, 12 groups of 5),
   computed from both parties' identity keys and River IDs; QR code uses the
   libsignal scannable fingerprint format.
-- _Identity fingerprint_: SHA-256 of the identity public key, first 16 bytes,
-  shown as 8 groups of 4 hex characters (e.g. `AB73 29FA 91C2 77D4 …`).
-- _Verification words_: the same 16 bytes mapped through the PGP word list
-  (even/odd byte lists) — an established, public-domain encoding designed for
-  reading aloud.
+- _Identity fingerprint_: SHA-256 of the libsignal-serialised identity public
+  key (33 bytes), first 16 bytes, shown as 8 groups of 4 hex characters
+  (e.g. `AB73 29FA 91C2 77D4 …`).
+- _Verification words_: the same 16 bytes as **Bytewords** (Blockchain Commons
+  BCR-2020-012, BSD-2-Clause-Patent): one four-letter word per byte, unique by
+  first and last letter, designed for reading aloud. The PGP word list was
+  considered but not used because its copyright status is disputed.
+- River ID: random UUIDv4 generated on the device. Registration ID: random 14-bit
+  value (libsignal). The private key is stored only in the SQLCipher database
+  and never crosses the main/renderer boundary (tested).
 
 ## 4. Messaging (planned, 0.2.x – 0.4.x)
 

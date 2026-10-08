@@ -3,12 +3,15 @@
 Ordered by priority. The top unchecked item is the next thing to build.
 Milestone definitions: [ROADMAP.md](ROADMAP.md).
 
-## 0.0.4 — Cryptographic identity
+## 0.1.0 — Accounts and device authentication
 
-- [ ] `packages/crypto`: libsignal identity key pair, River ID, identity fingerprint, PGP-wordlist verification words, safety numbers
-- [ ] Onboarding flow (choose display name; no phone/e-mail)
-- [ ] Private key never crosses IPC (test)
-- [ ] Test vectors for fingerprints and words
+- [ ] Protocol: `POST /v1/accounts` (River ID, identity key, device ID, device Ed25519 auth key, registration ID), schemas + test vectors
+- [ ] Server: `accounts` and `devices` tables (migration 0002), registration with proof the client holds the identity key (signature over a server challenge)
+- [ ] Challenge–response login (`/v1/auth/challenge`, `/v1/auth/session`), opaque session tokens stored hashed, short expiry
+- [ ] Identity-signed device list v1 (`PUT /v1/devices/list`), monotonic version, client-side verification
+- [ ] Per-account rate limits; abuse controls for registration (configurable: open / invite codes)
+- [ ] Desktop: device auth key in the encrypted DB; "Create account on <server>" flow in Settings → Server; Security Center devices
+- [ ] Tests: registration replay, wrong signature, stale device-list version, token expiry; e2e desktop ↔ server registration
 
 ## Later in 0.0.x / ongoing
 

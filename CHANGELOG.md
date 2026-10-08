@@ -6,6 +6,30 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-10-08
+
+You now have a River identity: a key pair created on your computer, with a
+fingerprint your contacts will be able to verify.
+
+### Added
+
+- **First-run onboarding**: create your identity — no phone number, no e-mail.
+  Choose an optional display name (kept on this computer for now).
+- **Cryptographic identity** built on **libsignal** (Curve25519 identity key,
+  the same construction Signal uses), a random River ID and registration ID.
+  The private key is stored only in the encrypted local database and never
+  leaves River's main process.
+- **Identity fingerprint** (128-bit, hex) and **verification words** (Bytewords),
+  shown in onboarding and in a new *Your identity* card in the Security Center.
+- `@river/crypto` package: identity creation, fingerprints, verification words
+  and libsignal safety numbers (used for contact verification from 0.3).
+- `THIRD_PARTY_NOTICES.md`.
+
+### Changed
+
+- Home greets you by name and shows the next milestones.
+- Security Center marks Identity as active once created.
+
 ## [0.0.3] - 2026-10-08
 
 River now has an encrypted place on your computer to keep things — the
@@ -98,7 +122,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v0.0.3...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v0.0.4...HEAD
+[0.0.4]: https://github.com/martex-dev/river/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/martex-dev/river/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/martex-dev/river/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/martex-dev/river/releases/tag/v0.0.1

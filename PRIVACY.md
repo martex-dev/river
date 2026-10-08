@@ -25,6 +25,11 @@ untraceable. This document lists, plainly, what is collected and why.
 You can disable automatic update checks in **Settings → Updates**. GitHub's own
 privacy policy applies to these requests.
 
+## What River keeps on your computer
+
+Your identity key pair, display name and settings, inside River's encrypted
+local database. Nothing about your identity is sent anywhere in 0.0.x.
+
 ## What a River server stores (planned, from 0.1.0)
 
 See the full table in [THREAT_MODEL.md §5](THREAT_MODEL.md#5-what-the-server-can-see).
