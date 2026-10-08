@@ -106,3 +106,27 @@ describe('safety numbers', () => {
     expect(() => safetyNumber({ ...a, riverId: 'not-a-uuid' }, a)).toThrow(/River ID/);
   });
 });
+
+describe('signing (XEdDSA via libsignal)', () => {
+  it('signs and verifies; rejects tampering, wrong keys and junk', async () => {
+    const { generateKeyPair, sign, verify, publicKeyOf } = await import('../src/index.ts');
+    const a = generateKeyPair();
+    const b = generateKeyPair();
+    const msg = Buffer.from('river-test-v1\nhello');
+    const sig = sign(a.privateKey, msg);
+    expect(sig).toHaveLength(64);
+    expect(verify(a.publicKey, msg, sig)).toBe(true);
+    expect(verify(b.publicKey, msg, sig)).toBe(false);
+    expect(verify(a.publicKey, Buffer.from('river-test-v1\nhellp'), sig)).toBe(false);
+    expect(verify(a.publicKey, msg, sig.subarray(0, 63))).toBe(false);
+    expect(verify(new Uint8Array(33), msg, sig)).toBe(false);
+    expect(Buffer.from(publicKeyOf(a.privateKey))).toEqual(Buffer.from(a.publicKey));
+  });
+
+  it('identity keys can sign too', async () => {
+    const { sign, verify } = await import('../src/index.ts');
+    const id = createIdentity();
+    const msg = Buffer.from('x');
+    expect(verify(id.publicKey, msg, sign(id.privateKey, msg))).toBe(true);
+  });
+});

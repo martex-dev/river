@@ -46,3 +46,4 @@ export function checkCompatibility(
   if (server.current < client.min) return 'server-too-old';
   return 'compatible';
 }
+export * from './accounts.ts';
