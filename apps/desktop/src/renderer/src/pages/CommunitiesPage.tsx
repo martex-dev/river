@@ -470,6 +470,12 @@ function VoiceChannel(props: {
         <div className="picker" role="dialog" aria-label="Choose what to share">
           <div className="picker__card glass">
             <h2 className="card__title">Share your screen</h2>
+            {picker.length === 0 && (
+              <p className="muted">
+                River could not find any screen or window to share. On Linux with Wayland, screen sharing
+                needs PipeWire and the desktop portal.
+              </p>
+            )}
             <div className="picker__grid">
               {picker.map((src) => (
                 <button

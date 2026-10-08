@@ -6,6 +6,13 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-09
+
+### Fixed
+
+- The screen-share picker explains when no screen or window can be captured
+  (for example Linux on Wayland without PipeWire) instead of showing an empty list.
+
 ## [0.2.0] - 2026-10-09
 
 **Communities.** Create a private community, invite people with a link, chat in
@@ -183,7 +190,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/martex-dev/river/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/martex-dev/river/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/martex-dev/river/compare/v0.0.4...v0.1.0
 [0.0.4]: https://github.com/martex-dev/river/compare/v0.0.3...v0.0.4

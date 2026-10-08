@@ -152,19 +152,25 @@ test('create, invite, join, chat and call between two members', async () => {
     .toBeGreaterThan(0);
   if (process.env.RIVER_SCREENSHOTS) await bob.screenshot({ path: 'test-results/community-call.png' });
 
-  // Screen sharing through River's own picker.
+  // Screen sharing through River's own picker (headless CI machines may have nothing to capture).
   await alice.getByRole('button', { name: 'Share screen' }).click();
-  await alice.locator('.picker__item').first().click();
-  await expect(alice.getByRole('button', { name: 'Stop sharing' })).toBeVisible({ timeout: 15_000 });
-  await expect(bob.locator('.tile--screen video')).toBeVisible({ timeout: 20_000 });
-  // Frames are actually decoded on Bob's side (not just an empty element).
-  await expect
-    .poll(() => bob.locator('.tile--screen video').evaluate((v: HTMLVideoElement) => v.videoWidth), {
-      timeout: 20_000,
-    })
-    .toBeGreaterThan(0);
-  if (process.env.RIVER_SCREENSHOTS) await bob.screenshot({ path: 'test-results/community-screen.png' });
-  await alice.getByRole('button', { name: 'Stop sharing' }).click();
+  await expect(alice.locator('.picker')).toBeVisible();
+  if ((await alice.locator('.picker__item').count()) === 0) {
+    await expect(alice.locator('.picker')).toContainText('could not find any screen');
+    await alice.locator('.picker').getByRole('button', { name: 'Cancel' }).click();
+  } else {
+    await alice.locator('.picker__item').first().click();
+    await expect(alice.getByRole('button', { name: 'Stop sharing' })).toBeVisible({ timeout: 15_000 });
+    await expect(bob.locator('.tile--screen video')).toBeVisible({ timeout: 20_000 });
+    // Frames are actually decoded on Bob's side (not just an empty element).
+    await expect
+      .poll(() => bob.locator('.tile--screen video').evaluate((v: HTMLVideoElement) => v.videoWidth), {
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(0);
+    if (process.env.RIVER_SCREENSHOTS) await bob.screenshot({ path: 'test-results/community-screen.png' });
+    await alice.getByRole('button', { name: 'Stop sharing' }).click();
+  }
 
   await bob.getByRole('button', { name: 'Leave' }).click();
   await expect(alice.locator('.tile', { hasText: 'Bob' })).toHaveCount(0, { timeout: 15_000 });
