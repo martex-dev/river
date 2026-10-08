@@ -857,6 +857,48 @@ html[data-platform='darwin'] .topbar {
   color: var(--danger);
 }
 
+/* ---------- Lock screen ---------- */
+.lock {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  -webkit-app-region: drag;
+}
+.lock__card {
+  width: min(460px, 100%);
+  padding: 36px 34px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  -webkit-app-region: no-drag;
+  animation: toast-in var(--dur-slow) var(--ease-spring);
+}
+.lock__mark {
+  filter: drop-shadow(0 0 22px rgba(79, 227, 209, 0.35));
+}
+.lock__title {
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.lock__text {
+  color: var(--text-dim);
+}
+.lock__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+.lock__form .textfield input {
+  font-family: var(--font-ui);
+}
+.lock__submit {
+  justify-content: center;
+  margin-top: 4px;
+}
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed;

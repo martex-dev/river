@@ -3,7 +3,10 @@
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "types": ["node", "electron-vite/node"]
+    "types": ["node", "electron-vite/node"],
+    "paths": {
+      "better-sqlite3-multiple-ciphers": ["../../node_modules/better-sqlite3-multiple-ciphers/index.d.ts"]
+    }
   },
   "include": [
     "electron.vite.config.ts",

@@ -13,6 +13,10 @@ export const IPC = {
   updatesStatusChanged: 'river:updates:status-changed',
   securityStatus: 'river:security:status',
   serverCheck: 'river:server:check',
+  storageStatus: 'river:storage:status',
+  storageSetup: 'river:storage:setup-passphrase',
+  storageUnlock: 'river:storage:unlock',
+  storageStatusChanged: 'river:storage:status-changed',
   openLink: 'river:link:open',
 } as const;
 
@@ -56,6 +60,22 @@ export interface SecurityStatus {
   releaseKeys: Array<{ keyId: string; comment?: string }>;
 }
 
+export type StorageStatus =
+  | { state: 'opening' }
+  /** No real OS keystore (e.g. Linux without a keyring): the user must choose a passphrase. */
+  | { state: 'setup-required'; minLength: number }
+  /** Passphrase-protected and waiting for the user. */
+  | { state: 'locked' }
+  | { state: 'open'; protection: 'os-keystore' | 'passphrase'; keystore: string; schema: number }
+  | {
+      state: 'error';
+      code: 'keystore-unavailable' | 'newer-data' | 'migration-failed' | 'corrupt' | 'unknown';
+      message: string;
+    };
+
+export type PassphraseResult =
+  { ok: true } | { ok: false; reason: 'wrong-passphrase' | 'too-short' | 'not-expected' };
+
 export type ServerCheckResult =
   | { ok: true; url: string; version: string; protocol: number }
   | { ok: false; reason: 'invalid-url' | 'unreachable' | 'not-river' | 'incompatible'; message: string };
@@ -73,5 +93,11 @@ export interface RiverApi {
   };
   security: { status(): Promise<SecurityStatus> };
   server: { check(url: string): Promise<ServerCheckResult> };
+  storage: {
+    status(): Promise<StorageStatus>;
+    setupPassphrase(passphrase: string): Promise<PassphraseResult>;
+    unlock(passphrase: string): Promise<PassphraseResult>;
+    onStatus(listener: (status: StorageStatus) => void): () => void;
+  };
   links: { open(id: ExternalLinkId): Promise<void> };
 }

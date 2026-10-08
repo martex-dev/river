@@ -4,7 +4,7 @@ import { autoUpdater } from 'electron-updater';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import { channelOfVersion } from '@river/release/channels';
 import type { AppInfo } from '../shared/ipc.ts';
-import { broadcastUpdateStatus, registerIpc } from './ipc.ts';
+import { broadcastStorageStatus, broadcastUpdateStatus, registerIpc } from './ipc.ts';
 import { createFileLogger } from './logger.ts';
 import {
   APP_ORIGIN,
@@ -16,6 +16,8 @@ import {
   UI_PARTITION,
 } from './security.ts';
 import { SettingsStore } from './settings-store.ts';
+import { electronKeystore } from './storage/electron-keystore.ts';
+import { StorageService } from './storage/storage-service.ts';
 import { UpdateService } from './updater/update-service.ts';
 import { createFetchBytes } from './http.ts';
 import { verifyDownloadedUpdate } from './updater/verify-download.ts';
@@ -42,6 +44,14 @@ async function start(): Promise<void> {
   log.info(`River ${app.getVersion()} starting on ${process.platform}-${process.arch}`);
 
   const settings = new SettingsStore(join(app.getPath('userData'), 'settings.json'), log);
+  const storage = new StorageService({
+    dir: join(app.getPath('userData'), 'data'),
+    keystore: electronKeystore,
+    log,
+    appVersion: app.getVersion(),
+  });
+  storage.start();
+  app.on('will-quit', () => storage.close());
 
   const ui = uiSession();
   hardenSession(ui, devServerUrl);
@@ -56,6 +66,8 @@ async function start(): Promise<void> {
   let updates: UpdateService | null = null;
   if (updatesEnabled) {
     autoUpdater.logger = log;
+    // River publishes full NSIS installers only; never fetch a separate web-installer payload.
+    (autoUpdater as { disableWebInstaller?: boolean }).disableWebInstaller = true;
     const fetchBytes = createFetchBytes((input, init) => net.fetch(input as string, init));
     updates = new UpdateService({
       updater: autoUpdater,
@@ -84,9 +96,18 @@ async function start(): Promise<void> {
   const serverFetch = createFetchBytes((input, init) => net.fetch(input as string, init), {
     timeoutMs: 10_000,
   });
-  registerIpc({ appInfo, settings, updates, updatesDisabledReason, devServerUrl, fetchBytes: serverFetch });
+  registerIpc({
+    appInfo,
+    settings,
+    updates,
+    updatesDisabledReason,
+    devServerUrl,
+    fetchBytes: serverFetch,
+    storage,
+  });
 
   const window = createWindow();
+  broadcastStorageStatus(window.webContents, storage);
   if (updates) {
     const service = updates;
     broadcastUpdateStatus(window.webContents, service);

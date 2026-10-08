@@ -1,11 +1,20 @@
 import { ipcMain, shell, type IpcMainInvokeEvent, type WebContents } from 'electron';
 import { z } from 'zod';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
-import { EXTERNAL_LINKS, IPC, type AppInfo, type SecurityStatus } from '../shared/ipc.ts';
+import {
+  EXTERNAL_LINKS,
+  IPC,
+  type AppInfo,
+  type PassphraseResult,
+  type SecurityStatus,
+  type StorageStatus,
+} from '../shared/ipc.ts';
 import type { FetchBytes } from './http.ts';
 import { isAllowedAppUrl } from './security.ts';
 import { checkServer } from './server-check.ts';
 import type { SettingsStore } from './settings-store.ts';
+import { MIN_PASSPHRASE_LENGTH, WrongPassphraseError } from './storage/key-file.ts';
+import type { StorageService } from './storage/storage-service.ts';
 import type { UpdateService } from './updater/update-service.ts';
 import { releasePageUrl } from './updater/verify-download.ts';
 
@@ -17,7 +26,11 @@ export interface IpcDeps {
   devServerUrl: string | undefined;
   /** Size-capped, time-limited fetch used for server checks. */
   fetchBytes: FetchBytes;
+  storage: StorageService;
 }
+
+const passphraseSchema = z.string().max(1024);
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 const linkIdSchema = z.enum(
   Object.keys(EXTERNAL_LINKS) as [keyof typeof EXTERNAL_LINKS, ...(keyof typeof EXTERNAL_LINKS)[]],
@@ -57,7 +70,38 @@ export function registerIpc(deps: IpcDeps): void {
     else await shell.openExternal(EXTERNAL_LINKS.releases);
   });
 
-  handle(IPC.securityStatus, () => securityStatus(deps.updates !== null, deps.settings.get().server.url));
+  handle(IPC.securityStatus, () =>
+    securityStatus({
+      updatesEnabled: deps.updates !== null,
+      serverUrl: deps.settings.get().server.url,
+      storage: deps.storage.getStatus(),
+    }),
+  );
+
+  handle(IPC.storageStatus, () => deps.storage.getStatus());
+  handle(IPC.storageSetup, async (_e, raw): Promise<PassphraseResult> => {
+    const passphrase = passphraseSchema.parse(raw);
+    if (deps.storage.getStatus().state !== 'setup-required') return { ok: false, reason: 'not-expected' };
+    if (passphrase.length < MIN_PASSPHRASE_LENGTH) return { ok: false, reason: 'too-short' };
+    await deps.storage.setupPassphrase(passphrase);
+    return { ok: true };
+  });
+  let failedUnlocks = 0;
+  handle(IPC.storageUnlock, async (_e, raw): Promise<PassphraseResult> => {
+    const passphrase = passphraseSchema.parse(raw);
+    if (deps.storage.getStatus().state !== 'locked') return { ok: false, reason: 'not-expected' };
+    try {
+      await deps.storage.unlock(passphrase);
+      failedUnlocks = 0;
+      return { ok: true };
+    } catch (err) {
+      if (!(err instanceof WrongPassphraseError)) throw err;
+      failedUnlocks += 1;
+      // Slow down repeated guessing through the UI (offline guessing is bounded by Argon2id).
+      await sleep(Math.min(5000, 250 * 2 ** failedUnlocks));
+      return { ok: false, reason: 'wrong-passphrase' };
+    }
+  });
   handle(IPC.serverCheck, (_e, url) => checkServer(url, deps.fetchBytes));
   handle(IPC.openLink, async (_e, id) => {
     await shell.openExternal(EXTERNAL_LINKS[linkIdSchema.parse(id)]);
@@ -70,7 +114,53 @@ export function broadcastUpdateStatus(target: WebContents, updates: UpdateServic
   });
 }
 
-export function securityStatus(updatesEnabled: boolean, serverUrl: string | null): SecurityStatus {
+export function broadcastStorageStatus(target: WebContents, storage: StorageService): () => void {
+  return storage.onStatus((status) => {
+    if (!target.isDestroyed()) target.send(IPC.storageStatusChanged, status);
+  });
+}
+
+function storageItem(status: StorageStatus): SecurityStatus['items'][number] {
+  const base = { id: 'storage', label: 'Encrypted local storage' };
+  switch (status.state) {
+    case 'open':
+      return {
+        ...base,
+        indicator: 'active',
+        value: status.protection === 'passphrase' ? 'Active · passphrase' : 'Active',
+        detail:
+          status.protection === 'passphrase'
+            ? 'River\u2019s local database is encrypted with SQLCipher (AES-256). Its key is sealed with your passphrase (Argon2id), which River asks for each time it starts.'
+            : `River\u2019s local database is encrypted with SQLCipher (AES-256). Its key is protected by ${status.keystore}, so other user accounts on this computer cannot read it.`,
+      };
+    case 'error':
+      return { ...base, indicator: 'warning', value: 'Unavailable', detail: status.message };
+    case 'opening':
+      return {
+        ...base,
+        indicator: 'inactive',
+        value: 'Opening…',
+        detail: 'River is opening its local database.',
+      };
+    default:
+      return {
+        ...base,
+        indicator: 'warning',
+        value: 'Locked',
+        detail: 'River\u2019s local data stays encrypted until you enter your passphrase.',
+      };
+  }
+}
+
+export function securityStatus({
+  updatesEnabled,
+  serverUrl,
+  storage,
+}: {
+  updatesEnabled: boolean;
+  serverUrl: string | null;
+  storage: StorageStatus;
+}): SecurityStatus {
   const serverHost = serverUrl ? new URL(serverUrl).host : null;
   return {
     items: [
@@ -114,14 +204,7 @@ export function securityStatus(updatesEnabled: boolean, serverUrl: string | null
         detail:
           'The interface runs in a sandboxed process with a strict content security policy. It has no access to files, keys or the network.',
       },
-      {
-        id: 'storage',
-        label: 'Encrypted local storage',
-        indicator: 'planned',
-        value: 'Arrives in 0.0.3',
-        detail:
-          'Nothing private is stored yet. Conversations and keys will live in an encrypted local database.',
-      },
+      storageItem(storage),
       {
         id: 'devices',
         label: 'Devices',

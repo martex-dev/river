@@ -1,7 +1,7 @@
 {
   "name": "@river/desktop",
   "productName": "River",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": true,
   "description": "River â€” private, end-to-end encrypted social communication.",
   "license": "AGPL-3.0-only",
@@ -21,7 +21,9 @@
     "dist:dir": "electron-vite build && electron-builder --dir --publish never"
   },
   "dependencies": {
-    "electron-updater": "6.8.9"
+    "better-sqlite3-multiple-ciphers": "13.0.3",
+    "electron-updater": "6.8.9",
+    "libsodium-wrappers-sumo": "0.8.4"
   },
   "devDependencies": {
     "@fontsource-variable/inter": "5.3.0",
@@ -30,6 +32,7 @@
     "@river/protocol": "*",
     "@river/release": "*",
     "@testing-library/react": "16.3.3",
+    "@types/libsodium-wrappers-sumo": "0.8.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/semver": "7.8.0",

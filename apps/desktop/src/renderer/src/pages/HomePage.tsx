@@ -18,6 +18,14 @@ export const STAGE_ONE = [
   { v: '1.0', name: 'Stage 1' },
 ];
 
+/** The next few milestones, shown on Home. Keep in step with ROADMAP.md. */
+const NEXT = [
+  { v: '0.0.4', name: 'Your cryptographic identity' },
+  { v: '0.1.0', name: 'Accounts without phone numbers' },
+  { v: '0.1.1', name: 'Encrypted profiles' },
+  { v: '0.2.0', name: 'End-to-end encrypted messages' },
+];
+
 /** Index of the current minor series on the Stage 1 timeline (e.g. 0.0.1 → 0). */
 export function stageIndex(version: string | undefined): number {
   if (!version) return 0;
@@ -108,26 +116,13 @@ export function HomePage({ reducedMotion }: { reducedMotion: boolean }): ReactEl
             Coming next
           </h2>
           <ul className="statuslist">
-            <li>
-              <StatusDot indicator="planned" />
-              <span>River server</span>
-              <span className="statuslist__value mono">0.0.2</span>
-            </li>
-            <li>
-              <StatusDot indicator="planned" />
-              <span>Encrypted local storage</span>
-              <span className="statuslist__value mono">0.0.3</span>
-            </li>
-            <li>
-              <StatusDot indicator="planned" />
-              <span>Your cryptographic identity</span>
-              <span className="statuslist__value mono">0.0.4</span>
-            </li>
-            <li>
-              <StatusDot indicator="planned" />
-              <span>Accounts without phone numbers</span>
-              <span className="statuslist__value mono">0.1.0</span>
-            </li>
+            {NEXT.map((n) => (
+              <li key={n.v}>
+                <StatusDot indicator="planned" />
+                <span>{n.name}</span>
+                <span className="statuslist__value mono">{n.v}</span>
+              </li>
+            ))}
           </ul>
         </section>
       </div>

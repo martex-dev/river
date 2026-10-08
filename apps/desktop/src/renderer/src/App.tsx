@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { RiverMark } from './components/RiverMark.tsx';
 import { SECTION_ICONS, LockIcon } from './components/Icons.tsx';
+import { LockScreen } from './components/LockScreen.tsx';
 import { UpdateToast } from './components/UpdateToast.tsx';
 import { PLANNED } from './features.ts';
 import { HomePage } from './pages/HomePage.tsx';
@@ -38,15 +39,20 @@ function useSystemReducedMotion(): boolean {
 }
 
 export function App(): ReactElement {
-  const { section, navigate, load, setUpdate, settings, info, loadError } = useRiver();
+  const { section, navigate, load, setUpdate, setStorage, settings, info, loadError, storage } = useRiver();
   const systemReduced = useSystemReducedMotion();
   const motion = settings?.appearance.motion ?? 'system';
   const reducedMotion = motion === 'reduced' || (motion === 'system' && systemReduced);
 
   useEffect(() => {
     void load();
-    return window.river.updates.onStatus(setUpdate);
-  }, [load, setUpdate]);
+    const offUpdates = window.river.updates.onStatus(setUpdate);
+    const offStorage = window.river.storage.onStatus((s) => void setStorage(s));
+    return () => {
+      offUpdates();
+      offStorage();
+    };
+  }, [load, setUpdate, setStorage]);
 
   useEffect(() => {
     document.documentElement.dataset.motion = reducedMotion ? 'reduced' : 'full';
@@ -57,6 +63,15 @@ export function App(): ReactElement {
   }, [info]);
 
   const planned = PLANNED[section];
+
+  if (storage.state === 'setup-required' || storage.state === 'locked' || storage.state === 'error') {
+    return (
+      <>
+        <div className="backdrop" aria-hidden="true" />
+        <LockScreen status={storage} />
+      </>
+    );
+  }
 
   return (
     <div className="shell">
