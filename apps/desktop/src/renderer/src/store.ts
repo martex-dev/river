@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AppInfo, SecurityStatus, StorageStatus, UpdateStatus } from '../../shared/ipc.ts';
+import type { AppInfo, IdentityInfo, SecurityStatus, StorageStatus, UpdateStatus } from '../../shared/ipc.ts';
 import type { Settings, SettingsPatch } from '../../shared/settings.ts';
 
 export const SECTIONS = [
@@ -22,12 +22,18 @@ interface RiverState {
   update: UpdateStatus;
   security: SecurityStatus | null;
   storage: StorageStatus;
+  /** undefined while loading; null when no identity exists yet. */
+  identity: IdentityInfo | null | undefined;
+  /** True while the first-run flow is on screen (kept until the user leaves the final step). */
+  onboarding: boolean;
   loadError: string | null;
   navigate(section: Section): void;
   load(): Promise<void>;
   updateSettings(patch: SettingsPatch): Promise<void>;
   setUpdate(status: UpdateStatus): void;
   setStorage(status: StorageStatus): Promise<void>;
+  identityCreated(identity: IdentityInfo): Promise<void>;
+  finishOnboarding(): void;
   checkForUpdates(): Promise<void>;
 }
 
@@ -38,18 +44,30 @@ export const useRiver = create<RiverState>((set) => ({
   update: { state: 'idle' },
   security: null,
   storage: { state: 'opening' },
+  identity: undefined,
+  onboarding: false,
   loadError: null,
   navigate: (section) => set({ section }),
   load: async () => {
     try {
-      const [info, settings, update, security, storage] = await Promise.all([
+      const [info, settings, update, security, storage, identity] = await Promise.all([
         window.river.app.info(),
         window.river.settings.get(),
         window.river.updates.status(),
         window.river.security.status(),
         window.river.storage.status(),
+        window.river.identity.get(),
       ]);
-      set({ info, settings, update, security, storage, loadError: null });
+      set({
+        info,
+        settings,
+        update,
+        security,
+        storage,
+        identity,
+        onboarding: storage.state === 'open' && identity === null,
+        loadError: null,
+      });
     } catch (err) {
       set({ loadError: (err as Error).message });
     }
@@ -63,8 +81,16 @@ export const useRiver = create<RiverState>((set) => ({
   setUpdate: (update) => set({ update }),
   setStorage: async (storage) => {
     set({ storage });
-    set({ security: await window.river.security.status() });
+    const [security, identity] = await Promise.all([
+      window.river.security.status(),
+      window.river.identity.get(),
+    ]);
+    set({ security, identity, onboarding: storage.state === 'open' && identity === null });
   },
+  identityCreated: async (identity) => {
+    set({ identity, security: await window.river.security.status() });
+  },
+  finishOnboarding: () => set({ onboarding: false, section: 'home' }),
   checkForUpdates: async () => {
     set({ update: { state: 'checking' } });
     set({ update: await window.river.updates.check() });

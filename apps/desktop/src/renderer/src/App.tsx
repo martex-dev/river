@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { RiverMark } from './components/RiverMark.tsx';
 import { SECTION_ICONS, LockIcon } from './components/Icons.tsx';
 import { LockScreen } from './components/LockScreen.tsx';
+import { Onboarding } from './components/Onboarding.tsx';
 import { UpdateToast } from './components/UpdateToast.tsx';
 import { PLANNED } from './features.ts';
 import { HomePage } from './pages/HomePage.tsx';
@@ -39,7 +40,20 @@ function useSystemReducedMotion(): boolean {
 }
 
 export function App(): ReactElement {
-  const { section, navigate, load, setUpdate, setStorage, settings, info, loadError, storage } = useRiver();
+  const {
+    section,
+    navigate,
+    load,
+    setUpdate,
+    setStorage,
+    settings,
+    info,
+    loadError,
+    storage,
+    onboarding,
+    identityCreated,
+    finishOnboarding,
+  } = useRiver();
   const systemReduced = useSystemReducedMotion();
   const motion = settings?.appearance.motion ?? 'system';
   const reducedMotion = motion === 'reduced' || (motion === 'system' && systemReduced);
@@ -69,6 +83,19 @@ export function App(): ReactElement {
       <>
         <div className="backdrop" aria-hidden="true" />
         <LockScreen status={storage} />
+      </>
+    );
+  }
+
+  if (onboarding) {
+    return (
+      <>
+        <div className="backdrop" aria-hidden="true" />
+        <Onboarding
+          reducedMotion={reducedMotion}
+          onCreated={(id) => void identityCreated(id)}
+          onFinished={finishOnboarding}
+        />
       </>
     );
   }

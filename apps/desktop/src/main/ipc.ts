@@ -5,6 +5,7 @@ import {
   EXTERNAL_LINKS,
   IPC,
   type AppInfo,
+  type IdentityInfo,
   type PassphraseResult,
   type SecurityStatus,
   type StorageStatus,
@@ -15,6 +16,7 @@ import { checkServer } from './server-check.ts';
 import type { SettingsStore } from './settings-store.ts';
 import { MIN_PASSPHRASE_LENGTH, WrongPassphraseError } from './storage/key-file.ts';
 import type { StorageService } from './storage/storage-service.ts';
+import type { IdentityService } from './identity/identity-service.ts';
 import type { UpdateService } from './updater/update-service.ts';
 import { releasePageUrl } from './updater/verify-download.ts';
 
@@ -27,6 +29,7 @@ export interface IpcDeps {
   /** Size-capped, time-limited fetch used for server checks. */
   fetchBytes: FetchBytes;
   storage: StorageService;
+  identity: IdentityService;
 }
 
 const passphraseSchema = z.string().max(1024);
@@ -75,10 +78,14 @@ export function registerIpc(deps: IpcDeps): void {
       updatesEnabled: deps.updates !== null,
       serverUrl: deps.settings.get().server.url,
       storage: deps.storage.getStatus(),
+      identity: deps.identity.get(),
     }),
   );
 
   handle(IPC.storageStatus, () => deps.storage.getStatus());
+  handle(IPC.identityGet, () => deps.identity.get());
+  handle(IPC.identityCreate, (_e, displayName) => deps.identity.create(displayName));
+  handle(IPC.identitySetName, (_e, displayName) => deps.identity.setDisplayName(displayName));
   handle(IPC.storageSetup, async (_e, raw): Promise<PassphraseResult> => {
     const passphrase = passphraseSchema.parse(raw);
     if (deps.storage.getStatus().state !== 'setup-required') return { ok: false, reason: 'not-expected' };
@@ -156,10 +163,12 @@ export function securityStatus({
   updatesEnabled,
   serverUrl,
   storage,
+  identity,
 }: {
   updatesEnabled: boolean;
   serverUrl: string | null;
   storage: StorageStatus;
+  identity: IdentityInfo | null;
 }): SecurityStatus {
   const serverHost = serverUrl ? new URL(serverUrl).host : null;
   return {
@@ -172,13 +181,22 @@ export function securityStatus({
         detail:
           'This version cannot send messages. River messages will be end-to-end encrypted from the first release that can send them (0.2.0).',
       },
-      {
-        id: 'identity',
-        label: 'Identity',
-        indicator: 'planned',
-        value: 'Not created',
-        detail: 'Your cryptographic identity and verification fingerprint arrive in 0.0.4.',
-      },
+      identity
+        ? {
+            id: 'identity',
+            label: 'Identity',
+            indicator: 'active',
+            value: identity.fingerprint.split(' ').slice(0, 2).join(' ') + ' …',
+            detail:
+              'Your identity key was created on this device and its private half never leaves it. Contacts will verify the fingerprint below to make sure they are really talking to you.',
+          }
+        : {
+            id: 'identity',
+            label: 'Identity',
+            indicator: 'inactive',
+            value: 'Not created',
+            detail: 'Create your identity to get a fingerprint your contacts can verify.',
+          },
       {
         id: 'server',
         label: 'Server message access',

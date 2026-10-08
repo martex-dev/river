@@ -18,6 +18,7 @@ import {
 import { SettingsStore } from './settings-store.ts';
 import { electronKeystore } from './storage/electron-keystore.ts';
 import { StorageService } from './storage/storage-service.ts';
+import { IdentityService } from './identity/identity-service.ts';
 import { UpdateService } from './updater/update-service.ts';
 import { createFetchBytes } from './http.ts';
 import { verifyDownloadedUpdate } from './updater/verify-download.ts';
@@ -51,6 +52,7 @@ async function start(): Promise<void> {
     appVersion: app.getVersion(),
   });
   storage.start();
+  const identity = new IdentityService(() => storage.db());
   app.on('will-quit', () => storage.close());
 
   const ui = uiSession();
@@ -104,6 +106,7 @@ async function start(): Promise<void> {
     devServerUrl,
     fetchBytes: serverFetch,
     storage,
+    identity,
   });
 
   const window = createWindow();

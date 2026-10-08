@@ -21,7 +21,7 @@ test.afterAll(async () => {
 
 test('loads the UI from the private river:// scheme', async () => {
   expect(page.url()).toBe('river://app/index.html');
-  await expect(page.locator('.hero__title')).toContainText('Your private');
+  await expect(page.locator('.hero__title')).toContainText('Welcome, E2E Tester');
   if (process.env.RIVER_SCREENSHOTS) await page.screenshot({ path: 'test-results/home.png' });
 });
 

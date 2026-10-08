@@ -17,6 +17,9 @@ export const IPC = {
   storageSetup: 'river:storage:setup-passphrase',
   storageUnlock: 'river:storage:unlock',
   storageStatusChanged: 'river:storage:status-changed',
+  identityGet: 'river:identity:get',
+  identityCreate: 'river:identity:create',
+  identitySetName: 'river:identity:set-name',
   openLink: 'river:link:open',
 } as const;
 
@@ -73,6 +76,17 @@ export type StorageStatus =
       message: string;
     };
 
+/** Everything the UI may know about the user's identity — public material only. */
+export interface IdentityInfo {
+  riverId: string;
+  displayName: string | null;
+  /** "AB73 29FA …" — SHA-256 of the identity public key, first 128 bits. */
+  fingerprint: string;
+  /** The same 16 bytes as Bytewords. */
+  words: string[];
+  createdAt: string;
+}
+
 export type PassphraseResult =
   { ok: true } | { ok: false; reason: 'wrong-passphrase' | 'too-short' | 'not-expected' };
 
@@ -93,6 +107,11 @@ export interface RiverApi {
   };
   security: { status(): Promise<SecurityStatus> };
   server: { check(url: string): Promise<ServerCheckResult> };
+  identity: {
+    get(): Promise<IdentityInfo | null>;
+    create(displayName: string): Promise<IdentityInfo>;
+    setDisplayName(displayName: string): Promise<IdentityInfo>;
+  };
   storage: {
     status(): Promise<StorageStatus>;
     setupPassphrase(passphrase: string): Promise<PassphraseResult>;

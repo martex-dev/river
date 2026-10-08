@@ -899,6 +899,133 @@ html[data-platform='darwin'] .topbar {
   margin-top: 4px;
 }
 
+/* ---------- Onboarding & identity ---------- */
+.onboarding {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  -webkit-app-region: drag;
+}
+.onboarding__card {
+  width: min(560px, 100%);
+  padding: 38px 36px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  -webkit-app-region: no-drag;
+  animation: toast-in var(--dur-slow) var(--ease-spring);
+}
+.onboarding__title {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.onboarding__points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-dim);
+}
+.onboarding__points li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.onboarding__points svg {
+  color: var(--ok);
+  flex: none;
+}
+.keygen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+  padding: 18px 0 8px;
+}
+.keygen__orbit {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+.keygen__orbit span {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--accent);
+  border-right-color: rgba(125, 134, 255, 0.6);
+  animation: spin 1.4s linear infinite;
+}
+.keygen__orbit span:nth-child(2) {
+  inset: 14px;
+  animation-duration: 1s;
+  animation-direction: reverse;
+  border-top-color: var(--accent-2);
+}
+.keygen__orbit span:nth-child(3) {
+  inset: 28px;
+  animation-duration: 0.8s;
+  border-top-color: var(--accent-3);
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.fingerprint {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--radius-m);
+  background: rgba(4, 8, 16, 0.6);
+  border: 1px solid var(--border-strong);
+}
+.fingerprint__hex {
+  display: flex;
+  flex-direction: column;
+  font-size: 18px;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  user-select: text;
+}
+.fingerprint__words {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  user-select: text;
+}
+.fingerprint__words li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-s);
+  background: rgba(125, 134, 255, 0.07);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  animation: page-in var(--dur-slow) var(--ease-out) both;
+}
+.fingerprint__n {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-weight: 500;
+}
+.identity-card .fingerprint {
+  max-width: 620px;
+}
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed;

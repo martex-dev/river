@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { ExternalIcon } from '../components/Icons.tsx';
+import { IdentityFingerprint } from '../components/IdentityFingerprint.tsx';
 import { StatusDot } from '../components/StatusDot.tsx';
 import { useRiver } from '../store.ts';
 
@@ -10,6 +11,7 @@ export function groupHex(hex: string): string {
 
 export function SecurityPage(): ReactElement {
   const security = useRiver((s) => s.security);
+  const identity = useRiver((s) => s.identity);
 
   return (
     <div className="page security">
@@ -21,6 +23,25 @@ export function SecurityPage(): ReactElement {
           marked as planned, never as active.
         </p>
       </header>
+
+      {identity && (
+        <section className="glass card identity-card" aria-labelledby="identity-title">
+          <div className="card__head">
+            <h2 id="identity-title" className="card__title">
+              Your identity{identity.displayName ? ` · ${identity.displayName}` : ''}
+            </h2>
+            <span className="muted small mono" title="River ID">
+              {identity.riverId}
+            </span>
+          </div>
+          <p className="muted small">
+            Read these words to a contact (in person or on a call) and ask them to compare with what River
+            shows for you. If they match, nobody has swapped your key. Contact verification arrives with
+            messaging.
+          </p>
+          <IdentityFingerprint identity={identity} />
+        </section>
+      )}
 
       <section className="glass board" aria-label="Security status">
         {(security?.items ?? []).map((item) => (

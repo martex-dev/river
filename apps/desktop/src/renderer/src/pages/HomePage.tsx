@@ -20,9 +20,9 @@ export const STAGE_ONE = [
 
 /** The next few milestones, shown on Home. Keep in step with ROADMAP.md. */
 const NEXT = [
-  { v: '0.0.4', name: 'Your cryptographic identity' },
   { v: '0.1.0', name: 'Accounts without phone numbers' },
   { v: '0.1.1', name: 'Encrypted profiles' },
+  { v: '0.1.2', name: 'Contacts and requests' },
   { v: '0.2.0', name: 'End-to-end encrypted messages' },
 ];
 
@@ -38,6 +38,7 @@ export function stageIndex(version: string | undefined): number {
 export function HomePage({ reducedMotion }: { reducedMotion: boolean }): ReactElement {
   const info = useRiver((s) => s.info);
   const security = useRiver((s) => s.security);
+  const identity = useRiver((s) => s.identity);
   const navigate = useRiver((s) => s.navigate);
   const current = stageIndex(info?.version);
 
@@ -50,7 +51,15 @@ export function HomePage({ reducedMotion }: { reducedMotion: boolean }): ReactEl
             River <span className="mono">{info?.version ?? '…'}</span> · {STAGE_ONE[current]?.name}
           </div>
           <h1 className="hero__title">
-            Your private <span className="gradient-text">river</span>.
+            {identity?.displayName ? (
+              <>
+                Welcome, <span className="gradient-text">{identity.displayName}</span>.
+              </>
+            ) : (
+              <>
+                Your private <span className="gradient-text">river</span>.
+              </>
+            )}
           </h1>
           <p className="hero__lead">
             Messages, communities, media and calls in one place — end-to-end encrypted, with no phone number,

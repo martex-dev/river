@@ -23,6 +23,11 @@ const api: RiverApi = {
   },
   security: { status: () => ipcRenderer.invoke(IPC.securityStatus) },
   server: { check: (url) => ipcRenderer.invoke(IPC.serverCheck, url) },
+  identity: {
+    get: () => ipcRenderer.invoke(IPC.identityGet),
+    create: (displayName) => ipcRenderer.invoke(IPC.identityCreate, displayName),
+    setDisplayName: (displayName) => ipcRenderer.invoke(IPC.identitySetName, displayName),
+  },
   storage: {
     status: () => ipcRenderer.invoke(IPC.storageStatus),
     setupPassphrase: (passphrase) => ipcRenderer.invoke(IPC.storageSetup, passphrase),
