@@ -1,0 +1,43 @@
+{
+  "name": "river",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "River — a private, end-to-end encrypted social communication platform.",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/martex-dev/river.git"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @river/desktop",
+    "build": "npm run build -w @river/desktop",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:e2e": "npm run test:e2e -w @river/desktop",
+    "dist": "npm run dist -w @river/desktop",
+    "version:set": "node scripts/release/set-version.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@resvg/resvg-js": "2.6.2",
+    "@types/node": "24.19.1",
+    "eslint": "10.12.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.13.0",
+    "prettier": "3.9.9",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.1",
+    "vitest": "5.0.3"
+  }
+}

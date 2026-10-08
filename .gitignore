@@ -1,0 +1,28 @@
+node_modules/
+out/
+dist/
+/apps/desktop/release/
+coverage/
+test-results/
+playwright-report/
+*.log
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+
+# Secrets — never commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.jks
+release-keys/
+
+# Local data
+*.sqlite
+*.sqlite-journal
+*.db
