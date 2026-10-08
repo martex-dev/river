@@ -3,7 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { launchRiver } from './launch.ts';
 
 // Desktop ↔ server integration: the real River server process and the real desktop app.
 let server: ChildProcess;
@@ -52,12 +53,7 @@ test.beforeAll(async () => {
   });
   await waitForHealth(`http://127.0.0.1:${port}/v1/health`);
 
-  app = await electron.launch({
-    args: [resolve(__dirname, '..'), `--user-data-dir=${userData}`],
-    env: { ...process.env, ELECTRON_RENDERER_URL: '' },
-  });
-  page = await app.firstWindow();
-  await page.waitForSelector('.rail');
+  ({ app, page } = await launchRiver(userData));
 });
 
 test.afterAll(async () => {

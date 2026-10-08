@@ -8,7 +8,10 @@ files:
   - out/**/*
   - package.json
   - '!**/*.map'
-asarUnpack: []
+# Native modules ship N-API prebuilds (ABI-stable across Node and Electron), so no rebuild is needed.
+npmRebuild: false
+asarUnpack:
+  - '**/*.node'
 extraResources:
   - from: ../../LICENSE
     to: LICENSE
@@ -34,6 +37,10 @@ win:
     - target: nsis
       arch: [x64]
   artifactName: River-Setup-${version}.${ext}
+  # Ship only this platform's native binaries.
+  files:
+    - '!**/node_modules/**/prebuilds/{darwin,linux,linuxmusl}-*'
+    - '!**/node_modules/**/prebuilds/win32-arm64*'
 nsis:
   oneClick: true
   perMachine: false
@@ -51,12 +58,17 @@ mac:
   identity: '-'
   hardenedRuntime: false
   artifactName: River-${version}-${arch}.${ext}
+  files:
+    - '!**/node_modules/**/prebuilds/{win32,linux,linuxmusl}-*'
 
 linux:
   executableName: river
   category: Network;InstantMessaging;Chat
   maintainer: River contributors <144735199+martex-dev@users.noreply.github.com>
   synopsis: Private, end-to-end encrypted social communication
+  files:
+    - '!**/node_modules/**/prebuilds/{win32,darwin,linuxmusl}-*'
+    - '!**/node_modules/**/prebuilds/linux-arm64*'
   target:
     - target: AppImage
       arch: [x64]

@@ -1,7 +1,8 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { join } from 'node:path';
+import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { launchRiver } from './launch.ts';
 
 // Runs the built app (`npm run build` first) exactly as the packaged app loads it: river://app/ with CSP.
 let app: ElectronApplication;
@@ -10,17 +11,12 @@ let userData: string;
 
 test.beforeAll(async () => {
   userData = mkdtempSync(join(tmpdir(), 'river-e2e-'));
-  app = await electron.launch({
-    args: [resolve(__dirname, '..'), `--user-data-dir=${userData}`],
-    env: { ...process.env, ELECTRON_RENDERER_URL: '' },
-  });
-  page = await app.firstWindow();
-  await page.waitForSelector('.rail');
+  ({ app, page } = await launchRiver(userData));
 });
 
 test.afterAll(async () => {
   await app?.close();
-  rmSync(userData, { recursive: true, force: true });
+  rmSync(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
 
 test('loads the UI from the private river:// scheme', async () => {
