@@ -83,6 +83,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Download the Electron binary (electron installs it lazily)
+        run: node node_modules/electron/install.js
       - run: npm run build
       - name: Allow Chromium sandbox on Ubuntu runners
         if: runner.os == 'Linux'
