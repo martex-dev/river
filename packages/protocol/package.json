@@ -1,0 +1,17 @@
+{
+  "name": "@river/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "description": "River client–server protocol: version constants and validated message schemas.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  }
+}
