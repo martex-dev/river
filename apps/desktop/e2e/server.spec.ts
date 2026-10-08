@@ -12,6 +12,8 @@ let port: number;
 let app: ElectronApplication;
 let page: Page;
 const dirs: string[] = [];
+let uiDir = '';
+const userDataDir = (): string => uiDir;
 
 function freePort(): Promise<number> {
   return new Promise((ok, fail) => {
@@ -41,6 +43,7 @@ test.beforeAll(async () => {
   const data = mkdtempSync(join(tmpdir(), 'river-e2e-srv-'));
   const userData = mkdtempSync(join(tmpdir(), 'river-e2e-ui-'));
   dirs.push(data, userData);
+  uiDir = userData;
   server = spawn(process.execPath, ['src/main.ts'], {
     cwd: resolve(__dirname, '../../server'),
     env: {
@@ -97,4 +100,27 @@ test('reports an unreachable server', async () => {
   await page.getByPlaceholder('https://river.example.org').fill(`http://127.0.0.1:${await freePort()}`);
   await page.getByRole('button', { name: 'Test connection' }).click();
   await expect(page.locator('.server-check')).toContainText('Could not reach the server');
+});
+
+test('creates an account on the server and reconnects after a restart', async () => {
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Server', exact: true }).click();
+  await page.getByPlaceholder('https://river.example.org').fill(`http://127.0.0.1:${port}`);
+  const save = page.getByRole('button', { name: 'Save', exact: true });
+  if (await save.isEnabled()) await save.click(); // already saved by the previous test
+  await page.getByRole('button', { name: 'Create account' }).click();
+  const card = page.locator('.account-card');
+  await expect(card).toContainText(`Account on 127.0.0.1:${port}`);
+  await expect(card.locator('.chip')).toHaveText('Connected');
+  await expect(page.locator('.topbar__pill')).toContainText('connected');
+  if (process.env.RIVER_SCREENSHOTS) await page.screenshot({ path: 'test-results/account.png' });
+
+  await page.getByRole('button', { name: 'Security', exact: true }).click();
+  await expect(page.locator('.board__row', { hasText: 'Devices' }).locator('.board__value')).toContainText(
+    'signed list v1',
+  );
+
+  await app.close();
+  ({ app, page } = await launchRiver(userDataDir()));
+  await expect(page.locator('.topbar__pill')).toContainText('connected', { timeout: 15_000 });
 });

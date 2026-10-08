@@ -1,5 +1,12 @@
 import { create } from 'zustand';
-import type { AppInfo, IdentityInfo, SecurityStatus, StorageStatus, UpdateStatus } from '../../shared/ipc.ts';
+import type {
+  AccountStatus,
+  AppInfo,
+  IdentityInfo,
+  SecurityStatus,
+  StorageStatus,
+  UpdateStatus,
+} from '../../shared/ipc.ts';
 import type { Settings, SettingsPatch } from '../../shared/settings.ts';
 
 export const SECTIONS = [
@@ -22,6 +29,7 @@ interface RiverState {
   update: UpdateStatus;
   security: SecurityStatus | null;
   storage: StorageStatus;
+  account: AccountStatus;
   /** undefined while loading; null when no identity exists yet. */
   identity: IdentityInfo | null | undefined;
   /** True while the first-run flow is on screen (kept until the user leaves the final step). */
@@ -32,6 +40,7 @@ interface RiverState {
   updateSettings(patch: SettingsPatch): Promise<void>;
   setUpdate(status: UpdateStatus): void;
   setStorage(status: StorageStatus): Promise<void>;
+  setAccount(status: AccountStatus): Promise<void>;
   identityCreated(identity: IdentityInfo): Promise<void>;
   finishOnboarding(): void;
   checkForUpdates(): Promise<void>;
@@ -45,18 +54,20 @@ export const useRiver = create<RiverState>((set) => ({
   security: null,
   storage: { state: 'opening' },
   identity: undefined,
+  account: { state: 'none' },
   onboarding: false,
   loadError: null,
   navigate: (section) => set({ section }),
   load: async () => {
     try {
-      const [info, settings, update, security, storage, identity] = await Promise.all([
+      const [info, settings, update, security, storage, identity, account] = await Promise.all([
         window.river.app.info(),
         window.river.settings.get(),
         window.river.updates.status(),
         window.river.security.status(),
         window.river.storage.status(),
         window.river.identity.get(),
+        window.river.account.status(),
       ]);
       set({
         info,
@@ -65,6 +76,7 @@ export const useRiver = create<RiverState>((set) => ({
         security,
         storage,
         identity,
+        account,
         onboarding: storage.state === 'open' && identity === null,
         loadError: null,
       });
@@ -86,6 +98,9 @@ export const useRiver = create<RiverState>((set) => ({
       window.river.identity.get(),
     ]);
     set({ security, identity, onboarding: storage.state === 'open' && identity === null });
+  },
+  setAccount: async (account) => {
+    set({ account, security: await window.river.security.status() });
   },
   identityCreated: async (identity) => {
     set({ identity, security: await window.river.security.status() });

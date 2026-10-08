@@ -4,6 +4,8 @@ import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import {
   EXTERNAL_LINKS,
   IPC,
+  type AccountActionResult,
+  type AccountStatus,
   type AppInfo,
   type IdentityInfo,
   type PassphraseResult,
@@ -17,6 +19,7 @@ import type { SettingsStore } from './settings-store.ts';
 import { MIN_PASSPHRASE_LENGTH, WrongPassphraseError } from './storage/key-file.ts';
 import type { StorageService } from './storage/storage-service.ts';
 import type { IdentityService } from './identity/identity-service.ts';
+import { UserFacingError, type AccountService } from './account/account-service.ts';
 import type { UpdateService } from './updater/update-service.ts';
 import { releasePageUrl } from './updater/verify-download.ts';
 
@@ -30,6 +33,7 @@ export interface IpcDeps {
   fetchBytes: FetchBytes;
   storage: StorageService;
   identity: IdentityService;
+  account: AccountService;
 }
 
 const passphraseSchema = z.string().max(1024);
@@ -79,10 +83,23 @@ export function registerIpc(deps: IpcDeps): void {
       serverUrl: deps.settings.get().server.url,
       storage: deps.storage.getStatus(),
       identity: deps.identity.get(),
+      account: deps.account.status(),
     }),
   );
 
   handle(IPC.storageStatus, () => deps.storage.getStatus());
+  handle(IPC.accountStatus, () => deps.account.status());
+  handle(IPC.accountConnect, () => deps.account.connect());
+  handle(IPC.accountRegister, async (): Promise<AccountActionResult> => {
+    try {
+      return { ok: true, status: await deps.account.register(deps.settings.get().server.url) };
+    } catch (err) {
+      return {
+        ok: false,
+        message: err instanceof UserFacingError ? err.message : 'Something went wrong creating your account.',
+      };
+    }
+  });
   handle(IPC.identityGet, () => deps.identity.get());
   handle(IPC.identityCreate, (_e, displayName) => deps.identity.create(displayName));
   handle(IPC.identitySetName, (_e, displayName) => deps.identity.setDisplayName(displayName));
@@ -118,6 +135,12 @@ export function registerIpc(deps: IpcDeps): void {
 export function broadcastUpdateStatus(target: WebContents, updates: UpdateService): () => void {
   return updates.onStatus((status) => {
     if (!target.isDestroyed()) target.send(IPC.updatesStatusChanged, status);
+  });
+}
+
+export function broadcastAccountStatus(target: WebContents, account: AccountService): () => void {
+  return account.onStatus((status) => {
+    if (!target.isDestroyed()) target.send(IPC.accountStatusChanged, status);
   });
 }
 
@@ -164,13 +187,16 @@ export function securityStatus({
   serverUrl,
   storage,
   identity,
+  account,
 }: {
   updatesEnabled: boolean;
   serverUrl: string | null;
   storage: StorageStatus;
   identity: IdentityInfo | null;
+  account: AccountStatus;
 }): SecurityStatus {
-  const serverHost = serverUrl ? new URL(serverUrl).host : null;
+  const serverHost =
+    account.state === 'registered' ? account.server : serverUrl ? new URL(serverUrl).host : null;
   return {
     items: [
       {
@@ -202,9 +228,12 @@ export function securityStatus({
         label: 'Server message access',
         indicator: 'inactive',
         value: serverHost ? `None · ${serverHost}` : 'No server configured',
-        detail: serverHost
-          ? `River is set to use ${serverHost}. No account exists there yet (accounts arrive in 0.1.0), so the server holds none of your data. When messaging arrives it will only ever receive encrypted messages.`
-          : 'River is not set to use any server, so no server holds any of your data.',
+        detail:
+          account.state === 'registered'
+            ? `Your account on ${serverHost} holds only your River ID, your public identity key and your signed device list. It cannot read anything you write: there is no messaging yet, and when it arrives the server will only ever relay encrypted messages.`
+            : serverHost
+              ? `River is set to use ${serverHost}, but you have no account there yet, so the server holds none of your data.`
+              : 'River is not set to use any server, so no server holds any of your data.',
       },
       {
         id: 'updates',
@@ -223,13 +252,25 @@ export function securityStatus({
           'The interface runs in a sandboxed process with a strict content security policy. It has no access to files, keys or the network.',
       },
       storageItem(storage),
-      {
-        id: 'devices',
-        label: 'Devices',
-        indicator: 'inactive',
-        value: 'This device only',
-        detail: 'Linking more devices arrives with accounts (0.1.x).',
-      },
+      account.state === 'registered'
+        ? {
+            id: 'devices',
+            label: 'Devices',
+            indicator: account.connection === 'error' ? 'warning' : 'active',
+            value: `${account.devices} · signed list v${account.listVersion}`,
+            detail:
+              account.connection === 'error'
+                ? (account.message ?? 'The device list could not be verified.')
+                : 'Your devices are listed in a record signed by your identity key. River checks that signature every time it connects, so the server cannot add a device to your account without you noticing.',
+          }
+        : {
+            id: 'devices',
+            label: 'Devices',
+            indicator: 'inactive',
+            value: 'This device only',
+            detail:
+              'Your device list starts when you create an account. Linking more devices comes later in 0.1.x.',
+          },
     ],
     releaseKeys: TRUSTED_RELEASE_KEYS.map((k) => ({ keyId: k.keyId, comment: k.comment })),
   };

@@ -46,6 +46,8 @@ export function App(): ReactElement {
     load,
     setUpdate,
     setStorage,
+    setAccount,
+    account,
     settings,
     info,
     loadError,
@@ -62,11 +64,13 @@ export function App(): ReactElement {
     void load();
     const offUpdates = window.river.updates.onStatus(setUpdate);
     const offStorage = window.river.storage.onStatus((s) => void setStorage(s));
+    const offAccount = window.river.account.onStatus((s) => void setAccount(s));
     return () => {
       offUpdates();
       offStorage();
+      offAccount();
     };
-  }, [load, setUpdate, setStorage]);
+  }, [load, setUpdate, setStorage, setAccount]);
 
   useEffect(() => {
     document.documentElement.dataset.motion = reducedMotion ? 'reduced' : 'full';
@@ -122,9 +126,18 @@ export function App(): ReactElement {
       <div className="main">
         <header className="topbar">
           <span className="topbar__title">{LABELS[section]}</span>
-          <span className="topbar__pill" title="This version does not connect to any River server">
-            <LockIcon size={13} /> Local only · no account yet
-          </span>
+          {account.state === 'registered' ? (
+            <span className={`topbar__pill is-${account.connection}`} title={`Account on ${account.server}`}>
+              <span
+                className={`status-dot status-dot--${account.connection === 'online' ? 'active' : account.connection === 'error' ? 'warning' : 'inactive'}`}
+              />
+              {account.server} · {account.connection === 'online' ? 'connected' : account.connection}
+            </span>
+          ) : (
+            <span className="topbar__pill" title="No River account yet">
+              <LockIcon size={13} /> Local only · no account yet
+            </span>
+          )}
         </header>
         <main className="content" key={section}>
           {loadError && (

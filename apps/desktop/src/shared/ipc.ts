@@ -20,6 +20,10 @@ export const IPC = {
   identityGet: 'river:identity:get',
   identityCreate: 'river:identity:create',
   identitySetName: 'river:identity:set-name',
+  accountStatus: 'river:account:status',
+  accountRegister: 'river:account:register',
+  accountConnect: 'river:account:connect',
+  accountStatusChanged: 'river:account:status-changed',
   openLink: 'river:link:open',
 } as const;
 
@@ -87,6 +91,23 @@ export interface IdentityInfo {
   createdAt: string;
 }
 
+export type AccountStatus =
+  | { state: 'none' }
+  | {
+      state: 'registered';
+      /** Host (and port) of the server, for display. */
+      server: string;
+      serverUrl: string;
+      riverId: string;
+      deviceId: number;
+      devices: number;
+      listVersion: number;
+      connection: 'connecting' | 'online' | 'offline' | 'error';
+      message?: string;
+    };
+
+export type AccountActionResult = { ok: true; status: AccountStatus } | { ok: false; message: string };
+
 export type PassphraseResult =
   { ok: true } | { ok: false; reason: 'wrong-passphrase' | 'too-short' | 'not-expected' };
 
@@ -111,6 +132,13 @@ export interface RiverApi {
     get(): Promise<IdentityInfo | null>;
     create(displayName: string): Promise<IdentityInfo>;
     setDisplayName(displayName: string): Promise<IdentityInfo>;
+  };
+  account: {
+    status(): Promise<AccountStatus>;
+    /** Creates an account on the server set in Settings → Server. */
+    register(): Promise<AccountActionResult>;
+    connect(): Promise<AccountStatus>;
+    onStatus(listener: (status: AccountStatus) => void): () => void;
   };
   storage: {
     status(): Promise<StorageStatus>;

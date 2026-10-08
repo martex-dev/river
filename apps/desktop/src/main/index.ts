@@ -4,7 +4,7 @@ import { autoUpdater } from 'electron-updater';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import { channelOfVersion } from '@river/release/channels';
 import type { AppInfo } from '../shared/ipc.ts';
-import { broadcastStorageStatus, broadcastUpdateStatus, registerIpc } from './ipc.ts';
+import { broadcastAccountStatus, broadcastStorageStatus, broadcastUpdateStatus, registerIpc } from './ipc.ts';
 import { createFileLogger } from './logger.ts';
 import {
   APP_ORIGIN,
@@ -19,8 +19,9 @@ import { SettingsStore } from './settings-store.ts';
 import { electronKeystore } from './storage/electron-keystore.ts';
 import { StorageService } from './storage/storage-service.ts';
 import { IdentityService } from './identity/identity-service.ts';
+import { AccountService } from './account/account-service.ts';
 import { UpdateService } from './updater/update-service.ts';
-import { createFetchBytes } from './http.ts';
+import { createFetchBytes, createRequestJson } from './http.ts';
 import { verifyDownloadedUpdate } from './updater/verify-download.ts';
 
 const devServerUrl = (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) || undefined;
@@ -53,6 +54,17 @@ async function start(): Promise<void> {
   });
   storage.start();
   const identity = new IdentityService(() => storage.db());
+  const account = new AccountService({
+    db: () => storage.db(),
+    identity,
+    requestJson: createRequestJson((input, init) => net.fetch(input as string, init)),
+    log,
+  });
+  // Connect whenever local data becomes available (now, or after the user unlocks).
+  if (storage.getStatus().state === 'open') void account.connect();
+  storage.onStatus((s) => {
+    if (s.state === 'open') void account.connect();
+  });
   app.on('will-quit', () => storage.close());
 
   const ui = uiSession();
@@ -107,10 +119,12 @@ async function start(): Promise<void> {
     fetchBytes: serverFetch,
     storage,
     identity,
+    account,
   });
 
   const window = createWindow();
   broadcastStorageStatus(window.webContents, storage);
+  broadcastAccountStatus(window.webContents, account);
   if (updates) {
     const service = updates;
     broadcastUpdateStatus(window.webContents, service);

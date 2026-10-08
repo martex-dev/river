@@ -35,4 +35,25 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 3,
+    name: '0003_account',
+    up(db) {
+      // The account on a River server. device_private_key never leaves this database.
+      db.exec(`
+        CREATE TABLE account (
+          id                    INTEGER PRIMARY KEY CHECK (id = 1),
+          server_url            TEXT NOT NULL,
+          river_id              TEXT NOT NULL,
+          device_id             INTEGER NOT NULL,
+          device_public_key     BLOB NOT NULL,
+          device_private_key    BLOB NOT NULL,
+          device_list           BLOB NOT NULL,
+          device_list_signature BLOB NOT NULL,
+          device_list_version   INTEGER NOT NULL,
+          registered_at         TEXT NOT NULL
+        ) STRICT;
+      `);
+    },
+  },
 ];

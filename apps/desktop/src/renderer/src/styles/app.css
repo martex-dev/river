@@ -1026,6 +1026,49 @@ html[data-platform='darwin'] .topbar {
   max-width: 620px;
 }
 
+/* ---------- Account ---------- */
+.account-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--radius-m);
+  background: rgba(4, 8, 16, 0.55);
+  border: 1px solid var(--border);
+}
+.account-card.is-online {
+  border-color: rgba(62, 224, 143, 0.4);
+}
+.account-card.is-error {
+  border-color: rgba(255, 92, 122, 0.45);
+}
+.account-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.chip--online {
+  color: var(--ok);
+  border-color: rgba(62, 224, 143, 0.4);
+}
+.chip--error {
+  color: var(--danger);
+  border-color: rgba(255, 92, 122, 0.45);
+}
+.chip--offline,
+.chip--connecting {
+  color: var(--text-dim);
+  border-color: var(--border-strong);
+}
+.create-account {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed;

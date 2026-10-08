@@ -20,9 +20,9 @@ export const STAGE_ONE = [
 
 /** The next few milestones, shown on Home. Keep in step with ROADMAP.md. */
 const NEXT = [
-  { v: '0.1.0', name: 'Accounts without phone numbers' },
   { v: '0.1.1', name: 'Encrypted profiles' },
   { v: '0.1.2', name: 'Contacts and requests' },
+  { v: '0.1.3', name: 'Privacy controls' },
   { v: '0.2.0', name: 'End-to-end encrypted messages' },
 ];
 

@@ -1,4 +1,10 @@
-import { createIdentity, formatFingerprint, identityFingerprint, verificationWords } from '@river/crypto';
+import {
+  createIdentity,
+  formatFingerprint,
+  identityFingerprint,
+  sign,
+  verificationWords,
+} from '@river/crypto';
 import { z } from 'zod';
 import type { IdentityInfo } from '../../shared/ipc.ts';
 import type { LocalDatabase } from '../storage/database.ts';
@@ -8,6 +14,13 @@ export const displayNameSchema = z
   .transform((s) => s.normalize('NFC').replace(/\s+/g, ' ').trim())
   .pipe(z.string().max(64))
   .transform((s) => (s === '' ? null : s));
+
+export interface IdentitySigner {
+  riverId: string;
+  publicKey: Uint8Array;
+  registrationId: number;
+  sign(message: Uint8Array): Uint8Array;
+}
 
 interface IdentityRow {
   river_id: string;
@@ -62,6 +75,34 @@ export class IdentityService {
       keys.privateKey.fill(0);
     }
     return this.get()!;
+  }
+
+  /**
+   * Main-process-only access for protocol code: public material plus a signing
+   * function. The private key is read, used and zeroed inside `sign`.
+   */
+  signer(): IdentitySigner | null {
+    const db = this.db();
+    if (!db) return null;
+    const row = db
+      .prepare('SELECT river_id, public_key, registration_id FROM identity WHERE id = 1')
+      .get() as { river_id: string; public_key: Uint8Array; registration_id: number } | undefined;
+    if (!row) return null;
+    return {
+      riverId: row.river_id,
+      publicKey: new Uint8Array(row.public_key),
+      registrationId: row.registration_id,
+      sign: (message) => {
+        const { private_key } = db.prepare('SELECT private_key FROM identity WHERE id = 1').get() as {
+          private_key: Uint8Array;
+        };
+        try {
+          return sign(private_key, message);
+        } finally {
+          private_key.fill(0);
+        }
+      },
+    };
   }
 
   setDisplayName(rawDisplayName: unknown): IdentityInfo {

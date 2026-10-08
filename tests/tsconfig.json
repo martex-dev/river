@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "paths": {
+      "better-sqlite3-multiple-ciphers": ["../node_modules/better-sqlite3-multiple-ciphers/index.d.ts"]
+    }
+  },
+  "include": ["integration", "vitest.config.ts"]
+}

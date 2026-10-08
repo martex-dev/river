@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC, type RiverApi, type StorageStatus, type UpdateStatus } from '../shared/ipc.ts';
+import {
+  IPC,
+  type AccountStatus,
+  type RiverApi,
+  type StorageStatus,
+  type UpdateStatus,
+} from '../shared/ipc.ts';
 
 // The only surface the UI gets. No Node, no ipcRenderer, no arbitrary channels.
 const api: RiverApi = {
@@ -27,6 +33,18 @@ const api: RiverApi = {
     get: () => ipcRenderer.invoke(IPC.identityGet),
     create: (displayName) => ipcRenderer.invoke(IPC.identityCreate, displayName),
     setDisplayName: (displayName) => ipcRenderer.invoke(IPC.identitySetName, displayName),
+  },
+  account: {
+    status: () => ipcRenderer.invoke(IPC.accountStatus),
+    register: () => ipcRenderer.invoke(IPC.accountRegister),
+    connect: () => ipcRenderer.invoke(IPC.accountConnect),
+    onStatus: (listener) => {
+      const handler = (_event: unknown, status: AccountStatus): void => listener(status);
+      ipcRenderer.on(IPC.accountStatusChanged, handler);
+      return () => {
+        ipcRenderer.removeListener(IPC.accountStatusChanged, handler);
+      };
+    },
   },
   storage: {
     status: () => ipcRenderer.invoke(IPC.storageStatus),

@@ -1,9 +1,9 @@
 {
   "name": "river",
-  "version": "0.0.4",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "River — a private, end-to-end encrypted social communication platform.",
+  "description": "River â€” a private, end-to-end encrypted social communication platform.",
   "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
@@ -19,7 +19,7 @@
   "scripts": {
     "dev": "npm run dev -w @river/desktop",
     "build": "npm run build -w @river/desktop",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc -p tests/tsconfig.json",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

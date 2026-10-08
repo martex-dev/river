@@ -1,6 +1,6 @@
 import { useState, type ReactElement, type ReactNode } from 'react';
 import type { ReleaseChannel } from '@river/release/channels';
-import type { ServerCheckResult, UpdateStatus } from '../../../shared/ipc.ts';
+import type { AccountStatus, ServerCheckResult, UpdateStatus } from '../../../shared/ipc.ts';
 import { serverUrlSchema, type Settings } from '../../../shared/settings.ts';
 import { ExternalIcon } from '../components/Icons.tsx';
 import { useRiver } from '../store.ts';
@@ -178,7 +178,80 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
 }
 
 function ServerPanel({ settings }: { settings: Settings }): ReactElement {
+  const account = useRiver((s) => s.account);
+  if (account.state === 'registered') return <AccountPanel account={account} />;
+  return <ServerSetup settings={settings} />;
+}
+
+const CONNECTION_LABEL = {
+  connecting: 'Connecting…',
+  online: 'Connected',
+  offline: 'Offline',
+  error: 'Problem',
+} as const;
+
+function AccountPanel({
+  account,
+}: {
+  account: Extract<AccountStatus, { state: 'registered' }>;
+}): ReactElement {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="panel">
+      <h2 className="panel__title">Server</h2>
+      <div className={`account-card is-${account.connection}`} role="status">
+        <div className="account-card__head">
+          <strong>Account on {account.server}</strong>
+          <span className={`chip chip--${account.connection}`}>{CONNECTION_LABEL[account.connection]}</span>
+        </div>
+        <dl className="about-grid">
+          <div>
+            <dt>River ID</dt>
+            <dd className="mono small">{account.riverId}</dd>
+          </div>
+          <div>
+            <dt>This device</dt>
+            <dd>
+              Device {account.deviceId} of {account.devices}
+            </dd>
+          </div>
+          <div>
+            <dt>Device list</dt>
+            <dd>Signed by your identity · v{account.listVersion}</dd>
+          </div>
+          <div>
+            <dt>Server address</dt>
+            <dd className="mono small">{account.serverUrl}</dd>
+          </div>
+        </dl>
+        {account.message && (
+          <p className={account.connection === 'error' ? 'field__error' : 'muted small'}>{account.message}</p>
+        )}
+      </div>
+      <div className="button-row">
+        <button
+          className="btn btn--ghost"
+          disabled={busy || account.connection === 'connecting'}
+          onClick={() => {
+            setBusy(true);
+            void window.river.account.connect().finally(() => setBusy(false));
+          }}
+        >
+          Reconnect
+        </button>
+      </div>
+      <p className="muted small">
+        The server knows your River ID, your public keys and which devices you use — never your messages.
+        Moving to another server and deleting your account arrive in a later release.
+      </p>
+    </div>
+  );
+}
+
+function ServerSetup({ settings }: { settings: Settings }): ReactElement {
   const updateSettings = useRiver((s) => s.updateSettings);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [draft, setDraft] = useState(settings.server.url ?? '');
   const [error, setError] = useState<string | null>(null);
   const [check, setCheck] = useState<ServerCheckResult | null>(null);
@@ -282,9 +355,41 @@ function ServerPanel({ settings }: { settings: Settings }): ReactElement {
         </div>
       )}
       <p className="muted small">
-        Testing sends one anonymous request for the server’s version — nothing about you. Accounts arrive in
-        River 0.1.0.
+        Testing sends one anonymous request for the server’s version — nothing about you.
       </p>
+
+      {settings.server.url && (
+        <div className="create-account">
+          <h3 className="card__title">Create your account on {new URL(settings.server.url).host}</h3>
+          <p className="muted small">
+            River registers your River ID, your public identity key and a new key for this device. No phone
+            number, e-mail or name is sent. Your display name stays on this computer.
+          </p>
+          {createError && (
+            <p className="field__error" role="alert">
+              {createError}
+            </p>
+          )}
+          <div className="button-row">
+            <button
+              className="btn btn--primary"
+              disabled={creating}
+              onClick={() => {
+                setCreating(true);
+                setCreateError(null);
+                void window.river.account
+                  .register()
+                  .then((r) => {
+                    if (!r.ok) setCreateError(r.message);
+                  })
+                  .finally(() => setCreating(false));
+              }}
+            >
+              {creating ? 'Creating account…' : 'Create account'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
