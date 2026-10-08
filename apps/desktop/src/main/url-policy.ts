@@ -30,11 +30,13 @@ export function resolveAppPath(rootDir: string, url: string): string | null {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== `${APP_SCHEME}:` || parsed.host !== 'app') return null;
+    // River's assets never contain encoded separators; refuse them on every OS.
+    if (/%2f|%5c/i.test(parsed.pathname)) return null;
     pathname = decodeURIComponent(parsed.pathname);
   } catch {
     return null;
   }
-  if (pathname.includes('\0')) return null;
+  if (pathname.includes('\0') || pathname.includes('\\')) return null;
   const root = resolve(rootDir);
   const target = resolve(root, '.' + (pathname === '/' ? '/index.html' : pathname));
   return target.startsWith(root + sep) ? target : null;

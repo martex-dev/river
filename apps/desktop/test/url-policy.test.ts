@@ -30,6 +30,8 @@ describe('resolveAppPath', () => {
     expect(resolveAppPath(root, 'river://app/..%2f..%2fsecret.txt')).toBeNull();
     expect(resolveAppPath(root, 'river://app/..%5c..%5csecret.txt')).toBeNull();
     expect(resolveAppPath(root, 'river://app/%00index.html')).toBeNull();
+    expect(resolveAppPath(root, 'river://app/assets/a%5Cb.js')).toBeNull();
+    expect(resolveAppPath(root, 'river://app/assets\\a.js')).toBeNull();
   });
 
   it('only answers for river://app', () => {
