@@ -1,0 +1,7 @@
+# Security reviews and design notes
+
+| Date       | Version | Scope                                    | Notes                              |
+| ---------- | ------- | ---------------------------------------- | ---------------------------------- |
+| 2026-10-08 | 0.0.1   | Desktop shell hardening, update pipeline | [0.0.1-review.md](0.0.1-review.md) |
+
+Internal reviews are not a substitute for an independent audit (see SECURITY.md).
