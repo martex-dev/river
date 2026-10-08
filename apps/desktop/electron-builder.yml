@@ -1,0 +1,71 @@
+appId: io.github.martex-dev.river
+productName: River
+copyright: Copyright © 2026 River contributors. Licensed under AGPL-3.0-only.
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+asarUnpack: []
+extraResources:
+  - from: ../../LICENSE
+    to: LICENSE
+# Electron fuses: River's binary cannot be reused as a Node.js runtime or debugged/injected
+# via --inspect / NODE_OPTIONS, and only loads its own integrity-checked app.asar.
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
+  resetAdHocDarwinSignature: true
+publish:
+  provider: github
+  owner: martex-dev
+  repo: river
+  releaseType: release
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: River-Setup-${version}.${ext}
+nsis:
+  oneClick: true
+  perMachine: false
+  deleteAppDataOnUninstall: false
+  shortcutName: River
+
+mac:
+  category: public.app-category.social-networking
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
+  # Ad-hoc signature until the project has an Apple Developer ID (see docs/deployment/updates.md).
+  identity: '-'
+  hardenedRuntime: false
+  artifactName: River-${version}-${arch}.${ext}
+
+linux:
+  executableName: river
+  category: Network;InstantMessaging;Chat
+  maintainer: River contributors <144735199+martex-dev@users.noreply.github.com>
+  synopsis: Private, end-to-end encrypted social communication
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+    - target: rpm
+      arch: [x64]
+  artifactName: River-${version}-${arch}.${ext}
+deb:
+  packageName: river
+rpm:
+  packageName: river

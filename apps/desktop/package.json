@@ -1,0 +1,47 @@
+{
+  "name": "@river/desktop",
+  "productName": "River",
+  "version": "0.0.1",
+  "private": true,
+  "description": "River \u00e2\u20ac\u201d private, end-to-end encrypted social communication.",
+  "license": "AGPL-3.0-only",
+  "author": {
+    "name": "River contributors",
+    "email": "144735199+martex-dev@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/martex-dev/river",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json && tsc -p tsconfig.e2e.json",
+    "test:e2e": "playwright test",
+    "dist": "electron-vite build && electron-builder --publish never",
+    "dist:dir": "electron-vite build && electron-builder --dir --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.9"
+  },
+  "devDependencies": {
+    "@fontsource-variable/inter": "5.3.0",
+    "@fontsource-variable/jetbrains-mono": "5.3.0",
+    "@playwright/test": "1.64.0",
+    "@river/release": "*",
+    "@testing-library/react": "16.3.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/semver": "7.8.0",
+    "@vitejs/plugin-react": "5.2.0",
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "jsdom": "30.1.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "semver": "7.8.5",
+    "vite": "7.3.7",
+    "zod": "4.6.5",
+    "zustand": "5.0.15"
+  }
+}
