@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-09 · Current version: **0.1.0** · Stage 1 · Next: **0.1.1**_
+_Last updated: 2026-10-09 · Current version: **0.2.0** · Stage 1 · Next: per-member keys, DMs, TURN/SFU_
 
 ## Complete
 
@@ -17,6 +17,7 @@ _Last updated: 2026-10-09 · Current version: **0.1.0** · Stage 1 · Next: **0.
 | Local storage     | SQLCipher database; key wrapped by DPAPI / Keychain / Secret Service, or sealed with an Argon2id passphrase; transactional migrations with backups; lock/unlock UI             | `storage.test.ts` (incl. libsodium vs OpenSSL Argon2id agreement), `e2e/storage.spec.ts`       |
 | Identity          | libsignal identity key, River ID, fingerprint, Bytewords verification words, safety numbers; onboarding; Security Center identity card; private key never crosses IPC          | `packages/crypto/test`, `identity-service.test.ts`, `e2e/identity.spec.ts`                     |
 | Accounts          | Registration with identity + device key proof, identity-signed device list, challenge–response sessions (hashed tokens), server-tamper detection, Settings → Server account UI | `apps/server/test/accounts.test.ts`, `tests/integration/account.test.ts`, `e2e/server.spec.ts` |
+| Communities       | Create/invite/join, text channels, voice channels with video and screen sharing (WebRTC mesh), shared-key E2EE of all community content                                        | `apps/server/test/communities.test.ts`, `e2e/community.spec.ts` (two apps)                     |
 | CI/CD             | CI (lint, format, typecheck, unit, e2e on 3 OSes, audit), CodeQL, Dependabot, tag-driven signed release pipeline                                                               | —                                                                                              |
 
 ## Partially complete

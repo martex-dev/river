@@ -19,10 +19,10 @@
 
 ---
 
-> **River is in early development (0.0.x).** This release is the foundation: the
-> desktop app, its design, and signed automatic updates. Messaging, communities,
-> social features and calls arrive in the releases listed in the [roadmap](ROADMAP.md).
-> Nothing is described below as working unless it works today.
+> **River is in early development.** Working today (0.2): encrypted identity and
+> accounts, and **communities** with encrypted text channels and voice/video
+> channels with screen sharing. Direct messages, social feed, files and mobile
+> arrive in the releases listed in the [roadmap](ROADMAP.md).
 
 ## What River is
 
@@ -61,6 +61,12 @@ macOS, are in [INSTALL.md](INSTALL.md).
 **You only install River once.** It updates itself from GitHub Releases, and every
 update is checked against River's Ed25519 release signature before it is installed.
 You can choose the Stable, Beta or Nightly channel in Settings → Updates.
+
+## Host a community
+
+Run a River server on your own PC with a free tunnel:
+[docs/deployment/host-a-community.md](docs/deployment/host-a-community.md).
+Members just install River and paste your invite link.
 
 ## Stages
 

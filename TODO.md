@@ -3,6 +3,14 @@
 Ordered by priority. The top unchecked item is the next thing to build.
 Milestone definitions: [ROADMAP.md](ROADMAP.md).
 
+## Next — community hardening (after 0.2.0)
+
+- [ ] Per-member keys (libsignal sender keys) with forward secrecy; member removal / key rotation
+- [ ] TURN relay for strict networks; SFU for larger calls
+- [ ] Kick/ban, roles UI, channel rename/delete, message edit/delete/reactions
+- [ ] Desktop notifications (privacy setting already exists), unread badges
+- [ ] Multiple servers per client
+
 ## 0.1.1 — Encrypted profiles
 
 - [ ] Profile key (256-bit) in the identity record; profile fields (name, bio, avatar, links) encrypted with AES-256-GCM under it

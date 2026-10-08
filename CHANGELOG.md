@@ -6,6 +6,38 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-09
+
+**Communities.** Create a private community, invite people with a link, chat in
+text channels and meet in voice channels with video and screen sharing.
+
+### Added
+
+- **Communities** with text and voice channels, owners/admins/members, member
+  list, and live updates.
+- **Invite links** — one paste joins the community *and* creates the account on
+  that server automatically. Links expire after 7 days or 100 uses.
+- **End-to-end encrypted community content**: community, channel and member
+  names, messages and call setup are encrypted on your device with the community
+  key (AES-256-GCM, bound to community and channel). The key travels only in the
+  invite link's `#fragment`, which never reaches the server.
+- **Voice channels with video and screen sharing**: direct, peer-to-peer WebRTC
+  calls (DTLS-SRTP), mute, camera, screen/window picker with high-quality screen
+  sharing, connection status per person.
+- Server: communities, channels, invites (stored hashed), encrypted messages,
+  realtime WebSocket, encrypted signalling relay, `/join` landing page.
+- Guide: [host a community tonight](docs/deployment/host-a-community.md) with a
+  free Cloudflare tunnel. `npm run server` starts the server.
+- Two-app end-to-end test: create, invite, join, chat both ways, call, camera.
+
+### Known limitations
+
+- Shared community key: anyone with an invite link can read the community, and
+  there is no forward secrecy or removal of members yet. Per-member libsignal
+  keys are planned.
+- Calls are a full mesh (best for up to ~10 people); no relay (TURN/SFU) yet.
+- Direct messages, social feed and files are still to come.
+
 ## [0.1.0] - 2026-10-09
 
 **Accounts.** Create an account on a River server with nothing but your
@@ -151,7 +183,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/martex-dev/river/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/martex-dev/river/compare/v0.0.4...v0.1.0
 [0.0.4]: https://github.com/martex-dev/river/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/martex-dev/river/compare/v0.0.2...v0.0.3

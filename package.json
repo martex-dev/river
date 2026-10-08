@@ -1,6 +1,6 @@
 {
   "name": "river",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "River â€” a private, end-to-end encrypted social communication platform.",
@@ -26,7 +26,8 @@
     "test": "vitest run",
     "test:e2e": "npm run test:e2e -w @river/desktop",
     "dist": "npm run dist -w @river/desktop",
-    "version:set": "node scripts/release/set-version.ts"
+    "version:set": "node scripts/release/set-version.ts",
+    "server": "npm start -w @river/server"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
