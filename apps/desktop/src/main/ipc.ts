@@ -2,7 +2,9 @@ import { ipcMain, shell, type IpcMainInvokeEvent, type WebContents } from 'elect
 import { z } from 'zod';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import { EXTERNAL_LINKS, IPC, type AppInfo, type SecurityStatus } from '../shared/ipc.ts';
+import type { FetchBytes } from './http.ts';
 import { isAllowedAppUrl } from './security.ts';
+import { checkServer } from './server-check.ts';
 import type { SettingsStore } from './settings-store.ts';
 import type { UpdateService } from './updater/update-service.ts';
 import { releasePageUrl } from './updater/verify-download.ts';
@@ -13,6 +15,8 @@ export interface IpcDeps {
   updates: UpdateService | null;
   updatesDisabledReason: string;
   devServerUrl: string | undefined;
+  /** Size-capped, time-limited fetch used for server checks. */
+  fetchBytes: FetchBytes;
 }
 
 const linkIdSchema = z.enum(
@@ -53,7 +57,8 @@ export function registerIpc(deps: IpcDeps): void {
     else await shell.openExternal(EXTERNAL_LINKS.releases);
   });
 
-  handle(IPC.securityStatus, () => securityStatus(deps.updates !== null));
+  handle(IPC.securityStatus, () => securityStatus(deps.updates !== null, deps.settings.get().server.url));
+  handle(IPC.serverCheck, (_e, url) => checkServer(url, deps.fetchBytes));
   handle(IPC.openLink, async (_e, id) => {
     await shell.openExternal(EXTERNAL_LINKS[linkIdSchema.parse(id)]);
   });
@@ -65,7 +70,8 @@ export function broadcastUpdateStatus(target: WebContents, updates: UpdateServic
   });
 }
 
-export function securityStatus(updatesEnabled: boolean): SecurityStatus {
+export function securityStatus(updatesEnabled: boolean, serverUrl: string | null): SecurityStatus {
+  const serverHost = serverUrl ? new URL(serverUrl).host : null;
   return {
     items: [
       {
@@ -87,8 +93,10 @@ export function securityStatus(updatesEnabled: boolean): SecurityStatus {
         id: 'server',
         label: 'Server message access',
         indicator: 'inactive',
-        value: 'No server connected',
-        detail: 'This version does not connect to any River server, so no server holds any of your data.',
+        value: serverHost ? `None · ${serverHost}` : 'No server configured',
+        detail: serverHost
+          ? `River is set to use ${serverHost}. No account exists there yet (accounts arrive in 0.1.0), so the server holds none of your data. When messaging arrives it will only ever receive encrypted messages.`
+          : 'River is not set to use any server, so no server holds any of your data.',
       },
       {
         id: 'updates',

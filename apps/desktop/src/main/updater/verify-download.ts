@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { MANIFEST_FILENAME, SIGNATURE_FILENAME, verifyReleaseFile, type TrustedKey } from '@river/release';
+import type { FetchBytes } from '../http.ts';
 
 export const RELEASE_REPO = 'martex-dev/river';
 export const RELEASE_DOWNLOAD_BASE = `https://github.com/${RELEASE_REPO}/releases/download`;
@@ -9,8 +10,6 @@ export const releasePageUrl = (version: string): string =>
 
 /** Manifests are tiny; anything bigger is refused rather than buffered. */
 const MAX_METADATA_BYTES = 512 * 1024;
-
-export type FetchBytes = (url: string, maxBytes: number) => Promise<Uint8Array>;
 
 export async function sha512OfFile(path: string): Promise<string> {
   const hash = createHash('sha512');
@@ -42,29 +41,4 @@ export async function verifyDownloadedUpdate(params: {
     expectedVersion: params.version,
     fileSha512,
   });
-}
-
-/** fetch()-based implementation with a hard size cap. */
-export function createFetchBytes(fetchImpl: typeof fetch): FetchBytes {
-  return async (url, maxBytes) => {
-    const res = await fetchImpl(url, { redirect: 'follow', cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
-    const declared = Number(res.headers.get('content-length') ?? '0');
-    if (declared > maxBytes) throw new Error(`Response too large from ${url}`);
-    const reader = res.body?.getReader();
-    if (!reader) return new Uint8Array(await res.arrayBuffer());
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel();
-        throw new Error(`Response too large from ${url}`);
-      }
-      chunks.push(value);
-    }
-    return Buffer.concat(chunks);
-  };
 }

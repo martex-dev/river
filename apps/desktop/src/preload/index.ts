@@ -22,6 +22,7 @@ const api: RiverApi = {
     },
   },
   security: { status: () => ipcRenderer.invoke(IPC.securityStatus) },
+  server: { check: (url) => ipcRenderer.invoke(IPC.serverCheck, url) },
   links: { open: (id) => ipcRenderer.invoke(IPC.openLink, id) },
 };
 

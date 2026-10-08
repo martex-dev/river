@@ -17,7 +17,8 @@ import {
 } from './security.ts';
 import { SettingsStore } from './settings-store.ts';
 import { UpdateService } from './updater/update-service.ts';
-import { createFetchBytes, verifyDownloadedUpdate } from './updater/verify-download.ts';
+import { createFetchBytes } from './http.ts';
+import { verifyDownloadedUpdate } from './updater/verify-download.ts';
 
 const devServerUrl = (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) || undefined;
 const FIRST_CHECK_DELAY_MS = 15_000;
@@ -80,7 +81,10 @@ async function start(): Promise<void> {
     },
   });
 
-  registerIpc({ appInfo, settings, updates, updatesDisabledReason, devServerUrl });
+  const serverFetch = createFetchBytes((input, init) => net.fetch(input as string, init), {
+    timeoutMs: 10_000,
+  });
+  registerIpc({ appInfo, settings, updates, updatesDisabledReason, devServerUrl, fetchBytes: serverFetch });
 
   const window = createWindow();
   if (updates) {

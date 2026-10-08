@@ -1,14 +1,15 @@
 import { useState, type ReactElement, type ReactNode } from 'react';
 import type { ReleaseChannel } from '@river/release/channels';
-import type { UpdateStatus } from '../../../shared/ipc.ts';
-import type { Settings } from '../../../shared/settings.ts';
+import type { ServerCheckResult, UpdateStatus } from '../../../shared/ipc.ts';
+import { serverUrlSchema, type Settings } from '../../../shared/settings.ts';
 import { ExternalIcon } from '../components/Icons.tsx';
 import { useRiver } from '../store.ts';
 
-const TABS = ['updates', 'appearance', 'notifications', 'about'] as const;
+const TABS = ['updates', 'server', 'appearance', 'notifications', 'about'] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   updates: 'Updates',
+  server: 'Server',
   appearance: 'Appearance',
   notifications: 'Notifications',
   about: 'About',
@@ -72,6 +73,7 @@ export function SettingsPage(): ReactElement {
           {settings ? (
             <>
               {tab === 'updates' && <UpdatesPanel settings={settings} />}
+              {tab === 'server' && <ServerPanel settings={settings} />}
               {tab === 'appearance' && <AppearancePanel settings={settings} />}
               {tab === 'notifications' && <NotificationsPanel settings={settings} />}
               {tab === 'about' && <AboutPanel />}
@@ -171,6 +173,118 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
         checked={settings.updates.installOnQuit}
         onChange={(v) => void updateSettings({ updates: { installOnQuit: v } })}
       />
+    </div>
+  );
+}
+
+function ServerPanel({ settings }: { settings: Settings }): ReactElement {
+  const updateSettings = useRiver((s) => s.updateSettings);
+  const [draft, setDraft] = useState(settings.server.url ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const [check, setCheck] = useState<ServerCheckResult | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const validate = (): string | null => {
+    const parsed = serverUrlSchema.safeParse(draft);
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Invalid address');
+      return null;
+    }
+    setError(null);
+    return parsed.data;
+  };
+
+  const test = async (): Promise<void> => {
+    const url = validate();
+    if (!url) return;
+    setBusy(true);
+    setCheck(null);
+    try {
+      setCheck(await window.river.server.check(url));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const save = async (): Promise<void> => {
+    const url = validate();
+    if (!url) return;
+    await updateSettings({ server: { url } });
+    setDraft(url);
+  };
+
+  const remove = async (): Promise<void> => {
+    await updateSettings({ server: { url: null } });
+    setDraft('');
+    setCheck(null);
+    setError(null);
+  };
+
+  return (
+    <div className="panel">
+      <h2 className="panel__title">Server</h2>
+      <p className="muted">
+        River uses a server to deliver encrypted messages between devices. Anyone can run one. The server
+        never receives your keys or readable messages.
+      </p>
+      <label className="textfield">
+        <span className="field__label">Server address</span>
+        <input
+          type="url"
+          inputMode="url"
+          spellCheck={false}
+          placeholder="https://river.example.org"
+          value={draft}
+          aria-invalid={error ? true : undefined}
+          aria-describedby="server-hint"
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setCheck(null);
+          }}
+        />
+      </label>
+      <p id="server-hint" className={error ? 'field__error' : 'muted small'}>
+        {error ?? 'Must start with https:// (http:// is allowed only for a server on this computer).'}
+      </p>
+      <div className="button-row">
+        <button className="btn btn--ghost" disabled={busy || draft.trim() === ''} onClick={() => void test()}>
+          {busy ? 'Testing…' : 'Test connection'}
+        </button>
+        <button
+          className="btn btn--primary"
+          disabled={draft.trim() === '' || draft.trim() === settings.server.url}
+          onClick={() => void save()}
+        >
+          Save
+        </button>
+        {settings.server.url && (
+          <button className="btn btn--link" onClick={() => void remove()}>
+            Remove server
+          </button>
+        )}
+      </div>
+      {check && (
+        <div className={`server-check ${check.ok ? 'is-ok' : 'is-bad'}`} role="status">
+          {check.ok ? (
+            <>
+              <strong>River server reachable</strong>
+              <span className="muted small">
+                Server <span className="mono">{check.version}</span> · protocol{' '}
+                <span className="mono">v{check.protocol}</span> · compatible
+              </span>
+            </>
+          ) : (
+            <>
+              <strong>Connection failed</strong>
+              <span className="muted small">{check.message}</span>
+            </>
+          )}
+        </div>
+      )}
+      <p className="muted small">
+        Testing sends one anonymous request for the server’s version — nothing about you. Accounts arrive in
+        River 0.1.0.
+      </p>
     </div>
   );
 }

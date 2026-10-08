@@ -70,4 +70,28 @@ describe('SettingsStore', () => {
     store.update({});
     expect(JSON.parse(readFileSync(file, 'utf8')).updates.channel).toBe('stable');
   });
+
+  it('upgrades a settings file written by River 0.0.1 without losing anything', () => {
+    // Exact shape River 0.0.1 wrote.
+    const v001 = {
+      schemaVersion: 1,
+      updates: { channel: 'beta', autoCheck: false, autoDownload: true, installOnQuit: false },
+      appearance: { motion: 'reduced' },
+      notifications: { preview: 'sender' },
+    };
+    writeFileSync(file, JSON.stringify(v001));
+    const s = new SettingsStore(file, nullLogger).get();
+    expect(s).toEqual({ ...v001, server: { url: null } });
+    // A clean upgrade is not treated as corruption.
+    expect(readdirSync(dir).some((n) => n.includes('.invalid-'))).toBe(false);
+  });
+
+  it('stores a validated, normalised server address', () => {
+    const store = new SettingsStore(file, nullLogger);
+    store.update({ server: { url: 'https://River.Example.org/' } });
+    expect(new SettingsStore(file, nullLogger).get().server.url).toBe('https://river.example.org');
+    expect(() => store.update({ server: { url: 'http://river.example.org' } })).toThrow();
+    store.update({ server: { url: null } });
+    expect(store.get().server.url).toBeNull();
+  });
 });

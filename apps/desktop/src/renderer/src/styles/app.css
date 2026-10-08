@@ -802,6 +802,61 @@ html[data-platform='darwin'] .topbar {
   margin: 2px 0 0;
 }
 
+.textfield {
+  display: flex;
+  flex-direction: column;
+}
+.textfield input {
+  padding: 11px 14px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border-strong);
+  background: rgba(4, 8, 16, 0.6);
+  color: var(--text);
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  user-select: text;
+}
+.textfield input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.textfield input[aria-invalid='true'] {
+  border-color: rgba(255, 92, 122, 0.6);
+}
+.field__error {
+  color: var(--danger);
+  font-size: 12.5px;
+}
+.button-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.server-check {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: var(--radius-m);
+  border: 1px solid var(--border);
+  background: rgba(4, 8, 16, 0.55);
+  animation: page-in var(--dur) var(--ease-out);
+}
+.server-check.is-ok {
+  border-color: rgba(62, 224, 143, 0.45);
+}
+.server-check.is-ok strong {
+  color: var(--ok);
+}
+.server-check.is-bad {
+  border-color: rgba(255, 92, 122, 0.45);
+}
+.server-check.is-bad strong {
+  color: var(--danger);
+}
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed;

@@ -12,6 +12,7 @@ export const IPC = {
   updatesOpenDownload: 'river:updates:open-download',
   updatesStatusChanged: 'river:updates:status-changed',
   securityStatus: 'river:security:status',
+  serverCheck: 'river:server:check',
   openLink: 'river:link:open',
 } as const;
 
@@ -55,6 +56,10 @@ export interface SecurityStatus {
   releaseKeys: Array<{ keyId: string; comment?: string }>;
 }
 
+export type ServerCheckResult =
+  | { ok: true; url: string; version: string; protocol: number }
+  | { ok: false; reason: 'invalid-url' | 'unreachable' | 'not-river' | 'incompatible'; message: string };
+
 /** Shape of `window.river`, implemented by the preload script. */
 export interface RiverApi {
   app: { info(): Promise<AppInfo> };
@@ -67,5 +72,6 @@ export interface RiverApi {
     onStatus(listener: (status: UpdateStatus) => void): () => void;
   };
   security: { status(): Promise<SecurityStatus> };
+  server: { check(url: string): Promise<ServerCheckResult> };
   links: { open(id: ExternalLinkId): Promise<void> };
 }

@@ -12,11 +12,8 @@ import {
   sha512Base64,
   signManifest,
 } from '@river/release';
-import {
-  createFetchBytes,
-  verifyDownloadedUpdate,
-  type FetchBytes,
-} from '../src/main/updater/verify-download.ts';
+import { createFetchBytes, type FetchBytes } from '../src/main/http.ts';
+import { verifyDownloadedUpdate } from '../src/main/updater/verify-download.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'river-verify-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));

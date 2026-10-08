@@ -2,9 +2,11 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname } from 'node:path';
 import {
   DEFAULT_SETTINGS,
+  SETTINGS_SECTIONS,
   applySettingsPatch,
   settingsPatchSchema,
   settingsSchema,
+  upgradeSettings,
   type Settings,
 } from '../shared/settings.ts';
 import type { Logger } from './logger.ts';
@@ -48,7 +50,8 @@ export class SettingsStore {
   private load(): Settings {
     if (!existsSync(this.path)) return structuredClone(DEFAULT_SETTINGS);
     try {
-      const raw: unknown = JSON.parse(readFileSync(this.path, 'utf8'));
+      // Files written by older Rivers lack newer sections; fill them in before validating.
+      const raw: unknown = upgradeSettings(JSON.parse(readFileSync(this.path, 'utf8')));
       const result = settingsSchema.safeParse(raw);
       if (result.success) return result.data;
       // Keep sections that are still valid instead of discarding everything.
@@ -67,7 +70,7 @@ export class SettingsStore {
     const out = structuredClone(DEFAULT_SETTINGS);
     if (raw && typeof raw === 'object') {
       const r = raw as Record<string, unknown>;
-      for (const key of ['updates', 'appearance', 'notifications'] as const) {
+      for (const key of SETTINGS_SECTIONS) {
         const section = settingsSchema.shape[key].safeParse(r[key]);
         if (section.success) (out as Record<string, unknown>)[key] = section.data;
       }

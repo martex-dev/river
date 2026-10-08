@@ -53,6 +53,8 @@ export const useRiver = create<RiverState>((set) => ({
   updateSettings: async (patch) => {
     const settings = await window.river.settings.update(patch);
     set({ settings });
+    // Some security indicators depend on settings (e.g. the configured server).
+    set({ security: await window.river.security.status() });
   },
   setUpdate: (update) => set({ update }),
   checkForUpdates: async () => {
