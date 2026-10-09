@@ -32,6 +32,17 @@ export type PermissionName = keyof typeof Permission;
 
 export const ALL_PERMISSIONS = Object.values(Permission).reduce((a, b) => a | b, 0);
 
+/** What a timed-out member cannot do (they can still read). */
+export const TIMEOUT_DENIES =
+  Permission.SEND_MESSAGES |
+  Permission.ADD_REACTIONS |
+  Permission.ATTACH_FILES |
+  Permission.MENTION_EVERYONE |
+  Permission.CONNECT |
+  Permission.SPEAK |
+  Permission.STREAM |
+  Permission.CREATE_INVITE;
+
 /** What @everyone may do in a new community. */
 export const DEFAULT_EVERYONE =
   Permission.VIEW_CHANNELS |

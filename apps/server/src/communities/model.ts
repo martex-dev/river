@@ -1,6 +1,7 @@
 import type { Kysely } from 'kysely';
 import {
   Permission,
+  TIMEOUT_DENIES,
   computePermissions,
   topPosition,
   type CommunityWire,
@@ -28,17 +29,6 @@ export interface CategoryModel {
   position: number;
   overwrites: OverwriteWire[];
 }
-
-/** What a timed-out member cannot do (they can still read). */
-export const TIMEOUT_DENIES =
-  Permission.SEND_MESSAGES |
-  Permission.ADD_REACTIONS |
-  Permission.ATTACH_FILES |
-  Permission.MENTION_EVERYONE |
-  Permission.CONNECT |
-  Permission.SPEAK |
-  Permission.STREAM |
-  Permission.CREATE_INVITE;
 
 export interface MemberModel {
   riverId: string;
