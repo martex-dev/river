@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, ChatMessage, CommunityView } from '../../../../shared/ipc.ts';
+import { play } from '../sound.ts';
 import { typingNames, useCommunity } from '../store.ts';
 import { AttachmentList, PendingFiles, pendingFrom, uploadAll, type PendingFile } from './Attachments.tsx';
 import {
@@ -258,6 +259,7 @@ function Message(props: {
   const canReact = can(channel.permissions, Permission.ADD_REACTIONS);
 
   const react = (emoji: string, on: boolean): void => {
+    if (on) play('reaction');
     void s.run({ a: 'react', channelId: channel.id, messageId: m.id, emoji, on });
   };
   const remove = (skipConfirm: boolean): void => {
@@ -551,6 +553,7 @@ function Composer(props: {
     setUploading(null);
     if (!sent) setText(value);
     else {
+      play('send');
       for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
       props.onPendingChange([]);
       s.handle({ t: 'message', message: sent, isNew: false });

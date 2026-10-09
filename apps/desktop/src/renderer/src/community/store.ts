@@ -328,6 +328,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   setModal: (modal) => set({ modal }),
 
   notify: (text, tone = 'info') => {
+    if (tone === 'error') play('error');
     window.clearTimeout(toastTimer);
     set({ toast: { text, tone } });
     toastTimer = window.setTimeout(() => set({ toast: null }), 4500);

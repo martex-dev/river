@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, CommunityView } from '../../../../shared/ipc.ts';
+import { play } from '../sound.ts';
 import { useCommunity, type Modal as ModalState } from '../store.ts';
 import { HashIcon, Modal, SpeakerIcon, Toggle, XIcon, hex } from './common.tsx';
 import { moveToCategory } from './ChannelList.tsx';
@@ -63,7 +64,10 @@ export function InviteDialog({ community }: { community: CommunityView }): React
               <button
                 className="btn btn--primary btn--small"
                 onClick={() => {
-                  void navigator.clipboard.writeText(invite).then(() => setCopied(true));
+                  void navigator.clipboard.writeText(invite).then(() => {
+                    play('success');
+                    setCopied(true);
+                  });
                 }}
               >
                 {copied ? 'Copied ✓' : 'Copy link'}
