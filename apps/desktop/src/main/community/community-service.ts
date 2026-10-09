@@ -161,6 +161,7 @@ export class CommunityService {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
   private backoff = 1000;
+  private retryAt: number | null = null;
   private readonly listeners = new Set<(e: CommunityEvent) => void>();
   private readonly rawListeners = new Set<(e: ServerEvent) => void>();
   /** Identity keys members published inside sealed community profiles. */
@@ -1158,6 +1159,9 @@ export class CommunityService {
           z.unknown(),
         );
         break;
+      case 'reconnect':
+        this.reconnectNow();
+        return ok;
       case 'markRead':
         this.markRead(act.channelId);
         return ok;
@@ -1585,20 +1589,37 @@ export class CommunityService {
       this.socket = null;
       this.voice.clear();
       this.voiceStates.clear();
-      this.setSocketState('offline');
-      this.scheduleReconnect();
+      this.scheduleReconnect(); // announces "offline" with the time of the next attempt
     };
     socket.onerror = () => socket.close();
   }
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer) return;
-    this.setSocketState('offline');
+    // Exponential backoff with ±20% jitter, so many clients don't reconnect in lockstep.
+    const delay = Math.round(this.backoff * (0.8 + Math.random() * 0.4));
+    this.retryAt = Date.now() + delay;
+    this.setSocketState('offline', true);
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
+      this.retryAt = null;
       this.ensureSocket();
-    }, this.backoff);
+    }, delay);
     this.backoff = Math.min(this.backoff * 2, 30_000);
+  }
+
+  /**
+   * Try again now: after the network comes back, the computer wakes up, or the
+   * user asks. Starts the backoff over.
+   */
+  reconnectNow(): void {
+    if (this.deps.account.status().state !== 'registered') return;
+    if (this.socket && this.socketState !== 'offline') return;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    this.retryAt = null;
+    this.backoff = 1000;
+    this.ensureSocket();
   }
 
   private handle(e: ServerEvent): void {
@@ -1700,10 +1721,14 @@ export class CommunityService {
     if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(event));
   }
 
-  private setSocketState(state: 'online' | 'offline' | 'connecting'): void {
-    if (this.socketState === state) return;
+  private setSocketState(state: 'online' | 'offline' | 'connecting', force = false): void {
+    if (this.socketState === state && !force) return;
     this.socketState = state;
-    this.emit({ t: 'connection', state });
+    this.emit({
+      t: 'connection',
+      state,
+      ...(state === 'offline' && this.retryAt ? { retryAt: this.retryAt } : {}),
+    });
   }
 
   private emit(e: CommunityEvent): void {

@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { BrowserWindow, app, desktopCapturer, net, session } from 'electron';
+import { BrowserWindow, app, desktopCapturer, net, powerMonitor, session } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import { channelOfVersion } from '@river/release/channels';
@@ -105,6 +105,9 @@ async function start(): Promise<void> {
     if (s.state === 'registered' && s.connection === 'online') community.ensureSocket();
   });
   app.on('will-quit', () => community.stop());
+  // Waking up or getting the network back: reconnect now rather than after the backoff.
+  powerMonitor.on('resume', () => community.reconnectNow());
+  powerMonitor.on('unlock-screen', () => community.reconnectNow());
 
   // Screen sharing: River shows its own picker; the chosen source is used for the next request.
   let chosenScreen: string | null = null;

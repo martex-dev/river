@@ -253,7 +253,8 @@ export type CommunityEvent =
   | { t: 'removed'; communityId: string; reason: 'kicked' | 'banned' | 'left' | 'deleted' }
   | { t: 'focusChannel'; communityId: string; channelId: string }
   | { t: 'signal'; from: string; channelId: string; data: unknown }
-  | { t: 'connection'; state: 'online' | 'offline' | 'connecting' }
+  /** `retryAt`: when the next reconnection attempt happens (epoch ms), while offline. */
+  | { t: 'connection'; state: 'online' | 'offline' | 'connecting'; retryAt?: number }
   /** Unread counts found by catching up on channels (including while River was closed). */
   | { t: 'catchUp'; unread: Record<string, number>; mentions: Record<string, number> };
 
