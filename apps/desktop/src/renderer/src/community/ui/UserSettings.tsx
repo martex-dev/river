@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { useRiver } from '../../store.ts';
-import { play, setSoundsEnabled } from '../sound.ts';
+import { SOUND_GROUPS, play, type SoundGroup, type SoundName } from '../sound.ts';
 import { useCommunity, type UserTab } from '../store.ts';
 import { Avatar, Modal, Toggle, XIcon } from './common.tsx';
 
@@ -423,26 +423,115 @@ function NotificationSettings(): ReactElement {
       </p>
       <Toggle
         label="Sounds"
-        help="Message, mention, voice join/leave, mute and stream sounds."
+        help="Short sounds for messages, voice, calls, friends and the interface."
         checked={n.sounds}
         onChange={(v) => {
-          setSoundsEnabled(v);
-          void update({ notifications: { sounds: v } });
-          if (v) play('message');
+          void update({ notifications: { sounds: v } }).then(() => {
+            if (v) play('success', true);
+          });
         }}
       />
-      <div className="button-row">
-        {(['message', 'mention', 'join', 'leave', 'mute', 'unmute', 'deafen', 'streamStart'] as const).map(
-          (sound) => (
-            <button key={sound} className="btn btn--ghost btn--small" onClick={() => play(sound)}>
-              ▶ {sound}
-            </button>
-          ),
-        )}
-      </div>
+      {n.sounds && (
+        <>
+          <label className="slider-field">
+            <span className="field__label">Sound volume — {Math.round(n.soundVolume * 100)}%</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={Math.round(n.soundVolume * 100)}
+              onChange={(e) => void update({ notifications: { soundVolume: Number(e.target.value) / 100 } })}
+              onPointerUp={() => play('message', true)}
+              onKeyUp={() => play('message', true)}
+            />
+          </label>
+          <div className="sound-groups">
+            {SOUND_GROUPS.map((group) => (
+              <div key={group} className="sound-group">
+                <Toggle
+                  label={SOUND_GROUP_INFO[group].label}
+                  help={SOUND_GROUP_INFO[group].help}
+                  checked={n.soundGroups[group]}
+                  onChange={(v) =>
+                    void update({ notifications: { soundGroups: { ...n.soundGroups, [group]: v } } })
+                  }
+                />
+                <div className="sound-group__previews">
+                  {SOUND_GROUP_INFO[group].previews.map(([sound, label]) => (
+                    <button
+                      key={sound}
+                      className="chip chip--button"
+                      aria-label={`Play the ${label} sound`}
+                      onClick={() => play(sound, true)}
+                    >
+                      ▶ {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
+
+const SOUND_GROUP_INFO: Record<
+  SoundGroup,
+  { label: string; help: string; previews: Array<[SoundName, string]> }
+> = {
+  messages: {
+    label: 'Messages',
+    help: 'Sending, receiving, mentions, direct messages and reactions.',
+    previews: [
+      ['send', 'Send'],
+      ['message', 'Message'],
+      ['mention', 'Mention'],
+      ['dm', 'Direct message'],
+      ['reaction', 'Reaction'],
+    ],
+  },
+  voice: {
+    label: 'Voice channels',
+    help: 'Joining, leaving, mute, deafen and screen sharing.',
+    previews: [
+      ['selfJoin', 'You join'],
+      ['join', 'Someone joins'],
+      ['leave', 'Someone leaves'],
+      ['mute', 'Mute'],
+      ['deafen', 'Deafen'],
+      ['streamStart', 'Go live'],
+    ],
+  },
+  calls: {
+    label: 'Calls',
+    help: 'Ringing, connected and call ended.',
+    previews: [
+      ['ring', 'Ringing'],
+      ['callConnected', 'Connected'],
+      ['callEnded', 'Ended'],
+    ],
+  },
+  social: {
+    label: 'Friends and communities',
+    help: 'Friend requests, new friends and joining a community.',
+    previews: [
+      ['friendRequest', 'Friend request'],
+      ['friendAdded', 'New friend'],
+      ['communityJoin', 'Joined a community'],
+    ],
+  },
+  interface: {
+    label: 'Interface',
+    help: 'Copied, saved and something went wrong.',
+    previews: [
+      ['success', 'Done'],
+      ['error', 'Error'],
+    ],
+  },
+};
 
 function AppearanceSettings(): ReactElement {
   const settings = useRiver((r) => r.settings);
