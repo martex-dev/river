@@ -12,10 +12,10 @@ Milestone definitions: [ROADMAP.md](ROADMAP.md).
 
 ## 0.5.0 — Contacts and direct messages
 
-- [ ] Prekeys (signed + one-time, Kyber) upload/fetch; libsignal session store in the local DB
-- [ ] Offline mailbox with acknowledgements; realtime delivery; multi-device fan-out
-- [ ] Contacts: add by invite link or River ID, message requests, block
-- [ ] DM UI (conversation list, unread, typing, read receipts, reactions/edit/delete), 1:1 voice/video calls
+- [x] Prekeys (signed + one-time, Kyber) upload/fetch; libsignal session store in the local DB
+- [x] Offline mailbox with acknowledgements; realtime delivery (multi-device fan-out comes with device linking)
+- [x] Contacts: add by River ID or from a community, message requests, block
+- [x] DM UI (conversation list, unread, typing, read receipts, reactions/edit/delete), 1:1 voice/video calls
 
 ## Next — community hardening (after 0.2.0)
 

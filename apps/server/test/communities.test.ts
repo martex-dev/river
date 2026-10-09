@@ -597,7 +597,8 @@ describe('communities', () => {
       });
       const blobId = res.json().id;
       const get = async () =>
-        (await a.inject({ method: 'GET', url: `/v1/attachments/${blobId}`, headers: auth(owner.token) })).statusCode;
+        (await a.inject({ method: 'GET', url: `/v1/attachments/${blobId}`, headers: auth(owner.token) }))
+          .statusCode;
       await database.db
         .updateTable('attachments')
         .set({ created_at: new Date(Date.now() - 48 * 3600_000).toISOString() })

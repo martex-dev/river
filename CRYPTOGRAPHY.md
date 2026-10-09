@@ -71,11 +71,17 @@ about. This prevents the server from silently adding an eavesdropping device.
   value (libsignal). The private key is stored only in the SQLCipher database
   and never crosses the main/renderer boundary (tested).
 
-## 4. Messaging (planned, 0.2.x – 0.4.x)
+## 4. Messaging (1:1 implemented in 0.5.0; groups planned)
 
-- 1:1 sessions: libsignal PQXDH + Double Ratchet, one session per
-  (local device, remote device) pair; each message is fanned out to every
-  device of the recipient and every other device of the sender.
+- 1:1 sessions (implemented, 0.5.0): libsignal PQXDH (X25519 + ML-KEM-1024
+  prekeys) + Double Ratchet, one session per (local device, remote device)
+  pair; each message is fanned out to every device of the recipient. Fan-out
+  to the sender's own other devices arrives with multi-device linking.
+  Prekey signatures are checked by the server and by libsignal; key bundles
+  are checked against the identity-signed device list and, when known, the
+  identity key sealed in a shared community profile. Identity keys are trusted
+  on first use; changes are flagged, and block sending to verified contacts.
+  Wire details: [docs/protocol/messaging.md](docs/protocol/messaging.md).
 - Sealed sender (0.3.x): sender certificates issued by the server, signed with a
   server key whose public part is pinned per-server on first use.
 - Groups: libsignal Sender Keys; distribution messages travel over 1:1

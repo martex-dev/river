@@ -6,6 +6,34 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**Direct messages and calls, end-to-end encrypted with the Signal protocol.**
+
+### Added
+
+- **Messages**: private one-to-one conversations using libsignal (PQXDH with
+  post-quantum Kyber keys and the Double Ratchet). Start one from anyone's
+  profile card in a community (**Message**), from **New message**, or by pasting
+  a River ID (copy yours from the Messages sidebar).
+- Replies, edits, delete for me / for everyone, emoji reactions, files and
+  pictures (encrypted the same way as in communities), typing indicators,
+  delivered/read status, unread badges, and desktop notifications that follow
+  your preview setting.
+- **Message requests**: messages from people you have not accepted wait in
+  Requests; they get no read receipts and cannot call you until you accept.
+  **Block** hides you from someone and silently drops their messages.
+- **Safety numbers**: compare 60 digits to rule out interception, mark a
+  contact verified, and get a warning if their key changes. River also checks a
+  person's key against the one in your shared communities.
+- **1:1 voice and video calls** from a conversation, with ringing, accept /
+  decline, busy and missed-call handling, mute, deafen, camera and screen
+  sharing. Call setup travels inside encrypted messages and is never stored.
+- Offline delivery: messages wait on the server (encrypted) for up to 30 days.
+
+### Server
+
+- Prekey distribution, an encrypted mailbox, blocks, and longer retention for
+  files sent in direct messages. See `docs/protocol/messaging.md`.
+
 ## [0.4.0] - 2026-10-09
 
 **Encrypted files and pictures.**

@@ -35,8 +35,8 @@ apps. Each line is one minor release; patch releases fix things in between.
 | Version    | Deliverable                                                                                                      | Status |
 | ---------- | ---------------------------------------------------------------------------------------------------------------- | ------ |
 | 0.2–0.3 ✅ | Communities: text/voice/video/screen share, roles, permissions, moderation, reactions, pins, notifications       | done   |
-| 0.4.0      | Encrypted attachments: files, images, video and audio in channels (Signal attachment format), drag & drop, paste | ⏳     |
-| 0.5.0      | Contacts and encrypted direct messages (libsignal prekeys + sessions, offline mailbox, read receipts), 1:1 calls | ⏳     |
+| 0.4.0 ✅   | Encrypted attachments: files, images, video and audio in channels (Signal attachment format), drag & drop, paste | done   |
+| 0.5.0 ✅   | Contacts and encrypted direct messages (libsignal prekeys + sessions, offline mailbox, read receipts), 1:1 calls | done   |
 | 0.6.0      | Group DMs (sender keys); per-member community keys with rotation when someone is removed                         | ⏳     |
 | 0.7.0      | Social: encrypted profiles, posts and photos feed, stories for friends, comments and reactions                   | ⏳     |
 | 0.8.0      | Multi-device linking, recovery phrase and encrypted backup                                                       | ⏳     |
