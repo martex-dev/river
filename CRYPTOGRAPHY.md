@@ -82,6 +82,35 @@ about. This prevents the server from silently adding an eavesdropping device.
   sessions; membership change → new sender key.
 - Content padding to fixed buckets before encryption to blur length.
 
+### 4a. Communities today (implemented, 0.2.0 / 0.3.0)
+
+Communities currently use **one shared 32-byte community key** (CSPRNG) rather
+than per-member sender keys:
+
+- Every human-readable value is sealed with AES-256-GCM under the community key
+  (random 96-bit nonce) with associated data
+  `river-community-v1|<communityId>|<purpose>`, where purpose is `meta`,
+  `profile`, `channel:<id>`, `role:<id>`, `message:<channelId>`,
+  `reaction:<messageId>` or `signal:<channelId>`. The AAD stops the server moving
+  ciphertext between communities, channels or fields.
+- The key travels only in the invite link's URL fragment (`#c=…&k=…`), which
+  browsers and River never send to a server. Joining verifies the key opens the
+  community metadata before it is stored.
+- **Reactions**: the server groups identical reactions by a tag
+  `HMAC-SHA256(HKDF-SHA256(communityKey, info="river-reaction-tag-v1|<communityId>"), messageId‖"|"‖emoji)`
+  truncated to 128 bits; the emoji itself is sealed. Clients show a reaction
+  only when its decrypted emoji reproduces its tag.
+- **What the server learns** (needed to enforce permissions and relay): who is
+  a member, channel kinds and order, role permission bits, **role colours**,
+  role positions and who holds which role, channel permission overwrites,
+  bans, message timing/size/sender, edit and pin state, reaction counts per tag,
+  typing and online presence, voice participants and their mute/deafen/streaming
+  flags. It never sees names, topics, profiles, avatars, message text or emoji.
+- **Limits, stated plainly**: anyone who ever had an invite link can decrypt the
+  community's content if they also obtain the ciphertext; removing (kicking,
+  banning) a member does **not** rotate the key, and there is no forward
+  secrecy. Per-member keys with rotation are the next step (§4).
+
 ## 5. Attachments and files (planned, 0.5.x)
 
 Signal attachment format: random 64-byte key (32 AES-256-CBC + 32 HMAC-SHA256),

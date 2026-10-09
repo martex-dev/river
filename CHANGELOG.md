@@ -6,6 +6,54 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**Roles, permissions, moderation and a full community experience.**
+
+### Added
+
+- **Roles and permissions**: an @everyone role plus custom roles with names,
+  colours and ordering; 18 permissions (view, send, react, mention @everyone,
+  manage messages, pin, connect, speak, video & screen share, mute and move
+  members, manage channels/roles/community, kick, ban, invites, administrator).
+  The server enforces every permission and the role hierarchy (you can only
+  manage roles and members below your highest role; nobody can act on the owner).
+- **Private and read-only channels** through per-channel permission overrides
+  (allow / inherit / deny per role).
+- **Moderation**: kick, ban and unban (banned people cannot rejoin), server
+  mute and disconnect in voice, leave community, delete community (owner).
+- **Community settings**: overview (name, description), roles editor, member
+  management with role assignment, ban list. **Channel settings**: rename,
+  topic, order, delete, permissions. Create text or voice channels, optionally private.
+- **Messages**: edit (Up arrow edits your last message), delete, reply,
+  pin and a pinned-messages panel, emoji reactions (the server sees only an
+  HMAC tag, never the emoji), @mentions with autocomplete and highlighting,
+  simple formatting (bold, italic, underline, strike, code, quotes), date
+  dividers, typing indicators, jump to present.
+- **Presence and unread**: online/offline member list grouped by role,
+  unread and mention badges on channels and communities.
+- **Desktop notifications** for messages or only mentions while River is in the
+  background; what they reveal follows Settings → Notifications (default: nothing private).
+- **Voice**: click a channel to join; mute, deafen, push to talk (while River
+  is focused), Ctrl+Shift+M / Ctrl+Shift+D, speaking indicators, LIVE badges,
+  per-person volume, input/output device selection, noise suppression and echo
+  cancellation toggles, microphone test, click a tile to spotlight it. The call
+  keeps playing while you read text channels.
+- **Profile**: display name and avatar (cropped and resized on your device,
+  encrypted per community).
+- Original synthesised **sound effects** (messages, mentions, join/leave,
+  mute/deafen, streaming) and interface **animations**; both respect
+  Settings (sounds toggle, reduced motion).
+
+### Changed
+
+- Members may create invite links by default (the owner can turn this off for
+  @everyone). Non-members asking about a community now get "not found".
+- Leaving or being removed from a community deletes its key from this device.
+
+### Security
+
+- New realtime events and fields are optional, so 0.2.x apps keep working
+  against an upgraded server while they auto-update.
+
 ## [0.2.2] - 2026-10-09
 
 ### Fixed

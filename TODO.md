@@ -7,8 +7,13 @@ Milestone definitions: [ROADMAP.md](ROADMAP.md).
 
 - [ ] Per-member keys (libsignal sender keys) with forward secrecy; member removal / key rotation
 - [ ] TURN relay for strict networks; SFU for larger calls
-- [ ] Kick/ban, roles UI, channel rename/delete, message edit/delete/reactions
-- [ ] Desktop notifications (privacy setting already exists), unread badges
+- [x] Kick/ban, roles UI, channel rename/delete, message edit/delete/reactions (0.3.0)
+- [x] Desktop notifications (privacy setting already exists), unread badges (0.3.0)
+- [ ] Encrypted file and image attachments (ATTACH_FILES permission is reserved)
+- [ ] Direct messages and friends (libsignal 1:1 sessions)
+- [ ] Global push-to-talk (outside the focused window) — needs a key-up capable hook
+- [ ] Persist unread state across restarts; drag-and-drop channel/role ordering; categories
+- [ ] Stable community address (named tunnel or hosted server) — needs a maintainer decision
 - [ ] Multiple servers per client
 
 ## 0.1.1 — Encrypted profiles
