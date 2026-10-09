@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { play } from '../community/sound.ts';
 import { useCommunity } from '../community/store.ts';
 import { ChannelSidebar } from '../community/ui/Sidebar.tsx';
 import { TextChannel } from '../community/ui/Chat.tsx';
@@ -193,7 +194,11 @@ function Welcome(props: { onDone(): void; canCancel: boolean; hasAccount: boolea
     const res =
       kind === 'create' ? await window.river.community.create(name) : await window.river.community.join(link);
     setBusy(null);
-    if (!res.ok) return setError(res.message);
+    if (!res.ok) {
+      play('error');
+      return setError(res.message);
+    }
+    play('communityJoin');
     await useCommunity.getState().load();
     useCommunity.getState().select(res.value.id);
     props.onDone();
