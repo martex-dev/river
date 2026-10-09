@@ -542,7 +542,11 @@ export async function registerCommunityRoutes(
       for (const c of req.channels) {
         await trx
           .updateTable('channels')
-          .set({ position: c.position, parent_id: c.parentId })
+          .set({
+            position: c.position,
+            parent_id: c.parentId,
+            ...(c.synced !== undefined ? { synced: c.synced && c.parentId !== null ? 1 : 0 } : {}),
+          })
           .where('id', '=', c.id)
           .execute();
       }

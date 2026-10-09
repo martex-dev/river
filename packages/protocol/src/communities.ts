@@ -196,6 +196,8 @@ export const layoutRequestSchema = z
             id: channelIdSchema,
             position: z.number().int().min(0).max(1000),
             parentId: channelIdSchema.nullable(),
+            /** Also (un)sync the channel with its category's permissions. */
+            synced: z.boolean().optional(),
           })
           .strict(),
       )
