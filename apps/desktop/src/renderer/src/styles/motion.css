@@ -1,0 +1,164 @@
+/*
+ * Motion added in 1.0.1. Everything here is decoration: html[data-motion='reduced']
+ * (base.css) collapses these animations, and celebrations are not rendered at all.
+ */
+
+/* ---------- Celebrations ---------- */
+.celebrations {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none;
+  overflow: hidden;
+}
+.burst {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+}
+.burst__text {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 12px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(79, 227, 209, 0.45);
+  background: rgba(8, 14, 26, 0.92);
+  box-shadow: 0 20px 60px -20px rgba(79, 227, 209, 0.5);
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  animation: burst-text 2.4s var(--ease-spring) forwards;
+}
+.burst__piece {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--w);
+  height: calc(var(--w) * 0.45);
+  border-radius: 2px;
+  background: var(--c);
+  opacity: 0;
+  animation: confetti 1.9s cubic-bezier(0.2, 0.7, 0.3, 1) var(--d) forwards;
+}
+@keyframes burst-text {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  12%,
+  78% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -70%) scale(0.96);
+  }
+}
+@keyframes confetti {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg);
+  }
+  45% {
+    opacity: 1;
+    transform: translate(var(--x), var(--y)) rotate(var(--r));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(var(--x) * 1.15), calc(var(--y) + 520px)) rotate(calc(var(--r) * 2));
+  }
+}
+
+/* ---------- Messages ---------- */
+/* Your own new message rises from the composer. */
+.msg--mine {
+  animation-name: msg-send;
+}
+@keyframes msg-send {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+}
+/* A message that mentions you arrives with a glow on its marker. */
+.msg--mention {
+  animation:
+    msg-in var(--dur) var(--ease-out),
+    mention-glow 1.4s var(--ease-out);
+}
+@keyframes mention-glow {
+  0% {
+    box-shadow:
+      inset 4px 0 0 #faa81a,
+      inset 0 0 0 999px rgba(250, 168, 26, 0.18);
+  }
+}
+
+/* Counts bump when they change (their elements are keyed by value). */
+.reaction__count {
+  display: inline-block;
+  animation: count-bump 360ms var(--ease-spring);
+}
+.badge {
+  animation: count-bump 360ms var(--ease-spring);
+}
+@keyframes count-bump {
+  0% {
+    transform: scale(0.5);
+  }
+  60% {
+    transform: scale(1.25);
+  }
+}
+.reaction.is-mine {
+  transition:
+    border-color var(--dur-fast),
+    background var(--dur-fast),
+    transform var(--dur-fast) var(--ease-spring);
+}
+.reaction:active {
+  transform: scale(0.9);
+}
+
+/* ---------- Channels and voice ---------- */
+.chat {
+  animation: fade-in var(--dur) var(--ease-out);
+}
+.voice-panel {
+  animation: slide-up var(--dur) var(--ease-spring);
+}
+.channel__participant {
+  animation: pop-in var(--dur) var(--ease-spring);
+}
+/* Speaking: a ring that breathes instead of a hard outline. */
+.avatar.is-speaking {
+  animation: speaking 1.2s ease-in-out infinite;
+}
+@keyframes speaking {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px var(--bg-1),
+      0 0 0 4px var(--ok);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px var(--bg-1),
+      0 0 0 5px var(--ok),
+      0 0 14px 4px rgba(62, 224, 143, 0.35);
+  }
+}
+
+/* ---------- Everywhere ---------- */
+.icon-btn:active,
+.channel__open:active {
+  transform: scale(0.94);
+}
+.community__server:active {
+  transform: scale(0.92);
+}
