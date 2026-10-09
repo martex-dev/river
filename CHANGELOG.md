@@ -6,6 +6,23 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**Encrypted files and pictures.**
+
+### Added
+
+- Send files, images, videos and audio in community channels: the + button,
+  drag and drop onto the chat, or paste. Up to 10 files (25 MB each) per message.
+- Every file is encrypted on your device with its own key (the Signal
+  attachment format: AES-256-CBC + HMAC-SHA256, padded to hide the exact size);
+  the server stores only ciphertext and never learns names or types.
+- Pictures appear inline with a blurred preview while they load and open full
+  size on click; audio and video play inline after a click; other files show as
+  cards with **Save**. River never opens a received file by itself, and warns
+  about programs.
+- Server: `RIVER_ATTACHMENT_DIR` and `RIVER_MAX_ATTACHMENT_MB`; blobs are
+  deleted with their message, and uploads never sent are cleaned up after a day.
+- The **Attach files** permission now applies (on for @everyone by default).
+
 ## [0.3.0] - 2026-10-09
 
 **Roles, permissions, moderation and a full community experience.**

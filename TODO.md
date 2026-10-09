@@ -5,10 +5,10 @@ Milestone definitions: [ROADMAP.md](ROADMAP.md).
 
 ## 0.4.0 — Encrypted attachments
 
-- [ ] Crypto: Signal attachment format (AES-256-CBC + HMAC-SHA256, 64-byte random key, SHA-256 digest) in `packages/crypto`, with tamper tests
-- [ ] Server: ciphertext blob store (`POST/GET /v1/attachments`), size limit, ATTACH_FILES enforced when linking to a message, deletion with message/channel/community, garbage collection of unlinked uploads
-- [ ] Desktop: upload (picker, drag & drop, paste), inline images/video/audio, file cards with save, local thumbnails, progress and errors
-- [ ] Tests: server never stores plaintext; wrong key/digest rejected; e2e image round trip between two apps
+- [x] Crypto: Signal attachment format (AES-256-CBC + HMAC-SHA256, 64-byte random key, SHA-256 digest) in `packages/crypto`, with tamper tests
+- [x] Server: ciphertext blob store (`POST/GET /v1/attachments`), size limit, ATTACH_FILES enforced when linking to a message, deletion with message/channel/community, garbage collection of unlinked uploads
+- [x] Desktop: upload (picker, drag & drop, paste), inline images/video/audio, file cards with save, local thumbnails, progress and errors
+- [x] Tests: server never stores plaintext; wrong key/digest rejected; e2e image round trip between two apps
 
 ## 0.5.0 — Contacts and direct messages
 
@@ -23,7 +23,6 @@ Milestone definitions: [ROADMAP.md](ROADMAP.md).
 - [ ] TURN relay for strict networks; SFU for larger calls
 - [x] Kick/ban, roles UI, channel rename/delete, message edit/delete/reactions (0.3.0)
 - [x] Desktop notifications (privacy setting already exists), unread badges (0.3.0)
-- [ ] Encrypted file and image attachments (ATTACH_FILES permission is reserved)
 - [ ] Direct messages and friends (libsignal 1:1 sessions)
 - [ ] Global push-to-talk (outside the focused window) — needs a key-up capable hook
 - [ ] Persist unread state across restarts; drag-and-drop channel/role ordering; categories

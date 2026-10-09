@@ -111,11 +111,19 @@ than per-member sender keys:
   banning) a member does **not** rotate the key, and there is no forward
   secrecy. Per-member keys with rotation are the next step (§4).
 
-## 5. Attachments and files (planned, 0.5.x)
+## 5. Attachments and files (implemented, 0.4.0)
 
-Signal attachment format: random 64-byte key (32 AES-256-CBC + 32 HMAC-SHA256),
-random IV, PKCS#7, encrypt-then-MAC, SHA-256 digest of the ciphertext included
-in the pointer message. Blobs are addressed by random IDs.
+Signal attachment format (`packages/crypto/src/attachment.ts`): a fresh random
+64-byte key per file (32 AES-256-CBC + 32 HMAC-SHA256), random IV, plaintext
+zero-padded to a size bucket (≥ 541 bytes, then 5 % steps) to blur the size,
+PKCS#7, encrypt-then-MAC over IV ‖ ciphertext, and the SHA-256 digest of the
+blob. The pointer (blob ID, key, digest, true size, name, type, image
+dimensions, a ≤ 3 KB blurred preview) travels only inside the end-to-end
+encrypted message. Downloads check the digest and MAC in constant time before
+decrypting. Blobs have random 128-bit IDs; the server learns their padded size,
+uploader and which message they belong to, nothing else. Received files are
+never opened automatically — only images, audio and video of a short allow-list
+of types are shown inline; everything else is saved only when the user chooses.
 
 ## 6. Local storage (implemented, 0.0.3)
 
