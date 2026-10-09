@@ -6,6 +6,27 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-10
+
+**Easy start: create or join a community in one step.**
+
+### Added
+
+- **One start screen.** Paste an invite link to join (pasting a whole link
+  joins straight away), or pick a template, type a name and create.
+- **Templates**: Friends, Gaming, Study group, Club or team, or Start from
+  scratch. Each comes with categories and channels, previewed before you create.
+- **Creating your first community creates your account too.** The server
+  address is asked for right on the start screen, no trip to Settings.
+- **Paste an invite link anywhere in River** (outside a text field) to get a
+  "Join this community?" prompt. River only reads the clipboard when you paste.
+- **Community icons**: pick an emoji in Community settings → Overview; new
+  communities start with their template's emoji. Icons are encrypted with the
+  name; older River versions keep showing initials.
+- **Empty channels help you start**: "Wave to say hi", plus "Invite friends"
+  when you are the only member.
+- **Invite button in every channel header.**
+
 ## [1.0.1] - 2026-10-10
 
 **Sound and motion: River now sounds and feels alive.**
@@ -460,7 +481,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/martex-dev/river/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/martex-dev/river/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/martex-dev/river/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/martex-dev/river/compare/v0.8.0...v0.9.0
