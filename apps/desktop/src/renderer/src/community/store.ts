@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { CommunityAction, CommunityActionResult } from '../../../shared/community-actions.ts';
 import type { ChatMessage, CommunityEvent, CommunityView, Result } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
-import { play, setSoundsEnabled } from './sound.ts';
+import { play } from './sound.ts';
 import { VoiceCall } from './voice.ts';
 
 export type Modal =
@@ -120,7 +120,6 @@ export const useCommunity = create<CommunityState>((set, get) => ({
 
   handle: (event) => {
     const settings = useRiver.getState().settings;
-    setSoundsEnabled(settings?.notifications.sounds ?? true);
     switch (event.t) {
       case 'communities':
         applyCommunities(event.communities);

@@ -7,6 +7,7 @@ import type {
   StorageStatus,
   UpdateStatus,
 } from '../../shared/ipc.ts';
+import { setSoundConfigSource } from './community/sound.ts';
 import type { Settings, SettingsPatch } from '../../shared/settings.ts';
 
 export const SECTIONS = [
@@ -111,3 +112,6 @@ export const useRiver = create<RiverState>((set) => ({
     set({ update: await window.river.updates.check() });
   },
 }));
+
+// Interface sounds follow Settings → Notifications (master switch, volume, groups).
+setSoundConfigSource(() => useRiver.getState().settings?.notifications);
