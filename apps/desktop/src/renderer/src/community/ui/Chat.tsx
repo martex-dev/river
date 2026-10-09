@@ -611,9 +611,14 @@ function Composer(props: {
   };
 
   if (!canSend) {
+    const timeout = community.members.find((m) => m.riverId === me)?.timeoutUntil;
     return (
       <div className="chat__composer chat__composer--locked">
-        <span className="muted">You do not have permission to send messages in this channel.</span>
+        <span className="muted">
+          {timeout
+            ? `You're timed out until ${new Date(timeout).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}. You can still read.`
+            : 'You do not have permission to send messages in this channel.'}
+        </span>
       </div>
     );
   }

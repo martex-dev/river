@@ -233,6 +233,10 @@ test('create, invite, join, chat and call between two members', async () => {
   await alice.getByRole('button', { name: 'Create role' }).click();
   await alice.getByLabel('Role name').fill('Crew');
   await alice.locator('.toggle-row', { hasText: 'Kick members' }).locator('input').check();
+  await alice
+    .locator('.toggle-row', { hasText: 'Show members with this role separately' })
+    .locator('input')
+    .check();
   await alice.getByRole('button', { name: 'Save changes' }).click();
   await expect(alice.locator('.role-row', { hasText: 'Crew' })).toBeVisible();
   await auditA11y(alice, 'Community settings → Roles');
@@ -240,6 +244,11 @@ test('create, invite, join, chat and call between two members', async () => {
   await alice.locator('.settings-tab', { hasText: 'Members' }).click();
   await alice.getByLabel('Add role to Bob').selectOption({ label: 'Crew' });
   await expect(alice.locator('.member-table__row', { hasText: 'Bob' })).toContainText('Crew');
+  // The audit log tells the story in words.
+  await alice.locator('.settings-tab', { hasText: 'Audit log' }).click();
+  await expect(alice.locator('.audit')).toContainText('Alice gave Bob Crew');
+  await expect(alice.locator('.audit')).toContainText('Alice created the role Crew');
+  await auditA11y(alice, 'Community settings → Audit log');
   await alice.getByRole('button', { name: 'Close settings' }).click();
   await openMembers(bob);
   await expect(bob.locator('.community__members')).toContainText('Crew — 1', { timeout: 15_000 });
