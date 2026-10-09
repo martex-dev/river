@@ -21,6 +21,8 @@ export interface ChannelModel {
   overwrites: OverwriteWire[];
   parentId: string | null;
   synced: boolean;
+  announcement: boolean;
+  slowmode: number;
 }
 
 export interface CategoryModel {
@@ -106,6 +108,9 @@ export class CommunityModel {
     // A timeout takes away talking, not reading; owners and administrators are never timed out.
     if (this.timedOut(riverId) && riverId !== this.ownerId && !(perms & Permission.ADMINISTRATOR))
       return perms & ~TIMEOUT_DENIES;
+    // In an announcement channel only people who may manage messages post.
+    if (channelId && this.channel(channelId)?.announcement && !(perms & Permission.MANAGE_MESSAGES))
+      return perms & ~Permission.SEND_MESSAGES;
     return perms;
   }
 
@@ -163,6 +168,8 @@ export class CommunityModel {
         parentId: c.parentId,
         lastMessageAt: last.get(c.id) ?? null,
         synced: c.synced,
+        announcement: c.announcement,
+        slowmode: c.slowmode,
       })),
       // A category whose channels are all hidden from you stays hidden too.
       categories: this.categories.filter(
@@ -256,6 +263,8 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
               .map((o) => ({ roleId: o.role_id, allow: o.allow, deny: o.deny })),
         parentId: ch.parent_id,
         synced,
+        announcement: ch.announcement === 1,
+        slowmode: ch.slowmode,
       };
     }),
     categories: categoryModels,
@@ -303,9 +312,13 @@ export async function loadMessages(
     sent_at: string;
     edited_at: string | null;
     pinned: number;
+    thread_id: string | null;
   }>,
 ): Promise<MessageWire[]> {
   const ids = rows.map((r) => r.id);
+  const threads = ids.length
+    ? await db.selectFrom('threads').selectAll().where('id', 'in', ids).execute()
+    : [];
   const reactions = ids.length
     ? await db.selectFrom('message_reactions').selectAll().where('message_id', 'in', ids).execute()
     : [];
@@ -334,6 +347,17 @@ export async function loadMessages(
       pinned: r.pinned === 1,
       reactions: [...grouped.values()],
       attachments: files.filter((f) => f.message_id === r.id).map((f) => f.id),
+      threadId: r.thread_id,
+      thread: ((t) =>
+        t
+          ? {
+              name: t.name,
+              count: t.count,
+              lastAt: t.last_at,
+              archived: t.archived === 1,
+              creator: t.creator,
+            }
+          : null)(threads.find((t) => t.id === r.id)),
     };
   });
 }
