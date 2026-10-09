@@ -109,6 +109,7 @@ async function begin(
       const active = useDmCall.getState().active;
       if (connected && !wasConnected && active?.callId === callId) {
         wasConnected = true;
+        play('callConnected');
         if (current) current.connectedAt = Date.now();
         useDmCall.setState({ active: { ...active, state: 'connected' } });
       }
@@ -191,7 +192,7 @@ export async function endDmCall(): Promise<void> {
   useDmCall.setState({ active: null });
   if (call?.channelId.startsWith('dm:')) {
     useCommunity.setState({ call: null });
-    play('selfLeave');
+    play('callEnded');
     await call.leave();
   }
 }
@@ -222,7 +223,6 @@ export function handleCallEvent(e: Extract<DmEvent, { t: 'call' }>): void {
       const me = useRiver.getState().identity?.riverId;
       const call = useCommunity.getState().call;
       if (me && call) call.updateParticipants([me, e.peer]);
-      play('join');
       return;
     }
     case 'decline':
