@@ -16,9 +16,9 @@ Each line is one PR; each version ships when its section is done.
 
 ### 1.0.1 — Sound and motion
 
-- [ ] Sound library: send, receive, mention, reaction, voice join/leave, call connected/ended, community joined, friend request/added, copied, error; volume and per-group toggles
-- [ ] Every interaction plays its sound (community and DMs)
-- [ ] Motion: sent/received messages, reaction pop, mention flash, voice join, speaking ring, celebration on joining/adding a friend, badge bounce; reduced motion respected
+- [x] Sound library: send, receive, mention, reaction, voice join/leave, call connected/ended, community joined, friend request/added, copied, error; volume and per-group toggles
+- [x] Every interaction plays its sound (community and DMs)
+- [x] Motion: sent/received messages, reaction pop, mention flash, voice join, speaking ring, celebration on joining/adding a friend, badge bounce; reduced motion respected
 
 ### 1.0.2 — Easy start
 
