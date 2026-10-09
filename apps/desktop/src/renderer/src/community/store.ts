@@ -135,6 +135,22 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       case 'connection':
         set({ connection: event.state });
         return;
+      case 'catchUp': {
+        // Counts from catching up never lower what this session already counted.
+        const merge = (
+          now: Record<string, number>,
+          found: Record<string, number>,
+        ): Record<string, number> => {
+          const out = { ...now };
+          for (const [id, n] of Object.entries(found)) {
+            if (id === get().selectedChannel || n <= 0) continue;
+            out[id] = Math.max(out[id] ?? 0, n);
+          }
+          return out;
+        };
+        set({ unread: merge(get().unread, event.unread), mentions: merge(get().mentions, event.mentions) });
+        return;
+      }
       case 'message': {
         const m = event.message;
         const list = get().messages[m.channelId];

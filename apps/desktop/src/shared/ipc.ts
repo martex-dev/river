@@ -253,7 +253,9 @@ export type CommunityEvent =
   | { t: 'removed'; communityId: string; reason: 'kicked' | 'banned' | 'left' | 'deleted' }
   | { t: 'focusChannel'; communityId: string; channelId: string }
   | { t: 'signal'; from: string; channelId: string; data: unknown }
-  | { t: 'connection'; state: 'online' | 'offline' | 'connecting' };
+  | { t: 'connection'; state: 'online' | 'offline' | 'connecting' }
+  /** Unread counts found by catching up on channels (including while River was closed). */
+  | { t: 'catchUp'; unread: Record<string, number>; mentions: Record<string, number> };
 
 export type Result<T> = { ok: true; value: T } | { ok: false; message: string };
 

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Permission } from '@river/protocol';
+import type { CommunityEvent } from '../../apps/desktop/src/shared/ipc.ts';
 // Desktop main-process code under test.
 import { AccountService } from '../../apps/desktop/src/main/account/account-service.ts';
 import { CommunityService } from '../../apps/desktop/src/main/community/community-service.ts';
@@ -330,14 +331,20 @@ describe('desktop ↔ server communities', () => {
 
     // Unread: old history starts read; a new message marks the channel; reading clears it for good.
     expect(view.channels.every((c) => !c.unread)).toBe(true);
-    await alice.community.send(general.id, 'anyone up?');
+    await alice.community.send(general.id, 'anyone up? @Bob');
     expect((await alice.community.refresh())[0]!.channels.find((c) => c.id === general.id)?.unread).toBe(
       false,
     );
     view = (await bob.community.refresh())[0]!;
     expect(view.channels.find((c) => c.id === general.id)?.unread).toBe(true);
     const restarted = bob.restart();
+    // Catching up after a restart counts what arrived meanwhile, mentions included.
+    const caught = new Promise<Extract<CommunityEvent, { t: 'catchUp' }>>((resolve) =>
+      restarted.onEvent((e) => e.t === 'catchUp' && resolve(e)),
+    );
     expect((await restarted.refresh())[0]!.channels.find((c) => c.id === general.id)?.unread).toBe(true);
+    expect((await caught).unread[general.id]).toBe(1);
+    expect((await caught).mentions[general.id]).toBe(1);
     await restarted.action({ a: 'markRead', channelId: general.id });
     const again = bob.restart();
     expect((await again.refresh())[0]!.channels.find((c) => c.id === general.id)?.unread).toBe(false);

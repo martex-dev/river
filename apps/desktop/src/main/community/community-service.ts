@@ -169,6 +169,8 @@ export class CommunityService {
   private reads: Map<string, string> | null = null;
   /** Newest message time per channel seen live since the last refresh. */
   private readonly liveLast = new Map<string, string>();
+  /** The newest message each channel had when we last counted its unread messages. */
+  private readonly caughtUp = new Map<string, string>();
 
   constructor(deps: Deps) {
     this.deps = deps;
@@ -786,6 +788,7 @@ export class CommunityService {
     for (const c of res.communities) this.wires.set(c.id, c);
     this.communities = res.communities.map((c) => this.view(c)).filter((c): c is CommunityView => c !== null);
     for (const c of res.communities) void this.maintainKeys(c).catch(() => undefined);
+    void this.catchUp().catch(() => undefined);
     this.emit({ t: 'communities', communities: this.communities });
     return this.communities;
   }
@@ -943,6 +946,43 @@ export class CommunityService {
 
   profile(): { name: string; avatar: string | null } {
     return { name: this.myName() ?? '', avatar: this.myAvatar() };
+  }
+
+  /**
+   * Counts unread messages and mentions in channels that changed since you last
+   * read them — messages that arrived while River was closed included — by
+   * reading the newest page of each (decrypted here, never on the server).
+   */
+  private async catchUp(): Promise<void> {
+    const reads = this.readMarkers();
+    const unread: Record<string, number> = {};
+    const mentions: Record<string, number> = {};
+    const due = this.communities
+      .flatMap((c) => c.channels)
+      .filter((ch) => {
+        if (ch.kind !== 'text' || !ch.unread) return false;
+        const latest = this.latest(ch.id, this.wireChannel(ch.id)?.lastMessageAt ?? null);
+        return latest !== null && this.caughtUp.get(ch.id) !== latest;
+      })
+      .slice(0, 25);
+    for (const ch of due) {
+      const read = reads.get(ch.id) ?? '';
+      const page = await this.messages(ch.id).catch(() => []);
+      const fresh = page.filter((m) => !m.mine && m.sentAt > read);
+      unread[ch.id] = fresh.length;
+      mentions[ch.id] = fresh.filter((m) => m.mentionsMe).length;
+      const latest = this.latest(ch.id, this.wireChannel(ch.id)?.lastMessageAt ?? null);
+      if (latest) this.caughtUp.set(ch.id, latest);
+    }
+    if (due.length) this.emit({ t: 'catchUp', unread, mentions });
+  }
+
+  private wireChannel(channelId: string): CommunityWire['channels'][number] | undefined {
+    for (const w of this.wires.values()) {
+      const ch = w.channels.find((c) => c.id === channelId);
+      if (ch) return ch;
+    }
+    return undefined;
   }
 
   async messages(channelId: string, before?: string): Promise<ChatMessage[]> {
