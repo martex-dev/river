@@ -6,6 +6,8 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-09
+
 **Roles, permissions, moderation and a full community experience.**
 
 ### Added
