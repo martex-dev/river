@@ -134,7 +134,8 @@ export class RiverProtocol {
       PrivateKey.deserialize(bytes(local.privateKey)),
     );
     const st = storage;
-    const self = this;
+    const pair = this.identityPair;
+    const notifyChange = (riverId: string): void => this.onIdentityChanged(riverId);
 
     this.sessions = new (class extends SessionStore {
       async saveSession(name: ProtocolAddress, record: SessionRecord): Promise<void> {
@@ -157,7 +158,7 @@ export class RiverProtocol {
 
     this.identities = new (class extends IdentityKeyStore {
       async getIdentityKey(): Promise<PrivateKey> {
-        return self.identityPair.privateKey;
+        return pair.privateKey;
       }
       async getLocalRegistrationId(): Promise<number> {
         return local.registrationId;
@@ -168,7 +169,7 @@ export class RiverProtocol {
         st.put('identity', name.name(), serialized);
         if (existing && !Buffer.from(existing).equals(Buffer.from(serialized))) {
           st.delete('verified', name.name());
-          self.onIdentityChanged(name.name());
+          notifyChange(name.name());
           return IdentityChange.ReplacedExisting;
         }
         return IdentityChange.NewOrUnchanged;
