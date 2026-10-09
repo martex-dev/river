@@ -3282,3 +3282,30 @@ input.switch:disabled {
   background: rgba(250, 168, 26, 0.35);
   color: inherit;
 }
+
+/* ---------- Connection banner (1.0.5) ---------- */
+.connection-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  border-bottom: 1px solid rgba(255, 181, 71, 0.25);
+  background: rgba(255, 181, 71, 0.08);
+  color: var(--warn);
+  font-size: 12.5px;
+  animation: slide-up var(--dur) var(--ease-out);
+}
+.connection-banner .btn {
+  margin-left: auto;
+}
+.connection-banner__dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--warn);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.connection-banner--connecting .connection-banner__dot {
+  background: var(--accent);
+}
