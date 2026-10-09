@@ -59,7 +59,8 @@ export function registerMessagingRoutes(
 
   app.put(
     `${API_PREFIX}/keys`,
-    { ...authed, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+    // 100 Kyber prekeys are about 230 KB of JSON, close to the default body limit.
+    { ...authed, bodyLimit: 1024 * 1024, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
     async (request) => {
       const { riverId, deviceId } = request.session!;
       const req = parse(preKeyUploadSchema, request.body);

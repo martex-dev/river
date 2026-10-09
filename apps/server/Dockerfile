@@ -16,7 +16,8 @@ FROM node:24-bookworm-slim
 ENV NODE_ENV=production \
     RIVER_HOST=0.0.0.0 \
     RIVER_PORT=8787 \
-    RIVER_DATABASE_URL=sqlite:/data/river.sqlite \n    RIVER_ATTACHMENT_DIR=/data/attachments
+    RIVER_DATABASE_URL=sqlite:/data/river.sqlite \
+    RIVER_ATTACHMENT_DIR=/data/attachments
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./

@@ -128,6 +128,12 @@ export function TextChannel(props: {
       <div
         className="chat__messages"
         ref={scrollRef}
+        onMouseDown={() => {
+          // On narrow windows the member list is an overlay: clicking the chat closes it.
+          if (window.innerWidth < 1100 && useCommunity.getState().showMembers) {
+            useCommunity.setState({ showMembers: false });
+          }
+        }}
         onScroll={(e) => {
           const el = e.currentTarget;
           setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
