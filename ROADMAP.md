@@ -26,6 +26,26 @@ files + calls, all end-to-end encrypted.
 | **0.9.x** | Integration & hardening        | Desktop multi-device linking, notifications, accessibility, performance, migrations from every 0.x, full security review, documentation                                                                                                        |
 | **1.0.0** | **Stage 1 release**            | Complete desktop platform                                                                                                                                                                                                                      |
 
+### Path to 1.0.0 (current plan, updated 2026-10-09)
+
+Communities shipped earlier than the series table assumed (0.2.0–0.3.0), so the
+remaining Stage 1 work is ordered by what people need to replace their other
+apps. Each line is one minor release; patch releases fix things in between.
+
+| Version    | Deliverable                                                                                                      | Status |
+| ---------- | ---------------------------------------------------------------------------------------------------------------- | ------ |
+| 0.2–0.3 ✅ | Communities: text/voice/video/screen share, roles, permissions, moderation, reactions, pins, notifications       | done   |
+| 0.4.0      | Encrypted attachments: files, images, video and audio in channels (Signal attachment format), drag & drop, paste | ⏳     |
+| 0.5.0      | Contacts and encrypted direct messages (libsignal prekeys + sessions, offline mailbox, read receipts), 1:1 calls | ⏳     |
+| 0.6.0      | Group DMs (sender keys); per-member community keys with rotation when someone is removed                         | ⏳     |
+| 0.7.0      | Social: encrypted profiles, posts and photos feed, stories for friends, comments and reactions                   | ⏳     |
+| 0.8.0      | Multi-device linking, recovery phrase and encrypted backup                                                       | ⏳     |
+| 0.9.0      | Hardening: TURN relay, message search, accessibility, performance, migrations from every 0.x, security review    | ⏳     |
+| 1.0.0      | Stage 1 release                                                                                                  | ⏳     |
+
+1.0.0 is released only when all of the above work, tests pass on all three
+desktop platforms, and no critical security issue is open.
+
 ### First 10 concrete milestones
 
 | #   | Version  | Deliverable                                                                                                                                              | Done when                                                                   |

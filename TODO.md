@@ -3,6 +3,20 @@
 Ordered by priority. The top unchecked item is the next thing to build.
 Milestone definitions: [ROADMAP.md](ROADMAP.md).
 
+## 0.4.0 — Encrypted attachments
+
+- [ ] Crypto: Signal attachment format (AES-256-CBC + HMAC-SHA256, 64-byte random key, SHA-256 digest) in `packages/crypto`, with tamper tests
+- [ ] Server: ciphertext blob store (`POST/GET /v1/attachments`), size limit, ATTACH_FILES enforced when linking to a message, deletion with message/channel/community, garbage collection of unlinked uploads
+- [ ] Desktop: upload (picker, drag & drop, paste), inline images/video/audio, file cards with save, local thumbnails, progress and errors
+- [ ] Tests: server never stores plaintext; wrong key/digest rejected; e2e image round trip between two apps
+
+## 0.5.0 — Contacts and direct messages
+
+- [ ] Prekeys (signed + one-time, Kyber) upload/fetch; libsignal session store in the local DB
+- [ ] Offline mailbox with acknowledgements; realtime delivery; multi-device fan-out
+- [ ] Contacts: add by invite link or River ID, message requests, block
+- [ ] DM UI (conversation list, unread, typing, read receipts, reactions/edit/delete), 1:1 voice/video calls
+
 ## Next — community hardening (after 0.2.0)
 
 - [ ] Per-member keys (libsignal sender keys) with forward secrecy; member removal / key rotation
