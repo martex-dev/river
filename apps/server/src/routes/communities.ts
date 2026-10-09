@@ -42,6 +42,9 @@ const INVITE_MAX_USES = 100;
 const MAX_CHANNELS = 100;
 const MAX_ROLES = 100;
 const PAGE = 100;
+/** Realtime events per second a client may send on average, and the burst allowed. */
+const SOCKET_RATE = 40;
+const SOCKET_BURST = 400;
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 const day = (d: Date): string => d.toISOString().slice(0, 10);
@@ -939,7 +942,18 @@ export async function registerCommunityRoutes(
       }
     };
 
+    // Token bucket: bursts of call setup are fine, sustained floods close the socket.
+    let tokens = SOCKET_BURST;
+    let refilled = Date.now();
     socket.on('message', (raw: Buffer) => {
+      const now = Date.now();
+      tokens = Math.min(SOCKET_BURST, tokens + ((now - refilled) / 1000) * SOCKET_RATE);
+      refilled = now;
+      if (tokens < 1) {
+        socket.close(4429, 'Too many events');
+        return;
+      }
+      tokens -= 1;
       void handle(raw).catch(() => send({ t: 'error', code: 'internal' }));
     });
 

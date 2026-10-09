@@ -62,6 +62,14 @@ export async function registerAttachmentRoutes(
       if (body.length < MIN_BLOB || (body.length - 48) % 16 !== 0) {
         throw new HttpError(400, 'bad_request', 'That is not an encrypted River attachment');
       }
+      const used = await db
+        .selectFrom('attachments')
+        .select((eb) => eb.fn.sum<number>('size').as('total'))
+        .where('uploader', '=', request.session!.riverId)
+        .executeTakeFirst();
+      if (Number(used?.total ?? 0) + body.length > deps.config.attachmentQuotaBytes) {
+        throw new HttpError(413, 'quota_exceeded', 'You have reached your storage limit on this server');
+      }
       const id = randomBytes(16).toString('base64url');
       const tmp = `${fileOf(id)}.part`;
       await writeFile(tmp, body, { flag: 'wx' });

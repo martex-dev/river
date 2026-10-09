@@ -254,3 +254,71 @@ describe('TURN credentials', () => {
     );
   });
 });
+
+describe('abuse limits', () => {
+  const custom = async (env: Record<string, string>) => {
+    database = openDatabase('sqlite::memory:');
+    await migrateToLatest(database.db);
+    app = await buildApp({
+      config: loadConfig({
+        RIVER_LOG_LEVEL: 'silent',
+        RIVER_RATE_LIMIT_PER_MINUTE: '100000',
+        RIVER_ATTACHMENT_DIR: join(tmpdir(), `river-blobs-${Math.random().toString(36).slice(2)}`),
+        ...env,
+      }),
+      database,
+    });
+  };
+
+  it('refuses mail for a device whose mailbox is full', async () => {
+    await custom({ RIVER_MAILBOX_LIMIT: '100' });
+    const alice = await client(app);
+    const bob = await client(app);
+    const body = Buffer.from('x'.repeat(40)).toString('base64');
+    const send = () =>
+      app.inject({
+        method: 'POST',
+        url: `/v1/messages/${bob.riverId}`,
+        headers: auth(alice.token),
+        payload: { messages: [{ deviceId: 1, registrationId: bob.identity.registrationId, type: 2, body }] },
+      });
+    for (let i = 0; i < 100; i++) expect((await send()).statusCode).toBe(202);
+    const full = await send();
+    expect(full.statusCode).toBe(429);
+    expect(full.json().error.code).toBe('mailbox_full');
+  });
+
+  it('enforces a per-person storage quota for files', async () => {
+    await custom({ RIVER_ATTACHMENT_QUOTA_MB: '10', RIVER_MAX_ATTACHMENT_MB: '25' });
+    const alice = await client(app);
+    const upload = () =>
+      app.inject({
+        method: 'POST',
+        url: '/v1/attachments',
+        headers: { ...auth(alice.token), 'content-type': 'application/octet-stream' },
+        payload: Buffer.alloc(16 + 6 * 1024 * 1024 + 32),
+      });
+    expect((await upload()).statusCode).toBe(201);
+    const over = await upload();
+    expect(over.statusCode).toBe(413);
+    expect(over.json().error.code).toBe('quota_exceeded');
+  });
+});
+
+describe('realtime socket', () => {
+  it('closes a connection that floods the server with events', async () => {
+    ({ app, database } = await startServer());
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const { port } = app.server.address() as { port: number };
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/ws`);
+    await new Promise((resolve, reject) => {
+      ws.onopen = resolve;
+      ws.onerror = reject;
+    });
+    const closed = new Promise<number>((resolve) => {
+      ws.onclose = (e) => resolve(e.code);
+    });
+    for (let i = 0; i < 1000; i++) ws.send(JSON.stringify({ t: 'ping' }));
+    expect(await closed).toBe(4429);
+  });
+});

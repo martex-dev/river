@@ -33,6 +33,10 @@ const envSchema = z.object({
   RIVER_ATTACHMENT_DIR: z.string().min(1).default('./data/attachments'),
   /** Largest attachment (after encryption) in MiB. */
   RIVER_MAX_ATTACHMENT_MB: z.coerce.number().int().min(1).max(500).default(25),
+  /** Total size of the files one person can keep on the server, in MiB. */
+  RIVER_ATTACHMENT_QUOTA_MB: z.coerce.number().int().min(10).max(1_000_000).default(2048),
+  /** Undelivered envelopes kept per device; more are refused until it catches up. */
+  RIVER_MAILBOX_LIMIT: z.coerce.number().int().min(100).max(1_000_000).default(5000),
   /** TURN relay URLs for calls (comma-separated), e.g. turn:turn.example.org:3478,turns:turn.example.org:5349 */
   RIVER_TURN_URLS: z.string().max(2000).optional(),
   /** coturn "static-auth-secret": the server hands out short-lived TURN credentials signed with it. */
@@ -54,6 +58,8 @@ export interface ServerConfig {
   attachmentDir: string;
   maxAttachmentBytes: number;
   turn: { urls: string[]; secret: string } | null;
+  attachmentQuotaBytes: number;
+  mailboxLimit: number;
 }
 
 export class ConfigError extends Error {
@@ -86,6 +92,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     sessionTtlMs: e.RIVER_SESSION_TTL_HOURS * 60 * 60 * 1000,
     attachmentDir: e.RIVER_ATTACHMENT_DIR,
     maxAttachmentBytes: e.RIVER_MAX_ATTACHMENT_MB * 1024 * 1024,
+    attachmentQuotaBytes: e.RIVER_ATTACHMENT_QUOTA_MB * 1024 * 1024,
+    mailboxLimit: e.RIVER_MAILBOX_LIMIT,
     turn:
       e.RIVER_TURN_URLS && e.RIVER_TURN_SECRET
         ? {

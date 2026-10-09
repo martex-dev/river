@@ -302,6 +302,24 @@ export function registerMessagingRoutes(
       // Blocked senders are not told; their messages are silently dropped.
       if (target !== me.riverId && (await isBlocked(target, me.riverId)))
         return reply.code(202).send({ ok: true });
+      if (!req.ephemeral) {
+        // A device that never collects its mail cannot be used to fill the server's disk.
+        for (const m of req.messages) {
+          const queued = await db
+            .selectFrom('mailbox')
+            .select((eb) => eb.fn.countAll<number>().as('n'))
+            .where('recipient', '=', target)
+            .where('recipient_device', '=', m.deviceId)
+            .executeTakeFirst();
+          if (Number(queued?.n ?? 0) >= deps.config.mailboxLimit) {
+            throw new HttpError(
+              429,
+              'mailbox_full',
+              'This person has too many undelivered messages. Try later.',
+            );
+          }
+        }
+      }
       const receivedAt = deps.now().toISOString();
       const envelopes: EnvelopeWire[] = req.messages.map((m) => ({
         id: randomBytes(16).toString('base64url'),
