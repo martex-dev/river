@@ -462,9 +462,18 @@ export class CommunityService {
     return row?.avatar ?? null;
   }
 
+  /** Your nickname in a community, if you set one. */
+  private nickname(communityId: string): string | null {
+    const row = this.deps
+      .db()
+      ?.prepare('SELECT nickname FROM community_nicknames WHERE community_id = ?')
+      .get(communityId) as { nickname: string } | undefined;
+    return row?.nickname ?? null;
+  }
+
   private sealedProfile(communityId: string): string {
     const profile: SealedProfile = {
-      name: this.myName(),
+      name: this.nickname(communityId) ?? this.myName(),
       avatar: this.myAvatar(),
       identityKey: this.myIdentityKey(),
     };
@@ -629,6 +638,7 @@ export class CommunityService {
       name: String(meta.name).slice(0, 64),
       description: String(meta.description ?? '').slice(0, 300),
       icon: communityIconSchema.safeParse(meta.icon).success ? (meta.icon as string) : null,
+      myNickname: this.nickname(c.id),
       ownerId,
       permissions: permsOfMe(),
       myRank: topPosition(ownerId, wireRoles, { riverId: me, roles: myRoles }),
@@ -795,8 +805,10 @@ export class CommunityService {
       if (role.everyone || !mine.includes(role.id) || !(role.mentionable || mayMentionAll)) continue;
       if (lower.includes(`@${role.name.toLowerCase()}`)) return true;
     }
-    const name = this.myName();
-    return !!name && lower.includes(`@${name.toLowerCase()}`);
+    const names = [this.myName(), community ? this.nickname(community.id) : null].filter(
+      (n): n is string => !!n,
+    );
+    return names.some((n) => lower.includes(`@${n.toLowerCase()}`));
   }
 
   // ---- Public API (called via IPC) -----------------------------------------------------------
@@ -1419,6 +1431,20 @@ export class CommunityService {
           ...(act.disconnect ? { disconnect: true } : {}),
         });
         break;
+      case 'setNickname': {
+        if (act.nickname === null)
+          this.db().prepare('DELETE FROM community_nicknames WHERE community_id = ?').run(act.communityId);
+        else
+          this.db()
+            .prepare(
+              `INSERT INTO community_nicknames (community_id, nickname) VALUES (?, ?)
+               ON CONFLICT (community_id) DO UPDATE SET nickname = excluded.nickname`,
+            )
+            .run(act.communityId, act.nickname);
+        await this.publishProfile(act.communityId);
+        await this.refresh().catch(() => undefined);
+        break;
+      }
       case 'setProfile': {
         if (act.name !== undefined) this.deps.identity.setDisplayName(act.name);
         if (act.avatar !== undefined) {

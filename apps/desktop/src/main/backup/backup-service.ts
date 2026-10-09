@@ -32,6 +32,8 @@ const TABLES = [
   'post_reactions',
   'story_views',
   'call_log',
+  'channel_reads',
+  'community_nicknames',
 ] as const;
 /** Contacts' identity keys (trust on first use) and verification marks. */
 const SIGNAL_KINDS = ['identity', 'verified'];

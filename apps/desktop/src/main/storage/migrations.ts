@@ -246,4 +246,17 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 13,
+    name: '0013_community_nicknames',
+    up(db) {
+      // The name you use in one community instead of your River name.
+      db.exec(`
+        CREATE TABLE community_nicknames (
+          community_id TEXT PRIMARY KEY,
+          nickname     TEXT NOT NULL
+        ) STRICT;
+      `);
+    },
+  },
 ];

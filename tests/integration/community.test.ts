@@ -571,4 +571,26 @@ describe('desktop ↔ server communities', () => {
     expect(lines.some((l) => l.startsWith('Alice timed out Bob until'))).toBe(true);
     await expect(bob.community.action({ a: 'audit', communityId: created.id })).rejects.toThrow();
   });
+
+  it('nicknames: one name per community, and @nickname pings you', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Nicks');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    await bob.community.action({ a: 'setNickname', communityId: created.id, nickname: 'Bobby' });
+    const view = (await alice.community.refresh())[0]!;
+    expect(view.members.find((m) => m.riverId === bob.riverId)?.name).toBe('Bobby');
+    expect((await bob.community.refresh())[0]!.myNickname).toBe('Bobby');
+
+    const general = view.channels.find((c) => c.kind === 'text')!;
+    await alice.community.send(general.id, 'hey @Bobby');
+    expect((await bob.community.messages(general.id)).find((m) => m.text === 'hey @Bobby')!.mentionsMe).toBe(
+      true,
+    );
+
+    await bob.community.action({ a: 'setNickname', communityId: created.id, nickname: null });
+    expect((await alice.community.refresh())[0]!.members.find((m) => m.riverId === bob.riverId)?.name).toBe(
+      'Bob',
+    );
+  });
 });

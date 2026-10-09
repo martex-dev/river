@@ -217,6 +217,8 @@ export interface CommunityView {
   description: string;
   /** An emoji, or null for the name's initials. */
   icon: string | null;
+  /** Your nickname here, or null if you use your River name. */
+  myNickname: string | null;
   ownerId: string;
   /** My community-wide permissions. */
   permissions: number;

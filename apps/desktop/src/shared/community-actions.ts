@@ -131,6 +131,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
         .max(500),
     })
     .strict(),
+  /** Your name in one community (null: use your River name). */
+  z.object({ a: z.literal('setNickname'), communityId: id, nickname: name.nullable() }).strict(),
   /** Reconnect to the server right away instead of waiting for the next attempt. */
   z.object({ a: z.literal('reconnect') }).strict(),
   /** You have seen this channel up to now. */
