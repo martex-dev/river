@@ -548,6 +548,7 @@ export class CommunityService {
           private: !!everyoneOverwrite && (everyoneOverwrite.deny & Permission.VIEW_CHANNELS) !== 0,
           parentId: ch.parentId,
           unread: this.isUnread(ch.id, ch.lastMessageAt),
+          lastReadAt: this.readMarkers().get(ch.id) ?? null,
         };
       })
       .sort((a, b) => a.position - b.position);

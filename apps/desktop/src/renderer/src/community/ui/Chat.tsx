@@ -64,9 +64,22 @@ export function TextChannel(props: {
     setPending(next.slice(0, 10));
   };
 
+  // The "New messages" divider sits before the first message from someone else since you last read.
+  const dividerAfter = useCommunity((x) => (x.divider?.channelId === channel.id ? x.divider.after : null));
+  const firstNew = dividerAfter ? messages.find((m) => !m.mine && m.sentAt > dividerAfter) : undefined;
+  const newCount = dividerAfter ? messages.filter((m) => !m.mine && m.sentAt > dividerAfter).length : 0;
+  const scrolledToNew = useRef<string | null>(null);
+
   useEffect(() => {
     const el = scrollRef.current;
-    if (el && atBottom) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    // Opening a channel with new messages starts at the divider, once.
+    if (firstNew && scrolledToNew.current !== channel.id) {
+      scrolledToNew.current = channel.id;
+      document.getElementById(`msg-${firstNew.id}`)?.scrollIntoView({ block: 'center' });
+      return;
+    }
+    if (atBottom) el.scrollTop = el.scrollHeight;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, channel.id]);
 
@@ -147,6 +160,16 @@ export function TextChannel(props: {
           </button>
         </span>
       </header>
+      {firstNew && (
+        <div className="chat__new-bar" role="status">
+          <button className="chat__new-bar-jump" onClick={() => jumpTo(firstNew.id)}>
+            {newCount} new {newCount === 1 ? 'message' : 'messages'} since {timeOf(dividerAfter!)}
+          </button>
+          <button className="chat__new-bar-read" onClick={() => useCommunity.setState({ divider: null })}>
+            Mark as read
+          </button>
+        </div>
+      )}
       {s.showPins && <PinsPanel community={community} channel={channel} me={me} onJump={jumpTo} />}
       {s.showSearch && <SearchPanel community={community} onJump={jumpTo} />}
       <div
@@ -209,6 +232,11 @@ export function TextChannel(props: {
               {newDay && (
                 <div className="chat__day">
                   <span>{dayLabel(m.sentAt)}</span>
+                </div>
+              )}
+              {m.id === firstNew?.id && (
+                <div className="chat__new" role="separator" aria-label="New messages">
+                  <span>New</span>
                 </div>
               )}
               <Message
@@ -564,6 +592,8 @@ function Composer(props: {
     if (!sent) setText(value);
     else {
       play('send');
+      // Answering means you have caught up.
+      if (useCommunity.getState().divider?.channelId === channel.id) useCommunity.setState({ divider: null });
       for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
       props.onPendingChange([]);
       s.handle({ t: 'message', message: sent, isNew: false });

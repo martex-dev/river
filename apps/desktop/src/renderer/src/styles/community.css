@@ -3216,3 +3216,63 @@ input.switch:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---------- New messages divider (1.0.4) ---------- */
+.chat__new {
+  display: flex;
+  align-items: center;
+  margin: 10px 16px 4px;
+  border-top: 1px solid #ed4245;
+  animation: fade-in var(--dur) var(--ease-out);
+}
+.chat__new span {
+  margin-left: auto;
+  margin-top: -9px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #ed4245;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+.chat__new-bar {
+  position: absolute;
+  top: 52px;
+  left: 16px;
+  right: 16px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  border-radius: 0 0 10px 10px;
+  background: #5865f2;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.7);
+  animation: slide-up var(--dur) var(--ease-spring);
+}
+.chat__new-bar button {
+  padding: 6px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.chat__new-bar-jump {
+  flex: 1;
+  text-align: left;
+}
+.chat__new-bar-read {
+  border-left: 1px solid rgba(255, 255, 255, 0.25) !important;
+}
+.chat__new-bar button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+.chat__new-bar button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}

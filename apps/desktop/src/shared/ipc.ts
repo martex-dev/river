@@ -162,6 +162,8 @@ export interface ChannelView {
   parentId: string | null;
   /** Has messages newer than you last read here (kept across restarts). */
   unread: boolean;
+  /** Where you stopped reading (this device), for the "New messages" divider. */
+  lastReadAt: string | null;
 }
 
 export interface CategoryView {

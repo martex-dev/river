@@ -394,4 +394,17 @@ test('a brand-new user creates a community from a template in one step', async (
   await auditA11y(carol, 'Friends');
   await carol.getByRole('tab', { name: 'Add friend' }).click();
   await expect(carol.locator('.friends__add code')).toContainText('/add#');
+
+  // Messages that arrive while you are elsewhere get a "New messages" divider when you open the channel.
+  await carol.getByRole('button', { name: 'Communities', exact: true }).click();
+  await carol.getByPlaceholder('Message #general').fill('hello Dave, welcome!');
+  await carol.keyboard.press('Enter');
+  await expect(dave.getByRole('button', { name: 'Text channel general, unread' })).toBeVisible({
+    timeout: 15_000,
+  });
+  await dave.getByRole('button', { name: 'Text channel general, unread' }).click();
+  await expect(dave.getByRole('separator', { name: 'New messages' })).toBeVisible();
+  await expect(dave.locator('.chat__new-bar')).toContainText('1 new message since');
+  await dave.getByRole('button', { name: 'Mark as read' }).click();
+  await expect(dave.locator('.chat__new-bar')).toHaveCount(0);
 });
