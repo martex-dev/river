@@ -6,6 +6,8 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-09
+
 **Direct messages and calls, end-to-end encrypted with the Signal protocol.**
 
 ### Added
