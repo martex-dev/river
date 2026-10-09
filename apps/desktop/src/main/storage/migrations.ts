@@ -200,4 +200,23 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 10,
+    name: '0010_call_log',
+    up(db) {
+      // Your call history (who, when, how long). Kept only on this device.
+      db.exec(`
+        CREATE TABLE call_log (
+          id           TEXT PRIMARY KEY,
+          peer         TEXT NOT NULL,
+          direction    TEXT NOT NULL CHECK (direction IN ('in', 'out')),
+          video        INTEGER NOT NULL,
+          started_at   TEXT NOT NULL,
+          answered     INTEGER NOT NULL,
+          duration_sec INTEGER NOT NULL
+        ) STRICT;
+        CREATE INDEX call_log_by_time ON call_log (started_at);
+      `);
+    },
+  },
 ];

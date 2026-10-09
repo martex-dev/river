@@ -257,4 +257,24 @@ describe('desktop ↔ server communities', () => {
     // Empty messages without files are still refused.
     await expect(alice.community.action({ a: 'send', channelId: general.id, text: '  ' })).rejects.toThrow();
   });
+
+  it('pages through older history and searches it on the device', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Archive');
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.kind === 'text')!;
+    for (let i = 0; i < 105; i++) {
+      await alice.community.send(general.id, i === 2 ? 'the hidden needle' : `message ${i}`);
+    }
+    const latest = await alice.community.messages(general.id);
+    expect(latest).toHaveLength(100);
+    expect(latest.map((m) => m.text)).not.toContain('the hidden needle');
+    const older = await alice.community.action({
+      a: 'history',
+      channelId: general.id,
+      before: latest[0]!.sentAt,
+    });
+    expect(older.map((m) => m.text)).toContain('the hidden needle');
+    const found = await alice.community.action({ a: 'search', communityId: created.id, query: 'NEEDLE' });
+    expect(found.map((m) => m.text)).toEqual(['the hidden needle']);
+  });
 });

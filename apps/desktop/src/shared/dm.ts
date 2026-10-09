@@ -41,6 +41,28 @@ export interface DirectMessageView {
   reactions: Array<{ emoji: string; count: number; mine: boolean; users: string[] }>;
 }
 
+export interface FileView {
+  pointer: AttachmentPointer;
+  /** Conversation (person or group) or 'post'. */
+  where: string;
+  whereName: string;
+  fromName: string;
+  mine: boolean;
+  sentAt: string;
+}
+
+export interface CallView {
+  id: string;
+  peer: string;
+  name: string;
+  avatar: string | null;
+  direction: 'in' | 'out';
+  video: boolean;
+  answered: boolean;
+  durationSec: number;
+  startedAt: string;
+}
+
 export type DmEvent =
   | { t: 'conversations'; conversations: ConversationView[] }
   | { t: 'message'; message: DirectMessageView; isNew: boolean; senderName: string }
@@ -117,6 +139,26 @@ export const dmActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('myId') }).strict(),
+  /** Every file shared in conversations and posts on this device. */
+  z.object({ a: z.literal('files') }).strict(),
+  /** Records a finished, missed or declined call. */
+  z
+    .object({
+      a: z.literal('logCall'),
+      peer: riverId,
+      direction: z.enum(['in', 'out']),
+      video: z.boolean(),
+      answered: z.boolean(),
+      durationSec: z
+        .number()
+        .int()
+        .min(0)
+        .max(7 * 86_400),
+    })
+    .strict(),
+  z.object({ a: z.literal('calls') }).strict(),
+  /** Searches all conversations on this device. */
+  z.object({ a: z.literal('search'), query: z.string().trim().min(2).max(100) }).strict(),
   z
     .object({
       a: z.literal('createGroup'),
@@ -152,6 +194,9 @@ interface DmResults {
   upload: AttachmentPointer;
   myId: string;
   createGroup: ConversationView;
+  search: DirectMessageView[];
+  files: FileView[];
+  calls: CallView[];
 }
 
 export type DmActionResult<A extends DmAction> = A['a'] extends keyof DmResults ? DmResults[A['a']] : null;

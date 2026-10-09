@@ -26,6 +26,26 @@ interface DmCallState {
 export const useDmCall = create<DmCallState>(() => ({ incoming: null, active: null }));
 
 let ringTimer: number | undefined;
+/** The current call, for the call history. */
+let current: { peer: string; direction: 'in' | 'out'; video: boolean; connectedAt: number | null } | null =
+  null;
+
+function logCall(entry: {
+  peer: string;
+  direction: 'in' | 'out';
+  video: boolean;
+  connectedAt: number | null;
+}): void {
+  const durationSec = entry.connectedAt ? Math.round((Date.now() - entry.connectedAt) / 1000) : 0;
+  void window.river.dm.action({
+    a: 'logCall',
+    peer: entry.peer,
+    direction: entry.direction,
+    video: entry.video,
+    answered: entry.connectedAt !== null,
+    durationSec,
+  });
+}
 let timeoutTimer: number | undefined;
 
 function stopRinging(): void {
@@ -89,6 +109,7 @@ async function begin(
       const active = useDmCall.getState().active;
       if (connected && !wasConnected && active?.callId === callId) {
         wasConnected = true;
+        if (current) current.connectedAt = Date.now();
         useDmCall.setState({ active: { ...active, state: 'connected' } });
       }
     },
@@ -107,6 +128,7 @@ async function begin(
   useDmCall.setState({
     active: { peer, callId, video, state: role === 'caller' ? 'ringing' : 'connecting' },
   });
+  current = { peer, direction: role === 'caller' ? 'out' : 'in', video, connectedAt: null };
   try {
     await call.start();
   } catch (err) {
@@ -155,6 +177,7 @@ export async function acceptDmCall(withVideo: boolean): Promise<void> {
 export function declineDmCall(): void {
   const incoming = useDmCall.getState().incoming;
   if (!incoming) return;
+  logCall({ peer: incoming.peer, direction: 'in', video: incoming.video, connectedAt: null });
   stopRinging();
   useDmCall.setState({ incoming: null });
   void send(incoming.peer, incoming.callId, 'decline').catch(() => undefined);
@@ -162,6 +185,8 @@ export function declineDmCall(): void {
 
 export async function endDmCall(): Promise<void> {
   stopRinging();
+  if (current) logCall(current);
+  current = null;
   const call = useCommunity.getState().call;
   useDmCall.setState({ active: null });
   if (call?.channelId.startsWith('dm:')) {
@@ -212,6 +237,7 @@ export function handleCallEvent(e: Extract<DmEvent, { t: 'call' }>): void {
       if (incoming?.callId === e.callId) {
         stopRinging();
         useDmCall.setState({ incoming: null });
+        logCall({ peer: e.peer, direction: 'in', video: e.video, connectedAt: null });
         useCommunity.getState().notify(`Missed call from ${name}.`);
       } else if (active?.callId === e.callId) {
         void endDmCall();

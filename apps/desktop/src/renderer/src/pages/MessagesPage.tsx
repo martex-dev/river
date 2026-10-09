@@ -112,6 +112,16 @@ function ConversationList({ onNew }: { onNew(): void }): ReactElement {
   const [query, setQuery] = useState('');
   const [copied, setCopied] = useState(false);
   const filtered = dm.conversations.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()));
+  const [results, setFound] = useState<DirectMessageView[]>([]);
+  const found = query.trim().length >= 2 ? results : [];
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) return;
+    const t = window.setTimeout(() => {
+      void window.river.dm.action({ a: 'search', query: q }).then((r) => r.ok && setFound(r.value));
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [query]);
   const requests = filtered.filter((c) => c.state === 'request');
   const chats = filtered.filter((c) => c.state !== 'request');
   return (
@@ -128,6 +138,30 @@ function ConversationList({ onNew }: { onNew(): void }): ReactElement {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
+      {found.length > 0 && (
+        <>
+          <div className="channel-group__head">
+            <span>Messages — {found.length}</span>
+          </div>
+          {found.map((m) => {
+            const conv = dm.conversations.find((c) => c.riverId === m.peer);
+            return (
+              <button key={m.id} className="dm-row" onClick={() => dm.select(m.peer)}>
+                <span className="dm-row__text">
+                  <span className="dm-row__top">
+                    <strong>{conv?.name ?? m.senderName}</strong>
+                    <time className="muted small">{shortWhen(m.sentAt)}</time>
+                  </span>
+                  <span className="dm-row__last muted small">
+                    {m.mine ? 'You: ' : conv?.kind === 'group' ? `${m.senderName}: ` : ''}
+                    {m.text || m.attachments.map((a) => a.name).join(', ')}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </>
+      )}
       {requests.length > 0 && (
         <>
           <div className="channel-group__head">

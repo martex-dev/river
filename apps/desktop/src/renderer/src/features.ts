@@ -9,42 +9,4 @@ export interface PlannedFeature {
 }
 
 /** Sections that are designed but not yet built. Copy must stay honest: nothing here works yet. */
-export const PLANNED: Partial<Record<Section, PlannedFeature>> = {
-  calls: {
-    title: 'Calls',
-    tagline: 'Voice and video, one-to-one or in groups, with verified encryption.',
-    arrives: '0.8.x',
-    capabilities: [
-      'Encrypted voice and video calls',
-      'Group calls and voice channels',
-      'Screen sharing',
-      'Microphone, camera and speaker selection',
-      'Call history kept on your device',
-    ],
-    note: 'Calls use WebRTC. Group calls use frame encryption so the relay cannot decode audio or video.',
-  },
-  files: {
-    title: 'Files',
-    tagline: 'Your encrypted vault for images, video, documents and voice notes.',
-    arrives: '0.5.x',
-    capabilities: [
-      'Folders, favourites and recent files',
-      'Shared with me / shared by me',
-      'Previews and thumbnails generated locally',
-      'Search across your files on-device',
-    ],
-    note: 'Files are encrypted on your device before upload. The server stores only ciphertext.',
-  },
-  contacts: {
-    title: 'Contacts',
-    tagline: 'People you trust, verified with fingerprints — no phone number required.',
-    arrives: '0.1.x',
-    capabilities: [
-      'Find people by username, only if they allow it',
-      'Contact requests and blocking',
-      'Identity verification with safety numbers and QR codes',
-      'Warnings when someone’s keys change',
-    ],
-    note: 'River never uploads your address book.',
-  },
-};
+export const PLANNED: Partial<Record<Section, PlannedFeature>> = {};

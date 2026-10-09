@@ -67,11 +67,16 @@ test('navigates every section', async () => {
   await expect(page.locator('.page__title')).toHaveText('Private conversations');
   await page.getByRole('button', { name: 'Social', exact: true }).click();
   await expect(page.locator('.page__title')).toHaveText('Share with your people');
-  for (const label of ['Calls', 'Files', 'Contacts']) {
+  for (const [label, title] of [
+    ['Calls', 'Calls'],
+    ['Files', 'Your files'],
+    ['Contacts', 'Your people'],
+  ] as const) {
     await page.getByRole('button', { name: label, exact: true }).click();
-    await expect(page.locator('.page__title')).toHaveText(label);
-    await expect(page.getByText('Nothing here works yet')).toBeVisible();
+    await expect(page.locator('.page__title')).toHaveText(title);
   }
+  // Every section is built: nothing claims to be "coming".
+  await expect(page.getByText('Nothing here works yet')).toHaveCount(0);
 });
 
 test('Security Center never claims encryption that is not active', async () => {

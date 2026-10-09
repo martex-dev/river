@@ -47,6 +47,7 @@ export function TextChannel(props: {
   const messages = useCommunity((x) => x.messages[channel.id]) ?? [];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const myName = memberOf(community, me)?.name ?? null;
   const names = useMemo(() => community.members.map((m) => m.name), [community.members]);
   const [pending, setPending] = useState<PendingFile[]>([]);
@@ -107,6 +108,14 @@ export function TextChannel(props: {
         {channel.topic && <span className="chat__topic">{channel.topic}</span>}
         <span className="chat__head-actions">
           <button
+            className={`icon-btn ${s.showSearch ? 'is-on' : ''}`}
+            aria-label="Search"
+            title="Search this community"
+            onClick={() => useCommunity.setState({ showSearch: !s.showSearch })}
+          >
+            🔍
+          </button>
+          <button
             className={`icon-btn ${s.showPins ? 'is-on' : ''}`}
             aria-label="Pinned messages"
             title="Pinned messages"
@@ -125,6 +134,7 @@ export function TextChannel(props: {
         </span>
       </header>
       {s.showPins && <PinsPanel community={community} channel={channel} me={me} onJump={jumpTo} />}
+      {s.showSearch && <SearchPanel community={community} onJump={jumpTo} />}
       <div
         className="chat__messages"
         ref={scrollRef}
@@ -139,7 +149,29 @@ export function TextChannel(props: {
           setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
         }}
       >
-        <div className="chat__welcome">
+        {messages.length >= 100 && !s.noMore[channel.id] && (
+          <div className="chat__older">
+            <button
+              className="btn btn--ghost btn--small"
+              disabled={loadingOlder}
+              onClick={() => {
+                const el = scrollRef.current;
+                const before = el ? el.scrollHeight - el.scrollTop : 0;
+                setLoadingOlder(true);
+                void s.loadOlder(channel.id).finally(() => {
+                  setLoadingOlder(false);
+                  // Keep the reader's place after older messages appear above.
+                  requestAnimationFrame(() => {
+                    if (el) el.scrollTop = el.scrollHeight - before;
+                  });
+                });
+              }}
+            >
+              {loadingOlder ? 'Decrypting…' : 'Load older messages'}
+            </button>
+          </div>
+        )}
+        <div className="chat__welcome" hidden={messages.length >= 100 && !s.noMore[channel.id]}>
           <div className="chat__welcome-icon">
             <HashIcon size={34} />
           </div>
@@ -748,6 +780,76 @@ function PinsPanel(props: {
             <strong>{m.senderName}</strong>{' '}
             <time className="muted small">{new Date(m.sentAt).toLocaleDateString()}</time>
             <span className="pins__text">{m.text.slice(0, 200)}</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SearchPanel(props: { community: CommunityView; onJump(id: string): void }): ReactElement {
+  const s = useCommunity();
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<ChatMessage[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const channelName = (id: string): string =>
+    props.community.channels.find((c) => c.id === id)?.name ?? 'channel';
+  const run = async (): Promise<void> => {
+    if (query.trim().length < 2) return;
+    setBusy(true);
+    const found = await s.run({ a: 'search', communityId: props.community.id, query: query.trim() });
+    setBusy(false);
+    setResults(found ?? []);
+  };
+  return (
+    <div className="pins search-panel">
+      <header className="pins__head">
+        <strong>Search {props.community.name}</strong>
+        <button
+          className="icon-btn"
+          aria-label="Close search"
+          onClick={() => useCommunity.setState({ showSearch: false })}
+        >
+          <XIcon size={14} />
+        </button>
+      </header>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run();
+        }}
+      >
+        <input
+          autoFocus
+          className="search"
+          placeholder="Search messages and files"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </form>
+      <p className="muted small">
+        Searched on this device — the server cannot read your messages, so it cannot search them.
+      </p>
+      {busy && <p className="muted small">Decrypting and searching…</p>}
+      {results?.length === 0 && !busy && <p className="muted small">No results.</p>}
+      {results?.map((m) => (
+        <button
+          key={m.id}
+          className="pins__item"
+          onClick={() => {
+            useCommunity.setState({ showSearch: false });
+            if (s.selectedChannel !== m.channelId) s.selectChannel(m.channelId);
+            window.setTimeout(() => props.onJump(m.id), 400);
+          }}
+        >
+          <span>
+            <strong>{m.senderName}</strong>{' '}
+            <span className="muted small">
+              #{channelName(m.channelId)} · {new Date(m.sentAt).toLocaleDateString()}
+            </span>
+            <span className="pins__text">
+              {m.text.slice(0, 200) || m.attachments.map((a) => a.name).join(', ')}
+            </span>
           </span>
         </button>
       ))}

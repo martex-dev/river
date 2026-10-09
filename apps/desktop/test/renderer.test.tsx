@@ -41,7 +41,7 @@ describe('planned sections', () => {
     }
   });
 
-  it('no longer lists messaging as planned (it shipped end-to-end encrypted in 0.5.0)', () => {
-    expect(PLANNED.messages).toBeUndefined();
+  it('lists nothing as planned any more: every section is built', () => {
+    expect(Object.keys(PLANNED)).toEqual([]);
   });
 });

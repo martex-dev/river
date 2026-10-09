@@ -142,6 +142,10 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
       bob.dm.action({ a: 'edit', peer: alice.riverId, id: sent.id, text: 'forged' }),
     ).rejects.toThrow();
 
+    // Search runs on the device over decrypted history (special characters are literal).
+    expect((await bob.dm.action({ a: 'search', query: 'HEY' })).map((m) => m.text)).toEqual(['hey!']);
+    expect(await bob.dm.action({ a: 'search', query: '%_' })).toEqual([]);
+
     // Safety numbers match on both sides.
     const a = await alice.dm.action({ a: 'safetyNumber', peer: bob.riverId });
     const b = await bob.dm.action({ a: 'safetyNumber', peer: alice.riverId });

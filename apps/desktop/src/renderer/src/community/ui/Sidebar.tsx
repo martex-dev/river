@@ -171,34 +171,30 @@ function ChannelRow(props: { community: CommunityView; channel: ChannelView; me:
   };
   return (
     <div className="channel-wrap">
-      <div
-        className={`channel ${active ? 'is-active' : ''} ${unread ? 'is-unread' : ''}`}
-        role="button"
-        tabIndex={0}
-        onClick={open}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') open();
-        }}
-      >
-        <span className="channel__icon">
-          {ch.kind === 'text' ? <HashIcon size={17} /> : <SpeakerIcon size={17} />}
-        </span>
-        <span className="channel__name">{ch.name}</span>
-        {ch.private && (
-          <span className="channel__lock" title="Private channel">
-            <LockSmallIcon size={12} />
+      <div className={`channel ${active ? 'is-active' : ''} ${unread ? 'is-unread' : ''}`}>
+        <button
+          className="channel__open"
+          aria-current={active ? 'page' : undefined}
+          aria-label={`${ch.kind === 'text' ? 'Text' : 'Voice'} channel ${ch.name}${unread ? `, ${unread} unread` : ''}`}
+          onClick={open}
+        >
+          <span className="channel__icon">
+            {ch.kind === 'text' ? <HashIcon size={17} /> : <SpeakerIcon size={17} />}
           </span>
-        )}
-        {mentions > 0 && <span className="badge badge--mention">{mentions}</span>}
+          <span className="channel__name">{ch.name}</span>
+          {ch.private && (
+            <span className="channel__lock" title="Private channel">
+              <LockSmallIcon size={12} />
+            </span>
+          )}
+          {mentions > 0 && <span className="badge badge--mention">{mentions}</span>}
+        </button>
         {canManage && (
           <button
             className="channel__gear"
             aria-label={`Edit ${ch.name}`}
             title="Edit channel"
-            onClick={(e) => {
-              e.stopPropagation();
-              s.setModal({ kind: 'channel-settings', channelId: ch.id });
-            }}
+            onClick={() => s.setModal({ kind: 'channel-settings', channelId: ch.id })}
           >
             <GearIcon size={14} />
           </button>

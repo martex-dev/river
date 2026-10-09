@@ -112,6 +112,7 @@ function explain(err: unknown): never {
     if (err.code === 'forbidden')
       throw new CommunityError(err.message || 'You do not have permission to do that.');
     if (err.code === 'banned') throw new CommunityError('You are banned from this community.');
+    if (err.code === 'mailbox_full' || err.code === 'quota_exceeded') throw new CommunityError(err.message);
     if (err.code === 'not_found') throw new CommunityError('That no longer exists.');
     if (err.status === 400 && err.message && err.message !== 'Bad request')
       throw new CommunityError(err.message);
@@ -792,9 +793,15 @@ export class CommunityService {
     return { name: this.myName() ?? '', avatar: this.myAvatar() };
   }
 
-  async messages(channelId: string): Promise<ChatMessage[]> {
+  async messages(channelId: string, before?: string): Promise<ChatMessage[]> {
     const communityId = this.communityOf(channelId);
-    const res = await this.call(`/channels/${channelId}/messages`, 'GET', undefined, messagesResponseSchema);
+    const query = before ? `?before=${encodeURIComponent(before)}` : '';
+    const res = await this.call(
+      `/channels/${channelId}/messages${query}`,
+      'GET',
+      undefined,
+      messagesResponseSchema,
+    );
     for (const m of res.messages) this.remember(m.id);
     return res.messages.map((m) => this.toChat(communityId, m)).filter((m): m is ChatMessage => m !== null);
   }
@@ -1031,6 +1038,32 @@ export class CommunityService {
           z.unknown(),
         );
         break;
+      case 'history':
+        return (await this.messages(act.channelId, act.before)) as CommunityActionResult<A>;
+      case 'search': {
+        // The server cannot search ciphertext: fetch recent history per channel and search it here.
+        const community = this.requireCommunity(act.communityId);
+        const needle = act.query.toLowerCase();
+        const found: ChatMessage[] = [];
+        for (const ch of community.channels.filter((c) => c.kind === 'text')) {
+          let before: string | undefined;
+          for (let page = 0; page < 5; page++) {
+            const batch = await this.messages(ch.id, before).catch(() => []);
+            found.push(
+              ...batch.filter(
+                (m) =>
+                  m.text.toLowerCase().includes(needle) ||
+                  m.attachments.some((a) => a.name.toLowerCase().includes(needle)),
+              ),
+            );
+            if (batch.length < 100) break;
+            before = batch[0]!.sentAt;
+          }
+        }
+        return found
+          .sort((a, b) => b.sentAt.localeCompare(a.sentAt))
+          .slice(0, 100) as CommunityActionResult<A>;
+      }
       case 'pins': {
         const communityId = this.communityOf(act.channelId);
         const res = await this.call(

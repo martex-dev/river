@@ -142,6 +142,10 @@ export const communityActionSchema = z.discriminatedUnion('a', [
   z.object({ a: z.literal('deleteMessage'), messageId: id }).strict(),
   z.object({ a: z.literal('pin'), messageId: id, pinned: z.boolean() }).strict(),
   z.object({ a: z.literal('pins'), channelId: id }).strict(),
+  /** Older messages, before an ISO timestamp (100 at a time). */
+  z.object({ a: z.literal('history'), channelId: id, before: z.iso.datetime() }).strict(),
+  /** Search a community's text channels (decrypted on this device). */
+  z.object({ a: z.literal('search'), communityId: id, query: z.string().trim().min(2).max(100) }).strict(),
   z
     .object({
       a: z.literal('react'),
@@ -182,6 +186,8 @@ interface Results {
   send: ChatMessage;
   pins: ChatMessage[];
   upload: AttachmentPointer;
+  history: ChatMessage[];
+  search: ChatMessage[];
   download: Uint8Array;
 }
 

@@ -4,6 +4,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { auditA11y } from './axe.ts';
 import { launchRiver } from './launch.ts';
 
 // Two real River apps and a real server: create, invite, join, chat, call.
@@ -125,6 +126,7 @@ test('create, invite, join, chat and call between two members', async () => {
   await alice.getByPlaceholder('Message #general').fill('welcome, bob');
   await alice.keyboard.press('Enter');
   await expect(bob.locator('.chat__messages')).toContainText('welcome, bob');
+  await auditA11y(bob, 'Community text channel');
   if (process.env.RIVER_SCREENSHOTS) await alice.screenshot({ path: 'test-results/community-chat.png' });
 
   // Voice: clicking the Lounge joins it, and both connect directly.
@@ -229,6 +231,7 @@ test('create, invite, join, chat and call between two members', async () => {
   await alice.locator('.toggle-row', { hasText: 'Kick members' }).locator('input').check();
   await alice.getByRole('button', { name: 'Save changes' }).click();
   await expect(alice.locator('.role-row', { hasText: 'Crew' })).toBeVisible();
+  await auditA11y(alice, 'Community settings → Roles');
   if (process.env.RIVER_SCREENSHOTS) await alice.screenshot({ path: 'test-results/community-roles.png' });
   await alice.locator('.settings-tab', { hasText: 'Members' }).click();
   await alice.getByLabel('Add role to Bob').selectOption({ label: 'Crew' });
@@ -256,6 +259,7 @@ test('create, invite, join, chat and call between two members', async () => {
   await expect(alice.locator('.chat__messages')).toContainText('got it, encrypted both ways', {
     timeout: 15_000,
   });
+  await auditA11y(alice, 'Direct message conversation');
   if (process.env.RIVER_SCREENSHOTS) await alice.screenshot({ path: 'test-results/dm.png' });
 
   // 1:1 call from the conversation: Alice rings, Bob accepts, audio flows, Alice hangs up.
@@ -310,5 +314,6 @@ test('create, invite, join, chat and call between two members', async () => {
   await bob.locator('.post').getByPlaceholder('Add a comment…').fill('Looks great!');
   await bob.locator('.post').getByRole('button', { name: 'Post', exact: true }).click();
   await expect(alice.locator('.post__comments')).toContainText('Looks great!', { timeout: 15_000 });
+  await auditA11y(alice, 'Social feed');
   if (process.env.RIVER_SCREENSHOTS) await bob.screenshot({ path: 'test-results/social.png' });
 });

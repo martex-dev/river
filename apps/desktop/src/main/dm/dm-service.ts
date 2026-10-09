@@ -29,6 +29,7 @@ import {
   type DmAction,
   type DmActionResult,
   type DmEvent,
+  type FileView,
 } from '../../shared/dm.ts';
 import type { AccountService } from '../account/account-service.ts';
 import { CommunityError, type CommunityService } from '../community/community-service.ts';
@@ -881,6 +882,94 @@ export class DmService {
       switch (act.a) {
         case 'myId':
           return out(this.me());
+        case 'files': {
+          const files: FileView[] = [];
+          const convs = new Map(this.conversations().map((c) => [c.riverId, c.name]));
+          for (const r of this.db()
+            .prepare(
+              `SELECT * FROM dm_messages WHERE deleted = 0 AND json_array_length(json_extract(body, '$.attachments')) > 0 ORDER BY sent_at DESC LIMIT 2000`,
+            )
+            .all() as MessageRow[]) {
+            const v = this.view(r);
+            for (const p of v.attachments) {
+              files.push({
+                pointer: p,
+                where: r.peer,
+                whereName: convs.get(r.peer) ?? 'Conversation',
+                fromName: v.senderName,
+                mine: v.mine,
+                sentAt: v.sentAt,
+              });
+            }
+          }
+          for (const r of this.db()
+            .prepare(`SELECT author, body, created_at FROM posts ORDER BY created_at DESC LIMIT 1000`)
+            .all() as Array<{ author: string; body: string; created_at: string }>) {
+            const body = JSON.parse(r.body) as { attachments?: AttachmentPointer[] };
+            for (const p of body.attachments ?? []) {
+              files.push({
+                pointer: p,
+                where: 'post',
+                whereName: 'Social',
+                fromName: this.nameOf(r.author),
+                mine: r.author === this.me(),
+                sentAt: r.created_at,
+              });
+            }
+          }
+          return out(files.sort((a, b) => b.sentAt.localeCompare(a.sentAt)));
+        }
+        case 'logCall':
+          this.db()
+            .prepare(
+              'INSERT INTO call_log (id, peer, direction, video, started_at, answered, duration_sec) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            )
+            .run(
+              randomBytes(16).toString('base64url'),
+              act.peer,
+              act.direction,
+              act.video ? 1 : 0,
+              new Date(Date.now() - act.durationSec * 1000).toISOString(),
+              act.answered ? 1 : 0,
+              act.durationSec,
+            );
+          return out(null);
+        case 'calls':
+          return out(
+            (
+              this.db().prepare('SELECT * FROM call_log ORDER BY started_at DESC LIMIT 500').all() as Array<{
+                id: string;
+                peer: string;
+                direction: 'in' | 'out';
+                video: number;
+                started_at: string;
+                answered: number;
+                duration_sec: number;
+              }>
+            ).map((c) => ({
+              id: c.id,
+              peer: c.peer,
+              name: this.nameOf(c.peer),
+              avatar: this.avatarOf(c.peer),
+              direction: c.direction,
+              video: c.video === 1,
+              answered: c.answered === 1,
+              durationSec: c.duration_sec,
+              startedAt: c.started_at,
+            })),
+          );
+        case 'search': {
+          const like = `%${act.query.replace(/[!%_]/g, (c) => `!${c}`)}%`;
+          const rows = this.db()
+            .prepare(
+              `SELECT * FROM dm_messages
+               WHERE deleted = 0 AND (json_extract(body, '$.text') LIKE ? ESCAPE '!'
+                 OR json_extract(body, '$.attachments') LIKE ? ESCAPE '!')
+               ORDER BY sent_at DESC LIMIT 100`,
+            )
+            .all(like, like) as MessageRow[];
+          return out(rows.map((r) => this.view(r)));
+        }
         case 'conversations':
           return out(this.conversations());
         case 'messages':

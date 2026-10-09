@@ -42,6 +42,10 @@ interface CommunityState {
   editing: string | null;
   showMembers: boolean;
   showPins: boolean;
+  showSearch: boolean;
+  /** Channels whose older history is exhausted. */
+  noMore: Record<string, boolean>;
+  loadOlder(channelId: string): Promise<number>;
 
   load(): Promise<void>;
   handle(event: CommunityEvent): void;
@@ -83,6 +87,21 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   // On narrow windows the member list is an overlay, so start with it closed.
   showMembers: typeof window === 'undefined' || window.innerWidth >= 1100,
   showPins: false,
+  showSearch: false,
+  noMore: {},
+
+  loadOlder: async (channelId) => {
+    const list = get().messages[channelId];
+    if (!list?.length || get().noMore[channelId]) return 0;
+    const res = await window.river.community.action({ a: 'history', channelId, before: list[0]!.sentAt });
+    if (!res.ok) return 0;
+    const older = (res.value as ChatMessage[]).filter((m) => !list.some((x) => x.id === m.id));
+    set({
+      messages: { ...get().messages, [channelId]: [...older, ...(get().messages[channelId] ?? [])] },
+      ...(older.length < 100 ? { noMore: { ...get().noMore, [channelId]: true } } : {}),
+    });
+    return older.length;
+  },
 
   load: async () => {
     const [res, connection] = await Promise.all([

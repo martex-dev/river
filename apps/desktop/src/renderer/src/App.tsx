@@ -10,6 +10,9 @@ import { CallAudio } from './community/ui/Voice.tsx';
 import { CommunitiesPage, Overlays, VoiceHotkeys } from './pages/CommunitiesPage.tsx';
 import { MessagesPage } from './pages/MessagesPage.tsx';
 import { SocialPage } from './pages/SocialPage.tsx';
+import { CallsPage } from './pages/CallsPage.tsx';
+import { ContactsPage } from './pages/ContactsPage.tsx';
+import { FilesPage } from './pages/FilesPage.tsx';
 import { onSocialChanged } from './social/store.ts';
 import { totalUnread, useDm } from './dm/store.ts';
 import { handleCallEvent } from './dm/call.ts';
@@ -170,6 +173,9 @@ export function App(): ReactElement {
           {section === 'communities' && <CommunitiesPage />}
           {section === 'messages' && <MessagesPage />}
           {section === 'social' && <SocialPage />}
+          {section === 'calls' && <CallsPage />}
+          {section === 'files' && <FilesPage />}
+          {section === 'contacts' && <ContactsPage />}
           {section === 'settings' && <SettingsPage />}
           {planned && <PlannedPage section={section} feature={planned} />}
         </main>
