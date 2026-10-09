@@ -37,7 +37,11 @@ class FakeUpdater extends EventEmitter implements UpdaterLike {
 }
 
 function setup(
-  opts: Partial<UpdatePreferences> & { mode?: 'auto' | 'manual'; verify?: () => Promise<void> } = {},
+  opts: Partial<UpdatePreferences> & {
+    mode?: 'auto' | 'manual';
+    verify?: () => Promise<void>;
+    hold?: () => string | null;
+  } = {},
 ) {
   const updater = new FakeUpdater();
   const prefs: UpdatePreferences = {
@@ -52,6 +56,7 @@ function setup(
     mode: opts.mode ?? 'auto',
     preferences: () => prefs,
     verifyDownload,
+    ...(opts.hold ? { installHold: opts.hold } : {}),
     log: nullLogger,
     now: () => new Date('2026-10-08T00:00:00Z'),
   });
@@ -92,6 +97,19 @@ describe('UpdateService', () => {
     expect(seen).toEqual(['checking', 'downloading', 'downloading', 'verifying', 'ready']);
     service.install();
     expect(updater.quitAndInstall).toHaveBeenCalledWith(false, true);
+  });
+
+  it('holds install-on-quit while the current version keeps failing to start', async () => {
+    let hold: string | null = 'this version has been failing to start';
+    const { updater, service } = setup({ hold: () => hold });
+    updater.offer = '0.0.2';
+    await service.check();
+    await flush();
+    expect(service.getStatus().state).toBe('ready');
+    expect(service.installOnQuit()).toBe(false);
+    expect(updater.install).not.toHaveBeenCalled();
+    hold = null;
+    expect(service.installOnQuit()).toBe(true);
   });
 
   it('refuses to install when signature verification fails', async () => {

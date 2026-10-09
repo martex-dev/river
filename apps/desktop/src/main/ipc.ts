@@ -27,6 +27,7 @@ import {
 } from '../shared/ipc.ts';
 import type { FetchBytes } from './http.ts';
 import { isAllowedAppUrl } from './security.ts';
+import { friendlyError } from './errors.ts';
 import { checkServer } from './server-check.ts';
 import type { SettingsStore } from './settings-store.ts';
 import { MIN_PASSPHRASE_LENGTH, WrongPassphraseError } from './storage/key-file.ts';
@@ -34,7 +35,7 @@ import type { StorageService } from './storage/storage-service.ts';
 import type { IdentityService } from './identity/identity-service.ts';
 import { UserFacingError, type AccountService } from './account/account-service.ts';
 import { attachmentPointerSchema, type CommunityAction } from '../shared/community-actions.ts';
-import { CommunityError, type CommunityService } from './community/community-service.ts';
+import type { CommunityService } from './community/community-service.ts';
 import type { DmService } from './dm/dm-service.ts';
 import type { SocialService } from './social/social-service.ts';
 import type { BackupService } from './backup/backup-service.ts';
@@ -67,18 +68,11 @@ export interface IpcDeps {
 }
 
 /** Turns any error into a message that is safe to show. */
-function friendly(err: unknown): string {
-  if (err instanceof CommunityError || err instanceof UserFacingError || err instanceof BackupError)
-    return err.message;
-  if (err instanceof z.ZodError) return 'Please check what you entered.';
-  return 'Something went wrong. Check your connection and try again.';
-}
-
 async function result<T>(fn: () => Promise<T> | T): Promise<Result<T>> {
   try {
     return { ok: true, value: await fn() };
   } catch (err) {
-    return { ok: false, message: friendly(err) };
+    return { ok: false, message: friendlyError(err) };
   }
 }
 
@@ -143,7 +137,7 @@ export function registerIpc(deps: IpcDeps): void {
       // Creating your first community can also create your account, like joining does.
       if (deps.account.status().state === 'none') {
         if (!options.serverUrl)
-          throw new Error('Enter the address of a River server to create your account on.');
+          throw new UserFacingError('Enter the address of a River server to create your account on.');
         deps.settings.update({ server: { url: options.serverUrl } });
         await deps.account.register(options.serverUrl);
       }

@@ -25,6 +25,9 @@ interface CommunityState {
   loaded: boolean;
   error: string | null;
   connection: 'online' | 'offline' | 'connecting';
+  /** When the connection state last changed, and when the next reconnection attempt is. */
+  connectionSince: number;
+  retryAt: number | null;
   communities: CommunityView[];
   selectedCommunity: string | null;
   selectedChannel: string | null;
@@ -79,6 +82,8 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   loaded: false,
   error: null,
   connection: 'offline',
+  connectionSince: Date.now(),
+  retryAt: null,
   communities: [],
   selectedCommunity: null,
   selectedChannel: null,
@@ -132,9 +137,21 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       case 'communities':
         applyCommunities(event.communities);
         return;
-      case 'connection':
-        set({ connection: event.state });
+      case 'connection': {
+        const was = get().connection;
+        const away = Date.now() - get().connectionSince;
+        set({
+          connection: event.state,
+          retryAt: event.retryAt ?? null,
+          ...(event.state !== was ? { connectionSince: Date.now() } : {}),
+        });
+        // Only celebrate a comeback the user could have noticed.
+        if (event.state === 'online' && was !== 'online' && away > 3000 && get().loaded) {
+          play('success');
+          get().notify('Back online');
+        }
         return;
+      }
       case 'catchUp': {
         // Counts from catching up never lower what this session already counted.
         const merge = (

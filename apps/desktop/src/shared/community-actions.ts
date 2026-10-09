@@ -123,6 +123,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
         .max(500),
     })
     .strict(),
+  /** Reconnect to the server right away instead of waiting for the next attempt. */
+  z.object({ a: z.literal('reconnect') }).strict(),
   /** You have seen this channel up to now. */
   z.object({ a: z.literal('markRead'), channelId: id }).strict(),
   z

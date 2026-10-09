@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Permission } from '@river/protocol';
 import type { CommunityEvent } from '../../apps/desktop/src/shared/ipc.ts';
 // Desktop main-process code under test.
@@ -50,6 +50,7 @@ const deadSocket = (): WebSocket => ({ send() {}, close() {}, readyState: 0 }) a
 
 async function person(
   name: string,
+  createSocket: (url: string) => WebSocket = deadSocket,
 ): Promise<{ community: CommunityService; riverId: string; restart(): CommunityService }> {
   const local = migrateDatabase(join(dir, `${name}.db`), newDatabaseKey(), CLIENT_MIGRATIONS).db;
   locals.push(local);
@@ -71,7 +72,7 @@ async function person(
       requestJson: createRequestJson(injectFetch),
       requestBytes: createRequestBytes(injectFetch),
       log: nullLogger,
-      createSocket: deadSocket,
+      createSocket,
     });
   return { community: start(), riverId: created.riverId, restart: start };
 }
@@ -476,5 +477,30 @@ describe('desktop ↔ server communities', () => {
     });
     const role = (await alice.community.refresh())[0]!.roles.find((r) => r.id === mods)!;
     expect([role.name, role.mentionable]).toEqual(['Mods', false]);
+  });
+
+  it('reconnects with jittered backoff, and right away when asked', async () => {
+    const sockets: Array<{ onclose?: () => void; send(): void; close(): void; readyState: number }> = [];
+    const make = (): WebSocket => {
+      const socket = { send() {}, close() {}, readyState: 0 };
+      sockets.push(socket);
+      return socket as unknown as WebSocket;
+    };
+    const alice = await person('Alice', make);
+    await alice.community.create('Net');
+    await vi.waitFor(() => expect(sockets).toHaveLength(1));
+    const events: CommunityEvent[] = [];
+    alice.community.onEvent((e) => events.push(e));
+
+    sockets[0]!.onclose!();
+    const offline = events.find((e) => e.t === 'connection' && e.state === 'offline');
+    expect(offline).toBeDefined();
+    const wait = (offline as { retryAt: number }).retryAt - Date.now();
+    expect(wait).toBeGreaterThan(600);
+    expect(wait).toBeLessThanOrEqual(1250);
+
+    await alice.community.action({ a: 'reconnect' });
+    await vi.waitFor(() => expect(sockets).toHaveLength(2));
+    alice.community.stop();
   });
 });

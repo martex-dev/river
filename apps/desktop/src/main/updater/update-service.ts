@@ -41,6 +41,8 @@ export interface UpdateServiceDeps {
   preferences: () => UpdatePreferences;
   /** Throws if the downloaded file is not part of a correctly signed release for `version`. */
   verifyDownload: (version: string, filePath: string) => Promise<void>;
+  /** A reason to hold automatic installs (e.g. the current version keeps crashing), or null. */
+  installHold?: () => string | null;
   log: Logger;
   now?: () => Date;
 }
@@ -139,6 +141,11 @@ export class UpdateService {
     if (this.status.state !== 'ready' || this.verifiedVersion === null) return false;
     if (!this.deps.preferences().installOnQuit || this.deps.mode !== 'auto') return false;
     if (!this.deps.updater.install) return false;
+    const hold = this.deps.installHold?.();
+    if (hold) {
+      this.deps.log.warn(`Not installing ${this.verifiedVersion} on quit: ${hold}`);
+      return false;
+    }
     this.deps.log.info(`Installing verified update ${this.verifiedVersion} on quit`);
     return this.deps.updater.install(true, false);
   }

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { Celebrations } from '../community/fx.tsx';
+import { ConnectionBanner, NetworkWatcher } from '../community/ui/ConnectionBanner.tsx';
 import { AddFriendDialog, JoinInviteDialog, PasteToJoin } from '../community/ui/PasteToJoin.tsx';
 import { StartScreen } from '../community/ui/StartScreen.tsx';
 import { useCommunity } from '../community/store.ts';
@@ -113,11 +114,7 @@ export function CommunitiesPage(): ReactElement {
       {community && <ChannelSidebar community={community} me={me} />}
 
       <section className="community__main">
-        {s.connection !== 'online' && (
-          <div className="community__banner" role="status">
-            {s.connection === 'connecting' ? 'Connecting to your River server…' : 'Offline — reconnecting…'}
-          </div>
-        )}
+        <ConnectionBanner />
         {community && channel?.kind === 'text' && (
           <TextChannel key={channel.id} community={community} channel={channel} me={me} />
         )}
@@ -140,6 +137,7 @@ export function Overlays(): ReactElement {
       <Toast />
       <Celebrations />
       <PasteToJoin />
+      <NetworkWatcher />
       <IncomingCall />
       <CallPill />
     </>

@@ -3282,3 +3282,62 @@ input.switch:disabled {
   background: rgba(250, 168, 26, 0.35);
   color: inherit;
 }
+
+/* ---------- Connection banner (1.0.5) ---------- */
+.connection-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  border-bottom: 1px solid rgba(255, 181, 71, 0.25);
+  background: rgba(255, 181, 71, 0.08);
+  color: var(--warn);
+  font-size: 12.5px;
+  animation: slide-up var(--dur) var(--ease-out);
+}
+.connection-banner .btn {
+  margin-left: auto;
+}
+.connection-banner__dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--warn);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.connection-banner--connecting .connection-banner__dot {
+  background: var(--accent);
+}
+
+/* ---------- Outgoing messages (1.0.5) ---------- */
+.msg--outgoing .msg__text {
+  transition: opacity var(--dur-fast);
+}
+.msg--sending .msg__text,
+.msg--waiting .msg__text {
+  opacity: 0.55;
+}
+.msg__status {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.msg--waiting .msg__status {
+  color: var(--warn);
+}
+.msg--failed .msg__text {
+  color: var(--danger);
+}
+.msg--failed .msg__status {
+  color: var(--danger);
+  font-weight: 600;
+}
+.msg__failed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  color: var(--danger);
+  font-size: 12.5px;
+  animation: slide-up var(--dur-fast) var(--ease-out);
+}
