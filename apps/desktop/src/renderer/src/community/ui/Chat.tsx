@@ -57,7 +57,9 @@ export function TextChannel(props: {
   const myName = memberOf(community, me)?.name ?? null;
   const names = useMemo(() => community.members.map((m) => m.name), [community.members]);
   const refs = useMentionRefs(community, me);
-  const outgoing = useOutbox(useShallow((o) => o.items.filter((i) => i.channelId === channel.id)));
+  const outgoing = useOutbox(
+    useShallow((o) => o.items.filter((i) => i.channelId === channel.id && !i.threadId)),
+  );
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [dragging, setDragging] = useState(false);
   const canAttach = can(channel.permissions, Permission.ATTACH_FILES | Permission.SEND_MESSAGES);
@@ -131,7 +133,7 @@ export function TextChannel(props: {
       )}
       <header className="chat__head">
         <span className="channel__icon">
-          <HashIcon size={20} />
+          {channel.announcement ? <span aria-hidden="true">📢</span> : <HashIcon size={20} />}
         </span>
         <strong>{channel.name}</strong>
         {channel.topic && <span className="chat__topic">{channel.topic}</span>}
@@ -392,6 +394,17 @@ function Message(props: {
             </div>
           )}
           {m.attachments.length > 0 && <AttachmentList attachments={m.attachments} />}
+          {m.thread && (
+            <button className="thread-summary" onClick={() => void s.showThread(channel.id, m.id)}>
+              <span aria-hidden="true">🧵</span>
+              <strong>{m.thread.name}</strong>
+              <span>
+                {m.thread.count} {m.thread.count === 1 ? 'reply' : 'replies'}
+              </span>
+              {m.thread.lastAt && <span className="muted small">· {timeOf(m.thread.lastAt)}</span>}
+              {m.thread.archived && <span className="chip">Archived</span>}
+            </button>
+          )}
           {m.reactions.length > 0 && (
             <div className="reactions">
               {m.reactions.map((r) => (
@@ -454,6 +467,22 @@ function Message(props: {
               }}
             >
               <ReplyIcon size={17} />
+            </button>
+          )}
+          {can(channel.permissions, Permission.SEND_MESSAGES) && !m.threadId && (
+            <button
+              className="msg__action"
+              aria-label={m.thread ? 'Open thread' : 'Create thread'}
+              title={m.thread ? 'Open thread' : 'Create thread'}
+              onClick={() => {
+                if (m.thread) return void s.showThread(channel.id, m.id);
+                const name = (m.text.split('\n')[0] ?? '').slice(0, 40).trim() || 'Thread';
+                void s
+                  .run({ a: 'createThread', channelId: channel.id, messageId: m.id, name })
+                  .then(() => s.showThread(channel.id, m.id));
+              }}
+            >
+              🧵
             </button>
           )}
           {m.mine && (
@@ -617,14 +646,26 @@ function Composer(props: {
         <span className="muted">
           {timeout
             ? `You're timed out until ${new Date(timeout).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}. You can still read.`
-            : 'You do not have permission to send messages in this channel.'}
+            : channel.announcement
+              ? 'This is an announcement channel: only people who manage messages post here.'
+              : 'You do not have permission to send messages in this channel.'}
         </span>
       </div>
     );
   }
 
+  const slowed =
+    channel.slowmode > 0 &&
+    !can(channel.permissions, Permission.MANAGE_MESSAGES) &&
+    !can(channel.permissions, Permission.MANAGE_CHANNELS);
+
   return (
     <div className="chat__composer-wrap">
+      {slowed && (
+        <div className="composer-note" role="note">
+          🐢 Slowmode is on: one message every {formatSlowmode(channel.slowmode)}.
+        </div>
+      )}
       {suggestions.length > 0 && (
         <div className="mention-menu" role="listbox" aria-label="Suggestions">
           {suggestions.map((choice, i) => (
@@ -1104,4 +1145,10 @@ function OutgoingMessage(props: { item: Outgoing; community: CommunityView; me: 
       </div>
     </div>
   );
+}
+
+function formatSlowmode(seconds: number): string {
+  if (seconds < 60) return `${seconds} seconds`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} minute${seconds >= 120 ? 's' : ''}`;
+  return `${Math.round(seconds / 3600)} hour${seconds >= 7200 ? 's' : ''}`;
 }
