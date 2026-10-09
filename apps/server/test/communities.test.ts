@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -15,6 +17,8 @@ import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { migrateToLatest, openDatabase, type RiverDatabase } from '../src/db/database.ts';
 
+const testBlobDir = (): string => join(tmpdir(), `river-blobs-${Math.random().toString(36).slice(2)}`);
+
 let app: FastifyInstance;
 let database: RiverDatabase;
 
@@ -31,7 +35,11 @@ async function start(): Promise<FastifyInstance> {
   database = openDatabase('sqlite::memory:');
   await migrateToLatest(database.db);
   app = await buildApp({
-    config: loadConfig({ RIVER_LOG_LEVEL: 'silent', RIVER_RATE_LIMIT_PER_MINUTE: '10000' }),
+    config: loadConfig({
+      RIVER_ATTACHMENT_DIR: testBlobDir(),
+      RIVER_LOG_LEVEL: 'silent',
+      RIVER_RATE_LIMIT_PER_MINUTE: '10000',
+    }),
     database,
   });
   return app;
@@ -456,6 +464,141 @@ describe('communities', () => {
         (await a.inject({ method: 'GET', url: '/v1/communities', headers: auth(owner.token) })).json()
           .communities,
       ).toEqual([]);
+    });
+  });
+  describe('attachments', () => {
+    const blob = (n = 1024): Buffer => randomBytes(16 + n + 32);
+    const upload = (a: FastifyInstance, token: string, body: Buffer = blob()) =>
+      a.inject({
+        method: 'POST',
+        url: '/v1/attachments',
+        headers: { ...auth(token), 'content-type': 'application/octet-stream' },
+        payload: body,
+      });
+
+    it('stores encrypted blobs, links them to messages and serves them to members', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { text } = await createCommunity(a, owner.token);
+      const body = blob();
+      const up = await upload(a, owner.token, body);
+      expect(up.statusCode).toBe(201);
+      const { id: blobId } = up.json();
+      const mid = id();
+      const sent = await a.inject({
+        method: 'POST',
+        url: `/v1/channels/${text}/messages`,
+        headers: auth(owner.token),
+        payload: { id: mid, body: sealed(), attachments: [blobId] },
+      });
+      expect(sent.statusCode).toBe(201);
+      expect(sent.json().attachments).toEqual([blobId]);
+      const msgs = (
+        await a.inject({ method: 'GET', url: `/v1/channels/${text}/messages`, headers: auth(owner.token) })
+      ).json().messages;
+      expect(msgs[0].attachments).toEqual([blobId]);
+      const got = await a.inject({
+        method: 'GET',
+        url: `/v1/attachments/${blobId}`,
+        headers: auth(owner.token),
+      });
+      expect(got.statusCode).toBe(200);
+      expect(got.rawPayload.equals(body)).toBe(true);
+      // A blob can be used once only.
+      const again = await a.inject({
+        method: 'POST',
+        url: `/v1/channels/${text}/messages`,
+        headers: auth(owner.token),
+        payload: { id: id(), body: sealed(), attachments: [blobId] },
+      });
+      expect(again.statusCode).toBe(400);
+      // Deleting the message deletes the blob.
+      await a.inject({ method: 'DELETE', url: `/v1/messages/${mid}`, headers: auth(owner.token) });
+      await a.collectAttachments();
+      expect(
+        (await a.inject({ method: 'GET', url: `/v1/attachments/${blobId}`, headers: auth(owner.token) }))
+          .statusCode,
+      ).toBe(404);
+    });
+
+    it('requires a session, the octet-stream type and a plausible size', async () => {
+      const a = await start();
+      const owner = await user(a);
+      expect(
+        (
+          await a.inject({
+            method: 'POST',
+            url: '/v1/attachments',
+            headers: { 'content-type': 'application/octet-stream' },
+            payload: blob(),
+          })
+        ).statusCode,
+      ).toBe(401);
+      expect((await upload(a, owner.token, randomBytes(50))).statusCode).toBe(400);
+      expect(
+        (
+          await a.inject({
+            method: 'POST',
+            url: '/v1/attachments',
+            headers: { ...auth(owner.token), 'content-type': 'application/json' },
+            payload: JSON.stringify({ x: 1 }),
+          })
+        ).statusCode,
+      ).toBe(415);
+      expect((await upload(a, owner.token, randomBytes(26 * 1024 * 1024))).statusCode).toBe(413);
+    });
+
+    it('cannot attach other people’s uploads, and ATTACH_FILES is enforced', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const code = (
+        await a.inject({ method: 'POST', url: `/v1/communities/${cid}/invites`, headers: auth(owner.token) })
+      ).json().code;
+      const member = await user(a);
+      await a.inject({
+        method: 'POST',
+        url: '/v1/invites/join',
+        headers: auth(member.token),
+        payload: { code, profile: sealed() },
+      });
+      const ownersBlob = (await upload(a, owner.token)).json().id;
+      const stolen = await a.inject({
+        method: 'POST',
+        url: `/v1/channels/${text}/messages`,
+        headers: auth(member.token),
+        payload: { id: id(), body: sealed(), attachments: [ownersBlob] },
+      });
+      expect(stolen.statusCode).toBe(400);
+      await a.inject({
+        method: 'PATCH',
+        url: `/v1/roles/${cid}`,
+        headers: auth(owner.token),
+        payload: { permissions: DEFAULT_EVERYONE & ~Permission.ATTACH_FILES },
+      });
+      const mine = (await upload(a, member.token)).json().id;
+      const denied = await a.inject({
+        method: 'POST',
+        url: `/v1/channels/${text}/messages`,
+        headers: auth(member.token),
+        payload: { id: id(), body: sealed(), attachments: [mine] },
+      });
+      expect(denied.statusCode).toBe(403);
+    });
+
+    it('garbage-collects uploads never attached to a message', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const blobId = (await upload(a, owner.token)).json().id;
+      await database.db
+        .updateTable('attachments')
+        .set({ created_at: new Date(Date.now() - 48 * 3600_000).toISOString() })
+        .execute();
+      await a.collectAttachments();
+      expect(
+        (await a.inject({ method: 'GET', url: `/v1/attachments/${blobId}`, headers: auth(owner.token) }))
+          .statusCode,
+      ).toBe(404);
     });
   });
 });

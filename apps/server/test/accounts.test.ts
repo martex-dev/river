@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -23,6 +25,8 @@ import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { migrateToLatest, openDatabase, type RiverDatabase } from '../src/db/database.ts';
 
+const testBlobDir = (): string => join(tmpdir(), `river-blobs-${Math.random().toString(36).slice(2)}`);
+
 let app: FastifyInstance | undefined;
 let database: RiverDatabase | undefined;
 let clock = new Date('2026-10-08T12:00:00.000Z');
@@ -31,7 +35,12 @@ async function start(env: Record<string, string> = {}): Promise<FastifyInstance>
   database = openDatabase('sqlite::memory:');
   await migrateToLatest(database.db);
   app = await buildApp({
-    config: loadConfig({ RIVER_LOG_LEVEL: 'silent', RIVER_RATE_LIMIT_PER_MINUTE: '10000', ...env }),
+    config: loadConfig({
+      RIVER_ATTACHMENT_DIR: testBlobDir(),
+      RIVER_LOG_LEVEL: 'silent',
+      RIVER_RATE_LIMIT_PER_MINUTE: '10000',
+      ...env,
+    }),
     database,
     now: () => clock,
   });

@@ -29,6 +29,10 @@ const envSchema = z.object({
     .min(1)
     .max(24 * 30)
     .default(24),
+  /** Where encrypted attachment blobs are stored. */
+  RIVER_ATTACHMENT_DIR: z.string().min(1).default('./data/attachments'),
+  /** Largest attachment (after encryption) in MiB. */
+  RIVER_MAX_ATTACHMENT_MB: z.coerce.number().int().min(1).max(500).default(25),
   /** Public https URL of this server; enables HSTS. */
   RIVER_PUBLIC_URL: z.url({ protocol: /^https$/ }).optional(),
 });
@@ -43,6 +47,8 @@ export interface ServerConfig {
   publicUrl: string | undefined;
   registration: 'open' | 'closed';
   sessionTtlMs: number;
+  attachmentDir: string;
+  maxAttachmentBytes: number;
 }
 
 export class ConfigError extends Error {
@@ -73,5 +79,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     publicUrl: e.RIVER_PUBLIC_URL,
     registration: e.RIVER_REGISTRATION,
     sessionTtlMs: e.RIVER_SESSION_TTL_HOURS * 60 * 60 * 1000,
+    attachmentDir: e.RIVER_ATTACHMENT_DIR,
+    maxAttachmentBytes: e.RIVER_MAX_ATTACHMENT_MB * 1024 * 1024,
   };
 }

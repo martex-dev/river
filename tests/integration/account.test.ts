@@ -17,6 +17,8 @@ import { buildApp } from '../../apps/server/src/app.ts';
 import { loadConfig } from '../../apps/server/src/config.ts';
 import { migrateToLatest, openDatabase, type RiverDatabase } from '../../apps/server/src/db/database.ts';
 
+const testBlobDir = (): string => join(tmpdir(), `river-blobs-${Math.random().toString(36).slice(2)}`);
+
 const SERVER = 'http://127.0.0.1:8787';
 
 let dir: string;
@@ -42,7 +44,12 @@ async function startServer(env: Record<string, string> = {}): Promise<void> {
   serverDb = openDatabase('sqlite::memory:');
   await migrateToLatest(serverDb.db);
   server = await buildApp({
-    config: loadConfig({ RIVER_LOG_LEVEL: 'silent', RIVER_RATE_LIMIT_PER_MINUTE: '10000', ...env }),
+    config: loadConfig({
+      RIVER_ATTACHMENT_DIR: testBlobDir(),
+      RIVER_LOG_LEVEL: 'silent',
+      RIVER_RATE_LIMIT_PER_MINUTE: '10000',
+      ...env,
+    }),
     database: serverDb,
   });
 }

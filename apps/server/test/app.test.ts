@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { Writable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -5,6 +7,8 @@ import { errorResponseSchema, healthResponseSchema, versionResponseSchema } from
 import { buildApp, SERVER_VERSION } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { migrateToLatest, openDatabase, type RiverDatabase } from '../src/db/database.ts';
+
+const testBlobDir = (): string => join(tmpdir(), `river-blobs-${Math.random().toString(36).slice(2)}`);
 
 let app: FastifyInstance | undefined;
 let database: RiverDatabase | undefined;
@@ -19,7 +23,7 @@ async function start(env: Record<string, string> = {}): Promise<{ app: FastifyIn
   });
   database = openDatabase('sqlite::memory:');
   await migrateToLatest(database.db);
-  const config = loadConfig({ RIVER_LOG_LEVEL: 'info', ...env });
+  const config = loadConfig({ RIVER_ATTACHMENT_DIR: testBlobDir(), RIVER_LOG_LEVEL: 'info', ...env });
   app = await buildApp({ config, database, logStream: stream });
   return { app, logs };
 }

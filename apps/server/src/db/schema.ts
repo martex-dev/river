@@ -110,7 +110,16 @@ export interface MessageReactionsTable {
   emoji: string;
 }
 
+export interface AttachmentsTable {
+  id: string;
+  uploader: string;
+  size: number;
+  created_at: string;
+  message_id: string | null;
+}
+
 export interface Database {
+  attachments: AttachmentsTable;
   communities: CommunitiesTable;
   community_members: CommunityMembersTable;
   channels: ChannelsTable;

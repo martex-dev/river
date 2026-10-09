@@ -32,6 +32,7 @@ import type { CommunityModel } from '../communities/model.ts';
 import { communityOfChannel, loadCommunity, loadMessages } from '../communities/model.ts';
 import type { ServerConfig } from '../config.ts';
 import { HttpError } from '../http-error.ts';
+import { linkAttachments } from './attachments.ts';
 import type { RiverDatabase } from '../db/database.ts';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -646,19 +647,27 @@ export async function registerCommunityRoutes(
       if (!model.can(me(request), Permission.SEND_MESSAGES, channelId))
         throw forbidden('You cannot send messages here');
       const req = parse(sendMessageRequestSchema, request.body);
+      const attachments = req.attachments ?? [];
+      if (attachments.length && !model.can(me(request), Permission.ATTACH_FILES, channelId)) {
+        throw forbidden('You cannot attach files here');
+      }
       try {
-        await db
-          .insertInto('messages')
-          .values({
-            id: req.id,
-            channel_id: channelId,
-            sender: me(request),
-            body: req.body,
-            sent_at: deps.now().toISOString(),
-            pinned: 0,
-          })
-          .execute();
-      } catch {
+        await db.transaction().execute(async (trx) => {
+          await trx
+            .insertInto('messages')
+            .values({
+              id: req.id,
+              channel_id: channelId,
+              sender: me(request),
+              body: req.body,
+              sent_at: deps.now().toISOString(),
+              pinned: 0,
+            })
+            .execute();
+          await linkAttachments(trx, attachments, me(request), req.id);
+        });
+      } catch (err) {
+        if (err instanceof HttpError) throw err;
         throw new HttpError(409, 'conflict', 'Message ID already exists');
       }
       await pushMessage(model, req.id);

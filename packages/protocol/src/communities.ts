@@ -19,6 +19,10 @@ export const communityIdSchema = z.string().regex(COMMUNITY_ID_RE);
 export const channelIdSchema = z.string().regex(COMMUNITY_ID_RE);
 export const messageIdSchema = z.string().regex(COMMUNITY_ID_RE);
 export const roleIdSchema = z.string().regex(COMMUNITY_ID_RE);
+/** Encrypted attachment blobs (see packages/crypto attachment.ts). */
+export const attachmentIdSchema = z.string().regex(COMMUNITY_ID_RE);
+export const MAX_ATTACHMENTS_PER_MESSAGE = 10;
+export const attachmentUploadResponseSchema = z.object({ id: attachmentIdSchema });
 export const inviteCodeSchema = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 /** HMAC tag that lets the server group identical reactions without learning the emoji. */
 export const reactionTagSchema = z.string().regex(/^[0-9a-f]{32}$/);
@@ -166,10 +170,16 @@ export const messageSchema = z.object({
   editedAt: z.iso.datetime().nullable().default(null),
   pinned: z.boolean().default(false),
   reactions: z.array(reactionSchema).default([]),
+  /** IDs of encrypted blobs; keys and names are inside the sealed body. */
+  attachments: z.array(attachmentIdSchema).default([]),
 });
 export type MessageWire = z.infer<typeof messageSchema>;
 export const sendMessageRequestSchema = z
-  .object({ id: messageIdSchema, body: sealedSchema(SEALED_MESSAGE) })
+  .object({
+    id: messageIdSchema,
+    body: sealedSchema(SEALED_MESSAGE),
+    attachments: z.array(attachmentIdSchema).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
+  })
   .strict();
 export const editMessageRequestSchema = z.object({ body: sealedSchema(SEALED_MESSAGE) }).strict();
 export const reactRequestSchema = z.object({ emoji: sealedSchema(SEALED_SMALL) }).strict();

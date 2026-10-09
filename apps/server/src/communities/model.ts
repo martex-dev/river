@@ -209,6 +209,14 @@ export async function loadMessages(
   const reactions = ids.length
     ? await db.selectFrom('message_reactions').selectAll().where('message_id', 'in', ids).execute()
     : [];
+  const files = ids.length
+    ? await db
+        .selectFrom('attachments')
+        .select(['id', 'message_id'])
+        .where('message_id', 'in', ids)
+        .orderBy('id')
+        .execute()
+    : [];
   return rows.map((r) => {
     const grouped = new Map<string, ReactionWire>();
     for (const x of reactions.filter((x) => x.message_id === r.id)) {
@@ -225,6 +233,7 @@ export async function loadMessages(
       editedAt: r.edited_at,
       pinned: r.pinned === 1,
       reactions: [...grouped.values()],
+      attachments: files.filter((f) => f.message_id === r.id).map((f) => f.id),
     };
   });
 }
