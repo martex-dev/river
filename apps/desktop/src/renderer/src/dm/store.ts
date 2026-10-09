@@ -17,6 +17,8 @@ interface DmState {
   loaded: boolean;
   myId: string | null;
   conversations: ConversationView[];
+  /** The conversation list has arrived at least once (so later changes are news). */
+  loadedOnce: boolean;
   selected: string | null;
   messages: Record<string, DirectMessageView[]>;
   typing: Record<string, number>;
@@ -36,6 +38,7 @@ export const useDm = create<DmState>((set, get) => ({
   loaded: false,
   myId: null,
   conversations: [],
+  loadedOnce: false,
   selected: null,
   messages: {},
   typing: {},
@@ -57,9 +60,28 @@ export const useDm = create<DmState>((set, get) => ({
 
   handle: (e) => {
     switch (e.t) {
-      case 'conversations':
-        set({ conversations: e.conversations });
+      case 'conversations': {
+        // A new message request, or someone becoming your contact, gets its own sound.
+        const before = new Map(get().conversations.map((c) => [c.riverId, c.state]));
+        const loaded = get().conversations.length > 0 || get().loadedOnce;
+        set({ conversations: e.conversations, loadedOnce: true });
+        if (!loaded) return;
+        if (
+          e.conversations.some((c) => c.kind === 'direct' && c.state === 'request' && !before.has(c.riverId))
+        )
+          play('friendRequest');
+        else if (
+          e.conversations.some(
+            (c) =>
+              c.kind === 'direct' &&
+              c.state === 'accepted' &&
+              before.has(c.riverId) &&
+              before.get(c.riverId) !== 'accepted',
+          )
+        )
+          play('friendAdded');
         return;
+      }
       case 'message': {
         const m = e.message;
         const list = get().messages[m.peer];
@@ -75,8 +97,7 @@ export const useDm = create<DmState>((set, get) => ({
           const viewing =
             get().selected === m.peer && useRiver.getState().section === 'messages' && document.hasFocus();
           if (viewing) void window.river.dm.action({ a: 'read', peer: m.peer });
-          if (useRiver.getState().settings?.notifications.sounds ?? true)
-            play(viewing ? 'message' : 'mention');
+          play(viewing ? 'message' : 'dm');
         }
         return;
       }
