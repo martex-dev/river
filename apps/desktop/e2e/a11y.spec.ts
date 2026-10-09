@@ -24,7 +24,7 @@ const audit = (where: string): Promise<void> => auditA11y(page, where);
 
 test('main screens have no serious accessibility problems', async () => {
   await audit('Home');
-  for (const section of ['Messages', 'Communities', 'Social', 'Calls', 'Files', 'Contacts', 'Security']) {
+  for (const section of ['Messages', 'Communities', 'Social', 'Calls', 'Files', 'Friends', 'Security']) {
     await page.getByRole('button', { name: section, exact: true }).click();
     await audit(section);
   }

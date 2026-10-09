@@ -70,7 +70,7 @@ test('navigates every section', async () => {
   for (const [label, title] of [
     ['Calls', 'Calls'],
     ['Files', 'Your files'],
-    ['Contacts', 'Your people'],
+    ['Friends', 'Your people'],
   ] as const) {
     await page.getByRole('button', { name: label, exact: true }).click();
     await expect(page.locator('.page__title')).toHaveText(title);
