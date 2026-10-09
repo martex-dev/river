@@ -3090,3 +3090,31 @@ input.switch:disabled {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 12px;
 }
+.chat__welcome-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  animation: slide-up var(--dur) var(--ease-out);
+}
+.wave-btn__hand {
+  display: inline-block;
+  transform-origin: 70% 80%;
+}
+.wave-btn:hover .wave-btn__hand {
+  animation: wave 0.9s ease-in-out;
+}
+@keyframes wave {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  20%,
+  60% {
+    transform: rotate(18deg);
+  }
+  40%,
+  80% {
+    transform: rotate(-10deg);
+  }
+}

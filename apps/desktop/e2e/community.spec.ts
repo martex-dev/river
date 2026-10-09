@@ -356,6 +356,11 @@ test('a brand-new user creates a community from a template in one step', async (
   await expect(carol.getByRole('group', { name: 'Category Chat' })).toContainText('clips');
   await expect(carol.getByRole('group', { name: 'Category Voice' })).toContainText('Squad 1');
   await auditA11y(carol, 'Community created from a template');
+  // An empty channel helps you break the ice.
+  await carol.locator('.channel', { hasText: 'general' }).getByRole('button').first().click();
+  await expect(carol.locator('.chat__welcome-actions')).toContainText("It's just you here");
+  await carol.getByRole('button', { name: /Wave to say hi/ }).click();
+  await expect(carol.locator('.chat__messages')).toContainText('👋');
 
   // Dave pastes Carol's invite anywhere in River (not in a text field) and joins from the prompt.
   await carol.getByRole('button', { name: 'Invite people' }).first().click();

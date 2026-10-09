@@ -180,6 +180,7 @@ export function TextChannel(props: {
           <p className="muted">
             This is the start of the #{channel.name} channel.{channel.topic ? ` ${channel.topic}` : ''}
           </p>
+          {messages.length === 0 && <WelcomeActions community={community} channel={channel} />}
         </div>
         {messages.map((m, i) => {
           const prev = messages[i - 1];
@@ -858,6 +859,54 @@ function SearchPanel(props: { community: CommunityView; onJump(id: string): void
           </span>
         </button>
       ))}
+    </div>
+  );
+}
+
+/** Ways to break the ice in an empty channel: wave, or invite people if you are alone. */
+function WelcomeActions(props: { community: CommunityView; channel: ChannelView }): ReactElement | null {
+  const { community, channel } = props;
+  const s = useCommunity();
+  const [busy, setBusy] = useState(false);
+  const alone = community.members.length <= 1;
+  const canWave = can(channel.permissions, Permission.SEND_MESSAGES);
+  const canInvite = can(community.permissions, Permission.CREATE_INVITE);
+  if (!canWave && !(alone && canInvite)) return null;
+  return (
+    <div className="chat__welcome-actions">
+      {alone && (
+        <p className="muted small">It's just you here for now — invite a few friends to get started.</p>
+      )}
+      <div className="button-row">
+        {alone && canInvite && (
+          <button
+            className="btn btn--primary btn--small"
+            onClick={() => s.setModal({ kind: 'invite', communityId: community.id })}
+          >
+            Invite friends
+          </button>
+        )}
+        {canWave && (
+          <button
+            className="btn btn--ghost btn--small wave-btn"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              void s.run({ a: 'send', channelId: channel.id, text: '👋' }).then((sent) => {
+                setBusy(false);
+                if (!sent) return;
+                play('send');
+                s.handle({ t: 'message', message: sent, isNew: false });
+              });
+            }}
+          >
+            <span className="wave-btn__hand" aria-hidden="true">
+              👋
+            </span>{' '}
+            Wave to say hi
+          </button>
+        )}
+      </div>
     </div>
   );
 }
