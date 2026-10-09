@@ -84,7 +84,7 @@ test('create, invite, join, chat and call between two members', async () => {
   await alice.getByPlaceholder('e.g. The Crew').fill('The Crew');
   await alice.getByRole('button', { name: 'Create community' }).click();
   await expect(alice.locator('.community__title strong')).toHaveText('The Crew');
-  await alice.getByRole('button', { name: 'Invite people' }).click();
+  await alice.getByRole('button', { name: 'Invite people' }).first().click();
   const invite = (await alice.locator('.invite-box__link').innerText()).trim();
   expect(invite).toMatch(/\/join#c=.+&k=.+/);
   // "Copy link" really puts the link on the clipboard.
@@ -96,7 +96,7 @@ test('create, invite, join, chat and call between two members', async () => {
   // Bob joins with nothing but the link (his account is created automatically).
   const bob = await open('Bob');
   await bob.getByRole('button', { name: 'Communities', exact: true }).click();
-  await bob.getByPlaceholder('https://…/join#c=…&k=…').fill(invite);
+  await bob.getByLabel('Invite link').fill(invite);
   await bob.getByRole('button', { name: 'Join community' }).click();
   await expect(bob.locator('.community__title strong')).toHaveText('The Crew');
   // A short celebration greets new members (purely visual: hidden from screen readers).
@@ -338,4 +338,41 @@ test('create, invite, join, chat and call between two members', async () => {
   await expect(alice.locator('.post__comments')).toContainText('Looks great!', { timeout: 15_000 });
   await auditA11y(alice, 'Social feed');
   if (process.env.RIVER_SCREENSHOTS) await bob.screenshot({ path: 'test-results/social.png' });
+});
+
+test('a brand-new user creates a community from a template in one step', async () => {
+  const carol = await open('Carol');
+  await carol.getByRole('button', { name: 'Communities', exact: true }).click();
+  await carol.getByRole('radio', { name: /Gaming/ }).click();
+  await expect(carol.getByLabel('Gaming channels')).toContainText('looking-for-group');
+  await carol.getByPlaceholder('e.g. The Crew').fill('Squad Goals');
+  // No account yet: the server address is asked for right here, not in Settings.
+  await carol.getByPlaceholder('https://river.example.org').fill(url);
+  await expect(carol.getByRole('radio', { name: /Gaming/ })).toHaveAttribute('aria-checked', 'true');
+  await expect(carol.getByRole('radio', { name: /Friends/ })).toHaveAttribute('aria-checked', 'false');
+  if (process.env.RIVER_SCREENSHOTS) await carol.screenshot({ path: 'test-results/start.png' });
+  await carol.getByRole('button', { name: 'Create community' }).click();
+  await expect(carol.locator('.community__title strong')).toHaveText('Squad Goals', { timeout: 20_000 });
+  await expect(carol.getByRole('group', { name: 'Category Chat' })).toContainText('clips');
+  await expect(carol.getByRole('group', { name: 'Category Voice' })).toContainText('Squad 1');
+  await auditA11y(carol, 'Community created from a template');
+  // An empty channel helps you break the ice.
+  await carol.locator('.channel', { hasText: 'general' }).getByRole('button').first().click();
+  await expect(carol.locator('.chat__welcome-actions')).toContainText("It's just you here");
+  await carol.getByRole('button', { name: /Wave to say hi/ }).click();
+  await expect(carol.locator('.chat__messages')).toContainText('👋');
+
+  // Dave pastes Carol's invite anywhere in River (not in a text field) and joins from the prompt.
+  await carol.getByRole('button', { name: 'Invite people' }).first().click();
+  const link = (await carol.locator('.invite-box__link').innerText()).trim();
+  await carol.keyboard.press('Escape');
+  const dave = await open('Dave');
+  await dave.evaluate((text) => {
+    const data = new DataTransfer();
+    data.setData('text', text);
+    document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true }));
+  }, link);
+  await expect(dave.getByRole('dialog', { name: 'Join this community?' })).toContainText('127.0.0.1');
+  await dave.getByRole('dialog').getByRole('button', { name: 'Join community' }).click();
+  await expect(dave.locator('.community__title strong')).toHaveText('Squad Goals', { timeout: 20_000 });
 });

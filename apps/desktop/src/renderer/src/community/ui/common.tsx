@@ -439,6 +439,13 @@ export const SmileIcon = (p: IconProps): ReactElement => (
     <path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01" />
   </Svg>
 );
+export const UserPlusIcon = (p: IconProps): ReactElement => (
+  <Svg {...p}>
+    <circle cx="9" cy="8" r="4" />
+    <path d="M2 21v-1a7 7 0 0 1 11-5.7" />
+    <path d="M19 14v6M16 17h6" />
+  </Svg>
+);
 export const UsersIcon = (p: IconProps): ReactElement => (
   <Svg {...p}>
     <circle cx="9" cy="8" r="3.5" />

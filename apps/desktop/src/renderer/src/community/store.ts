@@ -11,6 +11,7 @@ export type Modal =
   | { kind: 'create-channel'; communityId: string; channelKind: 'text' | 'voice'; parentId?: string }
   | { kind: 'category'; communityId: string; categoryId?: string }
   | { kind: 'invite'; communityId: string }
+  | { kind: 'join-invite'; link: string }
   | { kind: 'user-settings'; tab?: UserTab }
   | { kind: 'confirm'; title: string; body: string; action: string; run: () => Promise<void> };
 
