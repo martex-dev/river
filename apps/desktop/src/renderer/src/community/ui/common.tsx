@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type ReactElement,
+  type CSSProperties,
   type ReactNode,
   type SVGProps,
 } from 'react';
@@ -263,7 +264,19 @@ export function EmojiPicker(props: { onPick(emoji: string): void }): ReactElemen
  * ```code blocks```, `code`, **bold**, *italic*, __underline__, ~~strike~~,
  * > quotes and @mentions.
  */
-export function RichText(props: { text: string; names: string[]; me: string | null }): ReactElement {
+/** Roles and channels a message can mention, for highlighting and navigation. */
+export interface MentionRefs {
+  roles: Array<{ name: string; color: number; mine: boolean }>;
+  channels: Array<{ id: string; name: string }>;
+  onChannel?(id: string): void;
+}
+
+export function RichText(props: {
+  text: string;
+  names: string[];
+  me: string | null;
+  refs?: MentionRefs;
+}): ReactElement {
   const blocks = props.text.split(/(```[\s\S]*?```)/g);
   return (
     <>
@@ -277,7 +290,13 @@ export function RichText(props: { text: string; names: string[]; me: string | nu
         }
         return block.split('\n').map((line, j, lines) => {
           const quote = line.startsWith('> ');
-          const content = inline(quote ? line.slice(2) : line, props.names, props.me, `${i}-${j}`);
+          const content = inline(
+            quote ? line.slice(2) : line,
+            props.names,
+            props.me,
+            `${i}-${j}`,
+            props.refs,
+          );
           return quote ? (
             <blockquote key={`${i}-${j}`} className="md-quote">
               {content}
@@ -295,9 +314,15 @@ export function RichText(props: { text: string; names: string[]; me: string | nu
 }
 
 const INLINE =
-  /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|_[^_\n]+_|@everyone|@here|@[^\s@]+(?: [^\s@]+)?)/g;
+  /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|_[^_\n]+_|@everyone|@here|@[^\s@]+(?: [^\s@]+)?|#[\w-]+)/g;
 
-function inline(text: string, names: string[], me: string | null, key: string): ReactNode[] {
+function inline(
+  text: string,
+  names: string[],
+  me: string | null,
+  key: string,
+  refs?: MentionRefs,
+): ReactNode[] {
   const out: ReactNode[] = [];
   let last = 0;
   let n = 0;
@@ -316,7 +341,35 @@ function inline(text: string, names: string[], me: string | null, key: string): 
     else if (token.startsWith('__')) out.push(<u key={k}>{token.slice(2, -2)}</u>);
     else if (token.startsWith('~~')) out.push(<s key={k}>{token.slice(2, -2)}</s>);
     else if (token.startsWith('*') || token.startsWith('_')) out.push(<em key={k}>{token.slice(1, -1)}</em>);
-    else if (token.startsWith('@')) {
+    else if (token.startsWith('#')) {
+      const channel = refs?.channels.find((c) => c.name.toLowerCase() === token.slice(1).toLowerCase());
+      if (channel && refs?.onChannel) {
+        out.push(
+          <button
+            key={k}
+            type="button"
+            className="mention mention--channel"
+            onClick={() => refs.onChannel!(channel.id)}
+          >
+            #{channel.name}
+          </button>,
+        );
+      } else out.push(token);
+    } else if (token.startsWith('@') && refs && mentionedRole(token.slice(1), refs)) {
+      const raw = token.slice(1);
+      const role = mentionedRole(raw, refs)!;
+      const rest = raw.slice(role.name.length);
+      out.push(
+        <span
+          key={k}
+          className={`mention mention--role ${role.mine ? 'mention--me' : ''}`}
+          style={role.color ? ({ '--role': hex(role.color) } as CSSProperties) : undefined}
+        >
+          @{role.name}
+        </span>,
+      );
+      if (rest) out.push(rest);
+    } else if (token.startsWith('@')) {
       const raw = token.slice(1);
       const special = raw === 'everyone' || raw === 'here';
       // Two-word mention only when it is a real member name; otherwise give the second word back.
@@ -515,3 +568,12 @@ export const ArrowDownIcon = (p: IconProps): ReactElement => (
     <path d="m6 10 6 6 6-6" />
   </Svg>
 );
+
+/** The role a "@…" token names (two-word names allowed), if any. */
+function mentionedRole(raw: string, refs: MentionRefs): MentionRefs['roles'][number] | undefined {
+  const lower = raw.toLowerCase();
+  return (
+    refs.roles.find((r) => r.name.toLowerCase() === lower) ??
+    refs.roles.find((r) => r.name.toLowerCase() === lower.split(' ')[0])
+  );
+}
