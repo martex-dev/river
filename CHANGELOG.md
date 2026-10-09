@@ -6,6 +6,8 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-09
+
 **Group chats, and removed members can no longer read new community messages.**
 
 ### Added
