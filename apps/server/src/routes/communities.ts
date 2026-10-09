@@ -10,6 +10,7 @@ import {
   communityIdSchema,
   createChannelRequestSchema,
   createCommunityRequestSchema,
+  createInviteRequestSchema,
   createRoleRequestSchema,
   editMessageRequestSchema,
   joinRequestSchema,
@@ -20,6 +21,7 @@ import {
   reactionTagSchema,
   riverIdSchema,
   roleIdSchema,
+  rotateKeyRequestSchema,
   sendMessageRequestSchema,
   updateChannelRequestSchema,
   updateCommunityRequestSchema,
@@ -147,6 +149,8 @@ export async function registerCommunityRoutes(
         .where('community_id', '=', model.id)
         .where('river_id', '=', riverId)
         .execute();
+      // The removed person still knows the current key: a member must replace it.
+      await trx.updateTable('communities').set({ rotation_needed: 1 }).where('id', '=', model.id).execute();
     });
     if (hub.voiceChannelOf(riverId) && model.channel(hub.voiceChannelOf(riverId)!)) {
       const left = hub.leaveVoice(riverId);
@@ -555,6 +559,7 @@ export async function registerCommunityRoutes(
     async (request, reply) => {
       const model = await community(request.params.id, me(request));
       if (!model.can(me(request), Permission.CREATE_INVITE)) throw forbidden();
+      const inviteReq = parse(createInviteRequestSchema, request.body ?? {});
       const code = randomBytes(16).toString('base64url');
       const expiresAt = new Date(deps.now().getTime() + INVITE_TTL_MS).toISOString();
       await db
@@ -565,6 +570,7 @@ export async function registerCommunityRoutes(
           expires_at: expiresAt,
           uses: 0,
           max_uses: INVITE_MAX_USES,
+          check: inviteReq.check ?? null,
         })
         .execute();
       return reply.code(201).send({ code, expiresAt });
@@ -618,7 +624,33 @@ export async function registerCommunityRoutes(
           member: { riverId: me(request), role: 'member', roles: [], profile: req.profile, online: true },
         });
       }
-      return model.wireFor(me(request), (id) => hub.isOnline(id));
+      return { ...model.wireFor(me(request), (id) => hub.isOnline(id)), inviteCheck: invite.check };
+    },
+  );
+
+  /**
+   * Compare-and-set for key rotation: the first member to move the epoch from
+   * `from` to `from + 1` distributes the new key; everyone else waits for it.
+   */
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/communities/:id/epoch`,
+    authed,
+    async (request, reply) => {
+      const model = await community(request.params.id, me(request));
+      const req = parse(rotateKeyRequestSchema, request.body);
+      const res = await db
+        .updateTable('communities')
+        .set({ key_epoch: req.from + 1, rotation_needed: 0 })
+        .where('id', '=', model.id)
+        .where('key_epoch', '=', req.from)
+        .executeTakeFirst();
+      if (Number(res.numUpdatedRows) !== 1) {
+        return reply
+          .code(409)
+          .send({ error: { code: 'epoch_conflict', message: 'The key was already replaced' } });
+      }
+      changed(model);
+      return { epoch: req.from + 1 };
     },
   );
 

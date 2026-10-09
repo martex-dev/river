@@ -89,8 +89,15 @@ export const communitySchema = z.object({
   channels: z.array(channelSchema),
   members: z.array(memberSchema),
   roles: z.array(communityRoleSchema).default([]),
+  /** Current community key epoch; content is sealed with the newest key. */
+  keyEpoch: z.number().int().min(0).default(0),
+  /** A member was removed and the key has not been replaced yet. */
+  rotationNeeded: z.boolean().default(false),
 });
 export type CommunityWire = z.infer<typeof communitySchema>;
+export const joinResponseSchema = communitySchema.extend({
+  inviteCheck: z.string().max(4096).nullable().default(null),
+});
 
 export const createCommunityRequestSchema = z
   .object({
@@ -145,6 +152,10 @@ export const updateRoleRequestSchema = z
 export const memberRolesRequestSchema = z.object({ roles: z.array(roleIdSchema).max(50) }).strict();
 
 export const inviteResponseSchema = z.object({ code: inviteCodeSchema, expiresAt: z.iso.datetime() });
+/** Optional check value sealed with the key in the invite link, so joiners can verify the key. */
+export const createInviteRequestSchema = z.object({ check: sealedSchema(SEALED_SMALL).optional() }).strict();
+export const rotateKeyRequestSchema = z.object({ from: z.number().int().min(0) }).strict();
+export const rotateKeyResponseSchema = z.object({ epoch: z.number().int().min(0) });
 export const joinRequestSchema = z
   .object({ code: inviteCodeSchema, profile: sealedSchema(SEALED_PROFILE) })
   .strict();

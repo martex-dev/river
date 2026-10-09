@@ -1,3 +1,5 @@
+import type { Generated } from 'kysely';
+
 /** Kysely table types. Every table added by a migration is declared here. */
 export interface ServerMetaTable {
   key: string;
@@ -39,6 +41,8 @@ export interface CommunitiesTable {
   owner: string;
   meta: string;
   created_on: string;
+  key_epoch: Generated<number>;
+  rotation_needed: Generated<number>;
 }
 
 export interface CommunityMembersTable {
@@ -63,6 +67,7 @@ export interface InvitesTable {
   expires_at: string;
   uses: number;
   max_uses: number;
+  check: string | null;
 }
 
 export interface MessagesTable {

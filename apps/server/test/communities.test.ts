@@ -451,6 +451,51 @@ describe('communities', () => {
       expect(await list()).toEqual([]);
     });
 
+    it('flags key rotation when someone is removed; exactly one rotation wins', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const check = sealed();
+      const code = (
+        await a.inject({
+          method: 'POST',
+          url: `/v1/communities/${cid}/invites`,
+          headers: auth(owner.token),
+          payload: { check },
+        })
+      ).json().code;
+      const member = await user(a);
+      const joined = await a.inject({
+        method: 'POST',
+        url: '/v1/invites/join',
+        headers: auth(member.token),
+        payload: { code, profile: sealed() },
+      });
+      expect(joined.json()).toMatchObject({ inviteCheck: check, keyEpoch: 0, rotationNeeded: false });
+      const other = await join(a, owner.token, cid);
+      await status(a, 'DELETE', `/v1/communities/${cid}/members/${other.riverId}`, owner.token);
+      let c = await fetchCommunity(a, owner.token, cid);
+      expect(c).toMatchObject({ keyEpoch: 0, rotationNeeded: true });
+      const first = await a.inject({
+        method: 'POST',
+        url: `/v1/communities/${cid}/epoch`,
+        headers: auth(member.token),
+        payload: { from: 0 },
+      });
+      const second = await a.inject({
+        method: 'POST',
+        url: `/v1/communities/${cid}/epoch`,
+        headers: auth(owner.token),
+        payload: { from: 0 },
+      });
+      expect(first.json()).toEqual({ epoch: 1 });
+      expect(second.statusCode).toBe(409);
+      c = await fetchCommunity(a, owner.token, cid);
+      expect(c).toMatchObject({ keyEpoch: 1, rotationNeeded: false });
+      // Non-members cannot rotate.
+      expect(await status(a, 'POST', `/v1/communities/${cid}/epoch`, other.token, { from: 1 })).toBe(404);
+    });
+
     it('members can leave; only the owner can delete the community', async () => {
       const a = await start();
       const owner = await user(a);

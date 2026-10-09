@@ -31,6 +31,8 @@ export class CommunityModel {
   readonly id: string;
   readonly ownerId: string;
   readonly meta: string;
+  readonly keyEpoch: number;
+  readonly rotationNeeded: boolean;
   readonly roles: RoleWire[];
   readonly channels: ChannelModel[];
   readonly members: MemberModel[];
@@ -39,6 +41,8 @@ export class CommunityModel {
     id: string;
     ownerId: string;
     meta: string;
+    keyEpoch: number;
+    rotationNeeded: boolean;
     roles: RoleWire[];
     channels: ChannelModel[];
     members: MemberModel[];
@@ -46,6 +50,8 @@ export class CommunityModel {
     this.id = init.id;
     this.ownerId = init.ownerId;
     this.meta = init.meta;
+    this.keyEpoch = init.keyEpoch;
+    this.rotationNeeded = init.rotationNeeded;
     this.roles = init.roles;
     this.channels = init.channels;
     this.members = init.members;
@@ -110,6 +116,8 @@ export class CommunityModel {
       id: this.id,
       meta: this.meta,
       ownerId: this.ownerId,
+      keyEpoch: this.keyEpoch,
+      rotationNeeded: this.rotationNeeded,
       roles: this.roles,
       channels: this.channels
         .filter((c) => this.can(riverId, Permission.VIEW_CHANNELS, c.id))
@@ -134,7 +142,7 @@ export class CommunityModel {
 export async function loadCommunity(db: Kysely<Database>, id: string): Promise<CommunityModel | null> {
   const c = await db
     .selectFrom('communities')
-    .select(['id', 'owner', 'meta'])
+    .select(['id', 'owner', 'meta', 'key_epoch', 'rotation_needed'])
     .where('id', '=', id)
     .executeTakeFirst();
   if (!c) return null;
@@ -159,6 +167,8 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
     id: c.id,
     ownerId: c.owner,
     meta: c.meta,
+    keyEpoch: c.key_epoch,
+    rotationNeeded: c.rotation_needed === 1,
     roles: roles.map((r) => ({
       id: r.id,
       name: r.name,
