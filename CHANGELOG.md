@@ -6,6 +6,31 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-10-10
+
+**Stability: River stays connected, never loses what you type, and explains problems plainly.**
+
+### Added
+
+- **Messages wait for you.** What you send appears straight away as
+  *Sending…*. While you are offline it shows *Waiting for connection* and goes
+  out automatically when you are back. If the server refuses it, the reason
+  stays with **Retry** and **Delete**.
+- **A clear connection banner.** After a short grace period it says
+  "You're offline. Trying again in 8s." with **Retry now**, and "Back online"
+  when the connection returns.
+- **Faster reconnecting.** River reconnects right away when your computer
+  wakes, the screen unlocks or the network comes back, and spreads retries out
+  so servers aren't flooded.
+- **A guard against bad updates.** If an updated River fails to start three
+  times in a row, automatic installs pause and Home explains what happened.
+
+### Changed
+
+- **Plain-language errors** for connection problems, rate limits, files that
+  are too large, expired sessions and server errors. Internal details never
+  reach the screen.
+
 ## [1.0.4] - 2026-10-10
 
 **Highlighting: mentions, roles, channels and what you missed.**
@@ -525,7 +550,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.5...HEAD
+[1.0.5]: https://github.com/martex-dev/river/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/martex-dev/river/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/martex-dev/river/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/martex-dev/river/compare/v1.0.1...v1.0.2

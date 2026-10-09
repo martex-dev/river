@@ -40,10 +40,10 @@ Each line is one PR; each version ships when its section is done.
 
 ### 1.0.5 — Stability
 
-- [ ] Clear connection banner with automatic reconnect and backoff
-- [ ] Messages queue while offline: sending, failed, retry
-- [ ] Post-install health check: detect a crash loop after an update and pause auto-install
-- [ ] Plain-language errors everywhere
+- [x] Clear connection banner with automatic reconnect and backoff
+- [x] Messages queue while offline: sending, failed, retry
+- [x] Post-install health check: detect a crash loop after an update and pause auto-install
+- [x] Plain-language errors everywhere
 
 ### 1.0.6 — Roles and permissions parity
 
