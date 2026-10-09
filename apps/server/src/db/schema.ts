@@ -64,6 +64,7 @@ export interface ChannelsTable {
   synced: Generated<number>;
   announcement: Generated<number>;
   slowmode: Generated<number>;
+  user_limit: Generated<number>;
 }
 
 export interface ThreadsTable {

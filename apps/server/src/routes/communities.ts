@@ -404,7 +404,8 @@ export async function registerCommunityRoutes(
         req.position !== undefined ||
         req.parentId !== undefined ||
         req.announcement !== undefined ||
-        req.slowmode !== undefined
+        req.slowmode !== undefined ||
+        req.userLimit !== undefined
       ) {
         await trx
           .updateTable('channels')
@@ -414,6 +415,7 @@ export async function registerCommunityRoutes(
             ...(req.parentId !== undefined ? { parent_id: req.parentId } : {}),
             ...(req.announcement !== undefined ? { announcement: req.announcement ? 1 : 0 } : {}),
             ...(req.slowmode !== undefined ? { slowmode: req.slowmode } : {}),
+            ...(req.userLimit !== undefined ? { user_limit: req.userLimit } : {}),
           })
           .where('id', '=', channelId)
           .execute();
@@ -437,6 +439,7 @@ export async function registerCommunityRoutes(
       ...(synced !== undefined ? { synced } : {}),
       ...(req.announcement !== undefined ? { announcement: req.announcement } : {}),
       ...(req.slowmode !== undefined ? { slowmode: req.slowmode } : {}),
+      ...(req.userLimit !== undefined ? { userLimit: req.userLimit } : {}),
     });
     changed(model);
     return { ok: true };
@@ -1315,7 +1318,17 @@ export async function registerCommunityRoutes(
             ch.kind !== 'voice' ||
             !model.can(self, Permission.VIEW_CHANNELS | Permission.CONNECT, ch.id)
           ) {
-            return send({ t: 'error', code: 'forbidden' });
+            return send({ t: 'error', code: 'voice_forbidden' });
+          }
+          // A full channel turns people away, except those who may move members.
+          const inside = hub.participants(ch.id);
+          if (
+            ch.userLimit > 0 &&
+            inside.length >= ch.userLimit &&
+            !inside.includes(self) &&
+            !model.can(self, Permission.MOVE_MEMBERS, ch.id)
+          ) {
+            return send({ t: 'error', code: 'voice_full' });
           }
           const { left } = hub.joinVoice(self, model.id, ch.id);
           if (left) await voiceUpdate(left.communityId, left.channelId);
@@ -1394,8 +1407,9 @@ export async function registerCommunityRoutes(
       clearTimeout(authTimer);
       if (!riverId) return;
       const { offline, left } = hub.remove(riverId, hubSocket);
-      if (left) void voiceUpdate(left.communityId, left.channelId);
-      if (offline) void presence(riverId, false);
+      // Background updates after a disconnect must never crash the server (e.g. during shutdown).
+      if (left) void voiceUpdate(left.communityId, left.channelId).catch(() => undefined);
+      if (offline) void presence(riverId, false).catch(() => undefined);
     });
   });
 
