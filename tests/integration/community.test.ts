@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Permission } from '@river/protocol';
+import type { CommunityEvent } from '../../apps/desktop/src/shared/ipc.ts';
 // Desktop main-process code under test.
 import { AccountService } from '../../apps/desktop/src/main/account/account-service.ts';
 import { CommunityService } from '../../apps/desktop/src/main/community/community-service.ts';
@@ -330,14 +331,20 @@ describe('desktop ↔ server communities', () => {
 
     // Unread: old history starts read; a new message marks the channel; reading clears it for good.
     expect(view.channels.every((c) => !c.unread)).toBe(true);
-    await alice.community.send(general.id, 'anyone up?');
+    await alice.community.send(general.id, 'anyone up? @Bob');
     expect((await alice.community.refresh())[0]!.channels.find((c) => c.id === general.id)?.unread).toBe(
       false,
     );
     view = (await bob.community.refresh())[0]!;
     expect(view.channels.find((c) => c.id === general.id)?.unread).toBe(true);
     const restarted = bob.restart();
+    // Catching up after a restart counts what arrived meanwhile, mentions included.
+    const caught = new Promise<Extract<CommunityEvent, { t: 'catchUp' }>>((resolve) =>
+      restarted.onEvent((e) => e.t === 'catchUp' && resolve(e)),
+    );
     expect((await restarted.refresh())[0]!.channels.find((c) => c.id === general.id)?.unread).toBe(true);
+    expect((await caught).unread[general.id]).toBe(1);
+    expect((await caught).mentions[general.id]).toBe(1);
     await restarted.action({ a: 'markRead', channelId: general.id });
     const again = bob.restart();
     expect((await again.refresh())[0]!.channels.find((c) => c.id === general.id)?.unread).toBe(false);
@@ -402,5 +409,72 @@ describe('desktop ↔ server communities', () => {
     const blank = await alice.community.create('Plain');
     expect(blank.categories).toEqual([]);
     expect(blank.channels.map((c) => c.name)).toEqual(['general', 'Lounge']);
+  });
+
+  it('mentions: mentionable roles, @everyone rights and replies to your messages', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    const created = await alice.community.create('Mentions');
+    for (const p of [bob, carol])
+      await p.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.kind === 'text')!;
+    const mods = await alice.community.action({
+      a: 'createRole',
+      communityId: created.id,
+      name: 'Mods',
+      color: 0x3498db,
+      permissions: 0,
+      mentionable: true,
+    });
+    const quiet = await alice.community.action({
+      a: 'createRole',
+      communityId: created.id,
+      name: 'Quiet',
+      color: 0,
+      permissions: 0,
+    });
+    await alice.community.action({
+      a: 'setMemberRoles',
+      communityId: created.id,
+      riverId: bob.riverId,
+      roles: [mods, quiet],
+    });
+    expect((await bob.community.refresh())[0]!.roles.find((r) => r.id === mods)).toMatchObject({
+      mentionable: true,
+    });
+
+    // Carol (a plain member) can ping the mentionable role, not the other one, and not @everyone.
+    await carol.community.refresh();
+    await carol.community.send(general.id, 'hey @Mods, help?');
+    await carol.community.send(general.id, 'psst @Quiet');
+    await carol.community.send(general.id, '@everyone party');
+    const seen = await bob.community.messages(general.id);
+    const flag = (text: string) => seen.find((m) => m.text === text)!.mentionsMe;
+    expect([flag('hey @Mods, help?'), flag('psst @Quiet'), flag('@everyone party')]).toEqual([
+      true,
+      false,
+      false,
+    ]);
+    // The owner may mention any role.
+    await alice.community.send(general.id, 'owner says @Quiet');
+    expect(
+      (await bob.community.messages(general.id)).find((m) => m.text === 'owner says @Quiet')!.mentionsMe,
+    ).toBe(true);
+
+    // A reply to Bob's message pings Bob.
+    const bobs = await bob.community.send(general.id, 'anyone?');
+    await carol.community.action({ a: 'send', channelId: general.id, text: 'me!', replyTo: bobs.id });
+    expect((await bob.community.messages(general.id)).find((m) => m.text === 'me!')!.mentionsMe).toBe(true);
+
+    // Turning mentionable off keeps the name.
+    await alice.community.action({
+      a: 'updateRole',
+      communityId: created.id,
+      roleId: mods,
+      mentionable: false,
+    });
+    const role = (await alice.community.refresh())[0]!.roles.find((r) => r.id === mods)!;
+    expect([role.name, role.mentionable]).toEqual(['Mods', false]);
   });
 });

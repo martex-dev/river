@@ -125,7 +125,16 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     .strict(),
   /** You have seen this channel up to now. */
   z.object({ a: z.literal('markRead'), channelId: id }).strict(),
-  z.object({ a: z.literal('createRole'), communityId: id, name, color, permissions }).strict(),
+  z
+    .object({
+      a: z.literal('createRole'),
+      communityId: id,
+      name,
+      color,
+      permissions,
+      mentionable: z.boolean().optional(),
+    })
+    .strict(),
   z
     .object({
       a: z.literal('updateRole'),
@@ -134,6 +143,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       name: name.optional(),
       color: color.optional(),
       permissions: permissions.optional(),
+      mentionable: z.boolean().optional(),
     })
     .strict(),
   z.object({ a: z.literal('moveRole'), communityId: id, roleId: id, direction }).strict(),

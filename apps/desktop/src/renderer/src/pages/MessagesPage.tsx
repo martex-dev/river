@@ -14,6 +14,7 @@ import {
   CameraIcon,
   EditIcon,
   EmojiPicker,
+  Highlight,
   MenuItem,
   Modal,
   PhoneIcon,
@@ -155,7 +156,11 @@ function ConversationList({ onNew }: { onNew(): void }): ReactElement {
                   </span>
                   <span className="dm-row__last muted small">
                     {m.mine ? 'You: ' : conv?.kind === 'group' ? `${m.senderName}: ` : ''}
-                    {m.text || m.attachments.map((a) => a.name).join(', ')}
+                    {m.text ? (
+                      <Highlight text={m.text} query={query} max={120} />
+                    ) : (
+                      m.attachments.map((a) => a.name).join(', ')
+                    )}
                   </span>
                 </span>
               </button>

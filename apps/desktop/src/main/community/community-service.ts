@@ -138,6 +138,8 @@ export class CommunityService {
   private readonly wires = new Map<string, CommunityWire>();
   /** Which key opened each message, so reactions use the same key. */
   private readonly messageKeys = new Map<string, Buffer>();
+  /** Who sent recent messages, so a reply to one of yours counts as a mention. */
+  private readonly messageSenders = new Map<string, string>();
   private keyChannel: { send(peer: string, message: KeyMessage): Promise<void> } | null = null;
   private readonly rotating = new Set<string>();
   private readonly keyRequests = new Map<string, number>();
@@ -167,6 +169,8 @@ export class CommunityService {
   private reads: Map<string, string> | null = null;
   /** Newest message time per channel seen live since the last refresh. */
   private readonly liveLast = new Map<string, string>();
+  /** The newest message each channel had when we last counted its unread messages. */
+  private readonly caughtUp = new Map<string, string>();
 
   constructor(deps: Deps) {
     this.deps = deps;
@@ -485,14 +489,25 @@ export class CommunityService {
       .map((r) => {
         const everyone = r.id === c.id;
         let name = everyone ? '@everyone' : 'role';
+        let mentionable = false;
         if (!everyone) {
           try {
-            name = String(ring.open<{ name: string }>(c.id, `role:${r.id}`, r.name).name).slice(0, 64);
+            const opened = ring.open<{ name: string; mentionable?: unknown }>(c.id, `role:${r.id}`, r.name);
+            name = String(opened.name).slice(0, 64);
+            mentionable = opened.mentionable === true;
           } catch {
             // keep placeholder
           }
         }
-        return { id: r.id, name, color: r.color, permissions: r.permissions, position: r.position, everyone };
+        return {
+          id: r.id,
+          name,
+          color: r.color,
+          permissions: r.permissions,
+          position: r.position,
+          everyone,
+          mentionable,
+        };
       })
       .sort((a, b) => b.position - a.position);
     const legacyAdmins = new Set(c.members.filter((m) => m.role !== 'member').map((m) => m.riverId));
@@ -535,6 +550,7 @@ export class CommunityService {
           private: !!everyoneOverwrite && (everyoneOverwrite.deny & Permission.VIEW_CHANNELS) !== 0,
           parentId: ch.parentId,
           unread: this.isUnread(ch.id, ch.lastMessageAt),
+          lastReadAt: this.readMarkers().get(ch.id) ?? null,
         };
       })
       .sort((a, b) => a.position - b.position);
@@ -684,6 +700,9 @@ export class CommunityService {
       const key = opened.key;
       this.messageKeys.set(m.id, key);
       if (this.messageKeys.size > 20_000) this.messageKeys.delete(this.messageKeys.keys().next().value!);
+      this.messageSenders.set(m.id, m.sender);
+      if (this.messageSenders.size > 20_000)
+        this.messageSenders.delete(this.messageSenders.keys().next().value!);
       const community = this.communities.find((c) => c.id === communityId);
       const sender = community?.members.find((x) => x.riverId === m.sender);
       const me = this.me();
@@ -705,6 +724,8 @@ export class CommunityService {
           return [];
         }
       });
+      const replyTo =
+        typeof body.replyTo === 'string' && /^[A-Za-z0-9_-]{22}$/.test(body.replyTo) ? body.replyTo : null;
       return {
         id: m.id,
         communityId,
@@ -716,10 +737,9 @@ export class CommunityService {
         editedAt: m.editedAt,
         pinned: m.pinned,
         reactions,
-        replyTo:
-          typeof body.replyTo === 'string' && /^[A-Za-z0-9_-]{22}$/.test(body.replyTo) ? body.replyTo : null,
+        replyTo,
         attachments,
-        mentionsMe: m.sender !== me && this.mentions(text, community, m.sender),
+        mentionsMe: m.sender !== me && this.mentions(text, community, m.sender, replyTo ?? undefined),
         mine: m.sender === me,
       };
     } catch {
@@ -727,18 +747,33 @@ export class CommunityService {
     }
   }
 
-  private mentions(text: string, community: CommunityView | undefined, sender: string): boolean {
+  /**
+   * Does this message mention you? By name, through a role you have (when the
+   * role is mentionable or the sender may mention everyone), with @everyone or
+   * @here (only from people allowed to), or by replying to your message.
+   */
+  private mentions(
+    text: string,
+    community: CommunityView | undefined,
+    sender: string,
+    replyTo?: string,
+  ): boolean {
+    if (replyTo && this.messageSenders.get(replyTo) === this.me()) return true;
     const lower = text.toLowerCase();
     const senderMember = community?.members.find((m) => m.riverId === sender);
-    if (/(^|\s)@(everyone|here)\b/.test(lower) && community) {
-      const senderPerms = senderMember
-        ? senderMember.owner
-          ? 0x7fffffff
-          : community.roles
-              .filter((r) => r.everyone || senderMember.roles.includes(r.id))
-              .reduce((p, r) => p | r.permissions, 0)
-        : 0;
-      if (senderPerms & (Permission.MENTION_EVERYONE | Permission.ADMINISTRATOR)) return true;
+    const senderPerms = senderMember
+      ? senderMember.owner
+        ? 0x7fffffff
+        : (community?.roles ?? [])
+            .filter((r) => r.everyone || senderMember.roles.includes(r.id))
+            .reduce((p, r) => p | r.permissions, 0)
+      : 0;
+    const mayMentionAll = (senderPerms & (Permission.MENTION_EVERYONE | Permission.ADMINISTRATOR)) !== 0;
+    if (mayMentionAll && /(^|\s)@(everyone|here)\b/.test(lower)) return true;
+    const mine = community?.members.find((m) => m.riverId === this.me())?.roles ?? [];
+    for (const role of community?.roles ?? []) {
+      if (role.everyone || !mine.includes(role.id) || !(role.mentionable || mayMentionAll)) continue;
+      if (lower.includes(`@${role.name.toLowerCase()}`)) return true;
     }
     const name = this.myName();
     return !!name && lower.includes(`@${name.toLowerCase()}`);
@@ -753,6 +788,7 @@ export class CommunityService {
     for (const c of res.communities) this.wires.set(c.id, c);
     this.communities = res.communities.map((c) => this.view(c)).filter((c): c is CommunityView => c !== null);
     for (const c of res.communities) void this.maintainKeys(c).catch(() => undefined);
+    void this.catchUp().catch(() => undefined);
     this.emit({ t: 'communities', communities: this.communities });
     return this.communities;
   }
@@ -910,6 +946,43 @@ export class CommunityService {
 
   profile(): { name: string; avatar: string | null } {
     return { name: this.myName() ?? '', avatar: this.myAvatar() };
+  }
+
+  /**
+   * Counts unread messages and mentions in channels that changed since you last
+   * read them — messages that arrived while River was closed included — by
+   * reading the newest page of each (decrypted here, never on the server).
+   */
+  private async catchUp(): Promise<void> {
+    const reads = this.readMarkers();
+    const unread: Record<string, number> = {};
+    const mentions: Record<string, number> = {};
+    const due = this.communities
+      .flatMap((c) => c.channels)
+      .filter((ch) => {
+        if (ch.kind !== 'text' || !ch.unread) return false;
+        const latest = this.latest(ch.id, this.wireChannel(ch.id)?.lastMessageAt ?? null);
+        return latest !== null && this.caughtUp.get(ch.id) !== latest;
+      })
+      .slice(0, 25);
+    for (const ch of due) {
+      const read = reads.get(ch.id) ?? '';
+      const page = await this.messages(ch.id).catch(() => []);
+      const fresh = page.filter((m) => !m.mine && m.sentAt > read);
+      unread[ch.id] = fresh.length;
+      mentions[ch.id] = fresh.filter((m) => m.mentionsMe).length;
+      const latest = this.latest(ch.id, this.wireChannel(ch.id)?.lastMessageAt ?? null);
+      if (latest) this.caughtUp.set(ch.id, latest);
+    }
+    if (due.length) this.emit({ t: 'catchUp', unread, mentions });
+  }
+
+  private wireChannel(channelId: string): CommunityWire['channels'][number] | undefined {
+    for (const w of this.wires.values()) {
+      const ch = w.channels.find((c) => c.id === channelId);
+      if (ch) return ch;
+    }
+    return undefined;
   }
 
   async messages(channelId: string, before?: string): Promise<ChatMessage[]> {
@@ -1098,7 +1171,10 @@ export class CommunityService {
           'POST',
           {
             id,
-            name: seal(this.requireKey(act.communityId), act.communityId, `role:${id}`, { name: act.name }),
+            name: seal(this.requireKey(act.communityId), act.communityId, `role:${id}`, {
+              name: act.name,
+              mentionable: act.mentionable ?? false,
+            }),
             color: act.color,
             permissions: act.permissions,
           },
@@ -1109,9 +1185,12 @@ export class CommunityService {
       }
       case 'updateRole': {
         const body: Record<string, unknown> = {};
-        if (act.name !== undefined) {
+        if (act.name !== undefined || act.mentionable !== undefined) {
+          // Name and settings are sealed together, so keep whichever was not changed.
+          const current = this.requireCommunity(act.communityId).roles.find((r) => r.id === act.roleId);
           body.name = seal(this.requireKey(act.communityId), act.communityId, `role:${act.roleId}`, {
-            name: act.name,
+            name: act.name ?? current?.name ?? 'role',
+            mentionable: act.mentionable ?? current?.mentionable ?? false,
           });
         }
         if (act.color !== undefined) body.color = act.color;

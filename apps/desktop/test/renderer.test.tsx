@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
+import { Highlight } from '../src/renderer/src/community/ui/common.tsx';
 import { PLANNED } from '../src/renderer/src/features.ts';
 import { STAGE_ONE, stageIndex } from '../src/renderer/src/pages/HomePage.tsx';
 import { PlannedPage } from '../src/renderer/src/pages/PlannedPage.tsx';
@@ -43,5 +44,27 @@ describe('planned sections', () => {
 
   it('lists nothing as planned any more: every section is built', () => {
     expect(Object.keys(PLANNED)).toEqual([]);
+  });
+});
+
+describe('search highlighting', () => {
+  it('marks every match, case-insensitively, and treats the query literally', () => {
+    const { container } = render(<Highlight text="Pizza? pizza! PIZZA (pizza)" query="pizza" />);
+    expect([...container.querySelectorAll('mark')].map((m) => m.textContent)).toEqual([
+      'Pizza',
+      'pizza',
+      'PIZZA',
+      'pizza',
+    ]);
+    cleanup();
+    const special = render(<Highlight text="a+b (c) [d]" query="(c)" />);
+    expect(special.container.querySelector('mark')?.textContent).toBe('(c)');
+  });
+
+  it('keeps a match far into a long message visible', () => {
+    const text = `${'x'.repeat(500)} needle ${'y'.repeat(500)}`;
+    const { container } = render(<Highlight text={text} query="needle" max={100} />);
+    expect(container.textContent!.startsWith('…')).toBe(true);
+    expect(container.querySelector('mark')?.textContent).toBe('needle');
   });
 });

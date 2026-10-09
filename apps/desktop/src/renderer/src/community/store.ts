@@ -31,6 +31,10 @@ interface CommunityState {
   messages: Record<string, ChatMessage[]>;
   unread: Record<string, number>;
   mentions: Record<string, number>;
+  /** Where the "New messages" divider goes in the open channel. */
+  divider: { channelId: string; after: string } | null;
+  /** When you last read each channel this session. */
+  readAt: Record<string, string>;
   /** channel → River ID → time typing was last seen */
   typing: Record<string, Record<string, number>>;
   call: VoiceCall | null;
@@ -81,6 +85,8 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   messages: {},
   unread: {},
   mentions: {},
+  divider: null,
+  readAt: {},
   typing: {},
   call: null,
   callVersion: 0,
@@ -129,6 +135,22 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       case 'connection':
         set({ connection: event.state });
         return;
+      case 'catchUp': {
+        // Counts from catching up never lower what this session already counted.
+        const merge = (
+          now: Record<string, number>,
+          found: Record<string, number>,
+        ): Record<string, number> => {
+          const out = { ...now };
+          for (const [id, n] of Object.entries(found)) {
+            if (id === get().selectedChannel || n <= 0) continue;
+            out[id] = Math.max(out[id] ?? 0, n);
+          }
+          return out;
+        };
+        set({ unread: merge(get().unread, event.unread), mentions: merge(get().mentions, event.mentions) });
+        return;
+      }
       case 'message': {
         const m = event.message;
         const list = get().messages[m.channelId];
@@ -146,7 +168,10 @@ export const useCommunity = create<CommunityState>((set, get) => ({
           get().selectedChannel === m.channelId &&
           useRiver.getState().section === 'communities' &&
           document.hasFocus();
-        if (viewing) void markRead(m.channelId);
+        if (viewing) {
+          void markRead(m.channelId);
+          set({ readAt: { ...get().readAt, [m.channelId]: m.sentAt } });
+        }
         if (!viewing) {
           set({ unread: { ...get().unread, [m.channelId]: (get().unread[m.channelId] ?? 0) + 1 } });
           if (m.mentionsMe) {
@@ -245,6 +270,16 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   selectChannel: (channelId) => {
     // Leaving a channel and opening one both count as reading them up to now.
     const previous = get().selectedChannel;
+    const channel = get()
+      .communities.flatMap((c) => c.channels)
+      .find((c) => c.id === channelId);
+    const after = get().readAt[channelId] ?? channel?.lastReadAt ?? null;
+    const hasNew = (get().unread[channelId] ?? 0) > 0 || !!channel?.unread;
+    const now = new Date().toISOString();
+    set({
+      divider: hasNew && after ? { channelId, after } : null,
+      readAt: { ...get().readAt, [channelId]: now, ...(previous ? { [previous]: now } : {}) },
+    });
     if (previous && previous !== channelId) void markRead(previous);
     void markRead(channelId);
     const { [channelId]: _u, ...unread } = get().unread;

@@ -143,6 +143,8 @@ export interface RoleView {
   permissions: number;
   position: number;
   everyone: boolean;
+  /** Anyone may @mention this role (people with Mention everyone always can). */
+  mentionable: boolean;
 }
 
 export interface ChannelView {
@@ -160,6 +162,8 @@ export interface ChannelView {
   parentId: string | null;
   /** Has messages newer than you last read here (kept across restarts). */
   unread: boolean;
+  /** Where you stopped reading (this device), for the "New messages" divider. */
+  lastReadAt: string | null;
 }
 
 export interface CategoryView {
@@ -249,7 +253,9 @@ export type CommunityEvent =
   | { t: 'removed'; communityId: string; reason: 'kicked' | 'banned' | 'left' | 'deleted' }
   | { t: 'focusChannel'; communityId: string; channelId: string }
   | { t: 'signal'; from: string; channelId: string; data: unknown }
-  | { t: 'connection'; state: 'online' | 'offline' | 'connecting' };
+  | { t: 'connection'; state: 'online' | 'offline' | 'connecting' }
+  /** Unread counts found by catching up on channels (including while River was closed). */
+  | { t: 'catchUp'; unread: Record<string, number>; mentions: Record<string, number> };
 
 export type Result<T> = { ok: true; value: T } | { ok: false; message: string };
 
