@@ -362,6 +362,43 @@ describe('desktop ↔ server communities', () => {
     expect(inCategory('Chat')).toEqual(['general', 'clips', 'looking-for-group']);
     expect(inCategory('Voice')).toEqual(['Squad 1', 'Squad 2', 'AFK']);
     // No template: the familiar general + Lounge without categories.
+    // The template's emoji becomes the icon; it can be changed or removed.
+    expect(created.icon).toBe('🎮');
+    await alice.community.action({
+      a: 'updateCommunity',
+      communityId: created.id,
+      name: 'Squad',
+      description: 'Friday nights',
+      icon: '🚀',
+    });
+    let view = (await alice.community.refresh()).find((c) => c.id === created.id)!;
+    expect([view.icon, view.description]).toEqual(['🚀', 'Friday nights']);
+    await alice.community.action({
+      a: 'updateCommunity',
+      communityId: created.id,
+      name: 'Squad',
+      description: '',
+    });
+    view = (await alice.community.refresh()).find((c) => c.id === created.id)!;
+    expect(view.icon).toBe('🚀');
+    await alice.community.action({
+      a: 'updateCommunity',
+      communityId: created.id,
+      name: 'Squad',
+      description: '',
+      icon: null,
+    });
+    view = (await alice.community.refresh()).find((c) => c.id === created.id)!;
+    expect(view.icon).toBeNull();
+    await expect(
+      alice.community.action({
+        a: 'updateCommunity',
+        communityId: created.id,
+        name: 'Squad',
+        description: '',
+        icon: 'ABC' as never,
+      }),
+    ).rejects.toThrow();
     const blank = await alice.community.create('Plain');
     expect(blank.categories).toEqual([]);
     expect(blank.channels.map((c) => c.name)).toEqual(['general', 'Lounge']);

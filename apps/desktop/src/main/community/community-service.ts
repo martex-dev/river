@@ -32,7 +32,7 @@ import {
   type CommunityActionResult,
 } from '../../shared/community-actions.ts';
 import { layoutChanges, moveChannel as moveInLayout, sidebarGroups } from '../../shared/layout.ts';
-import { templateById, type TemplateId } from '../../shared/templates.ts';
+import { communityIconSchema, templateById, type TemplateId } from '../../shared/templates.ts';
 import type {
   CategoryView,
   ChannelView,
@@ -469,9 +469,9 @@ export class CommunityService {
     const ring = this.keys.get(c.id);
     if (!ring) return null;
     const me = this.me();
-    let meta: { name: string; description?: string };
+    let meta: { name: string; description?: string; icon?: unknown };
     try {
-      meta = ring.open<{ name: string; description?: string }>(c.id, 'meta', c.meta);
+      meta = ring.open<{ name: string; description?: string; icon?: unknown }>(c.id, 'meta', c.meta);
     } catch {
       // Sealed with a newer key we have not received yet.
       meta = { name: 'Waiting for the community key…' };
@@ -592,6 +592,7 @@ export class CommunityService {
       id: c.id,
       name: String(meta.name).slice(0, 64),
       description: String(meta.description ?? '').slice(0, 300),
+      icon: communityIconSchema.safeParse(meta.icon).success ? (meta.icon as string) : null,
       ownerId,
       permissions: permsOf(me, myRoles),
       myRank: topPosition(ownerId, wireRoles, { riverId: me, roles: myRoles }),
@@ -777,7 +778,7 @@ export class CommunityService {
     }));
     const body = {
       id,
-      meta: seal(key, id, 'meta', { name }),
+      meta: seal(key, id, 'meta', { name, icon: template.emoji }),
       profile: seal(key, id, 'profile', {
         name: this.myName(),
         avatar: this.myAvatar(),
@@ -963,7 +964,13 @@ export class CommunityService {
     switch (act.a) {
       case 'updateCommunity': {
         const key = this.requireKey(act.communityId);
-        const meta = seal(key, act.communityId, 'meta', { name: act.name, description: act.description });
+        const current = this.requireCommunity(act.communityId);
+        const icon = act.icon === undefined ? current.icon : act.icon;
+        const meta = seal(key, act.communityId, 'meta', {
+          name: act.name,
+          description: act.description,
+          ...(icon ? { icon } : {}),
+        });
         await this.call(`/communities/${act.communityId}`, 'PATCH', { meta }, z.unknown());
         break;
       }

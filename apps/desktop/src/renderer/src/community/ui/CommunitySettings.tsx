@@ -2,8 +2,9 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { PERMISSION_INFO, Permission } from '@river/protocol/permissions';
 import type { BanView } from '../../../../shared/community-actions.ts';
 import type { CommunityView, RoleView } from '../../../../shared/ipc.ts';
+import { COMMUNITY_ICONS } from '../../../../shared/templates.ts';
 import { useCommunity, type CommunityTab } from '../store.ts';
-import { ArrowDownIcon, ArrowUpIcon, Avatar, Modal, Toggle, XIcon, can, hex } from './common.tsx';
+import { ArrowDownIcon, ArrowUpIcon, Avatar, Modal, Toggle, XIcon, can, hex, initials } from './common.tsx';
 
 export const ROLE_COLORS = [
   0x1abc9c, 0x2ecc71, 0x3498db, 0x9b59b6, 0xe91e63, 0xf1c40f, 0xe67e22, 0xe74c3c, 0x95a5a6, 0x607d8b,
@@ -84,10 +85,37 @@ function Overview({ community }: { community: CommunityView }): ReactElement {
   const s = useCommunity();
   const [name, setName] = useState(community.name);
   const [description, setDescription] = useState(community.description);
-  const dirty = name !== community.name || description !== community.description;
+  const [icon, setIcon] = useState(community.icon);
+  const dirty = name !== community.name || description !== community.description || icon !== community.icon;
   return (
     <div className="settings-page">
       <h2>Overview</h2>
+      <div className="field__label">Icon</div>
+      <div className="icon-picker" role="radiogroup" aria-label="Community icon">
+        <button
+          type="button"
+          role="radio"
+          aria-checked={icon === null}
+          aria-label="Initials"
+          className={`icon-picker__item icon-picker__item--initials ${icon === null ? 'is-active' : ''}`}
+          onClick={() => setIcon(null)}
+        >
+          {initials(name || community.name)}
+        </button>
+        {COMMUNITY_ICONS.map((e) => (
+          <button
+            key={e}
+            type="button"
+            role="radio"
+            aria-checked={icon === e}
+            aria-label={`Icon ${e}`}
+            className={`icon-picker__item ${icon === e ? 'is-active' : ''}`}
+            onClick={() => setIcon(e)}
+          >
+            {e}
+          </button>
+        ))}
+      </div>
       <label className="textfield">
         <span className="field__label">Community name</span>
         <input value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
@@ -112,6 +140,7 @@ function Overview({ community }: { community: CommunityView }): ReactElement {
             onClick={() => {
               setName(community.name);
               setDescription(community.description);
+              setIcon(community.icon);
             }}
           >
             Reset
@@ -120,7 +149,13 @@ function Overview({ community }: { community: CommunityView }): ReactElement {
             className="btn btn--primary btn--small"
             disabled={name.trim() === ''}
             onClick={() =>
-              void s.run({ a: 'updateCommunity', communityId: community.id, name: name.trim(), description })
+              void s.run({
+                a: 'updateCommunity',
+                communityId: community.id,
+                name: name.trim(),
+                description,
+                icon,
+              })
             }
           >
             Save changes

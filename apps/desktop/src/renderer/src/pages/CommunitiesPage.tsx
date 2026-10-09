@@ -82,7 +82,13 @@ export function CommunitiesPage(): ReactElement {
                 aria-label={c.name}
                 onClick={() => s.select(c.id)}
               >
-                {initials(c.name)}
+                {c.icon ? (
+                  <span className="community__server-icon" aria-hidden="true">
+                    {c.icon}
+                  </span>
+                ) : (
+                  initials(c.name)
+                )}
               </button>
               {mentions > 0 && (
                 <span key={mentions} className="badge badge--mention community__server-badge">

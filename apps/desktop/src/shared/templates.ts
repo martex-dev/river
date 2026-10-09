@@ -139,6 +139,41 @@ export function templateById(id: TemplateId | undefined): CommunityTemplate {
   return COMMUNITY_TEMPLATES.find((t) => t.id === id) ?? COMMUNITY_TEMPLATES.at(-1)!;
 }
 
+/** A community icon is a single emoji (sealed in the community's metadata). */
+export const communityIconSchema = z
+  .string()
+  .min(1)
+  .max(16)
+  .regex(/^\p{Extended_Pictographic}/u);
+
+/** Icons offered in community settings. */
+export const COMMUNITY_ICONS = [
+  '🫶',
+  '🎮',
+  '📚',
+  '🏆',
+  '✨',
+  '🔥',
+  '🌊',
+  '🎵',
+  '🎨',
+  '⚽',
+  '🍕',
+  '🚀',
+  '🌙',
+  '🐱',
+  '🐶',
+  '🌿',
+  '💻',
+  '🎬',
+  '📸',
+  '🧠',
+  '💬',
+  '🏠',
+  '🎲',
+  '☕',
+] as const;
+
 /** Options the renderer may pass when creating a community (validated in main). */
 export const createCommunityOptionsSchema = z
   .object({

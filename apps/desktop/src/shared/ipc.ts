@@ -193,6 +193,8 @@ export interface CommunityView {
   id: string;
   name: string;
   description: string;
+  /** An emoji, or null for the name's initials. */
+  icon: string | null;
   ownerId: string;
   /** My community-wide permissions. */
   permissions: number;

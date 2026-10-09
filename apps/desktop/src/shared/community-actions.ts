@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ChatMessage } from './ipc.ts';
+import { communityIconSchema } from './templates.ts';
 
 /**
  * Community operations the renderer may request. Main parses every request
@@ -73,7 +74,14 @@ const fileBytes = z.custom<Uint8Array>(
 
 export const communityActionSchema = z.discriminatedUnion('a', [
   z
-    .object({ a: z.literal('updateCommunity'), communityId: id, name, description: z.string().max(300) })
+    .object({
+      a: z.literal('updateCommunity'),
+      communityId: id,
+      name,
+      description: z.string().max(300),
+      /** Omitted: keep the current icon; null: no icon. */
+      icon: communityIconSchema.nullable().optional(),
+    })
     .strict(),
   z.object({ a: z.literal('deleteCommunity'), communityId: id }).strict(),
   z.object({ a: z.literal('leave'), communityId: id }).strict(),
