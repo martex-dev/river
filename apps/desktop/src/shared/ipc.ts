@@ -1,6 +1,7 @@
 import type { ReleaseChannel } from '@river/release/channels';
 import type { AttachmentPointer, CommunityAction, CommunityActionResult } from './community-actions.ts';
 import type { DmAction, DmActionResult, DmEvent } from './dm.ts';
+import type { SocialAction, SocialActionResult, SocialEvent } from './social.ts';
 import type { Settings, SettingsPatch } from './settings.ts';
 
 /** Every IPC channel River uses. Main validates every payload; nothing else is exposed. */
@@ -40,6 +41,8 @@ export const IPC = {
   screenSelect: 'river:voice:screen-select',
   communityEvent: 'river:community:event',
   dmAction: 'river:dm:action',
+  socialAction: 'river:social:action',
+  socialEvent: 'river:social:event',
   dmEvent: 'river:dm:event',
   communityAction: 'river:community:action',
   profileGet: 'river:profile:get',
@@ -270,6 +273,10 @@ export interface RiverApi {
     register(): Promise<AccountActionResult>;
     connect(): Promise<AccountStatus>;
     onStatus(listener: (status: AccountStatus) => void): () => void;
+  };
+  social: {
+    action<A extends SocialAction>(action: A): Promise<Result<SocialActionResult<A>>>;
+    onEvent(listener: (event: SocialEvent) => void): () => void;
   };
   dm: {
     action<A extends DmAction>(action: A): Promise<Result<DmActionResult<A>>>;

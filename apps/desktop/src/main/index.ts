@@ -8,6 +8,7 @@ import {
   broadcastAccountStatus,
   broadcastCommunityEvents,
   broadcastDmEvents,
+  broadcastSocialEvents,
   broadcastStorageStatus,
   broadcastUpdateStatus,
   registerIpc,
@@ -24,6 +25,7 @@ import {
   UI_PARTITION,
 } from './security.ts';
 import { DmService } from './dm/dm-service.ts';
+import { SocialService } from './social/social-service.ts';
 import { startMessageNotifications } from './notifications.ts';
 import { SettingsStore } from './settings-store.ts';
 import { electronKeystore } from './storage/electron-keystore.ts';
@@ -80,6 +82,14 @@ async function start(): Promise<void> {
     log,
   });
   const dm = new DmService({ db: () => storage.db(), identity, account, community, log });
+  const social = new SocialService({ db: () => storage.db(), identity, dm, log });
+  // Stories disappear after a day.
+  setInterval(
+    () => {
+      if (storage.db()) social.expireStories();
+    },
+    10 * 60 * 1000,
+  ).unref();
   // Connect whenever local data becomes available (now, or after the user unlocks).
   const connectAll = async (): Promise<void> => {
     await account.connect();
@@ -162,6 +172,7 @@ async function start(): Promise<void> {
     account,
     community,
     dm,
+    social,
     selectScreen: (id) => {
       chosenScreen = id;
     },
@@ -172,6 +183,7 @@ async function start(): Promise<void> {
   broadcastAccountStatus(window.webContents, account);
   broadcastCommunityEvents(window.webContents, community);
   broadcastDmEvents(window.webContents, dm);
+  broadcastSocialEvents(window.webContents, social);
   startMessageNotifications({ community, dm, settings: () => settings.get(), window });
   window.on('focus', () => window.flashFrame(false));
   if (updates) {

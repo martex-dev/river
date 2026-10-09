@@ -9,6 +9,8 @@ import { HomePage } from './pages/HomePage.tsx';
 import { CallAudio } from './community/ui/Voice.tsx';
 import { CommunitiesPage, Overlays, VoiceHotkeys } from './pages/CommunitiesPage.tsx';
 import { MessagesPage } from './pages/MessagesPage.tsx';
+import { SocialPage } from './pages/SocialPage.tsx';
+import { onSocialChanged } from './social/store.ts';
 import { totalUnread, useDm } from './dm/store.ts';
 import { handleCallEvent } from './dm/call.ts';
 import { useCommunity } from './community/store.ts';
@@ -76,12 +78,14 @@ export function App(): ReactElement {
       e.t === 'call' ? handleCallEvent(e) : useDm.getState().handle(e),
     );
     void useDm.getState().load();
+    const offSocial = window.river.social.onEvent(() => onSocialChanged());
     return () => {
       offUpdates();
       offStorage();
       offAccount();
       offCommunity();
       offDm();
+      offSocial();
     };
   }, [load, setUpdate, setStorage, setAccount]);
 
@@ -165,6 +169,7 @@ export function App(): ReactElement {
           {section === 'security' && <SecurityPage />}
           {section === 'communities' && <CommunitiesPage />}
           {section === 'messages' && <MessagesPage />}
+          {section === 'social' && <SocialPage />}
           {section === 'settings' && <SettingsPage />}
           {planned && <PlannedPage section={section} feature={planned} />}
         </main>

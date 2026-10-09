@@ -288,4 +288,17 @@ test('create, invite, join, chat and call between two members', async () => {
   await bob.keyboard.press('Enter');
   await expect(alice.locator('.chat__messages')).toContainText('hi group', { timeout: 15_000 });
   await expect(alice.locator('.msg', { hasText: 'hi group' })).toContainText('Bob');
+
+  // Social: Alice posts to her friends; Bob sees it and comments; Alice sees the comment.
+  await alice.getByRole('button', { name: /^Social/ }).click();
+  await alice.locator('.social__compose').click();
+  await alice.getByPlaceholder('What do you want to share?').fill('First post on River 🌊');
+  await alice.getByRole('button', { name: 'Post', exact: true }).click();
+  await expect(alice.locator('.post')).toContainText('First post on River', { timeout: 15_000 });
+  await bob.getByRole('button', { name: /^Social/ }).click();
+  await expect(bob.locator('.post')).toContainText('First post on River', { timeout: 15_000 });
+  await bob.locator('.post').getByPlaceholder('Add a comment…').fill('Looks great!');
+  await bob.locator('.post').getByRole('button', { name: 'Post', exact: true }).click();
+  await expect(alice.locator('.post__comments')).toContainText('Looks great!', { timeout: 15_000 });
+  if (process.env.RIVER_SCREENSHOTS) await bob.screenshot({ path: 'test-results/social.png' });
 });

@@ -10,19 +10,6 @@ export interface PlannedFeature {
 
 /** Sections that are designed but not yet built. Copy must stay honest: nothing here works yet. */
 export const PLANNED: Partial<Record<Section, PlannedFeature>> = {
-  social: {
-    title: 'Social',
-    tagline: 'Profiles, posts and stories shared with exactly the people you choose.',
-    arrives: '0.7.x',
-    capabilities: [
-      'Profiles with avatar, bio and links',
-      'Photo and video posts, stories and collections',
-      'Reactions and comments',
-      'Friends, followers and audience controls per post',
-      'Share any post straight into an encrypted chat',
-    ],
-    note: 'Posts for friends or selected people are encrypted for that audience only.',
-  },
   calls: {
     title: 'Calls',
     tagline: 'Voice and video, one-to-one or in groups, with verified encryption.',

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AccountService } from '../../apps/desktop/src/main/account/account-service.ts';
 import { CommunityService } from '../../apps/desktop/src/main/community/community-service.ts';
 import { DmService } from '../../apps/desktop/src/main/dm/dm-service.ts';
+import { SocialService } from '../../apps/desktop/src/main/social/social-service.ts';
 import { createRequestBytes, createRequestJson } from '../../apps/desktop/src/main/http.ts';
 import { IdentityService } from '../../apps/desktop/src/main/identity/identity-service.ts';
 import { nullLogger } from '../../apps/desktop/src/main/logger.ts';
@@ -63,10 +64,11 @@ async function person(name: string) {
     createSocket: deadSocket,
   });
   const dm = new DmService({ db: () => local, identity, account, community, log: nullLogger });
+  const social = new SocialService({ db: () => local, identity, dm, log: nullLogger });
   const events: DmEvent[] = [];
   dm.onEvent((e) => events.push(e));
   await dm.sync();
-  return { riverId: me.riverId, dm, community, events, local };
+  return { riverId: me.riverId, dm, community, social, events, local };
 }
 
 beforeEach(async () => {
@@ -307,5 +309,95 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     await alice.dm.sync();
     const aliceGroup = (await alice.dm.action({ a: 'conversations' })).find((c) => c.kind === 'group')!;
     expect(aliceGroup.members.map((m) => m.name)).toEqual(['Alice']);
+  });
+
+  it('social: posts, comments relayed by the author, stories with views, bios', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    // Alice and Bob are contacts; Carol is a stranger.
+    await alice.dm.action({ a: 'open', peer: bob.riverId });
+    await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'hi' });
+    await bob.dm.sync();
+    await bob.dm.action({ a: 'accept', peer: alice.riverId });
+    alice.dm.setMyBio('Climber. Coffee.');
+    const photo = await alice.dm.action({
+      a: 'upload',
+      name: 'summit.jpg',
+      mime: 'image/jpeg',
+      bytes: new Uint8Array([1, 2, 3]),
+    });
+    const post = await alice.social.action({
+      a: 'post',
+      kind: 'post',
+      text: 'Made it to the top!',
+      attachments: [photo],
+      audience: 'friends',
+    });
+    expect(post).toMatchObject({ mine: true, audience: 1 });
+
+    await bob.dm.sync();
+    let feed = await bob.social.action({ a: 'feed' });
+    expect(feed.posts).toEqual([
+      expect.objectContaining({ id: post.id, authorName: 'Alice', text: 'Made it to the top!' }),
+    ]);
+    expect(feed.posts[0]!.attachments).toEqual([photo]);
+    await bob.social.action({ a: 'comment', postId: post.id, text: 'Congrats!!' });
+    await bob.social.action({ a: 'react', postId: post.id, emoji: '🔥', on: true });
+
+    await alice.dm.sync();
+    let mine = (await alice.social.action({ a: 'feed' })).posts[0]!;
+    expect(mine.comments.map((c) => [c.authorName, c.text])).toEqual([['Bob', 'Congrats!!']]);
+    expect(mine.reactions).toEqual([{ emoji: '🔥', count: 1, mine: false }]);
+    // The author relays the snapshot to the audience.
+    await alice.social.relay(post.id);
+    await bob.dm.sync();
+    feed = await bob.social.action({ a: 'feed' });
+    expect(feed.posts[0]!.comments.map((c) => c.text)).toEqual(['Congrats!!']);
+    expect(feed.posts[0]!.reactions).toEqual([{ emoji: '🔥', count: 1, mine: true }]);
+
+    // Stories: unseen until viewed; the author sees who viewed.
+    const story = await alice.social.action({
+      a: 'post',
+      kind: 'story',
+      text: 'sunrise',
+      attachments: [],
+      audience: 'friends',
+    });
+    await bob.dm.sync();
+    feed = await bob.social.action({ a: 'feed' });
+    expect(feed.stories).toEqual([expect.objectContaining({ name: 'Alice', unseen: true })]);
+    await bob.social.action({ a: 'seen', postId: story.id });
+    await alice.dm.sync();
+    mine = (await alice.social.action({ a: 'feed' })).stories[0]!.stories[0]!;
+    expect(mine.viewers.map((v) => v.name)).toEqual(['Bob']);
+
+    // Profiles show bios and posts.
+    const profile = await bob.social.action({ a: 'profile', riverId: alice.riverId });
+    expect(profile).toMatchObject({ name: 'Alice', bio: 'Climber. Coffee.', isContact: true });
+    expect(profile.posts.map((p) => p.id)).toEqual([post.id]);
+
+    // A stranger cannot put posts in Bob's feed.
+    await (carol.dm as unknown as { sendContent(p: string, c: unknown): Promise<void> }).sendContent(
+      bob.riverId,
+      {
+        v: 1,
+        t: 'post',
+        postId: 'BBBBBBBBBBBBBBBBBBBBBB',
+        kind: 'post',
+        text: 'spam',
+        attachments: [],
+        createdAt: new Date().toISOString(),
+      },
+    );
+    await bob.dm.sync();
+    expect((await bob.social.action({ a: 'feed' })).posts.map((p) => p.text)).not.toContain('spam');
+
+    // Deleting a post removes it for the audience; nothing readable reached the server.
+    await alice.social.action({ a: 'deletePost', postId: post.id });
+    await bob.dm.sync();
+    expect((await bob.social.action({ a: 'feed' })).posts).toEqual([]);
+    const mailbox = JSON.stringify(await serverDb.db.selectFrom('mailbox').selectAll().execute());
+    for (const t of ['Made it', 'Congrats', 'sunrise', 'Climber']) expect(mailbox).not.toContain(t);
   });
 });

@@ -157,4 +157,47 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 9,
+    name: '0009_social',
+    up(db) {
+      // Posts and stories (yours and ones shared with you), their comments,
+      // reactions and story views. Bios for you and your contacts.
+      db.exec(`
+        CREATE TABLE posts (
+          id         TEXT PRIMARY KEY,
+          author     TEXT NOT NULL,
+          kind       TEXT NOT NULL CHECK (kind IN ('post', 'story')),
+          body       TEXT NOT NULL,
+          audience   TEXT NOT NULL DEFAULT '[]',
+          created_at TEXT NOT NULL,
+          expires_at TEXT,
+          seen       INTEGER NOT NULL DEFAULT 0
+        ) STRICT;
+        CREATE INDEX posts_by_time ON posts (created_at);
+        CREATE TABLE post_comments (
+          id         TEXT PRIMARY KEY,
+          post_id    TEXT NOT NULL REFERENCES posts (id) ON DELETE CASCADE,
+          author     TEXT NOT NULL,
+          author_name TEXT NOT NULL,
+          text       TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        ) STRICT;
+        CREATE TABLE post_reactions (
+          post_id TEXT NOT NULL REFERENCES posts (id) ON DELETE CASCADE,
+          author  TEXT NOT NULL,
+          emoji   TEXT NOT NULL,
+          PRIMARY KEY (post_id, author, emoji)
+        ) STRICT;
+        CREATE TABLE story_views (
+          post_id   TEXT NOT NULL REFERENCES posts (id) ON DELETE CASCADE,
+          viewer    TEXT NOT NULL,
+          viewed_at TEXT NOT NULL,
+          PRIMARY KEY (post_id, viewer)
+        ) STRICT;
+        ALTER TABLE contacts ADD COLUMN bio TEXT;
+        ALTER TABLE profile ADD COLUMN bio TEXT;
+      `);
+    },
+  },
 ];

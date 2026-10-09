@@ -35,6 +35,8 @@ import { UserFacingError, type AccountService } from './account/account-service.
 import { attachmentPointerSchema, type CommunityAction } from '../shared/community-actions.ts';
 import { CommunityError, type CommunityService } from './community/community-service.ts';
 import type { DmService } from './dm/dm-service.ts';
+import type { SocialService } from './social/social-service.ts';
+import type { SocialAction } from '../shared/social.ts';
 import type { DmAction, DmEvent } from '../shared/dm.ts';
 import { desktopCapturer } from 'electron';
 import type { UpdateService } from './updater/update-service.ts';
@@ -53,6 +55,7 @@ export interface IpcDeps {
   account: AccountService;
   community: CommunityService;
   dm: DmService;
+  social: SocialService;
   /** Screen chosen in River's picker for the next screen share. */
   selectScreen(sourceId: string): void;
 }
@@ -151,6 +154,7 @@ export function registerIpc(deps: IpcDeps): void {
   );
   handle(IPC.communityAction, (_e, action) => result(() => deps.community.action(action as CommunityAction)));
   handle(IPC.dmAction, (_e, action) => result(() => deps.dm.action(action as DmAction)));
+  handle(IPC.socialAction, (_e, action) => result(() => deps.social.action(action as SocialAction)));
   handle(IPC.profileGet, () => deps.community.profile());
   handle(IPC.attachmentSave, (event, raw) =>
     result(async () => {
@@ -249,6 +253,12 @@ export function broadcastUpdateStatus(target: WebContents, updates: UpdateServic
 export function broadcastAccountStatus(target: WebContents, account: AccountService): () => void {
   return account.onStatus((status) => {
     if (!target.isDestroyed()) target.send(IPC.accountStatusChanged, status);
+  });
+}
+
+export function broadcastSocialEvents(target: WebContents, social: SocialService): () => void {
+  return social.onEvent((event) => {
+    if (!target.isDestroyed()) target.send(IPC.socialEvent, event);
   });
 }
 

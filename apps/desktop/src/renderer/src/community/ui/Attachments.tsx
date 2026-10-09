@@ -26,7 +26,7 @@ export function formatBytes(n: number): string {
 /** Decrypted object URLs for this session, so scrolling back does not re-download. */
 const urls = new Map<string, string>();
 
-async function decryptToUrl(pointer: AttachmentPointer): Promise<string> {
+export async function decryptToUrl(pointer: AttachmentPointer): Promise<string> {
   const existing = urls.get(pointer.id);
   if (existing) return existing;
   const res = await window.river.community.action({ a: 'download', pointer });

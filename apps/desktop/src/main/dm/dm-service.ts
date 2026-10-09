@@ -108,10 +108,60 @@ const contentSchema = z.discriminatedUnion('t', [
     t: z.literal('profile'),
     name: z.string().max(64).nullable(),
     avatar: avatarSchema.nullable().optional(),
+    bio: z.string().max(300).optional(),
     /** Set when shared only for a group: the receiver records it there, not as a contact. */
     groupId: msgId.optional(),
   }),
+  // Social (posts and stories), handled by SocialService.
+  z.object({
+    v: z.literal(1),
+    t: z.literal('post'),
+    postId: msgId,
+    kind: z.enum(['post', 'story']),
+    text: z.string().max(2000),
+    attachments: z.array(attachmentPointerSchema).max(10),
+    createdAt: z.iso.datetime(),
+    expiresAt: z.iso.datetime().optional(),
+  }),
+  z.object({ v: z.literal(1), t: z.literal('postDelete'), postId: msgId }),
+  z.object({
+    v: z.literal(1),
+    t: z.literal('postReact'),
+    postId: msgId,
+    emoji: z.string().min(1).max(32),
+    on: z.boolean(),
+  }),
+  z.object({
+    v: z.literal(1),
+    t: z.literal('postComment'),
+    postId: msgId,
+    commentId: msgId,
+    text: z.string().min(1).max(1000),
+  }),
+  z.object({
+    v: z.literal(1),
+    t: z.literal('postActivity'),
+    postId: msgId,
+    comments: z
+      .array(
+        z.object({
+          id: msgId,
+          author: z.uuid(),
+          authorName: z.string().max(64),
+          text: z.string().max(1000),
+          createdAt: z.iso.datetime(),
+        }),
+      )
+      .max(300),
+    reactions: z.record(z.string().max(32), z.array(z.uuid()).max(1000)),
+  }),
+  z.object({ v: z.literal(1), t: z.literal('storySeen'), postId: msgId }),
 ]);
+export type SocialContent = Extract<
+  z.infer<typeof contentSchema>,
+  { t: 'post' | 'postDelete' | 'postReact' | 'postComment' | 'postActivity' | 'storySeen' }
+>;
+const SOCIAL = new Set(['post', 'postDelete', 'postReact', 'postComment', 'postActivity', 'storySeen']);
 type Content = z.infer<typeof contentSchema>;
 
 const MAX_GROUP = 32;
@@ -175,6 +225,7 @@ export class DmService {
   private queue: Promise<unknown> = Promise.resolve();
   private readonly listeners = new Set<(e: DmEvent) => void>();
   private draining = false;
+  private socialHandler: ((peer: string, content: SocialContent) => void) | null = null;
 
   constructor(deps: Deps) {
     this.deps = deps;
@@ -343,6 +394,10 @@ export class DmService {
     }
     if (contact?.state === 'blocked') return true;
     const peer = env.sender;
+    if (SOCIAL.has(content.t)) {
+      this.socialHandler?.(peer, content as SocialContent);
+      return true;
+    }
     if (content.t === 'ckey' || content.t === 'ckeyReq') {
       // Community key exchange between members; not a conversation.
       const { v: _v, ...message } = content;
@@ -488,12 +543,71 @@ export class DmService {
       case 'profile': {
         if (!contact) this.upsertContact(peer, 'request');
         this.db()
-          .prepare('UPDATE contacts SET name = ?, avatar = ? WHERE river_id = ?')
-          .run(content.name ? content.name.slice(0, 64) : null, content.avatar ?? null, peer);
+          .prepare('UPDATE contacts SET name = ?, avatar = ?, bio = ? WHERE river_id = ?')
+          .run(
+            content.name ? content.name.slice(0, 64) : null,
+            content.avatar ?? null,
+            content.bio ?? null,
+            peer,
+          );
         this.emitConversations();
         return true;
       }
+      default:
+        return true;
     }
+  }
+
+  // ---- used by SocialService ----------------------------------------------------------------------
+
+  setSocialHandler(handler: (peer: string, content: SocialContent) => void): void {
+    this.socialHandler = handler;
+  }
+
+  /** Sends social content to one person (encrypted with their libsignal session). */
+  async sendSocial(peer: string, content: SocialContent, ephemeral = false): Promise<void> {
+    await this.shareProfile(peer).catch(() => undefined);
+    await this.sendContent(peer, content, ephemeral);
+  }
+
+  /** People who are accepted contacts (your "friends"). */
+  friends(): string[] {
+    return (
+      this.db().prepare(`SELECT river_id FROM contacts WHERE state = 'accepted'`).all() as Array<{
+        river_id: string;
+      }>
+    ).map((r) => r.river_id);
+  }
+
+  contactState(riverId: string): 'accepted' | 'request' | 'blocked' | null {
+    return this.contact(riverId)?.state ?? null;
+  }
+
+  person(riverId: string): { name: string; avatar: string | null; bio: string } {
+    const row = this.db().prepare('SELECT bio FROM contacts WHERE river_id = ?').get(riverId) as
+      { bio: string | null } | undefined;
+    return {
+      name: this.nameOf(riverId),
+      avatar: this.avatarOf(riverId),
+      bio: riverId === this.me() ? this.myBio() : (row?.bio ?? ''),
+    };
+  }
+
+  myBio(): string {
+    const row = this.deps.db()?.prepare('SELECT bio FROM profile WHERE id = 1').get() as
+      { bio: string | null } | undefined;
+    return row?.bio ?? '';
+  }
+
+  setMyBio(bio: string): void {
+    this.db()
+      .prepare('INSERT INTO profile (id, bio) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET bio = excluded.bio')
+      .run(bio.trim().slice(0, 300));
+  }
+
+  /** Keeps local copies of files in received posts. */
+  prefetch(attachments: AttachmentPointer[]): void {
+    for (const a of attachments) void this.deps.community.prefetchAttachment(a).catch(() => undefined);
   }
 
   // ---- groups ----------------------------------------------------------------------------------
@@ -703,10 +817,18 @@ export class DmService {
   private async shareProfile(peer: string, groupId?: string): Promise<void> {
     const name = this.deps.identity.get()?.displayName ?? null;
     const avatar = this.deps.community.profile().avatar;
-    const fingerprint = JSON.stringify([name, avatar?.length ?? 0, avatar?.slice(-32) ?? '']);
+    const bio = this.myBio();
+    const fingerprint = JSON.stringify([name, avatar?.length ?? 0, avatar?.slice(-32) ?? '', bio]);
     const tag = groupId ? `profileSent:${groupId}:${peer}` : `profileSent:${peer}`;
     if (this.meta(tag) === fingerprint) return;
-    await this.sendContent(peer, { v: 1, t: 'profile', name, avatar, ...(groupId ? { groupId } : {}) });
+    await this.sendContent(peer, {
+      v: 1,
+      t: 'profile',
+      name,
+      avatar,
+      ...(bio ? { bio } : {}),
+      ...(groupId ? { groupId } : {}),
+    });
     this.setMeta(tag, fingerprint);
   }
 

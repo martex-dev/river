@@ -65,7 +65,9 @@ test('navigates every section', async () => {
   // Messages is built: without an account it explains how to start.
   await page.getByRole('button', { name: 'Messages', exact: true }).click();
   await expect(page.locator('.page__title')).toHaveText('Private conversations');
-  for (const label of ['Social', 'Calls', 'Files', 'Contacts']) {
+  await page.getByRole('button', { name: 'Social', exact: true }).click();
+  await expect(page.locator('.page__title')).toHaveText('Share with your people');
+  for (const label of ['Calls', 'Files', 'Contacts']) {
     await page.getByRole('button', { name: label, exact: true }).click();
     await expect(page.locator('.page__title')).toHaveText(label);
     await expect(page.getByText('Nothing here works yet')).toBeVisible();
