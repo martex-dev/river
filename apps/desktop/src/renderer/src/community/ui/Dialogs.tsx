@@ -3,9 +3,9 @@ import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, CommunityView } from '../../../../shared/ipc.ts';
 import { play } from '../sound.ts';
 import { useCommunity, type Modal as ModalState } from '../store.ts';
-import { HashIcon, Modal, SpeakerIcon, Toggle, XIcon, hex } from './common.tsx';
+import { HashIcon, Modal, SpeakerIcon, Toggle, XIcon } from './common.tsx';
 import { moveToCategory } from './ChannelList.tsx';
-import { infoOf } from './CommunitySettings.tsx';
+import { PermissionEditor, setOverwrite, type Overwrite } from './PermissionEditor.tsx';
 
 export function ConfirmDialog({ modal }: { modal: Extract<ModalState, { kind: 'confirm' }> }): ReactElement {
   const s = useCommunity();
@@ -153,72 +153,169 @@ export function CreateChannelDialog(props: {
   );
 }
 
-/** Create a category, or rename or delete one. */
+/** Create a category; or edit one (name, permissions for its synced channels, delete). */
 export function CategoryDialog(props: { community: CommunityView; categoryId?: string }): ReactElement {
   const s = useCommunity();
   const existing = props.community.categories.find((k) => k.id === props.categoryId);
   const [name, setName] = useState(existing?.name ?? '');
+  const [overwrites, setOverwrites] = useState<Overwrite[]>(existing?.overwrites ?? []);
+  const [tab, setTab] = useState<'overview' | 'permissions'>('overview');
   const [busy, setBusy] = useState(false);
-  const submit = async (e: FormEvent): Promise<void> => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    setBusy(true);
-    await s.run(
-      existing
-        ? { a: 'renameCategory', communityId: props.community.id, categoryId: existing.id, name: name.trim() }
-        : { a: 'createCategory', communityId: props.community.id, name: name.trim() },
-    );
-    setBusy(false);
-    s.setModal(null);
-  };
-  return (
-    <Modal title={existing ? 'Edit category' : 'Create category'} onClose={() => s.setModal(null)}>
-      <form onSubmit={(e) => void submit(e)} className="create-channel">
-        <label className="textfield">
-          <span className="field__label">Category name</span>
-          <input
-            autoFocus
-            value={name}
-            maxLength={64}
-            placeholder="New category"
-            onChange={(e) => setName(e.target.value)}
-          />
-        </label>
-        <p className="muted small">
-          Category names are encrypted like channel names. Drag channels onto a category to move them.
-        </p>
-        <div className="modal__foot">
-          {existing && (
-            <button
-              type="button"
-              className="btn btn--danger"
-              onClick={() =>
-                s.setModal({
-                  kind: 'confirm',
-                  title: `Delete ${existing.name}`,
-                  body: 'Its channels stay; they just move out of the category.',
-                  action: 'Delete category',
-                  run: async () => {
-                    await s.run({
-                      a: 'deleteCategory',
-                      communityId: props.community.id,
-                      categoryId: existing.id,
-                    });
-                  },
-                })
-              }
-            >
-              Delete
+  const close = (): void => s.setModal(null);
+
+  if (!existing) {
+    const submit = async (e: FormEvent): Promise<void> => {
+      e.preventDefault();
+      if (!name.trim()) return;
+      setBusy(true);
+      await s.run({ a: 'createCategory', communityId: props.community.id, name: name.trim() });
+      setBusy(false);
+      close();
+    };
+    return (
+      <Modal title="Create category" onClose={close}>
+        <form onSubmit={(e) => void submit(e)} className="create-channel">
+          <label className="textfield">
+            <span className="field__label">Category name</span>
+            <input
+              autoFocus
+              value={name}
+              maxLength={64}
+              placeholder="New category"
+              onChange={(e) => setName(e.target.value)}
+            />
+          </label>
+          <p className="muted small">
+            Category names are encrypted like channel names. Drag channels onto a category to move them.
+          </p>
+          <div className="modal__foot">
+            <button type="button" className="btn btn--link" onClick={close}>
+              Cancel
             </button>
+            <button className="btn btn--primary" disabled={busy || name.trim() === ''}>
+              Create category
+            </button>
+          </div>
+        </form>
+      </Modal>
+    );
+  }
+
+  const synced = props.community.channels.filter((c) => c.parentId === existing.id && c.synced);
+  const dirtyName = name.trim() !== existing.name && name.trim() !== '';
+  const dirtyPerms = JSON.stringify(overwrites) !== JSON.stringify(existing.overwrites);
+  return (
+    <Modal onClose={close} full>
+      <div className="settings-layout">
+        <nav className="settings-layout__nav" aria-label="Category settings">
+          <div className="settings-layout__heading">{existing.name}</div>
+          <button
+            className={`settings-tab ${tab === 'overview' ? 'is-active' : ''}`}
+            onClick={() => setTab('overview')}
+          >
+            Overview
+          </button>
+          <button
+            className={`settings-tab ${tab === 'permissions' ? 'is-active' : ''}`}
+            onClick={() => setTab('permissions')}
+          >
+            Permissions
+          </button>
+          <hr />
+          <button
+            className="settings-tab settings-tab--danger"
+            onClick={() =>
+              s.setModal({
+                kind: 'confirm',
+                title: `Delete ${existing.name}`,
+                body: 'Its channels stay; they just move out of the category.',
+                action: 'Delete category',
+                run: async () => {
+                  await s.run({
+                    a: 'deleteCategory',
+                    communityId: props.community.id,
+                    categoryId: existing.id,
+                  });
+                },
+              })
+            }
+          >
+            Delete category
+          </button>
+        </nav>
+        <section className="settings-layout__body">
+          <button className="settings-layout__close icon-btn" aria-label="Close settings" onClick={close}>
+            <XIcon />
+          </button>
+          {tab === 'overview' && (
+            <div className="settings-page">
+              <h2>Overview</h2>
+              <label className="textfield">
+                <span className="field__label">Category name</span>
+                <input value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
+              </label>
+              {dirtyName && (
+                <div className="save-bar">
+                  <span>Careful — you have unsaved changes!</span>
+                  <button className="btn btn--link" onClick={() => setName(existing.name)}>
+                    Reset
+                  </button>
+                  <button
+                    className="btn btn--primary btn--small"
+                    onClick={() =>
+                      void s.run({
+                        a: 'renameCategory',
+                        communityId: props.community.id,
+                        categoryId: existing.id,
+                        name: name.trim(),
+                      })
+                    }
+                  >
+                    Save changes
+                  </button>
+                </div>
+              )}
+            </div>
           )}
-          <button type="button" className="btn btn--link" onClick={() => s.setModal(null)}>
-            Cancel
-          </button>
-          <button className="btn btn--primary" disabled={busy || name.trim() === ''}>
-            {existing ? 'Save' : 'Create category'}
-          </button>
-        </div>
-      </form>
+          {tab === 'permissions' && (
+            <div className="settings-page">
+              <h2>Category permissions</h2>
+              <p className="muted small">
+                {synced.length
+                  ? `${synced.length} synced ${synced.length === 1 ? 'channel follows' : 'channels follow'} these permissions. Channels with their own permissions keep them.`
+                  : 'Channels you add to this category follow these permissions until you give them their own.'}
+              </p>
+              <PermissionEditor
+                community={props.community}
+                overwrites={overwrites}
+                bits={CATEGORY_PERMS}
+                onChange={setOverwrites}
+              />
+              {dirtyPerms && (
+                <div className="save-bar">
+                  <span>Careful — you have unsaved changes!</span>
+                  <button className="btn btn--link" onClick={() => setOverwrites(existing.overwrites)}>
+                    Reset
+                  </button>
+                  <button
+                    className="btn btn--primary btn--small"
+                    onClick={() =>
+                      void s.run({
+                        a: 'categoryPermissions',
+                        communityId: props.community.id,
+                        categoryId: existing.id,
+                        overwrites,
+                      })
+                    }
+                  >
+                    Save changes
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
     </Modal>
   );
 }
@@ -233,6 +330,22 @@ const TEXT_PERMS = [
   Permission.PIN_MESSAGES,
   Permission.MANAGE_CHANNELS,
 ];
+/** A category's permissions cover both its text and voice channels. */
+const CATEGORY_PERMS = [
+  Permission.VIEW_CHANNELS,
+  Permission.SEND_MESSAGES,
+  Permission.ADD_REACTIONS,
+  Permission.ATTACH_FILES,
+  Permission.MENTION_EVERYONE,
+  Permission.MANAGE_MESSAGES,
+  Permission.PIN_MESSAGES,
+  Permission.CONNECT,
+  Permission.SPEAK,
+  Permission.STREAM,
+  Permission.MUTE_MEMBERS,
+  Permission.MOVE_MEMBERS,
+  Permission.MANAGE_CHANNELS,
+];
 const VOICE_PERMS = [
   Permission.VIEW_CHANNELS,
   Permission.CONNECT,
@@ -243,8 +356,6 @@ const VOICE_PERMS = [
   Permission.MANAGE_CHANNELS,
 ];
 
-type Overwrite = ChannelView['overwrites'][number];
-
 export function ChannelSettings(props: { community: CommunityView; channel: ChannelView }): ReactElement {
   const { community, channel } = props;
   const s = useCommunity();
@@ -252,31 +363,13 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
   const [name, setName] = useState(channel.name);
   const [topic, setTopic] = useState(channel.topic);
   const [overwrites, setOverwrites] = useState<Overwrite[]>(channel.overwrites);
-  const [role, setRole] = useState(community.id);
   const close = (): void => s.setModal(null);
+  const parent = community.categories.find((k) => k.id === channel.parentId);
   const dirtyOverview = name !== channel.name || topic !== channel.topic;
   const dirtyPerms = JSON.stringify(overwrites) !== JSON.stringify(channel.overwrites);
   const bits = channel.kind === 'text' ? TEXT_PERMS : VOICE_PERMS;
   const everyone = overwrites.find((o) => o.roleId === community.id);
   const isPrivate = !!everyone && (everyone.deny & Permission.VIEW_CHANNELS) !== 0;
-
-  const setBit = (roleId: string, bit: number, value: 'allow' | 'deny' | 'inherit'): void => {
-    const current = overwrites.find((o) => o.roleId === roleId) ?? { roleId, allow: 0, deny: 0 };
-    const next = {
-      roleId,
-      allow: value === 'allow' ? current.allow | bit : current.allow & ~bit,
-      deny: value === 'deny' ? current.deny | bit : current.deny & ~bit,
-    };
-    const rest = overwrites.filter((o) => o.roleId !== roleId);
-    setOverwrites(next.allow || next.deny ? [...rest, next] : rest);
-  };
-  const stateOf = (roleId: string, bit: number): 'allow' | 'deny' | 'inherit' => {
-    const o = overwrites.find((x) => x.roleId === roleId);
-    if (o && o.allow & bit) return 'allow';
-    if (o && o.deny & bit) return 'deny';
-    return 'inherit';
-  };
-  const selectedRole = community.roles.find((r) => r.id === role) ?? community.roles.find((r) => r.everyone)!;
 
   return (
     <Modal onClose={close} full>
@@ -398,71 +491,39 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
             <div className="settings-page">
               <h2>Channel permissions</h2>
               <p className="muted small">Override what each role can do in this channel only.</p>
+              {parent && channel.synced && (
+                <div className="sync-note" role="note">
+                  🔗 Synced with <strong>{parent.name}</strong>: this channel uses the category's permissions.
+                  Changing them here gives the channel its own.
+                </div>
+              )}
+              {parent && !channel.synced && (
+                <div className="sync-note sync-note--off" role="note">
+                  This channel has its own permissions, not those of <strong>{parent.name}</strong>.
+                  <button
+                    className="btn btn--link btn--small"
+                    onClick={() => void s.run({ a: 'updateChannel', channelId: channel.id, synced: true })}
+                  >
+                    Sync with category
+                  </button>
+                </div>
+              )}
               <Toggle
                 label="Private channel"
                 help="Hide this channel from @everyone. Then allow the roles that should see it."
                 checked={isPrivate}
-                onChange={(on) => setBit(community.id, Permission.VIEW_CHANNELS, on ? 'deny' : 'inherit')}
+                onChange={(on) =>
+                  setOverwrites(
+                    setOverwrite(overwrites, community.id, Permission.VIEW_CHANNELS, on ? 'deny' : 'inherit'),
+                  )
+                }
               />
-              <div className="overwrites">
-                <div className="overwrites__roles">
-                  <div className="field__label">Roles</div>
-                  {community.roles.map((r) => (
-                    <button
-                      key={r.id}
-                      className={`role-row__main ${r.id === role ? 'is-active' : ''} ${overwrites.some((o) => o.roleId === r.id) ? 'has-overwrite' : ''}`}
-                      onClick={() => setRole(r.id)}
-                    >
-                      <span
-                        className="role-chip__dot"
-                        style={{ background: r.color ? hex(r.color) : 'var(--text-faint)' }}
-                      />
-                      {r.name}
-                    </button>
-                  ))}
-                </div>
-                <div className="overwrites__bits">
-                  <div className="field__label">{selectedRole.name}</div>
-                  {bits.map((bit) => {
-                    const info = infoOf(bit);
-                    const value = stateOf(role, bit);
-                    return (
-                      <div key={bit} className="tri-row">
-                        <span className="toggle-row__text">
-                          <span className="toggle-row__label">{info.label}</span>
-                          <span className="toggle-row__help">{info.help}</span>
-                        </span>
-                        <span className="tri" role="radiogroup" aria-label={info.label}>
-                          <button
-                            className={`tri__opt tri__opt--deny ${value === 'deny' ? 'is-on' : ''}`}
-                            aria-label="Deny"
-                            title="Deny"
-                            onClick={() => setBit(role, bit, 'deny')}
-                          >
-                            ✕
-                          </button>
-                          <button
-                            className={`tri__opt ${value === 'inherit' ? 'is-on' : ''}`}
-                            aria-label="Inherit"
-                            title="Inherit from roles"
-                            onClick={() => setBit(role, bit, 'inherit')}
-                          >
-                            /
-                          </button>
-                          <button
-                            className={`tri__opt tri__opt--allow ${value === 'allow' ? 'is-on' : ''}`}
-                            aria-label="Allow"
-                            title="Allow"
-                            onClick={() => setBit(role, bit, 'allow')}
-                          >
-                            ✓
-                          </button>
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <PermissionEditor
+                community={community}
+                overwrites={overwrites}
+                bits={bits}
+                onChange={setOverwrites}
+              />
               {dirtyPerms && (
                 <div className="save-bar">
                   <span>Careful — you have unsaved changes!</span>
