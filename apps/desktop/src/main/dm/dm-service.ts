@@ -211,6 +211,7 @@ interface ContactRow {
   created_at: string;
   last_read: string | null;
   key_changed: number;
+  heard_from: number;
 }
 
 const enc = (v: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(v));
@@ -487,6 +488,7 @@ export class DmService {
             }),
             sentAt,
           );
+        this.db().prepare('UPDATE contacts SET heard_from = 1 WHERE river_id = ?').run(peer);
         this.emitMessage(content.id, true);
         this.emitConversations();
         // Keep our own (encrypted) copies of files before the server's copy expires.
@@ -560,6 +562,9 @@ export class DmService {
         return true;
       case 'profile': {
         if (!contact) this.upsertContact(peer, 'request');
+        // A profile shared with you directly means they accepted (or started) the conversation.
+        if (!content.groupId)
+          this.db().prepare('UPDATE contacts SET heard_from = 1 WHERE river_id = ?').run(peer);
         this.db()
           .prepare('UPDATE contacts SET name = ?, avatar = ?, bio = ? WHERE river_id = ?')
           .run(
@@ -1141,7 +1146,8 @@ export class DmService {
           }
           this.db().prepare(`UPDATE contacts SET state = 'accepted' WHERE river_id = ?`).run(act.peer);
           this.emitConversations();
-          void this.shareProfile(act.peer).catch(() => undefined);
+          // Sharing your profile is also how the other side learns you accepted.
+          await this.shareProfile(act.peer).catch(() => undefined);
           return out(null);
         case 'block':
           await this.deps.community.api(`/blocks/${act.peer}`, 'PUT', {}, z.unknown());
@@ -1408,6 +1414,7 @@ export class DmService {
         unread,
         verified: false,
         keyChanged: false,
+        awaitingReply: false,
       };
     });
     return [
@@ -1446,6 +1453,7 @@ export class DmService {
           unread,
           verified: protocol?.isVerified(c.river_id) ?? false,
           keyChanged: c.key_changed === 1,
+          awaitingReply: c.state === 'accepted' && c.heard_from === 0,
         };
       }),
     ].sort((a, b) => (b.last?.sentAt ?? '').localeCompare(a.last?.sentAt ?? ''));

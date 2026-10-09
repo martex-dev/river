@@ -16,3 +16,28 @@ export function inviteHost(text: string): string {
     return '';
   }
 }
+
+const RIVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** A link that tells River "add me as a friend": `<server>/add#<River ID>`. */
+export function friendLink(serverUrl: string, riverId: string): string {
+  return `${serverUrl.replace(/\/+$/, '')}/add#${riverId}`;
+}
+
+/** A friend link or a bare River ID → who to add (and on which server, for links). */
+export function parseFriend(text: string): { riverId: string; serverUrl: string | null } | null {
+  const value = text.trim();
+  if (RIVER_ID.test(value)) return { riverId: value.toLowerCase(), serverUrl: null };
+  try {
+    const url = new URL(value);
+    if (!/^https?:$/.test(url.protocol) || !url.pathname.endsWith('/add')) return null;
+    const riverId = url.hash.slice(1);
+    if (!RIVER_ID.test(riverId)) return null;
+    return {
+      riverId: riverId.toLowerCase(),
+      serverUrl: `${url.origin}${url.pathname.slice(0, -'/add'.length)}`,
+    };
+  } catch {
+    return null;
+  }
+}

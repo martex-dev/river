@@ -232,4 +232,18 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 12,
+    name: '0012_contacts_heard_from',
+    up(db) {
+      // Whether a contact has ever written back (a message, or the profile they
+      // share when accepting), so a request you sent shows as pending, not as a friend.
+      db.exec(`
+        ALTER TABLE contacts ADD COLUMN heard_from INTEGER NOT NULL DEFAULT 0;
+        UPDATE contacts SET heard_from = 1
+          WHERE state = 'request'
+             OR EXISTS (SELECT 1 FROM dm_messages m WHERE m.peer = contacts.river_id AND m.sender = contacts.river_id);
+      `);
+    },
+  },
 ];

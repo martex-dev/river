@@ -112,8 +112,17 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     // Requests do not leak receipts.
     await alice.dm.sync();
     expect((await alice.dm.action({ a: 'messages', peer: bob.riverId }))[0]!.status).toBe('sent');
+    // For Alice it is a sent request until Bob answers; for Bob it is an incoming one.
+    expect((await alice.dm.action({ a: 'conversations' }))[0]).toMatchObject({ awaitingReply: true });
+    expect(convs[0]).toMatchObject({ awaitingReply: false });
 
     await bob.dm.action({ a: 'accept', peer: alice.riverId });
+    // Accepting shares Bob's profile: Alice now sees a friend, before Bob even writes.
+    await alice.dm.sync();
+    expect((await alice.dm.action({ a: 'conversations' }))[0]).toMatchObject({
+      state: 'accepted',
+      awaitingReply: false,
+    });
     await bob.dm.action({ a: 'read', peer: alice.riverId });
     const reply = await bob.dm.action({ a: 'send', peer: alice.riverId, text: 'hey!', replyTo: sent.id });
     await alice.dm.sync();

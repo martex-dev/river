@@ -375,4 +375,23 @@ test('a brand-new user creates a community from a template in one step', async (
   await expect(dave.getByRole('dialog', { name: 'Join this community?' })).toContainText('127.0.0.1');
   await dave.getByRole('dialog').getByRole('button', { name: 'Join community' }).click();
   await expect(dave.locator('.community__title strong')).toHaveText('Squad Goals', { timeout: 20_000 });
+
+  // Dave adds Carol from her member card; Carol accepts on the Friends page and both see each other.
+  if ((await dave.locator('.community__members').count()) === 0) {
+    await dave.getByRole('button', { name: 'Member list' }).click();
+  }
+  await dave.locator('.community__members .member', { hasText: 'Carol' }).click();
+  await dave.getByRole('button', { name: 'Add friend' }).click();
+  await expect(dave.getByText('Request sent ✓')).toBeVisible({ timeout: 15_000 });
+  await dave.keyboard.press('Escape');
+  await carol.getByRole('button', { name: 'Friends', exact: true }).click();
+  await carol.getByRole('tab', { name: /Pending/ }).click();
+  const request = carol.locator('.friend-row', { hasText: 'Dave' });
+  await expect(request).toContainText('Wants to be friends', { timeout: 15_000 });
+  await request.getByRole('button', { name: 'Accept' }).click();
+  await carol.getByRole('tab', { name: 'All' }).click();
+  await expect(carol.locator('.friend-row', { hasText: 'Dave' })).toBeVisible();
+  await auditA11y(carol, 'Friends');
+  await carol.getByRole('tab', { name: 'Add friend' }).click();
+  await expect(carol.locator('.friends__add code')).toContainText('/add#');
 });

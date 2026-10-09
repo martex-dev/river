@@ -11,7 +11,7 @@ import { CommunitiesPage, Overlays, VoiceHotkeys } from './pages/CommunitiesPage
 import { MessagesPage } from './pages/MessagesPage.tsx';
 import { SocialPage } from './pages/SocialPage.tsx';
 import { CallsPage } from './pages/CallsPage.tsx';
-import { ContactsPage } from './pages/ContactsPage.tsx';
+import { FriendsPage } from './pages/FriendsPage.tsx';
 import { FilesPage } from './pages/FilesPage.tsx';
 import { onSocialChanged } from './social/store.ts';
 import { totalUnread, useDm } from './dm/store.ts';
@@ -29,7 +29,7 @@ const LABELS: Record<Section, string> = {
   social: 'Social',
   calls: 'Calls',
   files: 'Files',
-  contacts: 'Contacts',
+  contacts: 'Friends',
   security: 'Security',
   settings: 'Settings',
 };
@@ -175,7 +175,7 @@ export function App(): ReactElement {
           {section === 'social' && <SocialPage />}
           {section === 'calls' && <CallsPage />}
           {section === 'files' && <FilesPage />}
-          {section === 'contacts' && <ContactsPage />}
+          {section === 'contacts' && <FriendsPage />}
           {section === 'settings' && <SettingsPage />}
           {planned && <PlannedPage section={section} feature={planned} />}
         </main>

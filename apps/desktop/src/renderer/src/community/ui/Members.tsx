@@ -2,6 +2,7 @@ import { useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { CommunityView, MemberView } from '../../../../shared/ipc.ts';
 import { useRiver } from '../../store.ts';
+import { friendState, sendFriendRequest } from '../../dm/friends.ts';
 import { useDm } from '../../dm/store.ts';
 import { useCommunity } from '../store.ts';
 import { Avatar, CrownIcon, Popover, can, hex } from './common.tsx';
@@ -226,6 +227,7 @@ export function ProfileCard(props: {
             >
               Message
             </button>
+            <FriendButton riverId={member.riverId} />
             {voiceChannel && outranks && can(perms, Permission.MUTE_MEMBERS) && (
               <button
                 className="btn btn--ghost btn--small"
@@ -262,5 +264,35 @@ export function ProfileCard(props: {
         )}
       </div>
     </div>
+  );
+}
+
+/** "Add friend" on a member's card; shows where things stand once you are connected. */
+function FriendButton({ riverId }: { riverId: string }): ReactElement | null {
+  useDm((d) => d.conversations);
+  const [sent, setSent] = useState(false);
+  const state = friendState(riverId);
+  if (state === 'blocked') return null;
+  if (state === 'friend')
+    return (
+      <span className="chip chip--online" title="You are friends">
+        Friends ✓
+      </span>
+    );
+  if (state === 'request') return <span className="chip">Wants to be friends</span>;
+  if (state === 'sent' || sent) return <span className="chip">Request sent ✓</span>;
+  return (
+    <button
+      className="btn btn--ghost btn--small"
+      onClick={() => {
+        setSent(true);
+        void sendFriendRequest(riverId).then((ok) => {
+          if (ok) useCommunity.getState().notify('Friend request sent');
+          else setSent(false);
+        });
+      }}
+    >
+      Add friend
+    </button>
   );
 }

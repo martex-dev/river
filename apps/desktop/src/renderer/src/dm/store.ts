@@ -63,7 +63,9 @@ export const useDm = create<DmState>((set, get) => ({
     switch (e.t) {
       case 'conversations': {
         // A new message request, or someone becoming your contact, gets its own sound.
-        const before = new Map(get().conversations.map((c) => [c.riverId, c.state]));
+        // "Friend" = accepted and they have answered; anything else before counts as not yet friends.
+        const isFriend = (c: ConversationView): boolean => c.state === 'accepted' && !c.awaitingReply;
+        const before = new Map(get().conversations.map((c) => [c.riverId, c]));
         const loaded = get().conversations.length > 0 || get().loadedOnce;
         set({ conversations: e.conversations, loadedOnce: true });
         if (!loaded) return;
@@ -72,13 +74,10 @@ export const useDm = create<DmState>((set, get) => ({
         )
           play('friendRequest');
         else {
-          const friend = e.conversations.find(
-            (c) =>
-              c.kind === 'direct' &&
-              c.state === 'accepted' &&
-              before.has(c.riverId) &&
-              before.get(c.riverId) !== 'accepted',
-          );
+          const friend = e.conversations.find((c) => {
+            const was = before.get(c.riverId);
+            return c.kind === 'direct' && isFriend(c) && was !== undefined && !isFriend(was);
+          });
           if (friend) {
             play('friendAdded');
             celebrate(`You and ${friend.name} are now friends`);

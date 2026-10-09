@@ -161,3 +161,115 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- Friends (1.0.3) ---------- */
+.friends__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.friends__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast),
+    color var(--dur-fast);
+}
+.friends__tab:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.friends__tab.is-active {
+  background: rgba(79, 227, 209, 0.12);
+  color: var(--text);
+}
+.friends__tab--add {
+  margin-left: auto;
+  background: var(--accent-grad);
+  color: #04121a;
+}
+.friends__tab--add:hover,
+.friends__tab--add.is-active {
+  background: var(--accent-grad);
+  color: #04121a;
+  filter: brightness(1.08);
+}
+.friends__tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.friends__search {
+  width: min(420px, 100%);
+  margin-bottom: 14px;
+}
+.friends__list {
+  display: flex;
+  flex-direction: column;
+}
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  border-top: 1px solid var(--border);
+  border-radius: 8px;
+  animation: slide-in var(--dur) var(--ease-out);
+  transition: background var(--dur-fast);
+}
+.friend-row:hover {
+  background: var(--surface-hover);
+}
+.friend-row__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.friend-row__text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.friend-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.friend-row.is-online .avatar__status {
+  animation: pop var(--dur) var(--ease-spring);
+}
+.friends__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 18px 0;
+}
+.friends__add {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.friends__add .card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  animation: pop-in var(--dur) var(--ease-out);
+}

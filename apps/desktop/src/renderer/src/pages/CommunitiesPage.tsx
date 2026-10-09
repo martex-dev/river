@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { Celebrations } from '../community/fx.tsx';
-import { JoinInviteDialog, PasteToJoin } from '../community/ui/PasteToJoin.tsx';
+import { AddFriendDialog, JoinInviteDialog, PasteToJoin } from '../community/ui/PasteToJoin.tsx';
 import { StartScreen } from '../community/ui/StartScreen.tsx';
 import { useCommunity } from '../community/store.ts';
 import { ChannelSidebar } from '../community/ui/Sidebar.tsx';
@@ -158,6 +158,8 @@ function Modals({ me }: { me: string }): ReactElement | null {
       return <UserSettings tab={modal.tab} />;
     case 'join-invite':
       return <JoinInviteDialog link={modal.link} />;
+    case 'add-friend':
+      return <AddFriendDialog riverId={modal.riverId} serverUrl={modal.serverUrl} />;
     case 'invite': {
       const c = communityById(modal.communityId);
       return c ? <InviteDialog community={c} /> : null;
