@@ -1,6 +1,7 @@
-import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
-import { Celebrations, celebrate } from '../community/fx.tsx';
-import { play } from '../community/sound.ts';
+import { useEffect, useState, type ReactElement } from 'react';
+import { Celebrations } from '../community/fx.tsx';
+import { JoinInviteDialog, PasteToJoin } from '../community/ui/PasteToJoin.tsx';
+import { StartScreen } from '../community/ui/StartScreen.tsx';
 import { useCommunity } from '../community/store.ts';
 import { ChannelSidebar } from '../community/ui/Sidebar.tsx';
 import { TextChannel } from '../community/ui/Chat.tsx';
@@ -52,7 +53,7 @@ export function CommunitiesPage(): ReactElement {
   if (s.communities.length === 0 || adding) {
     return (
       <>
-        <Welcome
+        <StartScreen
           onDone={() => setAdding(false)}
           canCancel={s.communities.length > 0}
           hasAccount={account.state === 'registered'}
@@ -132,6 +133,7 @@ export function Overlays(): ReactElement {
       <Modals me={me} />
       <Toast />
       <Celebrations />
+      <PasteToJoin />
       <IncomingCall />
       <CallPill />
     </>
@@ -148,6 +150,8 @@ function Modals({ me }: { me: string }): ReactElement | null {
       return <ConfirmDialog modal={modal} />;
     case 'user-settings':
       return <UserSettings tab={modal.tab} />;
+    case 'join-invite':
+      return <JoinInviteDialog link={modal.link} />;
     case 'invite': {
       const c = communityById(modal.communityId);
       return c ? <InviteDialog community={c} /> : null;
@@ -180,113 +184,6 @@ function Toast(): ReactElement | null {
   return (
     <div className={`river-toast river-toast--${toast.tone}`} role="status">
       {toast.text}
-    </div>
-  );
-}
-
-function Welcome(props: { onDone(): void; canCancel: boolean; hasAccount: boolean }): ReactElement {
-  const [name, setName] = useState('');
-  const [link, setLink] = useState('');
-  const [busy, setBusy] = useState<'create' | 'join' | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const navigate = useRiver((r) => r.navigate);
-
-  const run = async (kind: 'create' | 'join', e: FormEvent): Promise<void> => {
-    e.preventDefault();
-    setBusy(kind);
-    setError(null);
-    const res =
-      kind === 'create' ? await window.river.community.create(name) : await window.river.community.join(link);
-    setBusy(null);
-    if (!res.ok) {
-      play('error');
-      return setError(res.message);
-    }
-    play('communityJoin');
-    celebrate(kind === 'create' ? `${res.value.name} is ready` : `Welcome to ${res.value.name}`);
-    await useCommunity.getState().load();
-    useCommunity.getState().select(res.value.id);
-    props.onDone();
-  };
-
-  return (
-    <div className="page">
-      <header className="page__header">
-        <div className="eyebrow">Communities</div>
-        <h1 className="page__title">Your private spaces</h1>
-        <p className="page__lead">
-          Text and voice channels, roles and permissions, video and screen sharing — encrypted with a key only
-          members have.
-        </p>
-      </header>
-      {error && (
-        <div className="glass card card--error" role="alert">
-          {error}
-        </div>
-      )}
-      <div className="home__grid">
-        <form className="glass card" onSubmit={(e) => void run('join', e)}>
-          <h2 className="card__title">Join with an invite link</h2>
-          <p className="muted small">
-            Paste the link someone sent you. River sets everything up — including your account.
-          </p>
-          <label className="textfield">
-            <span className="field__label">Invite link</span>
-            <input
-              value={link}
-              onChange={(e) => setLink(e.target.value)}
-              placeholder="https://…/join#c=…&k=…"
-              spellCheck={false}
-            />
-          </label>
-          <div className="button-row">
-            <button className="btn btn--primary" disabled={busy !== null || link.trim() === ''}>
-              {busy === 'join' ? 'Joining…' : 'Join community'}
-            </button>
-          </div>
-        </form>
-        <form className="glass card" onSubmit={(e) => void run('create', e)}>
-          <h2 className="card__title">Create a community</h2>
-          {props.hasAccount ? (
-            <>
-              <p className="muted small">
-                You get a #general text channel and a Lounge voice channel to start.
-              </p>
-              <label className="textfield">
-                <span className="field__label">Community name</span>
-                <input
-                  value={name}
-                  maxLength={64}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. The Crew"
-                />
-              </label>
-              <div className="button-row">
-                <button className="btn btn--primary" disabled={busy !== null || name.trim() === ''}>
-                  {busy === 'create' ? 'Creating…' : 'Create community'}
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="muted small">
-                Creating a community needs an account on a River server. Set your server and create an account
-                first.
-              </p>
-              <div className="button-row">
-                <button type="button" className="btn btn--ghost" onClick={() => navigate('settings')}>
-                  Open Settings → Server
-                </button>
-              </div>
-            </>
-          )}
-        </form>
-      </div>
-      {props.canCancel && (
-        <button className="btn btn--link" onClick={props.onDone}>
-          ← Back to my communities
-        </button>
-      )}
     </div>
   );
 }
