@@ -34,9 +34,9 @@ Each line is one PR; each version ships when its section is done.
 
 ### 1.0.4 — Highlighting
 
-- [ ] Mention autocomplete for people, roles, @everyone and @here
-- [ ] Mentioned messages highlighted; role mentions and @everyone respect permissions
-- [ ] "New messages" divider, jump to reply/pin/search result with a flash, mention counts kept across restarts
+- [x] Mention autocomplete for people, roles, @everyone and @here
+- [x] Mentioned messages highlighted; role mentions and @everyone respect permissions
+- [x] "New messages" divider, jump to reply/pin/search result with a flash, mention counts kept across restarts
 
 ### 1.0.5 — Stability
 
