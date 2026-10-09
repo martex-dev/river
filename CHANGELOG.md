@@ -6,6 +6,28 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-10-10
+
+**Highlighting: mentions, roles, channels and what you missed.**
+
+### Added
+
+- **Role mentions.** Turn on "Allow anyone to @mention this role" in a role's
+  settings. Mentioning the role pings everyone who has it. People allowed to
+  mention @everyone can mention any role.
+- **Replies to your messages count as mentions**: sound, badge, highlight and
+  notification.
+- **Smarter autocomplete** for @people (with avatars), @roles (in their colour),
+  @everyone and @here (with what they do), and **#channels**.
+- **Clickable #channel links** and role mentions shown in the role's colour.
+- **"New messages" divider** and a catch-up bar ("3 new messages since 14:02 —
+  Mark as read"). Opening a channel with new messages starts at the divider.
+- **Unread and mention counts survive restarts**, including messages that
+  arrived while River was closed. They are counted on your computer after
+  decrypting; the server cannot see them.
+- **Search highlights the matching words** in community and conversation
+  search results.
+
 ## [1.0.3] - 2026-10-10
 
 **Friends made simple.**
@@ -503,7 +525,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/martex-dev/river/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/martex-dev/river/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/martex-dev/river/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/martex-dev/river/compare/v1.0.0...v1.0.1
