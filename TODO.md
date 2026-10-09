@@ -22,9 +22,9 @@ Each line is one PR; each version ships when its section is done.
 
 ### 1.0.2 — Easy start
 
-- [ ] Create a community in one step, with templates (Friends, Gaming, Study, Club) and an icon
-- [ ] Paste an invite link anywhere (or have it detected on the clipboard) to join
-- [ ] Welcome screen for new members, helpful empty states, invite button always at hand
+- [x] Create a community in one step, with templates (Friends, Gaming, Study, Club) and an icon
+- [x] Paste an invite link anywhere (or have it detected on the clipboard) to join
+- [x] Welcome screen for new members, helpful empty states, invite button always at hand
 
 ### 1.0.3 — Friends made simple
 
