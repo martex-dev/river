@@ -9,6 +9,7 @@ import { HttpError } from './http-error.ts';
 import { Hub } from './communities/hub.ts';
 import { registerAttachmentRoutes } from './routes/attachments.ts';
 import { registerMessagingRoutes } from './routes/messaging.ts';
+import { registerTurnRoutes } from './routes/turn.ts';
 import { registerCommunityRoutes } from './routes/communities.ts';
 import serverPackage from '../package.json' with { type: 'json' };
 
@@ -125,6 +126,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const hub = new Hub();
   await registerCommunityRoutes(app, { config, database: deps.database, now, hub });
   registerMessagingRoutes(app, { config, database: deps.database, now, hub });
+  registerTurnRoutes(app, { config, database: deps.database, now });
   await registerAttachmentRoutes(app, { config, database: deps.database, now });
 
   return app;

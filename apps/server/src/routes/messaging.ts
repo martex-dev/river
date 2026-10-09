@@ -82,8 +82,23 @@ export function registerMessagingRoutes(
         .where('river_id', '=', riverId)
         .where('device_id', '=', deviceId)
         .executeTakeFirst();
-      if (Number(counts?.n ?? 0) + req.preKeys.length > MAX_ONE_TIME_PREKEYS) throw bad('Too many prekeys');
+      if (!req.replaceAll && Number(counts?.n ?? 0) + req.preKeys.length > MAX_ONE_TIME_PREKEYS) {
+        throw bad('Too many prekeys');
+      }
       await db.transaction().execute(async (trx) => {
+        if (req.replaceAll) {
+          // Prekeys from a previous install of this device: their private halves are gone.
+          await trx
+            .deleteFrom('prekeys')
+            .where('river_id', '=', riverId)
+            .where('device_id', '=', deviceId)
+            .execute();
+          await trx
+            .deleteFrom('kyber_prekeys')
+            .where('river_id', '=', riverId)
+            .where('device_id', '=', deviceId)
+            .execute();
+        }
         await trx
           .deleteFrom('signed_prekeys')
           .where('river_id', '=', riverId)

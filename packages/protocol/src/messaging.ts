@@ -26,6 +26,8 @@ export const preKeyUploadSchema = z
     kyberLastResort: kyberPreKeySchema,
     preKeys: z.array(oneTimePreKeySchema).max(100),
     kyberPreKeys: z.array(kyberPreKeySchema).max(100),
+    /** First upload from a (re)installed device: drop every older prekey of this device. */
+    replaceAll: z.boolean().optional(),
   })
   .strict();
 export type PreKeyUploadWire = z.infer<typeof preKeyUploadSchema>;
@@ -98,5 +100,19 @@ export const ackRequestSchema = z
       .max(200),
   })
   .strict();
+
+/** STUN/TURN servers for calls; TURN credentials are short-lived. */
+export const iceServersResponseSchema = z.object({
+  iceServers: z
+    .array(
+      z.object({
+        urls: z.array(z.string().regex(/^(stun|turns?):[^\s]+$/)).max(10),
+        username: z.string().max(200).optional(),
+        credential: z.string().max(200).optional(),
+      }),
+    )
+    .max(5),
+  ttl: z.number().int().min(0),
+});
 
 export const blocksResponseSchema = z.object({ blocked: z.array(riverIdSchema) });

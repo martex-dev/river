@@ -33,6 +33,10 @@ const envSchema = z.object({
   RIVER_ATTACHMENT_DIR: z.string().min(1).default('./data/attachments'),
   /** Largest attachment (after encryption) in MiB. */
   RIVER_MAX_ATTACHMENT_MB: z.coerce.number().int().min(1).max(500).default(25),
+  /** TURN relay URLs for calls (comma-separated), e.g. turn:turn.example.org:3478,turns:turn.example.org:5349 */
+  RIVER_TURN_URLS: z.string().max(2000).optional(),
+  /** coturn "static-auth-secret": the server hands out short-lived TURN credentials signed with it. */
+  RIVER_TURN_SECRET: z.string().min(16).max(256).optional(),
   /** Public https URL of this server; enables HSTS. */
   RIVER_PUBLIC_URL: z.url({ protocol: /^https$/ }).optional(),
 });
@@ -49,6 +53,7 @@ export interface ServerConfig {
   sessionTtlMs: number;
   attachmentDir: string;
   maxAttachmentBytes: number;
+  turn: { urls: string[]; secret: string } | null;
 }
 
 export class ConfigError extends Error {
@@ -81,5 +86,14 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     sessionTtlMs: e.RIVER_SESSION_TTL_HOURS * 60 * 60 * 1000,
     attachmentDir: e.RIVER_ATTACHMENT_DIR,
     maxAttachmentBytes: e.RIVER_MAX_ATTACHMENT_MB * 1024 * 1024,
+    turn:
+      e.RIVER_TURN_URLS && e.RIVER_TURN_SECRET
+        ? {
+            urls: e.RIVER_TURN_URLS.split(',')
+              .map((u) => u.trim())
+              .filter((u) => /^turns?:[^\s]+$/.test(u)),
+            secret: e.RIVER_TURN_SECRET,
+          }
+        : null,
   };
 }

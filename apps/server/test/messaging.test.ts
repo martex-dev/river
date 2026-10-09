@@ -1,8 +1,13 @@
+import { createHmac } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { RiverProtocol, type ProtocolStorage, type StoreKind } from '@river/crypto';
 import { keyBundleResponseSchema, mailboxResponseSchema } from '@river/protocol';
-import type { RiverDatabase } from '../src/db/database.ts';
+import { buildApp } from '../src/app.ts';
+import { loadConfig } from '../src/config.ts';
+import { migrateToLatest, openDatabase, type RiverDatabase } from '../src/db/database.ts';
 import { auth, registerUser, startServer } from './helpers.ts';
 
 let app: FastifyInstance;
@@ -208,5 +213,44 @@ describe('direct messages', () => {
     ] as const) {
       expect((await app.inject({ method, url })).statusCode).toBe(401);
     }
+  });
+});
+
+describe('TURN credentials', () => {
+  it('hands out short-lived coturn credentials only when configured', async () => {
+    ({ app, database } = await startServer());
+    const alice = await client(app);
+    expect((await app.inject({ method: 'GET', url: '/v1/turn', headers: auth(alice.token) })).json()).toEqual(
+      {
+        iceServers: [],
+        ttl: 0,
+      },
+    );
+    expect((await app.inject({ method: 'GET', url: '/v1/turn' })).statusCode).toBe(401);
+  });
+
+  it('signs credentials the way coturn expects (use-auth-secret)', async () => {
+    database = openDatabase('sqlite::memory:');
+    await migrateToLatest(database.db);
+    app = await buildApp({
+      config: loadConfig({
+        RIVER_LOG_LEVEL: 'silent',
+        RIVER_RATE_LIMIT_PER_MINUTE: '10000',
+        RIVER_ATTACHMENT_DIR: join(tmpdir(), `river-blobs-${Math.random().toString(36).slice(2)}`),
+        RIVER_TURN_URLS: 'turn:turn.example.org:3478, turns:turn.example.org:5349, bogus',
+        RIVER_TURN_SECRET: 'a-long-shared-secret-for-coturn',
+      }),
+      database,
+    });
+    const alice = await client(app);
+    const res = (await app.inject({ method: 'GET', url: '/v1/turn', headers: auth(alice.token) })).json();
+    const [server] = res.iceServers;
+    expect(server.urls).toEqual(['turn:turn.example.org:3478', 'turns:turn.example.org:5349']);
+    const [expiry, who] = server.username.split(':');
+    expect(who).toBe(alice.riverId);
+    expect(Number(expiry)).toBeGreaterThan(Date.now() / 1000);
+    expect(server.credential).toBe(
+      createHmac('sha1', 'a-long-shared-secret-for-coturn').update(server.username).digest('base64'),
+    );
   });
 });
