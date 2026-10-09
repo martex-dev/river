@@ -233,6 +233,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   joinVoice: async (channelId, me) => {
     await get().call?.leave();
     const voice = useRiver.getState().settings?.voice;
+    const iceServers = await window.river.voice.iceServers().catch(() => []);
     let streaming = false;
     const onChange = (): void => {
       set({ callVersion: get().callVersion + 1 });
@@ -244,6 +245,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       }
     };
     const call = new VoiceCall(channelId, me, onChange, {
+      iceServers,
       inputDeviceId: voice?.inputDeviceId ?? null,
       noiseSuppression: voice?.noiseSuppression ?? true,
       echoCancellation: voice?.echoCancellation ?? true,

@@ -49,6 +49,12 @@ const api: RiverApi = {
       };
     },
   },
+  backup: {
+    status: () => ipcRenderer.invoke(IPC.backupStatus),
+    phrase: () => ipcRenderer.invoke(IPC.backupPhrase),
+    create: () => ipcRenderer.invoke(IPC.backupCreate),
+    restore: (file, phrase) => ipcRenderer.invoke(IPC.backupRestore, file, phrase),
+  },
   social: {
     action: (action) => ipcRenderer.invoke(IPC.socialAction, action),
     onEvent: (listener) => {
@@ -93,6 +99,7 @@ const api: RiverApi = {
     join: (channelId) => ipcRenderer.invoke(IPC.voiceJoin, channelId),
     leave: () => ipcRenderer.invoke(IPC.voiceLeave),
     signal: (to, channelId, payload) => ipcRenderer.invoke(IPC.voiceSignal, to, channelId, payload),
+    iceServers: () => ipcRenderer.invoke(IPC.voiceIceServers),
     screenSources: () => ipcRenderer.invoke(IPC.screenSources),
     selectScreen: (id) => ipcRenderer.invoke(IPC.screenSelect, id),
   },

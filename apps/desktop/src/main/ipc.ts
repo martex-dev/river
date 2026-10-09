@@ -36,6 +36,8 @@ import { attachmentPointerSchema, type CommunityAction } from '../shared/communi
 import { CommunityError, type CommunityService } from './community/community-service.ts';
 import type { DmService } from './dm/dm-service.ts';
 import type { SocialService } from './social/social-service.ts';
+import type { BackupService } from './backup/backup-service.ts';
+import { BackupError } from '@river/crypto';
 import type { SocialAction } from '../shared/social.ts';
 import type { DmAction, DmEvent } from '../shared/dm.ts';
 import { desktopCapturer } from 'electron';
@@ -56,13 +58,17 @@ export interface IpcDeps {
   community: CommunityService;
   dm: DmService;
   social: SocialService;
+  backup: BackupService;
+  /** After a restore: reconnect and re-introduce ourselves to contacts. */
+  afterRestore(): Promise<void>;
   /** Screen chosen in River's picker for the next screen share. */
   selectScreen(sourceId: string): void;
 }
 
 /** Turns any error into a message that is safe to show. */
 function friendly(err: unknown): string {
-  if (err instanceof CommunityError || err instanceof UserFacingError) return err.message;
+  if (err instanceof CommunityError || err instanceof UserFacingError || err instanceof BackupError)
+    return err.message;
   if (err instanceof z.ZodError) return 'Please check what you entered.';
   return 'Something went wrong. Check your connection and try again.';
 }
@@ -154,6 +160,33 @@ export function registerIpc(deps: IpcDeps): void {
   );
   handle(IPC.communityAction, (_e, action) => result(() => deps.community.action(action as CommunityAction)));
   handle(IPC.dmAction, (_e, action) => result(() => deps.dm.action(action as DmAction)));
+  handle(IPC.backupStatus, () => deps.backup.status());
+  handle(IPC.backupPhrase, () => deps.backup.phrase());
+  handle(IPC.backupCreate, (event) =>
+    result(async () => {
+      const file = deps.backup.create();
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const name = `river-backup-${new Date().toISOString().slice(0, 10)}.riverbackup`;
+      const options = {
+        defaultPath: join(app.getPath('documents'), name),
+        filters: [{ name: 'River backup', extensions: ['riverbackup'] }],
+      };
+      const choice = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+      if (choice.canceled || !choice.filePath) return false;
+      await writeFile(choice.filePath, file);
+      return true;
+    }),
+  );
+  handle(IPC.backupRestore, (_e, file, phrase) =>
+    result(async () => {
+      if (!(file instanceof Uint8Array) || file.byteLength > 1024 * 1024 * 1024) {
+        throw new BackupError('That file is too large to be a River backup.');
+      }
+      deps.backup.restore(file, z.string().max(1000).parse(phrase));
+      await deps.afterRestore();
+      return null;
+    }),
+  );
   handle(IPC.socialAction, (_e, action) => result(() => deps.social.action(action as SocialAction)));
   handle(IPC.profileGet, () => deps.community.profile());
   handle(IPC.attachmentSave, (event, raw) =>
@@ -192,6 +225,7 @@ export function registerIpc(deps: IpcDeps): void {
       return null;
     }),
   );
+  handle(IPC.voiceIceServers, () => deps.community.iceServers());
   handle(IPC.screenSources, async () => {
     const sources = await desktopCapturer.getSources({
       types: ['screen', 'window'],

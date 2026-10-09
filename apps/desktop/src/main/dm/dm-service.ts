@@ -226,6 +226,8 @@ export class DmService {
   private readonly listeners = new Set<(e: DmEvent) => void>();
   private draining = false;
   private socialHandler: ((peer: string, content: SocialContent) => void) | null = null;
+  /** Set after restoring a backup: contacts need new sessions with us. */
+  private reintroduce = false;
 
   constructor(deps: Deps) {
     this.deps = deps;
@@ -321,6 +323,7 @@ export class DmService {
     if (e.t === 'ready') {
       void this.ensurePreKeys()
         .then(() => this.drainMailbox())
+        .then(() => this.reintroduceIfNeeded())
         .catch((err: unknown) =>
           this.deps.log.warn(`Direct messages unavailable: ${(err as Error).message}`),
         );
@@ -343,8 +346,21 @@ export class DmService {
         0,
         Math.min(100, PREKEY_TARGET - Math.min(counts.preKeys, counts.kyberPreKeys)),
       );
-      const upload = this.protocol().generatePreKeys({ oneTime, rotate });
-      await this.deps.community.api('/keys', 'PUT', upload, z.unknown());
+      // A first upload from this install (new, or restored from a backup) replaces whatever
+      // prekeys the server still has for this device: their private halves are not here.
+      const fresh = !uploaded;
+      // One transaction for the hundreds of key writes: separate commits each wait for the
+      // disk and froze the app for seconds on slow machines.
+      const protocol = this.protocol();
+      const upload = this.db().transaction(() =>
+        protocol.generatePreKeys({ oneTime: fresh ? PREKEY_TARGET : oneTime, rotate }),
+      )();
+      await this.deps.community.api(
+        '/keys',
+        'PUT',
+        { ...upload, ...(fresh ? { replaceAll: true } : {}) },
+        z.unknown(),
+      );
       this.setMeta('keysUploaded', this.me());
       if (rotate) this.setMeta('signedAt', String(Date.now()));
     });
@@ -354,6 +370,7 @@ export class DmService {
   async sync(): Promise<void> {
     await this.ensurePreKeys();
     await this.drainMailbox();
+    await this.reintroduceIfNeeded();
   }
 
   private async drainMailbox(): Promise<void> {
@@ -556,6 +573,29 @@ export class DmService {
       default:
         return true;
     }
+  }
+
+  /**
+   * After a restore our old sessions are gone (they are never in backups), so
+   * message every contact once: our new PreKey message gives them a fresh
+   * session with us, and their later messages decrypt again.
+   */
+  afterRestore(): void {
+    this.protocolCache = null;
+    this.reintroduce = true;
+  }
+
+  private async reintroduceIfNeeded(): Promise<void> {
+    if (!this.reintroduce) return;
+    this.reintroduce = false;
+    const peers = new Set<string>(this.friends());
+    for (const g of this.db().prepare(`SELECT members FROM dm_groups WHERE state != 'left'`).all() as Array<{
+      members: string;
+    }>) {
+      for (const m of this.list(g.members)) peers.add(m);
+    }
+    peers.delete(this.me());
+    for (const peer of peers) await this.shareProfile(peer).catch(() => undefined);
   }
 
   // ---- used by SocialService ----------------------------------------------------------------------

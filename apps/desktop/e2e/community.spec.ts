@@ -108,6 +108,15 @@ test('create, invite, join, chat and call between two members', async () => {
   await openMembers(alice);
   await expect(bob.locator('.community__members')).toContainText('Alice');
   await expect(alice.locator('.community__members')).toContainText('Bob');
+  // …and must be closed again before using the chat underneath it.
+  const closeMembers = async (p: typeof alice): Promise<void> => {
+    const narrow = await p.evaluate(() => window.innerWidth < 1100);
+    if (narrow && (await p.locator('.community__members').count()) > 0) {
+      await p.getByRole('button', { name: 'Member list' }).click();
+    }
+  };
+  await closeMembers(bob);
+  await closeMembers(alice);
 
   // Encrypted chat, live in both directions.
   await bob.getByPlaceholder('Message #general').fill('hello from bob');
@@ -227,6 +236,7 @@ test('create, invite, join, chat and call between two members', async () => {
   await alice.getByRole('button', { name: 'Close settings' }).click();
   await openMembers(bob);
   await expect(bob.locator('.community__members')).toContainText('Crew — 1', { timeout: 15_000 });
+  await closeMembers(bob);
   if (process.env.RIVER_SCREENSHOTS) await bob.screenshot({ path: 'test-results/community-members.png' });
 
   // Direct messages (libsignal): Alice messages Bob from his profile card.

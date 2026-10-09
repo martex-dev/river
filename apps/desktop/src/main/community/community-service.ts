@@ -5,6 +5,7 @@ import {
   DEFAULT_EVERYONE,
   Permission,
   attachmentUploadResponseSchema,
+  iceServersResponseSchema,
   bansResponseSchema,
   joinResponseSchema,
   rotateKeyResponseSchema,
@@ -54,6 +55,13 @@ import {
   reactionTag,
   seal,
 } from './sealed.ts';
+
+/** The shape WebRTC expects for STUN/TURN servers. */
+export interface RTCIceServerLike {
+  urls: string[];
+  username?: string;
+  credential?: string;
+}
 
 /** Community keys travel inside libsignal direct messages. */
 export type KeyMessage =
@@ -365,6 +373,20 @@ export class CommunityService {
       epoch: message.epoch,
       key: key.toString('base64'),
     });
+  }
+
+  private iceCache: { servers: RTCIceServerLike[]; until: number } | null = null;
+
+  /** TURN relays from our server (short-lived credentials), cached for half their lifetime. */
+  async iceServers(): Promise<RTCIceServerLike[]> {
+    if (this.iceCache && this.iceCache.until > Date.now()) return this.iceCache.servers;
+    try {
+      const res = await this.call('/turn', 'GET', undefined, iceServersResponseSchema);
+      this.iceCache = { servers: res.iceServers, until: Date.now() + (res.ttl * 1000) / 2 };
+      return res.iceServers;
+    } catch {
+      return [];
+    }
   }
 
   /** Authenticated API call with one re-login on an expired session. */

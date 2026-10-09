@@ -73,6 +73,8 @@ export function channelTransport(channelId: string): CallTransport {
 }
 
 export interface CallOptions {
+  /** Extra STUN/TURN servers (TURN relays from the River server). */
+  iceServers: RTCIceServer[];
   inputDeviceId: string | null;
   noiseSuppression: boolean;
   echoCancellation: boolean;
@@ -126,6 +128,7 @@ export class VoiceCall {
     this.me = me;
     this.onChange = onChange;
     this.options = {
+      iceServers: [],
       inputDeviceId: null,
       noiseSuppression: true,
       echoCancellation: true,
@@ -412,7 +415,10 @@ export class VoiceCall {
   }
 
   private createPeer(id: string): Peer {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS, bundlePolicy: 'max-bundle' });
+    const pc = new RTCPeerConnection({
+      iceServers: [...ICE_SERVERS, ...this.options.iceServers],
+      bundlePolicy: 'max-bundle',
+    });
     const peer: Peer = {
       pc,
       remote: {

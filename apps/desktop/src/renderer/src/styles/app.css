@@ -1118,3 +1118,50 @@ html[data-platform='darwin'] .topbar {
     display: none;
   }
 }
+
+/* ---------- Backup ---------- */
+.backup-step {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 18px 0;
+  padding: 16px;
+  border-radius: var(--radius-m);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+.phrase {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 18px;
+  width: 100%;
+  margin: 6px 0;
+  padding: 14px;
+  list-style: none;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 181, 71, 0.4);
+  background: rgba(4, 8, 16, 0.7);
+  user-select: text;
+}
+.phrase li {
+  display: flex;
+  gap: 8px;
+  font-family: var(--font-mono);
+}
+.phrase__n {
+  width: 22px;
+  text-align: right;
+  color: var(--text-faint);
+}
+.phrase__w {
+  font-weight: 600;
+}
+.restore__phrase {
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border-strong);
+  background: rgba(4, 8, 16, 0.6);
+  color: var(--text);
+  font-family: var(--font-mono);
+}

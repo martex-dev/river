@@ -1,15 +1,17 @@
 import { useState, type ReactElement, type ReactNode } from 'react';
+import { BackupPanel } from '../components/BackupPanel.tsx';
 import type { ReleaseChannel } from '@river/release/channels';
 import type { AccountStatus, ServerCheckResult, UpdateStatus } from '../../../shared/ipc.ts';
 import { serverUrlSchema, type Settings } from '../../../shared/settings.ts';
 import { ExternalIcon } from '../components/Icons.tsx';
 import { useRiver } from '../store.ts';
 
-const TABS = ['updates', 'server', 'appearance', 'notifications', 'about'] as const;
+const TABS = ['updates', 'server', 'backup', 'appearance', 'notifications', 'about'] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   updates: 'Updates',
   server: 'Server',
+  backup: 'Backup',
   appearance: 'Appearance',
   notifications: 'Notifications',
   about: 'About',
@@ -74,6 +76,7 @@ export function SettingsPage(): ReactElement {
             <>
               {tab === 'updates' && <UpdatesPanel settings={settings} />}
               {tab === 'server' && <ServerPanel settings={settings} />}
+              {tab === 'backup' && <BackupPanel />}
               {tab === 'appearance' && <AppearancePanel settings={settings} />}
               {tab === 'notifications' && <NotificationsPanel settings={settings} />}
               {tab === 'about' && <AboutPanel />}

@@ -77,6 +77,7 @@ async function begin(
   if (!me) return false;
   await useCommunity.getState().call?.leave();
   const voice = useRiver.getState().settings?.voice;
+  const iceServers = await window.river.voice.iceServers().catch(() => []);
   const community = useCommunity;
   let wasConnected = false;
   const call = new VoiceCall(
@@ -92,6 +93,7 @@ async function begin(
       }
     },
     {
+      iceServers,
       inputDeviceId: voice?.inputDeviceId ?? null,
       noiseSuppression: voice?.noiseSuppression ?? true,
       echoCancellation: voice?.echoCancellation ?? true,

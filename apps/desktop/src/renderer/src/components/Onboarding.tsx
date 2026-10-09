@@ -3,8 +3,9 @@ import type { IdentityInfo } from '../../../shared/ipc.ts';
 import { ArrowIcon, CheckIcon, LockIcon } from './Icons.tsx';
 import { RiverMark } from './RiverMark.tsx';
 import { IdentityFingerprint } from './IdentityFingerprint.tsx';
+import { RestoreForm } from './BackupPanel.tsx';
 
-type Step = 'welcome' | 'name' | 'creating' | 'done';
+type Step = 'welcome' | 'name' | 'creating' | 'done' | 'restore';
 
 /** First run: create the user's cryptographic identity. No phone number, no e-mail. */
 export function Onboarding(props: {
@@ -73,7 +74,22 @@ export function Onboarding(props: {
             <button className="btn btn--primary lock__submit" onClick={() => setStep('name')}>
               Create my identity <ArrowIcon size={16} />
             </button>
+            <button className="btn btn--link" onClick={() => setStep('restore')}>
+              I already use River — restore from a backup
+            </button>
           </>
+        )}
+
+        {step === 'restore' && (
+          <RestoreForm
+            onBack={() => setStep('welcome')}
+            onRestored={() => {
+              void window.river.identity.get().then((restored) => {
+                if (restored) props.onCreated(restored);
+                props.onFinished();
+              });
+            }}
+          />
         )}
 
         {step === 'name' && (

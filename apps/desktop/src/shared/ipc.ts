@@ -37,11 +37,16 @@ export const IPC = {
   voiceJoin: 'river:voice:join',
   voiceLeave: 'river:voice:leave',
   voiceSignal: 'river:voice:signal',
+  voiceIceServers: 'river:voice:ice-servers',
   screenSources: 'river:voice:screen-sources',
   screenSelect: 'river:voice:screen-select',
   communityEvent: 'river:community:event',
   dmAction: 'river:dm:action',
   socialAction: 'river:social:action',
+  backupStatus: 'river:backup:status',
+  backupPhrase: 'river:backup:phrase',
+  backupCreate: 'river:backup:create',
+  backupRestore: 'river:backup:restore',
   socialEvent: 'river:social:event',
   dmEvent: 'river:dm:event',
   communityAction: 'river:community:action',
@@ -274,6 +279,15 @@ export interface RiverApi {
     connect(): Promise<AccountStatus>;
     onStatus(listener: (status: AccountStatus) => void): () => void;
   };
+  backup: {
+    status(): Promise<{ hasPhrase: boolean; lastBackupAt: string | null }>;
+    /** The 18-word recovery phrase (created on first request). */
+    phrase(): Promise<string[]>;
+    /** Encrypts a backup and asks where to save it. */
+    create(): Promise<Result<boolean>>;
+    /** Fresh installs only: restores from a backup file and its recovery phrase. */
+    restore(file: Uint8Array, phrase: string): Promise<Result<null>>;
+  };
   social: {
     action<A extends SocialAction>(action: A): Promise<Result<SocialActionResult<A>>>;
     onEvent(listener: (event: SocialEvent) => void): () => void;
@@ -302,6 +316,8 @@ export interface RiverApi {
     join(channelId: string): Promise<Result<null>>;
     leave(): Promise<Result<null>>;
     signal(to: string, channelId: string, payload: unknown): Promise<Result<null>>;
+    /** TURN relays offered by the server (may be empty). */
+    iceServers(): Promise<Array<{ urls: string[]; username?: string; credential?: string }>>;
     screenSources(): Promise<ScreenSource[]>;
     selectScreen(sourceId: string): Promise<void>;
   };

@@ -26,6 +26,7 @@ import {
 } from './security.ts';
 import { DmService } from './dm/dm-service.ts';
 import { SocialService } from './social/social-service.ts';
+import { BackupService } from './backup/backup-service.ts';
 import { startMessageNotifications } from './notifications.ts';
 import { SettingsStore } from './settings-store.ts';
 import { electronKeystore } from './storage/electron-keystore.ts';
@@ -83,6 +84,7 @@ async function start(): Promise<void> {
   });
   const dm = new DmService({ db: () => storage.db(), identity, account, community, log });
   const social = new SocialService({ db: () => storage.db(), identity, dm, log });
+  const backup = new BackupService({ db: () => storage.db() });
   // Stories disappear after a day.
   setInterval(
     () => {
@@ -173,6 +175,13 @@ async function start(): Promise<void> {
     community,
     dm,
     social,
+    backup,
+    afterRestore: async () => {
+      dm.afterRestore();
+      await account.connect().catch(() => undefined);
+      community.stop();
+      community.ensureSocket();
+    },
     selectScreen: (id) => {
       chosenScreen = id;
     },
