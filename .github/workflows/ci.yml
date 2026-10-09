@@ -18,7 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17-alpine
+        # Docker Hub rate-limits shared runners; this is the same official image, mirrored.
+        image: public.ecr.aws/docker/library/postgres:17-alpine
         env:
           POSTGRES_USER: river
           POSTGRES_PASSWORD: river-ci-only
@@ -50,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build image
-        run: docker build -f apps/server/Dockerfile -t river-server:ci .
+        run: docker build --build-arg NODE_IMAGE=public.ecr.aws/docker/library/node:24-bookworm-slim -f apps/server/Dockerfile -t river-server:ci .
       - name: Run read-only and check health
         run: |
           docker run -d --name river -p 127.0.0.1:8787:8787 --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true -v river-data:/data river-server:ci

@@ -1,7 +1,9 @@
 # River server image. Build from the repository root:
 #   docker build -f apps/server/Dockerfile -t river-server .
 # Debian (glibc) because libsignal ships prebuilt binaries for glibc only.
-FROM node:24-bookworm-slim AS deps
+# Base image; CI pulls the same official image from AWS's mirror of Docker Hub.
+ARG NODE_IMAGE=node:24-bookworm-slim
+FROM ${NODE_IMAGE} AS deps
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 COPY packages/protocol/package.json packages/protocol/
@@ -12,7 +14,7 @@ COPY apps/desktop/package.json apps/desktop/
 RUN npm ci --omit=dev --workspace @river/server --include-workspace-root=false --ignore-scripts \
   && npm cache clean --force
 
-FROM node:24-bookworm-slim
+FROM ${NODE_IMAGE}
 ENV NODE_ENV=production \
     RIVER_HOST=0.0.0.0 \
     RIVER_PORT=8787 \
