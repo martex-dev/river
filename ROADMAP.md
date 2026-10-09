@@ -39,8 +39,8 @@ apps. Each line is one minor release; patch releases fix things in between.
 | 0.5.0 ✅   | Contacts and encrypted direct messages (libsignal prekeys + sessions, offline mailbox, read receipts), 1:1 calls | done   |
 | 0.6.0 ✅   | Group DMs (sender keys); per-member community keys with rotation when someone is removed                         | done   |
 | 0.7.0 ✅   | Social: encrypted profiles, posts and photos feed, stories for friends, comments and reactions                   | done   |
-| 0.8.0      | Multi-device linking, recovery phrase and encrypted backup                                                       | ⏳     |
-| 0.9.0      | Hardening: TURN relay, message search, accessibility, performance, migrations from every 0.x, security review    | ⏳     |
+| 0.8.0 ✅   | Recovery phrase and encrypted backup/restore; TURN relay for calls (multi-device linking moved to 0.9.0)         | done   |
+| 0.9.0      | Multi-device linking, message search, accessibility, performance, migrations from every 0.x, security review     | ⏳     |
 | 1.0.0      | Stage 1 release                                                                                                  | ⏳     |
 
 1.0.0 is released only when all of the above work, tests pass on all three

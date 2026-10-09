@@ -37,6 +37,8 @@ RIVER_DATABASE_URL=sqlite:/var/lib/river/river.sqlite npm start -w @river/server
 | `RIVER_RATE_LIMIT_PER_MINUTE` | `300`                             | Per-client request limit (in-memory counters)         |
 | `RIVER_PUBLIC_URL`            | —                                 | Public `https://` URL; enables HSTS                   |
 | `RIVER_ATTACHMENT_DIR`        | `./data/attachments`              | Encrypted file blobs (back this up with the database) |
+| `RIVER_TURN_URLS`             | —                                 | TURN relays for calls (see [turn.md](turn.md))        |
+| `RIVER_TURN_SECRET`           | —                                 | coturn `static-auth-secret`                           |
 | `RIVER_MAX_ATTACHMENT_MB`     | `25`                              | Largest encrypted file accepted                       |
 
 Invalid values stop the server at start-up with a list of every problem.

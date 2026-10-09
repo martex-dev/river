@@ -163,11 +163,18 @@ of types are shown inline; everything else is saved only when the user chooses.
   moved aside, not deleted.
 - Planned: media cache encrypted with per-file AES-256-GCM keys stored in the DB.
 
-## 7. Backups and recovery (planned, 0.1.4)
+## 7. Backups and recovery (implemented, 0.8.0)
 
 - No server master key exists. River cannot recover an account without the
-  user's recovery phrase or another linked device.
-- Encrypted backup = AES-256-GCM under `HKDF(recovery_secret, info="river-backup-v1")`.
+  user's recovery phrase and a backup file.
+- Recovery secret: 16 random bytes, shown as 16 Bytewords + 2 checksum words
+  (first two bytes of its SHA-256).
+- Encrypted backup = `"RIVERBK1"` ‖ nonce ‖ AES-256-GCM(gzip(JSON)) under
+  `HKDF-SHA256(recovery_secret, info="river-backup-v1")`, with the magic as
+  associated data. It contains identity and device keys, account, community
+  keys (all epochs), contacts' identity keys and verification marks, groups,
+  message history and posts — not libsignal sessions or prekeys, which are
+  regenerated after a restore (contacts get a fresh session automatically).
 - Device-to-device transfer (Stage 2) uses a libsignal session established by
   scanning a QR code.
 

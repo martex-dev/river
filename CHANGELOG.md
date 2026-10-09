@@ -6,6 +6,29 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**Never lose your account: recovery phrase and encrypted backups. Calls through strict networks.**
+
+### Added
+
+- **Settings → Backup**: an 18-word recovery phrase and an encrypted backup
+  file (AES-256-GCM under a key derived from the phrase) containing your
+  identity, account, community keys, contacts and their safety-number trust,
+  groups, message history, posts and profile. Without the phrase the file is
+  unreadable.
+- **Restore from a backup** on the first screen of a fresh install: pick the
+  file, type the words, and you are back — communities decrypt, history is
+  there, and River re-introduces you to your contacts so conversations
+  continue. Prekeys left on the server by the old install are replaced.
+- **TURN relay support** for voice/video calls and screen sharing through
+  strict firewalls: set `RIVER_TURN_URLS` and `RIVER_TURN_SECRET` on the
+  server (coturn); clients get short-lived credentials automatically. See
+  `docs/deployment/turn.md`.
+
+### Fixed
+
+- Setting up encrypted messaging no longer freezes River for seconds on slow
+  disks (key generation now writes in one transaction).
+
 ## [0.7.0] - 2026-10-09
 
 **Social: posts, photos and stories for your friends.**

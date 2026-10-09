@@ -10,6 +10,13 @@ Milestone definitions: [ROADMAP.md](ROADMAP.md).
 - [x] Desktop: upload (picker, drag & drop, paste), inline images/video/audio, file cards with save, local thumbnails, progress and errors
 - [x] Tests: server never stores plaintext; wrong key/digest rejected; e2e image round trip between two apps
 
+## 0.8.0 — Recovery and reliable calls
+
+- [x] Recovery phrase (Bytewords + checksum) and encrypted backup files; restore on a fresh install
+- [x] Fresh prekeys and automatic re-introduction to contacts after a restore
+- [x] TURN relay support (coturn REST credentials) for calls through strict networks
+- [ ] Automatic scheduled backups to a folder; multi-device linking (0.9)
+
 ## 0.7.0 — Social
 
 - [x] Posts and 24-hour stories to all friends or chosen people (pairwise libsignal fan-out)
