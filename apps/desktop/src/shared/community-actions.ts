@@ -85,6 +85,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       name,
       topic: z.string().max(300).optional(),
       private: z.boolean().optional(),
+      parentId: id.nullable().optional(),
     })
     .strict(),
   z
@@ -98,6 +99,24 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     .strict(),
   z.object({ a: z.literal('moveChannel'), channelId: id, direction }).strict(),
   z.object({ a: z.literal('deleteChannel'), channelId: id }).strict(),
+  z.object({ a: z.literal('createCategory'), communityId: id, name }).strict(),
+  z.object({ a: z.literal('renameCategory'), communityId: id, categoryId: id, name }).strict(),
+  z.object({ a: z.literal('deleteCategory'), communityId: id, categoryId: id }).strict(),
+  /** A drag and drop in the sidebar: only the categories and channels that moved. */
+  z
+    .object({
+      a: z.literal('layout'),
+      communityId: id,
+      categories: z.array(z.object({ id, position: z.number().int().min(0).max(1000) }).strict()).max(100),
+      channels: z
+        .array(
+          z.object({ id, position: z.number().int().min(0).max(1000), parentId: id.nullable() }).strict(),
+        )
+        .max(500),
+    })
+    .strict(),
+  /** You have seen this channel up to now. */
+  z.object({ a: z.literal('markRead'), channelId: id }).strict(),
   z.object({ a: z.literal('createRole'), communityId: id, name, color, permissions }).strict(),
   z
     .object({
@@ -182,6 +201,7 @@ export interface BanView {
 
 interface Results {
   createRole: string;
+  createCategory: string;
   bans: BanView[];
   send: ChatMessage;
   pins: ChatMessage[];

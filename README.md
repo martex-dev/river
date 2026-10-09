@@ -19,10 +19,33 @@
 
 ---
 
-> **River is in early development.** Working today (0.2): encrypted identity and
-> accounts, and **communities** with encrypted text channels and voice/video
-> channels with screen sharing. Direct messages, social feed, files and mobile
-> arrive in the releases listed in the [roadmap](ROADMAP.md).
+> **River 1.0 — the complete desktop platform (Stage 1).** Windows, macOS and Linux.
+> Mobile apps, linked devices and consent-based remote assistance come in Stage 2
+> (see the [roadmap](ROADMAP.md)). River has not had an independent security audit yet.
+
+## What works today
+
+- **Direct messages and group chats** — end-to-end encrypted with the Signal protocol
+  (libsignal: PQXDH + Double Ratchet). Replies, reactions, edits, deletes, read receipts,
+  typing, files, safety numbers and key-change warnings. Groups of up to 32 people.
+- **Voice and video calls** — 1:1 calls from any conversation, encrypted media
+  (DTLS-SRTP) with setup inside encrypted messages; TURN relay support for strict networks.
+- **Communities** — text and voice channels with video and screen sharing, **categories**
+  you can rearrange by drag and drop, roles and permissions with a hierarchy, private
+  channels, kick/ban, pins, mentions, reactions, typing, presence, unread markers,
+  notifications and sounds. All names, profiles and messages are encrypted with the
+  community key, which is replaced when someone is removed.
+- **Social** — posts and 24-hour stories for all your friends or chosen people,
+  comments, reactions, story views and profiles with bios.
+- **Files** — every file and picture shared with you, encrypted with its own key and
+  decrypted only on your computer.
+- **Contacts and calls history**, search in conversations and channels (on your device),
+  an encrypted local database, an 18-word recovery phrase with encrypted backups, and
+  signed automatic updates.
+
+What River does **not** protect against is listed honestly in
+[THREAT_MODEL.md](THREAT_MODEL.md) — for example, the server still sees who messages whom
+and when (no sealed sender yet).
 
 ## What River is
 
@@ -70,10 +93,10 @@ Members just install River and paste your invite link.
 
 ## Stages
 
-| Stage | Version           | Platforms             | Scope                                                                                                  |
-| ----- | ----------------- | --------------------- | ------------------------------------------------------------------------------------------------------ |
-| **1** | 0.0.1 → **1.0.0** | Windows, macOS, Linux | Encrypted messaging, groups, channels, communities, social profiles/posts/stories, media, files, calls |
-| **2** | 1.0.x → **2.0.0** | + iOS, Android        | Everything in Stage 1 on all platforms, multi-device sync, consent-based remote assistance             |
+| Stage    | Version           | Platforms             | Scope                                                                                                  |
+| -------- | ----------------- | --------------------- | ------------------------------------------------------------------------------------------------------ |
+| **1** ✅ | 0.0.1 → **1.0.0** | Windows, macOS, Linux | Encrypted messaging, groups, channels, communities, social profiles/posts/stories, media, files, calls |
+| **2**    | 1.0.x → **2.0.0** | + iOS, Android        | Everything in Stage 1 on all platforms, multi-device sync, consent-based remote assistance             |
 
 ## For developers
 

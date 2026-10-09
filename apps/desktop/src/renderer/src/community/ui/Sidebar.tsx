@@ -1,8 +1,9 @@
-import { useState, type ReactElement } from 'react';
+import { useState, type DragEvent, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, CommunityView } from '../../../../shared/ipc.ts';
 import { useRiver } from '../../store.ts';
 import { useCommunity } from '../store.ts';
+import { ChannelList } from './ChannelList.tsx';
 import {
   Avatar,
   ChevronIcon,
@@ -95,6 +96,17 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
               Create channel
             </MenuItem>
           )}
+          {manageChannels && (
+            <MenuItem
+              icon={<PlusIcon size={16} />}
+              onClick={() => {
+                setMenu(null);
+                s.setModal({ kind: 'category', communityId: community.id });
+              }}
+            >
+              Create category
+            </MenuItem>
+          )}
           {community.ownerId !== me && (
             <MenuItem
               danger
@@ -122,45 +134,33 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
           Invite people
         </button>
       )}
-      <div className="community__channel-scroll">
-        {(['text', 'voice'] as const).map((kind) => (
-          <div key={kind} className="channel-group">
-            <div className="channel-group__head">
-              <span>{kind === 'text' ? 'Text channels' : 'Voice channels'}</span>
-              {manageChannels && (
-                <button
-                  className="channel-group__add"
-                  title={`Create ${kind} channel`}
-                  aria-label={`Create ${kind} channel`}
-                  onClick={() =>
-                    s.setModal({ kind: 'create-channel', communityId: community.id, channelKind: kind })
-                  }
-                >
-                  <PlusIcon size={14} />
-                </button>
-              )}
-            </div>
-            {community.channels
-              .filter((ch) => ch.kind === kind)
-              .map((ch) => (
-                <ChannelRow key={ch.id} community={community} channel={ch} me={me} />
-              ))}
-          </div>
-        ))}
-      </div>
+      <ChannelList community={community} me={me} />
       <VoicePanel community={community} />
       <UserPanel me={me} community={community} />
     </aside>
   );
 }
 
-function ChannelRow(props: { community: CommunityView; channel: ChannelView; me: string }): ReactElement {
+export function ChannelRow(props: {
+  community: CommunityView;
+  channel: ChannelView;
+  me: string;
+  dragging?: boolean;
+  dropClass?: string;
+  dnd?: {
+    draggable: boolean;
+    onDragStart(e: DragEvent): void;
+    onDragOver(e: DragEvent<HTMLElement>): void;
+    onDrop(e: DragEvent): void;
+  };
+}): ReactElement {
   const { community, channel: ch, me } = props;
   const s = useCommunity();
   useCommunity((x) => x.callVersion);
-  const unread = s.unread[ch.id] ?? 0;
   const mentions = s.mentions[ch.id] ?? 0;
   const active = ch.id === s.selectedChannel;
+  // Live count this session, or newer messages than where you stopped last time.
+  const unread = s.unread[ch.id] ?? (ch.unread && !active ? 1 : 0);
   const participants = community.voice[ch.id] ?? [];
   const canManage = can(ch.permissions, Permission.MANAGE_CHANNELS);
   const open = (): void => {
@@ -170,12 +170,15 @@ function ChannelRow(props: { community: CommunityView; channel: ChannelView; me:
     }
   };
   return (
-    <div className="channel-wrap">
+    <div
+      className={`channel-wrap ${props.dragging ? 'is-dragging' : ''} ${props.dropClass ?? ''}`}
+      {...props.dnd}
+    >
       <div className={`channel ${active ? 'is-active' : ''} ${unread ? 'is-unread' : ''}`}>
         <button
           className="channel__open"
           aria-current={active ? 'page' : undefined}
-          aria-label={`${ch.kind === 'text' ? 'Text' : 'Voice'} channel ${ch.name}${unread ? `, ${unread} unread` : ''}`}
+          aria-label={`${ch.kind === 'text' ? 'Text' : 'Voice'} channel ${ch.name}${unread ? ', unread' : ''}`}
           onClick={open}
         >
           <span className="channel__icon">

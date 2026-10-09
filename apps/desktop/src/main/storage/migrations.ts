@@ -219,4 +219,17 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 11,
+    name: '0011_channel_reads',
+    up(db) {
+      // Where you stopped reading each community channel, for unread markers.
+      db.exec(`
+        CREATE TABLE channel_reads (
+          channel_id TEXT PRIMARY KEY,
+          read_at    TEXT NOT NULL
+        ) STRICT;
+      `);
+    },
+  },
 ];

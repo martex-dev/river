@@ -6,6 +6,32 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**Stage 1 is complete: River is a full desktop platform for messages, communities, social, files and calls.**
+
+### Added
+
+- **Channel categories.** Group channels under named categories (names are
+  encrypted like everything else), collapse them, and create channels inside
+  them. People who may manage channels can **drag and drop** channels and
+  categories to reorder them; the whole move is applied at once. Channel
+  settings also has a category picker for keyboard users.
+- **Unread channels are remembered across restarts.** River keeps the time you
+  last read each channel in its encrypted local database and marks channels with
+  newer messages, including ones that arrived while River was closed.
+
+### Changed
+
+- Home shows the finished Stage 1 timeline and what comes in Stage 2.
+- README describes what works in 1.0 and links the threat model.
+
+### Security
+
+- Release signing: the current setup and the plan to move the key to hardware
+  and then to threshold signing are documented in
+  `docs/security/release-signing.md`.
+- The server only sends a category to members who can see at least one channel
+  in it (or may manage channels).
+
 ## [0.9.0] - 2026-10-09
 
 **Hardening before 1.0: history, search, every section built, abuse limits, accessibility.**

@@ -60,8 +60,20 @@ export const channelSchema = z.object({
   name: sealedSchema(SEALED_SMALL),
   position: z.number().int(),
   overwrites: z.array(overwriteSchema).default([]),
+  /** The category the channel sits in, if any (1.0+). */
+  parentId: channelIdSchema.nullable().default(null),
+  /** When the newest message was sent, so clients can mark unread channels (1.0+). */
+  lastMessageAt: z.string().max(40).nullable().default(null),
 });
 export type ChannelWire = z.infer<typeof channelSchema>;
+
+/** A named group of channels in the sidebar (1.0+). */
+export const categorySchema = z.object({
+  id: channelIdSchema,
+  name: sealedSchema(SEALED_SMALL),
+  position: z.number().int(),
+});
+export type CategoryWire = z.infer<typeof categorySchema>;
 
 export const communityRoleSchema = z.object({
   id: roleIdSchema,
@@ -89,6 +101,7 @@ export const communitySchema = z.object({
   channels: z.array(channelSchema),
   members: z.array(memberSchema),
   roles: z.array(communityRoleSchema).default([]),
+  categories: z.array(categorySchema).default([]),
   /** Current community key epoch; content is sealed with the newest key. */
   keyEpoch: z.number().int().min(0).default(0),
   /** A member was removed and the key has not been replaced yet. */
@@ -122,6 +135,7 @@ export const createChannelRequestSchema = z
     kind: channelKindSchema,
     name: sealedSchema(SEALED_SMALL),
     overwrites: z.array(overwriteSchema).max(50).optional(),
+    parentId: channelIdSchema.nullable().optional(),
   })
   .strict();
 
@@ -130,8 +144,37 @@ export const updateChannelRequestSchema = z
     name: sealedSchema(SEALED_SMALL).optional(),
     position: z.number().int().min(0).max(1000).optional(),
     overwrites: z.array(overwriteSchema).max(50).optional(),
+    parentId: channelIdSchema.nullable().optional(),
   })
   .strict();
+
+export const createCategoryRequestSchema = z
+  .object({ id: channelIdSchema, name: sealedSchema(SEALED_SMALL) })
+  .strict();
+export const updateCategoryRequestSchema = z.object({ name: sealedSchema(SEALED_SMALL) }).strict();
+/**
+ * The whole sidebar order in one request, so drag and drop is atomic: every
+ * category and channel the caller can manage, with its new place.
+ */
+export const layoutRequestSchema = z
+  .object({
+    categories: z
+      .array(z.object({ id: channelIdSchema, position: z.number().int().min(0).max(1000) }).strict())
+      .max(100),
+    channels: z
+      .array(
+        z
+          .object({
+            id: channelIdSchema,
+            position: z.number().int().min(0).max(1000),
+            parentId: channelIdSchema.nullable(),
+          })
+          .strict(),
+      )
+      .max(500),
+  })
+  .strict();
+export type LayoutRequest = z.infer<typeof layoutRequestSchema>;
 
 export const createRoleRequestSchema = z
   .object({

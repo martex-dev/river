@@ -3,6 +3,7 @@ import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, CommunityView } from '../../../../shared/ipc.ts';
 import { useCommunity, type Modal as ModalState } from '../store.ts';
 import { HashIcon, Modal, SpeakerIcon, Toggle, XIcon, hex } from './common.tsx';
+import { moveToCategory } from './ChannelList.tsx';
 import { infoOf } from './CommunitySettings.tsx';
 
 export function ConfirmDialog({ modal }: { modal: Extract<ModalState, { kind: 'confirm' }> }): ReactElement {
@@ -78,6 +79,7 @@ export function InviteDialog({ community }: { community: CommunityView }): React
 export function CreateChannelDialog(props: {
   community: CommunityView;
   kind: 'text' | 'voice';
+  parentId?: string;
 }): ReactElement {
   const s = useCommunity();
   const [kind, setKind] = useState(props.kind);
@@ -95,6 +97,7 @@ export function CreateChannelDialog(props: {
       kind,
       name: cleaned.trim(),
       private: isPrivate,
+      ...(props.parentId ? { parentId: props.parentId } : {}),
     });
     setBusy(false);
     s.setModal(null);
@@ -139,6 +142,76 @@ export function CreateChannelDialog(props: {
           </button>
           <button className="btn btn--primary" disabled={busy || cleaned.trim() === ''}>
             Create channel
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Create a category, or rename or delete one. */
+export function CategoryDialog(props: { community: CommunityView; categoryId?: string }): ReactElement {
+  const s = useCommunity();
+  const existing = props.community.categories.find((k) => k.id === props.categoryId);
+  const [name, setName] = useState(existing?.name ?? '');
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: FormEvent): Promise<void> => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setBusy(true);
+    await s.run(
+      existing
+        ? { a: 'renameCategory', communityId: props.community.id, categoryId: existing.id, name: name.trim() }
+        : { a: 'createCategory', communityId: props.community.id, name: name.trim() },
+    );
+    setBusy(false);
+    s.setModal(null);
+  };
+  return (
+    <Modal title={existing ? 'Edit category' : 'Create category'} onClose={() => s.setModal(null)}>
+      <form onSubmit={(e) => void submit(e)} className="create-channel">
+        <label className="textfield">
+          <span className="field__label">Category name</span>
+          <input
+            autoFocus
+            value={name}
+            maxLength={64}
+            placeholder="New category"
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+        <p className="muted small">
+          Category names are encrypted like channel names. Drag channels onto a category to move them.
+        </p>
+        <div className="modal__foot">
+          {existing && (
+            <button
+              type="button"
+              className="btn btn--danger"
+              onClick={() =>
+                s.setModal({
+                  kind: 'confirm',
+                  title: `Delete ${existing.name}`,
+                  body: 'Its channels stay; they just move out of the category.',
+                  action: 'Delete category',
+                  run: async () => {
+                    await s.run({
+                      a: 'deleteCategory',
+                      communityId: props.community.id,
+                      categoryId: existing.id,
+                    });
+                  },
+                })
+              }
+            >
+              Delete
+            </button>
+          )}
+          <button type="button" className="btn btn--link" onClick={() => s.setModal(null)}>
+            Cancel
+          </button>
+          <button className="btn btn--primary" disabled={busy || name.trim() === ''}>
+            {existing ? 'Save' : 'Create category'}
           </button>
         </div>
       </form>
@@ -259,6 +332,22 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
                     placeholder="Let everyone know how to use this channel!"
                     onChange={(e) => setTopic(e.target.value)}
                   />
+                </label>
+              )}
+              {community.categories.length > 0 && (
+                <label className="textfield">
+                  <span className="field__label">Category</span>
+                  <select
+                    value={channel.parentId ?? ''}
+                    onChange={(e) => moveToCategory(community, channel.id, e.target.value || null)}
+                  >
+                    <option value="">No category</option>
+                    {community.categories.map((k) => (
+                      <option key={k.id} value={k.id}>
+                        {k.name}
+                      </option>
+                    ))}
+                  </select>
                 </label>
               )}
               <div className="field__label">Order</div>

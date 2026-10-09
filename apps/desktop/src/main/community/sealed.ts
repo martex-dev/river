@@ -11,6 +11,7 @@ export type SealPurpose =
   | 'meta'
   | 'profile'
   | `channel:${string}`
+  | `category:${string}`
   | `message:${string}`
   | `signal:${string}`
   | `role:${string}`

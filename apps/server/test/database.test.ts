@@ -36,6 +36,7 @@ async function reset(db: Kysely<Database>): Promise<void> {
     'messages',
     'invites',
     'channels',
+    'categories',
     'community_members',
     'communities',
     'sessions',

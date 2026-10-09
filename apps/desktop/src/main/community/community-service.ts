@@ -31,7 +31,9 @@ import {
   type CommunityAction,
   type CommunityActionResult,
 } from '../../shared/community-actions.ts';
+import { layoutChanges, moveChannel as moveInLayout, sidebarGroups } from '../../shared/layout.ts';
 import type {
+  CategoryView,
   ChannelView,
   ChatMessage,
   CommunityEvent,
@@ -160,6 +162,10 @@ export class CommunityService {
   private readonly rawListeners = new Set<(e: ServerEvent) => void>();
   /** Identity keys members published inside sealed community profiles. */
   private readonly profileKeys = new Map<string, string>();
+  /** Where you stopped reading each channel (from the local database). */
+  private reads: Map<string, string> | null = null;
+  /** Newest message time per channel seen live since the last refresh. */
+  private readonly liveLast = new Map<string, string>();
 
   constructor(deps: Deps) {
     this.deps = deps;
@@ -526,7 +532,20 @@ export class CommunityService {
           overwrites: ch.overwrites,
           permissions: permsOf(me, myRoles, ch.overwrites),
           private: !!everyoneOverwrite && (everyoneOverwrite.deny & Permission.VIEW_CHANNELS) !== 0,
+          parentId: ch.parentId,
+          unread: this.isUnread(ch.id, ch.lastMessageAt),
         };
+      })
+      .sort((a, b) => a.position - b.position);
+    const categories: CategoryView[] = c.categories
+      .map((k) => {
+        let name = 'Category';
+        try {
+          name = String(ring.open<{ name: string }>(c.id, `category:${k.id}`, k.name).name).slice(0, 64);
+        } catch {
+          // keep placeholder for undecryptable names
+        }
+        return { id: k.id, name, position: k.position };
       })
       .sort((a, b) => a.position - b.position);
 
@@ -576,11 +595,78 @@ export class CommunityService {
       permissions: permsOf(me, myRoles),
       myRank: topPosition(ownerId, wireRoles, { riverId: me, roles: myRoles }),
       roles,
+      categories,
       channels,
       members,
       voice,
       voiceStates,
     };
+  }
+
+  // ---- Read markers --------------------------------------------------------------------------
+
+  private readMarkers(): Map<string, string> {
+    if (!this.reads) {
+      const rows = this.db().prepare('SELECT channel_id, read_at FROM channel_reads').all() as Array<{
+        channel_id: string;
+        read_at: string;
+      }>;
+      this.reads = new Map(rows.map((r) => [r.channel_id, r.read_at]));
+    }
+    return this.reads;
+  }
+
+  private saveRead(channelId: string, at: string): void {
+    this.readMarkers().set(channelId, at);
+    this.db()
+      .prepare(
+        `INSERT INTO channel_reads (channel_id, read_at) VALUES (?, ?)
+         ON CONFLICT (channel_id) DO UPDATE SET read_at = excluded.read_at`,
+      )
+      .run(channelId, at);
+  }
+
+  private latest(channelId: string, fromServer: string | null): string | null {
+    const live = this.liveLast.get(channelId) ?? null;
+    if (!fromServer) return live;
+    if (!live) return fromServer;
+    return live > fromServer ? live : fromServer;
+  }
+
+  /**
+   * A channel is unread when its newest message is newer than where you
+   * stopped. A channel seen for the first time starts as read, so updating to
+   * this version does not light up every old channel.
+   */
+  private isUnread(channelId: string, lastMessageAt: string | null): boolean {
+    const latest = this.latest(channelId, lastMessageAt);
+    const read = this.readMarkers().get(channelId);
+    if (read === undefined) {
+      this.saveRead(channelId, latest ?? new Date(0).toISOString());
+      return false;
+    }
+    return latest !== null && latest > read;
+  }
+
+  private markRead(channelId: string): void {
+    const wire = [...this.wires.values()].flatMap((w) => w.channels).find((ch) => ch.id === channelId);
+    const latest = this.latest(channelId, wire?.lastMessageAt ?? null);
+    const now = new Date().toISOString();
+    this.saveRead(channelId, latest && latest > now ? latest : now);
+    let changed = false;
+    this.communities = this.communities.map((c) =>
+      c.channels.some((ch) => ch.id === channelId && ch.unread)
+        ? {
+            ...c,
+            channels: c.channels.map((ch) => {
+              if (ch.id !== channelId) return ch;
+              changed = true;
+              return { ...ch, unread: false };
+            }),
+          }
+        : c,
+    );
+    if (changed) this.emit({ t: 'communities', communities: this.communities });
   }
 
   private toChat(communityId: string, m: MessageWire): ChatMessage | null {
@@ -832,6 +918,9 @@ export class CommunityService {
       },
       messageSchema,
     );
+    // Your own message never makes a channel unread for you.
+    if (sent.sentAt > (this.liveLast.get(channelId) ?? '')) this.liveLast.set(channelId, sent.sentAt);
+    this.markRead(channelId);
     return this.toChat(communityId, sent)!;
   }
 
@@ -876,6 +965,7 @@ export class CommunityService {
             kind: act.kind,
             name: seal(key, act.communityId, `channel:${id}`, { name: act.name, topic: act.topic ?? '' }),
             ...(overwrites ? { overwrites } : {}),
+            ...(act.parentId ? { parentId: act.parentId } : {}),
           },
           z.unknown(),
         );
@@ -896,23 +986,69 @@ export class CommunityService {
         break;
       }
       case 'moveChannel': {
+        // One step up or down among its neighbours in the sidebar (same kind when there are no categories).
         const community = this.requireCommunity(this.communityOf(act.channelId));
-        const channel = community.channels.find((c) => c.id === act.channelId)!;
-        const list = community.channels.filter((c) => c.kind === channel.kind);
-        const from = list.indexOf(channel);
-        const to = from + act.direction;
-        if (to < 0 || to >= list.length) break;
-        [list[from], list[to]] = [list[to]!, list[from]!];
-        // Renumber the whole community so positions are unique and stable.
-        const ordered = [...list, ...community.channels.filter((c) => c.kind !== channel.kind)].sort(
-          (a, b) => (a.kind === b.kind ? 0 : a.kind === 'text' ? -1 : 1),
+        const groups = sidebarGroups(community.channels, community.categories);
+        const group = groups.find((g) => g.channels.some((c) => c.id === act.channelId))!;
+        const channel = group.channels.find((c) => c.id === act.channelId)!;
+        const peers = community.categories.length
+          ? group.channels
+          : group.channels.filter((c) => c.kind === channel.kind);
+        const target = peers[peers.indexOf(channel) + act.direction];
+        if (!target) break;
+        const moved = moveInLayout(
+          groups,
+          channel.id,
+          group.category?.id ?? null,
+          group.channels.indexOf(target),
         );
-        for (const [position, ch] of ordered.entries()) {
-          if (ch.position !== position)
-            await this.call(`/channels/${ch.id}`, 'PATCH', { position }, z.unknown());
-        }
+        const change = layoutChanges(moved);
+        if (change.channels.length || change.categories.length)
+          await this.call(`/communities/${community.id}/layout`, 'PUT', change, z.unknown());
         break;
       }
+      case 'createCategory': {
+        const id = randomId();
+        await this.call(
+          `/communities/${act.communityId}/categories`,
+          'POST',
+          {
+            id,
+            name: seal(this.requireKey(act.communityId), act.communityId, `category:${id}`, {
+              name: act.name,
+            }),
+          },
+          z.unknown(),
+        );
+        await this.refresh();
+        return id as CommunityActionResult<A>;
+      }
+      case 'renameCategory':
+        await this.call(
+          `/categories/${act.categoryId}`,
+          'PATCH',
+          {
+            name: seal(this.requireKey(act.communityId), act.communityId, `category:${act.categoryId}`, {
+              name: act.name,
+            }),
+          },
+          z.unknown(),
+        );
+        break;
+      case 'deleteCategory':
+        await this.call(`/categories/${act.categoryId}`, 'DELETE', undefined, z.unknown());
+        break;
+      case 'layout':
+        await this.call(
+          `/communities/${act.communityId}/layout`,
+          'PUT',
+          { categories: act.categories, channels: act.channels },
+          z.unknown(),
+        );
+        break;
+      case 'markRead':
+        this.markRead(act.channelId);
+        return ok;
       case 'deleteChannel':
         await this.call(`/channels/${act.channelId}`, 'DELETE', undefined, z.unknown());
         break;
@@ -1360,6 +1496,8 @@ export class CommunityService {
       case 'message': {
         const isNew = !this.seen.has(e.message.id);
         this.remember(e.message.id);
+        if (e.message.sentAt > (this.liveLast.get(e.message.channelId) ?? ''))
+          this.liveLast.set(e.message.channelId, e.message.sentAt);
         const chat = this.toChat(e.communityId, e.message);
         if (chat) this.emit({ t: 'message', message: chat, isNew });
         return;

@@ -4,26 +4,27 @@ import { NetworkField } from '../components/NetworkField.tsx';
 import { StatusDot } from '../components/StatusDot.tsx';
 import { useRiver } from '../store.ts';
 
+/** What each Stage 1 series actually shipped (see CHANGELOG.md). */
 export const STAGE_ONE = [
   { v: '0.0', name: 'Foundation' },
   { v: '0.1', name: 'Accounts' },
-  { v: '0.2', name: 'Encrypted messages' },
-  { v: '0.3', name: 'Verification' },
-  { v: '0.4', name: 'Groups' },
-  { v: '0.5', name: 'Media & files' },
-  { v: '0.6', name: 'Communities' },
+  { v: '0.2', name: 'Communities' },
+  { v: '0.3', name: 'Roles & moderation' },
+  { v: '0.4', name: 'Encrypted files' },
+  { v: '0.5', name: 'Messages & calls' },
+  { v: '0.6', name: 'Groups & key rotation' },
   { v: '0.7', name: 'Social' },
-  { v: '0.8', name: 'Calls' },
+  { v: '0.8', name: 'Backup & recovery' },
   { v: '0.9', name: 'Hardening' },
   { v: '1.0', name: 'Stage 1' },
 ];
 
-/** The next few milestones, shown on Home. Keep in step with ROADMAP.md. */
+/** The next few milestones (Stage 2), shown on Home. Keep in step with ROADMAP.md. */
 const NEXT = [
-  { v: '0.1.1', name: 'Encrypted profiles' },
-  { v: '0.1.2', name: 'Contacts and requests' },
-  { v: '0.1.3', name: 'Privacy controls' },
-  { v: '0.2.0', name: 'End-to-end encrypted messages' },
+  { v: '1.1', name: 'Protocol freeze and test vectors' },
+  { v: '1.2', name: 'Linked devices' },
+  { v: '1.3', name: 'iOS app' },
+  { v: '1.4', name: 'Android app' },
 ];
 
 /** Index of the current minor series on the Stage 1 timeline (e.g. 0.0.1 → 0). */
@@ -81,7 +82,9 @@ export function HomePage({ reducedMotion }: { reducedMotion: boolean }): ReactEl
           <h2 id="timeline-title" className="card__title">
             Stage 1 — the desktop platform
           </h2>
-          <span className="muted small">Each step ships as a signed update</span>
+          <span className="muted small">
+            {current === STAGE_ONE.length - 1 ? 'Complete · ' : ''}Each step ships as a signed update
+          </span>
         </div>
         <ol className="timeline">
           {STAGE_ONE.map((m, i) => (

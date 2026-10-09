@@ -59,6 +59,14 @@ export interface ChannelsTable {
   kind: string;
   name: string;
   position: number;
+  parent_id: string | null;
+}
+
+export interface CategoriesTable {
+  id: string;
+  community_id: string;
+  name: string;
+  position: number;
 }
 
 export interface InvitesTable {
@@ -174,6 +182,7 @@ export interface Database {
   communities: CommunitiesTable;
   community_members: CommunityMembersTable;
   channels: ChannelsTable;
+  categories: CategoriesTable;
   invites: InvitesTable;
   messages: MessagesTable;
   roles: RolesTable;

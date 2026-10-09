@@ -47,7 +47,9 @@ const injectFetch: typeof fetch = async (input, init) => {
 /** A realtime socket that never connects: these tests exercise the HTTP API only. */
 const deadSocket = (): WebSocket => ({ send() {}, close() {}, readyState: 0 }) as unknown as WebSocket;
 
-async function person(name: string): Promise<{ community: CommunityService; riverId: string }> {
+async function person(
+  name: string,
+): Promise<{ community: CommunityService; riverId: string; restart(): CommunityService }> {
   const local = migrateDatabase(join(dir, `${name}.db`), newDatabaseKey(), CLIENT_MIGRATIONS).db;
   locals.push(local);
   const identity = new IdentityService(() => local);
@@ -59,16 +61,18 @@ async function person(name: string): Promise<{ community: CommunityService; rive
   });
   const created = identity.create(name);
   await account.register(SERVER);
-  const community = new CommunityService({
-    db: () => local,
-    account,
-    identity,
-    requestJson: createRequestJson(injectFetch),
-    requestBytes: createRequestBytes(injectFetch),
-    log: nullLogger,
-    createSocket: deadSocket,
-  });
-  return { community, riverId: created.riverId };
+  // A fresh service over the same local database is what River looks like after a restart.
+  const start = (): CommunityService =>
+    new CommunityService({
+      db: () => local,
+      account,
+      identity,
+      requestJson: createRequestJson(injectFetch),
+      requestBytes: createRequestBytes(injectFetch),
+      log: nullLogger,
+      createSocket: deadSocket,
+    });
+  return { community: start(), riverId: created.riverId, restart: start };
 }
 
 beforeEach(async () => {
@@ -276,5 +280,72 @@ describe('desktop ↔ server communities', () => {
     expect(older.map((m) => m.text)).toContain('the hidden needle');
     const found = await alice.community.action({ a: 'search', communityId: created.id, query: 'NEEDLE' });
     expect(found.map((m) => m.text)).toEqual(['the hidden needle']);
+  });
+
+  it('categories, sidebar moves and unread markers that survive a restart', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Layout');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+
+    // Encrypted category names; a channel created inside one.
+    const gaming = await alice.community.action({
+      a: 'createCategory',
+      communityId: created.id,
+      name: 'Gaming',
+    });
+    await alice.community.action({
+      a: 'createChannel',
+      communityId: created.id,
+      kind: 'voice',
+      name: 'Squad',
+      parentId: gaming,
+    });
+    let view = (await bob.community.refresh())[0]!;
+    expect(view.categories.map((k) => k.name)).toEqual(['Gaming']);
+    expect(view.channels.find((c) => c.name === 'Squad')?.parentId).toBe(gaming);
+    const general = view.channels.find((c) => c.name === 'general')!;
+
+    // Bob may not rearrange; Alice moves general one step down (still uncategorised: past Lounge).
+    const bobMove = await bob.community
+      .action({
+        a: 'layout',
+        communityId: created.id,
+        categories: [],
+        channels: [{ id: general.id, position: 9, parentId: gaming }],
+      })
+      .catch((e: Error) => e);
+    expect(bobMove).toBeInstanceOf(Error);
+    await alice.community.action({ a: 'moveChannel', channelId: general.id, direction: 1 });
+    await alice.community.action({
+      a: 'renameCategory',
+      communityId: created.id,
+      categoryId: gaming,
+      name: 'Games',
+    });
+    view = (await bob.community.refresh())[0]!;
+    expect(view.categories[0]?.name).toBe('Games');
+    const loose = view.channels.filter((c) => c.parentId === null).sort((a, b) => a.position - b.position);
+    expect(loose.map((c) => c.name)).toEqual(['Lounge', 'general']);
+
+    // Unread: old history starts read; a new message marks the channel; reading clears it for good.
+    expect(view.channels.every((c) => !c.unread)).toBe(true);
+    await alice.community.send(general.id, 'anyone up?');
+    expect((await alice.community.refresh())[0]!.channels.find((c) => c.id === general.id)?.unread).toBe(
+      false,
+    );
+    view = (await bob.community.refresh())[0]!;
+    expect(view.channels.find((c) => c.id === general.id)?.unread).toBe(true);
+    const restarted = bob.restart();
+    expect((await restarted.refresh())[0]!.channels.find((c) => c.id === general.id)?.unread).toBe(true);
+    await restarted.action({ a: 'markRead', channelId: general.id });
+    const again = bob.restart();
+    expect((await again.refresh())[0]!.channels.find((c) => c.id === general.id)?.unread).toBe(false);
+
+    // Deleting the category keeps its channels.
+    await alice.community.action({ a: 'deleteCategory', communityId: created.id, categoryId: gaming });
+    view = (await alice.community.refresh())[0]!;
+    expect(view.categories).toEqual([]);
+    expect(view.channels.find((c) => c.name === 'Squad')?.parentId).toBeNull();
   });
 });

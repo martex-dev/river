@@ -155,6 +155,16 @@ export interface ChannelView {
   permissions: number;
   /** @everyone cannot see it. */
   private: boolean;
+  /** The category it sits in, or null. */
+  parentId: string | null;
+  /** Has messages newer than you last read here (kept across restarts). */
+  unread: boolean;
+}
+
+export interface CategoryView {
+  id: string;
+  name: string;
+  position: number;
 }
 
 export interface MemberView {
@@ -187,6 +197,7 @@ export interface CommunityView {
   permissions: number;
   myRank: number;
   roles: RoleView[];
+  categories: CategoryView[];
   channels: ChannelView[];
   members: MemberView[];
   /** voice channel ID → River IDs currently in it */

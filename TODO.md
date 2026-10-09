@@ -3,6 +3,20 @@
 Ordered by priority. The top unchecked item is the next thing to build.
 Milestone definitions: [ROADMAP.md](ROADMAP.md).
 
+## 1.0.0 — Stage 1 release
+
+- [x] Channel categories (encrypted names), drag-and-drop ordering of channels and categories, collapsible categories
+- [x] Unread markers that survive restarts (last-read times kept in the local encrypted database)
+- [x] Release-key hardening plan (docs/security/release-signing.md); the steps themselves need the maintainer
+- [x] README, Home and docs describe the finished Stage 1
+
+## 1.0.x — Stabilisation (next)
+
+- [ ] Fixes from 1.0 feedback
+- [ ] Post-install health check: detect a crash loop after an update and pause auto-install
+- [ ] Persist mention counts across restarts; threads in channels
+- [ ] Sealed sender for direct messages
+
 ## 0.4.0 — Encrypted attachments
 
 - [x] Crypto: Signal attachment format (AES-256-CBC + HMAC-SHA256, 64-byte random key, SHA-256 digest) in `packages/crypto`, with tamper tests
@@ -54,7 +68,7 @@ Milestone definitions: [ROADMAP.md](ROADMAP.md).
 - [x] Desktop notifications (privacy setting already exists), unread badges (0.3.0)
 - [ ] Direct messages and friends (libsignal 1:1 sessions)
 - [ ] Global push-to-talk (outside the focused window) — needs a key-up capable hook
-- [ ] Persist unread state across restarts; drag-and-drop channel/role ordering; categories
+- [x] Persist unread state across restarts; drag-and-drop channel ordering; categories (1.0.0)
 - [ ] Stable community address (named tunnel or hosted server) — needs a maintainer decision
 - [ ] Multiple servers per client
 
@@ -79,4 +93,4 @@ Milestone definitions: [ROADMAP.md](ROADMAP.md).
 - [ ] Post-install health check: detect crash loop after an update and pause auto-install
 - [ ] `dev-app-update.yml` for local updater testing
 - [ ] Bundle spellcheck dictionaries (Chromium's Linux spellchecker is disabled for privacy)
-- [ ] Release-key hardening plan (hardware key / threshold) — before 1.0.0
+- [x] Release-key hardening plan (hardware key / threshold) — docs/security/release-signing.md

@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-09 · Current version: **0.9.0** · Stage 1 · Next: per-member keys, DMs, TURN/SFU_
+_Last updated: 2026-10-09 · Current version: **1.0.0** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
 
 ## Complete
 
@@ -24,6 +24,7 @@ _Last updated: 2026-10-09 · Current version: **0.9.0** · Stage 1 · Next: per-
 | Groups & key rotation | Group conversations (pairwise libsignal, ≤ 32), admins, requests; community key epochs rotated on removal and delivered over libsignal; key requests with join proof              | `tests/integration/dm.test.ts`, `tests/integration/epochs.test.ts`, `communities.test.ts`, e2e                    |
 | Social                | Posts and 24-hour stories to friends or chosen people, comments/reactions relayed by the author, story views, profiles with bios                                                  | `tests/integration/dm.test.ts`, e2e                                                                               |
 | Backup & recovery     | 18-word recovery phrase, encrypted backup file, restore on a fresh install with automatic re-introduction; TURN relay support for calls                                           | `packages/crypto/test/backup.test.ts`, `tests/integration/backup.test.ts`, `apps/server/test/messaging.test.ts`   |
+| Categories & unread   | Encrypted channel categories, drag-and-drop ordering (one atomic layout request), collapsible categories, unread markers kept across restarts                                     | `communities.test.ts`, `layout.test.ts`, `tests/integration/community.test.ts`, e2e                               |
 | Hardening             | Channel history paging, on-device search, Contacts/Files/Calls sections, abuse limits, upgrade tests from every release, WCAG AA audits, pre-1.0 security review                  | `upgrades.test.ts`, `messaging.test.ts`, `e2e/a11y.spec.ts`, e2e                                                  |
 | CI/CD                 | CI (lint, format, typecheck, unit, e2e on 3 OSes, audit), CodeQL, Dependabot, tag-driven signed release pipeline                                                                  | —                                                                                                                 |
 
@@ -46,7 +47,8 @@ _Last updated: 2026-10-09 · Current version: **0.9.0** · Stage 1 · Next: per-
   join and read; removal rotates the key for future content only, and there is
   no per-message forward secrecy inside communities (CRYPTOGRAPHY.md §4a).
 - Release signing key lives in a GitHub Actions secret (plus an offline backup
-  held by the maintainer). Planned hardening before 1.0.0.
+  held by the maintainer). Hardening plan: docs/security/release-signing.md
+  (first steps need the maintainer).
 - No Authenticode / Apple notarization (user-facing warnings on first install).
 - No independent audit.
 - Dependabot alert #1 (`sprintf-js`, moderate) is in build tooling only
@@ -54,4 +56,4 @@ _Last updated: 2026-10-09 · Current version: **0.9.0** · Stage 1 · Next: per-
 
 ## Next
 
-See [TODO.md](TODO.md). Next milestone: **0.1.1 — Encrypted profiles**. Public use needs a decision on server hosting (see ROADMAP open decisions); until then people self-host or use a local server.
+See [TODO.md](TODO.md). Stage 1 is complete with 1.0.0. Next: **1.0.x stabilisation**, then **1.1 — protocol freeze** and **1.2 — linked devices**. Public use needs a decision on a stable server address (see ROADMAP open decisions); until then people self-host or use the maintainer's tunnel.

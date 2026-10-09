@@ -6,6 +6,7 @@ import { CommunitySettings } from '../community/ui/CommunitySettings.tsx';
 import {
   ChannelSettings,
   ConfirmDialog,
+  CategoryDialog,
   CreateChannelDialog,
   InviteDialog,
 } from '../community/ui/Dialogs.tsx';
@@ -33,6 +34,7 @@ export function CommunitiesPage(): ReactElement {
     const onFocus = (): void => {
       const ch = useCommunity.getState().selectedChannel;
       if (!ch) return;
+      void window.river.community.action({ a: 'markRead', channelId: ch });
       const { [ch]: _u, ...unread } = useCommunity.getState().unread;
       const { [ch]: _m, ...mentions } = useCommunity.getState().mentions;
       useCommunity.setState({ unread, mentions });
@@ -61,7 +63,9 @@ export function CommunitiesPage(): ReactElement {
     <div className={`community ${s.showMembers && channel?.kind === 'text' ? '' : 'community--no-members'}`}>
       <nav className="community__servers" aria-label="Your communities">
         {s.communities.map((c) => {
-          const unread = c.channels.some((ch) => (s.unread[ch.id] ?? 0) > 0);
+          const unread = c.channels.some(
+            (ch) => (s.unread[ch.id] ?? 0) > 0 || (ch.unread && ch.id !== s.selectedChannel),
+          );
           const mentions = c.channels.reduce((n, ch) => n + (s.mentions[ch.id] ?? 0), 0);
           return (
             <div
@@ -145,7 +149,13 @@ function Modals({ me }: { me: string }): ReactElement | null {
     }
     case 'create-channel': {
       const c = communityById(modal.communityId);
-      return c ? <CreateChannelDialog community={c} kind={modal.channelKind} /> : null;
+      return c ? (
+        <CreateChannelDialog community={c} kind={modal.channelKind} parentId={modal.parentId} />
+      ) : null;
+    }
+    case 'category': {
+      const c = communityById(modal.communityId);
+      return c ? <CategoryDialog community={c} categoryId={modal.categoryId} /> : null;
     }
     case 'community-settings': {
       const c = communityById(modal.communityId);

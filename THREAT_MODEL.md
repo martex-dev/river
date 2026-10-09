@@ -99,4 +99,6 @@ River does **not** claim to defend against:
   own Ed25519 update signatures still protect the update path.
 - **Release signing key** is held as a GitHub Actions secret. Compromise of the
   maintainer's GitHub account plus that secret would allow a malicious update.
-  Planned: move to a hardware-backed or threshold signing process before 1.0.0.
+  The plan to move to a hardware key and then threshold signing is in
+  [docs/security/release-signing.md](docs/security/release-signing.md); its
+  first steps need the maintainer (repository settings and a hardware key).

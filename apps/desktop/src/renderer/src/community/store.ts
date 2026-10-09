@@ -8,7 +8,8 @@ import { VoiceCall } from './voice.ts';
 export type Modal =
   | { kind: 'community-settings'; communityId: string; tab?: CommunityTab }
   | { kind: 'channel-settings'; channelId: string }
-  | { kind: 'create-channel'; communityId: string; channelKind: 'text' | 'voice' }
+  | { kind: 'create-channel'; communityId: string; channelKind: 'text' | 'voice'; parentId?: string }
+  | { kind: 'category'; communityId: string; categoryId?: string }
   | { kind: 'invite'; communityId: string }
   | { kind: 'user-settings'; tab?: UserTab }
   | { kind: 'confirm'; title: string; body: string; action: string; run: () => Promise<void> };
@@ -63,6 +64,10 @@ interface CommunityState {
 }
 
 let toastTimer: number | undefined;
+
+/** Remembers (on this device, encrypted) that a channel was read up to now. */
+const markRead = (channelId: string): Promise<unknown> =>
+  window.river.community.action({ a: 'markRead', channelId }).catch(() => undefined);
 
 export const useCommunity = create<CommunityState>((set, get) => ({
   loaded: false,
@@ -140,6 +145,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
           get().selectedChannel === m.channelId &&
           useRiver.getState().section === 'communities' &&
           document.hasFocus();
+        if (viewing) void markRead(m.channelId);
         if (!viewing) {
           set({ unread: { ...get().unread, [m.channelId]: (get().unread[m.channelId] ?? 0) + 1 } });
           if (m.mentionsMe) {
@@ -236,6 +242,10 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   },
 
   selectChannel: (channelId) => {
+    // Leaving a channel and opening one both count as reading them up to now.
+    const previous = get().selectedChannel;
+    if (previous && previous !== channelId) void markRead(previous);
+    void markRead(channelId);
     const { [channelId]: _u, ...unread } = get().unread;
     const { [channelId]: _m, ...mentions } = get().mentions;
     set({ selectedChannel: channelId, unread, mentions, replyTo: null, editing: null, showPins: false });

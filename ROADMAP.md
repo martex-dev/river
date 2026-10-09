@@ -41,7 +41,7 @@ apps. Each line is one minor release; patch releases fix things in between.
 | 0.7.0 ✅   | Social: encrypted profiles, posts and photos feed, stories for friends, comments and reactions                   | done   |
 | 0.8.0 ✅   | Recovery phrase and encrypted backup/restore; TURN relay for calls (multi-device linking moved to Stage 2)       | done   |
 | 0.9.0 ✅   | Hardening: history and search, Contacts/Files/Calls, abuse limits, accessibility, upgrade tests, security review | done   |
-| 1.0.0      | Stage 1 release                                                                                                  | ⏳     |
+| 1.0.0 ✅   | Stage 1 release: channel categories with drag and drop, unread markers across restarts, release-signing plan     | done   |
 
 1.0.0 is released only when all of the above work, tests pass on all three
 desktop platforms, and no critical security issue is open.
@@ -89,4 +89,5 @@ delivered to installed clients through the signed update channel.
 | -------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Public server hosting            | 0.1.0                                                                       | Messaging needs a reachable server. Options: maintainer-hosted instance, community instances, or self-host only. River works with any of them (server URL is configurable). |
 | Apple Developer ID ($99/yr)      | before relying on macOS auto-install; required for iOS App Store/TestFlight | Without it: macOS gets notify-and-download updates; iOS limited to sideloading/AltStore/EU marketplaces                                                                     |
+| Release-key hardening            | 1.1.x                                                                       | Protected `release` environment with manual approval, then a hardware security key for signing. See docs/security/release-signing.md                                        |
 | Windows code-signing certificate | optional                                                                    | Removes SmartScreen warning; River's own update signatures already protect updates                                                                                          |

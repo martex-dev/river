@@ -2839,3 +2839,97 @@ input.switch:disabled {
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+/* ---------- Categories and drag and drop ---------- */
+.category__head {
+  gap: 4px;
+}
+.category__toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.category__toggle:hover {
+  color: var(--text-dim);
+}
+.category__toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.category__chevron {
+  display: inline-grid;
+  place-items: center;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.category__toggle.is-collapsed .category__chevron {
+  transform: rotate(-90deg);
+}
+.category__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.category__tools {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--dur-fast);
+}
+.category__head:hover .category__tools,
+.category__head:focus-within .category__tools {
+  opacity: 1;
+}
+.channel-wrap[draggable='true'],
+.category__head[draggable='true'] {
+  cursor: grab;
+}
+.channel-wrap.is-dragging,
+.channel-group.is-dragging {
+  opacity: 0.45;
+}
+.channel-wrap.is-drop-before,
+.category__head.is-drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.channel-wrap.is-drop-after,
+.category__head.is-drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.category__head.is-drop-into {
+  border-radius: 6px;
+  background: rgba(79, 227, 209, 0.12);
+  color: var(--text);
+}
+.channel-drop {
+  margin: 6px 0 0;
+  padding: 8px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-align: center;
+  animation: pop-in var(--dur) var(--ease-out);
+}
+.channel-drop.is-over {
+  border-color: var(--accent);
+  color: var(--text);
+}
+@media (prefers-reduced-motion: reduce) {
+  .category__chevron,
+  .channel-drop {
+    transition: none;
+    animation: none;
+  }
+}

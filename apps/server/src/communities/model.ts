@@ -17,6 +17,13 @@ export interface ChannelModel {
   name: string;
   position: number;
   overwrites: OverwriteWire[];
+  parentId: string | null;
+}
+
+export interface CategoryModel {
+  id: string;
+  name: string;
+  position: number;
 }
 
 export interface MemberModel {
@@ -35,6 +42,7 @@ export class CommunityModel {
   readonly rotationNeeded: boolean;
   readonly roles: RoleWire[];
   readonly channels: ChannelModel[];
+  readonly categories: CategoryModel[];
   readonly members: MemberModel[];
 
   constructor(init: {
@@ -45,6 +53,7 @@ export class CommunityModel {
     rotationNeeded: boolean;
     roles: RoleWire[];
     channels: ChannelModel[];
+    categories?: CategoryModel[];
     members: MemberModel[];
   }) {
     this.id = init.id;
@@ -54,6 +63,7 @@ export class CommunityModel {
     this.rotationNeeded = init.rotationNeeded;
     this.roles = init.roles;
     this.channels = init.channels;
+    this.categories = init.categories ?? [];
     this.members = init.members;
   }
 
@@ -68,6 +78,10 @@ export class CommunityModel {
 
   channel(id: string): ChannelModel | undefined {
     return this.channels.find((c) => c.id === id);
+  }
+
+  category(id: string): CategoryModel | undefined {
+    return this.categories.find((c) => c.id === id);
   }
 
   role(id: string): RoleWire | undefined {
@@ -111,7 +125,13 @@ export class CommunityModel {
   }
 
   /** The community as one member sees it: only channels they may view. */
-  wireFor(riverId: string, online: (id: string) => boolean): CommunityWire {
+  wireFor(
+    riverId: string,
+    online: (id: string) => boolean,
+    last: ReadonlyMap<string, string> = new Map(),
+  ): CommunityWire {
+    const visible = this.channels.filter((c) => this.can(riverId, Permission.VIEW_CHANNELS, c.id));
+    const manager = this.can(riverId, Permission.MANAGE_CHANNELS);
     return {
       id: this.id,
       meta: this.meta,
@@ -119,15 +139,22 @@ export class CommunityModel {
       keyEpoch: this.keyEpoch,
       rotationNeeded: this.rotationNeeded,
       roles: this.roles,
-      channels: this.channels
-        .filter((c) => this.can(riverId, Permission.VIEW_CHANNELS, c.id))
-        .map((c) => ({
-          id: c.id,
-          kind: c.kind,
-          name: c.name,
-          position: c.position,
-          overwrites: c.overwrites,
-        })),
+      channels: visible.map((c) => ({
+        id: c.id,
+        kind: c.kind,
+        name: c.name,
+        position: c.position,
+        overwrites: c.overwrites,
+        parentId: c.parentId,
+        lastMessageAt: last.get(c.id) ?? null,
+      })),
+      // A category whose channels are all hidden from you stays hidden too.
+      categories: this.categories.filter(
+        (k) =>
+          manager ||
+          visible.some((c) => c.parentId === k.id) ||
+          !this.channels.some((c) => c.parentId === k.id),
+      ),
       members: this.members.map((m) => ({
         riverId: m.riverId,
         role: m.legacyRole,
@@ -146,7 +173,7 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
     .where('id', '=', id)
     .executeTakeFirst();
   if (!c) return null;
-  const [roles, channels, overwrites, members, memberRoles] = await Promise.all([
+  const [roles, channels, overwrites, members, memberRoles, categories] = await Promise.all([
     db.selectFrom('roles').selectAll().where('community_id', '=', id).orderBy('position').execute(),
     db.selectFrom('channels').selectAll().where('community_id', '=', id).orderBy('position').execute(),
     db
@@ -162,6 +189,7 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
       .execute(),
     db.selectFrom('community_members').selectAll().where('community_id', '=', id).execute(),
     db.selectFrom('member_roles').selectAll().where('community_id', '=', id).execute(),
+    db.selectFrom('categories').selectAll().where('community_id', '=', id).orderBy('position').execute(),
   ]);
   return new CommunityModel({
     id: c.id,
@@ -184,7 +212,9 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
       overwrites: overwrites
         .filter((o) => o.channel_id === ch.id)
         .map((o) => ({ roleId: o.role_id, allow: o.allow, deny: o.deny })),
+      parentId: ch.parent_id,
     })),
+    categories: categories.map((k) => ({ id: k.id, name: k.name, position: k.position })),
     members: members.map((m) => ({
       riverId: m.river_id,
       legacyRole: m.role as 'owner' | 'admin' | 'member',
@@ -192,6 +222,21 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
       profile: m.profile,
     })),
   });
+}
+
+/** When the newest message in each channel was sent (for unread markers). */
+export async function lastMessageTimes(
+  db: Kysely<Database>,
+  channelIds: string[],
+): Promise<Map<string, string>> {
+  if (channelIds.length === 0) return new Map();
+  const rows = await db
+    .selectFrom('messages')
+    .select((eb) => ['channel_id', eb.fn.max('sent_at').as('last')])
+    .where('channel_id', 'in', channelIds)
+    .groupBy('channel_id')
+    .execute();
+  return new Map(rows.map((r) => [r.channel_id, String(r.last)]));
 }
 
 export async function communityOfChannel(db: Kysely<Database>, channelId: string): Promise<string | null> {

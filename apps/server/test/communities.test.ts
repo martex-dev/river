@@ -153,6 +153,13 @@ describe('communities', () => {
     });
     expect(list.json().messages).toHaveLength(1);
     expect(list.json().messages[0].body).toBe(body);
+    // The community list says when each channel last had a message (for unread markers).
+    const listed = communitySchema.parse(
+      (await a.inject({ method: 'GET', url: '/v1/communities', headers: auth(owner.token) })).json()
+        .communities[0],
+    );
+    expect(listed.channels.find((c) => c.id === text)?.lastMessageAt).toBe(list.json().messages[0].sentAt);
+    expect(listed.channels.find((c) => c.id !== text)?.lastMessageAt).toBeNull();
   });
 
   it('non-members can neither read, post nor list', async () => {
@@ -509,6 +516,89 @@ describe('communities', () => {
         (await a.inject({ method: 'GET', url: '/v1/communities', headers: auth(owner.token) })).json()
           .communities,
       ).toEqual([]);
+    });
+
+    it('categories group channels; layout moves them atomically; hidden channels hide their category', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text, voice } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const cat = id();
+      const secretCat = id();
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/categories`, member.token, {
+          id: cat,
+          name: sealed(),
+        }),
+      ).toBe(403);
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/categories`, owner.token, {
+          id: cat,
+          name: sealed(),
+        }),
+      ).toBe(201);
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/categories`, owner.token, {
+          id: secretCat,
+          name: sealed(),
+        }),
+      ).toBe(201);
+      // A private channel inside the second category: @everyone cannot view it.
+      const secret = id();
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/channels`, owner.token, {
+          id: secret,
+          kind: 'text',
+          name: sealed(),
+          parentId: secretCat,
+          overwrites: [{ roleId: cid, allow: 0, deny: Permission.VIEW_CHANNELS }],
+        }),
+      ).toBe(201);
+      // Unknown category is refused.
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/channels`, owner.token, {
+          id: id(),
+          kind: 'text',
+          name: sealed(),
+          parentId: id(),
+        }),
+      ).toBe(400);
+
+      const layout = {
+        categories: [
+          { id: secretCat, position: 0 },
+          { id: cat, position: 1 },
+        ],
+        channels: [
+          { id: voice, position: 0, parentId: cat },
+          { id: text, position: 1, parentId: cat },
+        ],
+      };
+      expect(await status(a, 'PUT', `/v1/communities/${cid}/layout`, member.token, layout)).toBe(403);
+      expect(await status(a, 'PUT', `/v1/communities/${cid}/layout`, owner.token, layout)).toBe(200);
+      expect(
+        await status(a, 'PUT', `/v1/communities/${cid}/layout`, owner.token, {
+          categories: [],
+          channels: [{ id: text, position: 0, parentId: id() }],
+        }),
+      ).toBe(400);
+
+      const mine = await fetchCommunity(a, owner.token, cid);
+      expect(mine.categories.map((k) => k.id)).toEqual([secretCat, cat]);
+      expect(mine.channels.find((c) => c.id === voice)).toMatchObject({ parentId: cat, position: 0 });
+      expect(mine.channels.find((c) => c.id === text)).toMatchObject({ parentId: cat, position: 1 });
+
+      const theirs = await fetchCommunity(a, member.token, cid);
+      expect(theirs.channels.map((c) => c.id)).not.toContain(secret);
+      expect(theirs.categories.map((k) => k.id)).toEqual([cat]);
+
+      // Deleting a category leaves its channels uncategorised.
+      expect(await status(a, 'DELETE', `/v1/categories/${cat}`, member.token)).toBe(403);
+      expect(await status(a, 'PATCH', `/v1/categories/${cat}`, owner.token, { name: sealed() })).toBe(200);
+      expect(await status(a, 'DELETE', `/v1/categories/${cat}`, owner.token)).toBe(200);
+      const after = await fetchCommunity(a, owner.token, cid);
+      expect(after.categories.map((k) => k.id)).toEqual([secretCat]);
+      expect(after.channels.find((c) => c.id === text)?.parentId).toBeNull();
     });
   });
   describe('attachments', () => {

@@ -242,6 +242,24 @@ test('create, invite, join, chat and call between two members', async () => {
   await closeMembers(bob);
   if (process.env.RIVER_SCREENSHOTS) await bob.screenshot({ path: 'test-results/community-members.png' });
 
+  // Categories: Alice groups a new channel under one; Bob sees the (encrypted) category.
+  await alice.locator('.community__title').click();
+  await alice.getByRole('menuitem', { name: 'Create category' }).click();
+  await alice.getByLabel('Category name').fill('Hangout');
+  await alice.getByRole('button', { name: 'Create category' }).click();
+  await alice.getByRole('button', { name: 'Create channel in Hangout' }).click();
+  await alice.getByLabel('Channel name').fill('memes');
+  await alice.getByRole('button', { name: 'Create channel', exact: true }).click();
+  await expect(bob.getByRole('group', { name: 'Category Hangout' })).toContainText('memes', {
+    timeout: 15_000,
+  });
+  await bob
+    .getByRole('group', { name: 'Category Hangout' })
+    .getByRole('button', { name: 'Hangout', exact: true })
+    .click();
+  await expect(bob.getByRole('group', { name: 'Category Hangout' })).not.toContainText('memes');
+  await auditA11y(alice, 'Channel list with categories');
+
   // Direct messages (libsignal): Alice messages Bob from his profile card.
   await openMembers(alice);
   await alice.locator('.community__members .member', { hasText: 'Bob' }).click();

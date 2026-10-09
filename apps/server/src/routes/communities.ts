@@ -8,12 +8,14 @@ import {
   channelIdSchema,
   clientEventSchema,
   communityIdSchema,
+  createCategoryRequestSchema,
   createChannelRequestSchema,
   createCommunityRequestSchema,
   createInviteRequestSchema,
   createRoleRequestSchema,
   editMessageRequestSchema,
   joinRequestSchema,
+  layoutRequestSchema,
   memberRolesRequestSchema,
   messageIdSchema,
   profileRequestSchema,
@@ -23,6 +25,7 @@ import {
   roleIdSchema,
   rotateKeyRequestSchema,
   sendMessageRequestSchema,
+  updateCategoryRequestSchema,
   updateChannelRequestSchema,
   updateCommunityRequestSchema,
   updateRoleRequestSchema,
@@ -31,7 +34,7 @@ import {
 import { authenticate } from '../accounts/auth-store.ts';
 import type { Hub, HubSocket } from '../communities/hub.ts';
 import type { CommunityModel } from '../communities/model.ts';
-import { communityOfChannel, loadCommunity, loadMessages } from '../communities/model.ts';
+import { communityOfChannel, lastMessageTimes, loadCommunity, loadMessages } from '../communities/model.ts';
 import type { ServerConfig } from '../config.ts';
 import { HttpError } from '../http-error.ts';
 import { linkAttachments } from './attachments.ts';
@@ -41,6 +44,7 @@ const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const INVITE_MAX_USES = 100;
 const MAX_CHANNELS = 100;
 const MAX_ROLES = 100;
+const MAX_CATEGORIES = 50;
 const PAGE = 100;
 /** Realtime events per second a client may send on average, and the burst allowed. */
 const SOCKET_RATE = 40;
@@ -171,11 +175,15 @@ export async function registerCommunityRoutes(
       .select('community_id')
       .where('river_id', '=', me(request))
       .execute();
-    const models = await Promise.all(rows.map((r) => loadCommunity(db, r.community_id)));
+    const models = (await Promise.all(rows.map((r) => loadCommunity(db, r.community_id)))).filter(
+      (m): m is CommunityModel => m !== null,
+    );
+    const last = await lastMessageTimes(
+      db,
+      models.flatMap((m) => m.channels.map((c) => c.id)),
+    );
     return {
-      communities: models
-        .filter((m): m is CommunityModel => m !== null)
-        .map((m) => m.wireFor(me(request), (id) => hub.isOnline(id))),
+      communities: models.map((m) => m.wireFor(me(request), (id) => hub.isOnline(id), last)),
     };
   });
 
@@ -283,12 +291,21 @@ export async function registerCommunityRoutes(
       if (!model.can(me(request), Permission.MANAGE_CHANNELS)) throw forbidden();
       const req = parse(createChannelRequestSchema, request.body);
       if (model.channels.length >= MAX_CHANNELS) throw bad('Too many channels');
+      if (req.parentId && !model.category(req.parentId)) throw bad('Unknown category');
+      const parentId = req.parentId ?? null;
       const position = model.channels.length;
       try {
         await db.transaction().execute(async (trx) => {
           await trx
             .insertInto('channels')
-            .values({ id: req.id, community_id: model.id, kind: req.kind, name: req.name, position })
+            .values({
+              id: req.id,
+              community_id: model.id,
+              kind: req.kind,
+              name: req.name,
+              position,
+              parent_id: parentId,
+            })
             .execute();
           for (const o of req.overwrites ?? []) {
             if (!model.role(o.roleId)) throw bad('Unknown role');
@@ -303,9 +320,14 @@ export async function registerCommunityRoutes(
         throw new HttpError(409, 'conflict', 'Channel ID already exists');
       }
       changed(model);
-      return reply
-        .code(201)
-        .send({ id: req.id, kind: req.kind, name: req.name, position, overwrites: req.overwrites ?? [] });
+      return reply.code(201).send({
+        id: req.id,
+        kind: req.kind,
+        name: req.name,
+        position,
+        overwrites: req.overwrites ?? [],
+        parentId,
+      });
     },
   );
 
@@ -313,13 +335,15 @@ export async function registerCommunityRoutes(
     const { model, channelId } = await channelCommunity(request.params.id, me(request));
     if (!model.can(me(request), Permission.MANAGE_CHANNELS, channelId)) throw forbidden();
     const req = parse(updateChannelRequestSchema, request.body);
+    if (req.parentId && !model.category(req.parentId)) throw bad('Unknown category');
     await db.transaction().execute(async (trx) => {
-      if (req.name !== undefined || req.position !== undefined) {
+      if (req.name !== undefined || req.position !== undefined || req.parentId !== undefined) {
         await trx
           .updateTable('channels')
           .set({
             ...(req.name !== undefined ? { name: req.name } : {}),
             ...(req.position !== undefined ? { position: req.position } : {}),
+            ...(req.parentId !== undefined ? { parent_id: req.parentId } : {}),
           })
           .where('id', '=', channelId)
           .execute();
@@ -348,6 +372,95 @@ export async function registerCommunityRoutes(
       hub.sendTo([id], { t: 'voice.disconnect' });
     }
     await db.deleteFrom('channels').where('id', '=', channelId).execute();
+    changed(model);
+    return { ok: true };
+  });
+
+  // ---- categories and layout -----------------------------------------------------------------
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/communities/:id/categories`,
+    authed,
+    async (request, reply) => {
+      const model = await community(request.params.id, me(request));
+      if (!model.can(me(request), Permission.MANAGE_CHANNELS)) throw forbidden();
+      const req = parse(createCategoryRequestSchema, request.body);
+      if (model.categories.length >= MAX_CATEGORIES) throw bad('Too many categories');
+      const position = model.categories.length;
+      try {
+        await db
+          .insertInto('categories')
+          .values({ id: req.id, community_id: model.id, name: req.name, position })
+          .execute();
+      } catch {
+        throw new HttpError(409, 'conflict', 'Category ID already exists');
+      }
+      changed(model);
+      return reply.code(201).send({ id: req.id, name: req.name, position });
+    },
+  );
+
+  const categoryCommunity = async (
+    categoryId: unknown,
+    riverId: string,
+  ): Promise<{ model: CommunityModel; categoryId: string }> => {
+    const id = parse(channelIdSchema, categoryId);
+    const row = await db
+      .selectFrom('categories')
+      .select('community_id')
+      .where('id', '=', id)
+      .executeTakeFirst();
+    if (!row) throw notFound();
+    const model = await community(row.community_id, riverId);
+    if (!model.can(riverId, Permission.MANAGE_CHANNELS)) throw forbidden();
+    return { model, categoryId: id };
+  };
+
+  app.patch<{ Params: { id: string } }>(`${API_PREFIX}/categories/:id`, authed, async (request) => {
+    const { model, categoryId } = await categoryCommunity(request.params.id, me(request));
+    const req = parse(updateCategoryRequestSchema, request.body);
+    await db.updateTable('categories').set({ name: req.name }).where('id', '=', categoryId).execute();
+    changed(model);
+    return { ok: true };
+  });
+
+  app.delete<{ Params: { id: string } }>(`${API_PREFIX}/categories/:id`, authed, async (request) => {
+    const { model, categoryId } = await categoryCommunity(request.params.id, me(request));
+    await db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable('channels')
+        .set({ parent_id: null })
+        .where('parent_id', '=', categoryId)
+        .execute();
+      await trx.deleteFrom('categories').where('id', '=', categoryId).execute();
+    });
+    changed(model);
+    return { ok: true };
+  });
+
+  /** The whole sidebar order at once, so a drag and drop is applied atomically. */
+  app.put<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/layout`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    const actor = me(request);
+    if (!model.can(actor, Permission.MANAGE_CHANNELS)) throw forbidden();
+    const req = parse(layoutRequestSchema, request.body);
+    for (const k of req.categories) if (!model.category(k.id)) throw bad('Unknown category');
+    for (const c of req.channels) {
+      if (!model.channel(c.id)) throw bad('Unknown channel');
+      if (!model.can(actor, Permission.MANAGE_CHANNELS, c.id)) throw forbidden();
+      if (c.parentId !== null && !model.category(c.parentId)) throw bad('Unknown category');
+    }
+    await db.transaction().execute(async (trx) => {
+      for (const k of req.categories) {
+        await trx.updateTable('categories').set({ position: k.position }).where('id', '=', k.id).execute();
+      }
+      for (const c of req.channels) {
+        await trx
+          .updateTable('channels')
+          .set({ position: c.position, parent_id: c.parentId })
+          .where('id', '=', c.id)
+          .execute();
+      }
+    });
     changed(model);
     return { ok: true };
   });
@@ -627,7 +740,11 @@ export async function registerCommunityRoutes(
           member: { riverId: me(request), role: 'member', roles: [], profile: req.profile, online: true },
         });
       }
-      return { ...model.wireFor(me(request), (id) => hub.isOnline(id)), inviteCheck: invite.check };
+      const last = await lastMessageTimes(
+        db,
+        model.channels.map((c) => c.id),
+      );
+      return { ...model.wireFor(me(request), (id) => hub.isOnline(id), last), inviteCheck: invite.check };
     },
   );
 

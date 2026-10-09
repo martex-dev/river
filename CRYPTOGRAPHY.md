@@ -96,7 +96,7 @@ than per-member sender keys:
 - Every human-readable value is sealed with AES-256-GCM under the community key
   (random 96-bit nonce) with associated data
   `river-community-v1|<communityId>|<purpose>`, where purpose is `meta`,
-  `profile`, `channel:<id>`, `role:<id>`, `message:<channelId>`,
+  `profile`, `channel:<id>`, `category:<id>`, `role:<id>`, `message:<channelId>`,
   `reaction:<messageId>` or `signal:<channelId>`. The AAD stops the server moving
   ciphertext between communities, channels or fields.
 - The key travels only in the invite link's URL fragment (`#c=…&k=…`), which
