@@ -10,6 +10,7 @@ import {
   type WebContents,
 } from 'electron';
 import { z } from 'zod';
+import { createCommunityOptionsSchema } from '../shared/templates.ts';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import {
   EXTERNAL_LINKS,
@@ -136,7 +137,19 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.communityList, (_e, mode) =>
     mode === 'connection-only' ? deps.community.connectionState() : result(() => deps.community.refresh()),
   );
-  handle(IPC.communityCreate, (_e, name) => result(() => deps.community.create(name)));
+  handle(IPC.communityCreate, (_e, name, rawOptions) =>
+    result(async () => {
+      const options = createCommunityOptionsSchema.parse(rawOptions ?? {});
+      // Creating your first community can also create your account, like joining does.
+      if (deps.account.status().state === 'none') {
+        if (!options.serverUrl)
+          throw new Error('Enter the address of a River server to create your account on.');
+        deps.settings.update({ server: { url: options.serverUrl } });
+        await deps.account.register(options.serverUrl);
+      }
+      return deps.community.create(name, options.template);
+    }),
+  );
   handle(IPC.communityJoin, (_e, link) =>
     result(() =>
       deps.community.join(link, async (serverUrl) => {

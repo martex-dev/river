@@ -1,4 +1,5 @@
 import type { ReleaseChannel } from '@river/release/channels';
+import type { CreateCommunityOptions } from './templates.ts';
 import type { AttachmentPointer, CommunityAction, CommunityActionResult } from './community-actions.ts';
 import type { DmAction, DmActionResult, DmEvent } from './dm.ts';
 import type { SocialAction, SocialActionResult, SocialEvent } from './social.ts';
@@ -309,7 +310,7 @@ export interface RiverApi {
   };
   community: {
     list(): Promise<Result<CommunityView[]>>;
-    create(name: string): Promise<Result<CommunityView>>;
+    create(name: string, options?: CreateCommunityOptions): Promise<Result<CommunityView>>;
     join(inviteLink: string): Promise<Result<CommunityView>>;
     invite(communityId: string): Promise<Result<string>>;
     createChannel(communityId: string, kind: 'text' | 'voice', name: string): Promise<Result<null>>;

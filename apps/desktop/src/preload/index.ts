@@ -77,7 +77,7 @@ const api: RiverApi = {
   },
   community: {
     list: () => ipcRenderer.invoke(IPC.communityList),
-    create: (name) => ipcRenderer.invoke(IPC.communityCreate, name),
+    create: (name, options) => ipcRenderer.invoke(IPC.communityCreate, name, options),
     join: (link) => ipcRenderer.invoke(IPC.communityJoin, link),
     invite: (id) => ipcRenderer.invoke(IPC.communityInvite, id),
     createChannel: (id, kind, name) => ipcRenderer.invoke(IPC.communityCreateChannel, id, kind, name),
