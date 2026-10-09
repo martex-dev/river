@@ -28,7 +28,7 @@ import {
 } from '@river/protocol';
 import { authenticate } from '../accounts/auth-store.ts';
 import { Hub, type HubSocket } from '../communities/hub.ts';
-import type { CommunityModel} from '../communities/model.ts';
+import type { CommunityModel } from '../communities/model.ts';
 import { communityOfChannel, loadCommunity, loadMessages } from '../communities/model.ts';
 import type { ServerConfig } from '../config.ts';
 import { HttpError } from '../http-error.ts';
