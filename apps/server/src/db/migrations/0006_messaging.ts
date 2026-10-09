@@ -5,6 +5,10 @@ import type { Kysely } from 'kysely';
  * end-to-end encrypted envelopes (deleted when acknowledged), and blocks.
  */
 export async function up(db: Kysely<unknown>): Promise<void> {
+  // Attachments sent in direct messages are not linked to a community message;
+  // they are kept until this time (the mailbox lifetime) instead.
+  await db.schema.alterTable('attachments').addColumn('retain_until', 'varchar(32)').execute();
+
   await db.schema
     .createTable('signed_prekeys')
     .addColumn('river_id', 'varchar(36)', (c) => c.notNull())

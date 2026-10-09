@@ -116,6 +116,7 @@ export interface AttachmentsTable {
   size: number;
   created_at: string;
   message_id: string | null;
+  retain_until: string | null;
 }
 
 export interface SignedPreKeysTable {

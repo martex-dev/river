@@ -14,6 +14,7 @@ import { HttpError } from '../http-error.ts';
 /** Uploads not attached to a message within this time are deleted. */
 const UNLINKED_TTL_MS = 24 * 60 * 60 * 1000;
 const GC_INTERVAL_MS = 60 * 60 * 1000;
+const DM_RETAIN_MS = 31 * 24 * 60 * 60 * 1000;
 /** Smallest possible encrypted attachment: IV + one AES block + MAC. */
 const MIN_BLOB = 16 + 16 + 32;
 
@@ -47,7 +48,7 @@ export async function registerAttachmentRoutes(
     request.session = session;
   };
 
-  app.post(
+  app.post<{ Querystring: { retain?: string } }>(
     `${API_PREFIX}/attachments`,
     {
       preHandler: requireSession,
@@ -73,6 +74,11 @@ export async function registerAttachmentRoutes(
           size: body.length,
           created_at: deps.now().toISOString(),
           message_id: null,
+          // Direct-message files: the recipient may be offline as long as the mailbox keeps mail.
+          retain_until:
+            request.query.retain === 'dm'
+              ? new Date(deps.now().getTime() + DM_RETAIN_MS).toISOString()
+              : null,
         })
         .execute();
       return reply.code(201).send({ id });
@@ -104,7 +110,12 @@ export async function registerAttachmentRoutes(
     await db
       .deleteFrom('attachments')
       .where('message_id', 'is', null)
-      .where('created_at', '<', cutoff)
+      .where((eb) =>
+        eb.or([
+          eb.and([eb('retain_until', 'is', null), eb('created_at', '<', cutoff)]),
+          eb('retain_until', '<', deps.now().toISOString()),
+        ]),
+      )
       .execute();
     const known = new Set((await db.selectFrom('attachments').select('id').execute()).map((r) => r.id));
     for (const name of await readdir(dir)) {
@@ -143,6 +154,7 @@ export async function linkAttachments(
     .where('id', 'in', unique)
     .where('uploader', '=', uploader)
     .where('message_id', 'is', null)
+    .where('retain_until', 'is', null)
     .execute();
   if (rows.length !== unique.length)
     throw new HttpError(400, 'bad_request', 'Unknown or already used attachment');

@@ -586,6 +586,32 @@ describe('communities', () => {
       expect(denied.statusCode).toBe(403);
     });
 
+    it('keeps direct-message files for the mailbox lifetime, then deletes them', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const res = await a.inject({
+        method: 'POST',
+        url: '/v1/attachments?retain=dm',
+        headers: { ...auth(owner.token), 'content-type': 'application/octet-stream' },
+        payload: blob(),
+      });
+      const blobId = res.json().id;
+      const get = async () =>
+        (await a.inject({ method: 'GET', url: `/v1/attachments/${blobId}`, headers: auth(owner.token) })).statusCode;
+      await database.db
+        .updateTable('attachments')
+        .set({ created_at: new Date(Date.now() - 48 * 3600_000).toISOString() })
+        .execute();
+      await a.collectAttachments();
+      expect(await get()).toBe(200);
+      await database.db
+        .updateTable('attachments')
+        .set({ retain_until: new Date(Date.now() - 1000).toISOString() })
+        .execute();
+      await a.collectAttachments();
+      expect(await get()).toBe(404);
+    });
+
     it('garbage-collects uploads never attached to a message', async () => {
       const a = await start();
       const owner = await user(a);
