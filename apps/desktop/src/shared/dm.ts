@@ -18,6 +18,8 @@ export interface ConversationView {
   name: string;
   avatar: string | null;
   state: 'accepted' | 'request' | 'blocked' | 'left';
+  /** You started this conversation and they have not answered yet (a sent friend request). */
+  awaitingReply: boolean;
   last: { text: string; sentAt: string; mine: boolean } | null;
   unread: number;
   verified: boolean;
