@@ -6,6 +6,28 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-10
+
+**Friends made simple.**
+
+### Added
+
+- **Friends page** (replaces Contacts) with **Online, All, Pending and
+  Blocked** tabs, search, online status and mutual communities.
+- **Pending shows both directions**: requests for you (Accept, Read message,
+  Ignore) and requests you sent ("waiting for them to accept", Cancel request).
+- **Add friend** with a friend link or River ID and an editable first message.
+  **Your friend link** has a Copy button.
+- **Add friend on every member card** in a community; it shows "Request sent",
+  "Wants to be friends" or "Friends".
+- **Paste a friend link anywhere** in River to get an "Add a friend?" prompt.
+
+### Fixed
+
+- A request you sent no longer shows the person as your friend before they
+  accept. When they accept you hear the new-friend sound and see the
+  celebration.
+
 ## [1.0.2] - 2026-10-10
 
 **Easy start: create or join a community in one step.**
@@ -481,7 +503,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/martex-dev/river/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/martex-dev/river/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/martex-dev/river/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/martex-dev/river/compare/v0.9.0...v1.0.0

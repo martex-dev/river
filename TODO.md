@@ -28,9 +28,9 @@ Each line is one PR; each version ships when its section is done.
 
 ### 1.0.3 — Friends made simple
 
-- [ ] Friends page: Online, All, Pending, Blocked tabs with presence
-- [ ] Friend codes/links you can share; one-click add; request alerts with sound
-- [ ] Mutual communities and quick Message/Call on every friend
+- [x] Friends page: Online, All, Pending, Blocked tabs with presence
+- [x] Friend codes/links you can share; one-click add; request alerts with sound
+- [x] Mutual communities and quick Message/Call on every friend
 
 ### 1.0.4 — Highlighting
 
