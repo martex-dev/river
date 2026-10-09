@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { SOUND_GROUP, SOUND_GROUPS, audible, type SoundConfig } from '../src/renderer/src/community/sound.ts';
+import {
+  SOUND_GROUP,
+  SOUND_GROUPS,
+  audible,
+  type SoundConfig,
+} from '../src/renderer/src/community/sound-rules.ts';
 
 const config = (over: Partial<SoundConfig> = {}): SoundConfig => ({
   sounds: true,
