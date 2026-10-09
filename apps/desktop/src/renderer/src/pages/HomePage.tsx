@@ -45,6 +45,11 @@ export function HomePage({ reducedMotion }: { reducedMotion: boolean }): ReactEl
 
   return (
     <div className="page home">
+      {info?.startupProblem && (
+        <div className="glass card card--error" role="alert">
+          {info.startupProblem}
+        </div>
+      )}
       <section className="hero glass">
         <NetworkField reducedMotion={reducedMotion} />
         <div className="hero__content">

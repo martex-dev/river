@@ -75,6 +75,8 @@ export interface AppInfo {
   arch: string;
   isPackaged: boolean;
   versions: { electron: string; chrome: string; node: string };
+  /** Set when this version keeps failing to start after an update (automatic installs are paused). */
+  startupProblem: string | null;
 }
 
 export type UpdateStatus =

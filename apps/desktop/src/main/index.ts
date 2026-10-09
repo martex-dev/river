@@ -36,6 +36,9 @@ import { AccountService } from './account/account-service.ts';
 import { UpdateService } from './updater/update-service.ts';
 import { createFetchBytes, createRequestBytes, createRequestJson } from './http.ts';
 import { verifyDownloadedUpdate } from './updater/verify-download.ts';
+import { LaunchHealth } from './updater/launch-health.ts';
+
+const HEALTHY_AFTER_MS = 30_000;
 
 const devServerUrl = (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) || undefined;
 const FIRST_CHECK_DELAY_MS = 15_000;
@@ -59,6 +62,12 @@ async function start(): Promise<void> {
   log.info(`River ${app.getVersion()} starting on ${process.platform}-${process.arch}`);
 
   const settings = new SettingsStore(join(app.getPath('userData'), 'settings.json'), log);
+  // Counts starts until River has run for a while; repeated failures after an update pause auto-install.
+  const health = new LaunchHealth(join(app.getPath('userData'), 'health.json'), app.getVersion());
+  const startupProblem = health.crashLoop
+    ? `River ${app.getVersion()} had trouble starting ${health.current.starts} times since the update from ${health.current.previousVersion}. Automatic installs are paused until it runs normally. If problems continue, download the latest version from the Releases page.`
+    : null;
+  if (startupProblem) log.warn(startupProblem);
   const storage = new StorageService({
     dir: join(app.getPath('userData'), 'data'),
     keystore: electronKeystore,
@@ -145,6 +154,7 @@ async function start(): Promise<void> {
       preferences: () => settings.get().updates,
       verifyDownload: (version, filePath) =>
         verifyDownloadedUpdate({ version, filePath, fetchBytes, trustedKeys: TRUSTED_RELEASE_KEYS }),
+      installHold: () => (health.crashLoop ? 'this version has been failing to start' : null),
       log,
     });
   }
@@ -160,6 +170,7 @@ async function start(): Promise<void> {
       chrome: process.versions.chrome,
       node: process.versions.node,
     },
+    startupProblem,
   });
 
   const serverFetch = createFetchBytes((input, init) => net.fetch(input as string, init), {
@@ -191,6 +202,8 @@ async function start(): Promise<void> {
   });
 
   const window = createWindow();
+  // Running for a while with a window up counts as a healthy start.
+  window.once('ready-to-show', () => setTimeout(() => health.markHealthy(), HEALTHY_AFTER_MS));
   broadcastStorageStatus(window.webContents, storage);
   broadcastAccountStatus(window.webContents, account);
   broadcastCommunityEvents(window.webContents, community);
