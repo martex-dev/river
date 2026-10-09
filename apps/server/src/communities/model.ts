@@ -16,21 +16,36 @@ export interface ChannelModel {
   kind: 'text' | 'voice';
   name: string;
   position: number;
+  /** Effective overwrites: the category's when the channel is synced to it. */
   overwrites: OverwriteWire[];
   parentId: string | null;
+  synced: boolean;
 }
 
 export interface CategoryModel {
   id: string;
   name: string;
   position: number;
+  overwrites: OverwriteWire[];
 }
+
+/** What a timed-out member cannot do (they can still read). */
+export const TIMEOUT_DENIES =
+  Permission.SEND_MESSAGES |
+  Permission.ADD_REACTIONS |
+  Permission.ATTACH_FILES |
+  Permission.MENTION_EVERYONE |
+  Permission.CONNECT |
+  Permission.SPEAK |
+  Permission.STREAM |
+  Permission.CREATE_INVITE;
 
 export interface MemberModel {
   riverId: string;
   legacyRole: 'owner' | 'admin' | 'member';
   roles: string[];
   profile: string;
+  timeoutUntil: string | null;
 }
 
 /** Everything needed to answer "may X do Y here?" for one community. */
@@ -91,13 +106,23 @@ export class CommunityModel {
   perms(riverId: string, channelId?: string): number {
     const m = this.member(riverId);
     if (!m) return 0;
-    return computePermissions({
+    const perms = computePermissions({
       ownerId: this.ownerId,
       everyoneRoleId: this.everyoneRoleId,
       roles: this.roles,
       member: { riverId, roles: m.roles },
       overwrites: channelId ? this.channel(channelId)?.overwrites : undefined,
     });
+    // A timeout takes away talking, not reading; owners and administrators are never timed out.
+    if (this.timedOut(riverId) && riverId !== this.ownerId && !(perms & Permission.ADMINISTRATOR))
+      return perms & ~TIMEOUT_DENIES;
+    return perms;
+  }
+
+  /** Is this member timed out right now? */
+  timedOut(riverId: string, now = Date.now()): boolean {
+    const until = this.member(riverId)?.timeoutUntil;
+    return !!until && Date.parse(until) > now;
   }
 
   can(riverId: string, permission: number, channelId?: string): boolean {
@@ -147,6 +172,7 @@ export class CommunityModel {
         overwrites: c.overwrites,
         parentId: c.parentId,
         lastMessageAt: last.get(c.id) ?? null,
+        synced: c.synced,
       })),
       // A category whose channels are all hidden from you stays hidden too.
       categories: this.categories.filter(
@@ -161,6 +187,7 @@ export class CommunityModel {
         roles: m.roles,
         profile: m.profile,
         online: online(m.riverId),
+        timeoutUntil: this.timedOut(m.riverId) ? m.timeoutUntil : null,
       })),
     };
   }
@@ -173,24 +200,44 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
     .where('id', '=', id)
     .executeTakeFirst();
   if (!c) return null;
-  const [roles, channels, overwrites, members, memberRoles, categories] = await Promise.all([
-    db.selectFrom('roles').selectAll().where('community_id', '=', id).orderBy('position').execute(),
-    db.selectFrom('channels').selectAll().where('community_id', '=', id).orderBy('position').execute(),
-    db
-      .selectFrom('channel_overwrites')
-      .innerJoin('channels', 'channels.id', 'channel_overwrites.channel_id')
-      .select([
-        'channel_overwrites.channel_id',
-        'channel_overwrites.role_id',
-        'channel_overwrites.allow',
-        'channel_overwrites.deny',
-      ])
-      .where('channels.community_id', '=', id)
-      .execute(),
-    db.selectFrom('community_members').selectAll().where('community_id', '=', id).execute(),
-    db.selectFrom('member_roles').selectAll().where('community_id', '=', id).execute(),
-    db.selectFrom('categories').selectAll().where('community_id', '=', id).orderBy('position').execute(),
-  ]);
+  const [roles, channels, overwrites, members, memberRoles, categories, categoryOverwrites] =
+    await Promise.all([
+      db.selectFrom('roles').selectAll().where('community_id', '=', id).orderBy('position').execute(),
+      db.selectFrom('channels').selectAll().where('community_id', '=', id).orderBy('position').execute(),
+      db
+        .selectFrom('channel_overwrites')
+        .innerJoin('channels', 'channels.id', 'channel_overwrites.channel_id')
+        .select([
+          'channel_overwrites.channel_id',
+          'channel_overwrites.role_id',
+          'channel_overwrites.allow',
+          'channel_overwrites.deny',
+        ])
+        .where('channels.community_id', '=', id)
+        .execute(),
+      db.selectFrom('community_members').selectAll().where('community_id', '=', id).execute(),
+      db.selectFrom('member_roles').selectAll().where('community_id', '=', id).execute(),
+      db.selectFrom('categories').selectAll().where('community_id', '=', id).orderBy('position').execute(),
+      db
+        .selectFrom('category_overwrites')
+        .innerJoin('categories', 'categories.id', 'category_overwrites.category_id')
+        .select([
+          'category_overwrites.category_id',
+          'category_overwrites.role_id',
+          'category_overwrites.allow',
+          'category_overwrites.deny',
+        ])
+        .where('categories.community_id', '=', id)
+        .execute(),
+    ]);
+  const categoryModels: CategoryModel[] = categories.map((k) => ({
+    id: k.id,
+    name: k.name,
+    position: k.position,
+    overwrites: categoryOverwrites
+      .filter((o) => o.category_id === k.id)
+      .map((o) => ({ roleId: o.role_id, allow: o.allow, deny: o.deny })),
+  }));
   return new CommunityModel({
     id: c.id,
     ownerId: c.owner,
@@ -204,22 +251,30 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
       permissions: r.permissions,
       position: r.position,
     })),
-    channels: channels.map((ch) => ({
-      id: ch.id,
-      kind: ch.kind as 'text' | 'voice',
-      name: ch.name,
-      position: ch.position,
-      overwrites: overwrites
-        .filter((o) => o.channel_id === ch.id)
-        .map((o) => ({ roleId: o.role_id, allow: o.allow, deny: o.deny })),
-      parentId: ch.parent_id,
-    })),
-    categories: categories.map((k) => ({ id: k.id, name: k.name, position: k.position })),
+    channels: channels.map((ch) => {
+      const parent = categoryModels.find((k) => k.id === ch.parent_id);
+      const synced = ch.synced === 1 && parent !== undefined;
+      return {
+        id: ch.id,
+        kind: ch.kind as 'text' | 'voice',
+        name: ch.name,
+        position: ch.position,
+        overwrites: synced
+          ? parent.overwrites
+          : overwrites
+              .filter((o) => o.channel_id === ch.id)
+              .map((o) => ({ roleId: o.role_id, allow: o.allow, deny: o.deny })),
+        parentId: ch.parent_id,
+        synced,
+      };
+    }),
+    categories: categoryModels,
     members: members.map((m) => ({
       riverId: m.river_id,
       legacyRole: m.role as 'owner' | 'admin' | 'member',
       roles: memberRoles.filter((r) => r.river_id === m.river_id).map((r) => r.role_id),
       profile: m.profile,
+      timeoutUntil: m.timeout_until,
     })),
   });
 }
