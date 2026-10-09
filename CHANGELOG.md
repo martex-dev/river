@@ -6,6 +6,34 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**Hardening before 1.0: history, search, every section built, abuse limits, accessibility.**
+
+### Added
+
+- **Contacts**: your contacts, requests and blocked people, adding by River ID,
+  message or call with one click, safety-number status at a glance.
+- **Files**: every file and picture shared with you in messages and posts,
+  filter by type, search, show in chat, save.
+- **Calls**: call history (incoming, outgoing, missed, duration — kept only on
+  this computer) and quick voice/video calls to your contacts.
+- **Search**: search your conversations, and search a community's channels
+  (decrypted and searched on your computer — the server cannot read them).
+- **Load older messages** in community channels (beyond the latest 100).
+
+### Security
+
+- The server limits realtime event floods per connection, undelivered mail per
+  device (`RIVER_MAILBOX_LIMIT`) and stored files per person
+  (`RIVER_ATTACHMENT_QUOTA_MB`).
+- Pre-1.0 security review: `docs/security/0.9.0-review.md`.
+
+### Changed
+
+- Better contrast for secondary text (WCAG AA) and properly separated channel
+  buttons for screen readers; automated accessibility checks run in CI.
+- Multi-device linking moves to Stage 2 (1.2.x). To move to a new computer,
+  use **Settings → Backup** and **Restore from a backup**.
+
 ## [0.8.0] - 2026-10-09
 
 **Never lose your account: recovery phrase and encrypted backups. Calls through strict networks.**

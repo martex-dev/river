@@ -39,8 +39,8 @@ apps. Each line is one minor release; patch releases fix things in between.
 | 0.5.0 ✅   | Contacts and encrypted direct messages (libsignal prekeys + sessions, offline mailbox, read receipts), 1:1 calls | done   |
 | 0.6.0 ✅   | Group DMs (sender keys); per-member community keys with rotation when someone is removed                         | done   |
 | 0.7.0 ✅   | Social: encrypted profiles, posts and photos feed, stories for friends, comments and reactions                   | done   |
-| 0.8.0 ✅   | Recovery phrase and encrypted backup/restore; TURN relay for calls (multi-device linking moved to 0.9.0)         | done   |
-| 0.9.0      | Multi-device linking, message search, accessibility, performance, migrations from every 0.x, security review     | ⏳     |
+| 0.8.0 ✅   | Recovery phrase and encrypted backup/restore; TURN relay for calls (multi-device linking moved to Stage 2)       | done   |
+| 0.9.0 ✅   | Hardening: history and search, Contacts/Files/Calls, abuse limits, accessibility, upgrade tests, security review | done   |
 | 1.0.0      | Stage 1 release                                                                                                  | ⏳     |
 
 1.0.0 is released only when all of the above work, tests pass on all three
@@ -70,7 +70,7 @@ consent-based remote assistance.
 | --------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **1.0.x** | Stabilisation                   | Fixes from 1.0 feedback, performance                                                                                                                |
 | **1.1.x** | Protocol freeze                 | Protocol v1 spec, protobuf schemas, cross-language test vectors, API stability guarantees                                                           |
-| **1.2.x** | Devices                         | Device-to-device transfer, device approval UX, key rotation tooling, revocation                                                                     |
+| **1.2.x** | Devices                         | Multi-device linking (moved here from 0.9), device-to-device transfer, device approval UX, key rotation tooling, revocation                         |
 | **1.3.x** | iOS foundation                  | SwiftUI app, libsignal-swift, Keychain/Secure Enclave, onboarding, messaging (TestFlight)                                                           |
 | **1.4.x** | Android foundation              | Compose app, libsignal-android, Keystore/StrongBox, onboarding, messaging (APK + F-Droid track)                                                     |
 | **1.5.x** | Mobile parity I                 | Groups, media, files; content-free push (APNs, FCM, UnifiedPush); biometric lock                                                                    |

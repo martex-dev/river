@@ -10,6 +10,15 @@ Milestone definitions: [ROADMAP.md](ROADMAP.md).
 - [x] Desktop: upload (picker, drag & drop, paste), inline images/video/audio, file cards with save, local thumbnails, progress and errors
 - [x] Tests: server never stores plaintext; wrong key/digest rejected; e2e image round trip between two apps
 
+## 0.9.0 — Hardening
+
+- [x] Older history in channels; search in communities (on device) and conversations
+- [x] Contacts, Files and Calls sections (no placeholder sections left)
+- [x] Server abuse limits: socket flood control, mailbox cap, storage quota
+- [x] Upgrade tests from every released local schema; accessibility audits (axe-core) in CI
+- [x] Pre-1.0 security review
+- [ ] Multi-device linking (moved to Stage 2, 1.2.x)
+
 ## 0.8.0 — Recovery and reliable calls
 
 - [x] Recovery phrase (Bytewords + checksum) and encrypted backup files; restore on a fresh install
