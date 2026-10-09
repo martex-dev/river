@@ -384,6 +384,10 @@ test('a brand-new user creates a community from a template in one step', async (
   await dave.getByRole('button', { name: 'Add friend' }).click();
   await expect(dave.getByText('Request sent ✓')).toBeVisible({ timeout: 15_000 });
   await dave.keyboard.press('Escape');
+  // Close the member list again (on small screens it covers the chat).
+  if ((await dave.locator('.community__members').count()) > 0) {
+    await dave.getByRole('button', { name: 'Member list' }).click();
+  }
   await carol.getByRole('button', { name: 'Friends', exact: true }).click();
   await carol.getByRole('tab', { name: /Pending/ }).click();
   const request = carol.locator('.friend-row', { hasText: 'Dave' });
