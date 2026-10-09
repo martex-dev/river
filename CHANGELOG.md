@@ -6,6 +6,28 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**Social: posts, photos and stories for your friends.**
+
+### Added
+
+- **Social** section: share posts (text, photos, videos) with all your
+  contacts or only people you pick, and **stories** that disappear after 24
+  hours. Like and react, comment, and see comments from everyone the post was
+  shared with. Story viewer with progress bars, tap/arrow navigation, replies
+  that arrive as direct messages, and "seen by" for your own stories.
+- **Profiles** with a short bio; open anyone's profile from the feed to see
+  their posts and message them.
+- Every post is end-to-end encrypted separately for each person in its
+  audience (Signal protocol); comments and reactions go to the author, whose
+  River shares them back with the audience. The server only relays ciphertext.
+
+### Fixed
+
+- Files in direct messages no longer disappear after the server's 31-day
+  retention: River keeps its own encrypted copy as soon as they arrive.
+- On narrow windows, clicking into the chat closes the member list overlay.
+- The server's Docker image builds again (a broken line in the Dockerfile).
+
 ## [0.6.0] - 2026-10-09
 
 **Group chats, and removed members can no longer read new community messages.**

@@ -78,6 +78,17 @@ stop receiving messages because nobody encrypts to them any more. A group from
 someone you have not accepted arrives as a request; your name is shared with
 the group only once you accept. Groups have no read receipts or calls yet.
 
+## Social (posts and stories)
+
+Posts travel as encrypted envelopes to every person in the audience (all
+accepted contacts, or a chosen list): `post` (text, up to 10 attachment
+pointers, `kind` post or story, `expiresAt` for stories), `postDelete`,
+`postReact` and `postComment` (to the author only), `postActivity` (the
+author's snapshot of comments and reactions, sent back to the audience) and
+`storySeen`. Posts are accepted only from people you accepted; reactions,
+comments and views only from people in the post's audience. Stories are deleted
+on every device 24 hours after they were posted.
+
 ## Blocks
 
 `PUT/DELETE /v1/blocks/:riverId`, `GET /v1/blocks`. A blocked person gets
