@@ -219,4 +219,45 @@ test('create, invite, join, chat and call between two members', async () => {
   await alice.getByRole('button', { name: 'Close settings' }).click();
   await expect(bob.locator('.community__members')).toContainText('Crew — 1', { timeout: 15_000 });
   if (process.env.RIVER_SCREENSHOTS) await bob.screenshot({ path: 'test-results/community-members.png' });
+
+  // Direct messages (libsignal): Alice messages Bob from his profile card.
+  await alice.locator('.community__members .member', { hasText: 'Bob' }).click();
+  await alice.getByRole('button', { name: 'Message', exact: true }).click();
+  await expect(alice.locator('.dms')).toBeVisible({ timeout: 15_000 });
+  await alice.getByPlaceholder('Message Bob').fill('psst, a private hello');
+  await alice.keyboard.press('Enter');
+  await expect(alice.locator('.dm-status').last()).toHaveText(/Sent|Delivered/, { timeout: 15_000 });
+  await bob.getByRole('button', { name: /^Messages/ }).click();
+  await bob.locator('.dm-row', { hasText: 'Alice' }).click();
+  await expect(bob.locator('.chat__messages')).toContainText('psst, a private hello', { timeout: 15_000 });
+  await bob.getByRole('button', { name: 'Accept', exact: true }).click();
+  await bob.getByPlaceholder('Message Alice').fill('got it, encrypted both ways');
+  await bob.keyboard.press('Enter');
+  await expect(alice.locator('.chat__messages')).toContainText('got it, encrypted both ways', {
+    timeout: 15_000,
+  });
+  if (process.env.RIVER_SCREENSHOTS) await alice.screenshot({ path: 'test-results/dm.png' });
+
+  // 1:1 call from the conversation: Alice rings, Bob accepts, audio flows, Alice hangs up.
+  await alice.getByRole('button', { name: 'Start voice call' }).click();
+  await expect(bob.locator('.incoming-call')).toContainText('Alice', { timeout: 15_000 });
+  await bob.getByRole('button', { name: 'Accept', exact: true }).click();
+  for (const p of [alice, bob]) {
+    await expect(p.locator('.dm-call__status')).toContainText('Connected', { timeout: 30_000 });
+    await expect
+      .poll(
+        () =>
+          p
+            .locator('.call-audio audio')
+            .first()
+            .evaluate((a: HTMLAudioElement) => !a.paused && a.readyState > 0),
+        {
+          timeout: 20_000,
+        },
+      )
+      .toBe(true);
+  }
+  if (process.env.RIVER_SCREENSHOTS) await bob.screenshot({ path: 'test-results/dm-call.png' });
+  await alice.getByRole('button', { name: 'Hang up' }).click();
+  await expect(bob.locator('.dm-call')).toHaveCount(0, { timeout: 15_000 });
 });

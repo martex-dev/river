@@ -39,7 +39,15 @@ export type DmEvent =
   | { t: 'message'; message: DirectMessageView; isNew: boolean; senderName: string }
   | { t: 'remove'; peer: string; id: string }
   | { t: 'typing'; peer: string }
-  | { t: 'focus'; peer: string };
+  | { t: 'focus'; peer: string }
+  | {
+      t: 'call';
+      peer: string;
+      callId: string;
+      kind: 'invite' | 'accept' | 'decline' | 'end' | 'signal' | 'busy';
+      video: boolean;
+      data?: unknown;
+    };
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 const riverId = z.uuid();
@@ -100,6 +108,17 @@ export const dmActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('myId') }).strict(),
+  z
+    .object({
+      a: z.literal('call'),
+      peer: riverId,
+      callId: id,
+      kind: z.enum(['invite', 'accept', 'decline', 'end', 'signal', 'busy']),
+      video: z.boolean().optional(),
+      /** WebRTC session description / ICE candidate. */
+      data: z.unknown().optional(),
+    })
+    .strict(),
 ]);
 
 export type DmAction = z.input<typeof dmActionSchema>;

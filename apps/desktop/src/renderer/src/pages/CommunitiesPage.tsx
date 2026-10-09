@@ -14,6 +14,7 @@ import { UserSettings } from '../community/ui/UserSettings.tsx';
 import { VoiceChannel } from '../community/ui/Voice.tsx';
 import { PlusIcon, initials } from '../community/ui/common.tsx';
 import { useRiver } from '../store.ts';
+import { CallPill, IncomingCall } from '../dm/CallUi.tsx';
 
 export function CommunitiesPage(): ReactElement {
   const s = useCommunity();
@@ -52,7 +53,6 @@ export function CommunitiesPage(): ReactElement {
           canCancel={s.communities.length > 0}
           hasAccount={account.state === 'registered'}
         />
-        <Toast />
       </>
     );
   }
@@ -112,10 +112,20 @@ export function CommunitiesPage(): ReactElement {
       </section>
 
       {community && s.showMembers && channel?.kind === 'text' && <MemberList community={community} me={me} />}
+    </div>
+  );
+}
 
+/** Dialogs and toasts, mounted once at the app root so every section can use them. */
+export function Overlays(): ReactElement {
+  const me = useRiver((r) => r.identity?.riverId ?? '');
+  return (
+    <>
       <Modals me={me} />
       <Toast />
-    </div>
+      <IncomingCall />
+      <CallPill />
+    </>
   );
 }
 

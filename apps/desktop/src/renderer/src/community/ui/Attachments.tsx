@@ -286,11 +286,15 @@ async function prepare(file: File): Promise<{
 export async function uploadAll(
   files: PendingFile[],
   onProgress: (done: number) => void,
+  via: 'community' | 'dm' = 'community',
 ): Promise<AttachmentPointer[]> {
   const pointers: AttachmentPointer[] = [];
   for (const [i, p] of files.entries()) {
     const prepared = await prepare(p.file);
-    const res = await window.river.community.action({ a: 'upload', ...prepared });
+    const res =
+      via === 'dm'
+        ? await window.river.dm.action({ a: 'upload', ...prepared })
+        : await window.river.community.action({ a: 'upload', ...prepared });
     if (!res.ok) throw new Error(res.message);
     pointers.push(res.value as AttachmentPointer);
     onProgress(i + 1);

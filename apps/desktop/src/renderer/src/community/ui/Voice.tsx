@@ -219,7 +219,7 @@ export function VoiceChannel(props: {
   );
 }
 
-function Video({
+export function Video({
   stream,
   track,
   mirrored,

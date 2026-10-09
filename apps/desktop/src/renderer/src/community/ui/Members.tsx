@@ -2,6 +2,7 @@ import { useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { CommunityView, MemberView } from '../../../../shared/ipc.ts';
 import { useRiver } from '../../store.ts';
+import { useDm } from '../../dm/store.ts';
 import { useCommunity } from '../store.ts';
 import { Avatar, CrownIcon, Popover, can, hex } from './common.tsx';
 
@@ -216,6 +217,15 @@ export function ProfileCard(props: {
         )}
         {!isMe && (
           <div className="profile-card__actions">
+            <button
+              className="btn btn--primary btn--small"
+              onClick={() => {
+                props.onDone();
+                void useDm.getState().open(member.riverId, member.name);
+              }}
+            >
+              Message
+            </button>
             {voiceChannel && outranks && can(perms, Permission.MUTE_MEMBERS) && (
               <button
                 className="btn btn--ghost btn--small"

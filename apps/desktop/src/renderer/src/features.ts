@@ -10,20 +10,6 @@ export interface PlannedFeature {
 
 /** Sections that are designed but not yet built. Copy must stay honest: nothing here works yet. */
 export const PLANNED: Partial<Record<Section, PlannedFeature>> = {
-  messages: {
-    title: 'Messages',
-    tagline: 'One-to-one and group conversations, end-to-end encrypted from the first message.',
-    arrives: '0.2.x',
-    capabilities: [
-      'Direct and group conversations',
-      'Replies, reactions, editing, deletion and forwarding',
-      'Voice messages, photos, videos and documents',
-      'Typing, delivery and read indicators you control',
-      'Drafts, pins, mentions, threads and saved messages',
-      'Search that runs entirely on your device',
-    ],
-    note: 'River will not ship a plaintext messaging phase. Messaging arrives together with end-to-end encryption.',
-  },
   social: {
     title: 'Social',
     tagline: 'Profiles, posts and stories shared with exactly the people you choose.',

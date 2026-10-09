@@ -15,7 +15,9 @@ export type SoundName =
   | 'undeafen'
   | 'streamStart'
   | 'streamStop'
-  | 'disconnected';
+  | 'disconnected'
+  | 'ring'
+  | 'ringback';
 
 type Note = [frequency: number, startMs: number, durationMs: number, type?: OscillatorType];
 
@@ -107,6 +109,23 @@ const SOUNDS: Record<SoundName, { gain: number; notes: Note[] }> = {
       [1174.7, 0, 80],
       [880, 70, 80],
       [659.3, 140, 180],
+    ],
+  },
+  ring: {
+    gain: 0.07,
+    notes: [
+      [659.3, 0, 140],
+      [830.6, 150, 140],
+      [987.8, 300, 220],
+      [830.6, 560, 140],
+      [987.8, 710, 260],
+    ],
+  },
+  ringback: {
+    gain: 0.035,
+    notes: [
+      [440, 0, 900],
+      [480, 0, 900],
     ],
   },
   disconnected: {

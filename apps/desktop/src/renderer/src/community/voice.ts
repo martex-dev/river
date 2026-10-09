@@ -47,6 +47,31 @@ interface Peer {
   outgoingIce: RTCIceCandidateInit[];
 }
 
+/** How a call joins, leaves and exchanges connection setup with peers. */
+export interface CallTransport {
+  join(): Promise<void>;
+  leave(): Promise<void>;
+  signal(to: string, data: unknown): void;
+}
+
+/** Community voice channels: the server tracks participants and relays sealed signals. */
+export function channelTransport(channelId: string): CallTransport {
+  return {
+    join: async () => {
+      const res = await window.river.voice.join(channelId);
+      if (!res.ok) throw new Error(res.message);
+    },
+    leave: async () => {
+      await window.river.voice.leave();
+    },
+    signal: (to, data) => {
+      void window.river.voice.signal(to, channelId, data).then((r) => {
+        if (!r.ok) console.warn(`signal to ${to.slice(0, 4)} failed: ${r.message}`);
+      });
+    },
+  };
+}
+
 export interface CallOptions {
   inputDeviceId: string | null;
   noiseSuppression: boolean;
@@ -87,8 +112,17 @@ export class VoiceCall {
   muted = false;
   closed = false;
 
-  constructor(channelId: string, me: string, onChange: () => void, options?: Partial<CallOptions>) {
+  private readonly transport: CallTransport;
+
+  constructor(
+    channelId: string,
+    me: string,
+    onChange: () => void,
+    options?: Partial<CallOptions>,
+    transport?: CallTransport,
+  ) {
     this.channelId = channelId;
+    this.transport = transport ?? channelTransport(channelId);
     this.me = me;
     this.onChange = onChange;
     this.options = {
@@ -133,10 +167,11 @@ export class VoiceCall {
     this.local.audio = await this.microphone();
     this.applyMic();
     this.watch(this.me, this.local.audio);
-    const res = await window.river.voice.join(this.channelId);
-    if (!res.ok) {
+    try {
+      await this.transport.join();
+    } catch (err) {
       this.stopLocal();
-      throw new Error(res.message);
+      throw err;
     }
     this.speakingTimer = window.setInterval(() => this.measure(), 80);
   }
@@ -356,7 +391,7 @@ export class VoiceCall {
     for (const a of this.analysers.values()) a.source.disconnect();
     this.analysers.clear();
     void this.audioCtx?.close().catch(() => undefined);
-    await window.river.voice.leave();
+    await this.transport.leave().catch(() => undefined);
     this.onChange();
   }
 
@@ -508,8 +543,6 @@ export class VoiceCall {
   }
 
   private send(to: string, signal: Signal): void {
-    void window.river.voice.signal(to, this.channelId, signal).then((r) => {
-      if (!r.ok) console.warn(`signal to ${to.slice(0, 4)} failed: ${r.message}`);
-    });
+    this.transport.signal(to, signal);
   }
 }

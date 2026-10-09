@@ -41,7 +41,7 @@ describe('planned sections', () => {
     }
   });
 
-  it('never claims messaging works without encryption', () => {
-    expect(PLANNED.messages?.note).toMatch(/will not ship a plaintext messaging phase/);
+  it('no longer lists messaging as planned (it shipped end-to-end encrypted in 0.5.0)', () => {
+    expect(PLANNED.messages).toBeUndefined();
   });
 });

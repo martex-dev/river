@@ -244,7 +244,7 @@ function VoicePanel({ community }: { community: CommunityView }): ReactElement |
   const s = useCommunity();
   useCommunity((x) => x.callVersion);
   const call = s.call;
-  if (!call) return null;
+  if (!call || call.channelId.startsWith('dm:')) return null;
   const channelCommunity =
     s.communities.find((c) => c.channels.some((ch) => ch.id === call.channelId)) ?? community;
   const channel = channelCommunity.channels.find((ch) => ch.id === call.channelId);

@@ -7,7 +7,10 @@ import { UpdateToast } from './components/UpdateToast.tsx';
 import { PLANNED } from './features.ts';
 import { HomePage } from './pages/HomePage.tsx';
 import { CallAudio } from './community/ui/Voice.tsx';
-import { CommunitiesPage, VoiceHotkeys } from './pages/CommunitiesPage.tsx';
+import { CommunitiesPage, Overlays, VoiceHotkeys } from './pages/CommunitiesPage.tsx';
+import { MessagesPage } from './pages/MessagesPage.tsx';
+import { totalUnread, useDm } from './dm/store.ts';
+import { handleCallEvent } from './dm/call.ts';
 import { useCommunity } from './community/store.ts';
 import { PlannedPage } from './pages/PlannedPage.tsx';
 import { SecurityPage } from './pages/SecurityPage.tsx';
@@ -69,11 +72,16 @@ export function App(): ReactElement {
     const offStorage = window.river.storage.onStatus((s) => void setStorage(s));
     const offAccount = window.river.account.onStatus((s) => void setAccount(s));
     const offCommunity = window.river.community.onEvent((e) => useCommunity.getState().handle(e));
+    const offDm = window.river.dm.onEvent((e) =>
+      e.t === 'call' ? handleCallEvent(e) : useDm.getState().handle(e),
+    );
+    void useDm.getState().load();
     return () => {
       offUpdates();
       offStorage();
       offAccount();
       offCommunity();
+      offDm();
     };
   }, [load, setUpdate, setStorage, setAccount]);
 
@@ -144,7 +152,10 @@ export function App(): ReactElement {
             </span>
           )}
         </header>
-        <main className={`content ${section === 'communities' ? 'content--full' : ''}`} key={section}>
+        <main
+          className={`content ${section === 'communities' || section === 'messages' ? 'content--full' : ''}`}
+          key={section}
+        >
           {loadError && (
             <div className="glass card card--error" role="alert">
               River could not load its settings: {loadError}
@@ -153,6 +164,7 @@ export function App(): ReactElement {
           {section === 'home' && <HomePage reducedMotion={reducedMotion} />}
           {section === 'security' && <SecurityPage />}
           {section === 'communities' && <CommunitiesPage />}
+          {section === 'messages' && <MessagesPage />}
           {section === 'settings' && <SettingsPage />}
           {planned && <PlannedPage section={section} feature={planned} />}
         </main>
@@ -160,12 +172,17 @@ export function App(): ReactElement {
       <UpdateToast />
       <CallAudio />
       <VoiceHotkeys />
+      <Overlays />
     </div>
   );
 }
 
 function RailItem(props: { section: Section; active: boolean; onSelect(s: Section): void }): ReactElement {
   const Icon = SECTION_ICONS[props.section];
+  const dmUnread = useDm((d) => totalUnread(d.conversations));
+  const communityMentions = useCommunity((c) => Object.values(c.mentions).reduce((n, v) => n + v, 0));
+  const badge =
+    props.section === 'messages' ? dmUnread : props.section === 'communities' ? communityMentions : 0;
   return (
     <li>
       <button
@@ -175,6 +192,7 @@ function RailItem(props: { section: Section; active: boolean; onSelect(s: Sectio
       >
         <Icon size={22} />
         <span className="rail__label">{LABELS[props.section]}</span>
+        {badge > 0 && <span className="badge badge--mention rail__badge">{badge > 99 ? '99+' : badge}</span>}
       </button>
     </li>
   );

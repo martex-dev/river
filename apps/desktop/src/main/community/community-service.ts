@@ -546,6 +546,19 @@ export class CommunityService {
     return this.communities.find((c) => c.id === res.id)!;
   }
 
+  private profilesRepublished = false;
+
+  /**
+   * Once per start, republish our sealed profile everywhere so every community
+   * carries our current name, avatar and identity key (older versions did not
+   * include the key).
+   */
+  private async republishProfilesOnce(): Promise<void> {
+    if (this.profilesRepublished) return;
+    this.profilesRepublished = true;
+    for (const c of this.communities) await this.publishProfile(c.id).catch(() => undefined);
+  }
+
   /** (Re)publishes our sealed name and avatar to a community. */
   private async publishProfile(communityId: string): Promise<void> {
     await this.call(
@@ -1038,7 +1051,9 @@ export class CommunityService {
       case 'ready':
         this.backoff = 1000;
         this.setSocketState('online');
-        void this.refresh().catch(() => undefined);
+        void this.refresh()
+          .then(() => this.republishProfilesOnce())
+          .catch(() => undefined);
         return;
       case 'message': {
         const isNew = !this.seen.has(e.message.id);

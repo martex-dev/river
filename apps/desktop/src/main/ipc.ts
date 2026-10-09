@@ -323,9 +323,9 @@ export function securityStatus({
         id: 'e2ee',
         label: 'End-to-end encryption',
         indicator: 'active',
-        value: 'Communities',
+        value: 'Direct messages and communities',
         detail:
-          'Community names, channel names, member names, messages and call setup are encrypted on your device with the community key (AES-256-GCM) before they reach the server. The key travels only inside invite links, so anyone who has an invite link can read the community. Voice, video and screen sharing go directly between members, encrypted with DTLS-SRTP. Coming next: per-member keys with forward secrecy (libsignal) and direct messages.',
+          'Direct messages and 1:1 call setup use the Signal protocol (libsignal: PQXDH with post-quantum keys and the Double Ratchet), so each message has its own key and past messages stay safe if a key leaks later. Communities encrypt names, messages and call setup with a shared community key (AES-256-GCM) that travels only inside invite links — anyone with an invite link can read the community, and removing someone does not change the key yet. Files use a fresh key each (AES-256-CBC + HMAC-SHA256). Voice, video and screen sharing go directly between participants, encrypted with DTLS-SRTP. The server still sees who messages whom and when.',
       },
       identity
         ? {

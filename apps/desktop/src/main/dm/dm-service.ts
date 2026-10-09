@@ -67,6 +67,14 @@ const contentSchema = z.discriminatedUnion('t', [
   z.object({ v: z.literal(1), t: z.literal('typing') }),
   z.object({
     v: z.literal(1),
+    t: z.literal('call'),
+    callId: msgId,
+    kind: z.enum(['invite', 'accept', 'decline', 'end', 'signal', 'busy']),
+    video: z.boolean().optional(),
+    data: z.unknown().optional(),
+  }),
+  z.object({
+    v: z.literal(1),
     t: z.literal('profile'),
     name: z.string().max(64).nullable(),
     avatar: avatarSchema.nullable().optional(),
@@ -369,6 +377,19 @@ export class DmService {
       case 'typing':
         if (contact?.state === 'accepted') this.emit({ t: 'typing', peer });
         return true;
+      case 'call':
+        // Only accepted contacts can ring you; call setup is never stored.
+        if (contact?.state !== 'accepted') return true;
+        if (content.data !== undefined && JSON.stringify(content.data).length > 30_000) return true;
+        this.emit({
+          t: 'call',
+          peer,
+          callId: content.callId,
+          kind: content.kind,
+          video: content.video ?? false,
+          ...(content.data !== undefined ? { data: content.data } : {}),
+        });
+        return true;
       case 'profile': {
         if (!contact) this.upsertContact(peer, 'request');
         this.db()
@@ -643,6 +664,22 @@ export class DmService {
           return out(null);
         case 'upload':
           return out(await this.deps.community.upload(act, 'dm'));
+        case 'call':
+          if (this.contact(act.peer)?.state !== 'accepted')
+            throw new CommunityError('You can only call your contacts.');
+          await this.sendContent(
+            act.peer,
+            {
+              v: 1,
+              t: 'call',
+              callId: act.callId,
+              kind: act.kind,
+              ...(act.video !== undefined ? { video: act.video } : {}),
+              ...(act.data !== undefined ? { data: act.data } : {}),
+            },
+            true,
+          );
+          return out(null);
       }
     } catch (err) {
       if (err instanceof SafetyNumberChangedError) throw new CommunityError(err.message);
