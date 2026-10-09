@@ -12,10 +12,10 @@ export function MemberList({ community, me }: { community: CommunityView; me: st
   const byName = (a: MemberView, b: MemberView): number => a.name.localeCompare(b.name);
   const online = community.members.filter((m) => m.online);
   const offline = community.members.filter((m) => !m.online).sort(byName);
-  // Online members are grouped under their highest role, like a roster.
+  // Online members are grouped under their highest role that is shown separately (hoisted).
   const groups: Array<{ key: string; title: string; members: MemberView[] }> = [];
   const placed = new Set<string>();
-  for (const role of community.roles.filter((r) => !r.everyone)) {
+  for (const role of community.roles.filter((r) => !r.everyone && r.hoist)) {
     const members = online.filter((m) => !placed.has(m.riverId) && m.roles.includes(role.id)).sort(byName);
     for (const m of members) placed.add(m.riverId);
     if (members.length) groups.push({ key: role.id, title: role.name, members });
@@ -137,6 +137,12 @@ export function ProfileCard(props: {
         <h3>
           {member.name} {member.owner && <CrownIcon size={15} />}
         </h3>
+        {member.timeoutUntil && (
+          <div className="chip chip--error profile-card__timeout">
+            Timed out until{' '}
+            {new Date(member.timeoutUntil).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+          </div>
+        )}
         <div className="muted small mono" title="River ID">
           {member.riverId.slice(0, 8)}…
         </div>
@@ -250,6 +256,9 @@ export function ProfileCard(props: {
                 Disconnect
               </button>
             )}
+            {outranks && can(perms, Permission.MODERATE_MEMBERS) && (
+              <TimeoutButton community={community} member={member} onDone={props.onDone} />
+            )}
             {outranks && can(perms, Permission.KICK_MEMBERS) && (
               <button className="btn btn--ghost btn--small btn--danger-text" onClick={() => confirm('kick')}>
                 Kick
@@ -294,5 +303,64 @@ function FriendButton({ riverId }: { riverId: string }): ReactElement | null {
     >
       Add friend
     </button>
+  );
+}
+
+const TIMEOUTS: Array<[string, number]> = [
+  ['60 seconds', 60_000],
+  ['5 minutes', 5 * 60_000],
+  ['10 minutes', 10 * 60_000],
+  ['1 hour', 60 * 60_000],
+  ['1 day', 24 * 60 * 60_000],
+  ['1 week', 7 * 24 * 60 * 60_000],
+];
+
+/** Time someone out for a while, or end their timeout early. */
+function TimeoutButton(props: {
+  community: CommunityView;
+  member: MemberView;
+  onDone(): void;
+}): ReactElement {
+  const s = useCommunity();
+  const [open, setOpen] = useState(false);
+  const run = (until: string | null): void => {
+    props.onDone();
+    void s
+      .run({ a: 'timeout', communityId: props.community.id, riverId: props.member.riverId, until })
+      .then((r) => {
+        if (r !== null)
+          s.notify(until ? `${props.member.name} is timed out` : `Timeout ended for ${props.member.name}`);
+      });
+  };
+  if (props.member.timeoutUntil)
+    return (
+      <button className="btn btn--ghost btn--small" onClick={() => run(null)}>
+        End timeout
+      </button>
+    );
+  return (
+    <span className="timeout-picker">
+      <button
+        className="btn btn--ghost btn--small btn--danger-text"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        Time out
+      </button>
+      {open && (
+        <span className="timeout-picker__menu" role="menu" aria-label="Timeout length">
+          {TIMEOUTS.map(([label, ms]) => (
+            <button
+              key={label}
+              role="menuitem"
+              className="role-picker__item"
+              onClick={() => run(new Date(Date.now() + ms).toISOString())}
+            >
+              {label}
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
   );
 }

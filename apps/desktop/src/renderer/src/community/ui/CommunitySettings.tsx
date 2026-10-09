@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { PERMISSION_INFO, Permission } from '@river/protocol/permissions';
 import type { BanView } from '../../../../shared/community-actions.ts';
-import type { CommunityView, RoleView } from '../../../../shared/ipc.ts';
+import type { AuditView, CommunityView, RoleView } from '../../../../shared/ipc.ts';
 import { COMMUNITY_ICONS } from '../../../../shared/templates.ts';
 import { useCommunity, type CommunityTab } from '../store.ts';
 import { ArrowDownIcon, ArrowUpIcon, Avatar, Modal, Toggle, XIcon, can, hex, initials } from './common.tsx';
@@ -24,6 +24,7 @@ export function CommunitySettings(props: {
     ['roles', 'Roles', can(perms, Permission.MANAGE_ROLES)],
     ['members', 'Members', true],
     ['bans', 'Bans', can(perms, Permission.BAN_MEMBERS)],
+    ['audit', 'Audit log', can(perms, Permission.VIEW_AUDIT_LOG)],
   ];
   const visible = tabs.filter((t) => t[2]);
   const [tab, setTab] = useState<CommunityTab>(
@@ -75,6 +76,7 @@ export function CommunitySettings(props: {
           {tab === 'roles' && <Roles community={community} me={me} />}
           {tab === 'members' && <Members community={community} me={me} />}
           {tab === 'bans' && <Bans community={community} />}
+          {tab === 'audit' && <AuditLog community={community} />}
         </section>
       </div>
     </Modal>
@@ -307,11 +309,13 @@ function RoleEditor(props: {
   const [color, setColor] = useState(role.color);
   const [permissions, setPermissions] = useState(role.permissions);
   const [mentionable, setMentionable] = useState(role.mentionable);
+  const [hoist, setHoist] = useState(role.hoist);
   const dirty =
     name !== role.name ||
     color !== role.color ||
     permissions !== role.permissions ||
-    mentionable !== role.mentionable;
+    mentionable !== role.mentionable ||
+    hoist !== role.hoist;
   const mine = community.permissions;
 
   const save = (): void => {
@@ -319,7 +323,7 @@ function RoleEditor(props: {
       a: 'updateRole',
       communityId: community.id,
       roleId: role.id,
-      ...(role.everyone ? {} : { name: name.trim() || role.name, color, mentionable }),
+      ...(role.everyone ? {} : { name: name.trim() || role.name, color, mentionable, hoist }),
       permissions,
     });
   };
@@ -372,6 +376,13 @@ function RoleEditor(props: {
             checked={mentionable}
             disabled={!editable}
             onChange={setMentionable}
+          />
+          <Toggle
+            label="Show members with this role separately"
+            help="Online members with this role get their own group in the member list."
+            checked={hoist}
+            disabled={!editable}
+            onChange={setHoist}
           />
         </>
       )}
@@ -428,6 +439,7 @@ function RoleEditor(props: {
               setColor(role.color);
               setPermissions(role.permissions);
               setMentionable(role.mentionable);
+              setHoist(role.hoist);
             }}
           >
             Reset
@@ -620,6 +632,54 @@ function Bans({ community }: { community: CommunityView }): ReactElement {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** Who changed what, newest first; names are filled in on this device. */
+function AuditLog({ community }: { community: CommunityView }): ReactElement {
+  const s = useCommunity();
+  const [entries, setEntries] = useState<AuditView[] | null>(null);
+  const [more, setMore] = useState(true);
+  const load = (before?: string): void => {
+    void s.run({ a: 'audit', communityId: community.id, ...(before ? { before } : {}) }).then((page) => {
+      const list = page ?? [];
+      setEntries((prev) => (before ? [...(prev ?? []), ...list] : list));
+      setMore(list.length === 100);
+    });
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => load(), [community.id]);
+  return (
+    <div className="settings-page">
+      <h2>Audit log</h2>
+      <p className="muted small">
+        Changes to roles, channels and settings, and moderation, for the last 90 days. The server keeps only
+        IDs; names are filled in on your computer.
+      </p>
+      {entries === null && <p className="muted">Loading…</p>}
+      {entries?.length === 0 && <p className="muted">Nothing has happened yet.</p>}
+      <ol className="audit">
+        {entries?.map((e) => {
+          const actor = community.members.find((m) => m.riverId === e.actor);
+          return (
+            <li key={e.id} className="audit__row">
+              <Avatar id={e.actor} name={e.actorName} avatar={actor?.avatar} size={28} />
+              <span className="audit__text">
+                <strong>{e.actorName}</strong> {e.summary}
+              </span>
+              <time className="muted small" dateTime={e.at} title={new Date(e.at).toLocaleString()}>
+                {new Date(e.at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+              </time>
+            </li>
+          );
+        })}
+      </ol>
+      {entries && entries.length > 0 && more && (
+        <button className="btn btn--ghost btn--small" onClick={() => load(entries.at(-1)!.at)}>
+          Load older
+        </button>
+      )}
     </div>
   );
 }

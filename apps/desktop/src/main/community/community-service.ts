@@ -504,7 +504,8 @@ export class CommunityService {
             );
             name = String(opened.name).slice(0, 64);
             mentionable = opened.mentionable === true;
-            hoist = opened.hoist === true;
+            // Roles from before 1.0.6 have no flag: keep showing them separately, as they were.
+            hoist = opened.hoist !== false;
           } catch {
             // keep placeholder
           }
