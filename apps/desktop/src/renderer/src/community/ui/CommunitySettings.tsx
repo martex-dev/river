@@ -148,6 +148,7 @@ const PERMISSION_GROUPS: Array<[string, number[]]> = [
     [
       Permission.SEND_MESSAGES,
       Permission.ADD_REACTIONS,
+      Permission.ATTACH_FILES,
 
       Permission.MENTION_EVERYONE,
       Permission.MANAGE_MESSAGES,

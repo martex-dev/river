@@ -58,6 +58,7 @@ const api: RiverApi = {
     connection: () => ipcRenderer.invoke(IPC.communityList, 'connection-only'),
     action: (action) => ipcRenderer.invoke(IPC.communityAction, action),
     profile: () => ipcRenderer.invoke(IPC.profileGet),
+    saveAttachment: (pointer) => ipcRenderer.invoke(IPC.attachmentSave, pointer),
     onEvent: (listener) => {
       const handler = (_event: unknown, e: CommunityEvent): void => listener(e);
       ipcRenderer.on(IPC.communityEvent, handler);

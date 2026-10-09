@@ -2,6 +2,7 @@ import {
   API_PREFIX,
   DEFAULT_EVERYONE,
   Permission,
+  attachmentUploadResponseSchema,
   bansResponseSchema,
   communitiesResponseSchema,
   communitySchema,
@@ -18,7 +19,9 @@ import {
 } from '@river/protocol';
 import { z } from 'zod';
 import {
+  attachmentPointerSchema,
   communityActionSchema,
+  type AttachmentPointer,
   type BanView,
   type CommunityAction,
   type CommunityActionResult,
@@ -32,7 +35,8 @@ import type {
   RoleView,
 } from '../../shared/ipc.ts';
 import type { AccountService } from '../account/account-service.ts';
-import { ApiError, type RequestJson } from '../http.ts';
+import { decryptAttachment, encryptAttachment, paddedSize } from '@river/crypto';
+import { ApiError, type RequestBytes, type RequestJson } from '../http.ts';
 import type { IdentityService } from '../identity/identity-service.ts';
 import type { Logger } from '../logger.ts';
 import type { LocalDatabase } from '../storage/database.ts';
@@ -58,6 +62,8 @@ interface Deps {
   account: AccountService;
   identity: IdentityService;
   requestJson: RequestJson;
+  /** Binary requests for attachments. */
+  requestBytes?: RequestBytes;
   log: Logger;
   /** Creates the realtime socket (injectable for tests). */
   createSocket?: (url: string) => WebSocket;
@@ -102,6 +108,8 @@ export class CommunityService {
   private readonly knownNames = new Map<string, string>();
   /** Message IDs seen recently, to tell new messages from edits and reactions. */
   private readonly seen = new Set<string>();
+  private readonly attachmentCache = new Map<string, Uint8Array>();
+  private cacheBytes = 0;
   private socket: WebSocket | null = null;
   private socketState: 'online' | 'offline' | 'connecting' = 'offline';
   private reconnectTimer: NodeJS.Timeout | null = null;
@@ -331,7 +339,7 @@ export class CommunityService {
     const key = this.keys.get(communityId);
     if (!key) return null;
     try {
-      const body = open<{ text: string; replyTo?: string }>(
+      const body = open<{ text: string; replyTo?: string; attachments?: unknown[] }>(
         key,
         communityId,
         `message:${m.channelId}`,
@@ -340,7 +348,12 @@ export class CommunityService {
       const community = this.communities.find((c) => c.id === communityId);
       const sender = community?.members.find((x) => x.riverId === m.sender);
       const me = this.me();
-      const text = String(body.text).slice(0, 4000);
+      const text = String(body.text ?? '').slice(0, 4000);
+      // Only pointers to blobs the server linked to this message, and only well-formed ones.
+      const attachments = (Array.isArray(body.attachments) ? body.attachments : []).flatMap((a) => {
+        const p = attachmentPointerSchema.safeParse(a);
+        return p.success && m.attachments.includes(p.data.id) ? [p.data] : [];
+      });
       const reactions = m.reactions.flatMap((r) => {
         try {
           const emoji = String(
@@ -366,6 +379,7 @@ export class CommunityService {
         reactions,
         replyTo:
           typeof body.replyTo === 'string' && /^[A-Za-z0-9_-]{22}$/.test(body.replyTo) ? body.replyTo : null,
+        attachments,
         mentionsMe: m.sender !== me && this.mentions(text, community, m.sender),
         mine: m.sender === me,
       };
@@ -504,16 +518,30 @@ export class CommunityService {
     return res.messages.map((m) => this.toChat(communityId, m)).filter((m): m is ChatMessage => m !== null);
   }
 
-  async send(channelId: string, rawText: unknown, replyTo?: string): Promise<ChatMessage> {
-    const text = textSchema.parse(rawText);
+  async send(
+    channelId: string,
+    rawText: unknown,
+    replyTo?: string,
+    attachments: AttachmentPointer[] = [],
+  ): Promise<ChatMessage> {
+    const text = attachments.length ? z.string().max(4000).parse(rawText) : textSchema.parse(rawText);
     const communityId = this.communityOf(channelId);
     const key = this.requireKey(communityId);
     const id = randomId();
     this.remember(id);
+    const body = {
+      text,
+      ...(replyTo ? { replyTo } : {}),
+      ...(attachments.length ? { attachments } : {}),
+    };
     const sent = await this.call(
       `/channels/${channelId}/messages`,
       'POST',
-      { id, body: seal(key, communityId, `message:${channelId}`, replyTo ? { text, replyTo } : { text }) },
+      {
+        id,
+        body: seal(key, communityId, `message:${channelId}`, body),
+        ...(attachments.length ? { attachments: attachments.map((a) => a.id) } : {}),
+      },
       messageSchema,
     );
     return this.toChat(communityId, sent)!;
@@ -690,16 +718,24 @@ export class CommunityService {
         return bans as CommunityActionResult<A>;
       }
       case 'send':
-        return (await this.send(act.channelId, act.text, act.replyTo)) as CommunityActionResult<A>;
+        return (await this.send(
+          act.channelId,
+          act.text,
+          act.replyTo,
+          act.attachments,
+        )) as CommunityActionResult<A>;
+      case 'upload':
+        return (await this.upload(act)) as CommunityActionResult<A>;
+      case 'download':
+        return (await this.downloadAttachment(act.pointer)) as CommunityActionResult<A>;
       case 'edit': {
         const communityId = this.communityOf(act.channelId);
         const existing = await this.findMessage(act.channelId, act.messageId);
-        const body = seal(
-          this.requireKey(communityId),
-          communityId,
-          `message:${act.channelId}`,
-          existing?.replyTo ? { text: act.text, replyTo: existing.replyTo } : { text: act.text },
-        );
+        const body = seal(this.requireKey(communityId), communityId, `message:${act.channelId}`, {
+          text: act.text,
+          ...(existing?.replyTo ? { replyTo: existing.replyTo } : {}),
+          ...(existing?.attachments.length ? { attachments: existing.attachments } : {}),
+        });
         await this.call(`/messages/${act.messageId}`, 'PATCH', { body }, z.unknown());
         break;
       }
@@ -776,6 +812,93 @@ export class CommunityService {
       }
     }
     return ok;
+  }
+
+  /** Encrypts a file on this device and uploads only the ciphertext. */
+  private async upload(file: {
+    name: string;
+    mime: string;
+    bytes: Uint8Array;
+    width?: number;
+    height?: number;
+    thumb?: string;
+  }): Promise<AttachmentPointer> {
+    const requestBytes = this.requireBytes();
+    const enc = encryptAttachment(file.bytes);
+    const url = `${this.server()}${API_PREFIX}/attachments`;
+    const post = async (): Promise<Uint8Array> =>
+      requestBytes(url, { method: 'POST', body: enc.blob, token: await this.token(), maxBytes: 4096 });
+    let res: Uint8Array;
+    try {
+      res = await post();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        await this.deps.account.connect();
+        res = await post();
+      } else if (err instanceof ApiError && err.status === 413) {
+        throw new CommunityError(`${file.name} is larger than this server allows.`);
+      } else return explain(err);
+    }
+    const { id } = attachmentUploadResponseSchema.parse(JSON.parse(Buffer.from(res).toString('utf8')));
+    const mime = /^[\w.+-]+\/[\w.+-]+$/.test(file.mime) ? file.mime : 'application/octet-stream';
+    const thumb =
+      file.thumb && /^data:image\/(webp|jpeg);base64,[A-Za-z0-9+/]+=*$/.test(file.thumb)
+        ? file.thumb
+        : undefined;
+    return attachmentPointerSchema.parse({
+      id,
+      key: Buffer.from(enc.key).toString('base64'),
+      digest: Buffer.from(enc.digest).toString('base64'),
+      size: enc.size,
+      // eslint-disable-next-line no-control-regex -- strips control characters from file names
+      name: file.name.replace(/[\u0000-\u001f/\\]/g, '_').slice(0, 255) || 'file',
+      mime,
+      ...(file.width ? { width: file.width } : {}),
+      ...(file.height ? { height: file.height } : {}),
+      ...(thumb ? { thumb } : {}),
+    });
+  }
+
+  /** Downloads, verifies and decrypts an attachment (kept in a small in-memory cache). */
+  async downloadAttachment(raw: AttachmentPointer): Promise<Uint8Array> {
+    const pointer = attachmentPointerSchema.parse(raw);
+    const cached = this.attachmentCache.get(pointer.id);
+    if (cached) {
+      this.attachmentCache.delete(pointer.id);
+      this.attachmentCache.set(pointer.id, cached);
+      return cached;
+    }
+    const requestBytes = this.requireBytes();
+    const url = `${this.server()}${API_PREFIX}/attachments/${pointer.id}`;
+    const blob = await requestBytes(url, {
+      method: 'GET',
+      token: await this.token(),
+      maxBytes: paddedSize(pointer.size) + 16 + 32 + 16,
+    }).catch(explain);
+    let plain: Uint8Array;
+    try {
+      plain = decryptAttachment(blob, {
+        key: Buffer.from(pointer.key, 'base64'),
+        digest: Buffer.from(pointer.digest, 'base64'),
+        size: pointer.size,
+      });
+    } catch {
+      throw new CommunityError('This file failed its integrity check and was not opened.');
+    }
+    const copy = new Uint8Array(plain);
+    this.attachmentCache.set(pointer.id, copy);
+    this.cacheBytes += copy.byteLength;
+    for (const [id, bytes] of this.attachmentCache) {
+      if (this.cacheBytes <= 150 * 1024 * 1024) break;
+      this.attachmentCache.delete(id);
+      this.cacheBytes -= bytes.byteLength;
+    }
+    return copy;
+  }
+
+  private requireBytes(): RequestBytes {
+    if (!this.deps.requestBytes) throw new CommunityError('Attachments are not available.');
+    return this.deps.requestBytes;
   }
 
   private async findMessage(channelId: string, messageId: string): Promise<ChatMessage | undefined> {

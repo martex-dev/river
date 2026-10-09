@@ -1,4 +1,14 @@
-import { ipcMain, shell, type IpcMainInvokeEvent, type WebContents } from 'electron';
+import { writeFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
+import {
+  BrowserWindow,
+  app,
+  dialog,
+  ipcMain,
+  shell,
+  type IpcMainInvokeEvent,
+  type WebContents,
+} from 'electron';
 import { z } from 'zod';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import {
@@ -22,7 +32,7 @@ import { MIN_PASSPHRASE_LENGTH, WrongPassphraseError } from './storage/key-file.
 import type { StorageService } from './storage/storage-service.ts';
 import type { IdentityService } from './identity/identity-service.ts';
 import { UserFacingError, type AccountService } from './account/account-service.ts';
-import type { CommunityAction } from '../shared/community-actions.ts';
+import { attachmentPointerSchema, type CommunityAction } from '../shared/community-actions.ts';
 import { CommunityError, type CommunityService } from './community/community-service.ts';
 import { desktopCapturer } from 'electron';
 import type { UpdateService } from './updater/update-service.ts';
@@ -138,6 +148,24 @@ export function registerIpc(deps: IpcDeps): void {
   );
   handle(IPC.communityAction, (_e, action) => result(() => deps.community.action(action as CommunityAction)));
   handle(IPC.profileGet, () => deps.community.profile());
+  handle(IPC.attachmentSave, (event, raw) =>
+    result(async () => {
+      const pointer = attachmentPointerSchema.parse(raw);
+      const bytes = await deps.community.downloadAttachment(pointer);
+      // Only a plain file name from the (untrusted) message; the user picks the folder.
+      const safe =
+        basename(pointer.name)
+          // eslint-disable-next-line no-control-regex -- strips control characters from file names
+          .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
+          .replace(/^\.+/, '') || 'file';
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const options = { defaultPath: join(app.getPath('downloads'), safe) };
+      const choice = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+      if (choice.canceled || !choice.filePath) return false;
+      await writeFile(choice.filePath, bytes);
+      return true;
+    }),
+  );
   handle(IPC.voiceJoin, (_e, channelId) =>
     result(() => {
       deps.community.voiceJoin(z.string().parse(channelId));

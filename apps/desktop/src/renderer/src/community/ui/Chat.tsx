@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, ChatMessage, CommunityView } from '../../../../shared/ipc.ts';
 import { typingNames, useCommunity } from '../store.ts';
+import { AttachmentList, PendingFiles, pendingFrom, uploadAll, type PendingFile } from './Attachments.tsx';
 import {
   Avatar,
   EditIcon,
   EmojiPicker,
   HashIcon,
   PinIcon,
+  PlusIcon,
   Popover,
   QUICK_REACTIONS,
   ReplyIcon,
@@ -47,6 +49,15 @@ export function TextChannel(props: {
   const [atBottom, setAtBottom] = useState(true);
   const myName = memberOf(community, me)?.name ?? null;
   const names = useMemo(() => community.members.map((m) => m.name), [community.members]);
+  const [pending, setPending] = useState<PendingFile[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const canAttach = can(channel.permissions, Permission.ATTACH_FILES | Permission.SEND_MESSAGES);
+  const addFiles = (files: Iterable<File>): void => {
+    if (!canAttach) return s.notify('You cannot attach files in this channel.', 'error');
+    const next = [...pending, ...pendingFrom(files)];
+    if (next.length > 10) s.notify('You can attach up to 10 files to one message.', 'error');
+    setPending(next.slice(0, 10));
+  };
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -63,7 +74,31 @@ export function TextChannel(props: {
   };
 
   return (
-    <div className="chat">
+    <div
+      className="chat"
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes('Files')) return;
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node))
+          setDragging(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+      }}
+    >
+      {dragging && (
+        <div className="drop-zone" aria-hidden="true">
+          <div className="drop-zone__card">
+            <strong>Upload to #{channel.name}</strong>
+            <span className="muted small">Files are encrypted on your device before upload.</span>
+          </div>
+        </div>
+      )}
       <header className="chat__head">
         <span className="channel__icon">
           <HashIcon size={20} />
@@ -149,7 +184,16 @@ export function TextChannel(props: {
           Jump to present
         </button>
       )}
-      <Composer community={community} channel={channel} me={me} names={names} />
+      <Composer
+        community={community}
+        channel={channel}
+        me={me}
+        names={names}
+        pending={pending}
+        canAttach={canAttach}
+        onAddFiles={addFiles}
+        onPendingChange={setPending}
+      />
     </div>
   );
 }
@@ -239,7 +283,7 @@ function Message(props: {
             <EditBox message={m} />
           ) : (
             <div className="msg__text">
-              <RichText text={m.text} names={props.names} me={props.myName} />
+              {m.text && <RichText text={m.text} names={props.names} me={props.myName} />}
               {m.editedAt && (
                 <span className="msg__edited" title={new Date(m.editedAt).toLocaleString()}>
                   {' '}
@@ -248,6 +292,7 @@ function Message(props: {
               )}
             </div>
           )}
+          {m.attachments.length > 0 && <AttachmentList attachments={m.attachments} />}
           {m.reactions.length > 0 && (
             <div className="reactions">
               {m.reactions.map((r) => (
@@ -404,6 +449,10 @@ function Composer(props: {
   channel: ChannelView;
   me: string;
   names: string[];
+  pending: PendingFile[];
+  canAttach: boolean;
+  onAddFiles(files: Iterable<File>): void;
+  onPendingChange(files: PendingFile[]): void;
 }): ReactElement {
   const { community, channel, me } = props;
   const s = useCommunity();
@@ -412,6 +461,8 @@ function Composer(props: {
   const [mentionIndex, setMentionIndex] = useState(0);
   const lastTyping = useRef(0);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null);
   useCommunity((x) => x.typing[channel.id]);
   const typers = typingNames(channel.id, community, me);
   const canSend = can(channel.permissions, Permission.SEND_MESSAGES);
@@ -437,7 +488,19 @@ function Composer(props: {
 
   const send = async (): Promise<void> => {
     const value = text.trim();
-    if (!value) return;
+    const files = props.pending;
+    if ((!value && files.length === 0) || uploading) return;
+    let attachments;
+    if (files.length) {
+      setUploading({ done: 0, total: files.length });
+      try {
+        attachments = await uploadAll(files, (done) => setUploading({ done, total: files.length }));
+      } catch (err) {
+        setUploading(null);
+        s.notify((err as Error).message || 'Upload failed.', 'error');
+        return;
+      }
+    }
     setText('');
     useCommunity.setState({ replyTo: null });
     const sent = await s.run({
@@ -445,9 +508,15 @@ function Composer(props: {
       channelId: channel.id,
       text: value,
       ...(replyTo ? { replyTo: replyTo.id } : {}),
+      ...(attachments ? { attachments } : {}),
     });
+    setUploading(null);
     if (!sent) setText(value);
-    else s.handle({ t: 'message', message: sent, isNew: false });
+    else {
+      for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
+      props.onPendingChange([]);
+      s.handle({ t: 'message', message: sent, isNew: false });
+    }
   };
 
   if (!canSend) {
@@ -492,6 +561,22 @@ function Composer(props: {
           </button>
         </div>
       )}
+      {props.pending.length > 0 && (
+        <PendingFiles
+          files={props.pending}
+          onRemove={(key) => props.onPendingChange(props.pending.filter((p) => p.key !== key))}
+        />
+      )}
+      {uploading && (
+        <div className="upload-progress" role="status">
+          Encrypting and uploading{' '}
+          {uploading.done + 1 > uploading.total ? uploading.total : uploading.done + 1} of {uploading.total}…
+          <span
+            className="upload-progress__bar"
+            style={{ width: `${(uploading.done / uploading.total) * 100}%` }}
+          />
+        </div>
+      )}
       <form
         className={`chat__composer ${replyTo ? 'has-reply' : ''}`}
         onSubmit={(e) => {
@@ -499,8 +584,38 @@ function Composer(props: {
           void send();
         }}
       >
+        {props.canAttach && (
+          <>
+            <button
+              type="button"
+              className="icon-btn composer__attach"
+              aria-label="Attach files"
+              title="Attach files"
+              onClick={() => fileRef.current?.click()}
+            >
+              <PlusIcon size={20} />
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(e) => {
+                if (e.target.files?.length) props.onAddFiles(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </>
+        )}
         <textarea
           ref={ref}
+          onPaste={(e) => {
+            const files = [...e.clipboardData.files];
+            if (files.length) {
+              e.preventDefault();
+              props.onAddFiles(files);
+            }
+          }}
           rows={Math.min(8, Math.max(1, text.split('\n').length))}
           value={text}
           maxLength={4000}
@@ -550,7 +665,10 @@ function Composer(props: {
         >
           <SmileIcon size={20} />
         </button>
-        <button className="btn btn--primary" disabled={text.trim() === ''}>
+        <button
+          className="btn btn--primary"
+          disabled={(text.trim() === '' && props.pending.length === 0) || !!uploading}
+        >
           Send
         </button>
       </form>

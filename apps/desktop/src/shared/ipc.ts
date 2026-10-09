@@ -1,5 +1,5 @@
 import type { ReleaseChannel } from '@river/release/channels';
-import type { CommunityAction, CommunityActionResult } from './community-actions.ts';
+import type { AttachmentPointer, CommunityAction, CommunityActionResult } from './community-actions.ts';
 import type { Settings, SettingsPatch } from './settings.ts';
 
 /** Every IPC channel River uses. Main validates every payload; nothing else is exposed. */
@@ -40,6 +40,7 @@ export const IPC = {
   communityEvent: 'river:community:event',
   communityAction: 'river:community:action',
   profileGet: 'river:profile:get',
+  attachmentSave: 'river:attachment:save',
   openLink: 'river:link:open',
 } as const;
 
@@ -202,6 +203,7 @@ export interface ChatMessage {
   pinned: boolean;
   reactions: ReactionView[];
   replyTo: string | null;
+  attachments: AttachmentPointer[];
   mentionsMe: boolean;
   mine: boolean;
 }
@@ -278,6 +280,8 @@ export interface RiverApi {
     /** Every other community operation; validated in main against communityActionSchema. */
     action<A extends CommunityAction>(action: A): Promise<Result<CommunityActionResult<A>>>;
     profile(): Promise<{ name: string; avatar: string | null }>;
+    /** Decrypts an attachment and asks where to save it. */
+    saveAttachment(pointer: AttachmentPointer): Promise<Result<boolean>>;
     onEvent(listener: (event: CommunityEvent) => void): () => void;
   };
   voice: {

@@ -129,3 +129,68 @@ async function readCapped(res: Response, maxBytes: number): Promise<string> {
   }
   return Buffer.concat(chunks).toString('utf8');
 }
+
+export type RequestBytes = (
+  url: string,
+  options: { method: 'GET' | 'POST'; body?: Uint8Array; token?: string; maxBytes: number },
+) => Promise<Uint8Array>;
+
+/**
+ * Binary request (attachment upload/download) with a size cap and a timeout.
+ * Uploads return the raw JSON response bytes; non-2xx becomes ApiError.
+ */
+export function createRequestBytes(
+  fetchImpl: typeof fetch,
+  options: { timeoutMs?: number } = {},
+): RequestBytes {
+  const timeoutMs = options.timeoutMs ?? 120_000;
+  return async (url, req) => {
+    let res: Response;
+    try {
+      res = await fetchImpl(url, {
+        method: req.method,
+        redirect: 'error',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: {
+          ...(req.body ? { 'content-type': 'application/octet-stream' } : {}),
+          ...(req.token ? { authorization: `Bearer ${req.token}` } : {}),
+        },
+        ...(req.body ? { body: req.body } : {}),
+      });
+    } catch (err) {
+      throw new NetworkError((err as Error).message);
+    }
+    if (!res.ok) {
+      const text = await readCapped(res, 64 * 1024).catch(() => '');
+      let err: { code?: unknown; message?: unknown } | undefined;
+      try {
+        err = (JSON.parse(text) as { error?: typeof err }).error;
+      } catch {
+        // not JSON
+      }
+      throw new ApiError(
+        res.status,
+        typeof err?.code === 'string' ? err.code.slice(0, 64) : 'http_error',
+        typeof err?.message === 'string' ? err.message.slice(0, 300) : `HTTP ${res.status}`,
+      );
+    }
+    const declared = Number(res.headers.get('content-length') ?? '0');
+    if (declared > req.maxBytes) throw new ApiError(res.status, 'too_large', 'Response too large');
+    const reader = res.body?.getReader();
+    if (!reader) return new Uint8Array(await res.arrayBuffer());
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > req.maxBytes) {
+        await reader.cancel();
+        throw new ApiError(res.status, 'too_large', 'Response too large');
+      }
+      chunks.push(value);
+    }
+    return Buffer.concat(chunks);
+  };
+}

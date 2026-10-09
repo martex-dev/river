@@ -7,7 +7,7 @@ import { Permission } from '@river/protocol';
 // Desktop main-process code under test.
 import { AccountService } from '../../apps/desktop/src/main/account/account-service.ts';
 import { CommunityService } from '../../apps/desktop/src/main/community/community-service.ts';
-import { createRequestJson } from '../../apps/desktop/src/main/http.ts';
+import { createRequestBytes, createRequestJson } from '../../apps/desktop/src/main/http.ts';
 import { IdentityService } from '../../apps/desktop/src/main/identity/identity-service.ts';
 import { nullLogger } from '../../apps/desktop/src/main/logger.ts';
 import { migrateDatabase, type LocalDatabase } from '../../apps/desktop/src/main/storage/database.ts';
@@ -34,9 +34,11 @@ const injectFetch: typeof fetch = async (input, init) => {
     method: (init?.method ?? 'GET') as 'GET',
     url: url.pathname + url.search,
     headers: Object.fromEntries(new Headers(init?.headers).entries()),
-    ...(init?.body ? { payload: String(init.body) } : {}),
+    ...(init?.body
+      ? { payload: init.body instanceof Uint8Array ? Buffer.from(init.body) : String(init.body) }
+      : {}),
   });
-  return new Response(res.body || null, {
+  return new Response(res.rawPayload.length ? new Uint8Array(res.rawPayload) : null, {
     status: res.statusCode,
     headers: res.headers as Record<string, string>,
   });
@@ -62,6 +64,7 @@ async function person(name: string): Promise<{ community: CommunityService; rive
     account,
     identity,
     requestJson: createRequestJson(injectFetch),
+    requestBytes: createRequestBytes(injectFetch),
     log: nullLogger,
     createSocket: deadSocket,
   });
@@ -217,5 +220,41 @@ describe('desktop ↔ server communities', () => {
       alice.community.action({ a: 'kick', communityId: 'x', riverId: 'not-a-uuid' } as never),
     ).rejects.toThrow();
     await expect(alice.community.action({ a: 'nope' } as never)).rejects.toThrow();
+  });
+
+  it('sends encrypted files that only members can decrypt', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Files');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.kind === 'text')!;
+    await bob.community.refresh();
+
+    const secret = Buffer.from('%PDF-1.7 quarterly numbers: 42');
+    const pointer = await alice.community.action({
+      a: 'upload',
+      name: 'report.pdf',
+      mime: 'application/pdf',
+      bytes: new Uint8Array(secret),
+    });
+    expect(pointer).toMatchObject({ name: 'report.pdf', mime: 'application/pdf', size: secret.length });
+    await alice.community.action({ a: 'send', channelId: general.id, text: '', attachments: [pointer] });
+
+    const [msg] = await bob.community.messages(general.id);
+    expect(msg!.text).toBe('');
+    expect(msg!.attachments).toEqual([pointer]);
+    const bytes = await bob.community.action({ a: 'download', pointer: msg!.attachments[0]! });
+    expect(Buffer.from(bytes).equals(secret)).toBe(true);
+
+    // The server holds ciphertext only, and a forged pointer (wrong key) is refused.
+    const row = await serverDb.db.selectFrom('attachments').selectAll().executeTakeFirstOrThrow();
+    expect(row.size).toBeGreaterThan(secret.length);
+    const forged = { ...pointer, key: Buffer.alloc(64, 7).toString('base64') };
+    const fresh = await person('Carol');
+    await fresh.community.join(await alice.community.invite(created.id), async () => undefined);
+    await expect(fresh.community.action({ a: 'download', pointer: forged })).rejects.toThrow(/integrity/);
+
+    // Empty messages without files are still refused.
+    await expect(alice.community.action({ a: 'send', channelId: general.id, text: '  ' })).rejects.toThrow();
   });
 });

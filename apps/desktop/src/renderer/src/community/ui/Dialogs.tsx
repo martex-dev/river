@@ -150,6 +150,7 @@ const TEXT_PERMS = [
   Permission.VIEW_CHANNELS,
   Permission.SEND_MESSAGES,
   Permission.ADD_REACTIONS,
+  Permission.ATTACH_FILES,
   Permission.MENTION_EVERYONE,
   Permission.MANAGE_MESSAGES,
   Permission.PIN_MESSAGES,

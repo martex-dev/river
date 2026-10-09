@@ -27,6 +27,50 @@ export const avatarSchema = z
   .max(60_000)
   .regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/);
 
+const b64 = (bytes: number) =>
+  z
+    .string()
+    .regex(/^[A-Za-z0-9+/]+=*$/)
+    .refine(
+      (v) => v.length % 4 === 0 && (v.length / 4) * 3 - (v.match(/=*$/)?.[0].length ?? 0) === bytes,
+      `must be ${bytes} bytes`,
+    );
+
+/** Largest file River uploads (the server may allow less). */
+export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
+/**
+ * Everything needed to fetch and decrypt one attachment. It travels only
+ * inside end-to-end encrypted message bodies.
+ */
+export const attachmentPointerSchema = z
+  .object({
+    id,
+    key: b64(64),
+    digest: b64(32),
+    size: z.number().int().min(0).max(MAX_ATTACHMENT_BYTES),
+    name: z.string().min(1).max(255),
+    mime: z
+      .string()
+      .max(100)
+      .regex(/^[\w.+-]+\/[\w.+-]+$/),
+    width: z.number().int().min(1).max(20_000).optional(),
+    height: z.number().int().min(1).max(20_000).optional(),
+    /** Tiny blurred preview made on the sender's device. */
+    thumb: z
+      .string()
+      .max(3000)
+      .regex(/^data:image\/(webp|jpeg);base64,[A-Za-z0-9+/]+=*$/)
+      .optional(),
+  })
+  .strict();
+export type AttachmentPointer = z.infer<typeof attachmentPointerSchema>;
+
+const fileBytes = z.custom<Uint8Array>(
+  (v) => v instanceof Uint8Array && v.byteLength <= MAX_ATTACHMENT_BYTES,
+  'file too large',
+);
+
 export const communityActionSchema = z.discriminatedUnion('a', [
   z
     .object({ a: z.literal('updateCommunity'), communityId: id, name, description: z.string().max(300) })
@@ -72,7 +116,28 @@ export const communityActionSchema = z.discriminatedUnion('a', [
   z.object({ a: z.literal('ban'), communityId: id, riverId }).strict(),
   z.object({ a: z.literal('unban'), communityId: id, riverId }).strict(),
   z.object({ a: z.literal('bans'), communityId: id }).strict(),
-  z.object({ a: z.literal('send'), channelId: id, text, replyTo: id.optional() }).strict(),
+  z
+    .object({
+      a: z.literal('send'),
+      channelId: id,
+      text: z.string().max(4000),
+      replyTo: id.optional(),
+      attachments: z.array(attachmentPointerSchema).max(10).optional(),
+    })
+    .strict()
+    .refine((v) => v.text.trim().length > 0 || (v.attachments?.length ?? 0) > 0, 'empty'),
+  z
+    .object({
+      a: z.literal('upload'),
+      name: z.string().min(1).max(255),
+      mime: z.string().max(100),
+      bytes: fileBytes,
+      width: z.number().int().min(1).max(20_000).optional(),
+      height: z.number().int().min(1).max(20_000).optional(),
+      thumb: z.string().max(3000).optional(),
+    })
+    .strict(),
+  z.object({ a: z.literal('download'), pointer: attachmentPointerSchema }).strict(),
   z.object({ a: z.literal('edit'), channelId: id, messageId: id, text }).strict(),
   z.object({ a: z.literal('deleteMessage'), messageId: id }).strict(),
   z.object({ a: z.literal('pin'), messageId: id, pinned: z.boolean() }).strict(),
@@ -116,6 +181,8 @@ interface Results {
   bans: BanView[];
   send: ChatMessage;
   pins: ChatMessage[];
+  upload: AttachmentPointer;
+  download: Uint8Array;
 }
 
 export type CommunityActionResult<A extends CommunityAction> = A['a'] extends keyof Results

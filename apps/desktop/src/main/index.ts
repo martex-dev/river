@@ -29,7 +29,7 @@ import { StorageService } from './storage/storage-service.ts';
 import { IdentityService } from './identity/identity-service.ts';
 import { AccountService } from './account/account-service.ts';
 import { UpdateService } from './updater/update-service.ts';
-import { createFetchBytes, createRequestJson } from './http.ts';
+import { createFetchBytes, createRequestBytes, createRequestJson } from './http.ts';
 import { verifyDownloadedUpdate } from './updater/verify-download.ts';
 
 const devServerUrl = (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) || undefined;
@@ -73,6 +73,7 @@ async function start(): Promise<void> {
     account,
     identity,
     requestJson: createRequestJson((input, init) => net.fetch(input as string, init)),
+    requestBytes: createRequestBytes((input, init) => net.fetch(input as string, init)),
     log,
   });
   // Connect whenever local data becomes available (now, or after the user unlocks).

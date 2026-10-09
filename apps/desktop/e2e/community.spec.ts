@@ -187,6 +187,22 @@ test('create, invite, join, chat and call between two members', async () => {
   await bobsMessage(alice).getByTitle('React 👍').click();
   await expect(bobsMessage(bob).locator('.reaction__count')).toHaveText('1', { timeout: 15_000 });
 
+  // Encrypted image attachment: Alice sends a picture, Bob's app decrypts and shows it.
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  await alice
+    .locator('.chat__composer input[type=file]')
+    .setInputFiles({ name: 'pixel.png', mimeType: 'image/png', buffer: png });
+  await expect(alice.locator('.pending-file')).toContainText('pixel.png');
+  await alice.getByRole('button', { name: 'Send', exact: true }).click();
+  const bobImage = bob.locator('.attachment-image__full').last();
+  await expect(bobImage).toBeVisible({ timeout: 20_000 });
+  await expect
+    .poll(() => bobImage.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: 10_000 })
+    .toBe(1);
+
   // Roles: Alice creates a role that may kick, and gives it to Bob.
   await alice.locator('.community__title').click();
   await alice.getByRole('menuitem', { name: 'Community settings' }).click();
