@@ -6,6 +6,8 @@ import {
   Permission,
   attachmentUploadResponseSchema,
   iceServersResponseSchema,
+  auditResponseSchema,
+  TIMEOUT_DENIES,
   bansResponseSchema,
   joinResponseSchema,
   rotateKeyResponseSchema,
@@ -33,6 +35,7 @@ import {
 } from '../../shared/community-actions.ts';
 import { layoutChanges, moveChannel as moveInLayout, sidebarGroups } from '../../shared/layout.ts';
 import { communityIconSchema, templateById, type TemplateId } from '../../shared/templates.ts';
+import { describeAudit } from './audit-text.ts';
 import type {
   CategoryView,
   ChannelView,
@@ -459,9 +462,18 @@ export class CommunityService {
     return row?.avatar ?? null;
   }
 
+  /** Your nickname in a community, if you set one. */
+  private nickname(communityId: string): string | null {
+    const row = this.deps
+      .db()
+      ?.prepare('SELECT nickname FROM community_nicknames WHERE community_id = ?')
+      .get(communityId) as { nickname: string } | undefined;
+    return row?.nickname ?? null;
+  }
+
   private sealedProfile(communityId: string): string {
     const profile: SealedProfile = {
-      name: this.myName(),
+      name: this.nickname(communityId) ?? this.myName(),
       avatar: this.myAvatar(),
       identityKey: this.myIdentityKey(),
     };
@@ -491,11 +503,18 @@ export class CommunityService {
         const everyone = r.id === c.id;
         let name = everyone ? '@everyone' : 'role';
         let mentionable = false;
+        let hoist = false;
         if (!everyone) {
           try {
-            const opened = ring.open<{ name: string; mentionable?: unknown }>(c.id, `role:${r.id}`, r.name);
+            const opened = ring.open<{ name: string; mentionable?: unknown; hoist?: unknown }>(
+              c.id,
+              `role:${r.id}`,
+              r.name,
+            );
             name = String(opened.name).slice(0, 64);
             mentionable = opened.mentionable === true;
+            // Roles from before 1.0.6 have no flag: keep showing them separately, as they were.
+            hoist = opened.hoist !== false;
           } catch {
             // keep placeholder
           }
@@ -508,6 +527,7 @@ export class CommunityService {
           position: r.position,
           everyone,
           mentionable,
+          hoist,
         };
       })
       .sort((a, b) => b.position - a.position);
@@ -527,6 +547,12 @@ export class CommunityService {
       });
     };
     const myRoles = c.members.find((m) => m.riverId === me)?.roles ?? [];
+    const myTimeout = c.members.find((m) => m.riverId === me)?.timeoutUntil;
+    const timedOut = !!myTimeout && Date.parse(myTimeout) > Date.now() && me !== ownerId;
+    const permsOfMe = (overwrites?: ChannelView['overwrites']): number => {
+      const p = permsOf(me, myRoles, overwrites);
+      return timedOut && !(p & Permission.ADMINISTRATOR) ? p & ~TIMEOUT_DENIES : p;
+    };
 
     const channels: ChannelView[] = c.channels
       .map((ch) => {
@@ -547,11 +573,12 @@ export class CommunityService {
           topic,
           position: ch.position,
           overwrites: ch.overwrites,
-          permissions: permsOf(me, myRoles, ch.overwrites),
+          permissions: permsOfMe(ch.overwrites),
           private: !!everyoneOverwrite && (everyoneOverwrite.deny & Permission.VIEW_CHANNELS) !== 0,
           parentId: ch.parentId,
           unread: this.isUnread(ch.id, ch.lastMessageAt),
           lastReadAt: this.readMarkers().get(ch.id) ?? null,
+          synced: ch.synced,
         };
       })
       .sort((a, b) => a.position - b.position);
@@ -563,7 +590,7 @@ export class CommunityService {
         } catch {
           // keep placeholder for undecryptable names
         }
-        return { id: k.id, name, position: k.position };
+        return { id: k.id, name, position: k.position, overwrites: k.overwrites };
       })
       .sort((a, b) => a.position - b.position);
 
@@ -594,6 +621,7 @@ export class CommunityService {
         online: this.online.get(m.riverId) ?? m.online,
         owner: m.riverId === ownerId,
         rank: topPosition(ownerId, wireRoles, { riverId: m.riverId, roles: m.roles }),
+        timeoutUntil: m.timeoutUntil && Date.parse(m.timeoutUntil) > Date.now() ? m.timeoutUntil : null,
       };
     });
 
@@ -610,8 +638,9 @@ export class CommunityService {
       name: String(meta.name).slice(0, 64),
       description: String(meta.description ?? '').slice(0, 300),
       icon: communityIconSchema.safeParse(meta.icon).success ? (meta.icon as string) : null,
+      myNickname: this.nickname(c.id),
       ownerId,
-      permissions: permsOf(me, myRoles),
+      permissions: permsOfMe(),
       myRank: topPosition(ownerId, wireRoles, { riverId: me, roles: myRoles }),
       roles,
       categories,
@@ -776,8 +805,10 @@ export class CommunityService {
       if (role.everyone || !mine.includes(role.id) || !(role.mentionable || mayMentionAll)) continue;
       if (lower.includes(`@${role.name.toLowerCase()}`)) return true;
     }
-    const name = this.myName();
-    return !!name && lower.includes(`@${name.toLowerCase()}`);
+    const names = [this.myName(), community ? this.nickname(community.id) : null].filter(
+      (n): n is string => !!n,
+    );
+    return names.some((n) => lower.includes(`@${n.toLowerCase()}`));
   }
 
   // ---- Public API (called via IPC) -----------------------------------------------------------
@@ -848,7 +879,9 @@ export class CommunityService {
         {
           categories: categorised.map((g, position) => ({ id: g.categoryId!, position })),
           channels: groups
-            .flatMap((g) => g.channels.map((ch) => ({ id: ch.id, parentId: g.categoryId })))
+            .flatMap((g) =>
+              g.channels.map((ch) => ({ id: ch.id, parentId: g.categoryId, synced: g.categoryId !== null })),
+            )
             .map((ch, position) => ({ ...ch, position })),
         },
         z.unknown(),
@@ -1095,6 +1128,7 @@ export class CommunityService {
           });
         }
         if (act.overwrites) body.overwrites = act.overwrites;
+        if (act.synced !== undefined) body.synced = act.synced;
         await this.call(`/channels/${act.channelId}`, 'PATCH', body, z.unknown());
         break;
       }
@@ -1159,6 +1193,35 @@ export class CommunityService {
           z.unknown(),
         );
         break;
+      case 'categoryPermissions':
+        await this.call(
+          `/categories/${act.categoryId}`,
+          'PATCH',
+          { overwrites: act.overwrites },
+          z.unknown(),
+        );
+        break;
+      case 'timeout':
+        await this.call(
+          `/communities/${act.communityId}/members/${act.riverId}/timeout`,
+          'PUT',
+          { until: act.until },
+          z.unknown(),
+        );
+        break;
+      case 'audit': {
+        const query = act.before ? `?before=${encodeURIComponent(act.before)}` : '';
+        const res = await this.call(
+          `/communities/${act.communityId}/audit${query}`,
+          'GET',
+          undefined,
+          auditResponseSchema,
+        );
+        const community = this.requireCommunity(act.communityId);
+        return res.entries.map((e) =>
+          describeAudit(e, community, (id) => this.knownNames.get(id)),
+        ) as CommunityActionResult<A>;
+      }
       case 'reconnect':
         this.reconnectNow();
         return ok;
@@ -1178,6 +1241,7 @@ export class CommunityService {
             name: seal(this.requireKey(act.communityId), act.communityId, `role:${id}`, {
               name: act.name,
               mentionable: act.mentionable ?? false,
+              hoist: act.hoist ?? false,
             }),
             color: act.color,
             permissions: act.permissions,
@@ -1189,12 +1253,13 @@ export class CommunityService {
       }
       case 'updateRole': {
         const body: Record<string, unknown> = {};
-        if (act.name !== undefined || act.mentionable !== undefined) {
+        if (act.name !== undefined || act.mentionable !== undefined || act.hoist !== undefined) {
           // Name and settings are sealed together, so keep whichever was not changed.
           const current = this.requireCommunity(act.communityId).roles.find((r) => r.id === act.roleId);
           body.name = seal(this.requireKey(act.communityId), act.communityId, `role:${act.roleId}`, {
             name: act.name ?? current?.name ?? 'role',
             mentionable: act.mentionable ?? current?.mentionable ?? false,
+            hoist: act.hoist ?? current?.hoist ?? false,
           });
         }
         if (act.color !== undefined) body.color = act.color;
@@ -1366,6 +1431,20 @@ export class CommunityService {
           ...(act.disconnect ? { disconnect: true } : {}),
         });
         break;
+      case 'setNickname': {
+        if (act.nickname === null)
+          this.db().prepare('DELETE FROM community_nicknames WHERE community_id = ?').run(act.communityId);
+        else
+          this.db()
+            .prepare(
+              `INSERT INTO community_nicknames (community_id, nickname) VALUES (?, ?)
+               ON CONFLICT (community_id) DO UPDATE SET nickname = excluded.nickname`,
+            )
+            .run(act.communityId, act.nickname);
+        await this.publishProfile(act.communityId);
+        await this.refresh().catch(() => undefined);
+        break;
+      }
       case 'setProfile': {
         if (act.name !== undefined) this.deps.identity.setDisplayName(act.name);
         if (act.avatar !== undefined) {

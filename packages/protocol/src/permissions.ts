@@ -23,10 +23,25 @@ export const Permission = {
   ADMINISTRATOR: 1 << 16,
   ATTACH_FILES: 1 << 17,
   PIN_MESSAGES: 1 << 18,
+  /** Time members out (1.0.6). */
+  MODERATE_MEMBERS: 1 << 19,
+  /** Read the community's audit log (1.0.6). */
+  VIEW_AUDIT_LOG: 1 << 20,
 } as const;
 export type PermissionName = keyof typeof Permission;
 
 export const ALL_PERMISSIONS = Object.values(Permission).reduce((a, b) => a | b, 0);
+
+/** What a timed-out member cannot do (they can still read). */
+export const TIMEOUT_DENIES =
+  Permission.SEND_MESSAGES |
+  Permission.ADD_REACTIONS |
+  Permission.ATTACH_FILES |
+  Permission.MENTION_EVERYONE |
+  Permission.CONNECT |
+  Permission.SPEAK |
+  Permission.STREAM |
+  Permission.CREATE_INVITE;
 
 /** What @everyone may do in a new community. */
 export const DEFAULT_EVERYONE =
@@ -63,6 +78,16 @@ export const PERMISSION_INFO: Array<{ key: PermissionName; label: string; help: 
   },
   { key: 'KICK_MEMBERS', label: 'Kick members', help: 'Remove members (they can rejoin with an invite).' },
   { key: 'BAN_MEMBERS', label: 'Ban members', help: 'Remove members and stop them rejoining.' },
+  {
+    key: 'MODERATE_MEMBERS',
+    label: 'Time out members',
+    help: 'Stop members below them from talking, reacting and joining voice for a while.',
+  },
+  {
+    key: 'VIEW_AUDIT_LOG',
+    label: 'View audit log',
+    help: 'See who changed roles, channels and settings, and who moderated whom.',
+  },
   { key: 'CREATE_INVITE', label: 'Create invites', help: 'Make invite links.' },
   { key: 'VIEW_CHANNELS', label: 'View channels', help: 'See channels and read messages.' },
   { key: 'SEND_MESSAGES', label: 'Send messages', help: 'Post in text channels.' },

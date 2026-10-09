@@ -12,11 +12,12 @@ export type Modal =
   | { kind: 'category'; communityId: string; categoryId?: string }
   | { kind: 'invite'; communityId: string }
   | { kind: 'join-invite'; link: string }
+  | { kind: 'nickname'; communityId: string }
   | { kind: 'add-friend'; riverId: string; serverUrl: string }
   | { kind: 'user-settings'; tab?: UserTab }
   | { kind: 'confirm'; title: string; body: string; action: string; run: () => Promise<void> };
 
-export type CommunityTab = 'overview' | 'roles' | 'members' | 'bans';
+export type CommunityTab = 'overview' | 'roles' | 'members' | 'bans' | 'audit';
 export type UserTab = 'profile' | 'voice' | 'notifications' | 'appearance';
 
 const TYPING_MS = 7000;

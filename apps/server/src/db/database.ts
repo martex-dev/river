@@ -12,6 +12,7 @@ import * as m0005 from './migrations/0005_attachments.ts';
 import * as m0006 from './migrations/0006_messaging.ts';
 import * as m0007 from './migrations/0007_key_epochs.ts';
 import * as m0008 from './migrations/0008_categories.ts';
+import * as m0009 from './migrations/0009_moderation.ts';
 import type { Database } from './schema.ts';
 
 export type Dialect = 'sqlite' | 'postgres';
@@ -35,6 +36,7 @@ export const MIGRATIONS: Record<string, Migration> = {
   '0006_messaging': m0006,
   '0007_key_epochs': m0007,
   '0008_categories': m0008,
+  '0009_moderation': m0009,
 };
 
 /**

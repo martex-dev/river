@@ -503,4 +503,94 @@ describe('desktop ↔ server communities', () => {
     await vi.waitFor(() => expect(sockets).toHaveLength(2));
     alice.community.stop();
   });
+
+  it('moderation: timeouts, hoisted roles, category permissions and a readable audit log', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Mod', 'friends');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const staff = await alice.community.action({
+      a: 'createRole',
+      communityId: created.id,
+      name: 'Staff',
+      color: 0xe91e63,
+      permissions: 0,
+      hoist: true,
+    });
+    await alice.community.action({
+      a: 'setMemberRoles',
+      communityId: created.id,
+      riverId: bob.riverId,
+      roles: [staff],
+    });
+
+    // Timeout: Bob can no longer send (his own view says so too), until it is lifted.
+    const until = new Date(Date.now() + 10 * 60_000).toISOString();
+    await alice.community.action({ a: 'timeout', communityId: created.id, riverId: bob.riverId, until });
+    let view = (await bob.community.refresh())[0]!;
+    const general = view.channels.find((c) => c.name === 'general')!;
+    expect(view.members.find((m) => m.riverId === bob.riverId)?.timeoutUntil).toBe(until);
+    expect(general.permissions & Permission.SEND_MESSAGES).toBe(0);
+    await expect(bob.community.send(general.id, 'let me talk')).rejects.toThrow();
+    await alice.community.action({
+      a: 'timeout',
+      communityId: created.id,
+      riverId: bob.riverId,
+      until: null,
+    });
+    view = (await bob.community.refresh())[0]!;
+    expect(
+      view.channels.find((c) => c.id === general.id)!.permissions & Permission.SEND_MESSAGES,
+    ).toBeTruthy();
+    expect(view.roles.find((r) => r.id === staff)).toMatchObject({ name: 'Staff', hoist: true });
+
+    // Category permissions apply to its synced channels.
+    const text = view.categories.find((k) => k.name === 'Text channels')!;
+    await alice.community.action({
+      a: 'categoryPermissions',
+      communityId: created.id,
+      categoryId: text.id,
+      overwrites: [{ roleId: created.id, allow: 0, deny: Permission.ADD_REACTIONS }],
+    });
+    const memes = (await bob.community.refresh())[0]!.channels.find((c) => c.name === 'memes')!;
+    expect(memes.synced).toBe(true);
+    expect(memes.permissions & Permission.ADD_REACTIONS).toBe(0);
+
+    // The audit log reads like sentences with the names only members can decrypt.
+    const log = await alice.community.action({ a: 'audit', communityId: created.id });
+    const lines = log.map((e) => `${e.actorName} ${e.summary}`);
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        'Alice changed the category Text channels (permissions)',
+        'Alice ended the timeout of Bob',
+        'Alice gave Bob Staff',
+        'Alice created the role Staff',
+        'Bob joined the community',
+      ]),
+    );
+    expect(lines.some((l) => l.startsWith('Alice timed out Bob until'))).toBe(true);
+    await expect(bob.community.action({ a: 'audit', communityId: created.id })).rejects.toThrow();
+  });
+
+  it('nicknames: one name per community, and @nickname pings you', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Nicks');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    await bob.community.action({ a: 'setNickname', communityId: created.id, nickname: 'Bobby' });
+    const view = (await alice.community.refresh())[0]!;
+    expect(view.members.find((m) => m.riverId === bob.riverId)?.name).toBe('Bobby');
+    expect((await bob.community.refresh())[0]!.myNickname).toBe('Bobby');
+
+    const general = view.channels.find((c) => c.kind === 'text')!;
+    await alice.community.send(general.id, 'hey @Bobby');
+    expect((await bob.community.messages(general.id)).find((m) => m.text === 'hey @Bobby')!.mentionsMe).toBe(
+      true,
+    );
+
+    await bob.community.action({ a: 'setNickname', communityId: created.id, nickname: null });
+    expect((await alice.community.refresh())[0]!.members.find((m) => m.riverId === bob.riverId)?.name).toBe(
+      'Bob',
+    );
+  });
 });

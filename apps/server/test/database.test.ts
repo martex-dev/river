@@ -31,6 +31,8 @@ async function reset(db: Kysely<Database>): Promise<void> {
     'message_reactions',
     'bans',
     'channel_overwrites',
+    'category_overwrites',
+    'audit_log',
     'member_roles',
     'roles',
     'messages',

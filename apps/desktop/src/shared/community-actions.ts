@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ChatMessage } from './ipc.ts';
+import type { AuditView, ChatMessage } from './ipc.ts';
 import { communityIconSchema } from './templates.ts';
 
 /**
@@ -103,6 +103,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       name: name.optional(),
       topic: z.string().max(300).optional(),
       overwrites: overwrites.optional(),
+      /** true: use the category's permissions again. */
+      synced: z.boolean().optional(),
     })
     .strict(),
   z.object({ a: z.literal('moveChannel'), channelId: id, direction }).strict(),
@@ -110,6 +112,12 @@ export const communityActionSchema = z.discriminatedUnion('a', [
   z.object({ a: z.literal('createCategory'), communityId: id, name }).strict(),
   z.object({ a: z.literal('renameCategory'), communityId: id, categoryId: id, name }).strict(),
   z.object({ a: z.literal('deleteCategory'), communityId: id, categoryId: id }).strict(),
+  z.object({ a: z.literal('categoryPermissions'), communityId: id, categoryId: id, overwrites }).strict(),
+  /** Time a member out until a moment, or end it with null. */
+  z
+    .object({ a: z.literal('timeout'), communityId: id, riverId, until: z.iso.datetime().nullable() })
+    .strict(),
+  z.object({ a: z.literal('audit'), communityId: id, before: z.iso.datetime().optional() }).strict(),
   /** A drag and drop in the sidebar: only the categories and channels that moved. */
   z
     .object({
@@ -123,6 +131,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
         .max(500),
     })
     .strict(),
+  /** Your name in one community (null: use your River name). */
+  z.object({ a: z.literal('setNickname'), communityId: id, nickname: name.nullable() }).strict(),
   /** Reconnect to the server right away instead of waiting for the next attempt. */
   z.object({ a: z.literal('reconnect') }).strict(),
   /** You have seen this channel up to now. */
@@ -135,6 +145,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       color,
       permissions,
       mentionable: z.boolean().optional(),
+      hoist: z.boolean().optional(),
     })
     .strict(),
   z
@@ -146,6 +157,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       color: color.optional(),
       permissions: permissions.optional(),
       mentionable: z.boolean().optional(),
+      hoist: z.boolean().optional(),
     })
     .strict(),
   z.object({ a: z.literal('moveRole'), communityId: id, roleId: id, direction }).strict(),
@@ -222,6 +234,7 @@ export interface BanView {
 interface Results {
   createRole: string;
   createCategory: string;
+  audit: AuditView[];
   bans: BanView[];
   send: ChatMessage;
   pins: ChatMessage[];

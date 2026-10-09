@@ -600,6 +600,125 @@ describe('communities', () => {
       expect(after.categories.map((k) => k.id)).toEqual([secretCat]);
       expect(after.channels.find((c) => c.id === text)?.parentId).toBeNull();
     });
+
+    it('timeouts take away talking, not reading, and respect the hierarchy', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const mod = await join(a, owner.token, cid);
+      const member = await join(a, owner.token, cid);
+      const modRole = await role(a, owner.token, cid, Permission.MODERATE_MEMBERS);
+      await assign(a, owner.token, cid, mod.riverId, [modRole.rid]);
+      const soon = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      const url = (who: string) => `/v1/communities/${cid}/members/${who}/timeout`;
+
+      expect(await status(a, 'PUT', url(member.riverId), member.token, { until: soon })).toBe(403);
+      expect(await status(a, 'PUT', url(owner.riverId), mod.token, { until: soon })).toBe(403);
+      expect(
+        await status(a, 'PUT', url(member.riverId), mod.token, {
+          until: new Date(Date.now() + 40 * 24 * 3600 * 1000).toISOString(),
+        }),
+      ).toBe(400);
+      expect(
+        await status(a, 'PUT', url(member.riverId), mod.token, {
+          until: new Date(Date.now() - 1000).toISOString(),
+        }),
+      ).toBe(400);
+      expect(await status(a, 'PUT', url(member.riverId), mod.token, { until: soon })).toBe(200);
+
+      // Timed out: can read, cannot post or react.
+      expect(await status(a, 'GET', `/v1/channels/${text}/messages`, member.token)).toBe(200);
+      expect(
+        await status(a, 'POST', `/v1/channels/${text}/messages`, member.token, { id: id(), body: sealed() }),
+      ).toBe(403);
+      expect(
+        (await fetchCommunity(a, owner.token, cid)).members.find((m) => m.riverId === member.riverId),
+      ).toMatchObject({ timeoutUntil: soon });
+
+      expect(await status(a, 'PUT', url(member.riverId), mod.token, { until: null })).toBe(200);
+      expect(
+        await status(a, 'POST', `/v1/channels/${text}/messages`, member.token, { id: id(), body: sealed() }),
+      ).toBe(201);
+    });
+
+    it('records an audit log that only permitted members can read', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const helper = await role(a, owner.token, cid, Permission.KICK_MEMBERS);
+      await assign(a, owner.token, cid, member.riverId, [helper.rid]);
+      await status(a, 'PATCH', `/v1/channels/${text}`, owner.token, { name: sealed() });
+      expect(await status(a, 'GET', `/v1/communities/${cid}/audit`, member.token)).toBe(403);
+      const res = await a.inject({
+        method: 'GET',
+        url: `/v1/communities/${cid}/audit`,
+        headers: auth(owner.token),
+      });
+      expect(res.statusCode).toBe(200);
+      const actions = (res.json().entries as Array<{ action: string; actor: string; target: string }>).map(
+        (e) => e.action,
+      );
+      expect(actions).toEqual(
+        expect.arrayContaining([
+          'member.join',
+          'role.create',
+          'member.roles',
+          'channel.update',
+          'invite.create',
+        ]),
+      );
+      // Newest first, and nothing in it is content: only IDs and numbers.
+      expect(actions[0]).toBe('channel.update');
+      expect(JSON.stringify(res.json())).not.toMatch(/profile|body|meta/);
+    });
+
+    it("channels can follow their category's permissions until given their own", async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const cat = id();
+      await status(a, 'POST', `/v1/communities/${cid}/categories`, owner.token, { id: cat, name: sealed() });
+      const inside = id();
+      await status(a, 'POST', `/v1/communities/${cid}/channels`, owner.token, {
+        id: inside,
+        kind: 'text',
+        name: sealed(),
+        parentId: cat,
+      });
+      let mine = await fetchCommunity(a, owner.token, cid);
+      expect(mine.channels.find((c) => c.id === inside)).toMatchObject({ synced: true, overwrites: [] });
+
+      // Hiding the category from @everyone hides its synced channel.
+      const hidden = [{ roleId: cid, allow: 0, deny: Permission.VIEW_CHANNELS }];
+      expect(await status(a, 'PATCH', `/v1/categories/${cat}`, member.token, { overwrites: hidden })).toBe(
+        403,
+      );
+      expect(await status(a, 'PATCH', `/v1/categories/${cat}`, owner.token, { overwrites: hidden })).toBe(
+        200,
+      );
+      expect((await fetchCommunity(a, member.token, cid)).channels.map((c) => c.id)).not.toContain(inside);
+      mine = await fetchCommunity(a, owner.token, cid);
+      expect(mine.categories.find((k) => k.id === cat)?.overwrites).toEqual(hidden);
+
+      // Giving the channel its own permissions unsyncs it; syncing again restores the category's.
+      await status(a, 'PATCH', `/v1/channels/${inside}`, owner.token, { overwrites: [] });
+      expect((await fetchCommunity(a, member.token, cid)).channels.map((c) => c.id)).toContain(inside);
+      expect((await fetchCommunity(a, owner.token, cid)).channels.find((c) => c.id === inside)?.synced).toBe(
+        false,
+      );
+      await status(a, 'PATCH', `/v1/channels/${inside}`, owner.token, { synced: true });
+      expect((await fetchCommunity(a, member.token, cid)).channels.map((c) => c.id)).not.toContain(inside);
+    });
+
+    it('serves a page for friend links opened in a browser', async () => {
+      const a = await start();
+      const page = await a.inject({ method: 'GET', url: '/add' });
+      expect(page.statusCode).toBe(200);
+      expect(page.body).toContain('paste it anywhere in River');
+      expect(page.headers['content-security-policy']).toContain("default-src 'none'");
+    });
   });
   describe('attachments', () => {
     const blob = (n = 1024): Buffer => randomBytes(16 + n + 32);
