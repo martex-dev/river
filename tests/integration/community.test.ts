@@ -403,4 +403,71 @@ describe('desktop ↔ server communities', () => {
     expect(blank.categories).toEqual([]);
     expect(blank.channels.map((c) => c.name)).toEqual(['general', 'Lounge']);
   });
+
+  it('mentions: mentionable roles, @everyone rights and replies to your messages', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    const created = await alice.community.create('Mentions');
+    for (const p of [bob, carol])
+      await p.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.kind === 'text')!;
+    const mods = await alice.community.action({
+      a: 'createRole',
+      communityId: created.id,
+      name: 'Mods',
+      color: 0x3498db,
+      permissions: 0,
+      mentionable: true,
+    });
+    const quiet = await alice.community.action({
+      a: 'createRole',
+      communityId: created.id,
+      name: 'Quiet',
+      color: 0,
+      permissions: 0,
+    });
+    await alice.community.action({
+      a: 'setMemberRoles',
+      communityId: created.id,
+      riverId: bob.riverId,
+      roles: [mods, quiet],
+    });
+    expect((await bob.community.refresh())[0]!.roles.find((r) => r.id === mods)).toMatchObject({
+      mentionable: true,
+    });
+
+    // Carol (a plain member) can ping the mentionable role, not the other one, and not @everyone.
+    await carol.community.refresh();
+    await carol.community.send(general.id, 'hey @Mods, help?');
+    await carol.community.send(general.id, 'psst @Quiet');
+    await carol.community.send(general.id, '@everyone party');
+    const seen = await bob.community.messages(general.id);
+    const flag = (text: string) => seen.find((m) => m.text === text)!.mentionsMe;
+    expect([flag('hey @Mods, help?'), flag('psst @Quiet'), flag('@everyone party')]).toEqual([
+      true,
+      false,
+      false,
+    ]);
+    // The owner may mention any role.
+    await alice.community.send(general.id, 'owner says @Quiet');
+    expect(
+      (await bob.community.messages(general.id)).find((m) => m.text === 'owner says @Quiet')!.mentionsMe,
+    ).toBe(true);
+
+    // A reply to Bob's message pings Bob.
+    const bobs = await bob.community.send(general.id, 'anyone?');
+    await carol.community.action({ a: 'send', channelId: general.id, text: 'me!', replyTo: bobs.id });
+    expect((await bob.community.messages(general.id)).find((m) => m.text === 'me!')!.mentionsMe).toBe(true);
+
+    // Turning mentionable off keeps the name.
+    await alice.community.action({
+      a: 'updateRole',
+      communityId: created.id,
+      roleId: mods,
+      mentionable: false,
+    });
+    const role = (await alice.community.refresh())[0]!.roles.find((r) => r.id === mods)!;
+    expect([role.name, role.mentionable]).toEqual(['Mods', false]);
+  });
 });

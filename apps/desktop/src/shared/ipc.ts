@@ -143,6 +143,8 @@ export interface RoleView {
   permissions: number;
   position: number;
   everyone: boolean;
+  /** Anyone may @mention this role (people with Mention everyone always can). */
+  mentionable: boolean;
 }
 
 export interface ChannelView {
