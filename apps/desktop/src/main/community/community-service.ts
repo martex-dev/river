@@ -32,6 +32,7 @@ import {
   type CommunityActionResult,
 } from '../../shared/community-actions.ts';
 import { layoutChanges, moveChannel as moveInLayout, sidebarGroups } from '../../shared/layout.ts';
+import { templateById, type TemplateId } from '../../shared/templates.ts';
 import type {
   CategoryView,
   ChannelView,
@@ -763,12 +764,17 @@ export class CommunityService {
     }, 150);
   }
 
-  async create(rawName: unknown): Promise<CommunityView> {
+  /** Creates a community laid out from a template (see shared/templates.ts). */
+  async create(rawName: unknown, templateId?: TemplateId): Promise<CommunityView> {
     const name = nameSchema.parse(rawName);
+    const template = templateById(templateId);
     const id = randomId();
     const key = newCommunityKey();
-    const text = randomId();
-    const voice = randomId();
+    const groups = template.layout.map((g) => ({
+      categoryId: g.category === null ? null : randomId(),
+      category: g.category,
+      channels: g.channels.map((ch) => ({ ...ch, id: randomId() })),
+    }));
     const body = {
       id,
       meta: seal(key, id, 'meta', { name }),
@@ -777,13 +783,39 @@ export class CommunityService {
         avatar: this.myAvatar(),
         identityKey: this.myIdentityKey(),
       }),
-      channels: [
-        { id: text, kind: 'text', name: seal(key, id, `channel:${text}`, { name: 'general' }) },
-        { id: voice, kind: 'voice', name: seal(key, id, `channel:${voice}`, { name: 'Lounge' }) },
-      ],
+      channels: groups.flatMap((g) =>
+        g.channels.map((ch) => ({
+          id: ch.id,
+          kind: ch.kind,
+          name: seal(key, id, `channel:${ch.id}`, { name: ch.name }),
+        })),
+      ),
     };
     await this.call('/communities', 'POST', body, communitySchema);
     this.storeKey(id, key, 0);
+    // Categories need the community to exist first; then one layout request files the channels.
+    const categorised = groups.filter((g) => g.categoryId !== null);
+    if (categorised.length > 0) {
+      for (const g of categorised) {
+        await this.call(
+          `/communities/${id}/categories`,
+          'POST',
+          { id: g.categoryId, name: seal(key, id, `category:${g.categoryId!}`, { name: g.category! }) },
+          z.unknown(),
+        );
+      }
+      await this.call(
+        `/communities/${id}/layout`,
+        'PUT',
+        {
+          categories: categorised.map((g, position) => ({ id: g.categoryId!, position })),
+          channels: groups
+            .flatMap((g) => g.channels.map((ch) => ({ id: ch.id, parentId: g.categoryId })))
+            .map((ch, position) => ({ ...ch, position })),
+        },
+        z.unknown(),
+      );
+    }
     await this.refresh();
     this.ensureSocket();
     return this.communities.find((c) => c.id === id)!;

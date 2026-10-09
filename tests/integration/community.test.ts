@@ -348,4 +348,22 @@ describe('desktop ↔ server communities', () => {
     expect(view.categories).toEqual([]);
     expect(view.channels.find((c) => c.name === 'Squad')?.parentId).toBeNull();
   });
+
+  it('creates a community from a template in one step, with categories', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Squad', 'gaming');
+    expect(created.categories.map((k) => k.name)).toEqual(['Info', 'Chat', 'Voice']);
+    const inCategory = (name: string) =>
+      created.channels
+        .filter((c) => c.parentId === created.categories.find((k) => k.name === name)!.id)
+        .sort((a, b) => a.position - b.position)
+        .map((c) => c.name);
+    expect(inCategory('Info')).toEqual(['welcome', 'announcements']);
+    expect(inCategory('Chat')).toEqual(['general', 'clips', 'looking-for-group']);
+    expect(inCategory('Voice')).toEqual(['Squad 1', 'Squad 2', 'AFK']);
+    // No template: the familiar general + Lounge without categories.
+    const blank = await alice.community.create('Plain');
+    expect(blank.categories).toEqual([]);
+    expect(blank.channels.map((c) => c.name)).toEqual(['general', 'Lounge']);
+  });
 });
