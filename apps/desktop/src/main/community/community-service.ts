@@ -1,3 +1,5 @@
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   API_PREFIX,
   DEFAULT_EVERYONE,
@@ -80,6 +82,8 @@ interface Deps {
   requestJson: RequestJson;
   /** Binary requests for attachments. */
   requestBytes?: RequestBytes;
+  /** Where to keep encrypted copies of received files (null = keep none). */
+  blobDir?: () => string | null;
   log: Logger;
   /** Creates the realtime socket (injectable for tests). */
   createSocket?: (url: string) => WebSocket;
@@ -1126,13 +1130,7 @@ export class CommunityService {
       this.attachmentCache.set(pointer.id, cached);
       return cached;
     }
-    const requestBytes = this.requireBytes();
-    const url = `${this.server()}${API_PREFIX}/attachments/${pointer.id}`;
-    const blob = await requestBytes(url, {
-      method: 'GET',
-      token: await this.token(),
-      maxBytes: paddedSize(pointer.size) + 16 + 32 + 16,
-    }).catch(explain);
+    const blob = await this.fetchBlob(pointer);
     let plain: Uint8Array;
     try {
       plain = decryptAttachment(blob, {
@@ -1152,6 +1150,62 @@ export class CommunityService {
       this.cacheBytes -= bytes.byteLength;
     }
     return copy;
+  }
+
+  /**
+   * The encrypted blob, from this device if we kept a copy, otherwise from the
+   * server (then kept). Copies stay encrypted with the attachment key, which
+   * lives only in the encrypted database — deleting the message makes them
+   * unreadable.
+   */
+  private async fetchBlob(pointer: AttachmentPointer): Promise<Uint8Array> {
+    const dir = this.deps.blobDir?.();
+    const file = dir ? join(dir, pointer.id) : null;
+    if (file) {
+      const local = await readFile(file).catch(() => null);
+      if (local) return local;
+    }
+    const requestBytes = this.requireBytes();
+    const url = `${this.server()}${API_PREFIX}/attachments/${pointer.id}`;
+    const blob = await requestBytes(url, {
+      method: 'GET',
+      token: await this.token(),
+      maxBytes: paddedSize(pointer.size) + 16 + 32 + 16,
+    }).catch(explain);
+    if (file && dir) {
+      await mkdir(dir, { recursive: true }).catch(() => undefined);
+      await writeFile(`${file}.part`, blob)
+        .then(() => rename(`${file}.part`, file))
+        .catch(() => undefined);
+    }
+    return blob;
+  }
+
+  /**
+   * Keeps a local (still encrypted) copy of a received file so it outlives the
+   * server's retention. Verifies it first so a bad blob is never kept.
+   */
+  async prefetchAttachment(raw: AttachmentPointer): Promise<void> {
+    const pointer = attachmentPointerSchema.parse(raw);
+    const dir = this.deps.blobDir?.();
+    if (!dir) return;
+    if (
+      await readFile(join(dir, pointer.id)).then(
+        () => true,
+        () => false,
+      )
+    )
+      return;
+    const blob = await this.fetchBlob(pointer);
+    try {
+      decryptAttachment(blob, {
+        key: Buffer.from(pointer.key, 'base64'),
+        digest: Buffer.from(pointer.digest, 'base64'),
+        size: pointer.size,
+      });
+    } catch {
+      await rm(join(dir, pointer.id), { force: true });
+    }
   }
 
   private requireBytes(): RequestBytes {

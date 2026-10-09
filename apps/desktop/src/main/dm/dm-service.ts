@@ -416,6 +416,10 @@ export class DmService {
           );
         this.emitMessage(content.id, true);
         this.emitConversations();
+        // Keep our own (encrypted) copies of files before the server's copy expires.
+        for (const a of content.attachments ?? []) {
+          void this.deps.community.prefetchAttachment(a).catch(() => undefined);
+        }
         if (!groupId && this.contact(peer)?.state === 'accepted') {
           void this.sendContent(peer, { v: 1, t: 'receipt', kind: 'delivered', ids: [content.id] }).catch(
             () => undefined,

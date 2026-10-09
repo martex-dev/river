@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -58,6 +58,7 @@ async function person(name: string) {
     identity,
     requestJson: createRequestJson(injectFetch),
     requestBytes: createRequestBytes(injectFetch),
+    blobDir: () => join(dir, `${name}-blobs`),
     log: nullLogger,
     createSocket: deadSocket,
   });
@@ -167,6 +168,12 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     await bob.dm.sync();
     const [m] = await bob.dm.action({ a: 'messages', peer: alice.riverId });
     expect(m!.attachments).toEqual([pointer]);
+    // Bob's River keeps its own encrypted copy as soon as the message arrives…
+    const local = join(dir, 'Bob-blobs', pointer.id);
+    for (let i = 0; i < 100 && !existsSync(local); i++) await new Promise((r) => setTimeout(r, 20));
+    expect(readFileSync(local).toString('utf8')).not.toContain('private notes');
+    // …so the file still opens after the server's copy has expired.
+    await serverDb.db.deleteFrom('attachments').execute();
     const bytes = await bob.community.downloadAttachment(m!.attachments[0]!);
     expect(new TextDecoder().decode(bytes)).toBe('private notes');
   });

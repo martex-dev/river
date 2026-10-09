@@ -76,6 +76,7 @@ async function start(): Promise<void> {
     identity,
     requestJson: createRequestJson((input, init) => net.fetch(input as string, init)),
     requestBytes: createRequestBytes((input, init) => net.fetch(input as string, init)),
+    blobDir: () => (storage.db() ? join(app.getPath('userData'), 'attachments') : null),
     log,
   });
   const dm = new DmService({ db: () => storage.db(), identity, account, community, log });
