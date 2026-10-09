@@ -47,9 +47,36 @@ interface Peer {
   outgoingIce: RTCIceCandidateInit[];
 }
 
+export interface CallOptions {
+  inputDeviceId: string | null;
+  noiseSuppression: boolean;
+  echoCancellation: boolean;
+  pushToTalk: boolean;
+}
+
+const SPEAKING_THRESHOLD = 0.035;
+const SPEAKING_HOLD_MS = 350;
+
+interface Analyser {
+  node: AnalyserNode;
+  source: MediaStreamAudioSourceNode;
+  track: MediaStreamTrack;
+}
+
 export class VoiceCall {
   readonly channelId: string;
   private readonly me: string;
+  private options: CallOptions;
+  private audioCtx: AudioContext | null = null;
+  private readonly analysers = new Map<string, Analyser>();
+  private readonly lastLoud = new Map<string, number>();
+  private speakingTimer: number | null = null;
+  /** River IDs (including our own) currently speaking. */
+  speaking = new Set<string>();
+  deafened = false;
+  serverMuted = false;
+  /** Push-to-talk key is held. */
+  pttActive = false;
   private readonly peers = new Map<string, Peer>();
   /** Candidates from peers we have not created yet (they can overtake the offer). */
   private readonly earlyIce = new Map<string, RTCIceCandidateInit[]>();
@@ -60,10 +87,17 @@ export class VoiceCall {
   muted = false;
   closed = false;
 
-  constructor(channelId: string, me: string, onChange: () => void) {
+  constructor(channelId: string, me: string, onChange: () => void, options?: Partial<CallOptions>) {
     this.channelId = channelId;
     this.me = me;
     this.onChange = onChange;
+    this.options = {
+      inputDeviceId: null,
+      noiseSuppression: true,
+      echoCancellation: true,
+      pushToTalk: false,
+      ...options,
+    };
   }
 
   /** Inbound/outbound media statistics for diagnostics (no content). */
@@ -78,17 +112,127 @@ export class VoiceCall {
     return out;
   }
 
+  private async microphone(): Promise<MediaStreamTrack | null> {
+    const audio: MediaTrackConstraints = {
+      echoCancellation: this.options.echoCancellation,
+      noiseSuppression: this.options.noiseSuppression,
+      autoGainControl: true,
+      ...(this.options.inputDeviceId ? { deviceId: { exact: this.options.inputDeviceId } } : {}),
+    };
+    try {
+      return (await navigator.mediaDevices.getUserMedia({ audio, video: false })).getAudioTracks()[0] ?? null;
+    } catch (err) {
+      // The saved device may be unplugged: fall back to the default microphone.
+      if (!this.options.inputDeviceId || (err as Error).name !== 'OverconstrainedError') throw err;
+      this.options.inputDeviceId = null;
+      return this.microphone();
+    }
+  }
+
   async start(): Promise<void> {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      video: false,
-    });
-    this.local.audio = stream.getAudioTracks()[0] ?? null;
+    this.local.audio = await this.microphone();
+    this.applyMic();
+    this.watch(this.me, this.local.audio);
     const res = await window.river.voice.join(this.channelId);
     if (!res.ok) {
       this.stopLocal();
       throw new Error(res.message);
     }
+    this.speakingTimer = window.setInterval(() => this.measure(), 80);
+  }
+
+  /** Whether our microphone is actually transmitting right now. */
+  get transmitting(): boolean {
+    return !this.muted && !this.deafened && !this.serverMuted && (!this.options.pushToTalk || this.pttActive);
+  }
+
+  get pushToTalk(): boolean {
+    return this.options.pushToTalk;
+  }
+
+  private applyMic(): void {
+    if (this.local.audio) this.local.audio.enabled = this.transmitting;
+  }
+
+  async updateOptions(next: Partial<CallOptions>): Promise<void> {
+    const deviceChanged =
+      next.inputDeviceId !== undefined && next.inputDeviceId !== this.options.inputDeviceId;
+    const processingChanged =
+      (next.noiseSuppression !== undefined && next.noiseSuppression !== this.options.noiseSuppression) ||
+      (next.echoCancellation !== undefined && next.echoCancellation !== this.options.echoCancellation);
+    this.options = { ...this.options, ...next };
+    if ((deviceChanged || processingChanged) && !this.closed) {
+      const track = await this.microphone();
+      await this.setSlot('audio', track);
+      this.watch(this.me, track);
+    }
+    this.applyMic();
+    this.broadcastState();
+    this.onChange();
+  }
+
+  setPushToTalkActive(active: boolean): void {
+    if (this.pttActive === active) return;
+    this.pttActive = active;
+    this.applyMic();
+    this.broadcastState();
+    this.onChange();
+  }
+
+  setDeafened(deafened: boolean): void {
+    this.deafened = deafened;
+    this.applyMic();
+    this.broadcastState();
+    this.onChange();
+  }
+
+  setServerMuted(serverMuted: boolean): void {
+    if (this.serverMuted === serverMuted) return;
+    this.serverMuted = serverMuted;
+    this.applyMic();
+    this.broadcastState();
+    this.onChange();
+  }
+
+  // ---- speaking detection -----------------------------------------------------------------------
+
+  private watch(id: string, track: MediaStreamTrack | null): void {
+    const existing = this.analysers.get(id);
+    if (existing?.track === track) return;
+    existing?.source.disconnect();
+    this.analysers.delete(id);
+    if (!track) return;
+    try {
+      this.audioCtx ??= new AudioContext();
+      const source = this.audioCtx.createMediaStreamSource(new MediaStream([track]));
+      const node = this.audioCtx.createAnalyser();
+      node.fftSize = 512;
+      source.connect(node);
+      this.analysers.set(id, { node, source, track });
+    } catch {
+      // No audio context available: no speaking indicators.
+    }
+  }
+
+  private measure(): void {
+    const now = performance.now();
+    const buf = new Float32Array(512);
+    let changed = false;
+    for (const [id, a] of this.analysers) {
+      a.node.getFloatTimeDomainData(buf);
+      let sum = 0;
+      for (const v of buf) sum += v * v;
+      const rms = Math.sqrt(sum / buf.length);
+      const live = id === this.me ? this.transmitting : !(this.peers.get(id)?.remote.muted ?? false);
+      if (live && rms > SPEAKING_THRESHOLD) this.lastLoud.set(id, now);
+      const speaking = live && now - (this.lastLoud.get(id) ?? 0) < SPEAKING_HOLD_MS;
+      if (speaking !== this.speaking.has(id)) {
+        if (speaking) this.speaking.add(id);
+        else this.speaking.delete(id);
+        changed = true;
+      }
+    }
+    if (changed) this.onChange();
   }
 
   remotes(): RemotePeer[] {
@@ -169,7 +313,7 @@ export class VoiceCall {
 
   setMuted(muted: boolean): void {
     this.muted = muted;
-    if (this.local.audio) this.local.audio.enabled = !muted;
+    this.applyMic();
     this.broadcastState();
     this.onChange();
   }
@@ -206,8 +350,12 @@ export class VoiceCall {
   async leave(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    if (this.speakingTimer) window.clearInterval(this.speakingTimer);
     for (const id of [...this.peers.keys()]) this.dropPeer(id);
     this.stopLocal();
+    for (const a of this.analysers.values()) a.source.disconnect();
+    this.analysers.clear();
+    void this.audioCtx?.close().catch(() => undefined);
     await window.river.voice.leave();
     this.onChange();
   }
@@ -265,6 +413,7 @@ export class VoiceCall {
       const slot = SLOTS[pc.getTransceivers().indexOf(e.transceiver)];
       if (!slot) return;
       peer.remote[slot] = new MediaStream([e.track]);
+      if (slot === 'audio') this.watch(id, e.track);
       this.onChange();
     };
     this.peers.set(id, peer);
@@ -307,7 +456,12 @@ export class VoiceCall {
   }
 
   private stateSignal(): Signal {
-    return { type: 'state', camera: !!this.local.camera, screen: !!this.local.screen, muted: this.muted };
+    return {
+      type: 'state',
+      camera: !!this.local.camera,
+      screen: !!this.local.screen,
+      muted: !this.transmitting,
+    };
   }
 
   private broadcastState(): void {
@@ -341,6 +495,9 @@ export class VoiceCall {
     if (!peer) return;
     peer.pc.close();
     this.peers.delete(id);
+    this.analysers.get(id)?.source.disconnect();
+    this.analysers.delete(id);
+    this.speaking.delete(id);
   }
 
   private stopLocal(): void {

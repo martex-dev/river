@@ -50,10 +50,26 @@ export const settingsSchema = z.object({
   notifications: z.object({
     /** Default 'none': notifications say "New River message" with no sender or content. */
     preview: z.enum(['none', 'sender', 'full']),
+    /** Added in 0.3: desktop notifications on/off, for every message or only mentions. */
+    desktop: z.boolean(),
+    mode: z.enum(['all', 'mentions']),
+    sounds: z.boolean(),
   }),
   /** Added in 0.0.2. */
   server: z.object({
     url: serverUrlSchema.nullable(),
+  }),
+  /** Added in 0.3. */
+  voice: z.object({
+    inputDeviceId: z.string().max(256).nullable(),
+    outputDeviceId: z.string().max(256).nullable(),
+    inputMode: z.enum(['voice', 'push-to-talk']),
+    /** KeyboardEvent.code of the push-to-talk key (works while River is focused). */
+    pushToTalkKey: z.string().max(32),
+    noiseSuppression: z.boolean(),
+    echoCancellation: z.boolean(),
+    /** Per-member playback volume, 0–2 (1 = 100%). */
+    userVolumes: z.record(z.string().max(64), z.number().min(0).max(2)),
   }),
 });
 
@@ -63,22 +79,36 @@ export const DEFAULT_SETTINGS: Settings = {
   schemaVersion: 1,
   updates: { channel: 'stable', autoCheck: true, autoDownload: true, installOnQuit: true },
   appearance: { motion: 'system' },
-  notifications: { preview: 'none' },
+  notifications: { preview: 'none', desktop: true, mode: 'all', sounds: true },
   server: { url: null },
+  voice: {
+    inputDeviceId: null,
+    outputDeviceId: null,
+    inputMode: 'voice',
+    pushToTalkKey: 'Backquote',
+    noiseSuppression: true,
+    echoCancellation: true,
+    userVolumes: {},
+  },
 };
 
-export const SETTINGS_SECTIONS = ['updates', 'appearance', 'notifications', 'server'] as const;
+export const SETTINGS_SECTIONS = ['updates', 'appearance', 'notifications', 'server', 'voice'] as const;
 
 /**
  * Brings a settings object written by an older River up to the current shape:
- * sections that did not exist yet get their defaults. Existing values are kept
- * untouched (they are still validated afterwards).
+ * sections and keys that did not exist yet get their defaults. Existing values
+ * are kept untouched (they are still validated afterwards).
  */
 export function upgradeSettings(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
   const out: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
   for (const section of SETTINGS_SECTIONS) {
-    if (out[section] === undefined) out[section] = structuredClone(DEFAULT_SETTINGS[section]);
+    const current = out[section];
+    const defaults = structuredClone(DEFAULT_SETTINGS[section]);
+    if (current === undefined) out[section] = defaults;
+    else if (current && typeof current === 'object' && !Array.isArray(current)) {
+      out[section] = { ...defaults, ...(current as Record<string, unknown>) };
+    }
   }
   return out;
 }
@@ -90,6 +120,7 @@ export const settingsPatchSchema = z
     appearance: settingsSchema.shape.appearance.partial().strict().optional(),
     notifications: settingsSchema.shape.notifications.partial().strict().optional(),
     server: settingsSchema.shape.server.partial().strict().optional(),
+    voice: settingsSchema.shape.voice.partial().strict().optional(),
   })
   .strict();
 
@@ -102,5 +133,6 @@ export function applySettingsPatch(current: Settings, patch: z.output<typeof set
     appearance: { ...current.appearance, ...patch.appearance },
     notifications: { ...current.notifications, ...patch.notifications },
     server: { ...current.server, ...patch.server },
+    voice: { ...current.voice, ...patch.voice },
   });
 }

@@ -22,6 +22,7 @@ import { MIN_PASSPHRASE_LENGTH, WrongPassphraseError } from './storage/key-file.
 import type { StorageService } from './storage/storage-service.ts';
 import type { IdentityService } from './identity/identity-service.ts';
 import { UserFacingError, type AccountService } from './account/account-service.ts';
+import type { CommunityAction } from '../shared/community-actions.ts';
 import { CommunityError, type CommunityService } from './community/community-service.ts';
 import { desktopCapturer } from 'electron';
 import type { UpdateService } from './updater/update-service.ts';
@@ -135,6 +136,8 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.communitySend, (_e, channelId, text) =>
     result(() => deps.community.send(z.string().parse(channelId), text)),
   );
+  handle(IPC.communityAction, (_e, action) => result(() => deps.community.action(action as CommunityAction)));
+  handle(IPC.profileGet, () => deps.community.profile());
   handle(IPC.voiceJoin, (_e, channelId) =>
     result(() => {
       deps.community.voiceJoin(z.string().parse(channelId));

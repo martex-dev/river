@@ -1,4 +1,5 @@
 import type { ReleaseChannel } from '@river/release/channels';
+import type { CommunityAction, CommunityActionResult } from './community-actions.ts';
 import type { Settings, SettingsPatch } from './settings.ts';
 
 /** Every IPC channel River uses. Main validates every payload; nothing else is exposed. */
@@ -37,6 +38,8 @@ export const IPC = {
   screenSources: 'river:voice:screen-sources',
   screenSelect: 'river:voice:screen-select',
   communityEvent: 'river:community:event',
+  communityAction: 'river:community:action',
+  profileGet: 'river:profile:get',
   openLink: 'river:link:open',
 } as const;
 
@@ -119,14 +122,72 @@ export type AccountStatus =
       message?: string;
     };
 
+export interface RoleView {
+  id: string;
+  /** "@everyone" for the base role. */
+  name: string;
+  color: number;
+  permissions: number;
+  position: number;
+  everyone: boolean;
+}
+
+export interface ChannelView {
+  id: string;
+  kind: 'text' | 'voice';
+  name: string;
+  topic: string;
+  position: number;
+  overwrites: Array<{ roleId: string; allow: number; deny: number }>;
+  /** My effective permissions in this channel. */
+  permissions: number;
+  /** @everyone cannot see it. */
+  private: boolean;
+}
+
+export interface MemberView {
+  riverId: string;
+  name: string;
+  /** data: URL of a small image, or null. */
+  avatar: string | null;
+  roles: string[];
+  /** Colour of the highest coloured role, or null. */
+  color: number | null;
+  online: boolean;
+  owner: boolean;
+  /** Hierarchy position (owner is highest). */
+  rank: number;
+}
+
+export interface VoiceStateView {
+  muted: boolean;
+  deafened: boolean;
+  serverMuted: boolean;
+  streaming: boolean;
+}
+
 export interface CommunityView {
   id: string;
   name: string;
-  myRole: 'owner' | 'admin' | 'member';
-  channels: Array<{ id: string; kind: 'text' | 'voice'; name: string }>;
-  members: Array<{ riverId: string; role: 'owner' | 'admin' | 'member'; name: string }>;
+  description: string;
+  ownerId: string;
+  /** My community-wide permissions. */
+  permissions: number;
+  myRank: number;
+  roles: RoleView[];
+  channels: ChannelView[];
+  members: MemberView[];
   /** voice channel ID → River IDs currently in it */
   voice: Record<string, string[]>;
+  voiceStates: Record<string, VoiceStateView>;
+}
+
+export interface ReactionView {
+  tag: string;
+  emoji: string;
+  count: number;
+  mine: boolean;
+  users: string[];
 }
 
 export interface ChatMessage {
@@ -137,13 +198,29 @@ export interface ChatMessage {
   senderName: string;
   text: string;
   sentAt: string;
+  editedAt: string | null;
+  pinned: boolean;
+  reactions: ReactionView[];
+  replyTo: string | null;
+  mentionsMe: boolean;
   mine: boolean;
 }
 
 export type CommunityEvent =
   | { t: 'communities'; communities: CommunityView[] }
-  | { t: 'message'; message: ChatMessage }
-  | { t: 'voice'; communityId: string; channelId: string; participants: string[] }
+  | { t: 'message'; message: ChatMessage; isNew: boolean }
+  | { t: 'messageDelete'; channelId: string; messageId: string }
+  | {
+      t: 'voice';
+      communityId: string;
+      channelId: string;
+      participants: string[];
+      states: Record<string, VoiceStateView>;
+    }
+  | { t: 'voiceDisconnect' }
+  | { t: 'typing'; communityId: string; channelId: string; riverId: string }
+  | { t: 'removed'; communityId: string; reason: 'kicked' | 'banned' | 'left' | 'deleted' }
+  | { t: 'focusChannel'; communityId: string; channelId: string }
   | { t: 'signal'; from: string; channelId: string; data: unknown }
   | { t: 'connection'; state: 'online' | 'offline' | 'connecting' };
 
@@ -198,6 +275,9 @@ export interface RiverApi {
     messages(channelId: string): Promise<Result<ChatMessage[]>>;
     send(channelId: string, text: string): Promise<Result<ChatMessage>>;
     connection(): Promise<'online' | 'offline' | 'connecting'>;
+    /** Every other community operation; validated in main against communityActionSchema. */
+    action<A extends CommunityAction>(action: A): Promise<Result<CommunityActionResult<A>>>;
+    profile(): Promise<{ name: string; avatar: string | null }>;
     onEvent(listener: (event: CommunityEvent) => void): () => void;
   };
   voice: {

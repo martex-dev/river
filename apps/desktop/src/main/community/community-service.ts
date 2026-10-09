@@ -1,23 +1,42 @@
 import {
   API_PREFIX,
+  DEFAULT_EVERYONE,
+  Permission,
+  bansResponseSchema,
   communitiesResponseSchema,
   communitySchema,
+  computePermissions,
   inviteResponseSchema,
   messageSchema,
   messagesResponseSchema,
   serverEventSchema,
+  topPosition,
   type CommunityWire,
   type MessageWire,
   type ServerEvent,
+  type VoiceState,
 } from '@river/protocol';
 import { z } from 'zod';
-import type { ChatMessage, CommunityEvent, CommunityView } from '../../shared/ipc.ts';
+import {
+  communityActionSchema,
+  type BanView,
+  type CommunityAction,
+  type CommunityActionResult,
+} from '../../shared/community-actions.ts';
+import type {
+  ChannelView,
+  ChatMessage,
+  CommunityEvent,
+  CommunityView,
+  MemberView,
+  RoleView,
+} from '../../shared/ipc.ts';
 import type { AccountService } from '../account/account-service.ts';
 import { ApiError, type RequestJson } from '../http.ts';
 import type { IdentityService } from '../identity/identity-service.ts';
 import type { Logger } from '../logger.ts';
 import type { LocalDatabase } from '../storage/database.ts';
-import { formatInvite, newCommunityKey, open, parseInvite, randomId, seal } from './sealed.ts';
+import { formatInvite, newCommunityKey, open, parseInvite, randomId, reactionTag, seal } from './sealed.ts';
 
 export class CommunityError extends Error {
   constructor(message: string) {
@@ -32,6 +51,8 @@ const textSchema = z
   .max(4000)
   .refine((s) => s.trim().length > 0, 'empty');
 
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
 interface Deps {
   db: () => LocalDatabase | null;
   account: AccountService;
@@ -42,10 +63,32 @@ interface Deps {
   createSocket?: (url: string) => WebSocket;
 }
 
+interface SealedProfile {
+  name: string | null;
+  avatar?: string | null;
+}
+
+const AVATAR_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/;
+
+/** Server error codes turned into messages people understand. */
+function explain(err: unknown): never {
+  if (err instanceof ApiError) {
+    if (err.code === 'forbidden')
+      throw new CommunityError(err.message || 'You do not have permission to do that.');
+    if (err.code === 'banned') throw new CommunityError('You are banned from this community.');
+    if (err.code === 'not_found') throw new CommunityError('That no longer exists.');
+    if (err.status === 400 && err.message && err.message !== 'Bad request')
+      throw new CommunityError(err.message);
+  }
+  throw err;
+}
+
 /**
- * Communities on the user's River server. All names, profiles, messages and
- * call signalling are sealed with the community key before leaving this
- * process; the renderer only ever sees decrypted, validated values.
+ * Communities on the user's River server. All names, topics, profiles,
+ * messages, reactions and call signalling are sealed with the community key
+ * before leaving this process; the renderer only ever sees decrypted,
+ * validated values. Permissions are enforced by the server; the views here
+ * carry them so the UI can hide what the user cannot do.
  */
 export class CommunityService {
   private readonly deps: Deps;
@@ -53,9 +96,16 @@ export class CommunityService {
   private readonly keys = new Map<string, Buffer>();
   private readonly channelToCommunity = new Map<string, string>();
   private readonly voice = new Map<string, string[]>();
+  private readonly voiceStates = new Map<string, VoiceState>();
+  private readonly online = new Map<string, boolean>();
+  /** Names seen for River IDs, so ban lists can show who was banned. */
+  private readonly knownNames = new Map<string, string>();
+  /** Message IDs seen recently, to tell new messages from edits and reactions. */
+  private readonly seen = new Set<string>();
   private socket: WebSocket | null = null;
   private socketState: 'online' | 'offline' | 'connecting' = 'offline';
   private reconnectTimer: NodeJS.Timeout | null = null;
+  private refreshTimer: NodeJS.Timeout | null = null;
   private backoff = 1000;
   private readonly listeners = new Set<(e: CommunityEvent) => void>();
 
@@ -76,6 +126,19 @@ export class CommunityService {
     return this.socketState;
   }
 
+  /** Used by notifications: brings a channel to the front. */
+  focusChannel(communityId: string, channelId: string): void {
+    this.emit({ t: 'focusChannel', communityId, channelId });
+  }
+
+  channelName(channelId: string): string | null {
+    for (const c of this.communities) {
+      const ch = c.channels.find((x) => x.id === channelId);
+      if (ch) return ch.name;
+    }
+    return null;
+  }
+
   // ---- Server access -------------------------------------------------------------------------
 
   private server(): string {
@@ -94,21 +157,17 @@ export class CommunityService {
     return token;
   }
 
-  private async call<T>(
-    path: string,
-    method: 'GET' | 'POST',
-    body: unknown,
-    schema: z.ZodType<T>,
-  ): Promise<T> {
+  private async call<T>(path: string, method: Method, body: unknown, schema: z.ZodType<T>): Promise<T> {
     const url = `${this.server()}${API_PREFIX}${path}`;
+    const payload = body === undefined && (method === 'PUT' || method === 'POST') ? {} : body;
     try {
-      return await this.deps.requestJson(url, { method, body, token: await this.token() }, schema);
+      return await this.deps.requestJson(url, { method, body: payload, token: await this.token() }, schema);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         await this.deps.account.connect(); // session expired: one fresh login, one retry
-        return this.deps.requestJson(url, { method, body, token: await this.token() }, schema);
+        return this.deps.requestJson(url, { method, body: payload, token: await this.token() }, schema);
       }
-      throw err;
+      return explain(err);
     }
   }
 
@@ -126,8 +185,25 @@ export class CommunityService {
     for (const r of rows) this.keys.set(r.id, Buffer.from(r.key));
   }
 
+  private me(): string {
+    return this.deps.identity.get()?.riverId ?? '';
+  }
+
   private myName(): string | null {
     return this.deps.identity.get()?.displayName ?? null;
+  }
+
+  private myAvatar(): string | null {
+    const db = this.deps.db();
+    if (!db) return null;
+    const row = db.prepare('SELECT avatar FROM profile WHERE id = 1').get() as
+      { avatar: string | null } | undefined;
+    return row?.avatar ?? null;
+  }
+
+  private sealedProfile(communityId: string): string {
+    const profile: SealedProfile = { name: this.myName(), avatar: this.myAvatar() };
+    return seal(this.requireKey(communityId), communityId, 'profile', profile);
   }
 
   // ---- Decryption ----------------------------------------------------------------------------
@@ -135,58 +211,184 @@ export class CommunityService {
   private view(c: CommunityWire): CommunityView | null {
     const key = this.keys.get(c.id);
     if (!key) return null;
-    const me = this.deps.identity.get()?.riverId;
+    const me = this.me();
+    let meta: { name: string; description?: string };
     try {
-      const meta = open<{ name: string }>(key, c.id, 'meta', c.meta);
-      const channels = c.channels.map((ch) => {
-        let name = 'channel';
-        try {
-          name = open<{ name: string }>(key, c.id, `channel:${ch.id}`, ch.name).name;
-        } catch {
-          // keep placeholder for undecryptable names
-        }
-        return { id: ch.id, kind: ch.kind, name };
-      });
-      const members = c.members.map((m) => {
-        let name: string | null = null;
-        try {
-          name = open<{ name: string | null }>(key, c.id, 'profile', m.profile).name;
-        } catch {
-          // unreadable profile
-        }
-        return { riverId: m.riverId, role: m.role, name: name ?? `Member ${m.riverId.slice(0, 4)}` };
-      });
-      for (const ch of channels) this.channelToCommunity.set(ch.id, c.id);
-      const myRole = c.members.find((m) => m.riverId === me)?.role ?? 'member';
-      const voice: Record<string, string[]> = {};
-      for (const ch of channels) if (ch.kind === 'voice') voice[ch.id] = this.voice.get(ch.id) ?? [];
-      return { id: c.id, name: String(meta.name).slice(0, 64), myRole, channels, members, voice };
+      meta = open<{ name: string; description?: string }>(key, c.id, 'meta', c.meta);
     } catch {
       this.deps.log.warn('Community metadata could not be decrypted');
       return null;
     }
+    const ownerId = c.ownerId ?? c.members.find((m) => m.role === 'owner')?.riverId ?? '';
+    // Servers before 0.3 have no roles: synthesise @everyone so permissions still make sense.
+    const wireRoles = c.roles.length
+      ? c.roles
+      : [{ id: c.id, name: '', color: 0, permissions: DEFAULT_EVERYONE, position: 0 }];
+    const roles: RoleView[] = wireRoles
+      .map((r) => {
+        const everyone = r.id === c.id;
+        let name = everyone ? '@everyone' : 'role';
+        if (!everyone) {
+          try {
+            name = String(open<{ name: string }>(key, c.id, `role:${r.id}`, r.name).name).slice(0, 64);
+          } catch {
+            // keep placeholder
+          }
+        }
+        return { id: r.id, name, color: r.color, permissions: r.permissions, position: r.position, everyone };
+      })
+      .sort((a, b) => b.position - a.position);
+    const legacyAdmins = new Set(c.members.filter((m) => m.role !== 'member').map((m) => m.riverId));
+    const permsOf = (
+      riverId: string,
+      memberRoles: string[],
+      overwrites?: ChannelView['overwrites'],
+    ): number => {
+      if (!c.roles.length && legacyAdmins.has(riverId)) return 0x7fffffff;
+      return computePermissions({
+        ownerId,
+        everyoneRoleId: c.id,
+        roles: wireRoles,
+        member: { riverId, roles: memberRoles },
+        overwrites,
+      });
+    };
+    const myRoles = c.members.find((m) => m.riverId === me)?.roles ?? [];
+
+    const channels: ChannelView[] = c.channels
+      .map((ch) => {
+        let name = 'channel';
+        let topic = '';
+        try {
+          const opened = open<{ name: string; topic?: string }>(key, c.id, `channel:${ch.id}`, ch.name);
+          name = String(opened.name).slice(0, 64);
+          topic = String(opened.topic ?? '').slice(0, 300);
+        } catch {
+          // keep placeholder for undecryptable names
+        }
+        const everyoneOverwrite = ch.overwrites.find((o) => o.roleId === c.id);
+        return {
+          id: ch.id,
+          kind: ch.kind,
+          name,
+          topic,
+          position: ch.position,
+          overwrites: ch.overwrites,
+          permissions: permsOf(me, myRoles, ch.overwrites),
+          private: !!everyoneOverwrite && (everyoneOverwrite.deny & Permission.VIEW_CHANNELS) !== 0,
+        };
+      })
+      .sort((a, b) => a.position - b.position);
+
+    const members: MemberView[] = c.members.map((m) => {
+      let profile: SealedProfile = { name: null };
+      try {
+        profile = open<SealedProfile>(key, c.id, 'profile', m.profile);
+      } catch {
+        // unreadable profile
+      }
+      const name = profile.name ? String(profile.name).slice(0, 64) : `Member ${m.riverId.slice(0, 4)}`;
+      this.knownNames.set(m.riverId, name);
+      const avatar =
+        typeof profile.avatar === 'string' && AVATAR_RE.test(profile.avatar) ? profile.avatar : null;
+      const colored = roles.find((r) => !r.everyone && r.color !== 0 && m.roles.includes(r.id));
+      return {
+        riverId: m.riverId,
+        name,
+        avatar,
+        roles: m.roles,
+        color: colored?.color ?? null,
+        online: this.online.get(m.riverId) ?? m.online,
+        owner: m.riverId === ownerId,
+        rank: topPosition(ownerId, wireRoles, { riverId: m.riverId, roles: m.roles }),
+      };
+    });
+
+    for (const ch of channels) this.channelToCommunity.set(ch.id, c.id);
+    const voice: Record<string, string[]> = {};
+    const voiceStates: CommunityView['voiceStates'] = {};
+    for (const ch of channels) {
+      if (ch.kind !== 'voice') continue;
+      voice[ch.id] = this.voice.get(ch.id) ?? [];
+      for (const id of voice[ch.id]!) voiceStates[id] = this.voiceStates.get(id) ?? defaultVoiceState();
+    }
+    return {
+      id: c.id,
+      name: String(meta.name).slice(0, 64),
+      description: String(meta.description ?? '').slice(0, 300),
+      ownerId,
+      permissions: permsOf(me, myRoles),
+      myRank: topPosition(ownerId, wireRoles, { riverId: me, roles: myRoles }),
+      roles,
+      channels,
+      members,
+      voice,
+      voiceStates,
+    };
   }
 
   private toChat(communityId: string, m: MessageWire): ChatMessage | null {
     const key = this.keys.get(communityId);
     if (!key) return null;
     try {
-      const body = open<{ text: string }>(key, communityId, `message:${m.channelId}`, m.body);
+      const body = open<{ text: string; replyTo?: string }>(
+        key,
+        communityId,
+        `message:${m.channelId}`,
+        m.body,
+      );
       const community = this.communities.find((c) => c.id === communityId);
       const sender = community?.members.find((x) => x.riverId === m.sender);
+      const me = this.me();
+      const text = String(body.text).slice(0, 4000);
+      const reactions = m.reactions.flatMap((r) => {
+        try {
+          const emoji = String(
+            open<{ emoji: string }>(key, communityId, `reaction:${m.id}`, r.emoji).emoji,
+          ).slice(0, 32);
+          // Only show a reaction whose tag matches its emoji, so nobody can relabel a reaction.
+          if (reactionTag(key, communityId, m.id, emoji) !== r.tag) return [];
+          return [{ tag: r.tag, emoji, count: r.users.length, mine: r.users.includes(me), users: r.users }];
+        } catch {
+          return [];
+        }
+      });
       return {
         id: m.id,
         communityId,
         channelId: m.channelId,
         sender: m.sender,
         senderName: sender?.name ?? `Member ${m.sender.slice(0, 4)}`,
-        text: String(body.text).slice(0, 4000),
+        text,
         sentAt: m.sentAt,
-        mine: m.sender === this.deps.identity.get()?.riverId,
+        editedAt: m.editedAt,
+        pinned: m.pinned,
+        reactions,
+        replyTo:
+          typeof body.replyTo === 'string' && /^[A-Za-z0-9_-]{22}$/.test(body.replyTo) ? body.replyTo : null,
+        mentionsMe: m.sender !== me && this.mentions(text, community, m.sender),
+        mine: m.sender === me,
       };
     } catch {
       return null;
     }
+  }
+
+  private mentions(text: string, community: CommunityView | undefined, sender: string): boolean {
+    const lower = text.toLowerCase();
+    const senderMember = community?.members.find((m) => m.riverId === sender);
+    if (/(^|\s)@(everyone|here)\b/.test(lower) && community) {
+      const senderPerms = senderMember
+        ? senderMember.owner
+          ? 0x7fffffff
+          : community.roles
+              .filter((r) => r.everyone || senderMember.roles.includes(r.id))
+              .reduce((p, r) => p | r.permissions, 0)
+        : 0;
+      if (senderPerms & (Permission.MENTION_EVERYONE | Permission.ADMINISTRATOR)) return true;
+    }
+    const name = this.myName();
+    return !!name && lower.includes(`@${name.toLowerCase()}`);
   }
 
   // ---- Public API (called via IPC) -----------------------------------------------------------
@@ -199,6 +401,14 @@ export class CommunityService {
     return this.communities;
   }
 
+  private scheduleRefresh(): void {
+    if (this.refreshTimer) return;
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null;
+      void this.refresh().catch(() => undefined);
+    }, 150);
+  }
+
   async create(rawName: unknown): Promise<CommunityView> {
     const name = nameSchema.parse(rawName);
     const id = randomId();
@@ -208,32 +418,26 @@ export class CommunityService {
     const body = {
       id,
       meta: seal(key, id, 'meta', { name }),
-      profile: seal(key, id, 'profile', { name: this.myName() }),
+      profile: seal(key, id, 'profile', { name: this.myName(), avatar: this.myAvatar() }),
       channels: [
         { id: text, kind: 'text', name: seal(key, id, `channel:${text}`, { name: 'general' }) },
         { id: voice, kind: 'voice', name: seal(key, id, `channel:${voice}`, { name: 'Lounge' }) },
       ],
     };
-    const created = await this.call('/communities', 'POST', body, communitySchema);
+    await this.call('/communities', 'POST', body, communitySchema);
     this.storeKey(id, key);
-    const view = this.view(created);
     await this.refresh();
     this.ensureSocket();
-    return view!;
+    return this.communities.find((c) => c.id === id)!;
   }
 
   async createChannel(communityId: string, kind: unknown, rawName: unknown): Promise<void> {
-    const key = this.requireKey(communityId);
-    const k = z.enum(['text', 'voice']).parse(kind);
-    const name = nameSchema.parse(rawName);
-    const id = randomId();
-    await this.call(
-      `/communities/${communityId}/channels`,
-      'POST',
-      { id, kind: k, name: seal(key, communityId, `channel:${id}`, { name }) },
-      z.unknown(),
-    );
-    await this.refresh();
+    await this.action({
+      a: 'createChannel',
+      communityId,
+      kind: z.enum(['text', 'voice']).parse(kind),
+      name: nameSchema.parse(rawName),
+    });
   }
 
   async invite(communityId: string): Promise<string> {
@@ -254,8 +458,7 @@ export class CommunityService {
     else if (account.serverUrl !== invite.serverUrl) {
       throw new CommunityError(`Your account is on ${account.server}; this invite is for another server.`);
     }
-    // Encrypt our profile for the community before we know its ID? The server returns it; seal after.
-    // To avoid a second round-trip the profile is sealed for the ID learned from a dry decode below.
+    // The community ID is only learned from the response, so the real sealed profile follows right after.
     const res = await this.call(
       '/invites/join',
       'POST',
@@ -274,46 +477,313 @@ export class CommunityService {
       throw new CommunityError('This invite link is damaged: its key does not match the community.');
     }
     this.storeKey(res.id, invite.key);
-    await this.updateProfile(res.id);
+    await this.publishProfile(res.id);
     await this.refresh();
     this.ensureSocket();
     return this.communities.find((c) => c.id === res.id)!;
   }
 
-  /** (Re)publishes our sealed display name to a community. */
-  private async updateProfile(communityId: string): Promise<void> {
-    const key = this.requireKey(communityId);
+  /** (Re)publishes our sealed name and avatar to a community. */
+  private async publishProfile(communityId: string): Promise<void> {
     await this.call(
       `/communities/${communityId}/profile`,
       'POST',
-      { profile: seal(key, communityId, 'profile', { name: this.myName() }) },
+      { profile: this.sealedProfile(communityId) },
       z.unknown(),
     );
   }
 
+  profile(): { name: string; avatar: string | null } {
+    return { name: this.myName() ?? '', avatar: this.myAvatar() };
+  }
+
   async messages(channelId: string): Promise<ChatMessage[]> {
-    const communityId = this.channelToCommunity.get(channelId);
-    if (!communityId) throw new CommunityError('Unknown channel');
+    const communityId = this.communityOf(channelId);
     const res = await this.call(`/channels/${channelId}/messages`, 'GET', undefined, messagesResponseSchema);
+    for (const m of res.messages) this.remember(m.id);
     return res.messages.map((m) => this.toChat(communityId, m)).filter((m): m is ChatMessage => m !== null);
   }
 
-  async send(channelId: string, rawText: unknown): Promise<ChatMessage> {
+  async send(channelId: string, rawText: unknown, replyTo?: string): Promise<ChatMessage> {
     const text = textSchema.parse(rawText);
-    const communityId = this.channelToCommunity.get(channelId);
-    if (!communityId) throw new CommunityError('Unknown channel');
+    const communityId = this.communityOf(channelId);
     const key = this.requireKey(communityId);
+    const id = randomId();
+    this.remember(id);
     const sent = await this.call(
       `/channels/${channelId}/messages`,
       'POST',
-      { id: randomId(), body: seal(key, communityId, `message:${channelId}`, { text }) },
+      { id, body: seal(key, communityId, `message:${channelId}`, replyTo ? { text, replyTo } : { text }) },
       messageSchema,
     );
     return this.toChat(communityId, sent)!;
   }
 
+  /** Every other community operation; `raw` comes from the renderer and is validated here. */
+  async action<A extends CommunityAction>(raw: A): Promise<CommunityActionResult<A>> {
+    const act = communityActionSchema.parse(raw);
+    const ok = null as unknown as CommunityActionResult<A>;
+    switch (act.a) {
+      case 'updateCommunity': {
+        const key = this.requireKey(act.communityId);
+        const meta = seal(key, act.communityId, 'meta', { name: act.name, description: act.description });
+        await this.call(`/communities/${act.communityId}`, 'PATCH', { meta }, z.unknown());
+        break;
+      }
+      case 'deleteCommunity':
+        await this.call(`/communities/${act.communityId}`, 'DELETE', undefined, z.unknown());
+        this.forget(act.communityId);
+        break;
+      case 'leave':
+        await this.call(`/communities/${act.communityId}/leave`, 'POST', {}, z.unknown());
+        this.forget(act.communityId);
+        break;
+      case 'createChannel': {
+        const key = this.requireKey(act.communityId);
+        const id = randomId();
+        const community = this.requireCommunity(act.communityId);
+        const overwrites = act.private
+          ? [
+              { roleId: act.communityId, allow: 0, deny: Permission.VIEW_CHANNELS },
+              ...(community.members.find((m) => m.riverId === this.me())?.roles ?? []).map((roleId) => ({
+                roleId,
+                allow: Permission.VIEW_CHANNELS,
+                deny: 0,
+              })),
+            ]
+          : undefined;
+        await this.call(
+          `/communities/${act.communityId}/channels`,
+          'POST',
+          {
+            id,
+            kind: act.kind,
+            name: seal(key, act.communityId, `channel:${id}`, { name: act.name, topic: act.topic ?? '' }),
+            ...(overwrites ? { overwrites } : {}),
+          },
+          z.unknown(),
+        );
+        break;
+      }
+      case 'updateChannel': {
+        const communityId = this.communityOf(act.channelId);
+        const current = this.requireCommunity(communityId).channels.find((c) => c.id === act.channelId);
+        const body: Record<string, unknown> = {};
+        if (act.name !== undefined || act.topic !== undefined) {
+          body.name = seal(this.requireKey(communityId), communityId, `channel:${act.channelId}`, {
+            name: act.name ?? current?.name ?? 'channel',
+            topic: act.topic ?? current?.topic ?? '',
+          });
+        }
+        if (act.overwrites) body.overwrites = act.overwrites;
+        await this.call(`/channels/${act.channelId}`, 'PATCH', body, z.unknown());
+        break;
+      }
+      case 'moveChannel': {
+        const community = this.requireCommunity(this.communityOf(act.channelId));
+        const channel = community.channels.find((c) => c.id === act.channelId)!;
+        const list = community.channels.filter((c) => c.kind === channel.kind);
+        const from = list.indexOf(channel);
+        const to = from + act.direction;
+        if (to < 0 || to >= list.length) break;
+        [list[from], list[to]] = [list[to]!, list[from]!];
+        // Renumber the whole community so positions are unique and stable.
+        const ordered = [...list, ...community.channels.filter((c) => c.kind !== channel.kind)].sort(
+          (a, b) => (a.kind === b.kind ? 0 : a.kind === 'text' ? -1 : 1),
+        );
+        for (const [position, ch] of ordered.entries()) {
+          if (ch.position !== position)
+            await this.call(`/channels/${ch.id}`, 'PATCH', { position }, z.unknown());
+        }
+        break;
+      }
+      case 'deleteChannel':
+        await this.call(`/channels/${act.channelId}`, 'DELETE', undefined, z.unknown());
+        break;
+      case 'createRole': {
+        const id = randomId();
+        await this.call(
+          `/communities/${act.communityId}/roles`,
+          'POST',
+          {
+            id,
+            name: seal(this.requireKey(act.communityId), act.communityId, `role:${id}`, { name: act.name }),
+            color: act.color,
+            permissions: act.permissions,
+          },
+          z.unknown(),
+        );
+        await this.refresh();
+        return id as CommunityActionResult<A>;
+      }
+      case 'updateRole': {
+        const body: Record<string, unknown> = {};
+        if (act.name !== undefined) {
+          body.name = seal(this.requireKey(act.communityId), act.communityId, `role:${act.roleId}`, {
+            name: act.name,
+          });
+        }
+        if (act.color !== undefined) body.color = act.color;
+        if (act.permissions !== undefined) body.permissions = act.permissions;
+        await this.call(`/roles/${act.roleId}`, 'PATCH', body, z.unknown());
+        break;
+      }
+      case 'moveRole': {
+        const community = this.requireCommunity(act.communityId);
+        const list = community.roles.filter((r) => !r.everyone); // highest first
+        const from = list.findIndex((r) => r.id === act.roleId);
+        const to = from - act.direction; // direction 1 = up (higher position)
+        if (from < 0 || to < 0 || to >= list.length) break;
+        [list[from], list[to]] = [list[to]!, list[from]!];
+        const count = list.length;
+        // Lower roles first, so a role never needs to pass above the mover's own role.
+        for (let i = count - 1; i >= 0; i--) {
+          const role = list[i]!;
+          const position = count - i;
+          if (role.position !== position)
+            await this.call(`/roles/${role.id}`, 'PATCH', { position }, z.unknown());
+        }
+        break;
+      }
+      case 'deleteRole':
+        await this.call(`/roles/${act.roleId}`, 'DELETE', undefined, z.unknown());
+        break;
+      case 'setMemberRoles':
+        await this.call(
+          `/communities/${act.communityId}/members/${act.riverId}/roles`,
+          'PUT',
+          { roles: act.roles },
+          z.unknown(),
+        );
+        break;
+      case 'kick':
+        await this.call(
+          `/communities/${act.communityId}/members/${act.riverId}`,
+          'DELETE',
+          undefined,
+          z.unknown(),
+        );
+        break;
+      case 'ban':
+        await this.call(`/communities/${act.communityId}/bans/${act.riverId}`, 'PUT', {}, z.unknown());
+        break;
+      case 'unban':
+        await this.call(
+          `/communities/${act.communityId}/bans/${act.riverId}`,
+          'DELETE',
+          undefined,
+          z.unknown(),
+        );
+        break;
+      case 'bans': {
+        const res = await this.call(
+          `/communities/${act.communityId}/bans`,
+          'GET',
+          undefined,
+          bansResponseSchema,
+        );
+        const bans: BanView[] = res.bans.map((b) => ({
+          riverId: b.riverId,
+          bannedOn: b.bannedOn,
+          name: this.knownNames.get(b.riverId) ?? `Member ${b.riverId.slice(0, 4)}`,
+        }));
+        return bans as CommunityActionResult<A>;
+      }
+      case 'send':
+        return (await this.send(act.channelId, act.text, act.replyTo)) as CommunityActionResult<A>;
+      case 'edit': {
+        const communityId = this.communityOf(act.channelId);
+        const existing = await this.findMessage(act.channelId, act.messageId);
+        const body = seal(
+          this.requireKey(communityId),
+          communityId,
+          `message:${act.channelId}`,
+          existing?.replyTo ? { text: act.text, replyTo: existing.replyTo } : { text: act.text },
+        );
+        await this.call(`/messages/${act.messageId}`, 'PATCH', { body }, z.unknown());
+        break;
+      }
+      case 'deleteMessage':
+        await this.call(`/messages/${act.messageId}`, 'DELETE', undefined, z.unknown());
+        break;
+      case 'pin':
+        await this.call(
+          `/messages/${act.messageId}/pin`,
+          act.pinned ? 'PUT' : 'DELETE',
+          undefined,
+          z.unknown(),
+        );
+        break;
+      case 'pins': {
+        const communityId = this.communityOf(act.channelId);
+        const res = await this.call(
+          `/channels/${act.channelId}/messages?pinned=1`,
+          'GET',
+          undefined,
+          messagesResponseSchema,
+        );
+        return res.messages
+          .map((m) => this.toChat(communityId, m))
+          .filter((m): m is ChatMessage => m !== null)
+          .reverse() as CommunityActionResult<A>;
+      }
+      case 'react': {
+        const communityId = this.communityOf(act.channelId);
+        const key = this.requireKey(communityId);
+        const tag = reactionTag(key, communityId, act.messageId, act.emoji);
+        if (act.on) {
+          const emoji = seal(key, communityId, `reaction:${act.messageId}`, { emoji: act.emoji });
+          await this.call(`/messages/${act.messageId}/reactions/${tag}`, 'PUT', { emoji }, z.unknown());
+        } else {
+          await this.call(`/messages/${act.messageId}/reactions/${tag}`, 'DELETE', undefined, z.unknown());
+        }
+        break;
+      }
+      case 'typing':
+        this.trySend({ t: 'typing', channelId: act.channelId });
+        break;
+      case 'voiceState':
+        this.trySend({
+          t: 'voice.state',
+          muted: act.muted,
+          deafened: act.deafened,
+          streaming: act.streaming,
+        });
+        break;
+      case 'moderateVoice':
+        this.sendEvent({
+          t: 'voice.moderate',
+          target: act.riverId,
+          ...(act.serverMuted !== undefined ? { serverMuted: act.serverMuted } : {}),
+          ...(act.disconnect ? { disconnect: true } : {}),
+        });
+        break;
+      case 'setProfile': {
+        if (act.name !== undefined) this.deps.identity.setDisplayName(act.name);
+        if (act.avatar !== undefined) {
+          this.db()
+            .prepare(
+              'INSERT INTO profile (id, avatar) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET avatar = excluded.avatar',
+            )
+            .run(act.avatar);
+        }
+        if (this.deps.account.status().state === 'registered') {
+          this.loadKeys();
+          await Promise.all(this.communities.map((c) => this.publishProfile(c.id).catch(() => undefined)));
+          await this.refresh().catch(() => undefined);
+        }
+        break;
+      }
+    }
+    return ok;
+  }
+
+  private async findMessage(channelId: string, messageId: string): Promise<ChatMessage | undefined> {
+    return (await this.messages(channelId)).find((m) => m.id === messageId);
+  }
+
   voiceJoin(channelId: string): void {
-    if (!this.channelToCommunity.has(channelId)) throw new CommunityError('Unknown channel');
+    this.communityOf(channelId);
     this.sendEvent({ t: 'voice.join', channelId });
   }
 
@@ -323,11 +793,10 @@ export class CommunityService {
 
   /** Call signalling (SDP / ICE) sealed with the community key, relayed by the server. */
   signal(to: string, channelId: string, payload: unknown): void {
-    const communityId = this.channelToCommunity.get(channelId);
-    if (!communityId) throw new CommunityError('Unknown channel');
+    const communityId = this.communityOf(channelId);
     const data = seal(this.requireKey(communityId), communityId, `signal:${channelId}`, payload);
     if (data.length > 30_000) throw new CommunityError('Signal too large');
-    this.sendEvent({ t: 'signal', to: z.string().uuid().parse(to), data });
+    this.sendEvent({ t: 'signal', to: z.uuid().parse(to), data });
   }
 
   // ---- Realtime --------------------------------------------------------------------------------
@@ -371,6 +840,7 @@ export class CommunityService {
       if (this.socket !== socket) return;
       this.socket = null;
       this.voice.clear();
+      this.voiceStates.clear();
       this.setSocketState('offline');
       this.scheduleReconnect();
     };
@@ -395,22 +865,64 @@ export class CommunityService {
         void this.refresh().catch(() => undefined);
         return;
       case 'message': {
+        const isNew = !this.seen.has(e.message.id);
+        this.remember(e.message.id);
         const chat = this.toChat(e.communityId, e.message);
-        if (chat) this.emit({ t: 'message', message: chat });
+        if (chat) this.emit({ t: 'message', message: chat, isNew });
         return;
       }
+      case 'message.delete':
+        this.emit({ t: 'messageDelete', channelId: e.channelId, messageId: e.messageId });
+        return;
       case 'member':
       case 'channel':
-        void this.refresh().catch(() => undefined);
+      case 'community':
+        this.scheduleRefresh();
         return;
-      case 'voice':
+      case 'removed':
+        if (e.reason !== 'left') this.forget(e.communityId);
+        this.emit({ t: 'removed', communityId: e.communityId, reason: e.reason });
+        this.scheduleRefresh();
+        return;
+      case 'presence':
+        this.online.set(e.riverId, e.online);
+        this.communities = this.communities.map((c) => ({
+          ...c,
+          members: c.members.map((m) => (m.riverId === e.riverId ? { ...m, online: e.online } : m)),
+        }));
+        this.emit({ t: 'communities', communities: this.communities });
+        return;
+      case 'voice': {
         this.voice.set(e.channelId, e.participants);
+        const states: Record<string, VoiceState> = {};
+        for (const id of e.participants) {
+          const s = e.states?.[id] ?? this.voiceStates.get(id) ?? defaultVoiceState();
+          this.voiceStates.set(id, s);
+          states[id] = s;
+        }
+        this.communities = this.communities.map((c) =>
+          c.id === e.communityId
+            ? {
+                ...c,
+                voice: { ...c.voice, [e.channelId]: e.participants },
+                voiceStates: { ...c.voiceStates, ...states },
+              }
+            : c,
+        );
         this.emit({
           t: 'voice',
           communityId: e.communityId,
           channelId: e.channelId,
           participants: e.participants,
+          states,
         });
+        return;
+      }
+      case 'voice.disconnect':
+        this.emit({ t: 'voiceDisconnect' });
+        return;
+      case 'typing':
+        this.emit({ t: 'typing', communityId: e.communityId, channelId: e.channelId, riverId: e.riverId });
         return;
       case 'signal': {
         const communityId = this.channelToCommunity.get(e.channelId);
@@ -434,6 +946,11 @@ export class CommunityService {
     this.socket.send(JSON.stringify(event));
   }
 
+  /** Best-effort realtime hints (typing, voice state) that may be dropped while offline. */
+  private trySend(event: unknown): void {
+    if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(event));
+  }
+
   private setSocketState(state: 'online' | 'offline' | 'connecting'): void {
     if (this.socketState === state) return;
     this.socketState = state;
@@ -442,6 +959,26 @@ export class CommunityService {
 
   private emit(e: CommunityEvent): void {
     for (const l of this.listeners) l(e);
+  }
+
+  private remember(messageId: string): void {
+    this.seen.add(messageId);
+    if (this.seen.size > 5000) {
+      const first = this.seen.values().next().value;
+      if (first) this.seen.delete(first);
+    }
+  }
+
+  private communityOf(channelId: string): string {
+    const communityId = this.channelToCommunity.get(channelId);
+    if (!communityId) throw new CommunityError('Unknown channel');
+    return communityId;
+  }
+
+  private requireCommunity(communityId: string): CommunityView {
+    const c = this.communities.find((x) => x.id === communityId);
+    if (!c) throw new CommunityError('Unknown community');
+    return c;
   }
 
   private requireKey(communityId: string): Buffer {
@@ -457,4 +994,16 @@ export class CommunityService {
       .run(id, key, new Date().toISOString());
     this.keys.set(id, key);
   }
+
+  /** Drops a community's key after leaving or being removed. */
+  private forget(id: string): void {
+    this.deps.db()?.prepare('DELETE FROM communities WHERE id = ?').run(id);
+    this.keys.delete(id);
+    this.communities = this.communities.filter((c) => c.id !== id);
+    this.emit({ t: 'communities', communities: this.communities });
+  }
+}
+
+function defaultVoiceState(): VoiceState {
+  return { muted: false, deafened: false, serverMuted: false, streaming: false };
 }

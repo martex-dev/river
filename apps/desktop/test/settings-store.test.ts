@@ -81,7 +81,12 @@ describe('SettingsStore', () => {
     };
     writeFileSync(file, JSON.stringify(v001));
     const s = new SettingsStore(file, nullLogger).get();
-    expect(s).toEqual({ ...v001, server: { url: null } });
+    expect(s).toEqual({
+      ...v001,
+      notifications: { ...DEFAULT_SETTINGS.notifications, preview: 'sender' },
+      server: { url: null },
+      voice: DEFAULT_SETTINGS.voice,
+    });
     // A clean upgrade is not treated as corruption.
     expect(readdirSync(dir).some((n) => n.includes('.invalid-'))).toBe(false);
   });

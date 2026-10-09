@@ -6,7 +6,8 @@ import { Onboarding } from './components/Onboarding.tsx';
 import { UpdateToast } from './components/UpdateToast.tsx';
 import { PLANNED } from './features.ts';
 import { HomePage } from './pages/HomePage.tsx';
-import { CommunitiesPage } from './pages/CommunitiesPage.tsx';
+import { CallAudio } from './community/ui/Voice.tsx';
+import { CommunitiesPage, VoiceHotkeys } from './pages/CommunitiesPage.tsx';
 import { useCommunity } from './community/store.ts';
 import { PlannedPage } from './pages/PlannedPage.tsx';
 import { SecurityPage } from './pages/SecurityPage.tsx';
@@ -157,6 +158,8 @@ export function App(): ReactElement {
         </main>
       </div>
       <UpdateToast />
+      <CallAudio />
+      <VoiceHotkeys />
     </div>
   );
 }

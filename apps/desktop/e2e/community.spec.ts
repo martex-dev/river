@@ -89,6 +89,7 @@ test('create, invite, join, chat and call between two members', async () => {
   // "Copy link" really puts the link on the clipboard.
   await alice.getByRole('button', { name: 'Copy link' }).click();
   await expect(alice.getByRole('button', { name: 'Copied ✓' })).toBeVisible();
+  await alice.getByRole('button', { name: 'Close', exact: true }).click();
   expect(await apps[0]!.evaluate(({ clipboard }) => clipboard.readText())).toBe(invite);
 
   // Bob joins with nothing but the link (his account is created automatically).
@@ -109,11 +110,11 @@ test('create, invite, join, chat and call between two members', async () => {
   await expect(bob.locator('.chat__messages')).toContainText('welcome, bob');
   if (process.env.RIVER_SCREENSHOTS) await alice.screenshot({ path: 'test-results/community-chat.png' });
 
-  // Voice: both join the Lounge and connect directly.
+  // Voice: clicking the Lounge joins it, and both connect directly.
   for (const p of [alice, bob]) {
     await p.locator('.channel', { hasText: 'Lounge' }).click();
-    await p.getByRole('button', { name: 'Join voice' }).click();
   }
+  await expect(alice.locator('.voice-panel')).toContainText('Voice connected');
   // Starting the microphone can take a few seconds the first time.
   await expect(alice.locator('.tile', { hasText: 'Bob' })).toBeVisible({ timeout: 30_000 });
   await expect(alice.locator('.tile', { hasText: 'Bob' })).not.toContainText('connecting', {
@@ -129,7 +130,7 @@ test('create, invite, join, chat and call between two members', async () => {
       .poll(
         () =>
           p
-            .locator('.tile audio')
+            .locator('.call-audio audio')
             .first()
             .evaluate((a: HTMLAudioElement) => !a.paused && a.readyState > 0),
         {
@@ -178,4 +179,28 @@ test('create, invite, join, chat and call between two members', async () => {
 
   await bob.getByRole('button', { name: 'Leave' }).click();
   await expect(alice.locator('.tile', { hasText: 'Bob' })).toHaveCount(0, { timeout: 15_000 });
+
+  // Reactions travel encrypted and show up for the other member.
+  for (const p of [alice, bob]) await p.locator('.channel', { hasText: 'general' }).click();
+  const bobsMessage = (p: typeof alice) => p.locator('.msg', { hasText: 'hello from bob' });
+  await bobsMessage(alice).hover();
+  await bobsMessage(alice).getByTitle('React 👍').click();
+  await expect(bobsMessage(bob).locator('.reaction__count')).toHaveText('1', { timeout: 15_000 });
+
+  // Roles: Alice creates a role that may kick, and gives it to Bob.
+  await alice.locator('.community__title').click();
+  await alice.getByRole('menuitem', { name: 'Community settings' }).click();
+  await alice.locator('.settings-tab', { hasText: 'Roles' }).click();
+  await alice.getByRole('button', { name: 'Create role' }).click();
+  await alice.getByLabel('Role name').fill('Crew');
+  await alice.locator('.toggle-row', { hasText: 'Kick members' }).locator('input').check();
+  await alice.getByRole('button', { name: 'Save changes' }).click();
+  await expect(alice.locator('.role-row', { hasText: 'Crew' })).toBeVisible();
+  if (process.env.RIVER_SCREENSHOTS) await alice.screenshot({ path: 'test-results/community-roles.png' });
+  await alice.locator('.settings-tab', { hasText: 'Members' }).click();
+  await alice.getByLabel('Add role to Bob').selectOption({ label: 'Crew' });
+  await expect(alice.locator('.member-table__row', { hasText: 'Bob' })).toContainText('Crew');
+  await alice.getByRole('button', { name: 'Close settings' }).click();
+  await expect(bob.locator('.community__members')).toContainText('Crew — 1', { timeout: 15_000 });
+  if (process.env.RIVER_SCREENSHOTS) await bob.screenshot({ path: 'test-results/community-members.png' });
 });

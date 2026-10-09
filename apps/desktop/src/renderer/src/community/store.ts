@@ -1,6 +1,22 @@
 import { create } from 'zustand';
-import type { ChatMessage, CommunityEvent, CommunityView } from '../../../shared/ipc.ts';
+import type { CommunityAction, CommunityActionResult } from '../../../shared/community-actions.ts';
+import type { ChatMessage, CommunityEvent, CommunityView, Result } from '../../../shared/ipc.ts';
+import { useRiver } from '../store.ts';
+import { play, setSoundsEnabled } from './sound.ts';
 import { VoiceCall } from './voice.ts';
+
+export type Modal =
+  | { kind: 'community-settings'; communityId: string; tab?: CommunityTab }
+  | { kind: 'channel-settings'; channelId: string }
+  | { kind: 'create-channel'; communityId: string; channelKind: 'text' | 'voice' }
+  | { kind: 'invite'; communityId: string }
+  | { kind: 'user-settings'; tab?: UserTab }
+  | { kind: 'confirm'; title: string; body: string; action: string; run: () => Promise<void> };
+
+export type CommunityTab = 'overview' | 'roles' | 'members' | 'bans';
+export type UserTab = 'profile' | 'voice' | 'notifications' | 'appearance';
+
+const TYPING_MS = 7000;
 
 interface CommunityState {
   loaded: boolean;
@@ -10,10 +26,22 @@ interface CommunityState {
   selectedCommunity: string | null;
   selectedChannel: string | null;
   messages: Record<string, ChatMessage[]>;
+  unread: Record<string, number>;
+  mentions: Record<string, number>;
+  /** channel → River ID → time typing was last seen */
+  typing: Record<string, Record<string, number>>;
   call: VoiceCall | null;
   /** Bumped whenever call state changes, to re-render. */
   callVersion: number;
   callError: string | null;
+  selfMuted: boolean;
+  selfDeafened: boolean;
+  modal: Modal | null;
+  toast: { text: string; tone: 'info' | 'error' } | null;
+  replyTo: ChatMessage | null;
+  editing: string | null;
+  showMembers: boolean;
+  showPins: boolean;
 
   load(): Promise<void>;
   handle(event: CommunityEvent): void;
@@ -22,7 +50,15 @@ interface CommunityState {
   loadMessages(channelId: string): Promise<void>;
   joinVoice(channelId: string, me: string): Promise<void>;
   leaveVoice(): Promise<void>;
+  toggleMute(): void;
+  toggleDeafen(): void;
+  setModal(modal: Modal | null): void;
+  notify(text: string, tone?: 'info' | 'error'): void;
+  /** Runs a community action and shows its error, if any, as a toast. */
+  run<A extends CommunityAction>(action: A): Promise<CommunityActionResult<A> | null>;
 }
+
+let toastTimer: number | undefined;
 
 export const useCommunity = create<CommunityState>((set, get) => ({
   loaded: false,
@@ -32,9 +68,20 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   selectedCommunity: null,
   selectedChannel: null,
   messages: {},
+  unread: {},
+  mentions: {},
+  typing: {},
   call: null,
   callVersion: 0,
   callError: null,
+  selfMuted: false,
+  selfDeafened: false,
+  modal: null,
+  toast: null,
+  replyTo: null,
+  editing: null,
+  showMembers: true,
+  showPins: false,
 
   load: async () => {
     const [res, connection] = await Promise.all([
@@ -47,6 +94,8 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   },
 
   handle: (event) => {
+    const settings = useRiver.getState().settings;
+    setSoundsEnabled(settings?.notifications.sounds ?? true);
     switch (event.t) {
       case 'communities':
         applyCommunities(event.communities);
@@ -55,23 +104,101 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         set({ connection: event.state });
         return;
       case 'message': {
-        const list = get().messages[event.message.channelId];
-        if (!list || list.some((m) => m.id === event.message.id)) return;
-        set({ messages: { ...get().messages, [event.message.channelId]: [...list, event.message] } });
+        const m = event.message;
+        const list = get().messages[m.channelId];
+        if (list) {
+          const i = list.findIndex((x) => x.id === m.id);
+          const next = i >= 0 ? list.map((x) => (x.id === m.id ? m : x)) : [...list, m];
+          set({ messages: { ...get().messages, [m.channelId]: next } });
+        }
+        if (!event.isNew || m.mine) return;
+        // The sender stopped typing.
+        const typing = { ...get().typing[m.channelId] };
+        delete typing[m.sender];
+        set({ typing: { ...get().typing, [m.channelId]: typing } });
+        const viewing =
+          get().selectedChannel === m.channelId &&
+          useRiver.getState().section === 'communities' &&
+          document.hasFocus();
+        if (!viewing) {
+          set({ unread: { ...get().unread, [m.channelId]: (get().unread[m.channelId] ?? 0) + 1 } });
+          if (m.mentionsMe) {
+            set({ mentions: { ...get().mentions, [m.channelId]: (get().mentions[m.channelId] ?? 0) + 1 } });
+          }
+        }
+        const mode = settings?.notifications.mode ?? 'all';
+        if (m.mentionsMe) play('mention');
+        else if (!viewing && mode === 'all') play('message');
+        return;
+      }
+      case 'messageDelete': {
+        const list = get().messages[event.channelId];
+        if (list) {
+          set({
+            messages: { ...get().messages, [event.channelId]: list.filter((m) => m.id !== event.messageId) },
+          });
+        }
+        return;
+      }
+      case 'typing': {
+        set({
+          typing: {
+            ...get().typing,
+            [event.channelId]: { ...get().typing[event.channelId], [event.riverId]: Date.now() },
+          },
+        });
+        window.setTimeout(() => set({ typing: { ...get().typing } }), TYPING_MS + 50);
         return;
       }
       case 'voice': {
+        const before =
+          get().communities.find((c) => c.id === event.communityId)?.voice[event.channelId] ?? [];
         set({
           communities: get().communities.map((c) =>
             c.id === event.communityId
-              ? { ...c, voice: { ...c.voice, [event.channelId]: event.participants } }
+              ? {
+                  ...c,
+                  voice: { ...c.voice, [event.channelId]: event.participants },
+                  voiceStates: { ...c.voiceStates, ...event.states },
+                }
               : c,
           ),
         });
         const call = get().call;
-        if (call && call.channelId === event.channelId) call.updateParticipants(event.participants);
+        if (call && call.channelId === event.channelId) {
+          const me = useRiver.getState().identity?.riverId ?? '';
+          const joined = event.participants.filter((id) => !before.includes(id) && id !== me);
+          const left = before.filter((id) => !event.participants.includes(id) && id !== me);
+          if (joined.length) play('join');
+          else if (left.length) play('leave');
+          call.setServerMuted(event.states[me]?.serverMuted ?? false);
+          call.updateParticipants(event.participants);
+        }
         return;
       }
+      case 'voiceDisconnect': {
+        const call = get().call;
+        if (!call) return;
+        set({ call: null });
+        void call.leave();
+        play('disconnected');
+        get().notify('You were disconnected from the voice channel.');
+        return;
+      }
+      case 'removed': {
+        const c = get().communities.find((x) => x.id === event.communityId);
+        const name = c?.name ?? 'a community';
+        if (event.reason === 'kicked') get().notify(`You were removed from ${name}.`, 'error');
+        if (event.reason === 'banned') get().notify(`You were banned from ${name}.`, 'error');
+        if (event.reason === 'deleted') get().notify(`${name} was deleted by its owner.`, 'error');
+        const call = get().call;
+        if (call && c?.channels.some((ch) => ch.id === call.channelId)) void get().leaveVoice();
+        return;
+      }
+      case 'focusChannel':
+        useRiver.getState().navigate('communities');
+        get().select(event.communityId, event.channelId);
+        return;
       case 'signal': {
         const call = get().call;
         if (call && call.channelId === event.channelId) void call.handleSignal(event.from, event.data);
@@ -84,12 +211,14 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     const c = get().communities.find((x) => x.id === communityId);
     const channel =
       channelId ?? c?.channels.find((ch) => ch.kind === 'text')?.id ?? c?.channels[0]?.id ?? null;
-    set({ selectedCommunity: communityId, selectedChannel: channel });
-    if (channel) void get().loadMessages(channel);
+    set({ selectedCommunity: communityId, selectedChannel: channel, replyTo: null, editing: null });
+    if (channel) get().selectChannel(channel);
   },
 
   selectChannel: (channelId) => {
-    set({ selectedChannel: channelId });
+    const { [channelId]: _u, ...unread } = get().unread;
+    const { [channelId]: _m, ...mentions } = get().mentions;
+    set({ selectedChannel: channelId, unread, mentions, replyTo: null, editing: null, showPins: false });
     void get().loadMessages(channelId);
   },
 
@@ -102,10 +231,30 @@ export const useCommunity = create<CommunityState>((set, get) => ({
 
   joinVoice: async (channelId, me) => {
     await get().call?.leave();
-    const call = new VoiceCall(channelId, me, () => set({ callVersion: get().callVersion + 1 }));
+    const voice = useRiver.getState().settings?.voice;
+    let streaming = false;
+    const onChange = (): void => {
+      set({ callVersion: get().callVersion + 1 });
+      // Keep the server's LIVE badge right, including when the OS ends a share.
+      const now = !!get().call?.localTrack('screen');
+      if (now !== streaming) {
+        streaming = now;
+        sendVoiceState();
+      }
+    };
+    const call = new VoiceCall(channelId, me, onChange, {
+      inputDeviceId: voice?.inputDeviceId ?? null,
+      noiseSuppression: voice?.noiseSuppression ?? true,
+      echoCancellation: voice?.echoCancellation ?? true,
+      pushToTalk: voice?.inputMode === 'push-to-talk',
+    });
+    call.muted = get().selfMuted;
+    call.deafened = get().selfDeafened;
     set({ call, callError: null });
     try {
       await call.start();
+      play('selfJoin');
+      sendVoiceState();
     } catch (err) {
       set({
         call: null,
@@ -120,15 +269,79 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   leaveVoice: async () => {
     const call = get().call;
     set({ call: null });
+    if (call) play('selfLeave');
     await call?.leave();
   },
+
+  toggleMute: () => {
+    const { selfMuted, selfDeafened } = get();
+    // Unmuting while deafened also undeafens, like most voice apps.
+    if (selfMuted && selfDeafened) {
+      set({ selfMuted: false, selfDeafened: false });
+      get().call?.setDeafened(false);
+    } else set({ selfMuted: !selfMuted });
+    get().call?.setMuted(get().selfMuted);
+    play(get().selfMuted ? 'mute' : 'unmute');
+    sendVoiceState();
+  },
+
+  toggleDeafen: () => {
+    const deafened = !get().selfDeafened;
+    set({ selfDeafened: deafened, selfMuted: deafened ? true : false });
+    get().call?.setDeafened(deafened);
+    get().call?.setMuted(get().selfMuted);
+    play(deafened ? 'deafen' : 'undeafen');
+    sendVoiceState();
+  },
+
+  setModal: (modal) => set({ modal }),
+
+  notify: (text, tone = 'info') => {
+    window.clearTimeout(toastTimer);
+    set({ toast: { text, tone } });
+    toastTimer = window.setTimeout(() => set({ toast: null }), 4500);
+  },
+
+  run: async (action) => {
+    const res = (await window.river.community.action(action)) as Result<CommunityActionResult<typeof action>>;
+    if (!res.ok) {
+      get().notify(res.message, 'error');
+      return null;
+    }
+    return res.value;
+  },
 }));
+
+/** Tells the server our mute/deafen/streaming state so others see it. */
+export function sendVoiceState(): void {
+  const { call, selfMuted, selfDeafened } = useCommunity.getState();
+  if (!call) return;
+  void window.river.community.action({
+    a: 'voiceState',
+    muted: selfMuted || (call.pushToTalk && !call.pttActive),
+    deafened: selfDeafened,
+    streaming: !!call.localTrack('screen'),
+  });
+}
 
 function applyCommunities(communities: CommunityView[]): void {
   const s = useCommunity.getState();
   useCommunity.setState({ communities });
-  if (!s.selectedCommunity || !communities.some((c) => c.id === s.selectedCommunity)) {
+  const current = communities.find((c) => c.id === s.selectedCommunity);
+  if (!current) {
     if (communities[0]) useCommunity.getState().select(communities[0].id);
     else useCommunity.setState({ selectedCommunity: null, selectedChannel: null });
+  } else if (s.selectedChannel && !current.channels.some((ch) => ch.id === s.selectedChannel)) {
+    // The channel was deleted or hidden from us.
+    useCommunity.getState().select(current.id);
   }
+}
+
+/** Names of people typing in a channel right now (excluding me). */
+export function typingNames(channelId: string, community: CommunityView | undefined, me: string): string[] {
+  const entries = useCommunity.getState().typing[channelId] ?? {};
+  const now = Date.now();
+  return Object.entries(entries)
+    .filter(([id, at]) => id !== me && now - at < TYPING_MS)
+    .map(([id]) => community?.members.find((m) => m.riverId === id)?.name ?? 'Someone');
 }

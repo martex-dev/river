@@ -56,6 +56,8 @@ const api: RiverApi = {
     messages: (channelId) => ipcRenderer.invoke(IPC.communityMessages, channelId),
     send: (channelId, text) => ipcRenderer.invoke(IPC.communitySend, channelId, text),
     connection: () => ipcRenderer.invoke(IPC.communityList, 'connection-only'),
+    action: (action) => ipcRenderer.invoke(IPC.communityAction, action),
+    profile: () => ipcRenderer.invoke(IPC.profileGet),
     onEvent: (listener) => {
       const handler = (_event: unknown, e: CommunityEvent): void => listener(e);
       ipcRenderer.on(IPC.communityEvent, handler);

@@ -57,7 +57,7 @@ export class NetworkError extends Error {
 
 export type RequestJson = <T>(
   url: string,
-  options: { method: 'GET' | 'POST' | 'PUT'; body?: unknown; token?: string },
+  options: { method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; body?: unknown; token?: string },
   schema: z.ZodType<T>,
 ) => Promise<T>;
 

@@ -22,6 +22,7 @@ import {
   uiSession,
   UI_PARTITION,
 } from './security.ts';
+import { startMessageNotifications } from './notifications.ts';
 import { SettingsStore } from './settings-store.ts';
 import { electronKeystore } from './storage/electron-keystore.ts';
 import { StorageService } from './storage/storage-service.ts';
@@ -164,6 +165,8 @@ async function start(): Promise<void> {
   broadcastStorageStatus(window.webContents, storage);
   broadcastAccountStatus(window.webContents, account);
   broadcastCommunityEvents(window.webContents, community);
+  startMessageNotifications({ community, settings: () => settings.get(), window });
+  window.on('focus', () => window.flashFrame(false));
   if (updates) {
     const service = updates;
     broadcastUpdateStatus(window.webContents, service);

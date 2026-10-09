@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } from 'node:crypto';
 
 /**
  * Community content encryption: AES-256-GCM with a random 96-bit nonce under
@@ -7,7 +7,14 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
  * move ciphertext between communities, channels or fields.
  * Format: base64(nonce ‖ ciphertext ‖ tag).
  */
-export type SealPurpose = 'meta' | 'profile' | `channel:${string}` | `message:${string}` | `signal:${string}`;
+export type SealPurpose =
+  | 'meta'
+  | 'profile'
+  | `channel:${string}`
+  | `message:${string}`
+  | `signal:${string}`
+  | `role:${string}`
+  | `reaction:${string}`;
 
 const aad = (communityId: string, purpose: SealPurpose): Buffer =>
   Buffer.from(`river-community-v1|${communityId}|${purpose}`, 'utf8');
@@ -38,6 +45,22 @@ export function open<T = unknown>(
   decipher.setAuthTag(raw.subarray(raw.length - 16));
   const pt = Buffer.concat([decipher.update(raw.subarray(12, raw.length - 16)), decipher.final()]);
   return JSON.parse(pt.toString('utf8')) as T;
+}
+
+/**
+ * Lets the server group identical reactions without learning the emoji:
+ * HMAC-SHA256 under a key derived (HKDF) from the community key, over the
+ * message ID and emoji, truncated to 128 bits.
+ */
+export function reactionTag(key: Uint8Array, communityId: string, messageId: string, emoji: string): string {
+  const tagKey = Buffer.from(
+    hkdfSync('sha256', key, Buffer.alloc(0), `river-reaction-tag-v1|${communityId}`, 32),
+  );
+  return createHmac('sha256', tagKey)
+    .update(`${messageId}|${emoji}`)
+    .digest()
+    .subarray(0, 16)
+    .toString('hex');
 }
 
 export function randomId(): string {

@@ -70,4 +70,17 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 5,
+    name: '0005_profile',
+    up(db) {
+      // The avatar is shared with communities only inside sealed profiles.
+      db.exec(`
+        CREATE TABLE profile (
+          id     INTEGER PRIMARY KEY CHECK (id = 1),
+          avatar TEXT
+        ) STRICT;
+      `);
+    },
+  },
 ];
