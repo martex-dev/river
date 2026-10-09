@@ -237,7 +237,11 @@ function ConversationRow({ c }: { c: ConversationView }): ReactElement {
           )}
         </span>
       </span>
-      {c.unread > 0 && <span className="badge badge--mention">{c.unread}</span>}
+      {c.unread > 0 && (
+        <span key={c.unread} className="badge badge--mention">
+          {c.unread}
+        </span>
+      )}
     </button>
   );
 }
@@ -730,7 +734,9 @@ function DmMessage(props: {
                   onClick={() => react(r.emoji, !r.mine)}
                 >
                   <span className="reaction__emoji">{r.emoji}</span>
-                  <span className="reaction__count">{r.count}</span>
+                  <span key={r.count} className="reaction__count">
+                    {r.count}
+                  </span>
                 </button>
               ))}
             </div>

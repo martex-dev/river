@@ -99,6 +99,10 @@ test('create, invite, join, chat and call between two members', async () => {
   await bob.getByPlaceholder('https://…/join#c=…&k=…').fill(invite);
   await bob.getByRole('button', { name: 'Join community' }).click();
   await expect(bob.locator('.community__title strong')).toHaveText('The Crew');
+  // A short celebration greets new members (purely visual: hidden from screen readers).
+  await expect(bob.locator('.burst__text')).toHaveText('Welcome to The Crew');
+  await expect(bob.locator('.celebrations')).toHaveAttribute('aria-hidden', 'true');
+  if (process.env.RIVER_SCREENSHOTS) await bob.screenshot({ path: 'test-results/celebration.png' });
   // On small screens (e.g. macOS CI) the member list is an overlay that starts closed.
   const openMembers = async (p: typeof alice): Promise<void> => {
     if ((await p.locator('.community__members').count()) === 0) {

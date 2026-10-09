@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/dm.ts';
 import type { Result } from '../../../shared/ipc.ts';
 import { useCommunity } from '../community/store.ts';
+import { celebrate } from '../community/fx.tsx';
 import { play } from '../community/sound.ts';
 import { useRiver } from '../store.ts';
 
@@ -70,16 +71,19 @@ export const useDm = create<DmState>((set, get) => ({
           e.conversations.some((c) => c.kind === 'direct' && c.state === 'request' && !before.has(c.riverId))
         )
           play('friendRequest');
-        else if (
-          e.conversations.some(
+        else {
+          const friend = e.conversations.find(
             (c) =>
               c.kind === 'direct' &&
               c.state === 'accepted' &&
               before.has(c.riverId) &&
               before.get(c.riverId) !== 'accepted',
-          )
-        )
-          play('friendAdded');
+          );
+          if (friend) {
+            play('friendAdded');
+            celebrate(`You and ${friend.name} are now friends`);
+          }
+        }
         return;
       }
       case 'message': {
