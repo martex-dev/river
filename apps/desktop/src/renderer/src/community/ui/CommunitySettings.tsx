@@ -306,7 +306,12 @@ function RoleEditor(props: {
   const [name, setName] = useState(role.name);
   const [color, setColor] = useState(role.color);
   const [permissions, setPermissions] = useState(role.permissions);
-  const dirty = name !== role.name || color !== role.color || permissions !== role.permissions;
+  const [mentionable, setMentionable] = useState(role.mentionable);
+  const dirty =
+    name !== role.name ||
+    color !== role.color ||
+    permissions !== role.permissions ||
+    mentionable !== role.mentionable;
   const mine = community.permissions;
 
   const save = (): void => {
@@ -314,7 +319,7 @@ function RoleEditor(props: {
       a: 'updateRole',
       communityId: community.id,
       roleId: role.id,
-      ...(role.everyone ? {} : { name: name.trim() || role.name, color }),
+      ...(role.everyone ? {} : { name: name.trim() || role.name, color, mentionable }),
       permissions,
     });
   };
@@ -361,6 +366,13 @@ function RoleEditor(props: {
               onChange={(e) => setColor(parseInt(e.target.value.slice(1), 16))}
             />
           </div>
+          <Toggle
+            label="Allow anyone to @mention this role"
+            help="Members can ping everyone with this role. People who may mention @everyone can always mention every role."
+            checked={mentionable}
+            disabled={!editable}
+            onChange={setMentionable}
+          />
         </>
       )}
       {role.everyone && (
@@ -415,6 +427,7 @@ function RoleEditor(props: {
               setName(role.name);
               setColor(role.color);
               setPermissions(role.permissions);
+              setMentionable(role.mentionable);
             }}
           >
             Reset
