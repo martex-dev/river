@@ -6,6 +6,14 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-09
+
+### Fixed
+
+- **Copy link** for community invites now copies to the clipboard. River's
+  permission lock-down had blocked clipboard writes; it now allows writing
+  (never reading) the clipboard for River's own interface.
+
 ## [0.2.1] - 2026-10-09
 
 ### Fixed
@@ -190,7 +198,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/martex-dev/river/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/martex-dev/river/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/martex-dev/river/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/martex-dev/river/compare/v0.0.4...v0.1.0

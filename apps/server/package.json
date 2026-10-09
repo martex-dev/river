@@ -1,6 +1,6 @@
 {
   "name": "@river/server",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "River server â€” routes and stores ciphertext; never sees content or private keys.",
   "license": "AGPL-3.0-only",

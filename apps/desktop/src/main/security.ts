@@ -62,8 +62,9 @@ export function serveAppScheme(uiSession: Session, rendererDir: string): void {
  * renderer except to the dev server during development.
  */
 export function hardenSession(uiSession: Session, devServerUrl: string | undefined): void {
-  // Only calls need permissions: microphone/camera ('media') and screen capture, and only for River's own UI.
-  const CALL_PERMISSIONS = new Set(['media', 'display-capture']);
+  // Only what features need, and only for River's own UI: microphone/camera and screen capture
+  // for calls, and writing (never reading) the clipboard for "Copy link".
+  const CALL_PERMISSIONS = new Set(['media', 'display-capture', 'clipboard-sanitized-write']);
   uiSession.setPermissionRequestHandler((wc, permission, callback) =>
     callback(CALL_PERMISSIONS.has(permission) && isAllowedAppUrl(wc.getURL(), devServerUrl)),
   );

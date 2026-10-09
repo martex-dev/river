@@ -86,6 +86,10 @@ test('create, invite, join, chat and call between two members', async () => {
   await alice.getByRole('button', { name: 'Invite people' }).click();
   const invite = (await alice.locator('.invite-box__link').innerText()).trim();
   expect(invite).toMatch(/\/join#c=.+&k=.+/);
+  // "Copy link" really puts the link on the clipboard.
+  await alice.getByRole('button', { name: 'Copy link' }).click();
+  await expect(alice.getByRole('button', { name: 'Copied ✓' })).toBeVisible();
+  expect(await apps[0]!.evaluate(({ clipboard }) => clipboard.readText())).toBe(invite);
 
   // Bob joins with nothing but the link (his account is created automatically).
   const bob = await open('Bob');
