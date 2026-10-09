@@ -1,7 +1,7 @@
 {
   "name": "@river/desktop",
   "productName": "River",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "description": "River â€” private, end-to-end encrypted social communication.",
   "license": "AGPL-3.0-only",
