@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-09 · Current version: **0.7.0** · Stage 1 · Next: per-member keys, DMs, TURN/SFU_
+_Last updated: 2026-10-09 · Current version: **0.8.0** · Stage 1 · Next: per-member keys, DMs, TURN/SFU_
 
 ## Complete
 

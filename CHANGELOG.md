@@ -6,6 +6,8 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-09
+
 **Never lose your account: recovery phrase and encrypted backups. Calls through strict networks.**
 
 ### Added
