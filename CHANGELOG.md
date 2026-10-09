@@ -6,6 +6,8 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-09
+
 **Social: posts, photos and stories for your friends.**
 
 ### Added
