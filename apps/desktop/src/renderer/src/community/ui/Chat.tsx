@@ -23,6 +23,7 @@ import {
   can,
   hex,
   memberOf,
+  type MentionRefs,
 } from './common.tsx';
 
 const GROUP_MS = 5 * 60_000;
@@ -52,6 +53,7 @@ export function TextChannel(props: {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const myName = memberOf(community, me)?.name ?? null;
   const names = useMemo(() => community.members.map((m) => m.name), [community.members]);
+  const refs = useMentionRefs(community, me);
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [dragging, setDragging] = useState(false);
   const canAttach = can(channel.permissions, Permission.ATTACH_FILES | Permission.SEND_MESSAGES);
@@ -217,6 +219,7 @@ export function TextChannel(props: {
                 me={me}
                 myName={myName}
                 names={names}
+                refs={refs}
                 replied={m.replyTo ? messages.find((x) => x.id === m.replyTo) : undefined}
                 onJump={jumpTo}
               />
@@ -257,6 +260,7 @@ function Message(props: {
   me: string;
   myName: string | null;
   names: string[];
+  refs: MentionRefs;
   replied: ChatMessage | undefined;
   onJump(id: string): void;
 }): ReactElement {
@@ -335,7 +339,7 @@ function Message(props: {
             <EditBox message={m} />
           ) : (
             <div className="msg__text">
-              {m.text && <RichText text={m.text} names={props.names} me={props.myName} />}
+              {m.text && <RichText text={m.text} names={props.names} me={props.myName} refs={props.refs} />}
               {m.editedAt && (
                 <span className="msg__edited" title={new Date(m.editedAt).toLocaleString()}>
                   {' '}
@@ -522,20 +526,12 @@ function Composer(props: {
   const canSend = can(channel.permissions, Permission.SEND_MESSAGES);
   const replyTo = s.replyTo && s.replyTo.channelId === channel.id ? s.replyTo : null;
 
-  // @mention autocomplete: the word being typed at the caret.
-  const mentionQuery = /(?:^|\s)@([^\s@]*)$/.exec(text)?.[1];
-  const suggestions =
-    mentionQuery === undefined
-      ? []
-      : [
-          ...(can(channel.permissions, Permission.MENTION_EVERYONE) ? ['everyone', 'here'] : []),
-          ...community.members.map((m) => m.name),
-        ]
-          .filter((n) => n.toLowerCase().startsWith(mentionQuery.toLowerCase()))
-          .slice(0, 8);
+  // Autocomplete for @people, @roles, @everyone/@here and #channels: the word being typed at the caret.
+  const trigger = /(?:^|\s)([@#])([^\s@#]*)$/.exec(text);
+  const suggestions = trigger ? suggest(community, channel, trigger[1] as '@' | '#', trigger[2]!) : [];
 
-  const complete = (name: string): void => {
-    setText(text.replace(/@([^\s@]*)$/, `@${name} `));
+  const complete = (choice: Suggestion): void => {
+    setText(text.replace(/([@#])([^\s@#]*)$/, `$1${choice.insert} `));
     setMentionIndex(0);
     ref.current?.focus();
   };
@@ -585,19 +581,42 @@ function Composer(props: {
   return (
     <div className="chat__composer-wrap">
       {suggestions.length > 0 && (
-        <div className="mention-menu" role="listbox">
-          {suggestions.map((n, i) => (
+        <div className="mention-menu" role="listbox" aria-label="Suggestions">
+          {suggestions.map((choice, i) => (
             <button
-              key={n}
+              key={choice.key}
               role="option"
               aria-selected={i === mentionIndex}
               className={`mention-menu__item ${i === mentionIndex ? 'is-active' : ''}`}
               onMouseDown={(e) => {
                 e.preventDefault();
-                complete(n);
+                complete(choice);
               }}
             >
-              @{n}
+              {choice.member ? (
+                <Avatar
+                  id={choice.member.riverId}
+                  name={choice.member.name}
+                  avatar={choice.member.avatar}
+                  size={20}
+                />
+              ) : (
+                <span
+                  className="mention-menu__dot"
+                  style={choice.color ? { background: hex(choice.color) } : undefined}
+                  aria-hidden="true"
+                >
+                  {choice.symbol}
+                </span>
+              )}
+              <span
+                className="mention-menu__label"
+                style={choice.color ? { color: hex(choice.color) } : undefined}
+              >
+                {choice.symbol === '#' ? '#' : '@'}
+                {choice.insert}
+              </span>
+              {choice.hint && <span className="mention-menu__hint">{choice.hint}</span>}
             </button>
           ))}
         </div>
@@ -920,4 +939,80 @@ function WelcomeActions(props: { community: CommunityView; channel: ChannelView 
       </div>
     </div>
   );
+}
+
+interface Suggestion {
+  key: string;
+  /** Text inserted after the @ or #. */
+  insert: string;
+  symbol: '@' | '#';
+  hint: string;
+  color?: number;
+  member?: { riverId: string; name: string; avatar: string | null };
+}
+
+/** What can be mentioned here, best matches first, at most 8. */
+function suggest(
+  community: CommunityView,
+  channel: ChannelView,
+  symbol: '@' | '#',
+  query: string,
+): Suggestion[] {
+  const q = query.toLowerCase();
+  const matches = (name: string): boolean => name.toLowerCase().includes(q);
+  const rank = (name: string): number => (name.toLowerCase().startsWith(q) ? 0 : 1);
+  if (symbol === '#') {
+    return community.channels
+      .filter((c) => c.kind === 'text' && matches(c.name))
+      .sort((a, b) => rank(a.name) - rank(b.name))
+      .slice(0, 8)
+      .map((c) => ({ key: `c:${c.id}`, insert: c.name, symbol: '#' as const, hint: c.topic.slice(0, 40) }));
+  }
+  const all = can(channel.permissions, Permission.MENTION_EVERYONE);
+  const special: Suggestion[] = all
+    ? [
+        {
+          key: 's:everyone',
+          insert: 'everyone',
+          symbol: '@',
+          hint: 'Notify everyone who can see this channel',
+        },
+        { key: 's:here', insert: 'here', symbol: '@', hint: 'Notify everyone online right now' },
+      ]
+    : [];
+  const roles: Suggestion[] = community.roles
+    .filter((r) => !r.everyone && (r.mentionable || all))
+    .map((r) => ({
+      key: `r:${r.id}`,
+      insert: r.name,
+      symbol: '@',
+      hint: 'Role',
+      color: r.color || undefined,
+    }));
+  const members: Suggestion[] = community.members.map((m) => ({
+    key: `m:${m.riverId}`,
+    insert: m.name,
+    symbol: '@',
+    hint: m.online ? '' : 'Offline',
+    member: { riverId: m.riverId, name: m.name, avatar: m.avatar },
+  }));
+  return [...special, ...members, ...roles]
+    .filter((x) => matches(x.insert))
+    .sort((a, b) => rank(a.insert) - rank(b.insert))
+    .slice(0, 8);
+}
+
+/** Roles and channels for highlighting mentions; clicking a #channel opens it. */
+function useMentionRefs(community: CommunityView, me: string): MentionRefs {
+  const select = useCommunity((x) => x.selectChannel);
+  return useMemo(() => {
+    const mine = community.members.find((m) => m.riverId === me)?.roles ?? [];
+    return {
+      roles: community.roles
+        .filter((r) => !r.everyone)
+        .map((r) => ({ name: r.name, color: r.color, mine: mine.includes(r.id) })),
+      channels: community.channels.filter((c) => c.kind === 'text').map((c) => ({ id: c.id, name: c.name })),
+      onChannel: select,
+    };
+  }, [community.roles, community.members, community.channels, me, select]);
 }
