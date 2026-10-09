@@ -54,6 +54,11 @@ interface CommunityState {
   showMembers: boolean;
   showPins: boolean;
   showSearch: boolean;
+  /** The thread open in the side panel. */
+  openThread: { channelId: string; rootId: string } | null;
+  /** Loaded thread replies, by starting message. */
+  threads: Record<string, ChatMessage[]>;
+  showThread(channelId: string, rootId: string): Promise<void>;
   /** Channels whose older history is exhausted. */
   noMore: Record<string, boolean>;
   loadOlder(channelId: string): Promise<number>;
@@ -107,6 +112,13 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   showMembers: typeof window === 'undefined' || window.innerWidth >= 1100,
   showPins: false,
   showSearch: false,
+  openThread: null,
+  threads: {},
+  showThread: async (channelId, rootId) => {
+    set({ openThread: { channelId, rootId }, showMembers: false, showPins: false, showSearch: false });
+    const res = await window.river.community.action({ a: 'threadMessages', channelId, messageId: rootId });
+    if (res.ok) set({ threads: { ...get().threads, [rootId]: res.value as ChatMessage[] } });
+  },
   noMore: {},
 
   loadOlder: async (channelId) => {
@@ -171,6 +183,17 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       }
       case 'message': {
         const m = event.message;
+        if (m.threadId) {
+          // A reply inside a thread: it belongs to the thread, not the channel.
+          const replies = get().threads[m.threadId];
+          if (replies) {
+            const i = replies.findIndex((x) => x.id === m.id);
+            const next = i >= 0 ? replies.map((x) => (x.id === m.id ? m : x)) : [...replies, m];
+            set({ threads: { ...get().threads, [m.threadId]: next } });
+          }
+          if (event.isNew && !m.mine && m.mentionsMe) play('mention');
+          return;
+        }
         const list = get().messages[m.channelId];
         if (list) {
           const i = list.findIndex((x) => x.id === m.id);
