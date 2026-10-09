@@ -91,6 +91,21 @@ describe('SettingsStore', () => {
     expect(readdirSync(dir).some((n) => n.includes('.invalid-'))).toBe(false);
   });
 
+  it('upgrades a 1.0.0 settings file with the new sound settings', () => {
+    const v100 = {
+      ...DEFAULT_SETTINGS,
+      notifications: { preview: 'none', desktop: true, mode: 'mentions', sounds: false },
+    };
+    writeFileSync(file, JSON.stringify(v100));
+    const s = new SettingsStore(file, nullLogger).get();
+    expect(s.notifications).toEqual({
+      ...DEFAULT_SETTINGS.notifications,
+      mode: 'mentions',
+      sounds: false,
+    });
+    expect(s.notifications.soundVolume).toBe(0.8);
+  });
+
   it('stores a validated, normalised server address', () => {
     const store = new SettingsStore(file, nullLogger);
     store.update({ server: { url: 'https://River.Example.org/' } });

@@ -54,6 +54,17 @@ export const settingsSchema = z.object({
     desktop: z.boolean(),
     mode: z.enum(['all', 'mentions']),
     sounds: z.boolean(),
+    /** Added in 1.0.1: 0–1, and which groups of sounds play. */
+    soundVolume: z.number().min(0).max(1),
+    soundGroups: z
+      .object({
+        messages: z.boolean(),
+        voice: z.boolean(),
+        calls: z.boolean(),
+        social: z.boolean(),
+        interface: z.boolean(),
+      })
+      .strict(),
   }),
   /** Added in 0.0.2. */
   server: z.object({
@@ -79,7 +90,14 @@ export const DEFAULT_SETTINGS: Settings = {
   schemaVersion: 1,
   updates: { channel: 'stable', autoCheck: true, autoDownload: true, installOnQuit: true },
   appearance: { motion: 'system' },
-  notifications: { preview: 'none', desktop: true, mode: 'all', sounds: true },
+  notifications: {
+    preview: 'none',
+    desktop: true,
+    mode: 'all',
+    sounds: true,
+    soundVolume: 0.8,
+    soundGroups: { messages: true, voice: true, calls: true, social: true, interface: true },
+  },
   server: { url: null },
   voice: {
     inputDeviceId: null,
