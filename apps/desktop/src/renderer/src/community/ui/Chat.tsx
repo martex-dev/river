@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, ChatMessage, CommunityView } from '../../../../shared/ipc.ts';
+import { useShallow } from 'zustand/react/shallow';
+import { useOutbox, type Outgoing } from '../outbox.ts';
 import { play } from '../sound.ts';
 import { typingNames, useCommunity } from '../store.ts';
 import { AttachmentList, PendingFiles, pendingFrom, uploadAll, type PendingFile } from './Attachments.tsx';
@@ -55,6 +57,7 @@ export function TextChannel(props: {
   const myName = memberOf(community, me)?.name ?? null;
   const names = useMemo(() => community.members.map((m) => m.name), [community.members]);
   const refs = useMentionRefs(community, me);
+  const outgoing = useOutbox(useShallow((o) => o.items.filter((i) => i.channelId === channel.id)));
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [dragging, setDragging] = useState(false);
   const canAttach = can(channel.permissions, Permission.ATTACH_FILES | Permission.SEND_MESSAGES);
@@ -70,10 +73,18 @@ export function TextChannel(props: {
   const firstNew = dividerAfter ? messages.find((m) => !m.mine && m.sentAt > dividerAfter) : undefined;
   const newCount = dividerAfter ? messages.filter((m) => !m.mine && m.sentAt > dividerAfter).length : 0;
   const scrolledToNew = useRef<string | null>(null);
+  const lastOutgoing = useRef(0);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    // Your own message going out always brings you to the bottom.
+    if (outgoing.length > lastOutgoing.current) {
+      lastOutgoing.current = outgoing.length;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+    lastOutgoing.current = outgoing.length;
     // Opening a channel with new messages starts at the divider, once.
     if (firstNew && scrolledToNew.current !== channel.id) {
       scrolledToNew.current = channel.id;
@@ -82,7 +93,7 @@ export function TextChannel(props: {
     }
     if (atBottom) el.scrollTop = el.scrollHeight;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length, channel.id]);
+  }, [messages.length, channel.id, outgoing.length]);
 
   const jumpTo = (id: string): void => {
     const el = document.getElementById(`msg-${id}`);
@@ -255,6 +266,9 @@ export function TextChannel(props: {
             </div>
           );
         })}
+        {outgoing.map((o) => (
+          <OutgoingMessage key={o.localId} item={o} community={community} me={me} />
+        ))}
       </div>
       {!atBottom && (
         <button
@@ -581,24 +595,19 @@ function Composer(props: {
       }
     }
     setText('');
+    setUploading(null);
     useCommunity.setState({ replyTo: null });
-    const sent = await s.run({
-      a: 'send',
+    // Answering means you have caught up.
+    if (useCommunity.getState().divider?.channelId === channel.id) useCommunity.setState({ divider: null });
+    for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
+    props.onPendingChange([]);
+    // The outbox shows it as sending, waits if offline and keeps it with Retry if it fails.
+    useOutbox.getState().send({
       channelId: channel.id,
       text: value,
       ...(replyTo ? { replyTo: replyTo.id } : {}),
       ...(attachments ? { attachments } : {}),
     });
-    setUploading(null);
-    if (!sent) setText(value);
-    else {
-      play('send');
-      // Answering means you have caught up.
-      if (useCommunity.getState().divider?.channelId === channel.id) useCommunity.setState({ divider: null });
-      for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
-      props.onPendingChange([]);
-      s.handle({ t: 'message', message: sent, isNew: false });
-    }
   };
 
   if (!canSend) {
@@ -1050,4 +1059,44 @@ function useMentionRefs(community: CommunityView, me: string): MentionRefs {
       onChannel: select,
     };
   }, [community.roles, community.members, community.channels, me, select]);
+}
+
+/** A message on its way out: sending, waiting for the connection, or failed with Retry. */
+function OutgoingMessage(props: { item: Outgoing; community: CommunityView; me: string }): ReactElement {
+  const { item } = props;
+  const member = memberOf(props.community, props.me);
+  const outbox = useOutbox();
+  return (
+    <div className={`msg msg--mine msg--outgoing msg--${item.status}`} aria-live="polite">
+      <div className="msg__row">
+        <div className="msg__gutter">
+          <Avatar id={props.me} name={member?.name ?? 'You'} avatar={member?.avatar} size={40} />
+        </div>
+        <div className="msg__body">
+          <div className="msg__meta">
+            <strong className="msg__author">{member?.name ?? 'You'}</strong>
+            <span className="msg__status">
+              {item.status === 'sending'
+                ? 'Sending…'
+                : item.status === 'waiting'
+                  ? 'Waiting for connection — it will send when you are back online'
+                  : 'Not sent'}
+            </span>
+          </div>
+          <div className="msg__text">{item.text || `📎 ${item.attachments?.length ?? 0} file(s)`}</div>
+          {item.status === 'failed' && (
+            <div className="msg__failed" role="alert">
+              <span>{item.error ?? 'Something went wrong.'}</span>
+              <button className="btn btn--link btn--small" onClick={() => outbox.retry(item.localId)}>
+                Retry
+              </button>
+              <button className="btn btn--link btn--small" onClick={() => outbox.discard(item.localId)}>
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }

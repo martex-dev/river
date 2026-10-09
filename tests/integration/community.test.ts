@@ -480,7 +480,7 @@ describe('desktop ↔ server communities', () => {
   });
 
   it('reconnects with jittered backoff, and right away when asked', async () => {
-    const sockets: Array<{ onclose?: () => void }> = [];
+    const sockets: Array<{ onclose?: () => void; send(): void; close(): void; readyState: number }> = [];
     const make = (): WebSocket => {
       const socket = { send() {}, close() {}, readyState: 0 };
       sockets.push(socket);
