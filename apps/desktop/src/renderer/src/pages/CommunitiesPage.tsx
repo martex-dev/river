@@ -11,6 +11,7 @@ import {
   ChannelSettings,
   ConfirmDialog,
   CategoryDialog,
+  NicknameDialog,
   CreateChannelDialog,
   InviteDialog,
 } from '../community/ui/Dialogs.tsx';
@@ -154,6 +155,10 @@ function Modals({ me }: { me: string }): ReactElement | null {
       return <ConfirmDialog modal={modal} />;
     case 'user-settings':
       return <UserSettings tab={modal.tab} />;
+    case 'nickname': {
+      const c = communityById(modal.communityId);
+      return c ? <NicknameDialog community={c} /> : null;
+    }
     case 'join-invite':
       return <JoinInviteDialog link={modal.link} />;
     case 'add-friend':

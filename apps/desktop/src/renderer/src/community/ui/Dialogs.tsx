@@ -545,3 +545,54 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
     </Modal>
   );
 }
+
+/** Your name in this community only; everyone else sees it here instead of your River name. */
+export function NicknameDialog({ community }: { community: CommunityView }): ReactElement {
+  const s = useCommunity();
+  const [nickname, setNickname] = useState(community.myNickname ?? '');
+  const [busy, setBusy] = useState(false);
+  const save = async (value: string | null): Promise<void> => {
+    setBusy(true);
+    await s.run({ a: 'setNickname', communityId: community.id, nickname: value });
+    setBusy(false);
+    s.setModal(null);
+  };
+  return (
+    <Modal title={`Nickname in ${community.name}`} onClose={() => s.setModal(null)}>
+      <form
+        className="create-channel"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save(nickname.trim() || null);
+        }}
+      >
+        <label className="textfield">
+          <span className="field__label">Nickname</span>
+          <input
+            autoFocus
+            value={nickname}
+            maxLength={64}
+            placeholder="Your River name"
+            onChange={(e) => setNickname(e.target.value)}
+          />
+        </label>
+        <p className="muted small">
+          Only members of this community see it. It is encrypted like the rest of your profile.
+        </p>
+        <div className="modal__foot">
+          {community.myNickname && (
+            <button type="button" className="btn btn--link" disabled={busy} onClick={() => void save(null)}>
+              Reset to my River name
+            </button>
+          )}
+          <button type="button" className="btn btn--link" onClick={() => s.setModal(null)}>
+            Cancel
+          </button>
+          <button className="btn btn--primary" disabled={busy}>
+            Save
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}

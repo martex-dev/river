@@ -107,6 +107,15 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
               Create category
             </MenuItem>
           )}
+          <MenuItem
+            icon={<GearIcon size={16} />}
+            onClick={() => {
+              setMenu(null);
+              s.setModal({ kind: 'nickname', communityId: community.id });
+            }}
+          >
+            Change nickname
+          </MenuItem>
           {community.ownerId !== me && (
             <MenuItem
               danger
