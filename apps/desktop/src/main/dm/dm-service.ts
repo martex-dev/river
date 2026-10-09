@@ -48,15 +48,23 @@ const contentSchema = z.discriminatedUnion('t', [
     replyTo: msgId.optional(),
     attachments: z.array(attachmentPointerSchema).max(10).optional(),
     sentAt: z.iso.datetime(),
+    groupId: msgId.optional(),
   }),
-  z.object({ v: z.literal(1), t: z.literal('edit'), id: msgId, text: z.string().min(1).max(4000) }),
-  z.object({ v: z.literal(1), t: z.literal('delete'), id: msgId }),
+  z.object({
+    v: z.literal(1),
+    t: z.literal('edit'),
+    id: msgId,
+    text: z.string().min(1).max(4000),
+    groupId: msgId.optional(),
+  }),
+  z.object({ v: z.literal(1), t: z.literal('delete'), id: msgId, groupId: msgId.optional() }),
   z.object({
     v: z.literal(1),
     t: z.literal('react'),
     id: msgId,
     emoji: z.string().min(1).max(32),
     on: z.boolean(),
+    groupId: msgId.optional(),
   }),
   z.object({
     v: z.literal(1),
@@ -64,7 +72,16 @@ const contentSchema = z.discriminatedUnion('t', [
     kind: z.enum(['delivered', 'read']),
     ids: z.array(msgId).max(200),
   }),
-  z.object({ v: z.literal(1), t: z.literal('typing') }),
+  z.object({ v: z.literal(1), t: z.literal('typing'), groupId: msgId.optional() }),
+  z.object({
+    v: z.literal(1),
+    t: z.literal('group'),
+    groupId: msgId,
+    name: z.string().min(1).max(64),
+    members: z.array(z.uuid()).min(1).max(32),
+    admins: z.array(z.uuid()).min(1).max(32),
+  }),
+  z.object({ v: z.literal(1), t: z.literal('groupLeave'), groupId: msgId }),
   z.object({
     v: z.literal(1),
     t: z.literal('ckey'),
@@ -91,9 +108,25 @@ const contentSchema = z.discriminatedUnion('t', [
     t: z.literal('profile'),
     name: z.string().max(64).nullable(),
     avatar: avatarSchema.nullable().optional(),
+    /** Set when shared only for a group: the receiver records it there, not as a contact. */
+    groupId: msgId.optional(),
   }),
 ]);
 type Content = z.infer<typeof contentSchema>;
+
+const MAX_GROUP = 32;
+const isGroupId = (id: string): boolean => /^[A-Za-z0-9_-]{22}$/.test(id);
+
+interface GroupRow {
+  id: string;
+  name: string;
+  members: string;
+  admins: string;
+  profiles: string;
+  state: 'accepted' | 'request' | 'left';
+  created_at: string;
+  last_read: string | null;
+}
 
 const PREKEY_TARGET = 100;
 const PREKEY_LOW = 25;
@@ -317,9 +350,46 @@ export class DmService {
       return true;
     }
     const now = new Date();
+    if (content.t === 'group') return this.applyGroupUpdate(peer, content);
+    if (content.t === 'groupLeave') {
+      const g = this.group(content.groupId);
+      if (g) {
+        this.saveGroup({
+          ...g,
+          members: JSON.stringify(this.list(g.members).filter((m) => m !== peer)),
+          admins: JSON.stringify(this.list(g.admins).filter((m) => m !== peer)),
+        });
+        this.emitConversations();
+      }
+      return true;
+    }
+    if (content.t === 'profile' && content.groupId) {
+      const g = this.group(content.groupId);
+      if (g && this.list(g.members).includes(peer)) {
+        const profiles = JSON.parse(g.profiles) as Record<
+          string,
+          { name: string | null; avatar: string | null }
+        >;
+        profiles[peer] = {
+          name: content.name ? content.name.slice(0, 64) : null,
+          avatar: content.avatar ?? null,
+        };
+        this.saveGroup({ ...g, profiles: JSON.stringify(profiles) });
+        this.emitConversations();
+      }
+      return true;
+    }
+    // Group traffic is accepted only from current members of a group we are in.
+    const groupId = 'groupId' in content ? content.groupId : undefined;
+    let conv = peer;
+    if (groupId) {
+      const g = this.group(groupId);
+      if (!g || g.state === 'left' || !this.list(g.members).includes(peer)) return true;
+      conv = groupId;
+    }
     switch (content.t) {
       case 'msg': {
-        if (!contact) this.upsertContact(peer, 'request');
+        if (!groupId && !contact) this.upsertContact(peer, 'request');
         const claimed = Date.parse(content.sentAt);
         const received = Date.parse(env.receivedAt);
         // A sender's clock may be wrong or lying: keep timestamps near when the server got it.
@@ -335,7 +405,7 @@ export class DmService {
           )
           .run(
             content.id,
-            peer,
+            conv,
             peer,
             JSON.stringify({
               text: content.text,
@@ -346,7 +416,7 @@ export class DmService {
           );
         this.emitMessage(content.id, true);
         this.emitConversations();
-        if (this.contact(peer)?.state === 'accepted') {
+        if (!groupId && this.contact(peer)?.state === 'accepted') {
           void this.sendContent(peer, { v: 1, t: 'receipt', kind: 'delivered', ids: [content.id] }).catch(
             () => undefined,
           );
@@ -355,7 +425,7 @@ export class DmService {
       }
       case 'edit': {
         const row = this.row(content.id);
-        if (row && row.sender === peer && !row.deleted) {
+        if (row && row.peer === conv && row.sender === peer && !row.deleted) {
           const body = JSON.parse(row.body) as Record<string, unknown>;
           this.db()
             .prepare('UPDATE dm_messages SET body = ?, edited_at = ? WHERE id = ?')
@@ -366,7 +436,7 @@ export class DmService {
       }
       case 'delete': {
         const row = this.row(content.id);
-        if (row && row.sender === peer) {
+        if (row && row.peer === conv && row.sender === peer) {
           this.db()
             .prepare(
               `UPDATE dm_messages SET deleted = 1, body = '{"text":""}', reactions = '{}' WHERE id = ?`,
@@ -379,7 +449,7 @@ export class DmService {
       }
       case 'react': {
         const row = this.row(content.id);
-        if (row && row.peer === peer) this.applyReaction(row, peer, content.emoji, content.on);
+        if (row && row.peer === conv) this.applyReaction(row, peer, content.emoji, content.on);
         return true;
       }
       case 'receipt': {
@@ -395,7 +465,8 @@ export class DmService {
         return true;
       }
       case 'typing':
-        if (contact?.state === 'accepted') this.emit({ t: 'typing', peer });
+        if (groupId) this.emit({ t: 'typing', peer: conv, who: peer });
+        else if (contact?.state === 'accepted') this.emit({ t: 'typing', peer });
         return true;
       case 'call':
         // Only accepted contacts can ring you; call setup is never stored.
@@ -419,6 +490,130 @@ export class DmService {
         return true;
       }
     }
+  }
+
+  // ---- groups ----------------------------------------------------------------------------------
+
+  private list(json: string): string[] {
+    return JSON.parse(json) as string[];
+  }
+
+  private group(id: string): GroupRow | undefined {
+    return this.db().prepare('SELECT * FROM dm_groups WHERE id = ?').get(id) as GroupRow | undefined;
+  }
+
+  private saveGroup(g: GroupRow): void {
+    this.db()
+      .prepare(
+        `INSERT INTO dm_groups (id, name, members, admins, profiles, state, created_at, last_read)
+         VALUES (@id, @name, @members, @admins, @profiles, @state, @created_at, @last_read)
+         ON CONFLICT(id) DO UPDATE SET name = @name, members = @members, admins = @admins,
+           profiles = @profiles, state = @state, last_read = @last_read`,
+      )
+      .run(g);
+  }
+
+  /** Group state from an admin (or a new group that includes us). */
+  private applyGroupUpdate(
+    sender: string,
+    update: { groupId: string; name: string; members: string[]; admins: string[] },
+  ): boolean {
+    const me = this.me();
+    const members = [...new Set(update.members)].slice(0, MAX_GROUP);
+    const admins = [...new Set(update.admins)].filter((a) => members.includes(a) || a === sender);
+    const existing = this.group(update.groupId);
+    if (existing) {
+      if (!this.list(existing.admins).includes(sender)) return true;
+      const stillIn = members.includes(me);
+      this.saveGroup({
+        ...existing,
+        name: update.name.slice(0, 64),
+        members: JSON.stringify(members),
+        admins: JSON.stringify(admins),
+        state: stillIn ? (existing.state === 'left' ? 'accepted' : existing.state) : 'left',
+      });
+    } else {
+      if (!members.includes(me) || !members.includes(sender) || !admins.includes(sender)) return true;
+      if (this.contact(sender)?.state === 'blocked') return true;
+      this.saveGroup({
+        id: update.groupId,
+        name: update.name.slice(0, 64),
+        members: JSON.stringify(members),
+        admins: JSON.stringify(admins),
+        profiles: '{}',
+        // Groups started by people you have accepted open directly; others are requests.
+        state: this.contact(sender)?.state === 'accepted' ? 'accepted' : 'request',
+        created_at: new Date().toISOString(),
+        last_read: null,
+      });
+    }
+    this.emitConversations();
+    return true;
+  }
+
+  /** Sends to a person, or to every other member of a group (pairwise libsignal sessions). */
+  private async deliver(conv: string, content: Content, ephemeral = false): Promise<void> {
+    if (!isGroupId(conv)) {
+      await this.sendContent(conv, content, ephemeral);
+      return;
+    }
+    const g = this.group(conv);
+    if (!g || g.state === 'left') throw new CommunityError('You are not in this group.');
+    const me = this.me();
+    const failed: string[] = [];
+    const others = this.list(g.members).filter((m) => m !== me);
+    for (const m of others) {
+      try {
+        if (!ephemeral) await this.shareProfile(m, conv);
+        await this.sendContent(m, content, ephemeral);
+      } catch {
+        failed.push(m);
+      }
+    }
+    if (others.length && failed.length === others.length && !ephemeral) {
+      throw new CommunityError('The message could not be delivered to anyone in the group.');
+    }
+  }
+
+  private async sendGroupState(g: GroupRow, extraRecipients: string[] = []): Promise<void> {
+    const me = this.me();
+    const recipients = [...new Set([...this.list(g.members), ...extraRecipients])].filter((m) => m !== me);
+    const content: Content = {
+      v: 1,
+      t: 'group',
+      groupId: g.id,
+      name: g.name,
+      members: this.list(g.members),
+      admins: this.list(g.admins),
+    };
+    for (const m of recipients) {
+      // The group must exist on their side before our group-scoped profile arrives.
+      await this.sendContent(m, content).catch((err: unknown) =>
+        this.deps.log.warn(`Group update not delivered: ${(err as Error).message}`),
+      );
+      if (this.list(g.members).includes(m)) await this.shareProfile(m, g.id).catch(() => undefined);
+    }
+  }
+
+  private nameOf(riverId: string, g?: GroupRow): string {
+    if (riverId === this.me()) return this.deps.identity.get()?.displayName ?? 'You';
+    const c = this.contact(riverId);
+    if (c?.name) return c.name;
+    if (g) {
+      const p = (JSON.parse(g.profiles) as Record<string, { name: string | null }>)[riverId];
+      if (p?.name) return p.name;
+    }
+    return this.deps.community.knownProfile(riverId)?.name ?? `River ${riverId.slice(0, 8)}`;
+  }
+
+  private avatarOf(riverId: string, g?: GroupRow): string | null {
+    const c = this.contact(riverId);
+    if (c?.avatar) return c.avatar;
+    if (g) {
+      const p = (JSON.parse(g.profiles) as Record<string, { avatar: string | null }>)[riverId];
+      if (p?.avatar) return p.avatar;
+    }
+    return this.deps.community.knownProfile(riverId)?.avatar ?? null;
   }
 
   // ---- sending ---------------------------------------------------------------------------------
@@ -501,13 +696,14 @@ export class DmService {
   }
 
   /** Shares our name and avatar with a contact whenever they changed since we last told them. */
-  private async shareProfile(peer: string): Promise<void> {
+  private async shareProfile(peer: string, groupId?: string): Promise<void> {
     const name = this.deps.identity.get()?.displayName ?? null;
     const avatar = this.deps.community.profile().avatar;
     const fingerprint = JSON.stringify([name, avatar?.length ?? 0, avatar?.slice(-32) ?? '']);
-    if (this.meta(`profileSent:${peer}`) === fingerprint) return;
-    await this.sendContent(peer, { v: 1, t: 'profile', name, avatar });
-    this.setMeta(`profileSent:${peer}`, fingerprint);
+    const tag = groupId ? `profileSent:${groupId}:${peer}` : `profileSent:${peer}`;
+    if (this.meta(tag) === fingerprint) return;
+    await this.sendContent(peer, { v: 1, t: 'profile', name, avatar, ...(groupId ? { groupId } : {}) });
+    this.setMeta(tag, fingerprint);
   }
 
   // ---- public API ------------------------------------------------------------------------------
@@ -540,9 +736,16 @@ export class DmService {
           return out(this.conversations().find((c) => c.riverId === act.peer)!);
         }
         case 'send': {
-          const contact = this.contact(act.peer);
-          if (contact?.state === 'blocked') throw new CommunityError('Unblock this person to message them.');
-          if (!contact || contact.state === 'request') this.upsertContact(act.peer, 'accepted');
+          const group = isGroupId(act.peer) ? this.group(act.peer) : undefined;
+          if (isGroupId(act.peer)) {
+            if (!group || group.state === 'left') throw new CommunityError('You are not in this group.');
+            if (group.state === 'request') this.saveGroup({ ...group, state: 'accepted' });
+          } else {
+            const contact = this.contact(act.peer);
+            if (contact?.state === 'blocked')
+              throw new CommunityError('Unblock this person to message them.');
+            if (!contact || contact.state === 'request') this.upsertContact(act.peer, 'accepted');
+          }
           const id = randomBytes(16).toString('base64url');
           const sentAt = new Date().toISOString();
           const body = { text: act.text, replyTo: act.replyTo, attachments: act.attachments };
@@ -553,8 +756,8 @@ export class DmService {
             .run(id, act.peer, this.me(), JSON.stringify(body), sentAt);
           this.emitMessage(id, false);
           try {
-            await this.shareProfile(act.peer);
-            await this.sendContent(act.peer, {
+            if (!group) await this.shareProfile(act.peer);
+            await this.deliver(act.peer, {
               v: 1,
               t: 'msg',
               id,
@@ -562,6 +765,7 @@ export class DmService {
               ...(act.replyTo ? { replyTo: act.replyTo } : {}),
               ...(act.attachments?.length ? { attachments: act.attachments } : {}),
               sentAt,
+              ...(group ? { groupId: group.id } : {}),
             });
             this.db()
               .prepare(`UPDATE dm_messages SET status = 'sent' WHERE id = ? AND status = 'sending'`)
@@ -579,7 +783,13 @@ export class DmService {
           const row = this.row(act.id);
           if (!row || row.sender !== this.me() || row.peer !== act.peer)
             throw new CommunityError('You can only edit your own messages.');
-          await this.sendContent(act.peer, { v: 1, t: 'edit', id: act.id, text: act.text });
+          await this.deliver(act.peer, {
+            v: 1,
+            t: 'edit',
+            id: act.id,
+            text: act.text,
+            ...(isGroupId(act.peer) ? { groupId: act.peer } : {}),
+          });
           const body = JSON.parse(row.body) as Record<string, unknown>;
           this.db()
             .prepare('UPDATE dm_messages SET body = ?, edited_at = ? WHERE id = ?')
@@ -593,7 +803,12 @@ export class DmService {
           if (act.forEveryone) {
             if (row.sender !== this.me())
               throw new CommunityError('You can only delete your own messages for everyone.');
-            await this.sendContent(act.peer, { v: 1, t: 'delete', id: act.id });
+            await this.deliver(act.peer, {
+              v: 1,
+              t: 'delete',
+              id: act.id,
+              ...(isGroupId(act.peer) ? { groupId: act.peer } : {}),
+            });
           }
           this.db().prepare('DELETE FROM dm_messages WHERE id = ?').run(act.id);
           this.emit({ t: 'remove', peer: act.peer, id: act.id });
@@ -603,11 +818,24 @@ export class DmService {
         case 'react': {
           const row = this.row(act.id);
           if (!row || row.peer !== act.peer) return out(null);
-          await this.sendContent(act.peer, { v: 1, t: 'react', id: act.id, emoji: act.emoji, on: act.on });
+          await this.deliver(act.peer, {
+            v: 1,
+            t: 'react',
+            id: act.id,
+            emoji: act.emoji,
+            on: act.on,
+            ...(isGroupId(act.peer) ? { groupId: act.peer } : {}),
+          });
           this.applyReaction(row, this.me(), act.emoji, act.on);
           return out(null);
         }
         case 'read': {
+          if (isGroupId(act.peer)) {
+            const g = this.group(act.peer);
+            if (g) this.saveGroup({ ...g, last_read: new Date().toISOString() });
+            this.emitConversations();
+            return out(null);
+          }
           const contact = this.contact(act.peer);
           if (!contact) return out(null);
           const unread = this.db()
@@ -630,11 +858,32 @@ export class DmService {
           return out(null);
         }
         case 'typing':
-          if (this.contact(act.peer)?.state === 'accepted') {
+          if (isGroupId(act.peer)) {
+            if (this.group(act.peer)?.state === 'accepted') {
+              void this.deliver(act.peer, { v: 1, t: 'typing', groupId: act.peer }, true).catch(
+                () => undefined,
+              );
+            }
+          } else if (this.contact(act.peer)?.state === 'accepted') {
             void this.sendContent(act.peer, { v: 1, t: 'typing' }, true).catch(() => undefined);
           }
           return out(null);
         case 'accept':
+          if (isGroupId(act.peer)) {
+            const g = this.group(act.peer);
+            if (g && g.state === 'request') {
+              this.saveGroup({ ...g, state: 'accepted' });
+              // Now that we joined, let the others see who we are.
+              const me = this.me();
+              void (async () => {
+                for (const m of this.list(g.members)) {
+                  if (m !== me) await this.shareProfile(m, g.id).catch(() => undefined);
+                }
+              })();
+            }
+            this.emitConversations();
+            return out(null);
+          }
           this.db().prepare(`UPDATE contacts SET state = 'accepted' WHERE river_id = ?`).run(act.peer);
           this.emitConversations();
           void this.shareProfile(act.peer).catch(() => undefined);
@@ -651,6 +900,18 @@ export class DmService {
           this.emitConversations();
           return out(null);
         case 'removeConversation':
+          if (isGroupId(act.peer)) {
+            const g = this.group(act.peer);
+            if (g && g.state !== 'left') {
+              await this.deliver(act.peer, { v: 1, t: 'groupLeave', groupId: act.peer }).catch(
+                () => undefined,
+              );
+            }
+            this.db().prepare('DELETE FROM dm_messages WHERE peer = ?').run(act.peer);
+            this.db().prepare('DELETE FROM dm_groups WHERE id = ?').run(act.peer);
+            this.emitConversations();
+            return out(null);
+          }
           this.db().prepare('DELETE FROM dm_messages WHERE peer = ?').run(act.peer);
           this.db().prepare(`DELETE FROM contacts WHERE river_id = ? AND state != 'blocked'`).run(act.peer);
           this.emitConversations();
@@ -684,6 +945,72 @@ export class DmService {
           return out(null);
         case 'upload':
           return out(await this.deps.community.upload(act, 'dm'));
+        case 'createGroup': {
+          const me = this.me();
+          const members = [...new Set([me, ...act.members])].slice(0, MAX_GROUP);
+          if (members.length < 2) throw new CommunityError('Add at least one other person.');
+          // Make sure everyone can receive (has set up messaging) before creating the group.
+          for (const m of members) if (m !== me) await this.prepareSessions(m);
+          const g: GroupRow = {
+            id: randomBytes(16).toString('base64url'),
+            name: act.name,
+            members: JSON.stringify(members),
+            admins: JSON.stringify([me]),
+            profiles: '{}',
+            state: 'accepted',
+            created_at: new Date().toISOString(),
+            last_read: null,
+          };
+          this.saveGroup(g);
+          await this.sendGroupState(g);
+          this.emitConversations();
+          return out(this.conversations().find((c) => c.riverId === g.id)!);
+        }
+        case 'renameGroup':
+        case 'addGroupMembers':
+        case 'removeGroupMember': {
+          const g = this.group(act.peer);
+          if (!g || !this.list(g.admins).includes(this.me())) {
+            throw new CommunityError('Only group admins can change the group.');
+          }
+          let members = this.list(g.members);
+          let removed: string[] = [];
+          if (act.a === 'addGroupMembers') {
+            for (const m of act.members) if (!members.includes(m)) await this.prepareSessions(m);
+            members = [...new Set([...members, ...act.members])];
+            if (members.length > MAX_GROUP)
+              throw new CommunityError(`Groups can have up to ${MAX_GROUP} people.`);
+          }
+          if (act.a === 'removeGroupMember') {
+            if (act.member === this.me()) throw new CommunityError('Use Leave group to leave.');
+            removed = [act.member];
+            members = members.filter((m) => m !== act.member);
+          }
+          const next: GroupRow = {
+            ...g,
+            name: act.a === 'renameGroup' ? act.name : g.name,
+            members: JSON.stringify(members),
+            admins: JSON.stringify(this.list(g.admins).filter((a) => members.includes(a))),
+          };
+          this.saveGroup(next);
+          await this.sendGroupState(next, removed);
+          this.emitConversations();
+          return out(null);
+        }
+        case 'leaveGroup': {
+          const g = this.group(act.peer);
+          if (!g || g.state === 'left') return out(null);
+          await this.deliver(act.peer, { v: 1, t: 'groupLeave', groupId: act.peer }).catch(() => undefined);
+          const me = this.me();
+          this.saveGroup({
+            ...g,
+            state: 'left',
+            members: JSON.stringify(this.list(g.members).filter((m) => m !== me)),
+            admins: JSON.stringify(this.list(g.admins).filter((m) => m !== me)),
+          });
+          this.emitConversations();
+          return out(null);
+        }
         case 'call':
           if (this.contact(act.peer)?.state !== 'accepted')
             throw new CommunityError('You can only call your contacts.');
@@ -756,10 +1083,12 @@ export class DmService {
     const body = JSON.parse(r.body) as { text?: string; replyTo?: string; attachments?: AttachmentPointer[] };
     const me = this.me();
     const reactions = JSON.parse(r.reactions) as Record<string, string[]>;
+    const group = isGroupId(r.peer) ? this.group(r.peer) : undefined;
     return {
       id: r.id,
       peer: r.peer,
       sender: r.sender,
+      senderName: this.nameOf(r.sender, group),
       mine: r.sender === me,
       text: r.deleted ? '' : String(body.text ?? ''),
       replyTo: body.replyTo ?? null,
@@ -777,11 +1106,58 @@ export class DmService {
     };
   }
 
+  private lastOf(conv: string): ConversationView['last'] {
+    const last = this.db()
+      .prepare('SELECT * FROM dm_messages WHERE peer = ? ORDER BY sent_at DESC LIMIT 1')
+      .get(conv) as MessageRow | undefined;
+    if (!last) return null;
+    const v = this.view(last);
+    const text = v.deleted
+      ? 'Message deleted'
+      : v.text || (v.attachments.length ? `📎 ${v.attachments[0]!.name}` : '');
+    return {
+      text: isGroupId(conv) && !v.mine ? `${v.senderName}: ${text}` : text,
+      sentAt: v.sentAt,
+      mine: v.mine,
+    };
+  }
+
   conversations(): ConversationView[] {
     const contacts = this.db().prepare('SELECT * FROM contacts').all() as ContactRow[];
+    const groups = this.db().prepare('SELECT * FROM dm_groups').all() as GroupRow[];
     const protocol = this.deps.identity.protocolIdentity() ? this.protocol() : null;
-    return contacts
-      .map((c) => {
+    const me = this.me();
+    const groupViews: ConversationView[] = groups.map((g) => {
+      const admins = this.list(g.admins);
+      const unread = (
+        this.db()
+          .prepare(
+            'SELECT COUNT(*) AS n FROM dm_messages WHERE peer = ? AND sender != ? AND sent_at > ? AND deleted = 0',
+          )
+          .get(g.id, me, g.last_read ?? '') as { n: number }
+      ).n;
+      return {
+        riverId: g.id,
+        kind: 'group',
+        members: this.list(g.members).map((m) => ({
+          riverId: m,
+          name: this.nameOf(m, g),
+          avatar: this.avatarOf(m, g),
+          admin: admins.includes(m),
+        })),
+        isAdmin: admins.includes(me),
+        name: g.name,
+        avatar: null,
+        state: g.state,
+        last: this.lastOf(g.id),
+        unread,
+        verified: false,
+        keyChanged: false,
+      };
+    });
+    return [
+      ...groupViews,
+      ...contacts.map((c) => {
         const last = this.db()
           .prepare('SELECT * FROM dm_messages WHERE peer = ? ORDER BY sent_at DESC LIMIT 1')
           .get(c.river_id) as MessageRow | undefined;
@@ -796,6 +1172,9 @@ export class DmService {
         const lastView = last ? this.view(last) : null;
         return {
           riverId: c.river_id,
+          kind: 'direct' as const,
+          members: [],
+          isAdmin: false,
           name: c.name ?? known?.name ?? `River ${c.river_id.slice(0, 8)}`,
           avatar: c.avatar ?? known?.avatar ?? null,
           state: c.state,
@@ -813,8 +1192,8 @@ export class DmService {
           verified: protocol?.isVerified(c.river_id) ?? false,
           keyChanged: c.key_changed === 1,
         };
-      })
-      .sort((a, b) => (b.last?.sentAt ?? '').localeCompare(a.last?.sentAt ?? ''));
+      }),
+    ].sort((a, b) => (b.last?.sentAt ?? '').localeCompare(a.last?.sentAt ?? ''));
   }
 
   private emitConversations(): void {
@@ -824,7 +1203,9 @@ export class DmService {
   private emitMessage(id: string, isNew: boolean): void {
     const row = this.row(id);
     if (!row) return;
-    const name = this.conversations().find((c) => c.riverId === row.peer)?.name ?? 'Someone';
-    this.emit({ t: 'message', message: this.view(row), isNew, senderName: name });
+    const view = this.view(row);
+    const conv = this.conversations().find((c) => c.riverId === row.peer);
+    const name = conv?.kind === 'group' ? `${view.senderName} · ${conv.name}` : (conv?.name ?? 'Someone');
+    this.emit({ t: 'message', message: view, isNew, senderName: name });
   }
 }

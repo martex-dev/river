@@ -20,6 +20,8 @@ interface DmState {
   selected: string | null;
   messages: Record<string, DirectMessageView[]>;
   typing: Record<string, number>;
+  /** In groups: who typed last. */
+  typingWho: Record<string, string>;
   replyTo: DirectMessageView | null;
   editing: string | null;
   load(): Promise<void>;
@@ -37,6 +39,7 @@ export const useDm = create<DmState>((set, get) => ({
   selected: null,
   messages: {},
   typing: {},
+  typingWho: {},
   replyTo: null,
   editing: null,
 
@@ -83,7 +86,10 @@ export const useDm = create<DmState>((set, get) => ({
         return;
       }
       case 'typing':
-        set({ typing: { ...get().typing, [e.peer]: Date.now() } });
+        set({
+          typing: { ...get().typing, [e.peer]: Date.now() },
+          ...(e.who ? { typingWho: { ...get().typingWho, [e.peer]: e.who } } : {}),
+        });
         window.setTimeout(() => set({ typing: { ...get().typing } }), TYPING_MS + 50);
         return;
       case 'focus':

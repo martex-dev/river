@@ -270,4 +270,22 @@ test('create, invite, join, chat and call between two members', async () => {
   if (process.env.RIVER_SCREENSHOTS) await bob.screenshot({ path: 'test-results/dm-call.png' });
   await alice.getByRole('button', { name: 'Hang up' }).click();
   await expect(bob.locator('.dm-call')).toHaveCount(0, { timeout: 15_000 });
+
+  // Group conversation: Alice creates a group with Bob from New message → New group.
+  await alice.getByRole('button', { name: 'New message' }).click();
+  await alice.getByRole('button', { name: /New group/ }).click();
+  await alice.getByLabel('Group name').fill('Trenches crew');
+  await alice.locator('.people-list .dm-row', { hasText: 'Bob' }).locator('input').check();
+  await alice.getByRole('button', { name: 'Create group' }).click();
+  await expect(alice.locator('.chat__head')).toContainText('Trenches crew', { timeout: 15_000 });
+  await alice.getByPlaceholder('Message Trenches crew').fill('group hello');
+  await alice.keyboard.press('Enter');
+  await bob.locator('.dm-row', { hasText: 'Trenches crew' }).click({ timeout: 15_000 });
+  await expect(bob.locator('.chat__messages')).toContainText('group hello', { timeout: 15_000 });
+  // Bob already accepted Alice, so her group opens directly (no request step).
+  await expect(bob.locator('.dm-request')).toHaveCount(0);
+  await bob.getByPlaceholder('Message Trenches crew').fill('hi group');
+  await bob.keyboard.press('Enter');
+  await expect(alice.locator('.chat__messages')).toContainText('hi group', { timeout: 15_000 });
+  await expect(alice.locator('.msg', { hasText: 'hi group' })).toContainText('Bob');
 });

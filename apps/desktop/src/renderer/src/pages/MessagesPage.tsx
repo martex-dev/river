@@ -171,7 +171,11 @@ function ConversationRow({ c }: { c: ConversationView }): ReactElement {
       className={`dm-row ${dm.selected === c.riverId ? 'is-active' : ''} ${c.unread ? 'is-unread' : ''} ${c.state === 'blocked' ? 'is-blocked' : ''}`}
       onClick={() => dm.select(c.riverId)}
     >
-      <Avatar id={c.riverId} name={c.name} avatar={c.avatar} size={36} />
+      {c.kind === 'group' ? (
+        <GroupAvatar c={c} size={36} />
+      ) : (
+        <Avatar id={c.riverId} name={c.name} avatar={c.avatar} size={36} />
+      )}
       <span className="dm-row__text">
         <span className="dm-row__top">
           <strong>{c.name}</strong>
@@ -187,6 +191,8 @@ function ConversationRow({ c }: { c: ConversationView }): ReactElement {
             <em>typing…</em>
           ) : c.state === 'blocked' ? (
             'Blocked'
+          ) : c.state === 'left' ? (
+            'You left this group'
           ) : c.last ? (
             `${c.last.mine ? 'You: ' : ''}${c.last.text}`
           ) : (
@@ -212,6 +218,9 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
   const notify = useCommunity((s) => s.notify);
   const setModal = useCommunity((s) => s.setModal);
   const activeCall = useDmCall((s) => s.active);
+  const [showMembers, setShowMembers] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -268,17 +277,27 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
         </div>
       )}
       <header className="chat__head">
-        <Avatar id={c.riverId} name={c.name} avatar={c.avatar} size={28} />
+        {c.kind === 'group' ? (
+          <GroupAvatar c={c} size={28} />
+        ) : (
+          <Avatar id={c.riverId} name={c.name} avatar={c.avatar} size={28} />
+        )}
         <strong>{c.name}</strong>
-        <button
-          className={`chip dm-lock ${c.verified ? 'is-verified' : ''}`}
-          onClick={props.onSafety}
-          title="View safety number"
-        >
-          {c.verified ? '✓ Verified' : '🔒 Encrypted'}
-        </button>
+        {c.kind === 'group' ? (
+          <button className="chip dm-lock" onClick={() => setShowMembers(!showMembers)} title="Group members">
+            👥 {c.members.length} members
+          </button>
+        ) : (
+          <button
+            className={`chip dm-lock ${c.verified ? 'is-verified' : ''}`}
+            onClick={props.onSafety}
+            title="View safety number"
+          >
+            {c.verified ? '✓ Verified' : '🔒 Encrypted'}
+          </button>
+        )}
         <span className="chat__head-actions">
-          {c.state === 'accepted' && (
+          {c.kind === 'direct' && c.state === 'accepted' && (
             <>
               <button
                 className="icon-btn"
@@ -315,23 +334,77 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
       </header>
       {menu && (
         <Popover x={menu.x} y={menu.y} onClose={() => setMenu(null)} className="menu">
-          <MenuItem
-            onClick={() => {
-              setMenu(null);
-              props.onSafety();
-            }}
-          >
-            View safety number
-          </MenuItem>
-          <MenuItem
-            onClick={() => {
-              setMenu(null);
-              void navigator.clipboard.writeText(c.riverId).then(() => notify('River ID copied'));
-            }}
-          >
-            Copy River ID
-          </MenuItem>
-          {c.state === 'blocked' ? (
+          {c.kind === 'group' ? (
+            <>
+              <MenuItem
+                onClick={() => {
+                  setMenu(null);
+                  setShowMembers(true);
+                }}
+              >
+                Members
+              </MenuItem>
+              {c.isAdmin && (
+                <MenuItem
+                  onClick={() => {
+                    setMenu(null);
+                    setRenaming(c.name);
+                  }}
+                >
+                  Rename group
+                </MenuItem>
+              )}
+              {c.isAdmin && (
+                <MenuItem
+                  onClick={() => {
+                    setMenu(null);
+                    setAdding(true);
+                  }}
+                >
+                  Add people
+                </MenuItem>
+              )}
+              {c.state !== 'left' && (
+                <MenuItem
+                  danger
+                  onClick={() => {
+                    setMenu(null);
+                    setModal({
+                      kind: 'confirm',
+                      title: `Leave ${c.name}`,
+                      body: 'You will stop receiving messages from this group.',
+                      action: 'Leave group',
+                      run: async () => {
+                        await dm.run({ a: 'leaveGroup', peer: c.riverId });
+                      },
+                    });
+                  }}
+                >
+                  Leave group
+                </MenuItem>
+              )}
+            </>
+          ) : (
+            <>
+              <MenuItem
+                onClick={() => {
+                  setMenu(null);
+                  props.onSafety();
+                }}
+              >
+                View safety number
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  setMenu(null);
+                  void navigator.clipboard.writeText(c.riverId).then(() => notify('River ID copied'));
+                }}
+              >
+                Copy River ID
+              </MenuItem>
+            </>
+          )}
+          {c.kind === 'group' ? null : c.state === 'blocked' ? (
             <MenuItem
               onClick={() => {
                 setMenu(null);
@@ -364,6 +437,46 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
         </Popover>
       )}
       <DmCallPanel conversation={c} />
+      {showMembers && c.kind === 'group' && <GroupMembers c={c} onClose={() => setShowMembers(false)} />}
+      {renaming !== null && (
+        <Modal title="Rename group" onClose={() => setRenaming(null)}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void dm
+                .run({ a: 'renameGroup', peer: c.riverId, name: renaming.trim() })
+                .then(() => setRenaming(null));
+            }}
+          >
+            <label className="textfield">
+              <span className="field__label">Group name</span>
+              <input
+                autoFocus
+                value={renaming}
+                maxLength={64}
+                onChange={(e) => setRenaming(e.target.value)}
+              />
+            </label>
+            <div className="modal__foot">
+              <button className="btn btn--primary" disabled={!renaming.trim()}>
+                Save
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+      {adding && (
+        <PeoplePicker
+          title={`Add people to ${c.name}`}
+          exclude={c.members.map((m) => m.riverId)}
+          action="Add"
+          onClose={() => setAdding(false)}
+          onPick={async (ids) => {
+            const ok = await dm.run({ a: 'addGroupMembers', peer: c.riverId, members: ids });
+            if (ok !== null) setAdding(false);
+          }}
+        />
+      )}
       {c.keyChanged && (
         <div className="dm-banner dm-banner--warn" role="alert">
           <span>
@@ -418,11 +531,23 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           );
         })}
       </div>
-      {c.state === 'request' ? (
+      {c.state === 'left' ? (
+        <div className="chat__composer chat__composer--locked">
+          <span className="muted">You are no longer in this group.</span>
+        </div>
+      ) : c.state === 'request' ? (
         <div className="dm-request">
           <p>
-            <strong>{c.name}</strong> wants to message you. They will not know you have seen their messages
-            until you accept.
+            {c.kind === 'group' ? (
+              <>
+                You were added to <strong>{c.name}</strong>. Others will not see your name until you accept.
+              </>
+            ) : (
+              <>
+                <strong>{c.name}</strong> wants to message you. They will not know you have seen their
+                messages until you accept.
+              </>
+            )}
           </p>
           <div className="button-row">
             <button
@@ -431,12 +556,14 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
             >
               Accept
             </button>
-            <button
-              className="btn btn--ghost btn--danger-text"
-              onClick={() => void dm.run({ a: 'block', peer: c.riverId })}
-            >
-              Block
-            </button>
+            {c.kind === 'direct' && (
+              <button
+                className="btn btn--ghost btn--danger-text"
+                onClick={() => void dm.run({ a: 'block', peer: c.riverId })}
+              >
+                Block
+              </button>
+            )}
             <button className="btn btn--ghost" onClick={confirmRemove}>
               Delete
             </button>
@@ -478,7 +605,12 @@ function DmMessage(props: {
   const dm = useDm();
   const editing = useDm((x) => x.editing === m.id);
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
-  const name = m.mine ? props.myName : c.name;
+  const name = m.mine ? props.myName : c.kind === 'group' ? m.senderName : c.name;
+  const senderAvatar = m.mine
+    ? null
+    : c.kind === 'group'
+      ? (c.members.find((x) => x.riverId === m.sender)?.avatar ?? null)
+      : c.avatar;
   const react = (emoji: string, on: boolean): void =>
     void dm.run({ a: 'react', peer: c.riverId, id: m.id, emoji, on });
   const remove = (forEveryone: boolean): void => {
@@ -504,7 +636,7 @@ function DmMessage(props: {
           <ReplyIcon size={13} />
           {props.replied ? (
             <>
-              <strong>{props.replied.mine ? props.myName : c.name}</strong>
+              <strong>{props.replied.mine ? props.myName : props.replied.senderName}</strong>
               <span className="msg__reply-text">{props.replied.text.slice(0, 120) || 'Attachment'}</span>
             </>
           ) : (
@@ -517,7 +649,7 @@ function DmMessage(props: {
           {props.grouped ? (
             <time className="msg__hover-time">{timeOf(m.sentAt)}</time>
           ) : (
-            <Avatar id={m.sender} name={name} avatar={m.mine ? null : c.avatar} size={38} />
+            <Avatar id={m.sender} name={name} avatar={senderAvatar} size={38} />
           )}
         </div>
         <div className="msg__body">
@@ -537,7 +669,13 @@ function DmMessage(props: {
             </div>
           ) : (
             <div className="msg__text">
-              {m.text && <RichText text={m.text} names={[c.name, props.myName]} me={props.myName} />}
+              {m.text && (
+                <RichText
+                  text={m.text}
+                  names={c.kind === 'group' ? c.members.map((x) => x.name) : [c.name, props.myName]}
+                  me={props.myName}
+                />
+              )}
               {m.editedAt && <span className="msg__edited"> (edited)</span>}
             </div>
           )}
@@ -809,7 +947,7 @@ function DmComposer(props: {
               <i />
               <i />
             </span>
-            <span>{c.name} is typing…</span>
+            <span>{typingName(c)} is typing…</span>
           </>
         )}
       </div>
@@ -834,6 +972,7 @@ function NewMessage({ onClose }: { onClose(): void }): ReactElement {
   const myId = dm.myId;
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
+  const [grouping, setGrouping] = useState(false);
   // People you share communities with, de-duplicated.
   const people = useMemo(() => {
     const seen = new Map<string, { riverId: string; name: string; avatar: string | null; where: string }>();
@@ -856,8 +995,30 @@ function NewMessage({ onClose }: { onClose(): void }): ReactElement {
     if (ok) onClose();
   };
 
+  if (grouping) {
+    return (
+      <PeoplePicker
+        title="New group"
+        exclude={myId ? [myId] : []}
+        action="Create group"
+        withName
+        onClose={onClose}
+        onPick={async (ids, name) => {
+          const g = await dm.run({ a: 'createGroup', name: name ?? 'Group', members: ids });
+          if (g) {
+            dm.select(g.riverId);
+            onClose();
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <Modal title="New message" onClose={onClose}>
+      <button className="btn btn--ghost btn--small new-group-btn" onClick={() => setGrouping(true)}>
+        👥 New group
+      </button>
       <label className="textfield">
         <span className="field__label">Find someone, or paste their River ID</span>
         <input
@@ -940,4 +1101,149 @@ function SafetyNumber({ peer, onClose }: { peer: string; onClose(): void }): Rea
       )}
     </Modal>
   );
+}
+
+/** Everyone you can reach: contacts and people from your communities. */
+function useKnownPeople(): Array<{ riverId: string; name: string; avatar: string | null; where: string }> {
+  const communities = useCommunity((s) => s.communities);
+  const conversations = useDm((d) => d.conversations);
+  const myId = useDm((d) => d.myId);
+  return useMemo(() => {
+    const seen = new Map<string, { riverId: string; name: string; avatar: string | null; where: string }>();
+    for (const c of conversations) {
+      if (c.kind === 'direct' && c.state === 'accepted') {
+        seen.set(c.riverId, { riverId: c.riverId, name: c.name, avatar: c.avatar, where: 'your contacts' });
+      }
+    }
+    for (const c of communities) {
+      for (const m of c.members) {
+        if (m.riverId !== myId && !seen.has(m.riverId)) {
+          seen.set(m.riverId, { riverId: m.riverId, name: m.name, avatar: m.avatar, where: c.name });
+        }
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [communities, conversations, myId]);
+}
+
+function PeoplePicker(props: {
+  title: string;
+  exclude: string[];
+  action: string;
+  withName?: boolean;
+  onClose(): void;
+  onPick(ids: string[], name?: string): Promise<void>;
+}): ReactElement {
+  const people = useKnownPeople().filter((p) => !props.exclude.includes(p.riverId));
+  const [picked, setPicked] = useState<string[]>([]);
+  const [name, setName] = useState('');
+  const [query, setQuery] = useState('');
+  const [busy, setBusy] = useState(false);
+  const shown = people.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
+  const toggle = (id: string): void =>
+    setPicked(picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id].slice(0, 31));
+  return (
+    <Modal title={props.title} onClose={props.onClose}>
+      {props.withName && (
+        <label className="textfield">
+          <span className="field__label">Group name</span>
+          <input
+            autoFocus
+            value={name}
+            maxLength={64}
+            placeholder="e.g. Weekend trip"
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+      )}
+      <input
+        className="search"
+        placeholder="Search people"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <div className="people-list">
+        {shown.map((p) => (
+          <label key={p.riverId} className={`dm-row ${picked.includes(p.riverId) ? 'is-active' : ''}`}>
+            <input type="checkbox" checked={picked.includes(p.riverId)} onChange={() => toggle(p.riverId)} />
+            <Avatar id={p.riverId} name={p.name} avatar={p.avatar} size={30} />
+            <span className="dm-row__text">
+              <strong>{p.name}</strong>
+              <span className="muted small">from {p.where}</span>
+            </span>
+          </label>
+        ))}
+        {shown.length === 0 && (
+          <p className="muted small">
+            Nobody to add yet — people from your communities and contacts appear here.
+          </p>
+        )}
+      </div>
+      <div className="modal__foot">
+        <span className="muted small">{picked.length} selected</span>
+        <button
+          className="btn btn--primary"
+          disabled={busy || picked.length === 0 || (props.withName && !name.trim())}
+          onClick={() => {
+            setBusy(true);
+            void props.onPick(picked, name.trim() || undefined).finally(() => setBusy(false));
+          }}
+        >
+          {busy ? 'Setting up encryption…' : props.action}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function GroupAvatar({ c, size }: { c: ConversationView; size: number }): ReactElement {
+  const shown = c.members.slice(0, 2);
+  return (
+    <span className="group-avatar" style={{ width: size, height: size }}>
+      {shown.map((m, i) => (
+        <span key={m.riverId} className={`group-avatar__face group-avatar__face--${i}`}>
+          <Avatar id={m.riverId} name={m.name} avatar={m.avatar} size={Math.round(size * 0.68)} />
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function GroupMembers({ c, onClose }: { c: ConversationView; onClose(): void }): ReactElement {
+  const dm = useDm();
+  const myId = dm.myId;
+  return (
+    <div className="group-members">
+      <header className="pins__head">
+        <strong>Members — {c.members.length}</strong>
+        <button className="icon-btn" aria-label="Close members" onClick={onClose}>
+          <XIcon size={14} />
+        </button>
+      </header>
+      {c.members.map((m) => (
+        <div key={m.riverId} className="group-members__row">
+          <Avatar id={m.riverId} name={m.name} avatar={m.avatar} size={28} />
+          <span className="group-members__name">
+            {m.name}
+            {m.riverId === myId ? ' (you)' : ''}
+          </span>
+          {m.admin && <span className="chip">admin</span>}
+          {c.isAdmin && m.riverId !== myId && c.state !== 'left' && (
+            <button
+              className="btn btn--link btn--danger-text"
+              onClick={() => void dm.run({ a: 'removeGroupMember', peer: c.riverId, member: m.riverId })}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function typingName(c: ConversationView): string {
+  if (c.kind !== 'group') return c.name;
+  const who = useDm.getState().typingWho[c.riverId];
+  return c.members.find((m) => m.riverId === who)?.name ?? 'Someone';
 }

@@ -214,4 +214,91 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
       /different safety key/,
     );
   });
+
+  it('group conversations: create, messages from everyone, admin changes, leaving', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    const dave = await person('Dave');
+    const group = await alice.dm.action({
+      a: 'createGroup',
+      name: 'Weekend trip',
+      members: [bob.riverId, carol.riverId],
+    });
+    expect(group).toMatchObject({ kind: 'group', name: 'Weekend trip', isAdmin: true, state: 'accepted' });
+    await alice.dm.action({ a: 'send', peer: group.riverId, text: 'who brings the tent?' });
+
+    for (const p of [bob, carol]) await p.dm.sync();
+    const bobGroup = (await bob.dm.action({ a: 'conversations' })).find((c) => c.kind === 'group')!;
+    expect(bobGroup).toMatchObject({
+      riverId: group.riverId,
+      name: 'Weekend trip',
+      state: 'request',
+      unread: 1,
+    });
+    // Bob knows the admin's name; Carol stays anonymous to him until she accepts or speaks.
+    expect(bobGroup.members.map((m) => m.name)).toEqual(expect.arrayContaining(['Alice', 'Bob']));
+    await bob.dm.action({ a: 'accept', peer: group.riverId });
+    await carol.dm.action({ a: 'send', peer: group.riverId, text: 'me!' });
+    await alice.dm.sync();
+    await bob.dm.sync();
+    const aliceMsgs = await alice.dm.action({ a: 'messages', peer: group.riverId });
+    expect(aliceMsgs.map((m) => [m.senderName, m.text])).toEqual([
+      ['Alice', 'who brings the tent?'],
+      ['Carol', 'me!'],
+    ]);
+    expect((await bob.dm.action({ a: 'messages', peer: group.riverId })).map((m) => m.text)).toEqual([
+      'who brings the tent?',
+      'me!',
+    ]);
+    expect(
+      (await bob.dm.action({ a: 'conversations' }))
+        .find((c) => c.kind === 'group')!
+        .members.map((m) => m.name)
+        .sort(),
+    ).toEqual(['Alice', 'Bob', 'Carol']);
+    // Group members are not turned into one-to-one requests.
+    expect((await bob.dm.action({ a: 'conversations' })).filter((c) => c.kind === 'direct')).toEqual([]);
+
+    // Only admins change the group; removed people stop receiving.
+    await expect(bob.dm.action({ a: 'renameGroup', peer: group.riverId, name: 'Hijacked' })).rejects.toThrow(
+      /admins/,
+    );
+    await alice.dm.action({ a: 'removeGroupMember', peer: group.riverId, member: carol.riverId });
+    await alice.dm.action({ a: 'renameGroup', peer: group.riverId, name: 'Trip (final)' });
+    await alice.dm.action({ a: 'send', peer: group.riverId, text: 'tent sorted' });
+    await carol.dm.sync();
+    await bob.dm.sync();
+    const carolGroup = (await carol.dm.action({ a: 'conversations' })).find((c) => c.kind === 'group')!;
+    expect(carolGroup.state).toBe('left');
+    expect((await carol.dm.action({ a: 'messages', peer: group.riverId })).map((m) => m.text)).not.toContain(
+      'tent sorted',
+    );
+    expect((await bob.dm.action({ a: 'conversations' })).find((c) => c.kind === 'group')!.name).toBe(
+      'Trip (final)',
+    );
+
+    // Someone outside the group cannot post into it.
+    await (dave.dm as unknown as { sendContent(p: string, c: unknown): Promise<void> }).sendContent(
+      bob.riverId,
+      {
+        v: 1,
+        t: 'msg',
+        id: 'AAAAAAAAAAAAAAAAAAAAAA',
+        text: 'spoofed',
+        sentAt: new Date().toISOString(),
+        groupId: group.riverId,
+      },
+    );
+    await bob.dm.sync();
+    expect((await bob.dm.action({ a: 'messages', peer: group.riverId })).map((m) => m.text)).not.toContain(
+      'spoofed',
+    );
+
+    // Bob leaves; Alice sees it.
+    await bob.dm.action({ a: 'leaveGroup', peer: group.riverId });
+    await alice.dm.sync();
+    const aliceGroup = (await alice.dm.action({ a: 'conversations' })).find((c) => c.kind === 'group')!;
+    expect(aliceGroup.members.map((m) => m.name)).toEqual(['Alice']);
+  });
 });

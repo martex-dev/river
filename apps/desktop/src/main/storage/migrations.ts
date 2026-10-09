@@ -138,4 +138,23 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 8,
+    name: '0008_dm_groups',
+    up(db) {
+      // Group conversations (pairwise libsignal fan-out); members/admins/profiles are JSON.
+      db.exec(`
+        CREATE TABLE dm_groups (
+          id         TEXT PRIMARY KEY,
+          name       TEXT NOT NULL,
+          members    TEXT NOT NULL,
+          admins     TEXT NOT NULL,
+          profiles   TEXT NOT NULL,
+          state      TEXT NOT NULL CHECK (state IN ('accepted', 'request', 'left')),
+          created_at TEXT NOT NULL,
+          last_read  TEXT
+        ) STRICT;
+      `);
+    },
+  },
 ];

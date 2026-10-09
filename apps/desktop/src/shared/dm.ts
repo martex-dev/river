@@ -8,10 +8,16 @@ import {
 /** Direct messages as the renderer sees them (decrypted in main). */
 
 export interface ConversationView {
+  /** A River ID for a direct conversation, or a group ID. */
   riverId: string;
+  kind: 'direct' | 'group';
+  /** Group members (empty for direct conversations). */
+  members: Array<{ riverId: string; name: string; avatar: string | null; admin: boolean }>;
+  /** You can rename the group and add or remove people. */
+  isAdmin: boolean;
   name: string;
   avatar: string | null;
-  state: 'accepted' | 'request' | 'blocked';
+  state: 'accepted' | 'request' | 'blocked' | 'left';
   last: { text: string; sentAt: string; mine: boolean } | null;
   unread: number;
   verified: boolean;
@@ -23,6 +29,7 @@ export interface DirectMessageView {
   id: string;
   peer: string;
   sender: string;
+  senderName: string;
   mine: boolean;
   text: string;
   replyTo: string | null;
@@ -38,7 +45,7 @@ export type DmEvent =
   | { t: 'conversations'; conversations: ConversationView[] }
   | { t: 'message'; message: DirectMessageView; isNew: boolean; senderName: string }
   | { t: 'remove'; peer: string; id: string }
-  | { t: 'typing'; peer: string }
+  | { t: 'typing'; peer: string; who?: string }
   | { t: 'focus'; peer: string }
   | {
       t: 'call';
@@ -51,10 +58,12 @@ export type DmEvent =
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 const riverId = z.uuid();
+/** A conversation: a person's River ID or a group ID. */
+const conv = z.union([riverId, id]);
 
 export const dmActionSchema = z.discriminatedUnion('a', [
   z.object({ a: z.literal('conversations') }).strict(),
-  z.object({ a: z.literal('messages'), peer: riverId }).strict(),
+  z.object({ a: z.literal('messages'), peer: conv }).strict(),
   z
     .object({
       a: z.literal('open'),
@@ -65,7 +74,7 @@ export const dmActionSchema = z.discriminatedUnion('a', [
   z
     .object({
       a: z.literal('send'),
-      peer: riverId,
+      peer: conv,
       text: z.string().max(4000),
       replyTo: id.optional(),
       attachments: z.array(attachmentPointerSchema).max(10).optional(),
@@ -75,7 +84,7 @@ export const dmActionSchema = z.discriminatedUnion('a', [
   z
     .object({
       a: z.literal('edit'),
-      peer: riverId,
+      peer: conv,
       id,
       text: z
         .string()
@@ -83,16 +92,16 @@ export const dmActionSchema = z.discriminatedUnion('a', [
         .refine((s) => s.trim().length > 0),
     })
     .strict(),
-  z.object({ a: z.literal('delete'), peer: riverId, id, forEveryone: z.boolean() }).strict(),
+  z.object({ a: z.literal('delete'), peer: conv, id, forEveryone: z.boolean() }).strict(),
   z
-    .object({ a: z.literal('react'), peer: riverId, id, emoji: z.string().min(1).max(32), on: z.boolean() })
+    .object({ a: z.literal('react'), peer: conv, id, emoji: z.string().min(1).max(32), on: z.boolean() })
     .strict(),
-  z.object({ a: z.literal('read'), peer: riverId }).strict(),
-  z.object({ a: z.literal('typing'), peer: riverId }).strict(),
-  z.object({ a: z.literal('accept'), peer: riverId }).strict(),
+  z.object({ a: z.literal('read'), peer: conv }).strict(),
+  z.object({ a: z.literal('typing'), peer: conv }).strict(),
+  z.object({ a: z.literal('accept'), peer: conv }).strict(),
   z.object({ a: z.literal('block'), peer: riverId }).strict(),
   z.object({ a: z.literal('unblock'), peer: riverId }).strict(),
-  z.object({ a: z.literal('removeConversation'), peer: riverId }).strict(),
+  z.object({ a: z.literal('removeConversation'), peer: conv }).strict(),
   z.object({ a: z.literal('safetyNumber'), peer: riverId }).strict(),
   z.object({ a: z.literal('setVerified'), peer: riverId, verified: z.boolean() }).strict(),
   z.object({ a: z.literal('acknowledgeKeyChange'), peer: riverId }).strict(),
@@ -108,6 +117,17 @@ export const dmActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('myId') }).strict(),
+  z
+    .object({
+      a: z.literal('createGroup'),
+      name: z.string().trim().min(1).max(64),
+      members: z.array(riverId).min(1).max(31),
+    })
+    .strict(),
+  z.object({ a: z.literal('renameGroup'), peer: id, name: z.string().trim().min(1).max(64) }).strict(),
+  z.object({ a: z.literal('addGroupMembers'), peer: id, members: z.array(riverId).min(1).max(31) }).strict(),
+  z.object({ a: z.literal('removeGroupMember'), peer: id, member: riverId }).strict(),
+  z.object({ a: z.literal('leaveGroup'), peer: id }).strict(),
   z
     .object({
       a: z.literal('call'),
@@ -131,6 +151,7 @@ interface DmResults {
   safetyNumber: { digits: string; verified: boolean; theirName: string };
   upload: AttachmentPointer;
   myId: string;
+  createGroup: ConversationView;
 }
 
 export type DmActionResult<A extends DmAction> = A['a'] extends keyof DmResults ? DmResults[A['a']] : null;
