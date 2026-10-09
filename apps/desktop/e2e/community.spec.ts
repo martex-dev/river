@@ -98,6 +98,14 @@ test('create, invite, join, chat and call between two members', async () => {
   await bob.getByPlaceholder('https://…/join#c=…&k=…').fill(invite);
   await bob.getByRole('button', { name: 'Join community' }).click();
   await expect(bob.locator('.community__title strong')).toHaveText('The Crew');
+  // On small screens (e.g. macOS CI) the member list is an overlay that starts closed.
+  const openMembers = async (p: typeof alice): Promise<void> => {
+    if ((await p.locator('.community__members').count()) === 0) {
+      await p.getByRole('button', { name: 'Member list' }).click();
+    }
+  };
+  await openMembers(bob);
+  await openMembers(alice);
   await expect(bob.locator('.community__members')).toContainText('Alice');
   await expect(alice.locator('.community__members')).toContainText('Bob');
 
@@ -217,10 +225,12 @@ test('create, invite, join, chat and call between two members', async () => {
   await alice.getByLabel('Add role to Bob').selectOption({ label: 'Crew' });
   await expect(alice.locator('.member-table__row', { hasText: 'Bob' })).toContainText('Crew');
   await alice.getByRole('button', { name: 'Close settings' }).click();
+  await openMembers(bob);
   await expect(bob.locator('.community__members')).toContainText('Crew — 1', { timeout: 15_000 });
   if (process.env.RIVER_SCREENSHOTS) await bob.screenshot({ path: 'test-results/community-members.png' });
 
   // Direct messages (libsignal): Alice messages Bob from his profile card.
+  await openMembers(alice);
   await alice.locator('.community__members .member', { hasText: 'Bob' }).click();
   await alice.getByRole('button', { name: 'Message', exact: true }).click();
   await expect(alice.locator('.dms')).toBeVisible({ timeout: 15_000 });

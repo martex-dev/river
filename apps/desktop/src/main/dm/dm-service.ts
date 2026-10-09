@@ -67,6 +67,19 @@ const contentSchema = z.discriminatedUnion('t', [
   z.object({ v: z.literal(1), t: z.literal('typing') }),
   z.object({
     v: z.literal(1),
+    t: z.literal('ckey'),
+    communityId: msgId,
+    epoch: z.number().int().min(0).max(1_000_000),
+    key: z.string().regex(/^[A-Za-z0-9+/]{43}=$/),
+  }),
+  z.object({
+    v: z.literal(1),
+    t: z.literal('ckeyReq'),
+    communityId: msgId,
+    epoch: z.number().int().min(0).max(1_000_000),
+  }),
+  z.object({
+    v: z.literal(1),
     t: z.literal('call'),
     callId: msgId,
     kind: z.enum(['invite', 'accept', 'decline', 'end', 'signal', 'busy']),
@@ -133,6 +146,7 @@ export class DmService {
   constructor(deps: Deps) {
     this.deps = deps;
     deps.community.onServerEvent((e) => this.onServerEvent(e));
+    deps.community.setKeyChannel({ send: (peer, message) => this.sendContent(peer, { v: 1, ...message }) });
   }
 
   onEvent(listener: (e: DmEvent) => void): () => void {
@@ -296,6 +310,12 @@ export class DmService {
     }
     if (contact?.state === 'blocked') return true;
     const peer = env.sender;
+    if (content.t === 'ckey' || content.t === 'ckeyReq') {
+      // Community key exchange between members; not a conversation.
+      const { v: _v, ...message } = content;
+      void this.deps.community.handleKeyMessage(peer, message).catch(() => undefined);
+      return true;
+    }
     const now = new Date();
     switch (content.t) {
       case 'msg': {

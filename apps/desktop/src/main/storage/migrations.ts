@@ -120,4 +120,22 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 7,
+    name: '0007_community_key_epochs',
+    up(db) {
+      // Every key a community has had. Existing keys become epoch 0.
+      db.exec(`
+        CREATE TABLE community_keys (
+          community_id TEXT NOT NULL,
+          epoch        INTEGER NOT NULL,
+          key          BLOB NOT NULL,
+          added_at     TEXT NOT NULL,
+          PRIMARY KEY (community_id, epoch)
+        ) STRICT;
+        INSERT INTO community_keys (community_id, epoch, key, added_at)
+          SELECT id, 0, key, joined_at FROM communities;
+      `);
+    },
+  },
 ];

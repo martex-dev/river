@@ -80,7 +80,8 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   toast: null,
   replyTo: null,
   editing: null,
-  showMembers: true,
+  // On narrow windows the member list is an overlay, so start with it closed.
+  showMembers: typeof window === 'undefined' || window.innerWidth >= 1100,
   showPins: false,
 
   load: async () => {

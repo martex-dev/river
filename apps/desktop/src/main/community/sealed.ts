@@ -14,7 +14,8 @@ export type SealPurpose =
   | `message:${string}`
   | `signal:${string}`
   | `role:${string}`
-  | `reaction:${string}`;
+  | `reaction:${string}`
+  | 'invite';
 
 const aad = (communityId: string, purpose: SealPurpose): Buffer =>
   Buffer.from(`river-community-v1|${communityId}|${purpose}`, 'utf8');
@@ -67,22 +68,74 @@ export function randomId(): string {
   return randomBytes(16).toString('base64url');
 }
 
-/** Invite links: https://server/join#c=<code>&k=<key>. The fragment never reaches a server. */
-export function formatInvite(serverUrl: string, code: string, key: Uint8Array): string {
-  return `${serverUrl}/join#c=${code}&k=${Buffer.from(key).toString('base64url')}`;
+/**
+ * Invite links: https://server/join#c=<code>&k=<key>&e=<epoch>. The fragment
+ * never reaches a server. Links from before key epochs have no `e` (epoch 0).
+ */
+export function formatInvite(serverUrl: string, code: string, key: Uint8Array, epoch = 0): string {
+  const base = `${serverUrl}/join#c=${code}&k=${Buffer.from(key).toString('base64url')}`;
+  return epoch ? `${base}&e=${epoch}` : base;
 }
 
-export function parseInvite(link: string): { serverUrl: string; code: string; key: Buffer } | null {
+export function parseInvite(
+  link: string,
+): { serverUrl: string; code: string; key: Buffer; epoch: number } | null {
   try {
     const url = new URL(link.trim());
     if (!url.pathname.endsWith('/join')) return null;
     const params = new URLSearchParams(url.hash.slice(1));
     const code = params.get('c') ?? '';
     const key = Buffer.from(params.get('k') ?? '', 'base64url');
+    const epoch = Number(params.get('e') ?? '0');
+    if (!Number.isInteger(epoch) || epoch < 0 || epoch > 1_000_000) return null;
     if (!/^[A-Za-z0-9_-]{22}$/.test(code) || key.length !== 32) return null;
     const base = url.pathname.slice(0, -'/join'.length);
-    return { serverUrl: `${url.origin}${base}`, code, key };
+    return { serverUrl: `${url.origin}${base}`, code, key, epoch };
   } catch {
     return null;
+  }
+}
+
+/**
+ * All keys a member holds for one community, newest first. New content is
+ * sealed with the newest key; anything can be opened with whichever key made it.
+ */
+export class KeyRing {
+  private readonly entries: Array<{ epoch: number; key: Buffer }>;
+
+  constructor(entries: Array<{ epoch: number; key: Buffer }>) {
+    this.entries = [...entries].sort((a, b) => b.epoch - a.epoch);
+  }
+
+  get newest(): { epoch: number; key: Buffer } {
+    return this.entries[0]!;
+  }
+
+  has(epoch: number): boolean {
+    return this.entries.some((e) => e.epoch === epoch);
+  }
+
+  keyFor(epoch: number): Buffer | null {
+    return this.entries.find((e) => e.epoch === epoch)?.key ?? null;
+  }
+
+  /** Opens with whichever key sealed the value; also says which key that was. */
+  openWith<T = unknown>(
+    communityId: string,
+    purpose: SealPurpose,
+    sealed: string,
+  ): { value: T; key: Buffer } {
+    for (const { key } of this.entries) {
+      try {
+        return { value: open<T>(key, communityId, purpose, sealed), key };
+      } catch {
+        // try an older key
+      }
+    }
+    throw new Error('no key opens this value');
+  }
+
+  open<T = unknown>(communityId: string, purpose: SealPurpose, sealed: string): T {
+    return this.openWith<T>(communityId, purpose, sealed).value;
   }
 }

@@ -4,6 +4,8 @@ import {
   Permission,
   attachmentUploadResponseSchema,
   bansResponseSchema,
+  joinResponseSchema,
+  rotateKeyResponseSchema,
   communitiesResponseSchema,
   communitySchema,
   computePermissions,
@@ -40,7 +42,21 @@ import { ApiError, type RequestBytes, type RequestJson } from '../http.ts';
 import type { IdentityService } from '../identity/identity-service.ts';
 import type { Logger } from '../logger.ts';
 import type { LocalDatabase } from '../storage/database.ts';
-import { formatInvite, newCommunityKey, open, parseInvite, randomId, reactionTag, seal } from './sealed.ts';
+import {
+  KeyRing,
+  formatInvite,
+  newCommunityKey,
+  open,
+  parseInvite,
+  randomId,
+  reactionTag,
+  seal,
+} from './sealed.ts';
+
+/** Community keys travel inside libsignal direct messages. */
+export type KeyMessage =
+  | { t: 'ckey'; communityId: string; epoch: number; key: string }
+  | { t: 'ckeyReq'; communityId: string; epoch: number };
 
 export class CommunityError extends Error {
   constructor(message: string) {
@@ -101,7 +117,17 @@ function explain(err: unknown): never {
 export class CommunityService {
   private readonly deps: Deps;
   private communities: CommunityView[] = [];
-  private readonly keys = new Map<string, Buffer>();
+  private readonly keys = new Map<string, KeyRing>();
+  /** Raw community records from the server, for key maintenance. */
+  private readonly wires = new Map<string, CommunityWire>();
+  /** Which key opened each message, so reactions use the same key. */
+  private readonly messageKeys = new Map<string, Buffer>();
+  private keyChannel: { send(peer: string, message: KeyMessage): Promise<void> } | null = null;
+  private readonly rotating = new Set<string>();
+  private readonly keyRequests = new Map<string, number>();
+  private readonly keyAnswers = new Map<string, number>();
+  /** How long to wait for a rotation in progress before asking for a key (shortened in tests). */
+  keyRequestDelayMs = 3000;
   private readonly channelToCommunity = new Map<string, string>();
   private readonly voice = new Map<string, string[]>();
   private readonly voiceStates = new Map<string, VoiceState>();
@@ -195,6 +221,148 @@ export class CommunityService {
     return pk ? Buffer.from(pk).toString('base64') : undefined;
   }
 
+  // ---- Key epochs ------------------------------------------------------------------------------
+
+  /** Direct messages carry new community keys (set up by DmService). */
+  setKeyChannel(channel: { send(peer: string, message: KeyMessage): Promise<void> }): void {
+    this.keyChannel = channel;
+  }
+
+  /** The online member with the highest rank (then lowest ID) rotates; avoids everyone trying. */
+  private designated(c: CommunityWire, mustHave: number): string[] {
+    const view = this.communities.find((x) => x.id === c.id);
+    const me = this.me();
+    return (view?.members ?? [])
+      .filter((m) => m.online || m.riverId === me)
+      .filter((m) => m.riverId !== me || this.keys.get(c.id)?.has(mustHave))
+      .sort((a, b) => b.rank - a.rank || a.riverId.localeCompare(b.riverId))
+      .map((m) => m.riverId);
+  }
+
+  private async maintainKeys(c: CommunityWire): Promise<void> {
+    const ring = this.keys.get(c.id);
+    if (!ring) return;
+    if (c.keyEpoch > ring.newest.epoch) {
+      await this.requestKey(c);
+    } else if (
+      c.rotationNeeded &&
+      ring.newest.epoch === c.keyEpoch &&
+      this.designated(c, c.keyEpoch)[0] === this.me()
+    ) {
+      await this.rotate(c);
+    }
+  }
+
+  /**
+   * Replaces the community key after someone left or was removed: claim the next
+   * epoch on the server (only one member wins), seal our profile with the new key,
+   * then hand the key to every remaining member over their libsignal sessions.
+   */
+  private async rotate(c: CommunityWire): Promise<void> {
+    if (this.rotating.has(c.id) || !this.keyChannel) return;
+    this.rotating.add(c.id);
+    try {
+      let epoch: number;
+      try {
+        epoch = (
+          await this.call(`/communities/${c.id}/epoch`, 'POST', { from: c.keyEpoch }, rotateKeyResponseSchema)
+        ).epoch;
+      } catch {
+        return; // someone else rotated first
+      }
+      const key = newCommunityKey();
+      this.storeKey(c.id, key, epoch);
+      await this.publishProfile(c.id);
+      const me = this.me();
+      for (const m of c.members) {
+        if (m.riverId === me) continue;
+        await this.keyChannel
+          .send(m.riverId, { t: 'ckey', communityId: c.id, epoch, key: key.toString('base64') })
+          .catch((err: unknown) =>
+            this.deps.log.warn(`Could not deliver a community key: ${(err as Error).message}`),
+          );
+      }
+      await this.refresh();
+    } finally {
+      this.rotating.delete(c.id);
+    }
+  }
+
+  /** We are missing the newest key (joined with an older invite, or were offline): ask members. */
+  private async requestKey(c: CommunityWire): Promise<void> {
+    if (!this.keyChannel) return;
+    const tag = `${c.id}:${c.keyEpoch}`;
+    if (Date.now() - (this.keyRequests.get(tag) ?? 0) < 30_000) return;
+    this.keyRequests.set(tag, Date.now());
+    // Give a rotation in progress a moment to deliver the key by itself.
+    await new Promise((r) => setTimeout(r, this.keyRequestDelayMs));
+    if ((this.keys.get(c.id)?.newest.epoch ?? -1) >= c.keyEpoch) return;
+    const me = this.me();
+    // Online members first (they answer now); otherwise the request waits in mailboxes.
+    const view = this.communities.find((x) => x.id === c.id);
+    const targets = [...(view?.members ?? [])]
+      .filter((m) => m.riverId !== me)
+      .sort(
+        (a, b) =>
+          Number(b.online) - Number(a.online) || b.rank - a.rank || a.riverId.localeCompare(b.riverId),
+      )
+      .slice(0, 3)
+      .map((m) => m.riverId);
+    for (const peer of targets) {
+      await this.keyChannel
+        .send(peer, { t: 'ckeyReq', communityId: c.id, epoch: c.keyEpoch })
+        .catch(() => undefined);
+    }
+  }
+
+  /** Community key messages arriving over direct messages. Inputs are untrusted. */
+  async handleKeyMessage(sender: string, message: KeyMessage): Promise<void> {
+    const c = this.wires.get(message.communityId);
+    const ring = this.keys.get(message.communityId);
+    if (!c || !ring) return;
+    const senderMember = c.members.find((m) => m.riverId === sender);
+    if (!senderMember || !this.keyChannel) return;
+    if (message.t === 'ckey') {
+      if (ring.has(message.epoch)) return;
+      const key = Buffer.from(message.key, 'base64');
+      if (key.length !== 32) return;
+      // Accept a key only for an epoch the server has reached, and only if the sender's
+      // current profile is sealed with it (so a member cannot slip in a key nobody uses).
+      await this.refresh().catch(() => undefined);
+      const fresh = this.wires.get(message.communityId);
+      const freshSender = fresh?.members.find((m) => m.riverId === sender);
+      if (!fresh || !freshSender || message.epoch > fresh.keyEpoch) return;
+      try {
+        open(key, message.communityId, 'profile', freshSender.profile);
+      } catch {
+        return;
+      }
+      this.storeKey(message.communityId, key, message.epoch);
+      await this.refresh().catch(() => undefined);
+      return;
+    }
+    // A key request: answer members who prove they held a genuine key (their profile opens).
+    const key = ring.keyFor(message.epoch);
+    if (!key) return;
+    try {
+      ring.open(message.communityId, 'profile', senderMember.profile);
+    } catch {
+      return;
+    }
+    const tag = `${sender}:${message.communityId}:${message.epoch}`;
+    if (Date.now() - (this.keyAnswers.get(tag) ?? 0) < 60_000) return;
+    this.keyAnswers.set(tag, Date.now());
+    // Our profile must be sealed with the newest key for the requester to verify it.
+    if (ring.newest.epoch === message.epoch)
+      await this.publishProfile(message.communityId).catch(() => undefined);
+    await this.keyChannel.send(sender, {
+      t: 'ckey',
+      communityId: message.communityId,
+      epoch: message.epoch,
+      key: key.toString('base64'),
+    });
+  }
+
   /** Authenticated API call with one re-login on an expired session. */
   api<T>(path: string, method: Method, body: unknown, schema: z.ZodType<T>): Promise<T> {
     return this.call(path, method, body, schema);
@@ -221,11 +389,19 @@ export class CommunityService {
   }
 
   private loadKeys(): void {
-    const rows = this.db().prepare('SELECT id, key FROM communities').all() as Array<{
-      id: string;
+    const rows = this.db().prepare('SELECT community_id, epoch, key FROM community_keys').all() as Array<{
+      community_id: string;
+      epoch: number;
       key: Uint8Array;
     }>;
-    for (const r of rows) this.keys.set(r.id, Buffer.from(r.key));
+    const grouped = new Map<string, Array<{ epoch: number; key: Buffer }>>();
+    for (const r of rows) {
+      const list = grouped.get(r.community_id) ?? [];
+      list.push({ epoch: r.epoch, key: Buffer.from(r.key) });
+      grouped.set(r.community_id, list);
+    }
+    this.keys.clear();
+    for (const [id, list] of grouped) this.keys.set(id, new KeyRing(list));
   }
 
   private me(): string {
@@ -256,15 +432,15 @@ export class CommunityService {
   // ---- Decryption ----------------------------------------------------------------------------
 
   private view(c: CommunityWire): CommunityView | null {
-    const key = this.keys.get(c.id);
-    if (!key) return null;
+    const ring = this.keys.get(c.id);
+    if (!ring) return null;
     const me = this.me();
     let meta: { name: string; description?: string };
     try {
-      meta = open<{ name: string; description?: string }>(key, c.id, 'meta', c.meta);
+      meta = ring.open<{ name: string; description?: string }>(c.id, 'meta', c.meta);
     } catch {
-      this.deps.log.warn('Community metadata could not be decrypted');
-      return null;
+      // Sealed with a newer key we have not received yet.
+      meta = { name: 'Waiting for the community key…' };
     }
     const ownerId = c.ownerId ?? c.members.find((m) => m.role === 'owner')?.riverId ?? '';
     // Servers before 0.3 have no roles: synthesise @everyone so permissions still make sense.
@@ -277,7 +453,7 @@ export class CommunityService {
         let name = everyone ? '@everyone' : 'role';
         if (!everyone) {
           try {
-            name = String(open<{ name: string }>(key, c.id, `role:${r.id}`, r.name).name).slice(0, 64);
+            name = String(ring.open<{ name: string }>(c.id, `role:${r.id}`, r.name).name).slice(0, 64);
           } catch {
             // keep placeholder
           }
@@ -307,7 +483,7 @@ export class CommunityService {
         let name = 'channel';
         let topic = '';
         try {
-          const opened = open<{ name: string; topic?: string }>(key, c.id, `channel:${ch.id}`, ch.name);
+          const opened = ring.open<{ name: string; topic?: string }>(c.id, `channel:${ch.id}`, ch.name);
           name = String(opened.name).slice(0, 64);
           topic = String(opened.topic ?? '').slice(0, 300);
         } catch {
@@ -330,7 +506,7 @@ export class CommunityService {
     const members: MemberView[] = c.members.map((m) => {
       let profile: SealedProfile = { name: null };
       try {
-        profile = open<SealedProfile>(key, c.id, 'profile', m.profile);
+        profile = ring.open<SealedProfile>(c.id, 'profile', m.profile);
       } catch {
         // unreadable profile
       }
@@ -381,15 +557,18 @@ export class CommunityService {
   }
 
   private toChat(communityId: string, m: MessageWire): ChatMessage | null {
-    const key = this.keys.get(communityId);
-    if (!key) return null;
+    const ring = this.keys.get(communityId);
+    if (!ring) return null;
     try {
-      const body = open<{ text: string; replyTo?: string; attachments?: unknown[] }>(
-        key,
+      const opened = ring.openWith<{ text: string; replyTo?: string; attachments?: unknown[] }>(
         communityId,
         `message:${m.channelId}`,
         m.body,
       );
+      const body = opened.value;
+      const key = opened.key;
+      this.messageKeys.set(m.id, key);
+      if (this.messageKeys.size > 20_000) this.messageKeys.delete(this.messageKeys.keys().next().value!);
       const community = this.communities.find((c) => c.id === communityId);
       const sender = community?.members.find((x) => x.riverId === m.sender);
       const me = this.me();
@@ -455,7 +634,10 @@ export class CommunityService {
   async refresh(): Promise<CommunityView[]> {
     this.loadKeys();
     const res = await this.call('/communities', 'GET', undefined, communitiesResponseSchema);
+    this.wires.clear();
+    for (const c of res.communities) this.wires.set(c.id, c);
     this.communities = res.communities.map((c) => this.view(c)).filter((c): c is CommunityView => c !== null);
+    for (const c of res.communities) void this.maintainKeys(c).catch(() => undefined);
     this.emit({ t: 'communities', communities: this.communities });
     return this.communities;
   }
@@ -488,7 +670,7 @@ export class CommunityService {
       ],
     };
     await this.call('/communities', 'POST', body, communitySchema);
-    this.storeKey(id, key);
+    this.storeKey(id, key, 0);
     await this.refresh();
     this.ensureSocket();
     return this.communities.find((c) => c.id === id)!;
@@ -504,9 +686,16 @@ export class CommunityService {
   }
 
   async invite(communityId: string): Promise<string> {
-    const key = this.requireKey(communityId);
-    const res = await this.call(`/communities/${communityId}/invites`, 'POST', {}, inviteResponseSchema);
-    return formatInvite(this.server(), res.code, key);
+    const { key, epoch } = this.requireRing(communityId).newest;
+    // A value only the invite's key opens, so joiners can check the link is intact.
+    const check = seal(key, communityId, 'invite', { epoch });
+    const res = await this.call(
+      `/communities/${communityId}/invites`,
+      'POST',
+      { check },
+      inviteResponseSchema,
+    );
+    return formatInvite(this.server(), res.code, key, epoch);
   }
 
   /**
@@ -526,20 +715,24 @@ export class CommunityService {
       '/invites/join',
       'POST',
       { code: invite.code, profile: 'AAAA' },
-      communitySchema,
+      joinResponseSchema,
     ).catch((err: unknown) => {
       if (err instanceof ApiError && err.code === 'invalid_invite') {
         throw new CommunityError('This invite has expired or was already used too many times.');
       }
       throw err;
     });
-    // Verify the key from the link actually opens this community before trusting it.
+    // Verify the key from the link actually belongs to this community before trusting it.
+    let epoch = invite.epoch;
     try {
-      open(invite.key, res.id, 'meta', res.meta);
+      if (res.inviteCheck)
+        epoch = open<{ epoch: number }>(invite.key, res.id, 'invite', res.inviteCheck).epoch;
+      else open(invite.key, res.id, 'meta', res.meta);
     } catch {
       throw new CommunityError('This invite link is damaged: its key does not match the community.');
     }
-    this.storeKey(res.id, invite.key);
+    if (!Number.isInteger(epoch) || epoch < 0) epoch = 0;
+    this.storeKey(res.id, invite.key, epoch);
     await this.publishProfile(res.id);
     await this.refresh();
     this.ensureSocket();
@@ -827,7 +1020,7 @@ export class CommunityService {
       }
       case 'react': {
         const communityId = this.communityOf(act.channelId);
-        const key = this.requireKey(communityId);
+        const key = this.messageKeys.get(act.messageId) ?? this.requireKey(communityId);
         const tag = reactionTag(key, communityId, act.messageId, act.emoji);
         if (act.on) {
           const emoji = seal(key, communityId, `reaction:${act.messageId}`, { emoji: act.emoji });
@@ -1117,10 +1310,10 @@ export class CommunityService {
         return;
       case 'signal': {
         const communityId = this.channelToCommunity.get(e.channelId);
-        const key = communityId ? this.keys.get(communityId) : undefined;
-        if (!communityId || !key) return;
+        const ring = communityId ? this.keys.get(communityId) : undefined;
+        if (!communityId || !ring) return;
         try {
-          const data = open(key, communityId, `signal:${e.channelId}`, e.data);
+          const data = ring.open(communityId, `signal:${e.channelId}`, e.data);
           this.emit({ t: 'signal', from: e.from, channelId: e.channelId, data });
         } catch {
           this.deps.log.warn('Dropped a call signal that failed authentication');
@@ -1172,24 +1365,34 @@ export class CommunityService {
     return c;
   }
 
+  /** The newest key of a community: everything new is sealed with it. */
   private requireKey(communityId: string): Buffer {
+    return this.requireRing(communityId).newest.key;
+  }
+
+  private requireRing(communityId: string): KeyRing {
     if (!this.keys.has(communityId)) this.loadKeys();
-    const key = this.keys.get(communityId);
-    if (!key) throw new CommunityError('Unknown community');
-    return key;
+    const ring = this.keys.get(communityId);
+    if (!ring) throw new CommunityError('Unknown community');
+    return ring;
   }
 
-  private storeKey(id: string, key: Buffer): void {
-    this.db()
-      .prepare('INSERT OR REPLACE INTO communities (id, key, joined_at) VALUES (?, ?, ?)')
-      .run(id, key, new Date().toISOString());
-    this.keys.set(id, key);
+  private storeKey(id: string, key: Buffer, epoch: number): void {
+    const now = new Date().toISOString();
+    const db = this.db();
+    db.prepare('INSERT OR IGNORE INTO communities (id, key, joined_at) VALUES (?, ?, ?)').run(id, key, now);
+    db.prepare(
+      'INSERT OR IGNORE INTO community_keys (community_id, epoch, key, added_at) VALUES (?, ?, ?, ?)',
+    ).run(id, epoch, key, now);
+    this.loadKeys();
   }
 
-  /** Drops a community's key after leaving or being removed. */
+  /** Drops a community's keys after leaving or being removed. */
   private forget(id: string): void {
+    this.deps.db()?.prepare('DELETE FROM community_keys WHERE community_id = ?').run(id);
     this.deps.db()?.prepare('DELETE FROM communities WHERE id = ?').run(id);
     this.keys.delete(id);
+    this.wires.delete(id);
     this.communities = this.communities.filter((c) => c.id !== id);
     this.emit({ t: 'communities', communities: this.communities });
   }
