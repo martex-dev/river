@@ -2933,3 +2933,52 @@ input.switch:disabled {
     animation: none;
   }
 }
+
+/* ---------- Sound settings ---------- */
+.slider-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 14px 0 6px;
+}
+.slider-field input[type='range'] {
+  width: min(360px, 100%);
+  accent-color: var(--accent);
+}
+.sound-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+.sound-group {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(4, 8, 16, 0.35);
+}
+.sound-group__previews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.chip--button {
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast),
+    transform var(--dur-fast) var(--ease-out);
+}
+.chip--button:hover {
+  background: rgba(79, 227, 209, 0.1);
+}
+.chip--button:active {
+  transform: scale(0.94);
+}
+.chip--button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

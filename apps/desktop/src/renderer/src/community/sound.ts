@@ -2,22 +2,10 @@
  * River's interface sounds, synthesised with WebAudio (no sample files).
  * Each sound is a few short enveloped tones; they are deliberately quiet.
  */
-export type SoundName =
-  | 'message'
-  | 'mention'
-  | 'join'
-  | 'leave'
-  | 'selfJoin'
-  | 'selfLeave'
-  | 'mute'
-  | 'unmute'
-  | 'deafen'
-  | 'undeafen'
-  | 'streamStart'
-  | 'streamStop'
-  | 'disconnected'
-  | 'ring'
-  | 'ringback';
+import { audible, type SoundConfig, type SoundName } from './sound-rules.ts';
+
+export { SOUND_GROUP, SOUND_GROUPS, audible } from './sound-rules.ts';
+export type { SoundConfig, SoundGroup, SoundName } from './sound-rules.ts';
 
 type Note = [frequency: number, startMs: number, durationMs: number, type?: OscillatorType];
 
@@ -135,18 +123,114 @@ const SOUNDS: Record<SoundName, { gain: number; notes: Note[] }> = {
       [196, 140, 240, 'sawtooth'],
     ],
   },
+  // A soft upward "whoosh" when your message leaves.
+  send: {
+    gain: 0.035,
+    notes: [
+      [740, 0, 50, 'triangle'],
+      [1108.7, 35, 90, 'triangle'],
+    ],
+  },
+  // A direct message: warmer than a channel message, two notes up.
+  dm: {
+    gain: 0.06,
+    notes: [
+      [880, 0, 90],
+      [1174.7, 80, 110],
+      [1480, 170, 160],
+    ],
+  },
+  reaction: {
+    gain: 0.04,
+    notes: [
+      [1568, 0, 50, 'triangle'],
+      [2093, 40, 90, 'triangle'],
+    ],
+  },
+  callConnected: {
+    gain: 0.06,
+    notes: [
+      [587.3, 0, 90],
+      [880, 80, 90],
+      [1174.7, 160, 220],
+    ],
+  },
+  callEnded: {
+    gain: 0.06,
+    notes: [
+      [880, 0, 110],
+      [587.3, 100, 110],
+      [440, 200, 240],
+    ],
+  },
+  // A little fanfare when you join or create a community.
+  communityJoin: {
+    gain: 0.06,
+    notes: [
+      [523.3, 0, 100],
+      [659.3, 90, 100],
+      [784, 180, 100],
+      [1046.5, 270, 320],
+      [784, 270, 320],
+    ],
+  },
+  friendRequest: {
+    gain: 0.06,
+    notes: [
+      [784, 0, 110],
+      [987.8, 100, 110],
+      [784, 200, 160],
+    ],
+  },
+  friendAdded: {
+    gain: 0.06,
+    notes: [
+      [659.3, 0, 90],
+      [830.6, 80, 90],
+      [987.8, 160, 90],
+      [1318.5, 240, 260],
+    ],
+  },
+  success: {
+    gain: 0.04,
+    notes: [
+      [1046.5, 0, 70, 'triangle'],
+      [1568, 60, 140, 'triangle'],
+    ],
+  },
+  error: {
+    gain: 0.05,
+    notes: [
+      [311.1, 0, 120, 'square'],
+      [233.1, 110, 200, 'square'],
+    ],
+  },
 };
 
 let ctx: AudioContext | null = null;
 let enabled = true;
 let lastPlayed = new Map<SoundName, number>();
+let source: (() => SoundConfig | undefined) | null = null;
 
 export function setSoundsEnabled(on: boolean): void {
   enabled = on;
 }
 
-export function play(name: SoundName): void {
+/** Where `play` reads the user's sound settings from (set once at start-up). */
+export function setSoundConfigSource(get: () => SoundConfig | undefined): void {
+  source = get;
+}
+
+/**
+ * Plays a sound. `force` plays it even when its group is off (the preview
+ * buttons in settings); the master switch and volume still apply.
+ */
+export function play(name: SoundName, force = false): void {
+  const config = source?.();
   if (!enabled) return;
+  if (!force && !audible(name, config)) return;
+  if (config && (!config.sounds || config.soundVolume <= 0)) return;
+  const volume = config?.soundVolume ?? 1;
   const now = performance.now();
   // The same sound at most every 150 ms, so bursts don't stack into noise.
   if ((lastPlayed.get(name) ?? 0) > now - 150) return;
@@ -154,7 +238,8 @@ export function play(name: SoundName): void {
   try {
     ctx ??= new AudioContext();
     if (ctx.state === 'suspended') void ctx.resume();
-    const { gain, notes } = SOUNDS[name];
+    const { gain: base, notes } = SOUNDS[name];
+    const gain = base * volume;
     const t0 = ctx.currentTime + 0.01;
     for (const [freq, startMs, durMs, type = 'sine'] of notes) {
       const osc = ctx.createOscillator();

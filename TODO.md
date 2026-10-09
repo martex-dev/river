@@ -10,11 +10,64 @@ Milestone definitions: [ROADMAP.md](ROADMAP.md).
 - [x] Release-key hardening plan (docs/security/release-signing.md); the steps themselves need the maintainer
 - [x] README, Home and docs describe the finished Stage 1
 
-## 1.0.x — Stabilisation (next)
+## 1.0.x — Make River the only app you need (maintainer request, 2026-10-10)
 
-- [ ] Fixes from 1.0 feedback
+Each line is one PR; each version ships when its section is done.
+
+### 1.0.1 — Sound and motion
+
+- [ ] Sound library: send, receive, mention, reaction, voice join/leave, call connected/ended, community joined, friend request/added, copied, error; volume and per-group toggles
+- [ ] Every interaction plays its sound (community and DMs)
+- [ ] Motion: sent/received messages, reaction pop, mention flash, voice join, speaking ring, celebration on joining/adding a friend, badge bounce; reduced motion respected
+
+### 1.0.2 — Easy start
+
+- [ ] Create a community in one step, with templates (Friends, Gaming, Study, Club) and an icon
+- [ ] Paste an invite link anywhere (or have it detected on the clipboard) to join
+- [ ] Welcome screen for new members, helpful empty states, invite button always at hand
+
+### 1.0.3 — Friends made simple
+
+- [ ] Friends page: Online, All, Pending, Blocked tabs with presence
+- [ ] Friend codes/links you can share; one-click add; request alerts with sound
+- [ ] Mutual communities and quick Message/Call on every friend
+
+### 1.0.4 — Highlighting
+
+- [ ] Mention autocomplete for people, roles, @everyone and @here
+- [ ] Mentioned messages highlighted; role mentions and @everyone respect permissions
+- [ ] "New messages" divider, jump to reply/pin/search result with a flash, mention counts kept across restarts
+
+### 1.0.5 — Stability
+
+- [ ] Clear connection banner with automatic reconnect and backoff
+- [ ] Messages queue while offline: sending, failed, retry
 - [ ] Post-install health check: detect a crash loop after an update and pause auto-install
-- [ ] Persist mention counts across restarts; threads in channels
+- [ ] Plain-language errors everywhere
+
+### 1.0.6 — Roles and permissions parity
+
+- [ ] Category permissions; channels synced to their category
+- [ ] Hoisted roles (shown separately), mentionable roles, role colours in chat
+- [ ] Per-community nicknames; timeouts; audit log
+
+### 1.0.7 — Channels parity
+
+- [ ] Announcement channels; slowmode; channel topic in the header
+- [ ] Threads in text channels
+
+### 1.0.8 — Voice parity
+
+- [ ] User limits on voice channels; video grid and focus view
+- [ ] Mic test in settings; clearer speaking indicators
+
+### 1.0.9 — Polish
+
+- [ ] Compact mode; quick switcher (Ctrl+K); keyboard shortcuts panel
+- [ ] Accessibility and performance pass; security review of 1.0.x
+
+### Later
+
 - [ ] Sealed sender for direct messages
 
 ## 0.4.0 — Encrypted attachments
