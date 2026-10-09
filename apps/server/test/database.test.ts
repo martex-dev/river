@@ -22,6 +22,11 @@ if (pgUrl) targets.push(['postgres', () => openDatabase(pgUrl)]);
 
 async function reset(db: Kysely<Database>): Promise<void> {
   for (const t of [
+    'message_reactions',
+    'bans',
+    'channel_overwrites',
+    'member_roles',
+    'roles',
     'messages',
     'invites',
     'channels',

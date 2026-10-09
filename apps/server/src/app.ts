@@ -5,6 +5,7 @@ import { API_PREFIX, MIN_PROTOCOL_VERSION, PROTOCOL_VERSION, type ErrorResponse 
 import type { ServerConfig } from './config.ts';
 import type { RiverDatabase } from './db/database.ts';
 import { registerAccountRoutes } from './routes/accounts.ts';
+import { HttpError } from './http-error.ts';
 import { registerCommunityRoutes } from './routes/communities.ts';
 import serverPackage from '../package.json' with { type: 'json' };
 
@@ -44,7 +45,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     },
     // Fastify's built-in request logs include URLs and client IPs; River logs its own minimal line instead.
     logController: new LogController({ disableRequestLogging: true }),
-    bodyLimit: 64 * 1024,
+    bodyLimit: 256 * 1024,
     trustProxy: config.trustProxy,
     return503OnClosing: true,
   });
@@ -90,6 +91,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
 
   app.setErrorHandler((error: Error & { statusCode?: number; validation?: unknown }, request, reply) => {
+    if (error instanceof HttpError) {
+      void reply.code(error.status).send(errorBody(error.code, error.message));
+      return;
+    }
     const status = error.statusCode ?? 500;
     if (status === 429) {
       void reply.code(429).send(errorBody('rate_limited', 'Too many requests. Try again shortly.'));

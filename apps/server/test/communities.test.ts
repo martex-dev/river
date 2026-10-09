@@ -3,6 +3,8 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createIdentity, generateKeyPair, sign } from '@river/crypto';
 import {
+  DEFAULT_EVERYONE,
+  Permission,
   challengeResponseSchema,
   communitySchema,
   deviceListMessage,
@@ -176,10 +178,10 @@ describe('communities', () => {
           headers: auth(stranger.token),
         })
       ).statusCode,
-    ).toBe(403);
+    ).toBe(404);
   });
 
-  it('members cannot invite or add channels; invalid invites are refused', async () => {
+  it('members may invite by default but not add channels; invalid invites are refused', async () => {
     const a = await start();
     const owner = await user(a);
     const member = await user(a);
@@ -196,7 +198,7 @@ describe('communities', () => {
     expect(
       (await a.inject({ method: 'POST', url: `/v1/communities/${cid}/invites`, headers: auth(member.token) }))
         .statusCode,
-    ).toBe(403);
+    ).toBe(201);
     expect(
       (
         await a.inject({
@@ -236,5 +238,224 @@ describe('communities', () => {
     ] as const) {
       expect((await a.inject({ method, url })).statusCode).toBe(401);
     }
+  });
+  describe('roles and moderation', () => {
+    const join = async (a: FastifyInstance, ownerToken: string, cid: string) => {
+      const m = await user(a);
+      const code = (
+        await a.inject({ method: 'POST', url: `/v1/communities/${cid}/invites`, headers: auth(ownerToken) })
+      ).json().code;
+      await a.inject({
+        method: 'POST',
+        url: '/v1/invites/join',
+        headers: auth(m.token),
+        payload: { code, profile: sealed() },
+      });
+      return m;
+    };
+    const role = async (a: FastifyInstance, token: string, cid: string, permissions: number) => {
+      const rid = id();
+      const res = await a.inject({
+        method: 'POST',
+        url: `/v1/communities/${cid}/roles`,
+        headers: auth(token),
+        payload: { id: rid, name: sealed(), color: 0xff8800, permissions },
+      });
+      return { rid, status: res.statusCode };
+    };
+    const assign = (a: FastifyInstance, token: string, cid: string, target: string, roles: string[]) =>
+      a.inject({
+        method: 'PUT',
+        url: `/v1/communities/${cid}/members/${target}/roles`,
+        headers: auth(token),
+        payload: { roles },
+      });
+    const status = async (
+      a: FastifyInstance,
+      method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+      url: string,
+      token: string,
+      payload?: object,
+    ) => (await a.inject({ method, url, headers: auth(token), ...(payload ? { payload } : {}) })).statusCode;
+    const fetchCommunity = async (a: FastifyInstance, token: string, cid: string) =>
+      communitySchema.parse(
+        (await a.inject({ method: 'GET', url: '/v1/communities', headers: auth(token) }))
+          .json()
+          .communities.find((c: { id: string }) => c.id === cid),
+      );
+
+    it('new communities get an @everyone role with default permissions', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const c = await fetchCommunity(a, owner.token, cid);
+      expect(c.ownerId).toBe(owner.riverId);
+      expect(c.roles).toEqual([{ id: cid, name: '', color: 0, permissions: DEFAULT_EVERYONE, position: 0 }]);
+    });
+
+    it('roles grant permissions and respect the hierarchy', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const mod = await join(a, owner.token, cid);
+      const member = await join(a, owner.token, cid);
+      expect((await role(a, member.token, cid, 0)).status).toBe(403);
+      const modRole = await role(
+        a,
+        owner.token,
+        cid,
+        Permission.MANAGE_ROLES | Permission.KICK_MEMBERS | Permission.MANAGE_CHANNELS,
+      );
+      expect(modRole.status).toBe(201);
+      expect((await assign(a, owner.token, cid, mod.riverId, [modRole.rid])).statusCode).toBe(200);
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/channels`, mod.token, {
+          id: id(),
+          kind: 'text',
+          name: sealed(),
+        }),
+      ).toBe(201);
+      // Cannot grant permissions you lack, nor hand out your own (equal) role.
+      expect((await role(a, mod.token, cid, Permission.BAN_MEMBERS)).status).toBe(403);
+      expect((await assign(a, mod.token, cid, member.riverId, [modRole.rid])).statusCode).toBe(403);
+      const helper = await role(a, mod.token, cid, Permission.KICK_MEMBERS);
+      expect(helper.status).toBe(201);
+      expect((await assign(a, mod.token, cid, member.riverId, [helper.rid])).statusCode).toBe(200);
+      expect(await status(a, 'DELETE', `/v1/communities/${cid}/members/${mod.riverId}`, member.token)).toBe(
+        403,
+      );
+      expect(await status(a, 'DELETE', `/v1/communities/${cid}/members/${owner.riverId}`, mod.token)).toBe(
+        403,
+      );
+      expect(await status(a, 'DELETE', `/v1/communities/${cid}/members/${member.riverId}`, mod.token)).toBe(
+        200,
+      );
+      const c = await fetchCommunity(a, owner.token, cid);
+      expect(c.members.map((m) => m.riverId).sort()).toEqual([owner.riverId, mod.riverId].sort());
+    });
+
+    it('private channels are hidden from members without access', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const secret = id();
+      const deny = { roleId: cid, allow: 0, deny: Permission.VIEW_CHANNELS };
+      await status(a, 'POST', `/v1/communities/${cid}/channels`, owner.token, {
+        id: secret,
+        kind: 'text',
+        name: sealed(),
+        overwrites: [deny],
+      });
+      expect((await fetchCommunity(a, member.token, cid)).channels.map((ch) => ch.id)).not.toContain(secret);
+      expect(await status(a, 'GET', `/v1/channels/${secret}/messages`, member.token)).toBe(404);
+      const vip = await role(a, owner.token, cid, 0);
+      await status(a, 'PATCH', `/v1/channels/${secret}`, owner.token, {
+        overwrites: [deny, { roleId: vip.rid, allow: Permission.VIEW_CHANNELS, deny: 0 }],
+      });
+      await assign(a, owner.token, cid, member.riverId, [vip.rid]);
+      expect((await fetchCommunity(a, member.token, cid)).channels.map((ch) => ch.id)).toContain(secret);
+    });
+
+    it('banned users are removed and cannot rejoin until unbanned', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      expect(await status(a, 'PUT', `/v1/communities/${cid}/bans/${member.riverId}`, member.token)).toBe(403);
+      expect(await status(a, 'PUT', `/v1/communities/${cid}/bans/${member.riverId}`, owner.token)).toBe(200);
+      const code = (
+        await a.inject({ method: 'POST', url: `/v1/communities/${cid}/invites`, headers: auth(owner.token) })
+      ).json().code;
+      const rejoin = await a.inject({
+        method: 'POST',
+        url: '/v1/invites/join',
+        headers: auth(member.token),
+        payload: { code, profile: sealed() },
+      });
+      expect(rejoin.statusCode).toBe(403);
+      expect(rejoin.json().error.code).toBe('banned');
+      const bans = (
+        await a.inject({ method: 'GET', url: `/v1/communities/${cid}/bans`, headers: auth(owner.token) })
+      ).json().bans;
+      expect(bans.map((b: { riverId: string }) => b.riverId)).toEqual([member.riverId]);
+      await status(a, 'DELETE', `/v1/communities/${cid}/bans/${member.riverId}`, owner.token);
+      expect(await status(a, 'POST', '/v1/invites/join', member.token, { code, profile: sealed() })).toBe(
+        200,
+      );
+    });
+
+    it('@everyone can be restricted: no invites, read-only channels', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      expect(
+        await status(a, 'PATCH', `/v1/roles/${cid}`, owner.token, {
+          permissions: DEFAULT_EVERYONE & ~Permission.CREATE_INVITE,
+        }),
+      ).toBe(200);
+      expect(await status(a, 'POST', `/v1/communities/${cid}/invites`, member.token)).toBe(403);
+      await status(a, 'PATCH', `/v1/channels/${text}`, owner.token, {
+        overwrites: [{ roleId: cid, allow: 0, deny: Permission.SEND_MESSAGES }],
+      });
+      expect(
+        await status(a, 'POST', `/v1/channels/${text}/messages`, member.token, { id: id(), body: sealed() }),
+      ).toBe(403);
+      expect(await status(a, 'GET', `/v1/channels/${text}/messages`, member.token)).toBe(200);
+    });
+
+    it('messages: author edits, moderators pin and delete, everyone reacts', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const mid = id();
+      await status(a, 'POST', `/v1/channels/${text}/messages`, member.token, { id: mid, body: sealed() });
+      expect(await status(a, 'PATCH', `/v1/messages/${mid}`, owner.token, { body: sealed() })).toBe(403);
+      const edited = sealed();
+      expect(await status(a, 'PATCH', `/v1/messages/${mid}`, member.token, { body: edited })).toBe(200);
+      expect(await status(a, 'PUT', `/v1/messages/${mid}/pin`, member.token)).toBe(403);
+      expect(await status(a, 'PUT', `/v1/messages/${mid}/pin`, owner.token)).toBe(200);
+      const tag = randomBytes(16).toString('hex');
+      for (const t of [owner.token, member.token]) {
+        expect(await status(a, 'PUT', `/v1/messages/${mid}/reactions/${tag}`, t, { emoji: sealed() })).toBe(
+          200,
+        );
+      }
+      const list = async (q = '') =>
+        (
+          await a.inject({
+            method: 'GET',
+            url: `/v1/channels/${text}/messages${q}`,
+            headers: auth(owner.token),
+          })
+        ).json().messages;
+      const [msg] = await list();
+      expect(msg.body).toBe(edited);
+      expect(msg.editedAt).not.toBeNull();
+      expect(msg.pinned).toBe(true);
+      expect(msg.reactions[0].users.sort()).toEqual([owner.riverId, member.riverId].sort());
+      expect(await list('?pinned=1')).toHaveLength(1);
+      await status(a, 'DELETE', `/v1/messages/${mid}/reactions/${tag}`, member.token);
+      expect((await list())[0].reactions[0].users).toEqual([owner.riverId]);
+      expect(await status(a, 'DELETE', `/v1/messages/${mid}`, owner.token)).toBe(200);
+      expect(await list()).toEqual([]);
+    });
+
+    it('members can leave; only the owner can delete the community', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      expect(await status(a, 'DELETE', `/v1/communities/${cid}`, member.token)).toBe(403);
+      expect(await status(a, 'POST', `/v1/communities/${cid}/leave`, member.token)).toBe(200);
+      expect(await status(a, 'POST', `/v1/communities/${cid}/leave`, owner.token)).toBe(400);
+      expect(await status(a, 'DELETE', `/v1/communities/${cid}`, owner.token)).toBe(200);
+      expect(
+        (await a.inject({ method: 'GET', url: '/v1/communities', headers: auth(owner.token) })).json()
+          .communities,
+      ).toEqual([]);
+    });
   });
 });

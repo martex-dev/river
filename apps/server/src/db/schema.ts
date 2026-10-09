@@ -71,6 +71,43 @@ export interface MessagesTable {
   sender: string;
   body: string;
   sent_at: string;
+  edited_at: string | null;
+  pinned: number;
+}
+
+export interface RolesTable {
+  id: string;
+  community_id: string;
+  name: string;
+  color: number;
+  permissions: number;
+  position: number;
+}
+
+export interface MemberRolesTable {
+  community_id: string;
+  river_id: string;
+  role_id: string;
+}
+
+export interface ChannelOverwritesTable {
+  channel_id: string;
+  role_id: string;
+  allow: number;
+  deny: number;
+}
+
+export interface BansTable {
+  community_id: string;
+  river_id: string;
+  banned_on: string;
+}
+
+export interface MessageReactionsTable {
+  message_id: string;
+  river_id: string;
+  tag: string;
+  emoji: string;
 }
 
 export interface Database {
@@ -79,6 +116,11 @@ export interface Database {
   channels: ChannelsTable;
   invites: InvitesTable;
   messages: MessagesTable;
+  roles: RolesTable;
+  member_roles: MemberRolesTable;
+  channel_overwrites: ChannelOverwritesTable;
+  bans: BansTable;
+  message_reactions: MessageReactionsTable;
   server_meta: ServerMetaTable;
   accounts: AccountsTable;
   devices: DevicesTable;

@@ -48,3 +48,4 @@ export function checkCompatibility(
 }
 export * from './accounts.ts';
 export * from './communities.ts';
+export * from './permissions.ts';

@@ -2,51 +2,88 @@ import { z } from 'zod';
 import { base64Bytes, riverIdSchema } from './accounts.ts';
 
 /**
- * Communities (protocol v1, River 0.2).
+ * Communities (protocol v1).
  *
- * Every human-readable value — community name, channel names, member display
- * names, messages and call signalling — is end-to-end encrypted by clients with
- * the community key (AES-256-GCM). The key travels only inside invite links
- * (in the URL fragment, which is never sent to any server). The server stores
- * and relays ciphertext and knows membership, channel kinds and timing.
+ * Every human-readable value — community, channel and role names, topics,
+ * member profiles, messages, reactions and call signalling — is end-to-end
+ * encrypted by clients with the community key (AES-256-GCM). The key travels
+ * only inside invite links (in the URL fragment, never sent to a server). The
+ * server stores and relays ciphertext and knows membership, roles' permission
+ * bits, channel kinds and timing, which it needs to enforce permissions.
+ *
+ * Compatibility: fields added after 0.2 are optional on input and extra on
+ * output, so 0.2.x clients keep working while they auto-update.
  */
 export const COMMUNITY_ID_RE = /^[A-Za-z0-9_-]{22}$/;
 export const communityIdSchema = z.string().regex(COMMUNITY_ID_RE);
 export const channelIdSchema = z.string().regex(COMMUNITY_ID_RE);
 export const messageIdSchema = z.string().regex(COMMUNITY_ID_RE);
+export const roleIdSchema = z.string().regex(COMMUNITY_ID_RE);
 export const inviteCodeSchema = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
+/** HMAC tag that lets the server group identical reactions without learning the emoji. */
+export const reactionTagSchema = z.string().regex(/^[0-9a-f]{32}$/);
 
 /** base64(nonce 12 ‖ ciphertext ‖ tag 16). */
 export const sealedSchema = (max: number) => base64Bytes(undefined, max);
 export const SEALED_SMALL = 2048;
+export const SEALED_PROFILE = 96 * 1024;
 export const SEALED_MESSAGE = 32 * 1024;
 export const SEALED_SIGNAL = 32 * 1024;
 
 export const channelKindSchema = z.enum(['text', 'voice']);
 export type ChannelKind = z.infer<typeof channelKindSchema>;
+/** Legacy membership marker kept for 0.2 clients; real authority comes from roles. */
 export const roleSchema = z.enum(['owner', 'admin', 'member']);
 export type Role = z.infer<typeof roleSchema>;
+
+const permissionsSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(2 ** 30);
+
+export const overwriteSchema = z.object({
+  roleId: roleIdSchema,
+  allow: permissionsSchema,
+  deny: permissionsSchema,
+});
+export type OverwriteWire = z.infer<typeof overwriteSchema>;
 
 export const channelSchema = z.object({
   id: channelIdSchema,
   kind: channelKindSchema,
   name: sealedSchema(SEALED_SMALL),
   position: z.number().int(),
+  overwrites: z.array(overwriteSchema).default([]),
 });
 export type ChannelWire = z.infer<typeof channelSchema>;
+
+export const communityRoleSchema = z.object({
+  id: roleIdSchema,
+  /** Empty for @everyone (its ID equals the community ID). */
+  name: z.string().max(4096),
+  color: z.number().int().min(0).max(0xffffff),
+  permissions: permissionsSchema,
+  position: z.number().int().min(0),
+});
+export type RoleWire = z.infer<typeof communityRoleSchema>;
 
 export const memberSchema = z.object({
   riverId: riverIdSchema,
   role: roleSchema,
-  profile: sealedSchema(SEALED_SMALL),
+  roles: z.array(roleIdSchema).default([]),
+  profile: sealedSchema(SEALED_PROFILE),
+  online: z.boolean().default(false),
 });
 export type MemberWire = z.infer<typeof memberSchema>;
 
 export const communitySchema = z.object({
   id: communityIdSchema,
   meta: sealedSchema(SEALED_SMALL),
+  ownerId: riverIdSchema.optional(),
   channels: z.array(channelSchema),
   members: z.array(memberSchema),
+  roles: z.array(communityRoleSchema).default([]),
 });
 export type CommunityWire = z.infer<typeof communitySchema>;
 
@@ -54,7 +91,7 @@ export const createCommunityRequestSchema = z
   .object({
     id: communityIdSchema,
     meta: sealedSchema(SEALED_SMALL),
-    profile: sealedSchema(SEALED_SMALL),
+    profile: sealedSchema(SEALED_PROFILE),
     channels: z
       .array(
         z.object({ id: channelIdSchema, kind: channelKindSchema, name: sealedSchema(SEALED_SMALL) }).strict(),
@@ -65,16 +102,60 @@ export const createCommunityRequestSchema = z
   .strict();
 export type CreateCommunityRequest = z.infer<typeof createCommunityRequestSchema>;
 
+export const updateCommunityRequestSchema = z.object({ meta: sealedSchema(SEALED_SMALL) }).strict();
+
 export const createChannelRequestSchema = z
-  .object({ id: channelIdSchema, kind: channelKindSchema, name: sealedSchema(SEALED_SMALL) })
+  .object({
+    id: channelIdSchema,
+    kind: channelKindSchema,
+    name: sealedSchema(SEALED_SMALL),
+    overwrites: z.array(overwriteSchema).max(50).optional(),
+  })
   .strict();
+
+export const updateChannelRequestSchema = z
+  .object({
+    name: sealedSchema(SEALED_SMALL).optional(),
+    position: z.number().int().min(0).max(1000).optional(),
+    overwrites: z.array(overwriteSchema).max(50).optional(),
+  })
+  .strict();
+
+export const createRoleRequestSchema = z
+  .object({
+    id: roleIdSchema,
+    name: sealedSchema(SEALED_SMALL),
+    color: z.number().int().min(0).max(0xffffff),
+    permissions: permissionsSchema,
+  })
+  .strict();
+export const updateRoleRequestSchema = z
+  .object({
+    name: sealedSchema(SEALED_SMALL).optional(),
+    color: z.number().int().min(0).max(0xffffff).optional(),
+    permissions: permissionsSchema.optional(),
+    position: z.number().int().min(1).max(1000).optional(),
+  })
+  .strict();
+export const memberRolesRequestSchema = z.object({ roles: z.array(roleIdSchema).max(50) }).strict();
 
 export const inviteResponseSchema = z.object({ code: inviteCodeSchema, expiresAt: z.iso.datetime() });
 export const joinRequestSchema = z
-  .object({ code: inviteCodeSchema, profile: sealedSchema(SEALED_SMALL) })
+  .object({ code: inviteCodeSchema, profile: sealedSchema(SEALED_PROFILE) })
   .strict();
-export const profileRequestSchema = z.object({ profile: sealedSchema(SEALED_SMALL) }).strict();
+export const profileRequestSchema = z.object({ profile: sealedSchema(SEALED_PROFILE) }).strict();
 export const communitiesResponseSchema = z.object({ communities: z.array(communitySchema) });
+export const bansResponseSchema = z.object({
+  bans: z.array(z.object({ riverId: riverIdSchema, bannedOn: z.string() })),
+});
+
+export const reactionSchema = z.object({
+  tag: reactionTagSchema,
+  /** The emoji, sealed; any reactor's copy decrypts to the same emoji. */
+  emoji: sealedSchema(SEALED_SMALL),
+  users: z.array(riverIdSchema),
+});
+export type ReactionWire = z.infer<typeof reactionSchema>;
 
 export const messageSchema = z.object({
   id: messageIdSchema,
@@ -82,20 +163,46 @@ export const messageSchema = z.object({
   sender: riverIdSchema,
   body: sealedSchema(SEALED_MESSAGE),
   sentAt: z.iso.datetime(),
+  editedAt: z.iso.datetime().nullable().default(null),
+  pinned: z.boolean().default(false),
+  reactions: z.array(reactionSchema).default([]),
 });
 export type MessageWire = z.infer<typeof messageSchema>;
 export const sendMessageRequestSchema = z
   .object({ id: messageIdSchema, body: sealedSchema(SEALED_MESSAGE) })
   .strict();
+export const editMessageRequestSchema = z.object({ body: sealedSchema(SEALED_MESSAGE) }).strict();
+export const reactRequestSchema = z.object({ emoji: sealedSchema(SEALED_SMALL) }).strict();
 export const messagesResponseSchema = z.object({ messages: z.array(messageSchema) });
 
 // ---- Realtime (WebSocket /v1/ws) -------------------------------------------------------------
+
+export const voiceStateSchema = z.object({
+  muted: z.boolean(),
+  deafened: z.boolean(),
+  serverMuted: z.boolean(),
+  streaming: z.boolean(),
+});
+export type VoiceState = z.infer<typeof voiceStateSchema>;
 
 export const clientEventSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('auth'), token: z.string().max(64) }),
   z.object({ t: z.literal('voice.join'), channelId: channelIdSchema }),
   z.object({ t: z.literal('voice.leave') }),
+  z.object({
+    t: z.literal('voice.state'),
+    muted: z.boolean(),
+    deafened: z.boolean(),
+    streaming: z.boolean(),
+  }),
+  z.object({
+    t: z.literal('voice.moderate'),
+    target: riverIdSchema,
+    serverMuted: z.boolean().optional(),
+    disconnect: z.boolean().optional(),
+  }),
   z.object({ t: z.literal('signal'), to: riverIdSchema, data: sealedSchema(SEALED_SIGNAL) }),
+  z.object({ t: z.literal('typing'), channelId: channelIdSchema }),
   z.object({ t: z.literal('ping') }),
 ]);
 export type ClientEvent = z.infer<typeof clientEventSchema>;
@@ -103,20 +210,43 @@ export type ClientEvent = z.infer<typeof clientEventSchema>;
 export const serverEventSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('ready'), riverId: riverIdSchema }),
   z.object({ t: z.literal('message'), communityId: communityIdSchema, message: messageSchema }),
+  z.object({
+    t: z.literal('message.delete'),
+    communityId: communityIdSchema,
+    channelId: channelIdSchema,
+    messageId: messageIdSchema,
+  }),
   z.object({ t: z.literal('member'), communityId: communityIdSchema, member: memberSchema }),
   z.object({ t: z.literal('channel'), communityId: communityIdSchema, channel: channelSchema }),
+  /** Something structural changed (roles, channels, settings, membership): refetch the community. */
+  z.object({ t: z.literal('community'), communityId: communityIdSchema }),
+  /** You were removed (kicked, banned) or the community was deleted. */
+  z.object({
+    t: z.literal('removed'),
+    communityId: communityIdSchema,
+    reason: z.enum(['kicked', 'banned', 'left', 'deleted']),
+  }),
   z.object({
     t: z.literal('voice'),
     communityId: communityIdSchema,
     channelId: channelIdSchema,
     participants: z.array(riverIdSchema),
+    states: z.record(z.string(), voiceStateSchema).optional(),
   }),
+  z.object({ t: z.literal('voice.disconnect') }),
   z.object({
     t: z.literal('signal'),
     from: riverIdSchema,
     channelId: channelIdSchema,
     data: sealedSchema(SEALED_SIGNAL),
   }),
+  z.object({
+    t: z.literal('typing'),
+    communityId: communityIdSchema,
+    channelId: channelIdSchema,
+    riverId: riverIdSchema,
+  }),
+  z.object({ t: z.literal('presence'), riverId: riverIdSchema, online: z.boolean() }),
   z.object({ t: z.literal('error'), code: z.string() }),
   z.object({ t: z.literal('pong') }),
 ]);

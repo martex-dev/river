@@ -1,34 +1,40 @@
-import type { ServerEvent } from '@river/protocol';
+import type { ServerEvent, VoiceState } from '@river/protocol';
 
 export interface HubSocket {
   send(data: string): void;
   close(code?: number): void;
 }
 
+const DEFAULT_STATE: VoiceState = { muted: false, deafened: false, serverMuted: false, streaming: false };
+
 /**
- * In-memory realtime state: which sockets belong to which account, and who is
- * in which voice channel. Nothing here is persisted; a restart clears it.
+ * In-memory realtime state: which sockets belong to which account, who is in
+ * which voice channel, and their voice state. Nothing here is persisted.
  */
 export class Hub {
   private readonly sockets = new Map<string, Set<HubSocket>>();
-  /** channelId → riverIds currently in the voice channel. */
   private readonly voice = new Map<string, { communityId: string; members: Set<string> }>();
-  /** riverId → channelId they are in (one voice channel at a time). */
   private readonly voiceOf = new Map<string, string>();
+  private readonly states = new Map<string, VoiceState>();
 
-  add(riverId: string, socket: HubSocket): void {
+  add(riverId: string, socket: HubSocket): boolean {
     let set = this.sockets.get(riverId);
+    const cameOnline = !set || set.size === 0;
     if (!set) this.sockets.set(riverId, (set = new Set()));
     set.add(socket);
+    return cameOnline;
   }
 
-  /** Returns the voice channel the user left (if their last socket closed while in one). */
-  remove(riverId: string, socket: HubSocket): { channelId: string; communityId: string } | null {
+  /** Returns whether the user went offline and the voice channel they left (if any). */
+  remove(
+    riverId: string,
+    socket: HubSocket,
+  ): { offline: boolean; left: { channelId: string; communityId: string } | null } {
     const set = this.sockets.get(riverId);
     set?.delete(socket);
-    if (set && set.size > 0) return null;
+    if (set && set.size > 0) return { offline: false, left: null };
     this.sockets.delete(riverId);
-    return this.leaveVoice(riverId);
+    return { offline: true, left: this.leaveVoice(riverId) };
   }
 
   isOnline(riverId: string): boolean {
@@ -50,6 +56,7 @@ export class Hub {
     if (!room) this.voice.set(channelId, (room = { communityId, members: new Set() }));
     room.members.add(riverId);
     this.voiceOf.set(riverId, channelId);
+    if (!this.states.has(riverId)) this.states.set(riverId, { ...DEFAULT_STATE });
     return { left };
   }
 
@@ -60,7 +67,18 @@ export class Hub {
     const room = this.voice.get(channelId);
     room?.members.delete(riverId);
     if (room && room.members.size === 0) this.voice.delete(channelId);
+    const serverMuted = this.states.get(riverId)?.serverMuted ?? false;
+    // Server mute sticks across reconnects within the server's lifetime; the rest resets.
+    this.states.set(riverId, { ...DEFAULT_STATE, serverMuted });
     return room ? { channelId, communityId: room.communityId } : null;
+  }
+
+  setState(riverId: string, patch: Partial<VoiceState>): void {
+    this.states.set(riverId, { ...(this.states.get(riverId) ?? DEFAULT_STATE), ...patch });
+  }
+
+  stateOf(riverId: string): VoiceState {
+    return this.states.get(riverId) ?? DEFAULT_STATE;
   }
 
   voiceChannelOf(riverId: string): string | null {
@@ -71,7 +89,10 @@ export class Hub {
     return [...(this.voice.get(channelId)?.members ?? [])];
   }
 
-  /** Voice rooms of one community, for clients that just connected. */
+  statesOf(channelId: string): Record<string, VoiceState> {
+    return Object.fromEntries(this.participants(channelId).map((id) => [id, this.stateOf(id)]));
+  }
+
   rooms(communityId: string): Array<{ channelId: string; participants: string[] }> {
     return [...this.voice.entries()]
       .filter(([, r]) => r.communityId === communityId)

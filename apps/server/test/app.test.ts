@@ -79,7 +79,7 @@ describe('River server HTTP API', () => {
       method: 'POST',
       url: '/v1/echo-test',
       headers: { 'content-type': 'application/json' },
-      payload: JSON.stringify({ x: 'a'.repeat(70 * 1024) }),
+      payload: JSON.stringify({ x: 'a'.repeat(300 * 1024) }),
     });
     expect(res.statusCode).toBe(413);
     expect(res.json().error.code).toBe('payload_too_large');
