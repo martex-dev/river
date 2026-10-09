@@ -11,6 +11,9 @@ describe('friendly errors', () => {
     );
     expect(friendlyError(new ApiError(429, 'rate_limited', 'Rate limit exceeded'))).toMatch(/too fast/);
     expect(friendlyError(new ApiError(413, 'too_large', 'Body too large'))).toMatch(/too large/);
+    expect(friendlyError(new ApiError(429, 'slowmode', 'Slowmode is on: you can send again in 12s.'))).toBe(
+      'Slowmode is on: you can send again in 12s.',
+    );
     expect(friendlyError(new ApiError(401, 'unauthorized', 'bad token'))).toMatch(/session ended/);
     expect(friendlyError(new ApiError(503, 'unavailable', 'db down'))).toMatch(/server had a problem/);
     expect(friendlyError(new ApiError(404, 'not_found', 'Not found'))).toBe('That no longer exists.');
