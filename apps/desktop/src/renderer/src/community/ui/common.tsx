@@ -577,3 +577,32 @@ function mentionedRole(raw: string, refs: MentionRefs): MentionRefs['roles'][num
     refs.roles.find((r) => r.name.toLowerCase() === lower.split(' ')[0])
   );
 }
+
+/**
+ * A search result's text with every match marked, trimmed to the part around
+ * the first match so the hit is always visible.
+ */
+export function Highlight(props: { text: string; query: string; max?: number }): ReactElement {
+  const max = props.max ?? 200;
+  const q = props.query.trim();
+  if (!q) return <>{props.text.slice(0, max)}</>;
+  const lower = props.text.toLowerCase();
+  const first = lower.indexOf(q.toLowerCase());
+  const start = first > max / 2 ? first - Math.floor(max / 3) : 0;
+  const snippet = (start > 0 ? '…' : '') + props.text.slice(start, start + max);
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = snippet.split(new RegExp(`(${escaped})`, 'gi'));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === q.toLowerCase() ? (
+          <mark key={i} className="search-hit">
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}

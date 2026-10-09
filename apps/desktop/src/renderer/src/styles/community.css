@@ -3276,3 +3276,9 @@ input.switch:disabled {
   outline: 2px solid #fff;
   outline-offset: -2px;
 }
+.search-hit {
+  padding: 0 1px;
+  border-radius: 3px;
+  background: rgba(250, 168, 26, 0.35);
+  color: inherit;
+}

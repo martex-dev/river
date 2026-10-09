@@ -9,6 +9,7 @@ import {
   EditIcon,
   EmojiPicker,
   HashIcon,
+  Highlight,
   PinIcon,
   PlusIcon,
   Popover,
@@ -914,7 +915,11 @@ function SearchPanel(props: { community: CommunityView; onJump(id: string): void
               #{channelName(m.channelId)} · {new Date(m.sentAt).toLocaleDateString()}
             </span>
             <span className="pins__text">
-              {m.text.slice(0, 200) || m.attachments.map((a) => a.name).join(', ')}
+              {m.text ? (
+                <Highlight text={m.text} query={query} />
+              ) : (
+                m.attachments.map((a) => a.name).join(', ')
+              )}
             </span>
           </span>
         </button>
