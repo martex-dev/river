@@ -10,6 +10,12 @@ Milestone definitions: [ROADMAP.md](ROADMAP.md).
 - [x] Desktop: upload (picker, drag & drop, paste), inline images/video/audio, file cards with save, local thumbnails, progress and errors
 - [x] Tests: server never stores plaintext; wrong key/digest rejected; e2e image round trip between two apps
 
+## 0.6.0 — Groups and community key rotation
+
+- [x] Community key epochs: rotation on removal (compare-and-set), delivery over libsignal, key requests with join proof
+- [x] Group conversations (pairwise libsignal fan-out, ≤ 32 people): create, admins, add/remove, leave, requests
+- [ ] Sender keys for larger groups; read receipts and calls in groups
+
 ## 0.5.0 — Contacts and direct messages
 
 - [x] Prekeys (signed + one-time, Kyber) upload/fetch; libsignal session store in the local DB

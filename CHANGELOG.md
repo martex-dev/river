@@ -6,6 +6,36 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**Group chats, and removed members can no longer read new community messages.**
+
+### Added
+
+- **Group conversations** in Messages (up to 32 people): **New message → New
+  group**, then pick people from your contacts and communities. Admins rename
+  the group and add or remove people; anyone can leave. Messages, replies,
+  files, reactions, edits and deletes work as in one-to-one chats, end-to-end
+  encrypted to each member with the Signal protocol.
+- Groups from people you have not accepted arrive as requests; others only
+  learn your name once you accept.
+
+### Security
+
+- **Community key rotation**: when someone leaves, is kicked or is banned, a
+  remaining member's River replaces the community key and hands the new one to
+  everyone else over encrypted direct-message sessions. People who were removed
+  cannot read anything sent afterwards, even if they obtain the ciphertext.
+- Members who missed a rotation, or join with an older invite link, fetch the
+  current key from other members automatically. Members only hand keys to people
+  who prove they joined with a genuine invite, so a fake member added by a
+  compromised server receives nothing.
+- Invite links now carry a check value, so a damaged or altered key is caught
+  when joining.
+
+### Changed
+
+- On narrow windows the member list opens as an overlay (toggle it with the
+  members button) instead of disappearing.
+
 ## [0.5.0] - 2026-10-09
 
 **Direct messages and calls, end-to-end encrypted with the Signal protocol.**

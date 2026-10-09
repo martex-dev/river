@@ -112,10 +112,24 @@ than per-member sender keys:
   bans, message timing/size/sender, edit and pin state, reaction counts per tag,
   typing and online presence, voice participants and their mute/deafen/streaming
   flags. It never sees names, topics, profiles, avatars, message text or emoji.
-- **Limits, stated plainly**: anyone who ever had an invite link can decrypt the
-  community's content if they also obtain the ciphertext; removing (kicking,
-  banning) a member does **not** rotate the key, and there is no forward
-  secrecy. Per-member keys with rotation are the next step (§4).
+- **Key epochs (0.6.0)**: when someone leaves or is removed, the server flags
+  the community and the highest-ranked online member's client claims the next
+  epoch with a compare-and-set, generates a fresh 32-byte key, seals its own
+  profile with it and sends it to every remaining member inside libsignal
+  messages. New content is sealed with the newest key; members keep older keys
+  to read history (a value is opened with whichever key sealed it). A key is
+  accepted only for an epoch the server has reached and only if it opens the
+  sender's current profile. Members who missed a rotation, or joined with an
+  older invite, request the key; members answer only people whose sealed
+  profile opens with a genuine community key — so a fake member injected by
+  the server, who never held an invite key, receives nothing. Invite links carry
+  the epoch (`&e=`) and a check value sealed with their key.
+- **Limits, stated plainly**: anyone who holds a valid invite link can join and
+  read the community; rotation protects content created _after_ someone is
+  removed, not what they could already read, and there is no per-message forward
+  secrecy inside a community. Until the rotating member's message reaches
+  everyone, a member may still seal a few messages with the previous key.
+  Rotation needs members on 0.5.0+ (it travels over direct-message sessions).
 
 ## 5. Attachments and files (implemented, 0.4.0)
 

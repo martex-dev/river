@@ -49,20 +49,34 @@ setup) are only pushed to online devices and never stored.
 
 JSON with `v: 1` and a type `t`:
 
-| `t`       | Meaning                                                                       |
-| --------- | ----------------------------------------------------------------------------- |
-| `msg`     | Text, optional reply and up to 10 attachment pointers (see CRYPTOGRAPHY §5)   |
-| `edit`    | New text for one of the sender's messages                                     |
-| `delete`  | Delete one of the sender's messages for everyone                              |
-| `react`   | Add/remove an emoji reaction                                                  |
-| `receipt` | `delivered` / `read` for message IDs                                          |
-| `typing`  | Typing indicator (ephemeral)                                                  |
-| `profile` | Sender's display name and avatar                                              |
-| `call`    | 1:1 call setup: invite, accept, decline, busy, end, WebRTC signal (ephemeral) |
+| `t`                | Meaning                                                                          |
+| ------------------ | -------------------------------------------------------------------------------- |
+| `msg`              | Text, optional reply and up to 10 attachment pointers (see CRYPTOGRAPHY §5)      |
+| `edit`             | New text for one of the sender's messages                                        |
+| `delete`           | Delete one of the sender's messages for everyone                                 |
+| `react`            | Add/remove an emoji reaction                                                     |
+| `receipt`          | `delivered` / `read` for message IDs                                             |
+| `typing`           | Typing indicator (ephemeral)                                                     |
+| `profile`          | Sender's display name and avatar (with `groupId`: shared only inside that group) |
+| `group`            | Group state from an admin: `groupId`, name, members, admins                      |
+| `groupLeave`       | The sender left the group                                                        |
+| `ckey` / `ckeyReq` | A community key for an epoch / a request for one (see CRYPTOGRAPHY §4a)          |
+| `call`             | 1:1 call setup: invite, accept, decline, busy, end, WebRTC signal (ephemeral)    |
 
 Receivers validate every field; edits and deletes are applied only to messages
 from the same sender. Messages from people you have not accepted arrive as
 **requests**: no delivery or read receipts, no typing, no calls until accepted.
+
+## Groups
+
+Groups use pairwise libsignal sessions: a group message is encrypted separately
+for every other member (fine for the 32-person limit; sender keys are a later
+optimisation). `msg`, `edit`, `delete`, `react` and `typing` carry a `groupId`;
+receivers accept them only from current members of a group they are in. Only
+admins (initially the creator) change the name or membership; removed people
+stop receiving messages because nobody encrypts to them any more. A group from
+someone you have not accepted arrives as a request; your name is shared with
+the group only once you accept. Groups have no read receipts or calls yet.
 
 ## Blocks
 
