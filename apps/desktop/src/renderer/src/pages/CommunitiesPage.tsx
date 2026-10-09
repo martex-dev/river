@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { Celebrations, celebrate } from '../community/fx.tsx';
 import { play } from '../community/sound.ts';
 import { useCommunity } from '../community/store.ts';
 import { ChannelSidebar } from '../community/ui/Sidebar.tsx';
@@ -83,7 +84,9 @@ export function CommunitiesPage(): ReactElement {
                 {initials(c.name)}
               </button>
               {mentions > 0 && (
-                <span className="badge badge--mention community__server-badge">{mentions}</span>
+                <span key={mentions} className="badge badge--mention community__server-badge">
+                  {mentions}
+                </span>
               )}
             </div>
           );
@@ -128,6 +131,7 @@ export function Overlays(): ReactElement {
     <>
       <Modals me={me} />
       <Toast />
+      <Celebrations />
       <IncomingCall />
       <CallPill />
     </>
@@ -199,6 +203,7 @@ function Welcome(props: { onDone(): void; canCancel: boolean; hasAccount: boolea
       return setError(res.message);
     }
     play('communityJoin');
+    celebrate(kind === 'create' ? `${res.value.name} is ready` : `Welcome to ${res.value.name}`);
     await useCommunity.getState().load();
     useCommunity.getState().select(res.value.id);
     props.onDone();
