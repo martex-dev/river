@@ -190,7 +190,11 @@ export function ChannelRow(props: {
               <LockSmallIcon size={12} />
             </span>
           )}
-          {mentions > 0 && <span className="badge badge--mention">{mentions}</span>}
+          {mentions > 0 && (
+            <span key={mentions} className="badge badge--mention">
+              {mentions}
+            </span>
+          )}
         </button>
         {canManage && (
           <button

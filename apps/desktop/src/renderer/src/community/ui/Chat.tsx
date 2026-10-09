@@ -343,7 +343,9 @@ function Message(props: {
                   onClick={() => react(r.emoji, !r.mine)}
                 >
                   <span className="reaction__emoji">{r.emoji}</span>
-                  <span className="reaction__count">{r.count}</span>
+                  <span key={r.count} className="reaction__count">
+                    {r.count}
+                  </span>
                 </button>
               ))}
               {canReact && (

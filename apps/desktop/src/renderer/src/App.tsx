@@ -203,7 +203,11 @@ function RailItem(props: { section: Section; active: boolean; onSelect(s: Sectio
       >
         <Icon size={22} />
         <span className="rail__label">{LABELS[props.section]}</span>
-        {badge > 0 && <span className="badge badge--mention rail__badge">{badge > 99 ? '99+' : badge}</span>}
+        {badge > 0 && (
+          <span key={badge} className="badge badge--mention rail__badge">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
       </button>
     </li>
   );
