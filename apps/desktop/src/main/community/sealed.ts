@@ -12,6 +12,7 @@ export type SealPurpose =
   | 'profile'
   | `channel:${string}`
   | `category:${string}`
+  | `thread:${string}`
   | `message:${string}`
   | `signal:${string}`
   | `role:${string}`

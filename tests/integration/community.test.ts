@@ -593,4 +593,48 @@ describe('desktop ↔ server communities', () => {
       'Bob',
     );
   });
+
+  it('threads, announcement channels and slowmode through the app', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Threads');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.kind === 'text')!;
+
+    const root = await bob.community.send(general.id, 'what should we play tonight?');
+    await bob.community.action({
+      a: 'createThread',
+      channelId: general.id,
+      messageId: root.id,
+      name: 'Game night',
+    });
+    await alice.community.action({ a: 'send', channelId: general.id, text: 'chess!', threadId: root.id });
+    const channel = await alice.community.messages(general.id);
+    expect(channel.map((m) => m.text)).toEqual(['what should we play tonight?']);
+    expect(channel[0]!.thread).toMatchObject({ name: 'Game night', count: 1, creator: bob.riverId });
+    const replies = await bob.community.action({
+      a: 'threadMessages',
+      channelId: general.id,
+      messageId: root.id,
+    });
+    expect(replies).toEqual([expect.objectContaining({ text: 'chess!', threadId: root.id })]);
+    await bob.community.action({
+      a: 'updateThread',
+      channelId: general.id,
+      messageId: root.id,
+      name: 'Game night 🎲',
+    });
+    expect((await alice.community.messages(general.id))[0]!.thread?.name).toBe('Game night 🎲');
+
+    await alice.community.action({
+      a: 'updateChannel',
+      channelId: general.id,
+      announcement: true,
+      slowmode: 30,
+    });
+    const view = (await bob.community.refresh())[0]!.channels.find((c) => c.id === general.id)!;
+    expect([view.announcement, view.slowmode]).toEqual([true, 30]);
+    expect(view.permissions & Permission.SEND_MESSAGES).toBe(0);
+    await expect(bob.community.send(general.id, 'can I post?')).rejects.toThrow();
+  });
 });

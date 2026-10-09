@@ -105,10 +105,30 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       overwrites: overwrites.optional(),
       /** true: use the category's permissions again. */
       synced: z.boolean().optional(),
+      announcement: z.boolean().optional(),
+      slowmode: z.number().int().min(0).max(21_600).optional(),
     })
     .strict(),
   z.object({ a: z.literal('moveChannel'), channelId: id, direction }).strict(),
   z.object({ a: z.literal('deleteChannel'), channelId: id }).strict(),
+  z.object({ a: z.literal('createThread'), channelId: id, messageId: id, name }).strict(),
+  z
+    .object({
+      a: z.literal('updateThread'),
+      channelId: id,
+      messageId: id,
+      name: name.optional(),
+      archived: z.boolean().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      a: z.literal('threadMessages'),
+      channelId: id,
+      messageId: id,
+      before: z.iso.datetime().optional(),
+    })
+    .strict(),
   z.object({ a: z.literal('createCategory'), communityId: id, name }).strict(),
   z.object({ a: z.literal('renameCategory'), communityId: id, categoryId: id, name }).strict(),
   z.object({ a: z.literal('deleteCategory'), communityId: id, categoryId: id }).strict(),
@@ -174,6 +194,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       text: z.string().max(4000),
       replyTo: id.optional(),
       attachments: z.array(attachmentPointerSchema).max(10).optional(),
+      /** Reply inside the thread started from this message. */
+      threadId: id.optional(),
     })
     .strict()
     .refine((v) => v.text.trim().length > 0 || (v.attachments?.length ?? 0) > 0, 'empty'),
@@ -240,6 +262,7 @@ interface Results {
   pins: ChatMessage[];
   upload: AttachmentPointer;
   history: ChatMessage[];
+  threadMessages: ChatMessage[];
   search: ChatMessage[];
   download: Uint8Array;
 }
