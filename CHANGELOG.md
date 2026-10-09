@@ -6,6 +6,8 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-09
+
 **Hardening before 1.0: history, search, every section built, abuse limits, accessibility.**
 
 ### Added
