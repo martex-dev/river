@@ -6,6 +6,30 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-10
+
+**Sound and motion: River now sounds and feels alive.**
+
+### Added
+
+- **A sound for every interaction**: sending a message, direct messages (their
+  own sound), reactions, call connected and call ended, a friend request, a new
+  friend, joining or creating a community, copying a link, and errors.
+- **Sound settings** (Settings → Notifications): a volume slider and switches
+  for each group — Messages, Voice channels, Calls, Friends and communities,
+  Interface — each with preview buttons.
+- **Celebrations**: a short confetti burst when you join or create a community
+  or make a new friend.
+- **Motion**: your messages rise from the composer, mentions arrive with a
+  glow, badges and reaction counts bump when they change, the speaking ring
+  breathes, the voice panel slides in, voice participants pop in, and channels
+  fade in when you switch.
+
+### Accessibility
+
+- Celebrations are hidden from screen readers and are not shown at all when
+  reduced motion is on; every other animation follows Settings → Appearance.
+
 ## [1.0.0] - 2026-10-09
 
 **Stage 1 is complete: River is a full desktop platform for messages, communities, social, files and calls.**
@@ -436,7 +460,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/martex-dev/river/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/martex-dev/river/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/martex-dev/river/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/martex-dev/river/compare/v0.7.0...v0.8.0
