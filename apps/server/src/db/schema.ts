@@ -51,6 +51,7 @@ export interface CommunityMembersTable {
   role: string;
   profile: string;
   joined_on: string;
+  timeout_until: string | null;
 }
 
 export interface ChannelsTable {
@@ -60,6 +61,7 @@ export interface ChannelsTable {
   name: string;
   position: number;
   parent_id: string | null;
+  synced: Generated<number>;
 }
 
 export interface CategoriesTable {
@@ -101,6 +103,23 @@ export interface MemberRolesTable {
   community_id: string;
   river_id: string;
   role_id: string;
+}
+
+export interface CategoryOverwritesTable {
+  category_id: string;
+  role_id: string;
+  allow: number;
+  deny: number;
+}
+
+export interface AuditLogTable {
+  id: string;
+  community_id: string;
+  actor: string;
+  action: string;
+  target: string | null;
+  details: string;
+  created_at: string;
 }
 
 export interface ChannelOverwritesTable {
@@ -183,6 +202,8 @@ export interface Database {
   community_members: CommunityMembersTable;
   channels: ChannelsTable;
   categories: CategoriesTable;
+  category_overwrites: CategoryOverwritesTable;
+  audit_log: AuditLogTable;
   invites: InvitesTable;
   messages: MessagesTable;
   roles: RolesTable;
