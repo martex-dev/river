@@ -25,6 +25,7 @@ import {
   roleIdSchema,
   rotateKeyRequestSchema,
   sendMessageRequestSchema,
+  timeoutRequestSchema,
   updateCategoryRequestSchema,
   updateChannelRequestSchema,
   updateCommunityRequestSchema,
@@ -45,6 +46,8 @@ const INVITE_MAX_USES = 100;
 const MAX_CHANNELS = 100;
 const MAX_ROLES = 100;
 const MAX_CATEGORIES = 50;
+const AUDIT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+const MAX_TIMEOUT_MS = 28 * 24 * 60 * 60 * 1000;
 const PAGE = 100;
 /** Realtime events per second a client may send on average, and the burst allowed. */
 const SOCKET_RATE = 40;
@@ -140,10 +143,42 @@ export async function registerCommunityRoutes(
     const [message] = await loadMessages(db, [row]);
     hub.sendTo(model.viewers(row.channel_id), { t: 'message', communityId: model.id, message: message! });
   };
+  /**
+   * Records an administrative action. Only IDs and numbers go in: the server
+   * never has names or content. Entries older than 90 days are dropped.
+   */
+  const audit = async (
+    communityId: string,
+    actor: string,
+    action: string,
+    target: string | null,
+    details: Record<string, unknown> = {},
+  ): Promise<void> => {
+    const at = deps.now();
+    await db
+      .insertInto('audit_log')
+      .values({
+        id: randomBytes(16).toString('base64url'),
+        community_id: communityId,
+        actor,
+        action,
+        target,
+        details: JSON.stringify(details),
+        created_at: at.toISOString(),
+      })
+      .execute();
+    await db
+      .deleteFrom('audit_log')
+      .where('community_id', '=', communityId)
+      .where('created_at', '<', new Date(at.getTime() - AUDIT_RETENTION_MS).toISOString())
+      .execute();
+  };
+
   const removeMember = async (
     model: CommunityModel,
     riverId: string,
     reason: 'kicked' | 'banned' | 'left',
+    actor: string = riverId,
   ): Promise<void> => {
     await db.transaction().execute(async (trx) => {
       await trx
@@ -165,6 +200,12 @@ export async function registerCommunityRoutes(
       if (left) await voiceUpdate(left.communityId, left.channelId);
     }
     hub.sendTo([riverId], { t: 'removed', communityId: model.id, reason });
+    await audit(
+      model.id,
+      actor,
+      reason === 'left' ? 'member.leave' : `member.${reason === 'kicked' ? 'kick' : 'ban'}`,
+      riverId,
+    );
     changed(model);
   };
 
@@ -244,6 +285,7 @@ export async function registerCommunityRoutes(
     if (!model.can(me(request), Permission.MANAGE_COMMUNITY)) throw forbidden();
     const req = parse(updateCommunityRequestSchema, request.body);
     await db.updateTable('communities').set({ meta: req.meta }).where('id', '=', model.id).execute();
+    await audit(model.id, me(request), 'community.update', model.id);
     changed(model);
     return { ok: true };
   });
@@ -277,7 +319,14 @@ export async function registerCommunityRoutes(
     toMembers(model, {
       t: 'member',
       communityId: model.id,
-      member: { riverId: m.riverId, role: m.legacyRole, roles: m.roles, profile: req.profile, online: true },
+      member: {
+        riverId: m.riverId,
+        role: m.legacyRole,
+        roles: m.roles,
+        profile: req.profile,
+        online: true,
+        timeoutUntil: model.timedOut(m.riverId) ? m.timeoutUntil : null,
+      },
     });
     return { ok: true };
   });
@@ -305,6 +354,7 @@ export async function registerCommunityRoutes(
               name: req.name,
               position,
               parent_id: parentId,
+              synced: parentId && !req.overwrites?.length ? 1 : 0,
             })
             .execute();
           for (const o of req.overwrites ?? []) {
@@ -319,6 +369,7 @@ export async function registerCommunityRoutes(
         if (err instanceof HttpError) throw err;
         throw new HttpError(409, 'conflict', 'Channel ID already exists');
       }
+      await audit(model.id, me(request), 'channel.create', req.id, { kind: req.kind, parentId });
       changed(model);
       return reply.code(201).send({
         id: req.id,
@@ -336,7 +387,16 @@ export async function registerCommunityRoutes(
     if (!model.can(me(request), Permission.MANAGE_CHANNELS, channelId)) throw forbidden();
     const req = parse(updateChannelRequestSchema, request.body);
     if (req.parentId && !model.category(req.parentId)) throw bad('Unknown category');
+    // Editing a channel's own permissions unsyncs it from its category; synced: true syncs it again.
+    const synced = req.synced !== undefined ? req.synced : req.overwrites ? false : undefined;
     await db.transaction().execute(async (trx) => {
+      if (synced !== undefined) {
+        await trx
+          .updateTable('channels')
+          .set({ synced: synced ? 1 : 0 })
+          .where('id', '=', channelId)
+          .execute();
+      }
       if (req.name !== undefined || req.position !== undefined || req.parentId !== undefined) {
         await trx
           .updateTable('channels')
@@ -359,6 +419,13 @@ export async function registerCommunityRoutes(
         }
       }
     });
+    await audit(model.id, me(request), 'channel.update', channelId, {
+      ...(req.name !== undefined ? { name: true } : {}),
+      ...(req.position !== undefined ? { position: req.position } : {}),
+      ...(req.parentId !== undefined ? { parentId: req.parentId } : {}),
+      ...(req.overwrites ? { overwrites: req.overwrites } : {}),
+      ...(synced !== undefined ? { synced } : {}),
+    });
     changed(model);
     return { ok: true };
   });
@@ -372,6 +439,7 @@ export async function registerCommunityRoutes(
       hub.sendTo([id], { t: 'voice.disconnect' });
     }
     await db.deleteFrom('channels').where('id', '=', channelId).execute();
+    await audit(model.id, me(request), 'channel.delete', channelId);
     changed(model);
     return { ok: true };
   });
@@ -394,6 +462,7 @@ export async function registerCommunityRoutes(
       } catch {
         throw new HttpError(409, 'conflict', 'Category ID already exists');
       }
+      await audit(model.id, me(request), 'category.create', req.id);
       changed(model);
       return reply.code(201).send({ id: req.id, name: req.name, position });
     },
@@ -418,7 +487,23 @@ export async function registerCommunityRoutes(
   app.patch<{ Params: { id: string } }>(`${API_PREFIX}/categories/:id`, authed, async (request) => {
     const { model, categoryId } = await categoryCommunity(request.params.id, me(request));
     const req = parse(updateCategoryRequestSchema, request.body);
-    await db.updateTable('categories').set({ name: req.name }).where('id', '=', categoryId).execute();
+    for (const o of req.overwrites ?? []) if (!model.role(o.roleId)) throw bad('Unknown role');
+    await db.transaction().execute(async (trx) => {
+      if (req.name !== undefined)
+        await trx.updateTable('categories').set({ name: req.name }).where('id', '=', categoryId).execute();
+      if (req.overwrites) {
+        await trx.deleteFrom('category_overwrites').where('category_id', '=', categoryId).execute();
+        for (const o of req.overwrites)
+          await trx
+            .insertInto('category_overwrites')
+            .values({ category_id: categoryId, role_id: o.roleId, allow: o.allow, deny: o.deny })
+            .execute();
+      }
+    });
+    await audit(model.id, me(request), 'category.update', categoryId, {
+      ...(req.name !== undefined ? { name: true } : {}),
+      ...(req.overwrites ? { overwrites: req.overwrites } : {}),
+    });
     changed(model);
     return { ok: true };
   });
@@ -433,6 +518,7 @@ export async function registerCommunityRoutes(
         .execute();
       await trx.deleteFrom('categories').where('id', '=', categoryId).execute();
     });
+    await audit(model.id, me(request), 'category.delete', categoryId);
     changed(model);
     return { ok: true };
   });
@@ -460,6 +546,10 @@ export async function registerCommunityRoutes(
           .where('id', '=', c.id)
           .execute();
       }
+    });
+    await audit(model.id, actor, 'channels.reorder', null, {
+      categories: req.categories.length,
+      channels: req.channels.length,
     });
     changed(model);
     return { ok: true };
@@ -505,6 +595,10 @@ export async function registerCommunityRoutes(
       } catch {
         throw new HttpError(409, 'conflict', 'Role ID already exists');
       }
+      await audit(model.id, me(request), 'role.create', req.id, {
+        permissions: req.permissions,
+        color: req.color,
+      });
       changed(model);
       return reply.code(201).send({ ok: true });
     },
@@ -544,6 +638,12 @@ export async function registerCommunityRoutes(
       })
       .where('id', '=', roleId)
       .execute();
+    await audit(model.id, me(request), 'role.update', roleId, {
+      ...(req.name !== undefined ? { name: true } : {}),
+      ...(req.color !== undefined ? { color: req.color } : {}),
+      ...(req.permissions !== undefined ? { before: role.permissions, after: req.permissions } : {}),
+      ...(req.position !== undefined ? { position: req.position } : {}),
+    });
     changed(model);
     return { ok: true };
   });
@@ -563,8 +663,10 @@ export async function registerCommunityRoutes(
       throw forbidden('You can only delete roles below your own');
     await db.transaction().execute(async (trx) => {
       await trx.deleteFrom('channel_overwrites').where('role_id', '=', roleId).execute();
+      await trx.deleteFrom('category_overwrites').where('role_id', '=', roleId).execute();
       await trx.deleteFrom('roles').where('id', '=', roleId).execute();
     });
+    await audit(model.id, me(request), 'role.delete', roleId);
     changed(model);
     return { ok: true };
   });
@@ -602,6 +704,10 @@ export async function registerCommunityRoutes(
             .values({ community_id: model.id, river_id: target, role_id: id })
             .execute();
       });
+      await audit(model.id, me(request), 'member.roles', target, {
+        added: [...after].filter((id) => !before.has(id)),
+        removed: [...before].filter((id) => !after.has(id)),
+      });
       changed(model);
       return { ok: true };
     },
@@ -617,7 +723,7 @@ export async function registerCommunityRoutes(
       if (!model.member(target)) throw notFound();
       if (!model.can(me(request), Permission.KICK_MEMBERS) || !model.outranks(me(request), target))
         throw forbidden();
-      await removeMember(model, target, 'kicked');
+      await removeMember(model, target, 'kicked', me(request));
       return { ok: true };
     },
   );
@@ -636,7 +742,8 @@ export async function registerCommunityRoutes(
         .values({ community_id: model.id, river_id: target, banned_on: day(deps.now()) })
         .onConflict((oc) => oc.columns(['community_id', 'river_id']).doNothing())
         .execute();
-      if (model.member(target)) await removeMember(model, target, 'banned');
+      if (model.member(target)) await removeMember(model, target, 'banned', me(request));
+      else await audit(model.id, me(request), 'member.ban', target);
       return { ok: true };
     },
   );
@@ -653,7 +760,73 @@ export async function registerCommunityRoutes(
         .where('community_id', '=', model.id)
         .where('river_id', '=', target)
         .execute();
+      await audit(model.id, me(request), 'member.unban', target);
       return { ok: true };
+    },
+  );
+
+  app.put<{ Params: { id: string; member: string } }>(
+    `${API_PREFIX}/communities/:id/members/:member/timeout`,
+    authed,
+    async (request) => {
+      const model = await community(request.params.id, me(request));
+      const target = parse(riverIdSchema, request.params.member);
+      if (!model.member(target)) throw notFound();
+      if (!model.can(me(request), Permission.MODERATE_MEMBERS) || !model.outranks(me(request), target))
+        throw forbidden('You can only time out members below you');
+      const req = parse(timeoutRequestSchema, request.body);
+      const now = deps.now().getTime();
+      if (req.until !== null) {
+        const until = Date.parse(req.until);
+        if (until <= now) throw bad('A timeout must end in the future');
+        if (until > now + MAX_TIMEOUT_MS) throw bad('A timeout can last at most 28 days');
+      }
+      await db
+        .updateTable('community_members')
+        .set({ timeout_until: req.until })
+        .where('community_id', '=', model.id)
+        .where('river_id', '=', target)
+        .execute();
+      // No talking from a timed-out member in voice either.
+      if (req.until !== null && hub.voiceChannelOf(target) && model.channel(hub.voiceChannelOf(target)!)) {
+        const left = hub.leaveVoice(target);
+        hub.sendTo([target], { t: 'voice.disconnect' });
+        if (left) await voiceUpdate(left.communityId, left.channelId);
+      }
+      await audit(model.id, me(request), req.until ? 'member.timeout' : 'member.timeout.end', target, {
+        until: req.until,
+      });
+      changed(model);
+      return { ok: true };
+    },
+  );
+
+  app.get<{ Params: { id: string }; Querystring: { before?: string } }>(
+    `${API_PREFIX}/communities/:id/audit`,
+    authed,
+    async (request) => {
+      const model = await community(request.params.id, me(request));
+      if (!model.can(me(request), Permission.VIEW_AUDIT_LOG)) throw forbidden();
+      const before = request.query.before;
+      if (before !== undefined && Number.isNaN(Date.parse(before))) throw bad('Bad cursor');
+      let q = db
+        .selectFrom('audit_log')
+        .selectAll()
+        .where('community_id', '=', model.id)
+        .orderBy('created_at', 'desc')
+        .limit(PAGE);
+      if (before) q = q.where('created_at', '<', before);
+      const rows = await q.execute();
+      return {
+        entries: rows.map((r) => ({
+          id: r.id,
+          actor: r.actor,
+          action: r.action,
+          target: r.target,
+          details: JSON.parse(r.details) as Record<string, unknown>,
+          at: r.created_at,
+        })),
+      };
     },
   );
 
@@ -689,6 +862,7 @@ export async function registerCommunityRoutes(
           check: inviteReq.check ?? null,
         })
         .execute();
+      await audit(model.id, me(request), 'invite.create', null, { expiresAt });
       return reply.code(201).send({ code, expiresAt });
     },
   );
@@ -737,8 +911,16 @@ export async function registerCommunityRoutes(
         toMembers(model, {
           t: 'member',
           communityId: model.id,
-          member: { riverId: me(request), role: 'member', roles: [], profile: req.profile, online: true },
+          member: {
+            riverId: me(request),
+            role: 'member',
+            roles: [],
+            profile: req.profile,
+            online: true,
+            timeoutUntil: null,
+          },
         });
+        await audit(model.id, me(request), 'member.join', me(request));
       }
       const last = await lastMessageTimes(
         db,
@@ -850,6 +1032,8 @@ export async function registerCommunityRoutes(
     if (msg.sender !== me(request) && !model.can(me(request), Permission.MANAGE_MESSAGES, msg.channel_id))
       throw forbidden();
     await db.deleteFrom('messages').where('id', '=', msg.id).execute();
+    if (msg.sender !== me(request))
+      await audit(model.id, me(request), 'message.delete', msg.sender, { channelId: msg.channel_id });
     hub.sendTo(model.viewers(msg.channel_id), {
       t: 'message.delete',
       communityId: model.id,
@@ -1083,6 +1267,17 @@ export async function registerCommunityRoutes(
     });
   });
 
+  app.get('/add', async (_request, reply) => {
+    reply.header('content-type', 'text/html; charset=utf-8');
+    reply.header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'");
+    return reply.send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Add me on River</title>
+<body style="font-family:system-ui,sans-serif;background:#05070d;color:#e7ecf8;display:grid;place-items:center;min-height:100vh;margin:0">
+<main style="max-width:520px;padding:24px;line-height:1.5"><h1 style="margin:0 0 12px">Someone wants to be your friend on River</h1>
+<ol><li>Install River: <a style="color:#4fe3d1" href="https://github.com/martex-dev/river/releases/latest">github.com/martex-dev/river/releases/latest</a></li>
+<li>Open River and create your identity.</li><li>Copy this page's full address and paste it anywhere in River.</li></ol>
+<p style="color:#9ca8c6">River is end-to-end encrypted: this server never sees your messages.</p></main></body>`);
+  });
+
   app.get('/join', async (_request, reply) => {
     reply.header('content-type', 'text/html; charset=utf-8');
     reply.header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'");
@@ -1090,7 +1285,7 @@ export async function registerCommunityRoutes(
 <body style="font-family:system-ui,sans-serif;background:#05070d;color:#e7ecf8;display:grid;place-items:center;min-height:100vh;margin:0">
 <main style="max-width:520px;padding:24px;line-height:1.5"><h1 style="margin:0 0 12px">You're invited to a River community</h1>
 <ol><li>Install River: <a style="color:#4fe3d1" href="https://github.com/martex-dev/river/releases/latest">github.com/martex-dev/river/releases/latest</a></li>
-<li>Open River and create your identity.</li><li>Go to <b>Communities → Join with an invite link</b> and paste this page's full address.</li></ol>
+<li>Open River and create your identity.</li><li>Copy this page's full address and paste it anywhere in River (or in <b>Communities → Got an invite?</b>).</li></ol>
 <p style="color:#9ca8c6">The secret part of this link never reaches this server.</p></main></body>`);
   });
 }
