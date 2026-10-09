@@ -118,7 +118,52 @@ export interface AttachmentsTable {
   message_id: string | null;
 }
 
+export interface SignedPreKeysTable {
+  river_id: string;
+  device_id: number;
+  key_id: number;
+  public_key: string;
+  signature: string;
+}
+
+export interface PreKeysTable {
+  river_id: string;
+  device_id: number;
+  key_id: number;
+  public_key: string;
+}
+
+export interface KyberPreKeysTable {
+  river_id: string;
+  device_id: number;
+  key_id: number;
+  public_key: string;
+  signature: string;
+  last_resort: number;
+}
+
+export interface MailboxTable {
+  id: string;
+  recipient: string;
+  recipient_device: number;
+  sender: string;
+  sender_device: number;
+  type: number;
+  body: string;
+  received_at: string;
+}
+
+export interface BlocksTable {
+  river_id: string;
+  blocked: string;
+}
+
 export interface Database {
+  signed_prekeys: SignedPreKeysTable;
+  prekeys: PreKeysTable;
+  kyber_prekeys: KyberPreKeysTable;
+  mailbox: MailboxTable;
+  blocks: BlocksTable;
   attachments: AttachmentsTable;
   communities: CommunitiesTable;
   community_members: CommunityMembersTable;

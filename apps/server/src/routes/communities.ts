@@ -27,7 +27,7 @@ import {
   type ServerEvent,
 } from '@river/protocol';
 import { authenticate } from '../accounts/auth-store.ts';
-import { Hub, type HubSocket } from '../communities/hub.ts';
+import type { Hub, HubSocket } from '../communities/hub.ts';
 import type { CommunityModel } from '../communities/model.ts';
 import { communityOfChannel, loadCommunity, loadMessages } from '../communities/model.ts';
 import type { ServerConfig } from '../config.ts';
@@ -61,10 +61,10 @@ function parse<T>(
 /** Communities, roles, moderation, channels, messages, invites and the realtime socket. */
 export async function registerCommunityRoutes(
   app: FastifyInstance,
-  deps: { config: ServerConfig; database: RiverDatabase; now: () => Date },
+  deps: { config: ServerConfig; database: RiverDatabase; now: () => Date; hub: Hub },
 ): Promise<void> {
   const { db } = deps.database;
-  const hub = new Hub();
+  const { hub } = deps;
   await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
 
   const requireSession = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {

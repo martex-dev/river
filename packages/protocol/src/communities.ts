@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { base64Bytes, riverIdSchema } from './accounts.ts';
+import { envelopeSchema } from './messaging.ts';
 
 /**
  * Communities (protocol v1).
@@ -259,5 +260,7 @@ export const serverEventSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('presence'), riverId: riverIdSchema, online: z.boolean() }),
   z.object({ t: z.literal('error'), code: z.string() }),
   z.object({ t: z.literal('pong') }),
+  /** An end-to-end encrypted direct-message envelope for one of your devices. */
+  z.object({ t: z.literal('dm'), envelope: envelopeSchema }),
 ]);
 export type ServerEvent = z.infer<typeof serverEventSchema>;
