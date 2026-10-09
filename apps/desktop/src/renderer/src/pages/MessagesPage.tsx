@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import type { ConversationView, DirectMessageView } from '../../../shared/dm.ts';
+import { play } from '../community/sound.ts';
 import { useCommunity } from '../community/store.ts';
 import {
   AttachmentList,
@@ -185,7 +186,9 @@ function ConversationList({ onNew }: { onNew(): void }): ReactElement {
           <button
             className="dms__id"
             title="Copy your River ID"
-            onClick={() => void navigator.clipboard.writeText(dm.myId!).then(() => setCopied(true))}
+            onClick={() =>
+              void navigator.clipboard.writeText(dm.myId!).then(() => (play('success'), setCopied(true)))
+            }
           >
             <code>{dm.myId}</code>
             <span>{copied ? 'Copied ✓' : 'Copy'}</span>
@@ -431,7 +434,9 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
               <MenuItem
                 onClick={() => {
                   setMenu(null);
-                  void navigator.clipboard.writeText(c.riverId).then(() => notify('River ID copied'));
+                  void navigator.clipboard
+                    .writeText(c.riverId)
+                    .then(() => (play('success'), notify('River ID copied')));
                 }}
               >
                 Copy River ID
@@ -645,8 +650,10 @@ function DmMessage(props: {
     : c.kind === 'group'
       ? (c.members.find((x) => x.riverId === m.sender)?.avatar ?? null)
       : c.avatar;
-  const react = (emoji: string, on: boolean): void =>
+  const react = (emoji: string, on: boolean): void => {
+    if (on) play('reaction');
     void dm.run({ a: 'react', peer: c.riverId, id: m.id, emoji, on });
+  };
   const remove = (forEveryone: boolean): void => {
     useCommunity.getState().setModal({
       kind: 'confirm',
@@ -860,6 +867,7 @@ function DmComposer(props: {
     setUploading(null);
     if (!sent) setText(value);
     else {
+      play('send');
       props.onPending([]);
       dm.handle({ t: 'message', message: sent, isNew: false, senderName: '' });
     }

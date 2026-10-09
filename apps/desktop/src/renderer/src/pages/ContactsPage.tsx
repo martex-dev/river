@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactElement } from 'react';
 import type { ConversationView } from '../../../shared/dm.ts';
 import { Avatar } from '../community/ui/common.tsx';
 import { startDmCall } from '../dm/call.ts';
+import { play } from '../community/sound.ts';
 import { useDm } from '../dm/store.ts';
 import { useRiver } from '../store.ts';
 
@@ -81,7 +82,12 @@ export function ContactsPage(): ReactElement {
         {dm.myId && (
           <button
             className="dms__id"
-            onClick={() => void navigator.clipboard.writeText(dm.myId!).then(() => setCopied(true))}
+            onClick={() =>
+              void navigator.clipboard.writeText(dm.myId!).then(() => {
+                play('success');
+                setCopied(true);
+              })
+            }
           >
             <span className="muted small">Your River ID</span>
             <code>{dm.myId}</code>
