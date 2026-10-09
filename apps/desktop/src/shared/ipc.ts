@@ -147,6 +147,8 @@ export interface RoleView {
   everyone: boolean;
   /** Anyone may @mention this role (people with Mention everyone always can). */
   mentionable: boolean;
+  /** Members with this role are listed in their own group. */
+  hoist: boolean;
 }
 
 export interface ChannelView {
@@ -166,12 +168,24 @@ export interface ChannelView {
   unread: boolean;
   /** Where you stopped reading (this device), for the "New messages" divider. */
   lastReadAt: string | null;
+  /** Uses its category's permissions. */
+  synced: boolean;
 }
 
 export interface CategoryView {
   id: string;
   name: string;
   position: number;
+  overwrites: Array<{ roleId: string; allow: number; deny: number }>;
+}
+
+/** One line of the audit log, already in words. */
+export interface AuditView {
+  id: string;
+  actor: string;
+  actorName: string;
+  summary: string;
+  at: string;
 }
 
 export interface MemberView {
@@ -186,6 +200,8 @@ export interface MemberView {
   owner: boolean;
   /** Hierarchy position (owner is highest). */
   rank: number;
+  /** Timed out until then (cannot talk, react or join voice), or null. */
+  timeoutUntil: string | null;
 }
 
 export interface VoiceStateView {
