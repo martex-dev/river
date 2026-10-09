@@ -6,6 +6,8 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-09
+
 **Encrypted files and pictures.**
 
 ### Added
