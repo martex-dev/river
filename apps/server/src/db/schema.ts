@@ -62,6 +62,19 @@ export interface ChannelsTable {
   position: number;
   parent_id: string | null;
   synced: Generated<number>;
+  announcement: Generated<number>;
+  slowmode: Generated<number>;
+}
+
+export interface ThreadsTable {
+  id: string;
+  channel_id: string;
+  name: string;
+  creator: string;
+  created_at: string;
+  last_at: string | null;
+  count: Generated<number>;
+  archived: Generated<number>;
 }
 
 export interface CategoriesTable {
@@ -88,6 +101,7 @@ export interface MessagesTable {
   sent_at: string;
   edited_at: string | null;
   pinned: number;
+  thread_id: string | null;
 }
 
 export interface RolesTable {
@@ -204,6 +218,7 @@ export interface Database {
   categories: CategoriesTable;
   category_overwrites: CategoryOverwritesTable;
   audit_log: AuditLogTable;
+  threads: ThreadsTable;
   invites: InvitesTable;
   messages: MessagesTable;
   roles: RolesTable;
