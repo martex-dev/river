@@ -47,9 +47,9 @@ Each line is one PR; each version ships when its section is done.
 
 ### 1.0.6 — Roles and permissions parity
 
-- [ ] Category permissions; channels synced to their category
-- [ ] Hoisted roles (shown separately), mentionable roles, role colours in chat
-- [ ] Per-community nicknames; timeouts; audit log
+- [x] Category permissions; channels synced to their category
+- [x] Hoisted roles (shown separately), mentionable roles, role colours in chat
+- [x] Per-community nicknames; timeouts; audit log
 
 ### 1.0.7 — Channels parity
 

@@ -6,6 +6,34 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-10-10
+
+**Roles and permissions: timeouts, an audit log, category permissions, hoisted roles and nicknames.**
+
+### Added
+
+- **Time out members** (new *Time out members* permission) for 60 seconds up
+  to a week, from their member card. A timed-out member can still read, but
+  cannot send, react, attach files, invite or join voice. Their card and
+  composer show until when.
+- **Audit log** in Community settings (new *View audit log* permission). It
+  shows who changed roles, channels, categories and settings, who moderated
+  whom, and who joined or left, in plain sentences. The server keeps only IDs
+  and numbers for 90 days; names are filled in on your computer.
+- **Category permissions.** Channels can follow their category's permissions
+  ("synced"); a channel with its own permissions shows **Sync with category**.
+  Channels from templates start synced.
+- **Show members with a role separately** (hoisted roles) in the member list.
+- **Nicknames per community** ("Change nickname" in the community menu).
+  They are encrypted into your profile for that community only, and
+  @nickname mentions you.
+- Friend links opened in a browser show a short how-to page.
+
+### Changed
+
+- Channel and category permission editors are the same, with clear
+  allow / inherit / deny choices.
+
 ## [1.0.5] - 2026-10-10
 
 **Stability: River stays connected, never loses what you type, and explains problems plainly.**
@@ -550,7 +578,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.5...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.6...HEAD
+[1.0.6]: https://github.com/martex-dev/river/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/martex-dev/river/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/martex-dev/river/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/martex-dev/river/compare/v1.0.2...v1.0.3
