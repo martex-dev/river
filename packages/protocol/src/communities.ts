@@ -64,6 +64,8 @@ export const channelSchema = z.object({
   parentId: channelIdSchema.nullable().default(null),
   /** When the newest message was sent, so clients can mark unread channels (1.0+). */
   lastMessageAt: z.string().max(40).nullable().default(null),
+  /** The channel uses its category's permissions (1.0.6). */
+  synced: z.boolean().default(false),
 });
 export type ChannelWire = z.infer<typeof channelSchema>;
 
@@ -72,6 +74,8 @@ export const categorySchema = z.object({
   id: channelIdSchema,
   name: sealedSchema(SEALED_SMALL),
   position: z.number().int(),
+  /** Permissions channels synced to this category use (1.0.6). */
+  overwrites: z.array(overwriteSchema).default([]),
 });
 export type CategoryWire = z.infer<typeof categorySchema>;
 
@@ -91,6 +95,8 @@ export const memberSchema = z.object({
   roles: z.array(roleIdSchema).default([]),
   profile: sealedSchema(SEALED_PROFILE),
   online: z.boolean().default(false),
+  /** Timed out until this moment (1.0.6); null when not timed out. */
+  timeoutUntil: z.string().max(40).nullable().default(null),
 });
 export type MemberWire = z.infer<typeof memberSchema>;
 
@@ -145,13 +151,35 @@ export const updateChannelRequestSchema = z
     position: z.number().int().min(0).max(1000).optional(),
     overwrites: z.array(overwriteSchema).max(50).optional(),
     parentId: channelIdSchema.nullable().optional(),
+    /** true: use the category's permissions again (drops the channel's own). */
+    synced: z.boolean().optional(),
   })
   .strict();
 
 export const createCategoryRequestSchema = z
   .object({ id: channelIdSchema, name: sealedSchema(SEALED_SMALL) })
   .strict();
-export const updateCategoryRequestSchema = z.object({ name: sealedSchema(SEALED_SMALL) }).strict();
+export const updateCategoryRequestSchema = z
+  .object({
+    name: sealedSchema(SEALED_SMALL).optional(),
+    overwrites: z.array(overwriteSchema).max(50).optional(),
+  })
+  .strict();
+
+/** Time a member out until a moment (at most 28 days ahead), or end it with null. */
+export const timeoutRequestSchema = z.object({ until: z.iso.datetime().nullable() }).strict();
+
+export const auditEntrySchema = z.object({
+  id: z.string().max(64),
+  actor: riverIdSchema,
+  action: z.string().max(40),
+  /** A member, role, channel or category ID; never content. */
+  target: z.string().max(64).nullable(),
+  details: z.record(z.string(), z.unknown()).default({}),
+  at: z.string().max(40),
+});
+export type AuditEntry = z.infer<typeof auditEntrySchema>;
+export const auditResponseSchema = z.object({ entries: z.array(auditEntrySchema) });
 /**
  * The whole sidebar order in one request, so drag and drop is atomic: every
  * category and channel the caller can manage, with its new place.
