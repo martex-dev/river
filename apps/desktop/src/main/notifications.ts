@@ -1,6 +1,7 @@
 import { Notification, type BrowserWindow } from 'electron';
 import type { Settings } from '../shared/settings.ts';
 import type { CommunityService } from './community/community-service.ts';
+import type { DmService } from './dm/dm-service.ts';
 
 /**
  * Desktop notifications for new community messages while River is not
@@ -9,11 +10,42 @@ import type { CommunityService } from './community/community-service.ts';
  */
 export function startMessageNotifications(deps: {
   community: CommunityService;
+  dm: DmService;
   settings: () => Settings;
   window: BrowserWindow;
 }): () => void {
   const { community, window } = deps;
-  return community.onEvent((event) => {
+  const show = (title: string, body: string, mention: boolean, onClick: () => void): void => {
+    if (window.isDestroyed() || window.isFocused() || !Notification.isSupported()) return;
+    const notification = new Notification({ title, body, silent: true });
+    notification.on('click', () => {
+      if (window.isDestroyed()) return;
+      if (window.isMinimized()) window.restore();
+      window.show();
+      window.focus();
+      onClick();
+    });
+    notification.show();
+    if (mention) window.flashFrame(true);
+  };
+  // Direct messages always notify (they are personal), subject to the preview setting.
+  const offDm = deps.dm.onEvent((event) => {
+    if (event.t !== 'message' || !event.isNew || event.message.mine) return;
+    const prefs = deps.settings().notifications;
+    if (!prefs.desktop) return;
+    const m = event.message;
+    const title = prefs.preview === 'none' ? 'River' : event.senderName;
+    const body =
+      prefs.preview === 'full'
+        ? m.text
+          ? m.text.length > 180
+            ? `${m.text.slice(0, 180)}…`
+            : m.text
+          : 'Sent a file'
+        : 'New direct message';
+    show(title, body, true, () => deps.dm.focus(m.peer));
+  });
+  const offCommunity = community.onEvent((event) => {
     if (event.t !== 'message' || !event.isNew || event.message.mine) return;
     const prefs = deps.settings().notifications;
     if (!prefs.desktop) return;
@@ -39,4 +71,8 @@ export function startMessageNotifications(deps: {
     notification.show();
     if (m.mentionsMe) window.flashFrame(true);
   });
+  return () => {
+    offDm();
+    offCommunity();
+  };
 }

@@ -83,4 +83,41 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 6,
+    name: '0006_direct_messages',
+    up(db) {
+      // libsignal protocol state (sessions, identities, prekeys) and decrypted
+      // direct-message history. All of it lives only in this encrypted database.
+      db.exec(`
+        CREATE TABLE signal_store (
+          kind  TEXT NOT NULL,
+          id    TEXT NOT NULL,
+          value BLOB NOT NULL,
+          PRIMARY KEY (kind, id)
+        ) STRICT;
+        CREATE TABLE contacts (
+          river_id   TEXT PRIMARY KEY,
+          name       TEXT,
+          avatar     TEXT,
+          state      TEXT NOT NULL CHECK (state IN ('accepted', 'request', 'blocked')),
+          created_at TEXT NOT NULL,
+          last_read  TEXT,
+          key_changed INTEGER NOT NULL DEFAULT 0
+        ) STRICT;
+        CREATE TABLE dm_messages (
+          id          TEXT PRIMARY KEY,
+          peer        TEXT NOT NULL,
+          sender      TEXT NOT NULL,
+          body        TEXT NOT NULL,
+          sent_at     TEXT NOT NULL,
+          edited_at   TEXT,
+          deleted     INTEGER NOT NULL DEFAULT 0,
+          status      TEXT NOT NULL,
+          reactions   TEXT NOT NULL DEFAULT '{}'
+        ) STRICT;
+        CREATE INDEX dm_messages_by_peer ON dm_messages (peer, sent_at);
+      `);
+    },
+  },
 ];

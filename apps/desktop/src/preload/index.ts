@@ -1,3 +1,4 @@
+import type { DmEvent } from '../shared/dm.ts';
 import { contextBridge, ipcRenderer } from 'electron';
 import {
   IPC,
@@ -44,6 +45,16 @@ const api: RiverApi = {
       ipcRenderer.on(IPC.accountStatusChanged, handler);
       return () => {
         ipcRenderer.removeListener(IPC.accountStatusChanged, handler);
+      };
+    },
+  },
+  dm: {
+    action: (action) => ipcRenderer.invoke(IPC.dmAction, action),
+    onEvent: (listener) => {
+      const handler = (_event: unknown, e: DmEvent): void => listener(e);
+      ipcRenderer.on(IPC.dmEvent, handler);
+      return () => {
+        ipcRenderer.removeListener(IPC.dmEvent, handler);
       };
     },
   },

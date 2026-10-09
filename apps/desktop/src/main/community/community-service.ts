@@ -70,6 +70,8 @@ interface Deps {
 }
 
 interface SealedProfile {
+  /** The member's identity key (base64), so a direct message can detect a server swapping keys. */
+  identityKey?: string;
   name: string | null;
   avatar?: string | null;
 }
@@ -116,6 +118,9 @@ export class CommunityService {
   private refreshTimer: NodeJS.Timeout | null = null;
   private backoff = 1000;
   private readonly listeners = new Set<(e: CommunityEvent) => void>();
+  private readonly rawListeners = new Set<(e: ServerEvent) => void>();
+  /** Identity keys members published inside sealed community profiles. */
+  private readonly profileKeys = new Map<string, string>();
 
   constructor(deps: Deps) {
     this.deps = deps;
@@ -165,6 +170,36 @@ export class CommunityService {
     return token;
   }
 
+  /** Every realtime event from the server (used by direct messages). */
+  onServerEvent(listener: (e: ServerEvent) => void): () => void {
+    this.rawListeners.add(listener);
+    return () => this.rawListeners.delete(listener);
+  }
+
+  /** The identity key a member published in a community profile (sealed with the community key). */
+  communityIdentityKey(riverId: string): string | null {
+    return this.profileKeys.get(riverId) ?? null;
+  }
+
+  /** What other members know about a person from shared communities. */
+  knownProfile(riverId: string): { name: string; avatar: string | null } | null {
+    for (const c of this.communities) {
+      const m = c.members.find((x) => x.riverId === riverId);
+      if (m) return { name: m.name, avatar: m.avatar };
+    }
+    return null;
+  }
+
+  private myIdentityKey(): string | undefined {
+    const pk = this.deps.identity.get() ? this.deps.identity.signer()?.publicKey : undefined;
+    return pk ? Buffer.from(pk).toString('base64') : undefined;
+  }
+
+  /** Authenticated API call with one re-login on an expired session. */
+  api<T>(path: string, method: Method, body: unknown, schema: z.ZodType<T>): Promise<T> {
+    return this.call(path, method, body, schema);
+  }
+
   private async call<T>(path: string, method: Method, body: unknown, schema: z.ZodType<T>): Promise<T> {
     const url = `${this.server()}${API_PREFIX}${path}`;
     const payload = body === undefined && (method === 'PUT' || method === 'POST') ? {} : body;
@@ -210,7 +245,11 @@ export class CommunityService {
   }
 
   private sealedProfile(communityId: string): string {
-    const profile: SealedProfile = { name: this.myName(), avatar: this.myAvatar() };
+    const profile: SealedProfile = {
+      name: this.myName(),
+      avatar: this.myAvatar(),
+      identityKey: this.myIdentityKey(),
+    };
     return seal(this.requireKey(communityId), communityId, 'profile', profile);
   }
 
@@ -297,6 +336,12 @@ export class CommunityService {
       }
       const name = profile.name ? String(profile.name).slice(0, 64) : `Member ${m.riverId.slice(0, 4)}`;
       this.knownNames.set(m.riverId, name);
+      if (
+        typeof profile.identityKey === 'string' &&
+        /^[A-Za-z0-9+/]{43}[A-Za-z0-9+/=]=?$/.test(profile.identityKey)
+      ) {
+        this.profileKeys.set(m.riverId, profile.identityKey);
+      }
       const avatar =
         typeof profile.avatar === 'string' && AVATAR_RE.test(profile.avatar) ? profile.avatar : null;
       const colored = roles.find((r) => !r.everyone && r.color !== 0 && m.roles.includes(r.id));
@@ -432,7 +477,11 @@ export class CommunityService {
     const body = {
       id,
       meta: seal(key, id, 'meta', { name }),
-      profile: seal(key, id, 'profile', { name: this.myName(), avatar: this.myAvatar() }),
+      profile: seal(key, id, 'profile', {
+        name: this.myName(),
+        avatar: this.myAvatar(),
+        identityKey: this.myIdentityKey(),
+      }),
       channels: [
         { id: text, kind: 'text', name: seal(key, id, `channel:${text}`, { name: 'general' }) },
         { id: voice, kind: 'voice', name: seal(key, id, `channel:${voice}`, { name: 'Lounge' }) },
@@ -815,17 +864,20 @@ export class CommunityService {
   }
 
   /** Encrypts a file on this device and uploads only the ciphertext. */
-  private async upload(file: {
-    name: string;
-    mime: string;
-    bytes: Uint8Array;
-    width?: number;
-    height?: number;
-    thumb?: string;
-  }): Promise<AttachmentPointer> {
+  async upload(
+    file: {
+      name: string;
+      mime: string;
+      bytes: Uint8Array;
+      width?: number;
+      height?: number;
+      thumb?: string;
+    },
+    retain?: 'dm',
+  ): Promise<AttachmentPointer> {
     const requestBytes = this.requireBytes();
     const enc = encryptAttachment(file.bytes);
-    const url = `${this.server()}${API_PREFIX}/attachments`;
+    const url = `${this.server()}${API_PREFIX}/attachments${retain ? `?retain=${retain}` : ''}`;
     const post = async (): Promise<Uint8Array> =>
       requestBytes(url, { method: 'POST', body: enc.blob, token: await this.token(), maxBytes: 4096 });
     let res: Uint8Array;
@@ -981,6 +1033,7 @@ export class CommunityService {
   }
 
   private handle(e: ServerEvent): void {
+    for (const l of this.rawListeners) l(e);
     switch (e.t) {
       case 'ready':
         this.backoff = 1000;

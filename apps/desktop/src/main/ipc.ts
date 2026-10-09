@@ -34,6 +34,8 @@ import type { IdentityService } from './identity/identity-service.ts';
 import { UserFacingError, type AccountService } from './account/account-service.ts';
 import { attachmentPointerSchema, type CommunityAction } from '../shared/community-actions.ts';
 import { CommunityError, type CommunityService } from './community/community-service.ts';
+import type { DmService } from './dm/dm-service.ts';
+import type { DmAction, DmEvent } from '../shared/dm.ts';
 import { desktopCapturer } from 'electron';
 import type { UpdateService } from './updater/update-service.ts';
 import { releasePageUrl } from './updater/verify-download.ts';
@@ -50,6 +52,7 @@ export interface IpcDeps {
   identity: IdentityService;
   account: AccountService;
   community: CommunityService;
+  dm: DmService;
   /** Screen chosen in River's picker for the next screen share. */
   selectScreen(sourceId: string): void;
 }
@@ -147,6 +150,7 @@ export function registerIpc(deps: IpcDeps): void {
     result(() => deps.community.send(z.string().parse(channelId), text)),
   );
   handle(IPC.communityAction, (_e, action) => result(() => deps.community.action(action as CommunityAction)));
+  handle(IPC.dmAction, (_e, action) => result(() => deps.dm.action(action as DmAction)));
   handle(IPC.profileGet, () => deps.community.profile());
   handle(IPC.attachmentSave, (event, raw) =>
     result(async () => {
@@ -245,6 +249,12 @@ export function broadcastUpdateStatus(target: WebContents, updates: UpdateServic
 export function broadcastAccountStatus(target: WebContents, account: AccountService): () => void {
   return account.onStatus((status) => {
     if (!target.isDestroyed()) target.send(IPC.accountStatusChanged, status);
+  });
+}
+
+export function broadcastDmEvents(target: WebContents, dm: DmService): () => void {
+  return dm.onEvent((event: DmEvent) => {
+    if (!target.isDestroyed()) target.send(IPC.dmEvent, event);
   });
 }
 

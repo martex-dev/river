@@ -7,6 +7,7 @@ import type { AppInfo } from '../shared/ipc.ts';
 import {
   broadcastAccountStatus,
   broadcastCommunityEvents,
+  broadcastDmEvents,
   broadcastStorageStatus,
   broadcastUpdateStatus,
   registerIpc,
@@ -22,6 +23,7 @@ import {
   uiSession,
   UI_PARTITION,
 } from './security.ts';
+import { DmService } from './dm/dm-service.ts';
 import { startMessageNotifications } from './notifications.ts';
 import { SettingsStore } from './settings-store.ts';
 import { electronKeystore } from './storage/electron-keystore.ts';
@@ -76,6 +78,7 @@ async function start(): Promise<void> {
     requestBytes: createRequestBytes((input, init) => net.fetch(input as string, init)),
     log,
   });
+  const dm = new DmService({ db: () => storage.db(), identity, account, community, log });
   // Connect whenever local data becomes available (now, or after the user unlocks).
   const connectAll = async (): Promise<void> => {
     await account.connect();
@@ -157,6 +160,7 @@ async function start(): Promise<void> {
     identity,
     account,
     community,
+    dm,
     selectScreen: (id) => {
       chosenScreen = id;
     },
@@ -166,7 +170,8 @@ async function start(): Promise<void> {
   broadcastStorageStatus(window.webContents, storage);
   broadcastAccountStatus(window.webContents, account);
   broadcastCommunityEvents(window.webContents, community);
-  startMessageNotifications({ community, settings: () => settings.get(), window });
+  broadcastDmEvents(window.webContents, dm);
+  startMessageNotifications({ community, dm, settings: () => settings.get(), window });
   window.on('focus', () => window.flashFrame(false));
   if (updates) {
     const service = updates;

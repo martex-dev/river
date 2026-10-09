@@ -78,6 +78,32 @@ export class IdentityService {
   }
 
   /**
+   * Main-process-only: the full identity for libsignal's identity-key store,
+   * which needs the private key for session agreement. Never sent over IPC.
+   */
+  protocolIdentity(): {
+    riverId: string;
+    publicKey: Uint8Array;
+    privateKey: Uint8Array;
+    registrationId: number;
+  } | null {
+    const db = this.db();
+    if (!db) return null;
+    const row = db
+      .prepare('SELECT river_id, public_key, private_key, registration_id FROM identity WHERE id = 1')
+      .get() as
+      | { river_id: string; public_key: Uint8Array; private_key: Uint8Array; registration_id: number }
+      | undefined;
+    if (!row) return null;
+    return {
+      riverId: row.river_id,
+      publicKey: new Uint8Array(row.public_key),
+      privateKey: new Uint8Array(row.private_key),
+      registrationId: row.registration_id,
+    };
+  }
+
+  /**
    * Main-process-only access for protocol code: public material plus a signing
    * function. The private key is read, used and zeroed inside `sign`.
    */
