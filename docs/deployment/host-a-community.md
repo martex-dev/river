@@ -6,6 +6,15 @@ through a free Cloudflare tunnel. No domain, no account, no payment.
 You need: this repository on your PC with Node.js 24 (already the case if you
 build River), and River installed.
 
+## Shortcut
+
+After step 1, one command starts both the server and the tunnel and prints the
+address (port 8790 by default; change it with `-Port` if something else uses it):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "C:\Users\PC Games\Desktop\River\scripts\host\start-community-host.ps1"
+```
+
 ## 1. Install the tunnel tool (once)
 
 Open **PowerShell** and run:
