@@ -84,7 +84,7 @@ test('create, invite, join, chat and call between two members', async () => {
   await alice.getByPlaceholder('e.g. The Crew').fill('The Crew');
   await alice.getByRole('button', { name: 'Create community' }).click();
   await expect(alice.locator('.community__title strong')).toHaveText('The Crew');
-  await alice.getByRole('button', { name: 'Invite people' }).click();
+  await alice.getByRole('button', { name: 'Invite people' }).first().click();
   const invite = (await alice.locator('.invite-box__link').innerText()).trim();
   expect(invite).toMatch(/\/join#c=.+&k=.+/);
   // "Copy link" really puts the link on the clipboard.

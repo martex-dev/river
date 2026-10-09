@@ -17,6 +17,7 @@ import {
   RichText,
   SmileIcon,
   TrashIcon,
+  UserPlusIcon,
   UsersIcon,
   XIcon,
   can,
@@ -108,6 +109,16 @@ export function TextChannel(props: {
         <strong>{channel.name}</strong>
         {channel.topic && <span className="chat__topic">{channel.topic}</span>}
         <span className="chat__head-actions">
+          {can(community.permissions, Permission.CREATE_INVITE) && (
+            <button
+              className="icon-btn"
+              aria-label="Invite people"
+              title="Invite people"
+              onClick={() => s.setModal({ kind: 'invite', communityId: community.id })}
+            >
+              <UserPlusIcon size={18} />
+            </button>
+          )}
           <button
             className={`icon-btn ${s.showSearch ? 'is-on' : ''}`}
             aria-label="Search"
