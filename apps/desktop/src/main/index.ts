@@ -123,7 +123,8 @@ async function start(): Promise<void> {
     // Development builds can look elsewhere for an older River Host, so a test run never takes over a real one.
     homeDir: (!app.isPackaged && process.env.RIVER_DEV_HOME) || app.getPath('home'),
     localOnly: !app.isPackaged && process.env.RIVER_DEV_LOCAL_HOSTING === 'true',
-    autoAdoptInstanceId: HOME_SERVER.instanceId,
+    // Installed builds only: a development run or a test must never take over a real River Host.
+    ...(app.isPackaged ? { autoAdoptInstanceId: HOME_SERVER.instanceId } : {}),
     settings,
     log,
     pinnedId: () => locator.pinnedId(),

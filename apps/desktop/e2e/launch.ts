@@ -1,4 +1,6 @@
-import { resolve } from 'node:path';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
 
 export const TEST_PASSPHRASE = 'river end-to-end test passphrase';
@@ -21,7 +23,14 @@ export async function launchRiver(
 ): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
     args: [resolve(__dirname, '..'), `--user-data-dir=${userData}`, ...(options.args ?? [])],
-    env: { ...process.env, ELECTRON_RENDERER_URL: '', ...options.env },
+    env: {
+      ...process.env,
+      ELECTRON_RENDERER_URL: '',
+      // Every test app gets its own empty home, so it can never find (or take over) a real
+      // River Host on the machine running the tests.
+      RIVER_DEV_HOME: mkdtempSync(join(tmpdir(), 'river-e2e-home-')),
+      ...options.env,
+    },
   });
   const page = await app.firstWindow();
   await page.waitForSelector('.rail, .lock, .onboarding');
