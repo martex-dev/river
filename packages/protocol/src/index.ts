@@ -47,6 +47,7 @@ export function checkCompatibility(
   return 'compatible';
 }
 export * from './accounts.ts';
+export * from './admin.ts';
 export * from './communities.ts';
 export * from './instance.ts';
 export * from './messaging.ts';
