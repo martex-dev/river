@@ -131,9 +131,12 @@ describe('community key epochs', { timeout: 60_000 }, () => {
         .select(['key_epoch', 'rotation_needed'])
         .executeTakeFirstOrThrow(),
     ).toEqual({ key_epoch: 1, rotation_needed: 0 });
-    await bob.community.refresh();
-    await bob.dm.sync();
-    await until(() => epochs(bob.local, created.id).includes(1));
+    // Alice hands the key over in the background; keep delivering mail as the WebSocket would.
+    await until(async () => {
+      await bob.community.refresh();
+      await bob.dm.sync();
+      return epochs(bob.local, created.id).includes(1);
+    });
 
     // New messages use the new key: Bob reads them, Carol's old key cannot.
     const sent = await alice.community.send(general.id, 'after Carol left');
@@ -155,13 +158,14 @@ describe('community key epochs', { timeout: 60_000 }, () => {
     await dave.community.join(oldLink, async () => undefined);
     await dave.community.refresh();
     await until(async () => (await serverDb.db.selectFrom('mailbox').selectAll().execute()).length > 0);
-    await alice.community.refresh();
-    await alice.dm.sync();
-    // The answer is queued behind Alice's mailbox work; in the app it arrives over the WebSocket.
+    // Alice answers when she reads Dave's request, and Dave when he reads her answer; in the app
+    // both arrive over the WebSocket, here each round delivers whatever is waiting.
     await until(async () => {
+      await alice.community.refresh();
+      await alice.dm.sync();
       await dave.dm.sync();
       return epochs(dave.local, created.id).includes(1);
-    });
+    }, 20_000);
     expect((await dave.community.messages(general.id)).map((m) => m.text)).toContain('after Carol left');
 
     // A member the server injected (no real invite key, so its profile opens with no key) gets nothing.
