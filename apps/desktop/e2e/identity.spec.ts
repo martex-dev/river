@@ -14,6 +14,7 @@ test('first run creates an identity whose private key never reaches the UI', asy
   await page.getByPlaceholder('e.g. Alex').fill(`  ${TEST_NAME}  `);
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByText('Creating your keys')).toBeVisible();
+  await page.getByRole('button', { name: /Skip for now/ }).click({ timeout: 15_000 });
   await expect(page.getByRole('heading', { name: `This is you, ${TEST_NAME}` })).toBeVisible({
     timeout: 15_000,
   });

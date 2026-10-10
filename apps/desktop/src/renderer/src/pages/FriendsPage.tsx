@@ -116,7 +116,12 @@ export function FriendsPage(): ReactElement {
       </nav>
 
       {tab === 'add' ? (
-        <AddFriend serverUrl={account.serverUrl} myId={account.riverId} onSent={() => setTab('all')} />
+        <AddFriend
+          serverUrl={account.serverUrl}
+          myId={account.riverId}
+          myUsername={account.username}
+          onSent={() => setTab('all')}
+        />
       ) : (
         <>
           <input
@@ -281,35 +286,56 @@ function FriendRow(props: {
   );
 }
 
-function AddFriend(props: { serverUrl: string; myId: string; onSent(): void }): ReactElement {
+function AddFriend(props: {
+  serverUrl: string;
+  myId: string;
+  myUsername: string | null;
+  onSent(): void;
+}): ReactElement {
   const notify = useCommunity((s) => s.notify);
-  const [target, setTarget] = useState('');
+  const [handle, setHandle] = useState('');
   const [message, setMessage] = useState(GREETING);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const parsed = parseFriend(target);
   const myLink = friendLink(props.serverUrl, props.myId);
-  const otherServer = parsed?.serverUrl && parsed.serverUrl !== props.serverUrl.replace(/\/+$/, '');
-  const error =
-    target.trim() === ''
-      ? null
-      : !parsed
-        ? 'Paste a friend link or a River ID.'
-        : parsed.riverId === props.myId
-          ? "That's you!"
-          : otherServer
-            ? 'That person is on another River server. Friends need to be on the same server for now.'
-            : null;
 
   const submit = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
-    if (!parsed || error) return;
+    const value = handle.trim();
+    if (!value) return;
     setBusy(true);
-    const ok = await sendFriendRequest(parsed.riverId, message.trim() || GREETING);
+    setError(null);
+    // A username (maybe with a leading @), or an old-style friend link / River ID.
+    let riverId: string;
+    const link = parseFriend(value);
+    if (link) {
+      if (link.riverId === props.myId) {
+        setBusy(false);
+        return setError("That's you!");
+      }
+      if (link.serverUrl && link.serverUrl !== props.serverUrl.replace(/\/+$/, '')) {
+        setBusy(false);
+        return setError('That link is for a different River server.');
+      }
+      riverId = link.riverId;
+    } else {
+      const found = await window.river.users.lookup(value);
+      if (!found.ok) {
+        setBusy(false);
+        return setError(found.message);
+      }
+      if (found.value.riverId === props.myId) {
+        setBusy(false);
+        return setError("That's you!");
+      }
+      riverId = found.value.riverId;
+    }
+    const ok = await sendFriendRequest(riverId, message.trim() || GREETING);
     setBusy(false);
-    if (!ok) return;
+    if (!ok) return setError('Could not send the request. Try again.');
     notify('Friend request sent');
-    setTarget('');
+    setHandle('');
     props.onSent();
   };
 
@@ -318,15 +344,22 @@ function AddFriend(props: { serverUrl: string; myId: string; onSent(): void }): 
       <form className="glass card" onSubmit={(e) => void submit(e)}>
         <h2 className="card__title">Add a friend</h2>
         <p className="muted small">
-          Paste their friend link or River ID. They'll get your message as a request.
+          Type their username — like <span className="mono">@alex</span>. They get your message as a request.
         </p>
-        <label className="textfield">
-          <span className="field__label">Friend link or River ID</span>
+        <label className="textfield username-field">
+          <span className="username-field__at" aria-hidden="true">
+            @
+          </span>
           <input
-            value={target}
-            onChange={(e) => setTarget(e.target.value)}
-            placeholder="https://…/add#… or xxxxxxxx-xxxx-…"
+            value={handle.replace(/^@/, '')}
+            onChange={(e) => {
+              setHandle(e.target.value);
+              setError(null);
+            }}
+            placeholder="username"
+            autoCapitalize="none"
             spellCheck={false}
+            aria-label="Friend's username"
             aria-invalid={error ? true : undefined}
           />
         </label>
@@ -336,15 +369,17 @@ function AddFriend(props: { serverUrl: string; myId: string; onSent(): void }): 
           <input value={message} maxLength={200} onChange={(e) => setMessage(e.target.value)} />
         </label>
         <div className="button-row">
-          <button className="btn btn--primary" disabled={busy || !parsed || !!error}>
-            {busy ? 'Setting up encryption…' : 'Send friend request'}
+          <button className="btn btn--primary" disabled={busy || handle.trim() === ''}>
+            {busy ? 'Sending…' : 'Send friend request'}
           </button>
         </div>
       </form>
       <div className="glass card">
-        <h2 className="card__title">Your friend link</h2>
+        <h2 className="card__title">You are {props.myUsername ? `@${props.myUsername}` : 'on River'}</h2>
         <p className="muted small">
-          Send this to people you want to add you. Anyone with it can message you.
+          {props.myUsername
+            ? 'Share your username and people can add you. Or send them your link.'
+            : 'Choose a username in Settings → Account so people can add you by name. You can still share your link.'}
         </p>
         <code className="invite-box__link">{myLink}</code>
         <div className="button-row">

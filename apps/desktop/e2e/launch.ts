@@ -17,6 +17,7 @@ export async function launchRiver(
   options: {
     completeOnboarding?: boolean;
     name?: string;
+    username?: string;
     args?: string[];
     env?: Record<string, string>;
   } = {},
@@ -45,6 +46,15 @@ export async function launchRiver(
     await page.getByRole('button', { name: 'Create my identity' }).click();
     await page.getByPlaceholder('e.g. Alex').fill(options.name ?? TEST_NAME);
     await page.getByRole('button', { name: 'Continue' }).click();
+    // Username step (1.0.13): set it if a username was asked for, otherwise skip.
+    const skip = page.getByRole('button', { name: /Skip for now/ });
+    await skip.waitFor({ timeout: 15_000 });
+    if (options.username) {
+      await page.getByLabel('Username', { exact: true }).fill(options.username);
+      await page.getByRole('button', { name: 'Continue' }).click();
+    } else {
+      await skip.click();
+    }
     await page.getByRole('button', { name: 'Enter River' }).click({ timeout: 15_000 });
     await page.waitForSelector('.rail');
   }

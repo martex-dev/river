@@ -2,6 +2,7 @@ import { generateKeyPair, sign, verify } from '@river/crypto';
 import {
   API_PREFIX,
   accountResponseSchema,
+  usernameResponseSchema,
   challengeResponseSchema,
   checkCompatibility,
   deviceListMessage,
@@ -24,6 +25,7 @@ import type { LocalDatabase } from '../storage/database.ts';
 interface AccountRow {
   server_url: string;
   river_id: string;
+  username: string | null;
   device_id: number;
   device_public_key: Uint8Array;
   device_list: Uint8Array;
@@ -67,6 +69,7 @@ export class AccountService {
       server: new URL(row.server_url).host,
       serverUrl: row.server_url,
       riverId: row.river_id,
+      username: row.username,
       deviceId: row.device_id,
       devices: list.devices.length,
       listVersion: row.device_list_version,
@@ -85,7 +88,7 @@ export class AccountService {
     return this.token;
   }
 
-  async register(rawServerUrl: unknown): Promise<AccountStatus> {
+  async register(rawServerUrl: unknown, signupCode?: string): Promise<AccountStatus> {
     const db = this.deps.db();
     const signer = this.deps.identity.signer();
     if (!db || !signer) throw new UserFacingError('Create your identity before creating an account.');
@@ -136,6 +139,7 @@ export class AccountService {
         challenge,
         identitySignature: b64(signer.sign(message)),
         deviceSignature: b64(sign(device.privateKey, message)),
+        ...(signupCode ? { signupCode } : {}),
       };
       const res = await requestJson(
         `${server}${API_PREFIX}/accounts`,
@@ -206,6 +210,13 @@ export class AccountService {
         { method: 'GET', token: session.token },
         accountResponseSchema,
       );
+      // Keep the username the server has (the operator may have set one for us; we may have set it here).
+      if (account.username !== undefined && account.username !== row.username) {
+        this.deps
+          .db()
+          ?.prepare('UPDATE account SET username = ? WHERE id = 1')
+          .run(account.username ?? null);
+      }
       const listBytes = unb64(account.deviceList);
       const genuine =
         account.riverId === row.river_id &&
@@ -253,11 +264,48 @@ export class AccountService {
     return (
       (db
         .prepare(
-          `SELECT server_url, river_id, device_id, device_public_key, device_list, device_list_signature,
-                  device_list_version FROM account WHERE id = 1`,
+          `SELECT server_url, river_id, username, device_id, device_public_key, device_list,
+                  device_list_signature, device_list_version FROM account WHERE id = 1`,
         )
         .get() as AccountRow | undefined) ?? null
     );
+  }
+
+  /** Finds someone by @username, to add them as a friend. */
+  async lookupUser(rawUsername: unknown): Promise<{ username: string; riverId: string }> {
+    const row = this.row();
+    if (!row || !this.token) throw new UserFacingError('Connect to your server first, then try again.');
+    const username = (typeof rawUsername === 'string' ? rawUsername : '').trim().replace(/^@/, '');
+    try {
+      return await this.deps.requestJson(
+        `${row.server_url}${API_PREFIX}/users/lookup?username=${encodeURIComponent(username)}`,
+        { method: 'GET', token: this.token },
+        usernameResponseSchema,
+      );
+    } catch (err) {
+      throw toUserFacing(err);
+    }
+  }
+
+  /** Chooses or changes your username on the server (people find you by it). */
+  async setUsername(rawUsername: unknown): Promise<AccountStatus> {
+    const db = this.deps.db();
+    const row = this.row();
+    if (!db || !row) throw new UserFacingError('Create your account first.');
+    if (!this.token) throw new UserFacingError('Connect to your server first, then try again.');
+    const username = typeof rawUsername === 'string' ? rawUsername.trim() : '';
+    try {
+      const res = await this.deps.requestJson(
+        `${row.server_url}${API_PREFIX}/accounts/me/username`,
+        { method: 'PUT', body: { username }, token: this.token },
+        usernameResponseSchema,
+      );
+      db.prepare('UPDATE account SET username = ? WHERE id = 1').run(res.username);
+      this.setConnection(this.connection);
+      return this.status();
+    } catch (err) {
+      throw toUserFacing(err);
+    }
   }
 
   /**
@@ -308,6 +356,12 @@ function toUserFacing(err: unknown): UserFacingError {
         return new UserFacingError('Your identity already has an account on this server.');
       case 'rate_limited':
         return new UserFacingError('The server is busy. Try again in a minute.');
+      case 'username_taken':
+      case 'bad_username':
+      case 'signup_invite_only':
+      case 'invalid_signup':
+      case 'account_suspended':
+        return new UserFacingError(err.message);
       case 'unauthorized':
         return new UserFacingError('The server did not recognise this device.');
       default:

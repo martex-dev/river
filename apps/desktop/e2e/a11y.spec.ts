@@ -29,7 +29,7 @@ test('main screens have no serious accessibility problems', async () => {
     await audit(section);
   }
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  for (const tab of ['Updates', 'Server', 'Backup', 'Appearance', 'Notifications', 'System', 'About']) {
+  for (const tab of ['Updates', 'Account', 'Backup', 'Appearance', 'Notifications', 'System', 'About']) {
     await page.getByRole('button', { name: tab, exact: true }).click();
     await audit(`Settings → ${tab}`);
   }

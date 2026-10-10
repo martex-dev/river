@@ -43,7 +43,16 @@ export function AdminPage(): ReactElement {
     return map;
   }, [communities, conversations]);
   const communityNames = useMemo(() => new Map(communities.map((c) => [c.id, c.name])), [communities]);
-  const nameOf = (riverId: string): string => names.get(riverId) ?? `River user ${riverId.slice(0, 8)}`;
+  // Prefer the public @username; fall back to a display name this app knows, then a short id.
+  const usernames = useMemo(
+    () => new Map((data?.accounts ?? []).filter((a) => a.username).map((a) => [a.riverId, a.username!])),
+    [data],
+  );
+  const nameOf = (riverId: string): string => {
+    const u = usernames.get(riverId);
+    if (u) return `@${u}`;
+    return names.get(riverId) ?? `River user ${riverId.slice(0, 8)}`;
+  };
 
   const apply = useCallback((res: Awaited<ReturnType<typeof window.river.admin.overview>>): void => {
     if (res.ok) {
@@ -106,6 +115,8 @@ export function AdminPage(): ReactElement {
           <Stat label="Timed out or banned" value={suspended} />
         </div>
       )}
+
+      {data && <SignupControls data={data} onChanged={() => void load()} />}
 
       <section className="glass card admin__section" aria-labelledby="admin-people">
         <div className="admin__head">
@@ -327,5 +338,125 @@ function ConfirmBody(props: {
         </button>
       </div>
     </>
+  );
+}
+
+/** Create accounts ahead of time and choose whether anyone may sign up. */
+function SignupControls(props: { data: AdminOverview; onChanged(): void }): ReactElement {
+  const [username, setUsername] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [made, setMade] = useState<{ username: string; link: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const inviteOnly = props.data.signupMode === 'invite';
+
+  const create = async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    const res = await window.river.admin.createSignup(username.trim());
+    setBusy(false);
+    if (!res.ok) {
+      play('error');
+      return setError(res.message);
+    }
+    play('success');
+    setMade({ username: res.value.username, link: res.value.link });
+    setUsername('');
+    props.onChanged();
+  };
+
+  return (
+    <section className="glass card admin__section" aria-labelledby="admin-signups">
+      <h2 id="admin-signups" className="card__title">
+        Accounts you create
+      </h2>
+      <div className="admin__mode">
+        <span className="muted small">
+          {inviteOnly
+            ? 'Invite-only: only people you make a sign-up link for can join.'
+            : 'Open: anyone who downloads River can create an account here.'}
+        </span>
+        <button
+          className="btn btn--ghost btn--small"
+          onClick={() =>
+            void window.river.admin.setSignupMode(inviteOnly ? 'open' : 'invite').then((r) => {
+              if (r.ok) props.onChanged();
+            })
+          }
+        >
+          {inviteOnly ? 'Allow anyone to join' : 'Make invite-only'}
+        </button>
+      </div>
+
+      <div className="username-row">
+        <div className="textfield username-field">
+          <span className="username-field__at" aria-hidden="true">
+            @
+          </span>
+          <input
+            value={username.replace(/^@/, '')}
+            onChange={(e) => {
+              setUsername(e.target.value);
+              setError(null);
+            }}
+            placeholder="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            maxLength={32}
+            aria-label="Username for the new account"
+          />
+        </div>
+        <button
+          className="btn btn--primary btn--small"
+          disabled={busy || username.trim().length < 3}
+          onClick={() => void create()}
+        >
+          {busy ? 'Creating…' : 'Create account'}
+        </button>
+      </div>
+      {error && <p className="field__error">{error}</p>}
+
+      {made && (
+        <div className="admin__signup-link">
+          <span>
+            Send this link to <strong>@{made.username}</strong> — they open it in River and the account is
+            theirs:
+          </span>
+          <code>{made.link}</code>
+          <button
+            className="btn btn--ghost btn--small"
+            onClick={() =>
+              void navigator.clipboard.writeText(made.link).then(() => {
+                play('success');
+                setCopied(true);
+              })
+            }
+          >
+            {copied ? 'Copied ✓' : 'Copy link'}
+          </button>
+        </div>
+      )}
+
+      {props.data.signups.length > 0 && (
+        <div className="admin__signups">
+          <p className="muted small">Waiting to be claimed:</p>
+          {props.data.signups.map((s) => (
+            <div key={s.username} className="admin__row">
+              <strong>@{s.username}</strong>
+              <button
+                className="btn btn--link btn--small"
+                onClick={() =>
+                  void window.river.admin.deleteSignup(s.username).then((r) => {
+                    if (r.ok) props.onChanged();
+                  })
+                }
+              >
+                Cancel
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

@@ -5,7 +5,7 @@ import { RiverMark } from './RiverMark.tsx';
 import { IdentityFingerprint } from './IdentityFingerprint.tsx';
 import { RestoreForm } from './BackupPanel.tsx';
 
-type Step = 'welcome' | 'name' | 'creating' | 'done' | 'restore';
+type Step = 'welcome' | 'name' | 'creating' | 'username' | 'done' | 'restore';
 
 /** First run: create the user's cryptographic identity. No phone number, no e-mail. */
 export function Onboarding(props: {
@@ -17,6 +17,10 @@ export function Onboarding(props: {
   const [name, setName] = useState('');
   const [identity, setIdentity] = useState<IdentityInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [username, setUsername] = useState('');
+  const [savingUser, setSavingUser] = useState(false);
+  const [needsLink, setNeedsLink] = useState(false);
+  const [link, setLink] = useState('');
 
   useEffect(() => {
     if (step !== 'creating') return;
@@ -27,7 +31,7 @@ export function Onboarding(props: {
         if (cancelled) return;
         setIdentity(created);
         props.onCreated(created);
-        setStep('done');
+        setStep('username');
       })
       .catch(() => {
         if (cancelled) return;
@@ -45,6 +49,39 @@ export function Onboarding(props: {
     if (name.trim().length > 64) return setError('Use 64 characters or fewer.');
     setError(null);
     setStep('creating');
+  };
+
+  // Your account is created automatically in the background; this gives it a @username people
+  // use to find you. If the server is still connecting, River waits and tries again.
+  const submitUsername = async (e: FormEvent): Promise<void> => {
+    e.preventDefault();
+    setSavingUser(true);
+    setError(null);
+    const deadline = Date.now() + 25_000;
+    for (;;) {
+      const res = await window.river.account.setUsername(username.trim());
+      if (res.ok) {
+        setSavingUser(false);
+        setStep('done');
+        return;
+      }
+      // No server yet (you will host your own, or set one in Settings): let them move on.
+      if (/create your account first|connect to your server first/i.test(res.message)) {
+        setSavingUser(false);
+        setError('You can choose your username in Settings → Account once your account is ready.');
+        return;
+      }
+      const connecting = /reach the server|setting up/i.test(res.message);
+      if (connecting && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 1500));
+        continue;
+      }
+      setSavingUser(false);
+      // Invite-only server: the person needs a sign-up link from whoever runs it.
+      setError(/only accepts people its owner invites/i.test(res.message) ? res.message : res.message);
+      setNeedsLink(/only accepts people its owner invites/i.test(res.message));
+      return;
+    }
   };
 
   return (
@@ -137,6 +174,78 @@ export function Onboarding(props: {
             <h1 className="onboarding__title">Creating your keys…</h1>
             <p className="lock__text">Generating an identity key pair on this computer.</p>
           </div>
+        )}
+
+        {step === 'username' && (
+          <form className="lock__form" onSubmit={(e) => void submitUsername(e)}>
+            <h1 className="onboarding__title">Pick a username</h1>
+            <p className="lock__text">
+              This is how friends find and add you — like <span className="mono">@alex</span>. Letters,
+              numbers, <span className="mono">_</span> and <span className="mono">.</span>
+            </p>
+            <label className="textfield username-field">
+              <span className="username-field__at" aria-hidden="true">
+                @
+              </span>
+              <input
+                type="text"
+                autoFocus
+                inputMode="text"
+                autoCapitalize="none"
+                spellCheck={false}
+                maxLength={32}
+                placeholder="username"
+                aria-label="Username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value.replace(/^@/, ''))}
+              />
+            </label>
+            {error && (
+              <p className="field__error" role="alert">
+                {error}
+              </p>
+            )}
+            {needsLink && (
+              <label className="textfield">
+                <span className="field__label">Paste your sign-up link</span>
+                <input
+                  value={link}
+                  onChange={(e) => setLink(e.target.value)}
+                  placeholder="https://…/add#s=…"
+                  spellCheck={false}
+                />
+              </label>
+            )}
+            <button type="button" className="btn btn--link" onClick={() => setStep('done')}>
+              Skip for now — choose a username later
+            </button>
+            {needsLink ? (
+              <button
+                type="button"
+                className="btn btn--primary lock__submit"
+                disabled={savingUser || link.trim() === ''}
+                onClick={() => {
+                  setSavingUser(true);
+                  setError(null);
+                  void window.river.account.redeemSignup(link.trim()).then((res) => {
+                    setSavingUser(false);
+                    if (res.ok) setStep('done');
+                    else setError(res.message);
+                  });
+                }}
+              >
+                {savingUser ? 'Setting up…' : 'Use sign-up link'} <ArrowIcon size={16} />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="btn btn--primary lock__submit"
+                disabled={savingUser || username.trim().length < 3}
+              >
+                {savingUser ? 'Setting up your account…' : 'Continue'} <ArrowIcon size={16} />
+              </button>
+            )}
+          </form>
         )}
 
         {step === 'done' && identity && (
