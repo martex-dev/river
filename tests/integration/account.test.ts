@@ -155,6 +155,20 @@ describe('desktop ↔ server accounts', () => {
     expect(c.account.status()).toEqual({ state: 'none' });
   });
 
+  it('proves it can sign in at its own server before River moves it there', async () => {
+    const c = client();
+    c.identity.create('');
+    await c.account.register(SERVER);
+    // Same server, any address (the app uses its loopback address on the hosting PC).
+    expect(await c.account.canSignInAt('http://127.0.0.1:9999')).toBe(true);
+    // A server that does not hold this account refuses: River would not move there.
+    await serverDb.db.deleteFrom('devices').execute();
+    expect(await c.account.canSignInAt('http://127.0.0.1:9999')).toBe(false);
+    // Unreachable: no.
+    reachable = false;
+    expect(await c.account.canSignInAt('http://127.0.0.1:9999')).toBe(false);
+  });
+
   it('refuses a second account on the same device', async () => {
     const c = client();
     c.identity.create('');

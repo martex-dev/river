@@ -6,6 +6,14 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The hosting PC's own account now always connects to it.** If your account
+  had no saved server identity (accounts from before 1.0.8, or one that was
+  lost), River proves your account lives on this PC's server by signing in with
+  your device key, then connects to it directly. It never moves an account to a
+  server that does not hold it.
+
 ## [1.0.14] - 2026-10-10
 
 **No more server talk — River just connects.**

@@ -116,8 +116,8 @@ export class HostManager {
    * The owner's own app uses this instead of the public tunnel: always reachable,
    * no tunnel in the path.
    */
-  localServer(): { url: string; instanceId: string } | null {
-    if (this.port === null || this.port === 0 || !this.server || !this.instanceId) return null;
+  localServer(): { url: string; instanceId: string | null } | null {
+    if (this.port === null || this.port === 0 || !this.server) return null;
     return { url: this.local(), instanceId: this.instanceId };
   }
 

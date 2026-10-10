@@ -128,12 +128,21 @@ async function start(): Promise<void> {
     settings,
     log,
     pinnedId: () => locator.pinnedId(),
+    accountOnline: () => {
+      const s = account.status();
+      return s.state === 'registered' && s.connection === 'online';
+    },
+    canSignInAt: (url) => account.canSignInAt(url),
     followOwnServer: (url) => {
       const status = account.status();
       if (status.state !== 'registered' || status.serverUrl === url) return;
       account.moveServer(url);
       settings.update({ server: { url } });
-      community.reconnectNow();
+      // Sign in at the new address straight away, then bring the live connection back.
+      void account.connect().then(() => {
+        community.stop();
+        community.ensureSocket();
+      });
     },
   });
   void hosting.init();
