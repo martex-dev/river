@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react';
+import { QuickSwitcher } from './components/QuickSwitcher.tsx';
 import { RiverMark } from './components/RiverMark.tsx';
 import { SECTION_ICONS, LockIcon } from './components/Icons.tsx';
 import { LockScreen } from './components/LockScreen.tsx';
@@ -96,6 +97,11 @@ export function App(): ReactElement {
     document.documentElement.dataset.motion = reducedMotion ? 'reduced' : 'full';
   }, [reducedMotion]);
 
+  const density = useRiver((r) => r.settings?.appearance.density ?? 'cozy');
+  useEffect(() => {
+    document.documentElement.dataset.density = density;
+  }, [density]);
+
   useEffect(() => {
     if (info) document.documentElement.dataset.platform = info.platform;
   }, [info]);
@@ -184,6 +190,7 @@ export function App(): ReactElement {
       <CallAudio />
       <VoiceHotkeys />
       <Overlays />
+      <QuickSwitcher />
     </div>
   );
 }

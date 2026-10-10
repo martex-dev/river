@@ -154,6 +154,21 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     .strict(),
   /** Your name in one community (null: use your River name). */
   z.object({ a: z.literal('setNickname'), communityId: id, nickname: name.nullable() }).strict(),
+  /** Keep an unsent message on this device until it is delivered (survives restarts). */
+  z
+    .object({
+      a: z.literal('outboxSave'),
+      localId: z.string().regex(/^local-[0-9]+-[0-9]+$/),
+      channelId: id,
+      text: z.string().max(4000),
+      replyTo: id.optional(),
+      threadId: id.optional(),
+      attachments: z.array(attachmentPointerSchema).max(10).optional(),
+      createdAt: z.iso.datetime(),
+    })
+    .strict(),
+  z.object({ a: z.literal('outboxDelete'), localId: z.string().max(64) }).strict(),
+  z.object({ a: z.literal('outboxList') }).strict(),
   /** Reconnect to the server right away instead of waiting for the next attempt. */
   z.object({ a: z.literal('reconnect') }).strict(),
   /** You have seen this channel up to now. */
@@ -257,6 +272,7 @@ export interface BanView {
 interface Results {
   createRole: string;
   createCategory: string;
+  outboxList: SavedOutgoing[];
   audit: AuditView[];
   bans: BanView[];
   send: ChatMessage;
@@ -271,3 +287,14 @@ interface Results {
 export type CommunityActionResult<A extends CommunityAction> = A['a'] extends keyof Results
   ? Results[A['a']]
   : null;
+
+/** An unsent message as kept on this device. */
+export interface SavedOutgoing {
+  localId: string;
+  channelId: string;
+  text: string;
+  replyTo?: string;
+  threadId?: string;
+  attachments?: AttachmentPointer[];
+  createdAt: string;
+}

@@ -46,6 +46,8 @@ export const settingsSchema = z.object({
   appearance: z.object({
     /** 'system' follows the OS reduced-motion preference. */
     motion: z.enum(['system', 'reduced', 'full']),
+    /** Added in 1.0.9: how tightly messages are packed. */
+    density: z.enum(['cozy', 'compact']),
   }),
   notifications: z.object({
     /** Default 'none': notifications say "New River message" with no sender or content. */
@@ -96,7 +98,7 @@ export type Settings = z.infer<typeof settingsSchema>;
 export const DEFAULT_SETTINGS: Settings = {
   schemaVersion: 1,
   updates: { channel: 'stable', autoCheck: true, autoDownload: true, installOnQuit: true },
-  appearance: { motion: 'system' },
+  appearance: { motion: 'system', density: 'cozy' },
   notifications: {
     preview: 'none',
     desktop: true,

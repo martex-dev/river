@@ -143,6 +143,8 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     set({ connection });
     if (res.ok) applyCommunities(res.value);
     set({ loaded: true, error: res.ok ? null : res.message });
+    // Messages that were still on their way when River closed.
+    if (res.ok) void import('./outbox.ts').then((m) => m.useOutbox.getState().restore());
   },
 
   handle: (event) => {

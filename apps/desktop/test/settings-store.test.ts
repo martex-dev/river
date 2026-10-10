@@ -83,6 +83,7 @@ describe('SettingsStore', () => {
     const s = new SettingsStore(file, nullLogger).get();
     expect(s).toEqual({
       ...v001,
+      appearance: { motion: 'reduced', density: 'cozy' },
       notifications: { ...DEFAULT_SETTINGS.notifications, preview: 'sender' },
       server: { url: null },
       voice: DEFAULT_SETTINGS.voice,
