@@ -26,6 +26,9 @@ export default defineConfig({
           index: resolve(__dirname, 'src/main/index.ts'),
           'host-server': resolve(__dirname, 'src/host/server-process.ts'),
         },
+        // Optional native speed-ups of the WebSocket library. Bundled, they become empty stubs
+        // and the first frame crashes the server; left out, ws uses its JavaScript fallback.
+        external: ['bufferutil', 'utf-8-validate'],
       },
     },
   },
