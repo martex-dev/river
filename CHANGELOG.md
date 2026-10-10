@@ -6,6 +6,34 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**Hosting built into River: your communities stay online from your PC, for free.**
+
+### Added
+
+- **Host on this PC.** River can run your community server itself — no
+  separate program, no account anywhere, nothing to set up. Turn it on in
+  **Settings → Hosting**, or just pick **On this PC — free** when you create a
+  community (the new default when you have no account yet).
+- **Starts with your PC.** While hosting is on, River starts when you sign in,
+  starts the server and opens its public address by itself, and keeps running
+  in the tray.
+- **Never loses anything.** Your communities live in a permanent folder on
+  your PC, with an automatic backup every day (newest seven kept) and a
+  **Back up now** button.
+- **Stays reachable.** River restarts the server or the tunnel if either stops,
+  reopens an address that stopped answering, and members' apps follow the new
+  address by themselves. Optionally keeps the PC from sleeping while hosting.
+- **Asks before going offline.** Quitting River from the tray while hosting
+  asks first. The tray shows whether hosting is online.
+- **Moves River Host into River.** Turning hosting on takes over an existing
+  River Host (1.0.8) on this PC with all its data; the old folder stays as a
+  backup.
+
+### Security
+
+- `cloudflared` is used only from a system location or as a pinned Cloudflare
+  release verified by SHA-256 before it runs. Details: THREAT_MODEL §5b.
+
 ## [1.0.9] - 2026-10-10
 
 **Polish: get around faster, and never lose a message.**

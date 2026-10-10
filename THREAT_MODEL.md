@@ -82,6 +82,29 @@ read this topic". Apps follow only notes signed by the server key they pinned
 while connected, and only to an address that answers with that same key, so a
 relay or a forger cannot redirect anyone to another server.
 
+### 5b. Hosting from the River app (1.0.11)
+
+When the user hosts communities on their PC, River runs the same server code in
+an Electron utility process (separate from the window and from the user's own
+encrypted data, which it never opens), listening on loopback only. Members
+reach it through a Cloudflare quick tunnel run by `cloudflared`:
+
+- River runs `cloudflared` only from a system install location (never `PATH`)
+  or from its own copy of a pinned release, downloaded from Cloudflare's GitHub
+  releases and checked against a SHA-256 built into River before first use and
+  on every start (macOS: the archive is pinned, and the unpacked binary's hash
+  is recorded).
+- Cloudflare terminates TLS for the tunnel and sees members' IP addresses and
+  connection times; content stays end-to-end encrypted.
+- The address announcement endpoint accepts only the per-start secret River
+  hands the server process, from loopback, without proxy headers (§5a).
+- Taking over an older River Host stops a process only after its command line
+  confirms it is `river-host.ts`, so a reused process id can never make River
+  stop an unrelated program.
+- Hosted data and daily backups sit unencrypted-at-rest in River's hosting
+  folder (they contain only ciphertext and routing metadata, as on any River
+  server); protect the PC's disk as you would a server's.
+
 ## 6. Key threats and mitigations (STRIDE summary)
 
 | Threat          | Example                                | Mitigation                                                                                                                              | Status                                                 |
