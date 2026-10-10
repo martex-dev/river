@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createIdentity, generateKeyPair, sign } from '@river/crypto';
 import {
   DEFAULT_EVERYONE,
@@ -798,6 +798,49 @@ describe('communities', () => {
       expect((await send(owner.token)).statusCode).toBe(201);
       const listed = (await fetchCommunity(a, member.token, cid)).channels.find((c) => c.id === text)!;
       expect([listed.announcement, listed.slowmode]).toEqual([true, 0]);
+    });
+
+    it('voice channels turn people away when full, except those who may move members', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, voice } = await createCommunity(a, owner.token);
+      const first = await join(a, owner.token, cid);
+      const second = await join(a, owner.token, cid);
+      expect(await status(a, 'PATCH', `/v1/channels/${voice}`, owner.token, { userLimit: 1 })).toBe(200);
+      expect(
+        (await fetchCommunity(a, first.token, cid)).channels.find((c) => c.id === voice)?.userLimit,
+      ).toBe(1);
+
+      await a.listen({ host: '127.0.0.1', port: 0 });
+      const { port } = a.server.address() as { port: number };
+      const connect = async (token: string) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/ws`);
+        const events: Array<{ t: string; code?: string; participants?: string[] }> = [];
+        ws.onmessage = (m) => events.push(JSON.parse(String(m.data)));
+        await new Promise((resolve, reject) => {
+          ws.onopen = resolve;
+          ws.onerror = reject;
+        });
+        ws.send(JSON.stringify({ t: 'auth', token }));
+        await vi.waitFor(() => expect(events.some((e) => e.t === 'ready')).toBe(true));
+        return { ws, events };
+      };
+      const one = await connect(first.token);
+      one.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      await vi.waitFor(() =>
+        expect(one.events.some((e) => e.t === 'voice' && e.participants?.length === 1)).toBe(true),
+      );
+
+      const two = await connect(second.token);
+      two.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      await vi.waitFor(() => expect(two.events).toContainEqual({ t: 'error', code: 'voice_full' }));
+
+      const boss = await connect(owner.token);
+      boss.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      await vi.waitFor(() =>
+        expect(boss.events.some((e) => e.t === 'voice' && e.participants?.length === 2)).toBe(true),
+      );
+      for (const c of [one, two, boss]) c.ws.close();
     });
   });
   describe('attachments', () => {

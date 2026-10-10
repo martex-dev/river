@@ -23,6 +23,7 @@ export interface ChannelModel {
   synced: boolean;
   announcement: boolean;
   slowmode: number;
+  userLimit: number;
 }
 
 export interface CategoryModel {
@@ -170,6 +171,7 @@ export class CommunityModel {
         synced: c.synced,
         announcement: c.announcement,
         slowmode: c.slowmode,
+        userLimit: c.userLimit,
       })),
       // A category whose channels are all hidden from you stays hidden too.
       categories: this.categories.filter(
@@ -265,6 +267,7 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
         synced,
         announcement: ch.announcement === 1,
         slowmode: ch.slowmode,
+        userLimit: ch.user_limit,
       };
     }),
     categories: categoryModels,

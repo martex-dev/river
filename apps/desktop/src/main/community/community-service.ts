@@ -584,6 +584,7 @@ export class CommunityService {
           synced: ch.synced,
           announcement: ch.announcement,
           slowmode: ch.slowmode,
+          userLimit: ch.userLimit,
         };
       })
       .sort((a, b) => a.position - b.position);
@@ -1156,6 +1157,7 @@ export class CommunityService {
         if (act.synced !== undefined) body.synced = act.synced;
         if (act.announcement !== undefined) body.announcement = act.announcement;
         if (act.slowmode !== undefined) body.slowmode = act.slowmode;
+        if (act.userLimit !== undefined) body.userLimit = act.userLimit;
         await this.call(`/channels/${act.channelId}`, 'PATCH', body, z.unknown());
         break;
       }
@@ -1844,6 +1846,11 @@ export class CommunityService {
       }
       case 'voice.disconnect':
         this.emit({ t: 'voiceDisconnect' });
+        return;
+      case 'error':
+        if (e.code === 'voice_full') this.emit({ t: 'voiceRefused', reason: 'full' });
+        else if (e.code === 'voice_forbidden' || e.code === 'forbidden')
+          this.emit({ t: 'voiceRefused', reason: 'forbidden' });
         return;
       case 'typing':
         this.emit({ t: 'typing', communityId: e.communityId, channelId: e.channelId, riverId: e.riverId });

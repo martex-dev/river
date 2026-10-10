@@ -212,6 +212,14 @@ export function ChannelRow(props: {
               {mentions}
             </span>
           )}
+          {ch.kind === 'voice' && ch.userLimit > 0 && (
+            <span
+              className={`channel__limit ${participants.length >= ch.userLimit ? 'is-full' : ''}`}
+              title={`${participants.length} of ${ch.userLimit} places taken`}
+            >
+              {participants.length}/{ch.userLimit}
+            </span>
+          )}
         </button>
         {canManage && (
           <button

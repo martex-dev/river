@@ -14,6 +14,7 @@ import * as m0007 from './migrations/0007_key_epochs.ts';
 import * as m0008 from './migrations/0008_categories.ts';
 import * as m0009 from './migrations/0009_moderation.ts';
 import * as m0010 from './migrations/0010_channels_threads.ts';
+import * as m0011 from './migrations/0011_voice_limits.ts';
 import type { Database } from './schema.ts';
 
 export type Dialect = 'sqlite' | 'postgres';
@@ -39,6 +40,7 @@ export const MIGRATIONS: Record<string, Migration> = {
   '0008_categories': m0008,
   '0009_moderation': m0009,
   '0010_channels_threads': m0010,
+  '0011_voice_limits': m0011,
 };
 
 /**

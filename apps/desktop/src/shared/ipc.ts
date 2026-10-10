@@ -174,6 +174,8 @@ export interface ChannelView {
   announcement: boolean;
   /** Seconds between your messages (0 = off). */
   slowmode: number;
+  /** Most people in this voice channel at once (0 = no limit). */
+  userLimit: number;
 }
 
 export interface CategoryView {
@@ -285,6 +287,8 @@ export type CommunityEvent =
       states: Record<string, VoiceStateView>;
     }
   | { t: 'voiceDisconnect' }
+  /** The server would not let you into a voice channel. */
+  | { t: 'voiceRefused'; reason: 'full' | 'forbidden' }
   | { t: 'typing'; communityId: string; channelId: string; riverId: string }
   | { t: 'removed'; communityId: string; reason: 'kicked' | 'banned' | 'left' | 'deleted' }
   | { t: 'focusChannel'; communityId: string; channelId: string }

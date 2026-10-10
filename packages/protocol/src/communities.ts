@@ -70,6 +70,8 @@ export const channelSchema = z.object({
   announcement: z.boolean().default(false),
   /** Seconds between messages from the same member; 0 = off (1.0.7). */
   slowmode: z.number().int().min(0).max(21_600).default(0),
+  /** Most people in a voice channel at once; 0 = no limit (1.0.8). */
+  userLimit: z.number().int().min(0).max(99).default(0),
 });
 export type ChannelWire = z.infer<typeof channelSchema>;
 
@@ -159,6 +161,7 @@ export const updateChannelRequestSchema = z
     synced: z.boolean().optional(),
     announcement: z.boolean().optional(),
     slowmode: z.number().int().min(0).max(21_600).optional(),
+    userLimit: z.number().int().min(0).max(99).optional(),
   })
   .strict();
 
