@@ -69,6 +69,17 @@ Each line is one PR; each version ships when its section is done.
 - [x] Compact mode; quick switcher (Ctrl+K); keyboard shortcuts panel
 - [x] Accessibility and performance pass; security review of 1.0.x
 
+### 1.0.10 — Hosting status and quick menus
+
+- [x] "Hosting on this PC" in Settings → System; right-click menus; mark read/unread
+
+### 1.0.11 — Hosting built into River
+
+- [ ] The River server runs inside the app (no separate install); data in a permanent folder with daily backups
+- [ ] Public address opens by itself (verified cloudflared); members follow it automatically
+- [ ] Starts with the PC, keeps running in the tray, optional keep-awake; warns before going offline
+- [ ] "Host it on this PC" is the default when you start a community; adopts an existing River Host
+
 ### Later
 
 - [ ] Sealed sender for direct messages

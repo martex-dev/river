@@ -6,6 +6,26 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.10] - 2026-10-10
+
+**Quicker everyday actions, and a view of your own hosting.**
+
+### Added
+
+- **Hosting on this PC** in Settings → System shows whether this PC runs a
+  River server, its current public address (with a copy button) and whether
+  members' apps follow it automatically.
+- **Right-click menus** on messages (react, reply, thread, copy text, edit,
+  pin, mark unread, delete), channels (mark as read, invite, edit) and
+  community icons (mark all as read, invite, settings, nickname, leave).
+- **Mark as read / mark unread.** Mark a whole channel read, or mark any
+  message unread to come back to it later.
+
+### Fixed
+
+- Installing River Host again replaces a copy that is already running instead
+  of starting a second one.
+
 ## [1.0.9] - 2026-10-10
 
 **Polish: get around faster, and never lose a message.**
@@ -646,7 +666,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.9...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.10...HEAD
+[1.0.10]: https://github.com/martex-dev/river/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/martex-dev/river/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/martex-dev/river/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/martex-dev/river/compare/v1.0.6...v1.0.7
