@@ -27,17 +27,30 @@ async function open(name: string, env: Record<string, string> = {}): Promise<Pag
   return page;
 }
 
-test('a new user hosts a community on this PC in one step, and a friend joins and chats', async () => {
-  test.setTimeout(120_000);
+test('the operator hosts River on their PC, a friend joins, and the operator manages people', async () => {
+  test.setTimeout(150_000);
   const hana = await open('Hana', { RIVER_DEV_LOCAL_HOSTING: 'true', RIVER_DEV_HOME: tmp('river-home-') });
+  // Hosting is not in everyone's way: it is reached from Settings → Server.
+  await hana.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(hana.getByRole('button', { name: 'Hosting', exact: true })).toHaveCount(0);
+  await hana.getByRole('button', { name: 'Server', exact: true }).click();
+  await hana.getByRole('button', { name: 'Run a River server on this PC…' }).click();
+  await hana.getByRole('switch', { name: 'Host communities on this PC' }).click({ force: true });
+  await expect(hana.locator('.hosting__state')).toHaveText(/Online/, { timeout: 60_000 });
+  const address = (await hana.locator('.hosting__address code').innerText()).trim();
+  expect(address).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+  await expect(hana.locator('.hosting__backup')).toContainText('Last backup today');
+  await auditA11y(hana, 'Settings → Hosting');
+  const settings = await hana.evaluate(() => window.river.settings.get());
+  expect(settings.system).toEqual({ startAtLogin: true, closeToTray: true });
+
+  // Her community lives on the server inside her own River.
   await hana.getByRole('button', { name: 'Communities', exact: true }).click();
   await hana.getByPlaceholder('e.g. The Crew').fill('Hosted Here');
-  // Hosting on this PC is the default: no server address to find.
-  await expect(hana.getByRole('radio', { name: /On this PC/ })).toBeChecked();
-  await expect(hana.getByPlaceholder('https://river.example.org')).toHaveCount(0);
+  await hana.getByRole('button', { name: 'Use a different server' }).click();
+  await hana.getByPlaceholder('https://river.example.org').fill(address);
   await hana.getByRole('button', { name: 'Create community' }).click();
   await expect(hana.locator('.community__title strong')).toHaveText('Hosted Here', { timeout: 60_000 });
-
   await hana.getByRole('button', { name: 'Invite people' }).first().click();
   const invite = (await hana.locator('.invite-box__link').innerText()).trim();
   await hana.getByRole('button', { name: 'Close', exact: true }).click();
@@ -56,20 +69,35 @@ test('a new user hosts a community on this PC in one step, and a friend joins an
   await hana.keyboard.press('Enter');
   await expect(ivan.locator('.chat__messages')).toContainText('hi ivan, this lives on my PC');
 
-  // Settings → Hosting shows it running, backed up, and starting with the PC.
+  // Admin: only on the hosting PC. Everyone on the server, by name where Hana knows them.
+  await expect(ivan.getByRole('button', { name: 'Admin', exact: true })).toHaveCount(0);
+  await hana.getByRole('button', { name: 'Admin', exact: true }).click();
+  const people = hana.locator('.admin__section').first();
+  const row = people.locator('.admin__row', { hasText: 'Ivan' });
+  await expect(row).toBeVisible();
+  await expect(people.locator('.admin__row', { hasText: 'Hana' })).toContainText('You');
+  await expect(hana.locator('.admin__section').nth(1)).toContainText('Hosted Here');
+  await auditA11y(hana, 'Admin');
+  if (process.env.RIVER_SCREENSHOTS) await hana.screenshot({ path: 'test-results/admin.png' });
+
+  // A timeout signs Ivan out until it ends; ending it lets him back.
+  await row.getByLabel('Time out Ivan').selectOption({ label: '1 hour' });
+  await expect(row).toContainText('Timed out until');
+  await row.getByRole('button', { name: 'End timeout' }).click();
+  await expect(row).not.toContainText('Timed out');
+
+  // A ban asks first and can carry a reason.
+  await row.getByRole('button', { name: 'Ban' }).click();
+  await hana.getByLabel('Reason (optional, shown to them)').fill('testing');
+  await hana.getByRole('alertdialog').getByRole('button', { name: 'Ban' }).click();
+  await expect(row).toContainText('Banned');
+  await expect(row).toContainText('Reason: testing');
+  await row.getByRole('button', { name: 'Unban' }).click();
+  await expect(row).not.toContainText('Banned');
+
+  // Turning hosting off asks first, and nothing is deleted.
   await hana.getByRole('button', { name: 'Settings', exact: true }).click();
   await hana.getByRole('button', { name: 'Hosting', exact: true }).click();
-  await expect(hana.getByRole('switch', { name: 'Host communities on this PC' })).toBeChecked();
-  await expect(hana.locator('.hosting__state')).toHaveText(/Online/);
-  await expect(hana.locator('.hosting__backup')).toContainText('Last backup today');
-  await hana.getByRole('button', { name: 'Back up now' }).click();
-  await expect(hana.getByRole('button', { name: 'Back up now' })).toBeEnabled();
-  await auditA11y(hana, 'Settings → Hosting');
-  if (process.env.RIVER_SCREENSHOTS) await hana.screenshot({ path: 'test-results/hosting.png' });
-  const settings = await hana.evaluate(() => window.river.settings.get());
-  expect(settings.system).toEqual({ startAtLogin: true, closeToTray: true });
-
-  // Turning it off asks first, and nothing is deleted.
   await hana.getByRole('switch', { name: 'Host communities on this PC' }).click({ force: true });
   await expect(hana.getByRole('alertdialog')).toContainText('Stop hosting?');
   await hana.getByRole('button', { name: 'Keep hosting' }).click();
