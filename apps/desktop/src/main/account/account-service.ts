@@ -179,6 +179,36 @@ export class AccountService {
   }
 
   /**
+   * True if this account can sign in at `url` with its device key — i.e. that
+   * server really holds this account. Changes nothing; used before moving the
+   * account to a new address it was not told about by a signed note.
+   */
+  async canSignInAt(url: string): Promise<boolean> {
+    const row = this.row();
+    if (!row || !this.deps.identity.signer()) return false;
+    const { requestJson } = this.deps;
+    try {
+      const { challenge } = await requestJson(
+        `${url}${API_PREFIX}/auth/challenge`,
+        { method: 'POST', body: { purpose: 'session' } },
+        challengeResponseSchema,
+      );
+      const signature = this.signWithDevice(sessionMessage(unb64(challenge), row.river_id, row.device_id));
+      await requestJson(
+        `${url}${API_PREFIX}/auth/session`,
+        {
+          method: 'POST',
+          body: { riverId: row.river_id, deviceId: row.device_id, challenge, signature: b64(signature) },
+        },
+        sessionResponseSchema,
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Opens a session with the device key and checks that the server holds the
    * device list we signed. Never throws; problems are reported in status().
    */

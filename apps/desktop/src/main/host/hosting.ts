@@ -39,6 +39,10 @@ export interface HostingDeps {
   log: Logger;
   /** The server identity your own account is on (pinned when it first connects). */
   pinnedId(): string | null;
+  /** Whether your account is connected right now. */
+  accountOnline(): boolean;
+  /** Whether your account can sign in at this address (it lives on that server). */
+  canSignInAt(url: string): Promise<boolean>;
   /** Your own server has a new address: follow it at once instead of waiting for the relay. */
   followOwnServer(url: string): void;
   /** Development builds only (end-to-end tests): host without a public address. */
@@ -108,10 +112,36 @@ export class Hosting {
     });
   }
 
-  /** If this PC hosts the account's own server, point the app's account at it over loopback. */
+  private checkingOwn = false;
+  /**
+   * If this PC hosts the account's own server, point the app's account at it over loopback.
+   * A matching pinned identity is enough. Without one (an account from before identities
+   * were pinned, or a pin that was lost), the account must prove it lives there by signing
+   * in with its device key — so River never moves an account to a server that is not its own.
+   */
   private syncOwnConnection(): void {
     const local = this.manager.localServer();
-    if (local && local.instanceId === this.deps.pinnedId()) this.deps.followOwnServer(local.url);
+    if (!local) return;
+    const pinned = this.deps.pinnedId();
+    if (pinned !== null && pinned === local.instanceId) {
+      this.deps.followOwnServer(local.url);
+      return;
+    }
+    // Pinned to a different server we can identify: the account belongs elsewhere.
+    if (pinned !== null && local.instanceId !== null) return;
+    if (this.deps.accountOnline() || this.checkingOwn) return;
+    this.checkingOwn = true;
+    void this.deps
+      .canSignInAt(local.url)
+      .then((ok) => {
+        if (ok) {
+          this.deps.log.info('host: your account lives on this PC; connecting to it directly');
+          this.deps.followOwnServer(local.url);
+        }
+      })
+      .finally(() => {
+        this.checkingOwn = false;
+      });
   }
 
   /** At app start: resume hosting if it is on, and look for an older River Host. */
