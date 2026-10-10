@@ -330,6 +330,21 @@ const TEXT_PERMS = [
   Permission.PIN_MESSAGES,
   Permission.MANAGE_CHANNELS,
 ];
+const SLOWMODES: Array<[number, string]> = [
+  [0, 'Off'],
+  [5, '5 seconds'],
+  [10, '10 seconds'],
+  [30, '30 seconds'],
+  [60, '1 minute'],
+  [120, '2 minutes'],
+  [300, '5 minutes'],
+  [600, '10 minutes'],
+  [1800, '30 minutes'],
+  [3600, '1 hour'],
+  [7200, '2 hours'],
+  [21600, '6 hours'],
+];
+
 /** A category's permissions cover both its text and voice channels. */
 const CATEGORY_PERMS = [
   Permission.VIEW_CHANNELS,
@@ -430,6 +445,40 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
                     onChange={(e) => setTopic(e.target.value)}
                   />
                 </label>
+              )}
+              {channel.kind === 'text' && (
+                <>
+                  <Toggle
+                    label="Announcement channel"
+                    help="Only people who can manage messages post here; everyone else reads and reacts."
+                    checked={channel.announcement}
+                    onChange={(on) =>
+                      void s.run({ a: 'updateChannel', channelId: channel.id, announcement: on })
+                    }
+                  />
+                  <label className="textfield">
+                    <span className="field__label">Slowmode</span>
+                    <select
+                      value={channel.slowmode}
+                      onChange={(e) =>
+                        void s.run({
+                          a: 'updateChannel',
+                          channelId: channel.id,
+                          slowmode: Number(e.target.value),
+                        })
+                      }
+                    >
+                      {SLOWMODES.map(([seconds, label]) => (
+                        <option key={seconds} value={seconds}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="muted small">
+                      How long members wait between messages. People who manage messages are not slowed down.
+                    </span>
+                  </label>
+                </>
               )}
               {community.categories.length > 0 && (
                 <label className="textfield">

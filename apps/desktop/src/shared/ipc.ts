@@ -170,6 +170,10 @@ export interface ChannelView {
   lastReadAt: string | null;
   /** Uses its category's permissions. */
   synced: boolean;
+  /** Only people who may manage messages post here. */
+  announcement: boolean;
+  /** Seconds between your messages (0 = off). */
+  slowmode: number;
 }
 
 export interface CategoryView {
@@ -255,6 +259,18 @@ export interface ChatMessage {
   attachments: AttachmentPointer[];
   mentionsMe: boolean;
   mine: boolean;
+  /** Set on replies inside a thread: the thread's starting message. */
+  threadId: string | null;
+  /** The thread started from this message, if any. */
+  thread: ThreadView | null;
+}
+
+export interface ThreadView {
+  name: string;
+  count: number;
+  lastAt: string | null;
+  archived: boolean;
+  creator: string;
 }
 
 export type CommunityEvent =

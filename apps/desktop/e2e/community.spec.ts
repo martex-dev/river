@@ -420,4 +420,19 @@ test('a brand-new user creates a community from a template in one step', async (
   await expect(dave.locator('.chat__new-bar')).toContainText('1 new message since');
   await dave.getByRole('button', { name: 'Mark as read' }).click();
   await expect(dave.locator('.chat__new-bar')).toHaveCount(0);
+
+  // Threads: Carol starts one from her message and replies; Dave sees the count and opens it.
+  const carolMsg = carol.locator('.msg', { hasText: 'hello Dave, welcome!' });
+  await carolMsg.hover();
+  await carolMsg.getByRole('button', { name: 'Create thread' }).click();
+  await expect(carol.locator('.thread-panel')).toBeVisible();
+  await carol.getByLabel('Reply in thread').fill('first reply in the thread');
+  await carol.getByLabel('Reply in thread').press('Enter');
+  await expect(carol.locator('.thread-panel')).toContainText('first reply in the thread');
+  const summary = dave.locator('.thread-summary');
+  await expect(summary).toContainText('1 reply', { timeout: 15_000 });
+  await summary.click();
+  await expect(dave.locator('.thread-panel')).toContainText('first reply in the thread', { timeout: 15_000 });
+  await auditA11y(dave, 'Thread panel');
+  await dave.getByRole('button', { name: 'Close thread' }).click();
 });

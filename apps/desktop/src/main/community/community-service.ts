@@ -549,9 +549,12 @@ export class CommunityService {
     const myRoles = c.members.find((m) => m.riverId === me)?.roles ?? [];
     const myTimeout = c.members.find((m) => m.riverId === me)?.timeoutUntil;
     const timedOut = !!myTimeout && Date.parse(myTimeout) > Date.now() && me !== ownerId;
-    const permsOfMe = (overwrites?: ChannelView['overwrites']): number => {
-      const p = permsOf(me, myRoles, overwrites);
-      return timedOut && !(p & Permission.ADMINISTRATOR) ? p & ~TIMEOUT_DENIES : p;
+    const permsOfMe = (overwrites?: ChannelView['overwrites'], announcement = false): number => {
+      let p = permsOf(me, myRoles, overwrites);
+      if (timedOut && !(p & Permission.ADMINISTRATOR)) p &= ~TIMEOUT_DENIES;
+      // Same rule as the server: announcement channels are for people who manage messages.
+      if (announcement && !(p & Permission.MANAGE_MESSAGES)) p &= ~Permission.SEND_MESSAGES;
+      return p;
     };
 
     const channels: ChannelView[] = c.channels
@@ -573,12 +576,14 @@ export class CommunityService {
           topic,
           position: ch.position,
           overwrites: ch.overwrites,
-          permissions: permsOfMe(ch.overwrites),
+          permissions: permsOfMe(ch.overwrites, ch.announcement),
           private: !!everyoneOverwrite && (everyoneOverwrite.deny & Permission.VIEW_CHANNELS) !== 0,
           parentId: ch.parentId,
           unread: this.isUnread(ch.id, ch.lastMessageAt),
           lastReadAt: this.readMarkers().get(ch.id) ?? null,
           synced: ch.synced,
+          announcement: ch.announcement,
+          slowmode: ch.slowmode,
         };
       })
       .sort((a, b) => a.position - b.position);
@@ -771,6 +776,24 @@ export class CommunityService {
         attachments,
         mentionsMe: m.sender !== me && this.mentions(text, community, m.sender, replyTo ?? undefined),
         mine: m.sender === me,
+        threadId: m.threadId,
+        thread: m.thread
+          ? {
+              name: ((): string => {
+                try {
+                  return String(
+                    open<{ name: string }>(key, communityId, `thread:${m.id}`, m.thread.name).name,
+                  ).slice(0, 64);
+                } catch {
+                  return 'Thread';
+                }
+              })(),
+              count: m.thread.count,
+              lastAt: m.thread.lastAt,
+              archived: m.thread.archived,
+              creator: m.thread.creator,
+            }
+          : null,
       };
     } catch {
       return null;
@@ -1037,6 +1060,7 @@ export class CommunityService {
     rawText: unknown,
     replyTo?: string,
     attachments: AttachmentPointer[] = [],
+    threadId?: string,
   ): Promise<ChatMessage> {
     const text = attachments.length ? z.string().max(4000).parse(rawText) : textSchema.parse(rawText);
     const communityId = this.communityOf(channelId);
@@ -1055,6 +1079,7 @@ export class CommunityService {
         id,
         body: seal(key, communityId, `message:${channelId}`, body),
         ...(attachments.length ? { attachments: attachments.map((a) => a.id) } : {}),
+        ...(threadId ? { threadId } : {}),
       },
       messageSchema,
     );
@@ -1129,6 +1154,8 @@ export class CommunityService {
         }
         if (act.overwrites) body.overwrites = act.overwrites;
         if (act.synced !== undefined) body.synced = act.synced;
+        if (act.announcement !== undefined) body.announcement = act.announcement;
+        if (act.slowmode !== undefined) body.slowmode = act.slowmode;
         await this.call(`/channels/${act.channelId}`, 'PATCH', body, z.unknown());
         break;
       }
@@ -1334,7 +1361,55 @@ export class CommunityService {
           act.text,
           act.replyTo,
           act.attachments,
+          act.threadId,
         )) as CommunityActionResult<A>;
+      case 'createThread': {
+        const communityId = this.communityOf(act.channelId);
+        await this.call(
+          `/messages/${act.messageId}/thread`,
+          'POST',
+          {
+            name: seal(this.requireKey(communityId), communityId, `thread:${act.messageId}`, {
+              name: act.name,
+            }),
+          },
+          z.unknown(),
+        );
+        break;
+      }
+      case 'updateThread': {
+        const communityId = this.communityOf(act.channelId);
+        await this.call(
+          `/threads/${act.messageId}`,
+          'PATCH',
+          {
+            ...(act.name !== undefined
+              ? {
+                  name: seal(this.requireKey(communityId), communityId, `thread:${act.messageId}`, {
+                    name: act.name,
+                  }),
+                }
+              : {}),
+            ...(act.archived !== undefined ? { archived: act.archived } : {}),
+          },
+          z.unknown(),
+        );
+        break;
+      }
+      case 'threadMessages': {
+        const communityId = this.communityOf(act.channelId);
+        const query = act.before ? `?before=${encodeURIComponent(act.before)}` : '';
+        const res = await this.call(
+          `/threads/${act.messageId}/messages${query}`,
+          'GET',
+          undefined,
+          messagesResponseSchema,
+        );
+        for (const m of res.messages) this.remember(m.id);
+        return res.messages
+          .map((m) => this.toChat(communityId, m))
+          .filter((m): m is ChatMessage => m !== null) as CommunityActionResult<A>;
+      }
       case 'upload':
         return (await this.upload(act)) as CommunityActionResult<A>;
       case 'download':

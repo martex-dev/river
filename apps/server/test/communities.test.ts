@@ -719,6 +719,86 @@ describe('communities', () => {
       expect(page.body).toContain('paste it anywhere in River');
       expect(page.headers['content-security-policy']).toContain("default-src 'none'");
     });
+
+    it('threads: start one from a message, reply in it, keep it out of the channel, archive it', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const root = id();
+      await status(a, 'POST', `/v1/channels/${text}/messages`, member.token, { id: root, body: sealed() });
+      expect(await status(a, 'POST', `/v1/messages/${root}/thread`, member.token, { name: sealed() })).toBe(
+        201,
+      );
+      expect(await status(a, 'POST', `/v1/messages/${root}/thread`, owner.token, { name: sealed() })).toBe(
+        409,
+      );
+      const reply = id();
+      expect(
+        await status(a, 'POST', `/v1/channels/${text}/messages`, owner.token, {
+          id: reply,
+          body: sealed(),
+          threadId: root,
+        }),
+      ).toBe(201);
+      // No threads inside threads.
+      expect(await status(a, 'POST', `/v1/messages/${reply}/thread`, owner.token, { name: sealed() })).toBe(
+        400,
+      );
+
+      const channel = (
+        await a.inject({ method: 'GET', url: `/v1/channels/${text}/messages`, headers: auth(owner.token) })
+      ).json().messages as Array<{ id: string; thread: { count: number; creator: string } | null }>;
+      expect(channel.map((m) => m.id)).toEqual([root]);
+      expect(channel[0]!.thread).toMatchObject({ count: 1, creator: member.riverId });
+      const thread = (
+        await a.inject({ method: 'GET', url: `/v1/threads/${root}/messages`, headers: auth(member.token) })
+      ).json().messages as Array<{ id: string; threadId: string }>;
+      expect(thread).toEqual([expect.objectContaining({ id: reply, threadId: root })]);
+
+      // The creator archives it; then only managers can post there.
+      const outsider = await join(a, owner.token, cid);
+      expect(await status(a, 'PATCH', `/v1/threads/${root}`, outsider.token, { archived: true })).toBe(403);
+      expect(await status(a, 'PATCH', `/v1/threads/${root}`, member.token, { archived: true })).toBe(200);
+      expect(
+        await status(a, 'POST', `/v1/channels/${text}/messages`, outsider.token, {
+          id: id(),
+          body: sealed(),
+          threadId: root,
+        }),
+      ).toBe(403);
+      // Deleting the starting message removes the whole thread.
+      expect(await status(a, 'DELETE', `/v1/messages/${root}`, member.token)).toBe(200);
+      expect(await status(a, 'GET', `/v1/threads/${root}/messages`, owner.token)).toBe(404);
+    });
+
+    it('slowmode and announcement channels', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      expect(await status(a, 'PATCH', `/v1/channels/${text}`, owner.token, { slowmode: 60 })).toBe(200);
+      const send = (token: string) =>
+        a.inject({
+          method: 'POST',
+          url: `/v1/channels/${text}/messages`,
+          headers: auth(token),
+          payload: { id: id(), body: sealed() },
+        });
+      expect((await send(member.token)).statusCode).toBe(201);
+      const second = await send(member.token);
+      expect(second.statusCode).toBe(429);
+      expect(second.json().error.message).toMatch(/Slowmode is on: you can send again in \d+s/);
+      // People who manage the channel are not slowed down.
+      expect((await send(owner.token)).statusCode).toBe(201);
+      expect((await send(owner.token)).statusCode).toBe(201);
+
+      await status(a, 'PATCH', `/v1/channels/${text}`, owner.token, { slowmode: 0, announcement: true });
+      expect((await send(member.token)).statusCode).toBe(403);
+      expect((await send(owner.token)).statusCode).toBe(201);
+      const listed = (await fetchCommunity(a, member.token, cid)).channels.find((c) => c.id === text)!;
+      expect([listed.announcement, listed.slowmode]).toEqual([true, 0]);
+    });
   });
   describe('attachments', () => {
     const blob = (n = 1024): Buffer => randomBytes(16 + n + 32);

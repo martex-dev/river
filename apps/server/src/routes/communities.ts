@@ -10,6 +10,7 @@ import {
   communityIdSchema,
   createCategoryRequestSchema,
   createChannelRequestSchema,
+  createThreadRequestSchema,
   createCommunityRequestSchema,
   createInviteRequestSchema,
   createRoleRequestSchema,
@@ -28,6 +29,7 @@ import {
   timeoutRequestSchema,
   updateCategoryRequestSchema,
   updateChannelRequestSchema,
+  updateThreadRequestSchema,
   updateCommunityRequestSchema,
   updateRoleRequestSchema,
   type ServerEvent,
@@ -397,13 +399,21 @@ export async function registerCommunityRoutes(
           .where('id', '=', channelId)
           .execute();
       }
-      if (req.name !== undefined || req.position !== undefined || req.parentId !== undefined) {
+      if (
+        req.name !== undefined ||
+        req.position !== undefined ||
+        req.parentId !== undefined ||
+        req.announcement !== undefined ||
+        req.slowmode !== undefined
+      ) {
         await trx
           .updateTable('channels')
           .set({
             ...(req.name !== undefined ? { name: req.name } : {}),
             ...(req.position !== undefined ? { position: req.position } : {}),
             ...(req.parentId !== undefined ? { parent_id: req.parentId } : {}),
+            ...(req.announcement !== undefined ? { announcement: req.announcement ? 1 : 0 } : {}),
+            ...(req.slowmode !== undefined ? { slowmode: req.slowmode } : {}),
           })
           .where('id', '=', channelId)
           .execute();
@@ -425,6 +435,8 @@ export async function registerCommunityRoutes(
       ...(req.parentId !== undefined ? { parentId: req.parentId } : {}),
       ...(req.overwrites ? { overwrites: req.overwrites } : {}),
       ...(synced !== undefined ? { synced } : {}),
+      ...(req.announcement !== undefined ? { announcement: req.announcement } : {}),
+      ...(req.slowmode !== undefined ? { slowmode: req.slowmode } : {}),
     });
     changed(model);
     return { ok: true };
@@ -966,7 +978,11 @@ export async function registerCommunityRoutes(
     authed,
     async (request) => {
       const { channelId } = await channelCommunity(request.params.id, me(request));
-      let q = db.selectFrom('messages').selectAll().where('channel_id', '=', channelId);
+      let q = db
+        .selectFrom('messages')
+        .selectAll()
+        .where('channel_id', '=', channelId)
+        .where('thread_id', 'is', null);
       const before = request.query.before;
       if (before && /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(before)) q = q.where('sent_at', '<', before);
       if (request.query.pinned === '1') q = q.where('pinned', '=', 1);
@@ -986,6 +1002,34 @@ export async function registerCommunityRoutes(
         throw forbidden('You cannot send messages here');
       const req = parse(sendMessageRequestSchema, request.body);
       const attachments = req.attachments ?? [];
+      const managesMessages = model.can(me(request), Permission.MANAGE_MESSAGES, channelId);
+      if (req.threadId) {
+        const thread = await db
+          .selectFrom('threads')
+          .selectAll()
+          .where('id', '=', req.threadId)
+          .executeTakeFirst();
+        if (!thread || thread.channel_id !== channelId) throw notFound();
+        if (thread.archived && !managesMessages) throw forbidden('This thread is archived');
+      } else if (
+        ch.slowmode > 0 &&
+        !managesMessages &&
+        !model.can(me(request), Permission.MANAGE_CHANNELS, channelId)
+      ) {
+        const last = await db
+          .selectFrom('messages')
+          .select('sent_at')
+          .where('channel_id', '=', channelId)
+          .where('sender', '=', me(request))
+          .where('thread_id', 'is', null)
+          .orderBy('sent_at', 'desc')
+          .limit(1)
+          .executeTakeFirst();
+        const wait = last
+          ? Math.ceil((Date.parse(last.sent_at) + ch.slowmode * 1000 - deps.now().getTime()) / 1000)
+          : 0;
+        if (wait > 0) throw new HttpError(429, 'slowmode', `Slowmode is on: you can send again in ${wait}s.`);
+      }
       if (attachments.length && !model.can(me(request), Permission.ATTACH_FILES, channelId)) {
         throw forbidden('You cannot attach files here');
       }
@@ -1000,21 +1044,94 @@ export async function registerCommunityRoutes(
               body: req.body,
               sent_at: deps.now().toISOString(),
               pinned: 0,
+              thread_id: req.threadId ?? null,
             })
             .execute();
           await linkAttachments(trx, attachments, me(request), req.id);
+          if (req.threadId) {
+            await trx
+              .updateTable('threads')
+              .set((eb) => ({ count: eb('count', '+', 1), last_at: deps.now().toISOString(), archived: 0 }))
+              .where('id', '=', req.threadId)
+              .execute();
+          }
         });
       } catch (err) {
         if (err instanceof HttpError) throw err;
         throw new HttpError(409, 'conflict', 'Message ID already exists');
       }
       await pushMessage(model, req.id);
+      // The starting message shows the thread's reply count and last activity.
+      if (req.threadId) await pushMessage(model, req.threadId);
       const row = await db
         .selectFrom('messages')
         .selectAll()
         .where('id', '=', req.id)
         .executeTakeFirstOrThrow();
       return reply.code(201).send((await loadMessages(db, [row]))[0]);
+    },
+  );
+
+  // ---- threads ----------------------------------------------------------------------------------
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/messages/:id/thread`,
+    authed,
+    async (request, reply) => {
+      const { model, msg } = await messageContext(request.params.id, me(request));
+      if (msg.thread_id) throw bad('A thread cannot start inside another thread');
+      if (!model.can(me(request), Permission.SEND_MESSAGES, msg.channel_id)) throw forbidden();
+      const req = parse(createThreadRequestSchema, request.body);
+      try {
+        await db
+          .insertInto('threads')
+          .values({
+            id: msg.id,
+            channel_id: msg.channel_id,
+            name: req.name,
+            creator: me(request),
+            created_at: deps.now().toISOString(),
+            last_at: null,
+          })
+          .execute();
+      } catch {
+        throw new HttpError(409, 'conflict', 'That message already has a thread');
+      }
+      await pushMessage(model, msg.id);
+      return reply.code(201).send({ ok: true });
+    },
+  );
+
+  app.patch<{ Params: { id: string } }>(`${API_PREFIX}/threads/:id`, authed, async (request) => {
+    const { model, msg } = await messageContext(request.params.id, me(request));
+    const thread = await db.selectFrom('threads').selectAll().where('id', '=', msg.id).executeTakeFirst();
+    if (!thread) throw notFound();
+    const manager =
+      model.can(me(request), Permission.MANAGE_MESSAGES, msg.channel_id) ||
+      model.can(me(request), Permission.MANAGE_CHANNELS, msg.channel_id);
+    if (thread.creator !== me(request) && !manager) throw forbidden();
+    const req = parse(updateThreadRequestSchema, request.body);
+    await db
+      .updateTable('threads')
+      .set({
+        ...(req.name !== undefined ? { name: req.name } : {}),
+        ...(req.archived !== undefined ? { archived: req.archived ? 1 : 0 } : {}),
+      })
+      .where('id', '=', thread.id)
+      .execute();
+    await pushMessage(model, msg.id);
+    return { ok: true };
+  });
+
+  app.get<{ Params: { id: string }; Querystring: { before?: string } }>(
+    `${API_PREFIX}/threads/:id/messages`,
+    authed,
+    async (request) => {
+      const { msg } = await messageContext(request.params.id, me(request));
+      let q = db.selectFrom('messages').selectAll().where('thread_id', '=', msg.id);
+      const before = request.query.before;
+      if (before && /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(before)) q = q.where('sent_at', '<', before);
+      const rows = await q.orderBy('sent_at', 'desc').limit(PAGE).execute();
+      return { messages: await loadMessages(db, rows.reverse()) };
     },
   );
 
@@ -1035,7 +1152,18 @@ export async function registerCommunityRoutes(
     const { model, msg } = await messageContext(request.params.id, me(request));
     if (msg.sender !== me(request) && !model.can(me(request), Permission.MANAGE_MESSAGES, msg.channel_id))
       throw forbidden();
-    await db.deleteFrom('messages').where('id', '=', msg.id).execute();
+    await db.transaction().execute(async (trx) => {
+      await trx.deleteFrom('messages').where('thread_id', '=', msg.id).execute();
+      await trx.deleteFrom('threads').where('id', '=', msg.id).execute();
+      await trx.deleteFrom('messages').where('id', '=', msg.id).execute();
+      if (msg.thread_id)
+        await trx
+          .updateTable('threads')
+          .set((eb) => ({ count: eb('count', '-', 1) }))
+          .where('id', '=', msg.thread_id)
+          .execute();
+    });
+    if (msg.thread_id) await pushMessage(model, msg.thread_id);
     if (msg.sender !== me(request))
       await audit(model.id, me(request), 'message.delete', msg.sender, { channelId: msg.channel_id });
     hub.sendTo(model.viewers(msg.channel_id), {

@@ -66,6 +66,10 @@ export const channelSchema = z.object({
   lastMessageAt: z.string().max(40).nullable().default(null),
   /** The channel uses its category's permissions (1.0.6). */
   synced: z.boolean().default(false),
+  /** Only people who may manage messages can post (1.0.7). */
+  announcement: z.boolean().default(false),
+  /** Seconds between messages from the same member; 0 = off (1.0.7). */
+  slowmode: z.number().int().min(0).max(21_600).default(0),
 });
 export type ChannelWire = z.infer<typeof channelSchema>;
 
@@ -153,6 +157,8 @@ export const updateChannelRequestSchema = z
     parentId: channelIdSchema.nullable().optional(),
     /** true: use the category's permissions again (drops the channel's own). */
     synced: z.boolean().optional(),
+    announcement: z.boolean().optional(),
+    slowmode: z.number().int().min(0).max(21_600).optional(),
   })
   .strict();
 
@@ -257,6 +263,19 @@ export const messageSchema = z.object({
   reactions: z.array(reactionSchema).default([]),
   /** IDs of encrypted blobs; keys and names are inside the sealed body. */
   attachments: z.array(attachmentIdSchema).default([]),
+  /** The thread this message is a reply in (the thread's starting message), or null (1.0.7). */
+  threadId: messageIdSchema.nullable().default(null),
+  /** The thread started from this message, if any (1.0.7). */
+  thread: z
+    .object({
+      name: sealedSchema(SEALED_SMALL),
+      count: z.number().int().min(0),
+      lastAt: z.iso.datetime().nullable(),
+      archived: z.boolean(),
+      creator: riverIdSchema,
+    })
+    .nullable()
+    .default(null),
 });
 export type MessageWire = z.infer<typeof messageSchema>;
 export const sendMessageRequestSchema = z
@@ -264,7 +283,13 @@ export const sendMessageRequestSchema = z
     id: messageIdSchema,
     body: sealedSchema(SEALED_MESSAGE),
     attachments: z.array(attachmentIdSchema).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
+    /** Reply inside the thread started from this message (1.0.7). */
+    threadId: messageIdSchema.optional(),
   })
+  .strict();
+export const createThreadRequestSchema = z.object({ name: sealedSchema(SEALED_SMALL) }).strict();
+export const updateThreadRequestSchema = z
+  .object({ name: sealedSchema(SEALED_SMALL).optional(), archived: z.boolean().optional() })
   .strict();
 export const editMessageRequestSchema = z.object({ body: sealedSchema(SEALED_MESSAGE) }).strict();
 export const reactRequestSchema = z.object({ emoji: sealedSchema(SEALED_SMALL) }).strict();

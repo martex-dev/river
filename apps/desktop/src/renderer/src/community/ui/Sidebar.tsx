@@ -191,7 +191,15 @@ export function ChannelRow(props: {
           onClick={open}
         >
           <span className="channel__icon">
-            {ch.kind === 'text' ? <HashIcon size={17} /> : <SpeakerIcon size={17} />}
+            {ch.kind === 'voice' ? (
+              <SpeakerIcon size={17} />
+            ) : ch.announcement ? (
+              <span className="channel__emoji" aria-hidden="true">
+                📢
+              </span>
+            ) : (
+              <HashIcon size={17} />
+            )}
           </span>
           <span className="channel__name">{ch.name}</span>
           {ch.private && (

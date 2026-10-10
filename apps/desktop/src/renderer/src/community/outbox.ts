@@ -15,6 +15,8 @@ export interface Outgoing {
   text: string;
   replyTo?: string;
   attachments?: AttachmentPointer[];
+  /** A reply inside this thread. */
+  threadId?: string;
   status: 'waiting' | 'sending' | 'failed';
   error?: string;
   createdAt: string;
@@ -49,6 +51,7 @@ export const useOutbox = create<OutboxState>((set, get) => {
       text: item.text,
       ...(item.replyTo ? { replyTo: item.replyTo } : {}),
       ...(item.attachments ? { attachments: item.attachments } : {}),
+      ...(item.threadId ? { threadId: item.threadId } : {}),
     })) as Result<ChatMessage>;
     if (res.ok) {
       set({ items: get().items.filter((i) => i.localId !== localId) });

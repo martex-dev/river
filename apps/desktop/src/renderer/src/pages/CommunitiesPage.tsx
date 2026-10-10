@@ -3,6 +3,7 @@ import { Celebrations } from '../community/fx.tsx';
 import { ConnectionBanner, NetworkWatcher } from '../community/ui/ConnectionBanner.tsx';
 import { AddFriendDialog, JoinInviteDialog, PasteToJoin } from '../community/ui/PasteToJoin.tsx';
 import { StartScreen } from '../community/ui/StartScreen.tsx';
+import { ThreadPanel } from '../community/ui/Thread.tsx';
 import { useCommunity } from '../community/store.ts';
 import { ChannelSidebar } from '../community/ui/Sidebar.tsx';
 import { TextChannel } from '../community/ui/Chat.tsx';
@@ -124,7 +125,18 @@ export function CommunitiesPage(): ReactElement {
         )}
       </section>
 
-      {community && s.showMembers && channel?.kind === 'text' && <MemberList community={community} me={me} />}
+      {community && s.showMembers && channel?.kind === 'text' && !s.openThread && (
+        <MemberList community={community} me={me} />
+      )}
+      {community && channel?.kind === 'text' && s.openThread?.channelId === channel.id && (
+        <ThreadPanel
+          key={s.openThread.rootId}
+          community={community}
+          channel={channel}
+          rootId={s.openThread.rootId}
+          me={me}
+        />
+      )}
     </div>
   );
 }

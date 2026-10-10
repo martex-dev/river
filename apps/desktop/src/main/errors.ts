@@ -15,6 +15,7 @@ export function friendlyError(err: unknown): string {
   if (err instanceof NetworkError)
     return "Can't reach your River server. Check your internet connection; River keeps trying.";
   if (err instanceof ApiError) {
+    if (err.status === 429 && err.code === 'slowmode') return err.message;
     if (err.status === 429) return "You're doing that too fast. Wait a few seconds and try again.";
     if (err.status === 413) return "That's too large to send.";
     if (err.status === 401) return 'Your session ended. River is signing you in again; try once more.';
