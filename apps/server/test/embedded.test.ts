@@ -10,11 +10,12 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 describe('startServer', () => {
   it('listens on a free port, answers, backs up and closes', async () => {
     const config = loadConfig({
+      RIVER_PORT: '0',
       RIVER_LOG_LEVEL: 'silent',
       RIVER_DATABASE_URL: `sqlite:${join(dir, 'river.sqlite')}`,
       RIVER_ATTACHMENT_DIR: join(dir, 'attachments'),
     });
-    const server = await startServer({ ...config, port: 0 });
+    const server = await startServer(config);
     try {
       expect(server.port).toBeGreaterThan(0);
       const res = await fetch(`http://127.0.0.1:${server.port}/v1/health`);
