@@ -18,6 +18,7 @@ import {
   type AccountActionResult,
   type AccountStatus,
   type AppInfo,
+  type HostStatus,
   type IdentityInfo,
   type PassphraseResult,
   type Result,
@@ -65,6 +66,8 @@ export interface IpcDeps {
   afterRestore(): Promise<void>;
   /** Screen chosen in River's picker for the next screen share. */
   selectScreen(sourceId: string): void;
+  /** Finds out whether River Host runs a server on this PC. */
+  hostStatus(): Promise<HostStatus>;
 }
 
 /** Turns any error into a message that is safe to show. */
@@ -117,6 +120,7 @@ export function registerIpc(deps: IpcDeps): void {
     else await shell.openExternal(EXTERNAL_LINKS.releases);
   });
 
+  handle(IPC.hostStatus, () => deps.hostStatus());
   handle(IPC.securityStatus, () =>
     securityStatus({
       updatesEnabled: deps.updates !== null,

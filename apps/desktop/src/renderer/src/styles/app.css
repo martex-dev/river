@@ -1296,3 +1296,35 @@ html[data-density='compact'] .member {
   padding-top: 2px;
   padding-bottom: 2px;
 }
+
+/* ---------- Hosting on this PC (1.0.10) ---------- */
+.host-panel {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.host-panel__card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(4, 8, 16, 0.4);
+  animation: fade-in var(--dur) var(--ease-out);
+}
+.host-panel__card p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.host-panel__address {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.host-panel__address code {
+  overflow-wrap: anywhere;
+}

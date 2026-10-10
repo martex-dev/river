@@ -16,6 +16,7 @@ export const IPC = {
   updatesOpenDownload: 'river:updates:open-download',
   updatesStatusChanged: 'river:updates:status-changed',
   securityStatus: 'river:security:status',
+  hostStatus: 'river:host:status',
   serverCheck: 'river:server:check',
   storageStatus: 'river:storage:status',
   storageSetup: 'river:storage:setup-passphrase',
@@ -329,6 +330,8 @@ export interface RiverApi {
     onStatus(listener: (status: UpdateStatus) => void): () => void;
   };
   security: { status(): Promise<SecurityStatus> };
+  /** River Host on this PC, if it runs here. */
+  host: { status(): Promise<HostStatus> };
   server: { check(url: string): Promise<ServerCheckResult> };
   identity: {
     get(): Promise<IdentityInfo | null>;
@@ -392,3 +395,16 @@ export interface RiverApi {
   };
   links: { open(id: ExternalLinkId): Promise<void> };
 }
+
+/** A River server run by River Host on this PC (see docs/deployment/host-on-your-pc.md). */
+export type HostStatus =
+  | { state: 'none' }
+  | {
+      state: 'running';
+      /** Its current public address, once the tunnel is up. */
+      address: string | null;
+      /** It is the server your account is on. */
+      yours: boolean;
+      /** Members' apps can follow it to a new address. */
+      followable: boolean;
+    };

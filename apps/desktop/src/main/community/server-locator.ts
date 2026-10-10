@@ -100,6 +100,11 @@ export class ServerLocator {
     return url;
   }
 
+  /** The instance ID pinned for your account's server, if any. */
+  pinnedId(): string | null {
+    return this.current()?.instance_id ?? null;
+  }
+
   private current(): Pin | null {
     const db = this.deps.db();
     if (!db) return null;
