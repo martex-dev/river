@@ -355,10 +355,9 @@ test('a brand-new user creates a community from a template in one step', async (
   await carol.getByRole('radio', { name: /Gaming/ }).click();
   await expect(carol.getByLabel('Gaming channels')).toContainText('looking-for-group');
   await carol.getByPlaceholder('e.g. The Crew').fill('Squad Goals');
-  // No account yet: hosting on this PC is offered first; a server address can be given right here.
-  await expect(carol.getByRole('radio', { name: /On this PC/ })).toBeChecked();
-  await carol.getByText('On a River server').click();
-  await expect(carol.getByRole('radio', { name: /On a River server/ })).toBeChecked();
+  // No account yet: it goes to River's server, or to one named right here.
+  await expect(carol.getByPlaceholder('https://river.example.org')).toHaveCount(0);
+  await carol.getByRole('button', { name: 'Use a different server' }).click();
   await carol.getByPlaceholder('https://river.example.org').fill(url);
   await expect(carol.getByRole('radio', { name: /Gaming/ })).toHaveAttribute('aria-checked', 'true');
   await expect(carol.getByRole('radio', { name: /Friends/ })).toHaveAttribute('aria-checked', 'false');

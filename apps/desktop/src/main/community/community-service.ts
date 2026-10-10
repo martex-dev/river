@@ -951,11 +951,12 @@ export class CommunityService {
   async join(rawLink: unknown, ensureAccount: (serverUrl: string) => Promise<void>): Promise<CommunityView> {
     const invite = typeof rawLink === 'string' ? parseInvite(rawLink) : null;
     if (!invite) throw new CommunityError('That is not a valid River invite link.');
+    if (this.deps.account.status().state === 'none') await ensureAccount(invite.serverUrl);
     const account = this.deps.account.status();
-    if (account.state === 'none') await ensureAccount(invite.serverUrl);
-    else if (account.serverUrl !== invite.serverUrl) {
-      throw new CommunityError(`Your account is on ${account.server}; this invite is for another server.`);
-    }
+    // A server on a home PC changes address when the PC restarts, so an invite may name an old
+    // address of your own server. Invite codes are secrets only the server that made them knows:
+    // if your server accepts the code, it is the same server.
+    const elsewhere = account.state === 'registered' && account.serverUrl !== invite.serverUrl;
     // The community ID is only learned from the response, so the real sealed profile follows right after.
     const res = await this.call(
       '/invites/join',
@@ -964,7 +965,11 @@ export class CommunityService {
       joinResponseSchema,
     ).catch((err: unknown) => {
       if (err instanceof ApiError && err.code === 'invalid_invite') {
-        throw new CommunityError('This invite has expired or was already used too many times.');
+        throw new CommunityError(
+          elsewhere
+            ? 'This invite is for a different River server than the one your account is on.'
+            : 'This invite has expired or was already used too many times.',
+        );
       }
       throw err;
     });

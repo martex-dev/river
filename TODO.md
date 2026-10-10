@@ -80,6 +80,13 @@ Each line is one PR; each version ships when its section is done.
 - [x] Starts with the PC, keeps running in the tray, optional keep-awake; warns before going offline
 - [x] "Host it on this PC" is the default when you start a community; adopts an existing River Host
 
+### 1.0.12 — One River for everyone
+
+- [x] Accounts created automatically on River's built-in home server; communities go there by default
+- [x] Server operator Admin: people, communities, timeouts, bans, removal
+- [x] Invite friends to communities from the friends list; join from the message
+- [x] Hosting hidden from people who do not host; the host PC takes over River Host by itself
+
 ### Later
 
 - [ ] Sealed sender for direct messages

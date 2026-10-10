@@ -21,6 +21,8 @@ import { useCommunity } from './community/store.ts';
 import { PlannedPage } from './pages/PlannedPage.tsx';
 import { SecurityPage } from './pages/SecurityPage.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
+import { AdminPage } from './pages/AdminPage.tsx';
+import { useHostStatus } from './components/HostingPanel.tsx';
 import { SECTIONS, useRiver, type Section } from './store.ts';
 
 const LABELS: Record<Section, string> = {
@@ -31,12 +33,12 @@ const LABELS: Record<Section, string> = {
   calls: 'Calls',
   files: 'Files',
   contacts: 'Friends',
+  admin: 'Admin',
   security: 'Security',
   settings: 'Settings',
 };
 
-const PRIMARY = SECTIONS.filter((s) => s !== 'security' && s !== 'settings');
-const SECONDARY: Section[] = ['security', 'settings'];
+const PRIMARY = SECTIONS.filter((s) => s !== 'admin' && s !== 'security' && s !== 'settings');
 
 function useSystemReducedMotion(): boolean {
   const query = '(prefers-reduced-motion: reduce)';
@@ -69,6 +71,8 @@ export function App(): ReactElement {
     finishOnboarding,
   } = useRiver();
   const systemReduced = useSystemReducedMotion();
+  // The PC that hosts River's server gets the operator's Admin section.
+  const operator = useHostStatus()?.enabled ?? false;
   const motion = settings?.appearance.motion ?? 'system';
   const reducedMotion = motion === 'reduced' || (motion === 'system' && systemReduced);
 
@@ -143,7 +147,10 @@ export function App(): ReactElement {
           ))}
         </ul>
         <ul className="rail__list rail__list--bottom">
-          {SECONDARY.map((s) => (
+          {(operator
+            ? (['admin', 'security', 'settings'] as const)
+            : (['security', 'settings'] as const)
+          ).map((s) => (
             <RailItem key={s} section={s} active={section === s} onSelect={navigate} />
           ))}
         </ul>
@@ -157,7 +164,18 @@ export function App(): ReactElement {
               <span
                 className={`status-dot status-dot--${account.connection === 'online' ? 'active' : account.connection === 'error' ? 'warning' : 'inactive'}`}
               />
-              {account.server} · {account.connection === 'online' ? 'connected' : account.connection}
+              {account.connection === 'online'
+                ? 'Online'
+                : account.connection === 'connecting'
+                  ? 'Connecting…'
+                  : 'Offline — messages wait and send by themselves'}
+            </span>
+          ) : account.waiting ? (
+            <span
+              className="topbar__pill"
+              title="River creates your account as soon as its server is reachable"
+            >
+              <span className="status-dot status-dot--warning" /> Setting up your account…
             </span>
           ) : (
             <span className="topbar__pill" title="No River account yet">
@@ -183,6 +201,7 @@ export function App(): ReactElement {
           {section === 'files' && <FilesPage />}
           {section === 'contacts' && <FriendsPage />}
           {section === 'settings' && <SettingsPage />}
+          {section === 'admin' && <AdminPage />}
           {planned && <PlannedPage section={section} feature={planned} />}
         </main>
       </div>

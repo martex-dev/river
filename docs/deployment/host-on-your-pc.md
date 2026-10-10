@@ -42,6 +42,27 @@ and keeps running in the tray when you close its window.
 - **Asks before going offline.** Quitting River from the tray while it hosts
   asks first.
 
+## Admin: the people and communities on your server
+
+On the PC that hosts the server, River shows an **Admin** section (from 1.0.12):
+
+- everyone who uses River through your server — named where you share a
+  community or conversation with them — and who is online;
+- every community, with its owner, members and channels;
+- **Time out** someone for an hour, a day or a week, **ban** them (with an
+  optional reason they see), **unban**, **remove** their account, or
+  **delete** a community. Timed-out and banned people are signed out at once.
+
+The server never has names, messages or files, so Admin cannot show them.
+
+## River's home server
+
+River's official builds have a home server built in: new installs create their
+account there automatically. It is the maintainer's server, hosted from
+their PC with River as described above. Forks point
+`apps/desktop/src/shared/home-server.ts` at their own server (its instance ID,
+public key and announcement topic from `GET /v1/instance`).
+
 ## If you used River Host (1.0.8–1.0.10)
 
 River Host was a separate program set up with `scripts/host/install-host.ps1`.

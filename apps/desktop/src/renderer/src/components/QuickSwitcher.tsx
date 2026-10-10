@@ -20,6 +20,7 @@ const SECTION_LABEL: Record<Section, string> = {
   calls: 'Calls',
   files: 'Files',
   contacts: 'Friends',
+  admin: 'Admin',
   security: 'Security',
   settings: 'Settings',
 };
@@ -55,7 +56,8 @@ function useTargets(): Target[] {
           useDm.getState().select(c.riverId);
         },
       }));
-    const sections: Target[] = SECTIONS.map((s) => ({
+    // Admin exists only on the PC that hosts the server; it is reached from the rail there.
+    const sections: Target[] = SECTIONS.filter((s) => s !== 'admin').map((s) => ({
       key: `s:${s}`,
       label: SECTION_LABEL[s],
       hint: 'Section',

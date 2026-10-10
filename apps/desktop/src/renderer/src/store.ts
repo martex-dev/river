@@ -18,6 +18,7 @@ export const SECTIONS = [
   'calls',
   'files',
   'contacts',
+  'admin',
   'security',
   'settings',
 ] as const;

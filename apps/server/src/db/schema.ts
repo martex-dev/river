@@ -13,6 +13,9 @@ export interface AccountsTable {
   device_list_signature: string;
   device_list_version: number;
   created_on: string;
+  /** Suspended by the server operator until this ISO time (a ban: far future). */
+  suspended_until: string | null;
+  suspend_reason: string | null;
 }
 
 export interface DevicesTable {

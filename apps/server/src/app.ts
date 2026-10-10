@@ -12,6 +12,7 @@ import { registerMessagingRoutes } from './routes/messaging.ts';
 import { registerTurnRoutes } from './routes/turn.ts';
 import { registerInstanceRoutes } from './routes/instance.ts';
 import { registerCommunityRoutes } from './routes/communities.ts';
+import { registerAdminRoutes } from './routes/admin.ts';
 import serverPackage from '../package.json' with { type: 'json' };
 
 export const SERVER_VERSION: string = serverPackage.version;
@@ -127,7 +128,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const now = deps.now ?? (() => new Date());
   registerAccountRoutes(app, { config, database: deps.database, now });
   const hub = new Hub();
-  await registerCommunityRoutes(app, { config, database: deps.database, now, hub });
+  const ops = await registerCommunityRoutes(app, { config, database: deps.database, now, hub });
+  registerAdminRoutes(app, { config, database: deps.database, now, hub, ops });
   registerMessagingRoutes(app, { config, database: deps.database, now, hub });
   registerTurnRoutes(app, { config, database: deps.database, now });
   registerInstanceRoutes(app, {

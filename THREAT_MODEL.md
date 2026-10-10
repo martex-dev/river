@@ -105,6 +105,29 @@ reach it through a Cloudflare quick tunnel run by `cloudflared`:
   folder (they contain only ciphertext and routing metadata, as on any River
   server); protect the PC's disk as you would a server's.
 
+### 5c. River's home server and the operator (1.0.12)
+
+River ships with one built-in home server (`apps/desktop/src/shared/home-server.ts`):
+its instance ID, Ed25519 public key and announcement topic. New installs find
+its current address from notes on the relay signed by that key, check the
+address answers with that identity, and create their account there.
+
+- A forged note, or a different server at the announced address, is refused,
+  so nobody can steer new accounts elsewhere without the server's signing key.
+  Whoever holds that key (the operator's server database) decides where new
+  accounts are created; content stays end-to-end encrypted regardless.
+- **The operator** (whoever runs the server) can list accounts with their
+  creation date, device and community counts and online state; list
+  communities with owner, member and channel counts; suspend (timeout or ban),
+  remove accounts and delete communities. The server holds no names or
+  content, so the operator sees names only where their own app already knows
+  them (people they share a community or conversation with). This is the same
+  power any server operator has over the data on their server; River makes it
+  visible and explicit.
+- Operator endpoints exist only with `RIVER_HOST_TOKEN`, answer only loopback
+  requests without proxy headers, and need the per-start token, which never
+  leaves the hosting app's main process.
+
 ## 6. Key threats and mitigations (STRIDE summary)
 
 | Threat          | Example                                | Mitigation                                                                                                                              | Status                                                 |

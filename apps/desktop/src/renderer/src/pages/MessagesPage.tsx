@@ -32,6 +32,8 @@ import { isTyping, useDm } from '../dm/store.ts';
 import { startDmCall, useDmCall } from '../dm/call.ts';
 import { DmCallPanel } from '../dm/CallUi.tsx';
 import { useRiver } from '../store.ts';
+import { findInvite } from '../../../shared/invite-link.ts';
+import { joinWithLink } from '../community/ui/StartScreen.tsx';
 
 const GROUP_MS = 5 * 60_000;
 const RIVER_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -729,6 +731,7 @@ function DmMessage(props: {
               {m.editedAt && <span className="msg__edited"> (edited)</span>}
             </div>
           )}
+          {!m.deleted && !m.mine && m.text && <InviteCard text={m.text} />}
           {m.attachments.length > 0 && <AttachmentList attachments={m.attachments} />}
           {m.reactions.length > 0 && (
             <div className="reactions">
@@ -1299,4 +1302,35 @@ function typingName(c: ConversationView): string {
   if (c.kind !== 'group') return c.name;
   const who = useDm.getState().typingWho[c.riverId];
   return c.members.find((m) => m.riverId === who)?.name ?? 'Someone';
+}
+
+/** An invite someone sent you: one click joins (you are asked nothing else). */
+function InviteCard({ text }: { text: string }): ReactElement | null {
+  const link = findInvite(text);
+  const [state, setState] = useState<'idle' | 'joining' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  if (!link) return null;
+  return (
+    <div className="invite-card">
+      <span>🏠 Invitation to a River community</span>
+      <button
+        className="btn btn--primary btn--small"
+        disabled={state === 'joining'}
+        onClick={() => {
+          setState('joining');
+          void joinWithLink(link).then((failed) => {
+            setState(failed ? 'error' : 'idle');
+            setError(failed);
+          });
+        }}
+      >
+        {state === 'joining' ? 'Joining…' : 'Join community'}
+      </button>
+      {error && (
+        <span className="small" role="alert">
+          {error}
+        </span>
+      )}
+    </div>
+  );
 }

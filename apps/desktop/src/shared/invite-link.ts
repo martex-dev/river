@@ -8,6 +8,12 @@ export function looksLikeInvite(text: string): boolean {
   return INVITE_RE.test(text.trim());
 }
 
+/** The first invite link inside a message, e.g. "Join me in The Crew: https://…/join#c=…&k=…". */
+export function findInvite(text: string): string | null {
+  for (const word of text.split(/\s+/)) if (looksLikeInvite(word)) return word;
+  return null;
+}
+
 /** The server part of an invite link, for showing where you are about to join. */
 export function inviteHost(text: string): string {
   try {

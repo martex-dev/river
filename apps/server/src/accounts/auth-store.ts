@@ -1,3 +1,4 @@
+import { BANNED_UNTIL } from '@river/protocol';
 import { createHash, randomBytes } from 'node:crypto';
 import type { Kysely } from 'kysely';
 import { CHALLENGE_BYTES } from '@river/protocol';
@@ -61,13 +62,43 @@ export async function authenticate(
   now: Date,
 ): Promise<{ riverId: string; deviceId: number } | null> {
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
+  const iso = now.toISOString();
   const row = await db
     .selectFrom('sessions')
-    .select(['river_id', 'device_id'])
-    .where('token_hash', '=', sha256(token))
-    .where('expires_at', '>', now.toISOString())
+    .innerJoin('accounts', 'accounts.river_id', 'sessions.river_id')
+    .select(['sessions.river_id', 'sessions.device_id'])
+    .where('sessions.token_hash', '=', sha256(token))
+    .where('sessions.expires_at', '>', iso)
+    // A suspended account's sessions stop working at once, wherever they are used.
+    .where((eb) =>
+      eb.or([eb('accounts.suspended_until', 'is', null), eb('accounts.suspended_until', '<=', iso)]),
+    )
     .executeTakeFirst();
   return row ? { riverId: row.river_id, deviceId: row.device_id } : null;
+}
+
+/** The account's current suspension, or null. */
+export async function suspension(
+  db: Kysely<Database>,
+  riverId: string,
+  now: Date,
+): Promise<{ until: string; reason: string | null } | null> {
+  const row = await db
+    .selectFrom('accounts')
+    .select(['suspended_until', 'suspend_reason'])
+    .where('river_id', '=', riverId)
+    .executeTakeFirst();
+  if (!row?.suspended_until || row.suspended_until <= now.toISOString()) return null;
+  return { until: row.suspended_until, reason: row.suspend_reason };
+}
+
+/** What a suspended person is told when River signs in. */
+export function suspensionMessage(s: { until: string; reason: string | null }): string {
+  const base =
+    s.until === BANNED_UNTIL
+      ? 'Your account has been banned from this River server.'
+      : `Your account is suspended on this River server until ${s.until.slice(0, 16).replace('T', ' ')} UTC.`;
+  return s.reason ? `${base} Reason: ${s.reason}` : base;
 }
 
 /** Removes expired challenges and sessions. Cheap; called opportunistically. */

@@ -117,6 +117,15 @@ export const ExternalIcon = (p: IconProps): ReactElement => (
   </Svg>
 );
 
+export const AdminIcon = (p: IconProps): ReactElement => (
+  <Svg {...p}>
+    <circle cx="9" cy="8" r="3.2" />
+    <path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5" />
+    <path d="M17.5 9.5 19 11l2.5-3" />
+    <path d="M16 15.5h4.5M16 18.5h4.5" />
+  </Svg>
+);
+
 export const SECTION_ICONS: Record<Section, (p: IconProps) => ReactElement> = {
   home: HomeIcon,
   messages: MessagesIcon,
@@ -125,6 +134,7 @@ export const SECTION_ICONS: Record<Section, (p: IconProps) => ReactElement> = {
   calls: CallsIcon,
   files: FilesIcon,
   contacts: ContactsIcon,
+  admin: AdminIcon,
   security: SecurityIcon,
   settings: SettingsIcon,
 };

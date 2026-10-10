@@ -31,9 +31,12 @@ export async function startServer(): Promise<{ app: FastifyInstance; database: R
 }
 
 /** Registers an account with one device; returns its identity and a session token. */
-export async function registerUser(
-  a: FastifyInstance,
-): Promise<{ riverId: string; token: string; identity: IdentityKeys }> {
+export async function registerUser(a: FastifyInstance): Promise<{
+  riverId: string;
+  token: string;
+  identity: IdentityKeys;
+  device: ReturnType<typeof generateKeyPair>;
+}> {
   const identity = createIdentity();
   const device = generateKeyPair();
   const listBytes = Buffer.from(
@@ -76,5 +79,6 @@ export async function registerUser(
     riverId: identity.riverId,
     token: registerResponseSchema.parse(res.json()).session.token,
     identity,
+    device,
   };
 }

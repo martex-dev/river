@@ -29,6 +29,8 @@ import {
 import { CommunityService } from './community/community-service.ts';
 import { ServerLocator } from './community/server-locator.ts';
 import { Hosting } from './host/hosting.ts';
+import { HomeAccount } from './home-server.ts';
+import { HOME_SERVER } from '../shared/home-server.ts';
 import { createFileLogger } from './logger.ts';
 import {
   APP_ORIGIN,
@@ -121,6 +123,8 @@ async function start(): Promise<void> {
     // Development builds can look elsewhere for an older River Host, so a test run never takes over a real one.
     homeDir: (!app.isPackaged && process.env.RIVER_DEV_HOME) || app.getPath('home'),
     localOnly: !app.isPackaged && process.env.RIVER_DEV_LOCAL_HOSTING === 'true',
+    // Installed builds only: a development run or a test must never take over a real River Host.
+    ...(app.isPackaged ? { autoAdoptInstanceId: HOME_SERVER.instanceId } : {}),
     settings,
     log,
     pinnedId: () => locator.pinnedId(),
@@ -133,6 +137,24 @@ async function start(): Promise<void> {
     },
   });
   void hosting.init();
+  // New people get their account on River's server by themselves, as soon as they have a name.
+  const homeAccount = new HomeAccount({
+    enabled: app.isPackaged || process.env.RIVER_DEV_HOME_SERVER === 'true',
+    fetchBytes: createFetchBytes((input, init) => net.fetch(input as string, init)),
+    requestJson: createRequestJson((input, init) => net.fetch(input as string, init)),
+    hostedHere: () => {
+      const h = hosting.manager.status();
+      return h.instanceId === HOME_SERVER.instanceId && h.state === 'online' ? h.address : null;
+    },
+    account,
+    ready: () => storage.db() !== null && identity.get() !== null,
+    chosenServer: () => settings.get().server.url,
+    onRegistered: (url) => {
+      settings.update({ server: { url } });
+      community.ensureSocket();
+    },
+    log,
+  });
   const dm = new DmService({ db: () => storage.db(), identity, account, community, log });
   const social = new SocialService({ db: () => storage.db(), identity, dm, log });
   const backup = new BackupService({ db: () => storage.db() });
@@ -145,6 +167,7 @@ async function start(): Promise<void> {
   ).unref();
   // Connect whenever local data becomes available (now, or after the user unlocks).
   const connectAll = async (): Promise<void> => {
+    homeAccount.kick();
     await account.connect();
     community.ensureSocket();
   };
@@ -248,13 +271,14 @@ async function start(): Promise<void> {
       chosenScreen = id;
     },
     hosting,
+    homeAccount,
   });
 
   const window = createWindow();
   // Running for a while with a window up counts as a healthy start.
   window.once('ready-to-show', () => setTimeout(() => health.markHealthy(), HEALTHY_AFTER_MS));
   broadcastStorageStatus(window.webContents, storage);
-  broadcastAccountStatus(window.webContents, account);
+  broadcastAccountStatus(window.webContents, account, homeAccount);
   broadcastCommunityEvents(window.webContents, community);
   broadcastDmEvents(window.webContents, dm);
   broadcastSocialEvents(window.webContents, social);

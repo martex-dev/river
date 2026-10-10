@@ -235,6 +235,7 @@ function FriendRow(props: {
             <button className="icon-btn" aria-label={`Message ${c.name}`} title="Message" onClick={open}>
               💬
             </button>
+            <InviteToCommunity peer={c.riverId} name={c.name} />
             <button
               className="icon-btn"
               aria-label={`Call ${c.name}`}
@@ -361,5 +362,57 @@ function AddFriend(props: { serverUrl: string; myId: string; onSent(): void }): 
         </div>
       </div>
     </div>
+  );
+}
+
+/** Sends a friend an invite to one of your communities, as a message they can join from. */
+function InviteToCommunity(props: { peer: string; name: string }): ReactElement | null {
+  const communities = useCommunity((c) => c.communities);
+  const [open, setOpen] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
+  if (communities.length === 0) return null;
+  const invite = async (id: string, community: string): Promise<void> => {
+    setOpen(false);
+    const res = await window.river.community.invite(id);
+    if (!res.ok) {
+      play('error');
+      useCommunity.getState().notify(res.message);
+      return;
+    }
+    const ok = await useDm
+      .getState()
+      .run({ a: 'send', peer: props.peer, text: `Join me in ${community}: ${res.value}` });
+    if (ok) {
+      play('send');
+      setSent(community);
+      useCommunity.getState().notify(`Invite to ${community} sent to ${props.name}`);
+    }
+  };
+  return (
+    <span className="invite-to">
+      <button
+        className="icon-btn"
+        aria-label={`Invite ${props.name} to a community`}
+        aria-expanded={open}
+        title={sent ? `Invited to ${sent}` : 'Invite to a community'}
+        onClick={() => setOpen((v) => !v)}
+      >
+        ➕
+      </button>
+      {open && (
+        <span className="invite-to__menu glass" role="menu">
+          {communities.map((c) => (
+            <button
+              key={c.id}
+              role="menuitem"
+              className="invite-to__item"
+              onClick={() => void invite(c.id, c.name)}
+            >
+              {c.icon ?? '🏠'} {c.name}
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
   );
 }

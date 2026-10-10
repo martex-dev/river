@@ -76,6 +76,27 @@ export async function retireLegacyHost(legacy: LegacyHost, deps: RetireDeps): Pr
   await deps.sleep(1000);
 }
 
+/** The server identity stored in River Host's database (read-only), or null. */
+export function legacyInstanceId(
+  legacy: LegacyHost,
+  openReadOnly: (path: string) => { prepare(sql: string): { get(): unknown }; close(): void },
+): string | null {
+  const path = join(legacy.dataDir, 'river.sqlite');
+  if (!existsSync(path)) return null;
+  try {
+    const db = openReadOnly(path);
+    try {
+      const row = db.prepare("SELECT value FROM server_meta WHERE key = 'instance_id'").get() as
+        { value?: unknown } | undefined;
+      return typeof row?.value === 'string' ? row.value : null;
+    } finally {
+      db.close();
+    }
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Copies River Host's data (database and attachments) into River's own
  * hosting folder. Never overwrites: if River already hosts something there,

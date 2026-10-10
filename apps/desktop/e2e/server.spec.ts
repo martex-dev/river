@@ -112,7 +112,7 @@ test('creates an account on the server and reconnects after a restart', async ()
   const card = page.locator('.account-card');
   await expect(card).toContainText(`Account on 127.0.0.1:${port}`);
   await expect(card.locator('.chip')).toHaveText('Connected');
-  await expect(page.locator('.topbar__pill')).toContainText('connected');
+  await expect(page.locator('.topbar__pill')).toContainText('Online');
   if (process.env.RIVER_SCREENSHOTS) await page.screenshot({ path: 'test-results/account.png' });
 
   await page.getByRole('button', { name: 'Security', exact: true }).click();
@@ -122,5 +122,5 @@ test('creates an account on the server and reconnects after a restart', async ()
 
   await app.close();
   ({ app, page } = await launchRiver(userDataDir()));
-  await expect(page.locator('.topbar__pill')).toContainText('connected', { timeout: 15_000 });
+  await expect(page.locator('.topbar__pill')).toContainText('Online', { timeout: 15_000 });
 });
