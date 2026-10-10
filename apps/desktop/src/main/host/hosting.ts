@@ -96,15 +96,22 @@ export class Hosting {
       log: deps.log,
       ...(deps.localOnly ? { localOnly: true } : {}),
     });
-    this.manager.onAddress((url, instanceId) => {
-      if (instanceId && instanceId === deps.pinnedId()) deps.followOwnServer(url);
+    // The owner's own app talks to its server directly over loopback — never the public tunnel.
+    this.manager.onStatus(() => {
+      this.syncOwnConnection();
+      this.changed();
     });
-    this.manager.onStatus(() => this.changed());
     deps.settings.onChange((s) => {
       if (s.hosting.enabled) this.manager.start();
       else void this.manager.stop();
       this.changed();
     });
+  }
+
+  /** If this PC hosts the account's own server, point the app's account at it over loopback. */
+  private syncOwnConnection(): void {
+    const local = this.manager.localServer();
+    if (local && local.instanceId === this.deps.pinnedId()) this.deps.followOwnServer(local.url);
   }
 
   /** At app start: resume hosting if it is on, and look for an older River Host. */
@@ -125,6 +132,8 @@ export class Hosting {
       killOrphanTunnel(this.root, this.deps.log);
       this.manager.start();
     }
+    // Keep the owner's connection pointed at their live local server.
+    setInterval(() => this.syncOwnConnection(), 10_000).unref();
     this.changed();
   }
 

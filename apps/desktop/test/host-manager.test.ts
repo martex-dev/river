@@ -311,3 +311,31 @@ describe('HostManager without a tunnel (development)', () => {
     await m.stop();
   });
 });
+
+describe('HostManager localServer (owner connects over loopback)', () => {
+  it('exposes the local address and instance once the server is up and identified', async () => {
+    const m = manager();
+    expect(m.localServer()).toBeNull();
+    m.start();
+    expect(m.localServer()).toBeNull(); // not ready yet
+    servers[0]!.say({ type: 'ready', port: 8790 });
+    await tick();
+    expect(m.localServer()).toEqual({ url: 'http://127.0.0.1:8790', instanceId: 'inst-1' });
+    await m.stop();
+    expect(m.localServer()).toBeNull();
+  });
+
+  it('has no local address while the chosen port is still being resolved', async () => {
+    const m = manager();
+    m.start();
+    servers[0]!.say({ type: 'failed', reason: 'port-in-use', message: 'EADDRINUSE' });
+    servers[0]!.exit(1);
+    await tick(2_000);
+    // Port 0 (pick any) before the server reports its real port.
+    expect(m.localServer()).toBeNull();
+    servers[1]!.say({ type: 'ready', port: 49999 });
+    await tick();
+    expect(m.localServer()).toEqual({ url: 'http://127.0.0.1:49999', instanceId: 'inst-1' });
+    await m.stop();
+  });
+});

@@ -111,6 +111,16 @@ export class HostManager {
     return () => this.listeners.delete(listener);
   }
 
+  /**
+   * The server as this PC reaches it directly, once it is running and identified.
+   * The owner's own app uses this instead of the public tunnel: always reachable,
+   * no tunnel in the path.
+   */
+  localServer(): { url: string; instanceId: string } | null {
+    if (this.port === null || this.port === 0 || !this.server || !this.instanceId) return null;
+    return { url: this.local(), instanceId: this.instanceId };
+  }
+
   /** Called with each new public address once it is reachable. */
   onAddress(listener: (url: string, instanceId: string) => void): () => void {
     this.addressListeners.add(listener);

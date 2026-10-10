@@ -1531,3 +1531,31 @@ html[data-density='compact'] .member {
   align-items: center;
   justify-content: space-between;
 }
+
+.account-tech {
+  margin-top: 4px;
+}
+.account-tech summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 4px 0;
+}
+.account-tech summary:hover {
+  color: var(--text);
+}
+
+.username-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(79, 227, 209, 0.4);
+  border-radius: 12px;
+}
+.username-prompt p {
+  margin: 2px 0 0;
+}
