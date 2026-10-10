@@ -91,6 +91,13 @@ export const settingsSchema = z.object({
     /** Closing the window keeps River running in the tray, so calls and messages keep arriving. */
     closeToTray: z.boolean(),
   }),
+  /** Added in 1.0.11: communities hosted by this PC, from inside River. */
+  hosting: z.object({
+    /** Run the community server and its public address whenever River runs. */
+    enabled: z.boolean(),
+    /** Keep the PC from going to sleep while it hosts, so members can reach it. */
+    keepAwake: z.boolean(),
+  }),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -118,6 +125,7 @@ export const DEFAULT_SETTINGS: Settings = {
     userVolumes: {},
   },
   system: { startAtLogin: false, closeToTray: true },
+  hosting: { enabled: false, keepAwake: true },
 };
 
 export const SETTINGS_SECTIONS = [
@@ -127,6 +135,7 @@ export const SETTINGS_SECTIONS = [
   'server',
   'voice',
   'system',
+  'hosting',
 ] as const;
 
 /**
@@ -157,6 +166,7 @@ export const settingsPatchSchema = z
     server: settingsSchema.shape.server.partial().strict().optional(),
     voice: settingsSchema.shape.voice.partial().strict().optional(),
     system: settingsSchema.shape.system.partial().strict().optional(),
+    hosting: settingsSchema.shape.hosting.partial().strict().optional(),
   })
   .strict();
 
@@ -171,5 +181,6 @@ export function applySettingsPatch(current: Settings, patch: z.output<typeof set
     server: { ...current.server, ...patch.server },
     voice: { ...current.voice, ...patch.voice },
     system: { ...current.system, ...patch.system },
+    hosting: { ...current.hosting, ...patch.hosting },
   });
 }
