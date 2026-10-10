@@ -107,3 +107,23 @@ describe('openDatabase', () => {
     expect(() => openDatabase('mysql://nope')).toThrow(/Unsupported/);
   });
 });
+
+describe('backup', () => {
+  it('copies a running SQLite database into a file that opens on its own', async () => {
+    const database = openDatabase(`sqlite:${join(dir, 'live.sqlite')}`);
+    await migrateToLatest(database.db);
+    await database.db.insertInto('server_meta').values({ key: 'backup_probe', value: 'kept' }).execute();
+    const to = join(dir, 'backups', 'copy.sqlite');
+    await database.backup!(to);
+    await database.close();
+
+    const copy = openDatabase(`sqlite:${to}`);
+    const row = await copy.db
+      .selectFrom('server_meta')
+      .select('value')
+      .where('key', '=', 'backup_probe')
+      .executeTakeFirst();
+    await copy.close();
+    expect(row?.value).toBe('kept');
+  });
+});
