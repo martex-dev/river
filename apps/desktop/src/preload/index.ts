@@ -46,6 +46,13 @@ const api: RiverApi = {
       };
     },
   },
+  admin: {
+    overview: () => ipcRenderer.invoke(IPC.adminOverview),
+    suspend: (riverId, until, reason) => ipcRenderer.invoke(IPC.adminSuspend, riverId, until, reason),
+    unsuspend: (riverId) => ipcRenderer.invoke(IPC.adminUnsuspend, riverId),
+    deleteAccount: (riverId) => ipcRenderer.invoke(IPC.adminDeleteAccount, riverId),
+    deleteCommunity: (id) => ipcRenderer.invoke(IPC.adminDeleteCommunity, id),
+  },
   server: { check: (url) => ipcRenderer.invoke(IPC.serverCheck, url) },
   identity: {
     get: () => ipcRenderer.invoke(IPC.identityGet),

@@ -27,6 +27,7 @@ import {
 } from '../shared/ipc.ts';
 import type { FetchBytes } from './http.ts';
 import type { Hosting } from './host/hosting.ts';
+import type { HomeAccount } from './home-server.ts';
 import { isAllowedAppUrl } from './security.ts';
 import { friendlyError } from './errors.ts';
 import { checkServer } from './server-check.ts';
@@ -66,8 +67,22 @@ export interface IpcDeps {
   afterRestore(): Promise<void>;
   /** Screen chosen in River's picker for the next screen share. */
   selectScreen(sourceId: string): void;
+  /** Creates the account on River's home server by itself. */
+  homeAccount: Pick<HomeAccount, 'ensure' | 'kick' | 'isWaiting'>;
   /** Hosting communities on this PC. */
-  hosting: Pick<Hosting, 'status' | 'enable' | 'disable' | 'backupNow' | 'openFolder'>;
+  hosting: Pick<
+    Hosting,
+    | 'status'
+    | 'enable'
+    | 'disable'
+    | 'backupNow'
+    | 'openFolder'
+    | 'adminOverview'
+    | 'adminSuspend'
+    | 'adminUnsuspend'
+    | 'adminDeleteAccount'
+    | 'adminDeleteCommunity'
+  >;
 }
 
 /** Turns any error into a message that is safe to show. */
@@ -125,6 +140,36 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.hostDisable, () => result(() => deps.hosting.disable()));
   handle(IPC.hostBackup, () => result(() => deps.hosting.backupNow()));
   handle(IPC.hostOpenFolder, () => deps.hosting.openFolder());
+  const adminId = z.string().min(1).max(64);
+  handle(IPC.adminOverview, () => result(() => deps.hosting.adminOverview()));
+  handle(IPC.adminSuspend, (_e, riverId, until, reason) =>
+    result(async () => {
+      await deps.hosting.adminSuspend(
+        adminId.parse(riverId),
+        z.iso.datetime().nullable().parse(until),
+        z.string().trim().max(200).optional().parse(reason),
+      );
+      return null;
+    }),
+  );
+  handle(IPC.adminUnsuspend, (_e, riverId) =>
+    result(async () => {
+      await deps.hosting.adminUnsuspend(adminId.parse(riverId));
+      return null;
+    }),
+  );
+  handle(IPC.adminDeleteAccount, (_e, riverId) =>
+    result(async () => {
+      await deps.hosting.adminDeleteAccount(adminId.parse(riverId));
+      return null;
+    }),
+  );
+  handle(IPC.adminDeleteCommunity, (_e, id) =>
+    result(async () => {
+      await deps.hosting.adminDeleteCommunity(adminId.parse(id));
+      return null;
+    }),
+  );
   handle(IPC.securityStatus, () =>
     securityStatus({
       updatesEnabled: deps.updates !== null,
@@ -142,12 +187,15 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.communityCreate, (_e, name, rawOptions) =>
     result(async () => {
       const options = createCommunityOptionsSchema.parse(rawOptions ?? {});
-      // Creating your first community can also create your account, like joining does.
+      // Creating your first community also creates your account: on River's server, or on the
+      // server the person named.
       if (deps.account.status().state === 'none') {
-        if (!options.serverUrl)
-          throw new UserFacingError('Enter the address of a River server to create your account on.');
-        deps.settings.update({ server: { url: options.serverUrl } });
-        await deps.account.register(options.serverUrl);
+        if (options.serverUrl) {
+          deps.settings.update({ server: { url: options.serverUrl } });
+          await deps.account.register(options.serverUrl);
+        } else {
+          await deps.homeAccount.ensure();
+        }
       }
       return deps.community.create(name, options.template);
     }),
@@ -249,7 +297,7 @@ export function registerIpc(deps: IpcDeps): void {
     return sources.map((s) => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL() }));
   });
   handle(IPC.screenSelect, (_e, id) => deps.selectScreen(z.string().max(200).parse(id)));
-  handle(IPC.accountStatus, () => deps.account.status());
+  handle(IPC.accountStatus, () => accountView(deps.account, deps.homeAccount));
   handle(IPC.accountConnect, () => deps.account.connect());
   handle(IPC.accountRegister, async (): Promise<AccountActionResult> => {
     try {
@@ -262,7 +310,12 @@ export function registerIpc(deps: IpcDeps): void {
     }
   });
   handle(IPC.identityGet, () => deps.identity.get());
-  handle(IPC.identityCreate, (_e, displayName) => deps.identity.create(displayName));
+  handle(IPC.identityCreate, async (_e, displayName) => {
+    const created = await deps.identity.create(displayName);
+    // No server address, no button: the account follows the name.
+    deps.homeAccount.kick();
+    return created;
+  });
   handle(IPC.identitySetName, (_e, displayName) => deps.identity.setDisplayName(displayName));
   handle(IPC.storageSetup, async (_e, raw): Promise<PassphraseResult> => {
     const passphrase = passphraseSchema.parse(raw);
@@ -299,10 +352,25 @@ export function broadcastUpdateStatus(target: WebContents, updates: UpdateServic
   });
 }
 
-export function broadcastAccountStatus(target: WebContents, account: AccountService): () => void {
-  return account.onStatus((status) => {
-    if (!target.isDestroyed()) target.send(IPC.accountStatusChanged, status);
-  });
+function accountView(account: AccountService, home: Pick<HomeAccount, 'isWaiting'>): AccountStatus {
+  const status = account.status();
+  return status.state === 'none' && home.isWaiting() ? { state: 'none', waiting: true } : status;
+}
+
+export function broadcastAccountStatus(
+  target: WebContents,
+  account: AccountService,
+  home: Pick<HomeAccount, 'isWaiting' | 'onChange'>,
+): () => void {
+  const send = (): void => {
+    if (!target.isDestroyed()) target.send(IPC.accountStatusChanged, accountView(account, home));
+  };
+  const offAccount = account.onStatus(send);
+  const offHome = home.onChange(send);
+  return () => {
+    offAccount();
+    offHome();
+  };
 }
 
 export function broadcastSocialEvents(target: WebContents, social: SocialService): () => void {

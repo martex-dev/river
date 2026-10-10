@@ -1,3 +1,4 @@
+import type { AdminOverview } from '@river/protocol/admin';
 import type { ReleaseChannel } from '@river/release/channels';
 import type { CreateCommunityOptions } from './templates.ts';
 import type { AttachmentPointer, CommunityAction, CommunityActionResult } from './community-actions.ts';
@@ -22,6 +23,11 @@ export const IPC = {
   hostBackup: 'river:host:backup',
   hostOpenFolder: 'river:host:open-folder',
   hostStatusChanged: 'river:host:status-changed',
+  adminOverview: 'river:admin:overview',
+  adminSuspend: 'river:admin:suspend',
+  adminUnsuspend: 'river:admin:unsuspend',
+  adminDeleteAccount: 'river:admin:delete-account',
+  adminDeleteCommunity: 'river:admin:delete-community',
   serverCheck: 'river:server:check',
   storageStatus: 'river:storage:status',
   storageSetup: 'river:storage:setup-passphrase',
@@ -129,7 +135,11 @@ export interface IdentityInfo {
 }
 
 export type AccountStatus =
-  | { state: 'none' }
+  | {
+      state: 'none';
+      /** River is creating your account on River's server but cannot reach it yet; it keeps trying. */
+      waiting?: boolean;
+    }
   | {
       state: 'registered';
       /** Host (and port) of the server, for display. */
@@ -345,6 +355,15 @@ export interface RiverApi {
     /** Opens the folder with the hosted data, backups and logs. */
     openFolder(): Promise<void>;
     onStatus(listener: (status: HostStatus) => void): () => void;
+  };
+  /** Server operator tools; only work on the PC that hosts the server. */
+  admin: {
+    overview(): Promise<Result<AdminOverview>>;
+    /** `until` null bans until lifted; an ISO time is a timeout. */
+    suspend(riverId: string, until: string | null, reason?: string): Promise<Result<null>>;
+    unsuspend(riverId: string): Promise<Result<null>>;
+    deleteAccount(riverId: string): Promise<Result<null>>;
+    deleteCommunity(communityId: string): Promise<Result<null>>;
   };
   server: { check(url: string): Promise<ServerCheckResult> };
   identity: {
