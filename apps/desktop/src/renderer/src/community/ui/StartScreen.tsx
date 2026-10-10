@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { looksLikeInvite } from '../../../../shared/invite-link.ts';
 import { COMMUNITY_TEMPLATES, templateById, type TemplateId } from '../../../../shared/templates.ts';
+import { describeHost, hostAndWait } from '../../components/HostingPanel.tsx';
 import { useRiver } from '../../store.ts';
 import { celebrate } from '../fx.tsx';
 import { play } from '../sound.ts';
@@ -36,6 +37,9 @@ export function StartScreen(props: {
   const [server, setServer] = useState(savedServer);
   const [link, setLink] = useState('');
   const [busy, setBusy] = useState<'create' | 'join' | null>(null);
+  // Without an account, the community lives on this PC unless you pick a server.
+  const [where, setWhere] = useState<'this-pc' | 'server'>(savedServer ? 'server' : 'this-pc');
+  const [step, setStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const chosen = templateById(template);
 
@@ -52,11 +56,25 @@ export function StartScreen(props: {
     e.preventDefault();
     setBusy('create');
     setError(null);
+    let serverUrl = server.trim();
+    if (!props.hasAccount && where === 'this-pc') {
+      setStep('Starting your community server…');
+      const hosted = await hostAndWait((s) => setStep(describeHost(s)));
+      if (!hosted.ok) {
+        setBusy(null);
+        setStep(null);
+        play('error');
+        return setError(hosted.message);
+      }
+      serverUrl = hosted.address;
+      setStep('Creating your community…');
+    }
     const res = await window.river.community.create(name.trim(), {
       template,
-      ...(!props.hasAccount && server.trim() ? { serverUrl: server.trim() } : {}),
+      ...(!props.hasAccount && serverUrl ? { serverUrl } : {}),
     });
     setBusy(null);
+    setStep(null);
     if (!res.ok) {
       play('error');
       return setError(res.message);
@@ -159,25 +177,52 @@ export function StartScreen(props: {
             />
           </label>
           {!props.hasAccount && (
-            <label className="textfield">
-              <span className="field__label">River server</span>
-              <input
-                value={server}
-                onChange={(e) => setServer(e.target.value)}
-                placeholder="https://river.example.org"
-                spellCheck={false}
-              />
-              <span className="muted small">
-                Your account is created on this server. Ask whoever hosts your community, or host one
-                yourself.
-              </span>
-            </label>
+            <fieldset className="start__where">
+              <legend className="field__label">Where it lives</legend>
+              <label className={`choice ${where === 'this-pc' ? 'is-selected' : ''}`}>
+                <input
+                  type="radio"
+                  name="where"
+                  checked={where === 'this-pc'}
+                  onChange={() => setWhere('this-pc')}
+                />
+                <span className="choice__name">On this PC — free</span>
+                <span className="choice__text">
+                  River hosts it for you and starts with your PC. Nothing to set up.
+                </span>
+              </label>
+              <label className={`choice ${where === 'server' ? 'is-selected' : ''}`}>
+                <input
+                  type="radio"
+                  name="where"
+                  checked={where === 'server'}
+                  onChange={() => setWhere('server')}
+                />
+                <span className="choice__name">On a River server</span>
+                <span className="choice__text">One that runs all the time, if you have one.</span>
+              </label>
+              {where === 'server' && (
+                <label className="textfield">
+                  <span className="field__label">Server address</span>
+                  <input
+                    value={server}
+                    onChange={(e) => setServer(e.target.value)}
+                    placeholder="https://river.example.org"
+                    spellCheck={false}
+                  />
+                </label>
+              )}
+            </fieldset>
           )}
         </div>
         <div className="button-row">
           <button
             className="btn btn--primary"
-            disabled={busy !== null || name.trim() === '' || (!props.hasAccount && server.trim() === '')}
+            disabled={
+              busy !== null ||
+              name.trim() === '' ||
+              (!props.hasAccount && where === 'server' && server.trim() === '')
+            }
           >
             {busy === 'create' ? 'Creating…' : 'Create community'}
           </button>
@@ -187,6 +232,11 @@ export function StartScreen(props: {
             </button>
           )}
         </div>
+        {step && (
+          <p className="muted small" role="status">
+            {step}
+          </p>
+        )}
       </form>
     </div>
   );

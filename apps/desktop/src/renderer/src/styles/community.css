@@ -3090,6 +3090,21 @@ input.switch:disabled {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 12px;
 }
+.start__where {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.start__where legend {
+  margin-bottom: 6px;
+}
+.start__where .textfield {
+  grid-column: 1 / -1;
+}
 .chat__welcome-actions {
   display: flex;
   flex-direction: column;
