@@ -47,6 +47,11 @@ const RESTART_MAX_MS = 60_000;
 /** A process that ran this long gets a fresh, short pause after it stops. */
 const STABLE_AFTER_MS = 60_000;
 const ROUTE_TIMEOUT_MS = 90_000;
+/**
+ * A new quick-tunnel name needs a few seconds before it resolves. Asking too
+ * early gets a "no such name" that the system then caches for about a minute.
+ */
+const FIRST_PROBE_MS = 8_000;
 const WATCH_EVERY_MS = 60_000;
 const WATCH_FAILURES = 3;
 const ANNOUNCE_EVERY_MS = 4 * 60 * 60 * 1000;
@@ -321,6 +326,7 @@ export class HostManager {
   /** A fresh quick tunnel takes a few seconds before it routes; only then is it worth announcing. */
   private async waitUntilRoutable(tunnel: TunnelHandle, url: string): Promise<void> {
     const deadline = Date.now() + ROUTE_TIMEOUT_MS;
+    await this.sleep(FIRST_PROBE_MS);
     while (this.wanted && this.tunnel === tunnel && Date.now() < deadline) {
       if (await this.reachable(url)) {
         this.address = url;

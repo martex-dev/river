@@ -148,7 +148,7 @@ async function bringOnline(m: HostManager, url = 'https://one-two.trycloudflare.
   await tick();
   routable.add(url);
   tunnels.at(-1)!.print(`INF |  ${url}  |`);
-  await tick();
+  await tick(8_000);
 }
 
 describe('HostManager', () => {
@@ -171,7 +171,7 @@ describe('HostManager', () => {
 
     // The address is printed before it routes: not online until it answers.
     tunnels[0]!.print('INF |  https://one-two.trycloudflare.com  |');
-    await tick();
+    await tick(8_000);
     expect(m.status().state).toBe('starting');
     routable.add('https://one-two.trycloudflare.com');
     await tick(2_000);
@@ -227,7 +227,7 @@ describe('HostManager', () => {
     await tick(2_000);
     routable.add('https://three-four.trycloudflare.com');
     tunnels[1]!.print('https://three-four.trycloudflare.com');
-    await tick();
+    await tick(8_000);
     expect(m.status().address).toBe('https://three-four.trycloudflare.com');
     expect(announced.map((a) => a.url)).toEqual([
       'https://one-two.trycloudflare.com',
