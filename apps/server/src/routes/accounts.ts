@@ -19,6 +19,8 @@ import {
   authenticate,
   consumeChallenge,
   createSession,
+  suspension,
+  suspensionMessage,
   issueChallenge,
   purgeExpired,
 } from '../accounts/auth-store.ts';
@@ -167,6 +169,8 @@ export function registerAccountRoutes(
     ) {
       return fail(reply, 401, 'unauthorized', 'Authentication failed');
     }
+    const suspended = await suspension(db, req.riverId, now);
+    if (suspended) return fail(reply, 403, 'account_suspended', suspensionMessage(suspended));
     return createSession(db, req.riverId, req.deviceId, deps.config.sessionTtlMs, now);
   });
 

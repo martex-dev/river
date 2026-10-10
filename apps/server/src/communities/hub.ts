@@ -41,6 +41,11 @@ export class Hub {
     return (this.sockets.get(riverId)?.size ?? 0) > 0;
   }
 
+  /** Closes every connection of an account (suspended or deleted by the operator). */
+  disconnect(riverId: string, code: number): void {
+    for (const s of [...(this.sockets.get(riverId) ?? [])]) s.close(code);
+  }
+
   sendTo(riverIds: Iterable<string>, event: ServerEvent): void {
     const data = JSON.stringify(event);
     for (const id of riverIds) for (const s of this.sockets.get(id) ?? []) s.send(data);
