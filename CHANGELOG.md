@@ -6,6 +6,8 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.12] - 2026-10-10
+
 **One River for everyone: install, pick a name, and you are in.**
 
 ### Added
@@ -34,6 +36,11 @@ All notable changes to River are documented here. The format follows
 - Hosting is out of everyone's way: the Hosting tab only appears for people
   who host (or who ask for it in Settings → Server).
 - The top bar says **Online** instead of showing a server address.
+
+### Fixed
+
+- Invite links keep working after the host's PC restarts and the server's
+  address changes: River tries the invite on your own server first.
 
 ### Security
 
@@ -733,7 +740,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.11...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.12...HEAD
+[1.0.12]: https://github.com/martex-dev/river/compare/v1.0.11...v1.0.12
 [1.0.11]: https://github.com/martex-dev/river/compare/v1.0.10...v1.0.11
 [1.0.10]: https://github.com/martex-dev/river/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/martex-dev/river/compare/v1.0.8...v1.0.9
