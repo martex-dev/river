@@ -1,6 +1,6 @@
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { BackupPanel } from '../components/BackupPanel.tsx';
-import { HostingPanel } from '../components/HostingPanel.tsx';
+import { HostingPanel, useHostStatus } from '../components/HostingPanel.tsx';
 import type { ReleaseChannel } from '@river/release/channels';
 import type { AccountStatus, ServerCheckResult, UpdateStatus } from '../../../shared/ipc.ts';
 import { serverUrlSchema, type Settings } from '../../../shared/settings.ts';
@@ -9,8 +9,8 @@ import { useRiver } from '../store.ts';
 
 const TABS = [
   'updates',
-  'hosting',
   'server',
+  'hosting',
   'backup',
   'appearance',
   'notifications',
@@ -63,6 +63,12 @@ export function describeUpdate(status: UpdateStatus): string {
 export function SettingsPage(): ReactElement {
   const [tab, setTab] = useState<Tab>('updates');
   const settings = useRiver((s) => s.settings);
+  const host = useHostStatus();
+  const [askedForHosting, setAskedForHosting] = useState(false);
+  // Hosting is for whoever runs a server; everyone else never sees it.
+  const tabs = TABS.filter(
+    (t) => t !== 'hosting' || askedForHosting || host?.enabled || (host?.legacy ?? 'none') !== 'none',
+  );
 
   return (
     <div className="page settings">
@@ -72,7 +78,7 @@ export function SettingsPage(): ReactElement {
       </header>
       <div className="settings__layout">
         <nav className="settings__tabs glass" aria-label="Settings sections">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button
               key={t}
               className={`settings__tab ${tab === t ? 'is-active' : ''}`}
@@ -88,7 +94,22 @@ export function SettingsPage(): ReactElement {
             <>
               {tab === 'updates' && <UpdatesPanel settings={settings} />}
               {tab === 'hosting' && <HostingTab />}
-              {tab === 'server' && <ServerPanel settings={settings} />}
+              {tab === 'server' && (
+                <>
+                  <ServerPanel settings={settings} />
+                  {!tabs.includes('hosting') && (
+                    <button
+                      className="btn btn--link"
+                      onClick={() => {
+                        setAskedForHosting(true);
+                        setTab('hosting');
+                      }}
+                    >
+                      Run a River server on this PC…
+                    </button>
+                  )}
+                </>
+              )}
               {tab === 'backup' && <BackupPanel />}
               {tab === 'appearance' && <AppearancePanel settings={settings} />}
               {tab === 'notifications' && <NotificationsPanel settings={settings} />}
