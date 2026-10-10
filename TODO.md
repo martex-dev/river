@@ -66,8 +66,8 @@ Each line is one PR; each version ships when its section is done.
 
 ### 1.0.9 — Polish
 
-- [ ] Compact mode; quick switcher (Ctrl+K); keyboard shortcuts panel
-- [ ] Accessibility and performance pass; security review of 1.0.x
+- [x] Compact mode; quick switcher (Ctrl+K); keyboard shortcuts panel
+- [x] Accessibility and performance pass; security review of 1.0.x
 
 ### Later
 
