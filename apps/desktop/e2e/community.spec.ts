@@ -365,6 +365,16 @@ test('a brand-new user creates a community from a template in one step', async (
   await expect(carol.getByRole('group', { name: 'Category Chat' })).toContainText('clips');
   await expect(carol.getByRole('group', { name: 'Category Voice' })).toContainText('Squad 1');
   await auditA11y(carol, 'Community created from a template');
+  // Ctrl+K jumps anywhere; Ctrl+/ lists the shortcuts.
+  await carol.keyboard.press('Control+K');
+  await carol.getByRole('combobox').fill('looking');
+  await carol.keyboard.press('Enter');
+  await expect(carol.locator('.chat__head strong')).toHaveText('looking-for-group');
+  await carol.keyboard.press('Control+Slash');
+  await expect(carol.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
+  await auditA11y(carol, 'Keyboard shortcuts');
+  await carol.keyboard.press('Escape');
+  await expect(carol.getByRole('dialog', { name: 'Keyboard shortcuts' })).toHaveCount(0);
   // An empty channel helps you break the ice.
   await carol.locator('.channel', { hasText: 'general' }).getByRole('button').first().click();
   await expect(carol.locator('.chat__welcome-actions')).toContainText("It's just you here");
