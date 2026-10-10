@@ -29,8 +29,18 @@ test('main screens have no serious accessibility problems', async () => {
     await audit(section);
   }
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  for (const tab of ['Updates', 'Server', 'Backup', 'Appearance', 'Notifications', 'About']) {
+  for (const tab of ['Updates', 'Server', 'Backup', 'Appearance', 'Notifications', 'System', 'About']) {
     await page.getByRole('button', { name: tab, exact: true }).click();
     await audit(`Settings → ${tab}`);
   }
+});
+
+test('the quick switcher and the shortcuts list are accessible', async () => {
+  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  await page.keyboard.press('Control+K');
+  await audit('Quick switcher');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Control+Slash');
+  await audit('Keyboard shortcuts');
+  await page.keyboard.press('Escape');
 });
