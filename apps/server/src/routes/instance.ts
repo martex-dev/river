@@ -76,12 +76,16 @@ export function registerInstanceRoutes(
   const instance = loadInstance(deps.database.db);
   const publish = deps.fetch ?? fetch;
 
+  /** The last public address River Host announced (it is public anyway). */
+  let address: string | null = null;
+
   app.get(`${API_PREFIX}/instance`, async () => {
     const i = await instance;
     return {
       id: i.id,
       publicKey: i.publicKey,
       beacon: config.beaconRelay ? { relay: config.beaconRelay, topic: i.topic } : null,
+      address,
     };
   });
 
@@ -112,6 +116,7 @@ export function registerInstanceRoutes(
         request.log.warn({ err: { message: (err as Error).message } }, 'beacon publish failed');
       }
     }
+    address = url;
     return { ok: true, published, note: { url, issuedAt, sig } };
   });
 }

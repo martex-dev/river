@@ -15,6 +15,12 @@ export const instanceResponseSchema = z.object({
       topic: z.string().regex(/^river-[A-Za-z0-9_-]{24}$/),
     })
     .nullable(),
+  /** The public address River Host last announced, if this server runs under River Host. */
+  address: z
+    .url({ protocol: /^https?$/ })
+    .max(300)
+    .nullable()
+    .default(null),
 });
 export type InstanceInfo = z.infer<typeof instanceResponseSchema>;
 
