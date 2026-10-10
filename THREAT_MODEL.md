@@ -72,6 +72,16 @@ River does **not** claim to defend against:
 | Push tokens (Stage 2)                                | Yes                                                                                                             | Pushes carry no content                                                     |
 | Contact lists / address book                         | **No**                                                                                                          | River never uploads address books                                           |
 
+### 5a. Address relay (River Host, 1.0.8)
+
+A server hosted on a home PC behind a quick tunnel posts signed notes of its
+current public address to a relay (ntfy.sh by default; operators can turn it
+off). The relay learns the server's and members' IP addresses and when they post
+or read notes. It learns no content, names or membership beyond "these IPs
+read this topic". Apps follow only notes signed by the server key they pinned
+while connected, and only to an address that answers with that same key, so a
+relay or a forger cannot redirect anyone to another server.
+
 ## 6. Key threats and mitigations (STRIDE summary)
 
 | Threat          | Example                                | Mitigation                                                                                                                              | Status                                                 |

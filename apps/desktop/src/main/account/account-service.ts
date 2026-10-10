@@ -147,6 +147,8 @@ export class AccountService {
       }
 
       try {
+        // A new account may be on another server: forget the identity pinned for the old one.
+        db.prepare('DELETE FROM server_instance').run();
         db.prepare(
           `INSERT INTO account (id, server_url, river_id, device_id, device_public_key, device_private_key,
                                 device_list, device_list_signature, device_list_version, registered_at)
@@ -256,6 +258,17 @@ export class AccountService {
         )
         .get() as AccountRow | undefined) ?? null
     );
+  }
+
+  /**
+   * The same server, reachable at a new address (see ServerLocator). The
+   * account, keys and session stay as they are.
+   */
+  moveServer(url: string): void {
+    const db = this.deps.db();
+    if (!db) return;
+    db.prepare('UPDATE account SET server_url = ? WHERE id = 1').run(url);
+    this.setConnection('connecting');
   }
 
   private setConnection(connection: typeof this.connection, message?: string): void {

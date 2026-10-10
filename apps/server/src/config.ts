@@ -43,6 +43,13 @@ const envSchema = z.object({
   RIVER_TURN_SECRET: z.string().min(16).max(256).optional(),
   /** Public https URL of this server; enables HSTS. */
   RIVER_PUBLIC_URL: z.url({ protocol: /^https$/ }).optional(),
+  /**
+   * A public relay (ntfy-compatible, e.g. https://ntfy.sh) where the server posts signed notes
+   * of its new address, for servers whose address changes (home PC behind a quick tunnel).
+   */
+  RIVER_BEACON_RELAY: z.url({ protocol: /^https$/ }).optional(),
+  /** Secret River Host uses to tell the server its public address (from this machine only). */
+  RIVER_HOST_TOKEN: z.string().min(32).max(256).optional(),
 });
 
 export interface ServerConfig {
@@ -58,6 +65,8 @@ export interface ServerConfig {
   attachmentDir: string;
   maxAttachmentBytes: number;
   turn: { urls: string[]; secret: string } | null;
+  beaconRelay?: string;
+  hostToken?: string;
   attachmentQuotaBytes: number;
   mailboxLimit: number;
 }
@@ -94,6 +103,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     maxAttachmentBytes: e.RIVER_MAX_ATTACHMENT_MB * 1024 * 1024,
     attachmentQuotaBytes: e.RIVER_ATTACHMENT_QUOTA_MB * 1024 * 1024,
     mailboxLimit: e.RIVER_MAILBOX_LIMIT,
+    ...(e.RIVER_BEACON_RELAY ? { beaconRelay: e.RIVER_BEACON_RELAY.replace(/\/+$/, '') } : {}),
+    ...(e.RIVER_HOST_TOKEN ? { hostToken: e.RIVER_HOST_TOKEN } : {}),
     turn:
       e.RIVER_TURN_URLS && e.RIVER_TURN_SECRET
         ? {

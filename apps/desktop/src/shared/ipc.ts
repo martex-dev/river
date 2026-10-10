@@ -287,6 +287,8 @@ export type CommunityEvent =
       states: Record<string, VoiceStateView>;
     }
   | { t: 'voiceDisconnect' }
+  /** Your server moved to a new address and River followed it. */
+  | { t: 'serverMoved'; url: string }
   /** The server would not let you into a voice channel. */
   | { t: 'voiceRefused'; reason: 'full' | 'forbidden' }
   | { t: 'typing'; communityId: string; channelId: string; riverId: string }

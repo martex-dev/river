@@ -36,6 +36,7 @@ import {
 import { layoutChanges, moveChannel as moveInLayout, sidebarGroups } from '../../shared/layout.ts';
 import { communityIconSchema, templateById, type TemplateId } from '../../shared/templates.ts';
 import { describeAudit } from './audit-text.ts';
+import type { ServerLocator } from './server-locator.ts';
 import type {
   CategoryView,
   ChannelView,
@@ -101,6 +102,8 @@ interface Deps {
   log: Logger;
   /** Creates the realtime socket (injectable for tests). */
   createSocket?: (url: string) => WebSocket;
+  /** Finds the server again if its address changes. */
+  locator?: ServerLocator;
 }
 
 interface SealedProfile {
@@ -164,6 +167,8 @@ export class CommunityService {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
   private backoff = 1000;
+  private offlineSince: number | null = null;
+  private lastFollow = 0;
   private retryAt: number | null = null;
   private readonly listeners = new Set<(e: CommunityEvent) => void>();
   private readonly rawListeners = new Set<(e: ServerEvent) => void>();
@@ -1752,6 +1757,20 @@ export class CommunityService {
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer) return;
+    this.offlineSince ??= Date.now();
+    // Unreachable for a while: the server may have a new address (a home PC that restarted).
+    const now = Date.now();
+    if (this.deps.locator && now - this.offlineSince > 15_000 && now - this.lastFollow > 60_000) {
+      this.lastFollow = now;
+      void this.deps.locator
+        .follow()
+        .then((moved) => {
+          if (!moved) return;
+          this.emit({ t: 'serverMoved', url: moved });
+          this.reconnectNow();
+        })
+        .catch(() => undefined);
+    }
     // Exponential backoff with ±20% jitter, so many clients don't reconnect in lockstep.
     const delay = Math.round(this.backoff * (0.8 + Math.random() * 0.4));
     this.retryAt = Date.now() + delay;
@@ -1783,7 +1802,9 @@ export class CommunityService {
     switch (e.t) {
       case 'ready':
         this.backoff = 1000;
+        this.offlineSince = null;
         this.setSocketState('online');
+        void this.deps.locator?.pin().catch(() => undefined);
         void this.refresh()
           .then(() => this.republishProfilesOnce())
           .catch(() => undefined);

@@ -259,4 +259,21 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 14,
+    name: '0014_server_instance',
+    up(db) {
+      // Who your server is (its identity key) and where it announces a new address,
+      // so River can follow it when a home server's address changes.
+      db.exec(`
+        CREATE TABLE server_instance (
+          id          INTEGER PRIMARY KEY CHECK (id = 1),
+          instance_id TEXT NOT NULL,
+          public_key  TEXT NOT NULL,
+          relay       TEXT,
+          topic       TEXT
+        ) STRICT;
+      `);
+    },
+  },
 ];

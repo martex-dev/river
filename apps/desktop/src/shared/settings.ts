@@ -82,6 +82,13 @@ export const settingsSchema = z.object({
     /** Per-member playback volume, 0–2 (1 = 100%). */
     userVolumes: z.record(z.string().max(64), z.number().min(0).max(2)),
   }),
+  /** Added in 1.0.7. */
+  system: z.object({
+    /** Open River (in the tray) when you sign in to your computer. */
+    startAtLogin: z.boolean(),
+    /** Closing the window keeps River running in the tray, so calls and messages keep arriving. */
+    closeToTray: z.boolean(),
+  }),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -108,9 +115,17 @@ export const DEFAULT_SETTINGS: Settings = {
     echoCancellation: true,
     userVolumes: {},
   },
+  system: { startAtLogin: false, closeToTray: true },
 };
 
-export const SETTINGS_SECTIONS = ['updates', 'appearance', 'notifications', 'server', 'voice'] as const;
+export const SETTINGS_SECTIONS = [
+  'updates',
+  'appearance',
+  'notifications',
+  'server',
+  'voice',
+  'system',
+] as const;
 
 /**
  * Brings a settings object written by an older River up to the current shape:
@@ -139,6 +154,7 @@ export const settingsPatchSchema = z
     notifications: settingsSchema.shape.notifications.partial().strict().optional(),
     server: settingsSchema.shape.server.partial().strict().optional(),
     voice: settingsSchema.shape.voice.partial().strict().optional(),
+    system: settingsSchema.shape.system.partial().strict().optional(),
   })
   .strict();
 
@@ -152,5 +168,6 @@ export function applySettingsPatch(current: Settings, patch: z.output<typeof set
     notifications: { ...current.notifications, ...patch.notifications },
     server: { ...current.server, ...patch.server },
     voice: { ...current.voice, ...patch.voice },
+    system: { ...current.system, ...patch.system },
   });
 }

@@ -15,6 +15,8 @@ asarUnpack:
 extraResources:
   - from: ../../LICENSE
     to: LICENSE
+  - from: build/icon.png
+    to: icon.png
 # Electron fuses: River's binary cannot be reused as a Node.js runtime or debugged/injected
 # via --inspect / NODE_OPTIONS, and only loads its own integrity-checked app.asar.
 electronFuses:
