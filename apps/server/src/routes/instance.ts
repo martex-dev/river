@@ -1,16 +1,9 @@
-import {
-  createPrivateKey,
-  createPublicKey,
-  generateKeyPairSync,
-  randomBytes,
-  sign,
-  timingSafeEqual,
-} from 'node:crypto';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { createPrivateKey, createPublicKey, generateKeyPairSync, randomBytes, sign } from 'node:crypto';
+import type { FastifyInstance } from 'fastify';
 import { API_PREFIX, beaconMessage, instanceAddressRequestSchema } from '@river/protocol';
 import type { ServerConfig } from '../config.ts';
 import type { RiverDatabase } from '../db/database.ts';
-import { HttpError } from '../http-error.ts';
+import { requireHost } from '../host-auth.ts';
 
 /**
  * Who this server is, and where it can be found after its address changes.
@@ -52,22 +45,6 @@ async function loadInstance(db: RiverDatabase['db']): Promise<Instance> {
   return { id, publicKey: Buffer.from(jwk.x!, 'base64url').toString('base64'), privateKeyPem, topic };
 }
 
-/** A request that arrived straight from this machine, not through the tunnel or a proxy. */
-function fromThisMachine(request: FastifyRequest): boolean {
-  const remote = request.socket.remoteAddress ?? '';
-  const loopback = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
-  const proxied = ['x-forwarded-for', 'cf-connecting-ip', 'forwarded', 'x-real-ip'].some(
-    (h) => request.headers[h] !== undefined,
-  );
-  return loopback && !proxied;
-}
-
-function sameSecret(given: string | undefined, expected: string): boolean {
-  const a = Buffer.from(given ?? '');
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
 export function registerInstanceRoutes(
   app: FastifyInstance,
   deps: { config: ServerConfig; database: RiverDatabase; fetch?: typeof fetch; now: () => Date },
@@ -93,9 +70,7 @@ export function registerInstanceRoutes(
   if (!config.hostToken) return;
   const hostToken = config.hostToken;
   app.post(`${API_PREFIX}/instance/address`, async (request) => {
-    if (!fromThisMachine(request)) throw new HttpError(404, 'not_found', 'Not found');
-    const auth = request.headers.authorization?.replace(/^Bearer /, '');
-    if (!sameSecret(auth, hostToken)) throw new HttpError(401, 'unauthorized', 'Wrong host token');
+    requireHost(request, hostToken);
     const { url } = instanceAddressRequestSchema.parse(request.body);
     const i = await instance;
     const issuedAt = deps.now().toISOString();
