@@ -8,6 +8,7 @@
 | 2026-10-09 | 0.9.0   | Everything from 0.2 to 0.9 (pre-1.0)        | [0.9.0-review.md](0.9.0-review.md) |
 | 2026-10-09 | 1.0.0   | Categories, layout endpoint, unread markers | [1.0.0-review.md](1.0.0-review.md) |
 | 2026-10-10 | 1.0.6   | Timeouts, audit log, category permissions   | [1.0.6-review.md](1.0.6-review.md) |
+| 2026-10-10 | 1.0.8   | Server identity, address notes, River Host  | [1.0.8-review.md](1.0.8-review.md) |
 
 Design notes: [release-signing.md](release-signing.md) — where the release key
 lives and the plan to move it to hardware and threshold signing.

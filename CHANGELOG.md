@@ -6,6 +6,32 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-10-10
+
+**Voice, and a server that comes back by itself.**
+
+### Added
+
+- **River Host** for people who host on their own PC: the server and its
+  public tunnel start when you sign in to Windows, run hidden, restart if they
+  stop, and keep their data in a permanent folder
+  (see `docs/deployment/host-on-your-pc.md`).
+- **River follows your server to its new address.** A home server's tunnel
+  address changes after a restart. The server signs a note with its new
+  address, and River moves there automatically, but only if the same server
+  signed it and answers there.
+- **Settings → System**: *Start River when I sign in* (opens quietly in the
+  tray) and *Keep River running when I close the window*.
+- **Voice channel user limits** (2 to 99 people); the channel list shows
+  `2/5`, and a full channel says so.
+- **Video tiles** you can use from the keyboard: Enter shows someone large,
+  double-click or F toggles fullscreen; moving bars show who is speaking.
+
+### Fixed
+
+- Joining a voice channel the server refuses (full, or not allowed) no longer
+  looks connected while you are alone: River explains and leaves.
+
 ## [1.0.7] - 2026-10-10
 
 **Channels: threads, announcement channels and slowmode.**
@@ -595,7 +621,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.7...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.8...HEAD
+[1.0.8]: https://github.com/martex-dev/river/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/martex-dev/river/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/martex-dev/river/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/martex-dev/river/compare/v1.0.4...v1.0.5
