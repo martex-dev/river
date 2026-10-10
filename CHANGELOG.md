@@ -33,6 +33,7 @@ All notable changes to River are documented here. The format follows
 
 - `cloudflared` is used only from a system location or as a pinned Cloudflare
   release verified by SHA-256 before it runs. Details: THREAT_MODEL §5b.
+
 ## [1.0.10] - 2026-10-10
 
 **Quicker everyday actions, and a view of your own hosting.**
