@@ -6,6 +6,25 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**Usernames: add people the way you do on Discord.**
+
+### Added
+
+- **Usernames.** Pick an @username when you set up River; people add you by it.
+  No more River IDs to copy. Change it any time in Settings → Account.
+- **Add friends by @username** on the Friends page (links and IDs still work).
+- **Operator: create accounts.** On the PC that hosts the server, Admin can
+  create an account ahead of time — a sign-up link that carries a chosen
+  username — cancel pending ones, and switch the server between **open**
+  (anyone can join) and **invite-only** (only people you make a link for).
+- Admin lists everyone by @username.
+
+### Changed
+
+- Settings → Server is now **Settings → Account**, with your username and the
+  server details together. The top bar shows **Online**, not an address.
+
+
 ## [1.0.12] - 2026-10-10
 
 **One River for everyone: install, pick a name, and you are in.**

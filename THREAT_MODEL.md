@@ -128,6 +128,16 @@ address answers with that identity, and create their account there.
   requests without proxy headers, and need the per-start token, which never
   leaves the hosting app's main process.
 
+### 5d. Usernames (1.0.13)
+
+Usernames are public on their server, like on Discord: the server stores the
+lowercase username next to the account so people can find each other and the
+operator can tell accounts apart. Display names stay end-to-end encrypted;
+usernames are not secret and are not content. Lookup and bulk-resolve
+endpoints need a valid session. Operator-created accounts are one-time sign-up
+codes (hashed at rest, 7-day expiry) that carry a chosen username; in
+invite-only mode registration requires one.
+
 ## 6. Key threats and mitigations (STRIDE summary)
 
 | Threat          | Example                                | Mitigation                                                                                                                              | Status                                                 |

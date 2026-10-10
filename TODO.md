@@ -87,6 +87,12 @@ Each line is one PR; each version ships when its section is done.
 - [x] Invite friends to communities from the friends list; join from the message
 - [x] Hosting hidden from people who do not host; the host PC takes over River Host by itself
 
+### 1.0.13 — Usernames, not IDs
+
+- [x] Pick an @username at setup; change it in Settings → Account
+- [x] Add friends by @username (links and IDs still work)
+- [x] Operator can create accounts (sign-up links) and set the server invite-only
+
 ### Later
 
 - [ ] Sealed sender for direct messages
