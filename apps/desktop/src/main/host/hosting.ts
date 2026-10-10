@@ -269,10 +269,16 @@ function killOrphanTunnel(root: string, log: Logger): void {
 /** Appends process output to a log file, starting a fresh file past 5 MB. */
 function writer(file: string): (chunk: Buffer) => void {
   mkdirSync(join(file, '..'), { recursive: true });
+  // The size is counted here rather than checked before each write.
+  let size = statSync(file, { throwIfNoEntry: false })?.size ?? 0;
   return (chunk) => {
     try {
-      if ((statSync(file, { throwIfNoEntry: false })?.size ?? 0) > LOG_LIMIT) renameSync(file, `${file}.1`);
+      if (size > LOG_LIMIT) {
+        renameSync(file, `${file}.1`);
+        size = 0;
+      }
       appendFileSync(file, chunk);
+      size += chunk.byteLength;
     } catch {
       // logging must never stop hosting
     }
