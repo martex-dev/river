@@ -6,6 +6,10 @@
   "license": "AGPL-3.0-only",
   "type": "module",
   "main": "src/main.ts",
+  "exports": {
+    ".": "./src/main.ts",
+    "./embedded": "./src/embedded.ts"
+  },
   "scripts": {
     "start": "node src/main.ts",
     "dev": "node --watch src/main.ts",
