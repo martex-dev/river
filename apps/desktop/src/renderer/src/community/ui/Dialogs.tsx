@@ -480,6 +480,28 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
                   </label>
                 </>
               )}
+              {channel.kind === 'voice' && (
+                <label className="textfield">
+                  <span className="field__label">User limit</span>
+                  <select
+                    value={channel.userLimit}
+                    onChange={(e) =>
+                      void s.run({
+                        a: 'updateChannel',
+                        channelId: channel.id,
+                        userLimit: Number(e.target.value),
+                      })
+                    }
+                  >
+                    {[0, 2, 3, 4, 5, 6, 8, 10, 15, 20, 25, 50, 99].map((n) => (
+                      <option key={n} value={n}>
+                        {n === 0 ? 'No limit' : `${n} people`}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="muted small">People who can move members can always join.</span>
+                </label>
+              )}
               {community.categories.length > 0 && (
                 <label className="textfield">
                   <span className="field__label">Category</span>
