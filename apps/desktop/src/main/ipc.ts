@@ -18,7 +18,6 @@ import {
   type AccountActionResult,
   type AccountStatus,
   type AppInfo,
-  type HostStatus,
   type IdentityInfo,
   type PassphraseResult,
   type Result,
@@ -27,6 +26,7 @@ import {
   type StorageStatus,
 } from '../shared/ipc.ts';
 import type { FetchBytes } from './http.ts';
+import type { Hosting } from './host/hosting.ts';
 import { isAllowedAppUrl } from './security.ts';
 import { friendlyError } from './errors.ts';
 import { checkServer } from './server-check.ts';
@@ -66,8 +66,8 @@ export interface IpcDeps {
   afterRestore(): Promise<void>;
   /** Screen chosen in River's picker for the next screen share. */
   selectScreen(sourceId: string): void;
-  /** Finds out whether River Host runs a server on this PC. */
-  hostStatus(): Promise<HostStatus>;
+  /** Hosting communities on this PC. */
+  hosting: Pick<Hosting, 'status' | 'enable' | 'disable' | 'backupNow' | 'openFolder'>;
 }
 
 /** Turns any error into a message that is safe to show. */
@@ -120,7 +120,11 @@ export function registerIpc(deps: IpcDeps): void {
     else await shell.openExternal(EXTERNAL_LINKS.releases);
   });
 
-  handle(IPC.hostStatus, () => deps.hostStatus());
+  handle(IPC.hostStatus, () => deps.hosting.status());
+  handle(IPC.hostEnable, () => result(() => deps.hosting.enable()));
+  handle(IPC.hostDisable, () => result(() => deps.hosting.disable()));
+  handle(IPC.hostBackup, () => result(() => deps.hosting.backupNow()));
+  handle(IPC.hostOpenFolder, () => deps.hosting.openFolder());
   handle(IPC.securityStatus, () =>
     securityStatus({
       updatesEnabled: deps.updates !== null,
@@ -316,6 +320,12 @@ export function broadcastDmEvents(target: WebContents, dm: DmService): () => voi
 export function broadcastCommunityEvents(target: WebContents, community: CommunityService): () => void {
   return community.onEvent((event: CommunityEvent) => {
     if (!target.isDestroyed()) target.send(IPC.communityEvent, event);
+  });
+}
+
+export function broadcastHostStatus(target: WebContents, hosting: Hosting): () => void {
+  return hosting.onStatus((status) => {
+    if (!target.isDestroyed()) target.send(IPC.hostStatusChanged, status);
   });
 }
 

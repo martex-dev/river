@@ -5,6 +5,7 @@ import {
   IPC,
   type AccountStatus,
   type CommunityEvent,
+  type HostStatus,
   type RiverApi,
   type StorageStatus,
   type UpdateStatus,
@@ -31,7 +32,20 @@ const api: RiverApi = {
     },
   },
   security: { status: () => ipcRenderer.invoke(IPC.securityStatus) },
-  host: { status: () => ipcRenderer.invoke(IPC.hostStatus) },
+  host: {
+    status: () => ipcRenderer.invoke(IPC.hostStatus),
+    enable: () => ipcRenderer.invoke(IPC.hostEnable),
+    disable: () => ipcRenderer.invoke(IPC.hostDisable),
+    backupNow: () => ipcRenderer.invoke(IPC.hostBackup),
+    openFolder: () => ipcRenderer.invoke(IPC.hostOpenFolder),
+    onStatus: (listener) => {
+      const handler = (_event: unknown, status: HostStatus): void => listener(status);
+      ipcRenderer.on(IPC.hostStatusChanged, handler);
+      return () => {
+        ipcRenderer.removeListener(IPC.hostStatusChanged, handler);
+      };
+    },
+  },
   server: { check: (url) => ipcRenderer.invoke(IPC.serverCheck, url) },
   identity: {
     get: () => ipcRenderer.invoke(IPC.identityGet),
