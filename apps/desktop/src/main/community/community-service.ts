@@ -226,7 +226,7 @@ export class CommunityService {
       await this.deps.account.connect();
       token = this.deps.account.sessionToken();
     }
-    if (!token) throw new CommunityError('Not connected to your River server.');
+    if (!token) throw new CommunityError("You're offline. River will reconnect by itself.");
     return token;
   }
 
@@ -1941,7 +1941,7 @@ export class CommunityService {
   }
 
   private sendEvent(event: unknown): void {
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) throw new CommunityError('Not connected');
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) throw new CommunityError("You're offline");
     this.socket.send(JSON.stringify(event));
   }
 

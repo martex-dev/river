@@ -160,7 +160,7 @@ export function App(): ReactElement {
         <header className="topbar">
           <span className="topbar__title">{LABELS[section]}</span>
           {account.state === 'registered' ? (
-            <span className={`topbar__pill is-${account.connection}`} title={`Account on ${account.server}`}>
+            <span className={`topbar__pill is-${account.connection}`} title="Your River connection">
               <span
                 className={`status-dot status-dot--${account.connection === 'online' ? 'active' : account.connection === 'error' ? 'warning' : 'inactive'}`}
               />
@@ -187,6 +187,7 @@ export function App(): ReactElement {
           className={`content ${section === 'communities' || section === 'messages' ? 'content--full' : ''}`}
           key={section}
         >
+          <UsernamePrompt />
           {loadError && (
             <div className="glass card card--error" role="alert">
               River could not load its settings: {loadError}
@@ -236,5 +237,73 @@ function RailItem(props: { section: Section; active: boolean; onSelect(s: Sectio
         )}
       </button>
     </li>
+  );
+}
+
+/** Nudges people who have an account but no @username yet to choose one. */
+function UsernamePrompt(): ReactElement | null {
+  const account = useRiver((r) => r.account);
+  const setAccount = useRiver((r) => r.setAccount);
+  const navigate = useRiver((r) => r.navigate);
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed || account.state !== 'registered' || account.connection !== 'online' || account.username) {
+    return null;
+  }
+  const save = async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    const res = await window.river.account.setUsername(value.trim());
+    setBusy(false);
+    if (res.ok) {
+      setAccount(res.value);
+      setDismissed(true);
+    } else setError(res.message);
+  };
+  return (
+    <div className="username-prompt glass" role="region" aria-label="Choose a username">
+      <div>
+        <strong>Pick a username</strong>
+        <p className="muted small">It's how friends add you — like @alex. You can change it later.</p>
+      </div>
+      <div className="username-row">
+        <div className="textfield username-field">
+          <span className="username-field__at" aria-hidden="true">
+            @
+          </span>
+          <input
+            value={value.replace(/^@/, '')}
+            onChange={(e) => {
+              setValue(e.target.value);
+              setError(null);
+            }}
+            placeholder="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            maxLength={32}
+            aria-label="Username"
+          />
+        </div>
+        <button
+          className="btn btn--primary btn--small"
+          disabled={busy || value.trim().length < 3}
+          onClick={() => void save()}
+        >
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        <button
+          className="btn btn--link btn--small"
+          onClick={() => {
+            setDismissed(true);
+            navigate('settings');
+          }}
+        >
+          Later
+        </button>
+      </div>
+      {error && <p className="field__error">{error}</p>}
+    </div>
   );
 }

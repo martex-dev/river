@@ -27,7 +27,7 @@ export function ConnectionBanner(): ReactElement | null {
       <span className="connection-banner__dot" aria-hidden="true" />
       <span>
         {connection === 'connecting'
-          ? 'Reconnecting to your River server…'
+          ? 'Reconnecting…'
           : seconds > 0
             ? `You're offline. Trying again in ${seconds}s.`
             : "You're offline. Trying again…"}{' '}

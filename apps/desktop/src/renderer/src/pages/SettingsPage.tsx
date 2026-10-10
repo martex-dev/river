@@ -299,55 +299,66 @@ function AccountPanel({
   account: Extract<AccountStatus, { state: 'registered' }>;
 }): ReactElement {
   const [busy, setBusy] = useState(false);
+  const connected = account.connection === 'online';
+  const status =
+    account.connection === 'online'
+      ? 'Connected'
+      : account.connection === 'connecting'
+        ? 'Connecting…'
+        : "Offline — you'll reconnect automatically";
   return (
     <div className="panel">
       <h2 className="panel__title">Account</h2>
       <UsernameEditor account={account} />
       <div className={`account-card is-${account.connection}`} role="status">
         <div className="account-card__head">
-          <strong>Your account</strong>
-          <span className={`chip chip--${account.connection}`}>{CONNECTION_LABEL[account.connection]}</span>
+          <strong>{account.username ? `@${account.username}` : 'Your account'}</strong>
+          <span className={`chip chip--${account.connection}`}>
+            {connected ? 'Connected' : CONNECTION_LABEL[account.connection]}
+          </span>
         </div>
+        <p className="muted small">{status}</p>
+        {account.message && account.connection === 'error' && (
+          <p className="field__error">{account.message}</p>
+        )}
+        {!connected && (
+          <div className="button-row">
+            <button
+              className="btn btn--ghost btn--small"
+              disabled={busy || account.connection === 'connecting'}
+              onClick={() => {
+                setBusy(true);
+                void window.river.account.connect().finally(() => setBusy(false));
+              }}
+            >
+              Try now
+            </button>
+          </div>
+        )}
+      </div>
+      <details className="account-tech">
+        <summary>Technical details</summary>
         <dl className="about-grid">
           <div>
-            <dt>River ID</dt>
+            <dt>Account ID</dt>
             <dd className="mono small">{account.riverId}</dd>
           </div>
           <div>
             <dt>This device</dt>
             <dd>
-              Device {account.deviceId} of {account.devices}
+              Device {account.deviceId} of {account.devices} · list v{account.listVersion}
             </dd>
           </div>
           <div>
-            <dt>Device list</dt>
-            <dd>Signed by your identity · v{account.listVersion}</dd>
-          </div>
-          <div>
-            <dt>Server address</dt>
+            <dt>Connection</dt>
             <dd className="mono small">{account.serverUrl}</dd>
           </div>
         </dl>
-        {account.message && (
-          <p className={account.connection === 'error' ? 'field__error' : 'muted small'}>{account.message}</p>
-        )}
-      </div>
-      <div className="button-row">
-        <button
-          className="btn btn--ghost"
-          disabled={busy || account.connection === 'connecting'}
-          onClick={() => {
-            setBusy(true);
-            void window.river.account.connect().finally(() => setBusy(false));
-          }}
-        >
-          Reconnect
-        </button>
-      </div>
-      <p className="muted small">
-        The server knows your River ID, your public keys and which devices you use — never your messages.
-        Moving to another server and deleting your account arrive in a later release.
-      </p>
+        <p className="muted small">
+          River stores your account ID, your public keys and which devices you use — never your messages or
+          your name.
+        </p>
+      </details>
     </div>
   );
 }

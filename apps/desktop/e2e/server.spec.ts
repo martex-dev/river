@@ -110,8 +110,9 @@ test('creates an account on the server and reconnects after a restart', async ()
   if (await save.isEnabled()) await save.click(); // already saved by the previous test
   await page.getByRole('button', { name: 'Create account' }).click();
   const card = page.locator('.account-card');
-  await expect(card).toContainText(`http://127.0.0.1:${port}`);
   await expect(card.locator('.chip')).toHaveText('Connected');
+  // The address lives under "Technical details" now.
+  await expect(page.locator('.account-tech')).toContainText(`http://127.0.0.1:${port}`);
   await expect(page.locator('.topbar__pill')).toContainText('Online');
   if (process.env.RIVER_SCREENSHOTS) await page.screenshot({ path: 'test-results/account.png' });
 
