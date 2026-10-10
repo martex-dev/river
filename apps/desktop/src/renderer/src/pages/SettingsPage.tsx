@@ -430,6 +430,29 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
           ))}
         </div>
       </fieldset>
+      <fieldset className="field">
+        <legend className="field__label">Message density</legend>
+        <div className="choice-grid">
+          {(
+            [
+              ['cozy', 'Cozy', 'Larger avatars and more space between messages.'],
+              ['compact', 'Compact', 'More messages on screen: small avatars, tight spacing.'],
+            ] as const
+          ).map(([id, name, text]) => (
+            <label key={id} className={`choice ${settings.appearance.density === id ? 'is-selected' : ''}`}>
+              <input
+                type="radio"
+                name="density"
+                value={id}
+                checked={settings.appearance.density === id}
+                onChange={() => void updateSettings({ appearance: { density: id } })}
+              />
+              <span className="choice__name">{name}</span>
+              <span className="choice__text">{text}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
     </div>
   );
 }
