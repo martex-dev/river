@@ -53,6 +53,16 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
 Register-ScheduledTask -TaskName 'River Host' -Action $action -Trigger $trigger -Settings $settings `
   -Description 'Keeps your River server and its public address running. Installed by River.' -Force | Out-Null
 
+# Replace a River Host that is already running (started by hand or by an older install).
+Get-CimInstance Win32_Process |
+  Where-Object { $_.Name -eq 'node.exe' -and $_.CommandLine -like '*river-host.ts*' } |
+  ForEach-Object {
+    Get-CimInstance Win32_Process -Filter "ParentProcessId=$($_.ProcessId)" |
+      ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+  }
+Start-Sleep -Seconds 2
+
 Start-ScheduledTask -TaskName 'River Host'
 Write-Output "River Host installed in $HostDir and started. It will start again every time you sign in."
 Write-Output "Status: $HostDir\status.json   Logs: $HostDir\logs"
