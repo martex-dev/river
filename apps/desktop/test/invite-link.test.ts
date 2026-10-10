@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { formatInvite } from '../src/main/community/sealed.ts';
-import { friendLink, inviteHost, looksLikeInvite, parseFriend } from '../src/shared/invite-link.ts';
+import {
+  findInvite,
+  friendLink,
+  inviteHost,
+  looksLikeInvite,
+  parseFriend,
+} from '../src/shared/invite-link.ts';
 
 describe('invite link detection', () => {
   const key = new Uint8Array(32).fill(7);
@@ -38,5 +44,17 @@ describe('friend links', () => {
     expect(parseFriend(`https://river.example.org/join#${id}`)).toBeNull();
     expect(parseFriend('https://river.example.org/add#not-an-id')).toBeNull();
     expect(parseFriend(`javascript:alert(1)//add#${id}`)).toBeNull();
+  });
+});
+
+describe('invites inside messages', () => {
+  const link = `https://crew.trycloudflare.com/join#c=${'a'.repeat(22)}&k=${'b'.repeat(43)}`;
+  it('finds the invite in a friendly message', () => {
+    expect(findInvite(`Join me in The Crew: ${link}`)).toBe(link);
+    expect(findInvite(`${link}\nsee you there`)).toBe(link);
+  });
+  it('finds nothing in ordinary text or half links', () => {
+    expect(findInvite('hello there')).toBeNull();
+    expect(findInvite('https://crew.trycloudflare.com/join#c=short&k=short')).toBeNull();
   });
 });
