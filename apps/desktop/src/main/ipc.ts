@@ -68,7 +68,7 @@ export interface IpcDeps {
   /** Screen chosen in River's picker for the next screen share. */
   selectScreen(sourceId: string): void;
   /** Creates the account on River's home server by itself. */
-  homeAccount: Pick<HomeAccount, 'ensure' | 'kick' | 'isWaiting'>;
+  homeAccount: Pick<HomeAccount, 'ensure' | 'kick' | 'isWaiting' | 'enabled'>;
   /** Hosting communities on this PC. */
   hosting: Pick<
     Hosting,
@@ -203,8 +203,15 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.communityJoin, (_e, link) =>
     result(() =>
       deps.community.join(link, async (serverUrl) => {
-        deps.settings.update({ server: { url: serverUrl } });
-        await deps.account.register(serverUrl);
+        try {
+          await deps.account.register(serverUrl);
+          deps.settings.update({ server: { url: serverUrl } });
+        } catch (err) {
+          // The link's address may be an old one of River's server (its host PC restarted):
+          // create the account on River's server instead, where the invite code still works.
+          if (!(err instanceof UserFacingError && err.unreachable) || !deps.homeAccount.enabled()) throw err;
+          await deps.homeAccount.ensure();
+        }
       }),
     ),
   );

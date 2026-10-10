@@ -84,6 +84,11 @@ export class HomeAccount {
     this.deps = deps;
   }
 
+  /** River's server is used at all (installed builds). */
+  enabled(): boolean {
+    return this.deps.enabled;
+  }
+
   /** The account is being set up but the server is not reachable yet. */
   isWaiting(): boolean {
     return this.waiting;

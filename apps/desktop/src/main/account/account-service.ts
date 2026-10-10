@@ -285,16 +285,21 @@ export class AccountService {
 
 /** An error whose message is safe and meaningful to show the user. */
 export class UserFacingError extends Error {
-  constructor(message: string) {
+  /** The server could not be reached at all (as opposed to refusing). */
+  readonly unreachable: boolean;
+  constructor(message: string, options: { unreachable?: boolean } = {}) {
     super(message);
     this.name = 'UserFacingError';
+    this.unreachable = options.unreachable ?? false;
   }
 }
 
 function toUserFacing(err: unknown): UserFacingError {
   if (err instanceof UserFacingError) return err;
   if (err instanceof NetworkError)
-    return new UserFacingError('Could not reach the server. Check the address and your connection.');
+    return new UserFacingError('Could not reach the server. Check the address and your connection.', {
+      unreachable: true,
+    });
   if (err instanceof ApiError) {
     switch (err.code) {
       case 'registration_closed':

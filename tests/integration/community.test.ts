@@ -220,6 +220,24 @@ describe('desktop ↔ server communities', () => {
     await expect(bob.community.join(again, async () => undefined)).rejects.toThrow(/banned/);
   });
 
+  it('an invite naming an old address of your own server still works', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('The Crew');
+    const link = await alice.community.invite(created.id);
+    // The host PC restarted since: the link names an address the server no longer has.
+    const old = link.replace(SERVER, 'https://old-address.trycloudflare.com');
+    const joined = await bob.community.join(old, async () => undefined);
+    expect(joined.id).toBe(created.id);
+
+    // A code this server never issued is an invite for some other server.
+    const carol = await person('Carol');
+    const foreign = old.replace(/c=[A-Za-z0-9_-]{22}/, `c=${'A'.repeat(22)}`);
+    await expect(carol.community.join(foreign, async () => undefined)).rejects.toThrow(
+      'This invite is for a different River server than the one your account is on.',
+    );
+  });
+
   it('rejects malformed actions from the renderer before they reach the server', async () => {
     const alice = await person('Alice');
     await expect(
