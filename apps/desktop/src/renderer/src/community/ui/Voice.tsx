@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, CommunityView, ScreenSource } from '../../../../shared/ipc.ts';
 import { useRiver } from '../../store.ts';
@@ -33,6 +33,11 @@ export function VoiceChannel(props: {
   const participants = community.voice[channel.id] ?? [];
   const [picker, setPicker] = useState<ScreenSource[] | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
+  const placesTaken = (community.voice[channel.id] ?? []).length;
+  const full =
+    channel.userLimit > 0 &&
+    placesTaken >= channel.userLimit &&
+    !can(channel.permissions, Permission.MOVE_MEMBERS);
   const remotes = inThisCall ? call.remotes() : [];
   const canConnect = can(channel.permissions, Permission.CONNECT);
   const canStream = can(channel.permissions, Permission.STREAM);
@@ -78,8 +83,13 @@ export function VoiceChannel(props: {
             {participants.length
               ? `${participants.map((id) => nameOf(community, id)).join(', ')} ${participants.length === 1 ? 'is' : 'are'} here.`
               : 'Nobody is here yet.'}
+            {channel.userLimit > 0 && ` ${participants.length} of ${channel.userLimit} places taken.`}
           </p>
-          {canConnect ? (
+          {canConnect && full ? (
+            <button className="btn btn--primary" disabled>
+              Channel is full
+            </button>
+          ) : canConnect ? (
             <button className="btn btn--primary" onClick={() => void s.joinVoice(channel.id, me)}>
               Join voice
             </button>
@@ -258,7 +268,7 @@ function Tile(props: {
   return (
     <div
       className={`tile ${props.screen ? 'tile--screen' : ''} ${props.speaking ? 'is-speaking' : ''} ${props.focused ? 'is-focused' : ''}`}
-      onClick={props.onClick}
+      {...tileControls(props.label, props.speaking, props.focused, props.onClick)}
     >
       {props.screen ? (
         <Video track={props.screen} />
@@ -278,6 +288,7 @@ function Tile(props: {
       <span className="tile__label">
         {props.muted && <MicOffIcon size={14} />}
         {props.deafened && <HeadphonesOffIcon size={14} />}
+        {props.speaking && <SpeakingWaves />}
         {props.label}
         {props.muted ? ' · muted' : ''}
       </span>
@@ -301,7 +312,7 @@ function RemoteTile(props: {
   return (
     <div
       className={`tile ${peer.screenOn ? 'tile--screen' : ''} ${props.speaking ? 'is-speaking' : ''} ${props.focused ? 'is-focused' : ''}`}
-      onClick={props.onClick}
+      {...tileControls(label, props.speaking, props.focused, props.onClick)}
     >
       {peer.screenOn && peer.screen ? (
         <Video stream={peer.screen} />
@@ -315,6 +326,7 @@ function RemoteTile(props: {
       <span className="tile__label">
         {(peer.muted || state?.serverMuted) && <MicOffIcon size={14} />}
         {state?.deafened && <HeadphonesOffIcon size={14} />}
+        {props.speaking && <SpeakingWaves />}
         {label}
         {peer.muted ? ' · muted' : ''}
         {connecting ? ` · ${peer.state === 'failed' ? 'could not connect' : 'connecting…'}` : ''}
@@ -363,4 +375,40 @@ function PeerAudio({ peer, deafened }: { peer: RemotePeer; deafened: boolean }):
     }
   });
   return <audio ref={ref} autoPlay data-peer={peer.id} />;
+}
+
+/**
+ * Tiles are buttons: click, Enter or Space shows someone large; double-click
+ * (or F) puts their video in fullscreen.
+ */
+function tileControls(label: string, speaking: boolean, focused: boolean, onClick: () => void) {
+  const fullscreen = (el: HTMLElement): void => {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    else void el.requestFullscreen?.().catch(() => undefined);
+  };
+  return {
+    role: 'button',
+    tabIndex: 0,
+    'aria-pressed': focused,
+    'aria-label': `${label}${speaking ? ', speaking' : ''}. ${focused ? 'Shown large' : 'Show large'}; double-click for fullscreen.`,
+    onClick,
+    onDoubleClick: (e: MouseEvent<HTMLElement>) => fullscreen(e.currentTarget),
+    onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onClick();
+      } else if (e.key === 'f' || e.key === 'F') fullscreen(e.currentTarget);
+    },
+  } as const;
+}
+
+/** Three little bars that move while someone talks. */
+function SpeakingWaves(): ReactElement {
+  return (
+    <span className="speaking-waves" aria-hidden="true">
+      <i />
+      <i />
+      <i />
+    </span>
+  );
 }
