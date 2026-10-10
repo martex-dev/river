@@ -58,8 +58,11 @@ Each line is one PR; each version ships when its section is done.
 
 ### 1.0.8 — Voice parity
 
-- [ ] User limits on voice channels; video grid and focus view
-- [ ] Mic test in settings; clearer speaking indicators
+- [x] User limits on voice channels; video grid and focus view
+- [x] Mic test in settings; clearer speaking indicators
+
+- [x] River Host: server and tunnel start with Windows; apps follow the server to its new address
+- [x] Start River at sign-in; keep running in the tray
 
 ### 1.0.9 — Polish
 
