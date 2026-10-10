@@ -10,6 +10,8 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { net, powerSaveBlocker, shell, utilityProcess } from 'electron';
+import Database from 'better-sqlite3-multiple-ciphers';
+import { adminOverviewSchema, type AdminOverview } from '@river/protocol';
 import type { HostStatus } from '../../shared/ipc.ts';
 import type { Logger } from '../logger.ts';
 import type { SettingsStore } from '../settings-store.ts';
@@ -18,6 +20,7 @@ import { HostManager, type ServerHandle, type TunnelHandle } from './host-manage
 import {
   adoptLegacyData,
   findLegacyHost,
+  legacyInstanceId,
   legacyRunning,
   retireLegacyHost,
   type RetireDeps,
@@ -35,6 +38,11 @@ export interface HostingDeps {
   followOwnServer(url: string): void;
   /** Development builds only (end-to-end tests): host without a public address. */
   localOnly?: boolean;
+  /**
+   * The server that must keep running (River's home server). If an older River Host on this PC
+   * holds it and hosting is off, River takes it over at start instead of waiting for a click.
+   */
+  autoAdoptInstanceId?: string;
 }
 
 const PREFERRED_PORT = 8790;
@@ -97,6 +105,17 @@ export class Hosting {
   /** At app start: resume hosting if it is on, and look for an older River Host. */
   async init(): Promise<void> {
     await this.refreshLegacy();
+    const legacy = findLegacyHost(this.deps.homeDir);
+    if (
+      !this.deps.settings.get().hosting.enabled &&
+      legacy &&
+      this.deps.autoAdoptInstanceId &&
+      legacyInstanceId(legacy, openReadOnly) === this.deps.autoAdoptInstanceId
+    ) {
+      this.deps.log.info('host: taking over River’s home server from River Host');
+      await this.enable();
+      return;
+    }
     if (this.deps.settings.get().hosting.enabled) {
       killOrphanTunnel(this.root, this.deps.log);
       this.manager.start();
@@ -157,6 +176,31 @@ export class Hosting {
     await shell.openPath(this.root);
   }
 
+  // --- operator (admin) -------------------------------------------------
+
+  async adminOverview(): Promise<AdminOverview> {
+    return adminOverviewSchema.parse(await this.manager.operator('GET', '/v1/admin/overview'));
+  }
+
+  async adminSuspend(riverId: string, until: string | null, reason?: string): Promise<void> {
+    await this.manager.operator('POST', `/v1/admin/accounts/${encodeURIComponent(riverId)}/suspend`, {
+      until,
+      ...(reason ? { reason } : {}),
+    });
+  }
+
+  async adminUnsuspend(riverId: string): Promise<void> {
+    await this.manager.operator('POST', `/v1/admin/accounts/${encodeURIComponent(riverId)}/unsuspend`);
+  }
+
+  async adminDeleteAccount(riverId: string): Promise<void> {
+    await this.manager.operator('DELETE', `/v1/admin/accounts/${encodeURIComponent(riverId)}`);
+  }
+
+  async adminDeleteCommunity(communityId: string): Promise<void> {
+    await this.manager.operator('DELETE', `/v1/admin/communities/${encodeURIComponent(communityId)}`);
+  }
+
   /** Before River quits: stop the server cleanly (the database is safe either way). */
   stop(): Promise<void> {
     return this.manager.stop();
@@ -181,6 +225,9 @@ export class Hosting {
     for (const l of this.listeners) l(s);
   }
 }
+
+const openReadOnly = (path: string): Database.Database =>
+  new Database(path, { readonly: true, fileMustExist: true });
 
 /** Environment for child processes: the user's, minus RIVER_* settings that are not ours to pass on. */
 function childEnv(extra: Record<string, string>): Record<string, string> {

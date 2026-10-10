@@ -165,6 +165,28 @@ export class HostManager {
     if (this.state !== 'online' && this.port !== null && this.tunnelBinary) this.restartTunnel();
   }
 
+  /**
+   * Calls one of the server's operator endpoints (/v1/admin/*) with the host
+   * token. The token never leaves this process; the UI only gets the answers.
+   */
+  async operator(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
+    if (this.port === null || !this.server) throw new Error('Hosting is not running.');
+    const res = await this.deps.fetch(`${this.local()}${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${this.hostToken}`,
+        ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+      },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+    const json: unknown = await res.json().catch(() => null);
+    if (!res.ok) {
+      const message = (json as { error?: { message?: unknown } } | null)?.error?.message;
+      throw new Error(typeof message === 'string' ? message : `The server answered ${res.status}.`);
+    }
+    return json;
+  }
+
   /** Writes a dated copy of the database to the backups folder; keeps the newest seven. */
   async backupNow(): Promise<string> {
     const server = this.server;
