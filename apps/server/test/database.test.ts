@@ -47,6 +47,7 @@ async function reset(db: Kysely<Database>): Promise<void> {
     'accounts',
     'auth_challenges',
     'server_meta',
+    'signups',
     'schema_migrations',
     'schema_migrations_lock',
   ]) {
