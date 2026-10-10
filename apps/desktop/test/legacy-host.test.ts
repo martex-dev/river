@@ -95,3 +95,21 @@ describe('legacy River Host', () => {
     expect(readFileSync(join(target, 'river.sqlite'), 'utf8')).toBe('db');
   });
 });
+
+describe('legacy River Host identity', () => {
+  it('reads the server identity from its database without changing it', async () => {
+    const { default: Database } = await import('better-sqlite3-multiple-ciphers');
+    const { legacyInstanceId } = await import('../src/main/host/legacy-host.ts');
+    install({});
+    const path = join(home, 'RiverHost', 'data', 'river.sqlite');
+    const db = new Database(path);
+    db.exec(
+      "CREATE TABLE server_meta (key TEXT PRIMARY KEY, value TEXT); INSERT INTO server_meta VALUES ('instance_id', 'home-1')",
+    );
+    db.close();
+    const open = (p: string) => new Database(p, { readonly: true, fileMustExist: true });
+    expect(legacyInstanceId(findLegacyHost(home)!, open)).toBe('home-1');
+    rmSync(path);
+    expect(legacyInstanceId(findLegacyHost(home)!, open)).toBeNull();
+  });
+});
