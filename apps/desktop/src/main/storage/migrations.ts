@@ -276,4 +276,19 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 15,
+    name: '0015_outbox',
+    up(db) {
+      // Messages you sent that have not reached the server yet; they survive a restart.
+      db.exec(`
+        CREATE TABLE outbox (
+          local_id   TEXT PRIMARY KEY,
+          channel_id TEXT NOT NULL,
+          payload    TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        ) STRICT;
+      `);
+    },
+  },
 ];

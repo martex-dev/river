@@ -646,4 +646,23 @@ describe('desktop ↔ server communities', () => {
     await alice.community.action({ a: 'updateChannel', channelId: lounge.id, userLimit: 4 });
     expect((await alice.community.refresh())[0]!.channels.find((c) => c.id === lounge.id)?.userLimit).toBe(4);
   });
+
+  it('unsent messages are kept on this device across a restart', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Outbox');
+    const general = created.channels.find((c) => c.kind === 'text')!;
+    await alice.community.action({
+      a: 'outboxSave',
+      localId: 'local-1-1',
+      channelId: general.id,
+      text: 'sent while offline',
+      createdAt: new Date().toISOString(),
+    });
+    const later = alice.restart();
+    expect(await later.action({ a: 'outboxList' })).toEqual([
+      expect.objectContaining({ localId: 'local-1-1', channelId: general.id, text: 'sent while offline' }),
+    ]);
+    await later.action({ a: 'outboxDelete', localId: 'local-1-1' });
+    expect(await later.action({ a: 'outboxList' })).toEqual([]);
+  });
 });

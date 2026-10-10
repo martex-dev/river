@@ -32,6 +32,7 @@ import {
   type BanView,
   type CommunityAction,
   type CommunityActionResult,
+  type SavedOutgoing,
 } from '../../shared/community-actions.ts';
 import { layoutChanges, moveChannel as moveInLayout, sidebarGroups } from '../../shared/layout.ts';
 import { communityIconSchema, templateById, type TemplateId } from '../../shared/templates.ts';
@@ -1255,6 +1256,31 @@ export class CommunityService {
         return res.entries.map((e) =>
           describeAudit(e, community, (id) => this.knownNames.get(id)),
         ) as CommunityActionResult<A>;
+      }
+      case 'outboxSave': {
+        const { a: _a, localId, channelId, createdAt, ...payload } = act;
+        this.db()
+          .prepare(
+            'INSERT OR REPLACE INTO outbox (local_id, channel_id, payload, created_at) VALUES (?, ?, ?, ?)',
+          )
+          .run(localId, channelId, JSON.stringify(payload), createdAt);
+        return ok;
+      }
+      case 'outboxDelete':
+        this.db().prepare('DELETE FROM outbox WHERE local_id = ?').run(act.localId);
+        return ok;
+      case 'outboxList': {
+        const rows = this.db()
+          .prepare('SELECT local_id, channel_id, payload, created_at FROM outbox ORDER BY created_at')
+          .all() as Array<{ local_id: string; channel_id: string; payload: string; created_at: string }>;
+        return rows.flatMap((r) => {
+          try {
+            const p = JSON.parse(r.payload) as Omit<SavedOutgoing, 'localId' | 'channelId' | 'createdAt'>;
+            return [{ ...p, localId: r.local_id, channelId: r.channel_id, createdAt: r.created_at }];
+          } catch {
+            return [];
+          }
+        }) as CommunityActionResult<A>;
       }
       case 'reconnect':
         this.reconnectNow();
