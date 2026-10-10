@@ -10,6 +10,7 @@ import { Hub } from './communities/hub.ts';
 import { registerAttachmentRoutes } from './routes/attachments.ts';
 import { registerMessagingRoutes } from './routes/messaging.ts';
 import { registerTurnRoutes } from './routes/turn.ts';
+import { registerInstanceRoutes } from './routes/instance.ts';
 import { registerCommunityRoutes } from './routes/communities.ts';
 import serverPackage from '../package.json' with { type: 'json' };
 
@@ -22,6 +23,8 @@ export interface AppDeps {
   logStream?: Writable;
   /** Clock (tests). */
   now?: () => Date;
+  /** Outgoing requests to the address relay (tests). */
+  fetch?: typeof fetch;
 }
 
 function errorBody(code: string, message: string): ErrorResponse {
@@ -127,6 +130,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await registerCommunityRoutes(app, { config, database: deps.database, now, hub });
   registerMessagingRoutes(app, { config, database: deps.database, now, hub });
   registerTurnRoutes(app, { config, database: deps.database, now });
+  registerInstanceRoutes(app, {
+    config,
+    database: deps.database,
+    now,
+    ...(deps.fetch ? { fetch: deps.fetch } : {}),
+  });
   await registerAttachmentRoutes(app, { config, database: deps.database, now });
 
   return app;
