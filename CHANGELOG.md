@@ -6,6 +6,43 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**One River for everyone: install, pick a name, and you are in.**
+
+### Added
+
+- **Your account is created by itself.** River now has a home server built in.
+  Right after you pick your name, River finds it and creates your account —
+  no server address, no "Create account" button. If the server is away, River
+  says "Setting up your account…" and finishes on its own when it is back.
+- **Communities go to River's server.** Creating a community just needs a name;
+  another server is still one click away ("Use a different server").
+- **Admin, for whoever hosts the server.** On the PC that hosts it, a new Admin
+  section lists everyone who uses River through it (by name where you know
+  them), who is online, every community, and lets you **time out** (1 hour,
+  1 day, 1 week), **ban** (with an optional reason shown to them), **unban**,
+  **remove an account** or **delete a community**. Timed-out and banned people
+  are signed out at once.
+- **Invite friends to communities.** ➕ next to a friend sends them an invite
+  in your conversation, and invites you receive show a **Join community**
+  button.
+- **The host's PC takes over by itself.** If River finds the older River Host
+  running the home server on this PC, it switches to built-in hosting at start,
+  with all the data.
+
+### Changed
+
+- Hosting is out of everyone's way: the Hosting tab only appears for people
+  who host (or who ask for it in Settings → Server).
+- The top bar says **Online** instead of showing a server address.
+
+### Security
+
+- Operator endpoints (`/v1/admin/*`) answer only the program hosting the
+  server, from the same machine, with its per-start host token — never through
+  the tunnel. They expose ids, dates and counts; the server still has no names
+  or content. See THREAT_MODEL §5c.
+- Development builds and tests never create accounts on River's real server.
+
 ## [1.0.11] - 2026-10-10
 
 **Hosting built into River: your communities stay online from your PC, for free.**
