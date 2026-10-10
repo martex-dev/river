@@ -6,6 +6,31 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-10-10
+
+**Polish: get around faster, and never lose a message.**
+
+### Added
+
+- **Quick switcher (Ctrl+K).** Type part of a channel, person or section and
+  press Enter. Unread channels come first.
+- **Keyboard shortcuts list (Ctrl+/)**, and **Alt+↑ / Alt+↓** to move between
+  channels (add Shift to jump between unread ones).
+- **Compact mode** (Settings → Appearance → Message density) for more messages
+  on screen.
+- **Messages survive closing River.** Anything you sent that had not reached
+  the server yet is kept, encrypted, on your computer and goes out the next
+  time River starts.
+
+### Accessibility
+
+- Automated checks now also cover Settings → System, the quick switcher and
+  the shortcuts list.
+
+### Security
+
+- Review of the whole 1.0.1–1.0.9 series: `docs/security/1.0.x-review.md`.
+
 ## [1.0.8] - 2026-10-10
 
 **Voice, and a server that comes back by itself.**
@@ -621,7 +646,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.8...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.9...HEAD
+[1.0.9]: https://github.com/martex-dev/river/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/martex-dev/river/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/martex-dev/river/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/martex-dev/river/compare/v1.0.5...v1.0.6
