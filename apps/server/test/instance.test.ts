@@ -89,6 +89,10 @@ describe('server identity and address notes', () => {
     const res = await announce({ authorization: `Bearer ${TOKEN}` });
     expect(res.statusCode).toBe(200);
     expect(res.json().published).toBe(true);
+    // The server now reports where River Host put it.
+    expect((await app.inject({ method: 'GET', url: '/v1/instance' })).json().address).toBe(
+      'https://new-place.trycloudflare.com',
+    );
     const [url, init] = relay.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(`https://relay.example/${info.beacon!.topic}`);
     const note = JSON.parse(String(init.body));

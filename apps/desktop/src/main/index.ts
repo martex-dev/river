@@ -26,6 +26,8 @@ import {
 } from './ipc.ts';
 import { CommunityService } from './community/community-service.ts';
 import { ServerLocator } from './community/server-locator.ts';
+import { API_PREFIX, instanceResponseSchema } from '@river/protocol';
+import type { HostStatus } from '../shared/ipc.ts';
 import { createFileLogger } from './logger.ts';
 import {
   APP_ORIGIN,
@@ -220,6 +222,11 @@ async function start(): Promise<void> {
     selectScreen: (id) => {
       chosenScreen = id;
     },
+    hostStatus: () =>
+      localHostStatus(
+        createRequestJson((input, init) => net.fetch(input as string, init)),
+        locator.pinnedId(),
+      ),
   });
 
   const window = createWindow();
@@ -336,4 +343,26 @@ function createWindow(): BrowserWindow {
 /** The tray icon: next to the app in installed builds, in the source tree during development. */
 function trayIconPath(): string {
   return app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(__dirname, '../../build/icon.png');
+}
+
+/** River Host's server answers on this machine's port 8790 (see scripts/host). */
+async function localHostStatus(
+  requestJson: ReturnType<typeof createRequestJson>,
+  pinnedId: string | null,
+): Promise<HostStatus> {
+  try {
+    const info = await requestJson(
+      `http://127.0.0.1:8790${API_PREFIX}/instance`,
+      { method: 'GET' },
+      instanceResponseSchema,
+    );
+    return {
+      state: 'running',
+      address: info.address,
+      yours: info.id === pinnedId,
+      followable: info.beacon !== null,
+    };
+  } catch {
+    return { state: 'none' };
+  }
 }

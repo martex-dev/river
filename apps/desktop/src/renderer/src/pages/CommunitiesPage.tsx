@@ -19,7 +19,9 @@ import {
 import { MemberList } from '../community/ui/Members.tsx';
 import { UserSettings } from '../community/ui/UserSettings.tsx';
 import { VoiceChannel } from '../community/ui/Voice.tsx';
-import { PlusIcon, initials } from '../community/ui/common.tsx';
+import { MenuItem, PlusIcon, Popover, can, initials } from '../community/ui/common.tsx';
+import { Permission } from '@river/protocol/permissions';
+import type { CommunityView } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
 import { CallPill, IncomingCall } from '../dm/CallUi.tsx';
 
@@ -28,6 +30,7 @@ export function CommunitiesPage(): ReactElement {
   const identity = useRiver((r) => r.identity);
   const account = useRiver((r) => r.account);
   const [adding, setAdding] = useState(false);
+  const [serverMenu, setServerMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const me = identity?.riverId ?? '';
 
   useEffect(() => {
@@ -84,6 +87,10 @@ export function CommunitiesPage(): ReactElement {
                 title={c.name}
                 aria-label={c.name}
                 onClick={() => s.select(c.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setServerMenu({ id: c.id, x: e.clientX, y: e.clientY });
+                }}
               >
                 {c.icon ? (
                   <span className="community__server-icon" aria-hidden="true">
@@ -112,6 +119,15 @@ export function CommunitiesPage(): ReactElement {
           </button>
         </div>
       </nav>
+      {serverMenu && (
+        <CommunityMenu
+          community={s.communities.find((c) => c.id === serverMenu.id)}
+          me={me}
+          x={serverMenu.x}
+          y={serverMenu.y}
+          onClose={() => setServerMenu(null)}
+        />
+      )}
 
       {community && <ChannelSidebar community={community} me={me} />}
 
@@ -250,4 +266,66 @@ export function VoiceHotkeys(): null {
     };
   }, [pttKey]);
   return null;
+}
+
+/** Right-click on a community icon: the things you do with a whole community. */
+function CommunityMenu(props: {
+  community: CommunityView | undefined;
+  me: string;
+  x: number;
+  y: number;
+  onClose(): void;
+}): ReactElement | null {
+  const s = useCommunity();
+  const c = props.community;
+  if (!c) return null;
+  const perms = c.permissions;
+  const settings =
+    can(perms, Permission.MANAGE_COMMUNITY) ||
+    can(perms, Permission.MANAGE_ROLES) ||
+    can(perms, Permission.KICK_MEMBERS) ||
+    can(perms, Permission.BAN_MEMBERS) ||
+    can(perms, Permission.VIEW_AUDIT_LOG);
+  const run = (f: () => void) => () => {
+    props.onClose();
+    f();
+  };
+  return (
+    <Popover x={props.x} y={props.y} onClose={props.onClose} className="menu">
+      <MenuItem onClick={run(() => s.markChannelsRead(c.channels.map((ch) => ch.id)))}>
+        Mark all as read
+      </MenuItem>
+      {can(perms, Permission.CREATE_INVITE) && (
+        <MenuItem onClick={run(() => s.setModal({ kind: 'invite', communityId: c.id }))}>
+          Invite people
+        </MenuItem>
+      )}
+      {settings && (
+        <MenuItem onClick={run(() => s.setModal({ kind: 'community-settings', communityId: c.id }))}>
+          Community settings
+        </MenuItem>
+      )}
+      <MenuItem onClick={run(() => s.setModal({ kind: 'nickname', communityId: c.id }))}>
+        Change nickname
+      </MenuItem>
+      {c.ownerId !== props.me && (
+        <MenuItem
+          danger
+          onClick={run(() =>
+            s.setModal({
+              kind: 'confirm',
+              title: `Leave ${c.name}`,
+              body: 'You will not be able to rejoin unless someone invites you again.',
+              action: 'Leave community',
+              run: async () => {
+                await s.run({ a: 'leave', communityId: c.id });
+              },
+            }),
+          )}
+        >
+          Leave community
+        </MenuItem>
+      )}
+    </Popover>
+  );
 }

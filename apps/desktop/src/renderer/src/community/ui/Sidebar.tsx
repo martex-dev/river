@@ -172,6 +172,7 @@ export function ChannelRow(props: {
   const unread = s.unread[ch.id] ?? (ch.unread && !active ? 1 : 0);
   const participants = community.voice[ch.id] ?? [];
   const canManage = can(ch.permissions, Permission.MANAGE_CHANNELS);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const open = (): void => {
     s.selectChannel(ch.id);
     if (ch.kind === 'voice' && s.call?.channelId !== ch.id && can(ch.permissions, Permission.CONNECT)) {
@@ -182,7 +183,46 @@ export function ChannelRow(props: {
     <div
       className={`channel-wrap ${props.dragging ? 'is-dragging' : ''} ${props.dropClass ?? ''}`}
       {...props.dnd}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setMenu({ x: e.clientX, y: e.clientY });
+      }}
     >
+      {menu && (
+        <Popover x={menu.x} y={menu.y} onClose={() => setMenu(null)} className="menu">
+          <MenuItem
+            icon={<span aria-hidden="true">✓</span>}
+            onClick={() => {
+              setMenu(null);
+              s.markChannelsRead([ch.id]);
+            }}
+          >
+            Mark as read
+          </MenuItem>
+          {can(community.permissions, Permission.CREATE_INVITE) && (
+            <MenuItem
+              icon={<UsersIcon size={16} />}
+              onClick={() => {
+                setMenu(null);
+                s.setModal({ kind: 'invite', communityId: community.id });
+              }}
+            >
+              Invite people
+            </MenuItem>
+          )}
+          {canManage && (
+            <MenuItem
+              icon={<GearIcon size={16} />}
+              onClick={() => {
+                setMenu(null);
+                s.setModal({ kind: 'channel-settings', channelId: ch.id });
+              }}
+            >
+              Edit channel
+            </MenuItem>
+          )}
+        </Popover>
+      )}
       <div className={`channel ${active ? 'is-active' : ''} ${unread ? 'is-unread' : ''}`}>
         <button
           className="channel__open"

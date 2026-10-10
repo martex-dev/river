@@ -1285,6 +1285,22 @@ export class CommunityService {
       case 'reconnect':
         this.reconnectNow();
         return ok;
+      case 'markUnread': {
+        const before = new Date(Date.parse(act.from) - 1).toISOString();
+        this.saveRead(act.channelId, before);
+        this.communities = this.communities.map((c) =>
+          c.channels.some((ch) => ch.id === act.channelId)
+            ? {
+                ...c,
+                channels: c.channels.map((ch) =>
+                  ch.id === act.channelId ? { ...ch, unread: true, lastReadAt: before } : ch,
+                ),
+              }
+            : c,
+        );
+        this.emit({ t: 'communities', communities: this.communities });
+        return ok;
+      }
       case 'markRead':
         this.markRead(act.channelId);
         return ok;

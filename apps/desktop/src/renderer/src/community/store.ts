@@ -60,6 +60,10 @@ interface CommunityState {
   /** Loaded thread replies, by starting message. */
   threads: Record<string, ChatMessage[]>;
   showThread(channelId: string, rootId: string): Promise<void>;
+  /** Clears unread and mention counts for these channels and remembers them as read. */
+  markChannelsRead(channelIds: string[]): void;
+  /** Makes a message and everything after it count as new again. */
+  markUnreadFrom(message: ChatMessage): void;
   /** Channels whose older history is exhausted. */
   noMore: Record<string, boolean>;
   loadOlder(channelId: string): Promise<number>;
@@ -115,6 +119,27 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   showSearch: false,
   openThread: null,
   threads: {},
+  markChannelsRead: (channelIds) => {
+    const unread = { ...get().unread };
+    const mentions = { ...get().mentions };
+    const now = new Date().toISOString();
+    const readAt = { ...get().readAt };
+    for (const id of channelIds) {
+      delete unread[id];
+      delete mentions[id];
+      readAt[id] = now;
+      void markRead(id);
+    }
+    set({ unread, mentions, readAt });
+  },
+  markUnreadFrom: (m) => {
+    const before = new Date(Date.parse(m.sentAt) - 1).toISOString();
+    set({
+      divider: { channelId: m.channelId, after: before },
+      readAt: { ...get().readAt, [m.channelId]: before },
+    });
+    void window.river.community.action({ a: 'markUnread', channelId: m.channelId, from: m.sentAt });
+  },
   showThread: async (channelId, rootId) => {
     set({ openThread: { channelId, rootId }, showMembers: false, showPins: false, showSearch: false });
     const res = await window.river.community.action({ a: 'threadMessages', channelId, messageId: rootId });
