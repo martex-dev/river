@@ -30,6 +30,7 @@ import type { Hosting } from './host/hosting.ts';
 import type { HomeAccount } from './home-server.ts';
 import { isAllowedAppUrl } from './security.ts';
 import { friendlyError } from './errors.ts';
+import { parseSignup } from '../shared/invite-link.ts';
 import { checkServer } from './server-check.ts';
 import type { SettingsStore } from './settings-store.ts';
 import { MIN_PASSPHRASE_LENGTH, WrongPassphraseError } from './storage/key-file.ts';
@@ -82,6 +83,9 @@ export interface IpcDeps {
     | 'adminUnsuspend'
     | 'adminDeleteAccount'
     | 'adminDeleteCommunity'
+    | 'adminCreateSignup'
+    | 'adminDeleteSignup'
+    | 'adminSetSignupMode'
   >;
 }
 
@@ -167,6 +171,27 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.adminDeleteCommunity, (_e, id) =>
     result(async () => {
       await deps.hosting.adminDeleteCommunity(adminId.parse(id));
+      return null;
+    }),
+  );
+  const usernameArg = z.string().trim().max(64);
+  handle(IPC.adminCreateSignup, (_e, username) =>
+    result(async () => {
+      const made = await deps.hosting.adminCreateSignup(usernameArg.parse(username));
+      const base = deps.account.status();
+      const server = base.state === 'registered' ? base.serverUrl : 'https://river.invalid';
+      return { username: made.username, link: `${server}/add#s=${made.code}`, expiresAt: made.expiresAt };
+    }),
+  );
+  handle(IPC.adminDeleteSignup, (_e, username) =>
+    result(async () => {
+      await deps.hosting.adminDeleteSignup(usernameArg.parse(username));
+      return null;
+    }),
+  );
+  handle(IPC.adminSignupMode, (_e, mode) =>
+    result(async () => {
+      await deps.hosting.adminSetSignupMode(z.enum(['open', 'invite']).parse(mode));
       return null;
     }),
   );
@@ -306,6 +331,21 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.screenSelect, (_e, id) => deps.selectScreen(z.string().max(200).parse(id)));
   handle(IPC.accountStatus, () => accountView(deps.account, deps.homeAccount));
   handle(IPC.accountConnect, () => deps.account.connect());
+  handle(IPC.accountSetUsername, (_e, username) =>
+    result(() => deps.account.setUsername(z.string().max(64).parse(username))),
+  );
+  handle(IPC.accountRedeemSignup, (_e, link) =>
+    result(async () => {
+      const parsed = parseSignup(z.string().max(2048).parse(link));
+      if (!parsed) throw new UserFacingError('That is not a valid River sign-up link.');
+      const status = await deps.account.register(parsed.serverUrl, parsed.code);
+      deps.settings.update({ server: { url: parsed.serverUrl } });
+      return status;
+    }),
+  );
+  handle(IPC.usersLookup, (_e, username) =>
+    result(() => deps.account.lookupUser(z.string().max(64).parse(username))),
+  );
   handle(IPC.accountRegister, async (): Promise<AccountActionResult> => {
     try {
       return { ok: true, status: await deps.account.register(deps.settings.get().server.url) };

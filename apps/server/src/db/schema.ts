@@ -16,6 +16,15 @@ export interface AccountsTable {
   /** Suspended by the server operator until this ISO time (a ban: far future). */
   suspended_until: string | null;
   suspend_reason: string | null;
+  /** Lowercase, unique (1.0.13). */
+  username: string | null;
+}
+
+export interface SignupsTable {
+  code_hash: string;
+  username: string;
+  created_at: string;
+  expires_at: string;
 }
 
 export interface DevicesTable {
@@ -231,6 +240,7 @@ export interface Database {
   bans: BansTable;
   message_reactions: MessageReactionsTable;
   server_meta: ServerMetaTable;
+  signups: SignupsTable;
   accounts: AccountsTable;
   devices: DevicesTable;
   sessions: SessionsTable;

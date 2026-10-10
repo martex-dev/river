@@ -52,6 +52,9 @@ const api: RiverApi = {
     unsuspend: (riverId) => ipcRenderer.invoke(IPC.adminUnsuspend, riverId),
     deleteAccount: (riverId) => ipcRenderer.invoke(IPC.adminDeleteAccount, riverId),
     deleteCommunity: (id) => ipcRenderer.invoke(IPC.adminDeleteCommunity, id),
+    createSignup: (username) => ipcRenderer.invoke(IPC.adminCreateSignup, username),
+    deleteSignup: (username) => ipcRenderer.invoke(IPC.adminDeleteSignup, username),
+    setSignupMode: (mode) => ipcRenderer.invoke(IPC.adminSignupMode, mode),
   },
   server: { check: (url) => ipcRenderer.invoke(IPC.serverCheck, url) },
   identity: {
@@ -63,6 +66,8 @@ const api: RiverApi = {
     status: () => ipcRenderer.invoke(IPC.accountStatus),
     register: () => ipcRenderer.invoke(IPC.accountRegister),
     connect: () => ipcRenderer.invoke(IPC.accountConnect),
+    setUsername: (username) => ipcRenderer.invoke(IPC.accountSetUsername, username),
+    redeemSignup: (link) => ipcRenderer.invoke(IPC.accountRedeemSignup, link),
     onStatus: (listener) => {
       const handler = (_event: unknown, status: AccountStatus): void => listener(status);
       ipcRenderer.on(IPC.accountStatusChanged, handler);
@@ -70,6 +75,9 @@ const api: RiverApi = {
         ipcRenderer.removeListener(IPC.accountStatusChanged, handler);
       };
     },
+  },
+  users: {
+    lookup: (username) => ipcRenderer.invoke(IPC.usersLookup, username),
   },
   backup: {
     status: () => ipcRenderer.invoke(IPC.backupStatus),

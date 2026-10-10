@@ -47,3 +47,22 @@ export function parseFriend(text: string): { riverId: string; serverUrl: string 
     return null;
   }
 }
+
+const SIGNUP_CODE = /^[A-Za-z0-9_-]{22}$/;
+
+/** A sign-up link the operator made: `<server>/add#s=<code>`, which carries a chosen username. */
+export function signupLink(serverUrl: string, code: string): string {
+  return `${serverUrl.replace(/\/+$/, '')}/add#s=${code}`;
+}
+
+export function parseSignup(text: string): { serverUrl: string; code: string } | null {
+  try {
+    const url = new URL(text.trim());
+    if (!/^https?:$/.test(url.protocol) || !url.pathname.endsWith('/add')) return null;
+    const m = /^s=([A-Za-z0-9_-]{22})$/.exec(url.hash.slice(1));
+    if (!m || !SIGNUP_CODE.test(m[1]!)) return null;
+    return { serverUrl: `${url.origin}${url.pathname.slice(0, -'/add'.length)}`, code: m[1]! };
+  } catch {
+    return null;
+  }
+}

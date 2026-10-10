@@ -169,7 +169,7 @@ export class HostManager {
    * Calls one of the server's operator endpoints (/v1/admin/*) with the host
    * token. The token never leaves this process; the UI only gets the answers.
    */
-  async operator(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
+  async operator(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
     if (this.port === null || !this.server) throw new Error('Hosting is not running.');
     const res = await this.deps.fetch(`${this.local()}${path}`, {
       method,

@@ -28,6 +28,9 @@ export const IPC = {
   adminUnsuspend: 'river:admin:unsuspend',
   adminDeleteAccount: 'river:admin:delete-account',
   adminDeleteCommunity: 'river:admin:delete-community',
+  adminCreateSignup: 'river:admin:create-signup',
+  adminDeleteSignup: 'river:admin:delete-signup',
+  adminSignupMode: 'river:admin:signup-mode',
   serverCheck: 'river:server:check',
   storageStatus: 'river:storage:status',
   storageSetup: 'river:storage:setup-passphrase',
@@ -39,6 +42,9 @@ export const IPC = {
   accountStatus: 'river:account:status',
   accountRegister: 'river:account:register',
   accountConnect: 'river:account:connect',
+  accountSetUsername: 'river:account:set-username',
+  accountRedeemSignup: 'river:account:redeem-signup',
+  usersLookup: 'river:users:lookup',
   accountStatusChanged: 'river:account:status-changed',
   communityList: 'river:community:list',
   communityCreate: 'river:community:create',
@@ -150,6 +156,8 @@ export type AccountStatus =
       devices: number;
       listVersion: number;
       connection: 'connecting' | 'online' | 'offline' | 'error';
+      /** What people find you by (1.0.13); null until you choose one. */
+      username: string | null;
       message?: string;
     };
 
@@ -364,6 +372,10 @@ export interface RiverApi {
     unsuspend(riverId: string): Promise<Result<null>>;
     deleteAccount(riverId: string): Promise<Result<null>>;
     deleteCommunity(communityId: string): Promise<Result<null>>;
+    /** Create an account ahead of time; returns a sign-up link to send the person. */
+    createSignup(username: string): Promise<Result<{ username: string; link: string; expiresAt: string }>>;
+    deleteSignup(username: string): Promise<Result<null>>;
+    setSignupMode(mode: 'open' | 'invite'): Promise<Result<null>>;
   };
   server: { check(url: string): Promise<ServerCheckResult> };
   identity: {
@@ -376,7 +388,15 @@ export interface RiverApi {
     /** Creates an account on the server set in Settings → Server. */
     register(): Promise<AccountActionResult>;
     connect(): Promise<AccountStatus>;
+    /** Choose or change your @username. */
+    setUsername(username: string): Promise<Result<AccountStatus>>;
+    /** Use an operator's sign-up link (`…/add#s=…`) to create this account. */
+    redeemSignup(link: string): Promise<Result<AccountStatus>>;
     onStatus(listener: (status: AccountStatus) => void): () => void;
+  };
+  /** Find people by @username to add them. */
+  users: {
+    lookup(username: string): Promise<Result<{ username: string; riverId: string }>>;
   };
   backup: {
     status(): Promise<{ hasPhrase: boolean; lastBackupAt: string | null }>;

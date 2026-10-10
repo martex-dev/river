@@ -6,6 +6,7 @@ import type { AccountStatus, ServerCheckResult, UpdateStatus } from '../../../sh
 import { serverUrlSchema, type Settings } from '../../../shared/settings.ts';
 import { ExternalIcon } from '../components/Icons.tsx';
 import { useRiver } from '../store.ts';
+import { play } from '../community/sound.ts';
 
 const TABS = [
   'updates',
@@ -21,7 +22,7 @@ type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   updates: 'Updates',
   hosting: 'Hosting',
-  server: 'Server',
+  server: 'Account',
   backup: 'Backup',
   appearance: 'Appearance',
   notifications: 'Notifications',
@@ -215,6 +216,70 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
   );
 }
 
+function UsernameEditor({
+  account,
+}: {
+  account: Extract<AccountStatus, { state: 'registered' }>;
+}): ReactElement {
+  const [value, setValue] = useState(account.username ?? '');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const setAccount = useRiver((r) => r.setAccount);
+  const save = async (): Promise<void> => {
+    setBusy(true);
+    setMsg(null);
+    const res = await window.river.account.setUsername(value.trim());
+    setBusy(false);
+    if (res.ok) {
+      setAccount(res.value);
+      const name = res.value.state === 'registered' ? (res.value.username ?? value.trim()) : value.trim();
+      setMsg({ ok: true, text: `Saved. People can add you as @${name}.` });
+    } else {
+      play('error');
+      setMsg({ ok: false, text: res.message });
+    }
+  };
+  const changed = value.trim().replace(/^@/, '') !== (account.username ?? '');
+  return (
+    <div className="field">
+      <label className="field__label" htmlFor="username">
+        Username — how people add you
+      </label>
+      <div className="username-row">
+        <div className="textfield username-field">
+          <span className="username-field__at" aria-hidden="true">
+            @
+          </span>
+          <input
+            id="username"
+            value={value.replace(/^@/, '')}
+            onChange={(e) => {
+              setValue(e.target.value);
+              setMsg(null);
+            }}
+            placeholder="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            maxLength={32}
+          />
+        </div>
+        <button
+          className="btn btn--primary btn--small"
+          disabled={busy || !changed || value.trim().length < 3}
+          onClick={() => void save()}
+        >
+          {busy ? 'Saving…' : account.username ? 'Change' : 'Set username'}
+        </button>
+      </div>
+      {msg && (
+        <p className={msg.ok ? 'muted small' : 'field__error'} role={msg.ok ? 'status' : 'alert'}>
+          {msg.text}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ServerPanel({ settings }: { settings: Settings }): ReactElement {
   const account = useRiver((s) => s.account);
   if (account.state === 'registered') return <AccountPanel account={account} />;
@@ -236,10 +301,11 @@ function AccountPanel({
   const [busy, setBusy] = useState(false);
   return (
     <div className="panel">
-      <h2 className="panel__title">Server</h2>
+      <h2 className="panel__title">Account</h2>
+      <UsernameEditor account={account} />
       <div className={`account-card is-${account.connection}`} role="status">
         <div className="account-card__head">
-          <strong>Account on {account.server}</strong>
+          <strong>Your account</strong>
           <span className={`chip chip--${account.connection}`}>{CONNECTION_LABEL[account.connection]}</span>
         </div>
         <dl className="about-grid">

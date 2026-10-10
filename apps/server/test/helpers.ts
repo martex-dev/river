@@ -31,7 +31,10 @@ export async function startServer(): Promise<{ app: FastifyInstance; database: R
 }
 
 /** Registers an account with one device; returns its identity and a session token. */
-export async function registerUser(a: FastifyInstance): Promise<{
+export async function registerUser(
+  a: FastifyInstance,
+  options: { signupCode?: string } = {},
+): Promise<{
   riverId: string;
   token: string;
   identity: IdentityKeys;
@@ -73,8 +76,10 @@ export async function registerUser(a: FastifyInstance): Promise<{
       challenge: b64(chal),
       identitySignature: b64(sign(identity.privateKey, msg)),
       deviceSignature: b64(sign(device.privateKey, msg)),
+      ...(options.signupCode ? { signupCode: options.signupCode } : {}),
     },
   });
+  if (res.statusCode !== 201) throw new Error(`register failed: ${res.statusCode} ${res.body}`);
   return {
     riverId: identity.riverId,
     token: registerResponseSchema.parse(res.json()).session.token,

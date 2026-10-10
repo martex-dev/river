@@ -27,13 +27,21 @@ async function open(name: string, env: Record<string, string> = {}): Promise<Pag
   return page;
 }
 
+async function setUsername(page: Page, username: string): Promise<void> {
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Account', exact: true }).click();
+  await page.getByLabel('Username — how people add you').fill(username);
+  await page.getByRole('button', { name: /Set username|Change/ }).click();
+  await expect(page.getByText(`People can add you as @${username}`)).toBeVisible({ timeout: 20_000 });
+}
+
 test('the operator hosts River on their PC, a friend joins, and the operator manages people', async () => {
   test.setTimeout(150_000);
   const hana = await open('Hana', { RIVER_DEV_LOCAL_HOSTING: 'true', RIVER_DEV_HOME: tmp('river-home-') });
   // Hosting is not in everyone's way: it is reached from Settings → Server.
   await hana.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(hana.getByRole('button', { name: 'Hosting', exact: true })).toHaveCount(0);
-  await hana.getByRole('button', { name: 'Server', exact: true }).click();
+  await hana.getByRole('button', { name: 'Account', exact: true }).click();
   await hana.getByRole('button', { name: 'Run a River server on this PC…' }).click();
   await hana.getByRole('switch', { name: 'Host communities on this PC' }).click({ force: true });
   await expect(hana.locator('.hosting__state')).toHaveText(/Online/, { timeout: 60_000 });
@@ -61,6 +69,23 @@ test('the operator hosts River on their PC, a friend joins, and the operator man
   await ivan.getByRole('button', { name: 'Join community' }).click();
   await expect(ivan.locator('.community__title strong')).toHaveText('Hosted Here');
 
+  // Discord-style usernames: people are @names, not IDs.
+  await setUsername(hana, 'hana');
+  await setUsername(ivan, 'ivan');
+  await hana.getByRole('button', { name: 'Communities', exact: true }).click();
+  await ivan.getByRole('button', { name: 'Communities', exact: true }).click();
+
+  // Ivan adds Hana by her @username from the Friends page.
+  await ivan.getByRole('button', { name: 'Friends', exact: true }).click();
+  await ivan.getByRole('tab', { name: 'Add friend' }).click();
+  await ivan.getByLabel("Friend's username").fill('hana');
+  await ivan.getByRole('button', { name: 'Send friend request' }).click();
+  await hana.getByRole('button', { name: 'Friends', exact: true }).click();
+  await hana.getByRole('tab', { name: 'Pending' }).click();
+  await expect(hana.locator('.friend-row')).toContainText('Ivan');
+  await hana.getByRole('button', { name: 'Communities', exact: true }).click();
+  await ivan.getByRole('button', { name: 'Communities', exact: true }).click();
+
   // Live, encrypted chat through the server running inside Hana's River.
   await ivan.getByPlaceholder('Message #general').fill('hello from ivan');
   await ivan.keyboard.press('Enter');
@@ -72,16 +97,21 @@ test('the operator hosts River on their PC, a friend joins, and the operator man
   // Admin: only on the hosting PC. Everyone on the server, by name where Hana knows them.
   await expect(ivan.getByRole('button', { name: 'Admin', exact: true })).toHaveCount(0);
   await hana.getByRole('button', { name: 'Admin', exact: true }).click();
-  const people = hana.locator('.admin__section').first();
-  const row = people.locator('.admin__row', { hasText: 'Ivan' });
+  const people = hana.getByRole('heading', { name: 'People' }).locator('..').locator('..');
+  const row = people.locator('.admin__row', { hasText: '@ivan' });
   await expect(row).toBeVisible();
-  await expect(people.locator('.admin__row', { hasText: 'Hana' })).toContainText('You');
-  await expect(hana.locator('.admin__section').nth(1)).toContainText('Hosted Here');
+  await expect(people.locator('.admin__row', { hasText: '@hana' })).toContainText('You');
+
+  // Create an account ahead of time: a sign-up link to hand out.
+  await hana.getByLabel('Username for the new account').fill('recruit');
+  await hana.getByRole('button', { name: 'Create account' }).click();
+  await expect(hana.locator('.admin__signup-link')).toContainText('@recruit');
+  await expect(hana.locator('.admin__signup-link code')).toContainText('/add#s=');
   await auditA11y(hana, 'Admin');
   if (process.env.RIVER_SCREENSHOTS) await hana.screenshot({ path: 'test-results/admin.png' });
 
   // A timeout signs Ivan out until it ends; ending it lets him back.
-  await row.getByLabel('Time out Ivan').selectOption({ label: '1 hour' });
+  await row.getByLabel('Time out @ivan').selectOption({ label: '1 hour' });
   await expect(row).toContainText('Timed out until');
   await row.getByRole('button', { name: 'End timeout' }).click();
   await expect(row).not.toContainText('Timed out');

@@ -11,7 +11,12 @@ import {
 import { join } from 'node:path';
 import { net, powerSaveBlocker, shell, utilityProcess } from 'electron';
 import Database from 'better-sqlite3-multiple-ciphers';
-import { adminOverviewSchema, type AdminOverview } from '@river/protocol';
+import {
+  adminOverviewSchema,
+  adminSignupResponseSchema,
+  type AdminOverview,
+  type AdminSignupResponse,
+} from '@river/protocol';
 import type { HostStatus } from '../../shared/ipc.ts';
 import type { Logger } from '../logger.ts';
 import type { SettingsStore } from '../settings-store.ts';
@@ -199,6 +204,20 @@ export class Hosting {
 
   async adminDeleteCommunity(communityId: string): Promise<void> {
     await this.manager.operator('DELETE', `/v1/admin/communities/${encodeURIComponent(communityId)}`);
+  }
+
+  async adminCreateSignup(username: string): Promise<AdminSignupResponse> {
+    return adminSignupResponseSchema.parse(
+      await this.manager.operator('POST', '/v1/admin/signups', { username }),
+    );
+  }
+
+  async adminDeleteSignup(username: string): Promise<void> {
+    await this.manager.operator('DELETE', `/v1/admin/signups/${encodeURIComponent(username)}`);
+  }
+
+  async adminSetSignupMode(signupMode: 'open' | 'invite'): Promise<void> {
+    await this.manager.operator('PUT', '/v1/admin/settings', { signupMode });
   }
 
   /** Before River quits: stop the server cleanly (the database is safe either way). */

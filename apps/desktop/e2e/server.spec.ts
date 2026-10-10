@@ -71,7 +71,7 @@ test.afterAll(async () => {
 
 test('connects to a running River server from Settings → Server', async () => {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Server', exact: true }).click();
+  await page.getByRole('button', { name: 'Account', exact: true }).click();
   const input = page.getByPlaceholder('https://river.example.org');
 
   await input.fill('http://river.example.org');
@@ -96,7 +96,7 @@ test('connects to a running River server from Settings → Server', async () => 
 
 test('reports an unreachable server', async () => {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Server', exact: true }).click();
+  await page.getByRole('button', { name: 'Account', exact: true }).click();
   await page.getByPlaceholder('https://river.example.org').fill(`http://127.0.0.1:${await freePort()}`);
   await page.getByRole('button', { name: 'Test connection' }).click();
   await expect(page.locator('.server-check')).toContainText('Could not reach the server');
@@ -104,13 +104,13 @@ test('reports an unreachable server', async () => {
 
 test('creates an account on the server and reconnects after a restart', async () => {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Server', exact: true }).click();
+  await page.getByRole('button', { name: 'Account', exact: true }).click();
   await page.getByPlaceholder('https://river.example.org').fill(`http://127.0.0.1:${port}`);
   const save = page.getByRole('button', { name: 'Save', exact: true });
   if (await save.isEnabled()) await save.click(); // already saved by the previous test
   await page.getByRole('button', { name: 'Create account' }).click();
   const card = page.locator('.account-card');
-  await expect(card).toContainText(`Account on 127.0.0.1:${port}`);
+  await expect(card).toContainText(`http://127.0.0.1:${port}`);
   await expect(card.locator('.chip')).toHaveText('Connected');
   await expect(page.locator('.topbar__pill')).toContainText('Online');
   if (process.env.RIVER_SCREENSHOTS) await page.screenshot({ path: 'test-results/account.png' });

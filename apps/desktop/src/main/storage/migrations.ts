@@ -291,4 +291,12 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 16,
+    name: '0016_account_username',
+    up(db) {
+      // Your username on your server, cached so it shows before you reconnect (1.0.13).
+      db.exec(`ALTER TABLE account ADD COLUMN username TEXT`);
+    },
+  },
 ];

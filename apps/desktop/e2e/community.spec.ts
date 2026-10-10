@@ -75,7 +75,7 @@ test('create, invite, join, chat and call between two members', async () => {
   // Alice creates an account and a community.
   const alice = await open('Alice');
   await alice.getByRole('button', { name: 'Settings', exact: true }).click();
-  await alice.getByRole('button', { name: 'Server', exact: true }).click();
+  await alice.getByRole('button', { name: 'Account', exact: true }).click();
   await alice.getByPlaceholder('https://river.example.org').fill(url);
   await alice.getByRole('button', { name: 'Save', exact: true }).click();
   await alice.getByRole('button', { name: 'Create account' }).click();
