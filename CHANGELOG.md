@@ -37,6 +37,11 @@ All notable changes to River are documented here. The format follows
   who host (or who ask for it in Settings → Server).
 - The top bar says **Online** instead of showing a server address.
 
+### Fixed
+
+- Invite links keep working after the host's PC restarts and the server's
+  address changes: River tries the invite on your own server first.
+
 ### Security
 
 - Operator endpoints (`/v1/admin/*`) answer only the program hosting the
