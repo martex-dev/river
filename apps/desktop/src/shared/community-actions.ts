@@ -171,6 +171,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
   z.object({ a: z.literal('outboxList') }).strict(),
   /** Reconnect to the server right away instead of waiting for the next attempt. */
   z.object({ a: z.literal('reconnect') }).strict(),
+  /** Mark a channel unread from a message on (that message and later ones count as new). */
+  z.object({ a: z.literal('markUnread'), channelId: id, from: z.iso.datetime() }).strict(),
   /** You have seen this channel up to now. */
   z.object({ a: z.literal('markRead'), channelId: id }).strict(),
   z
