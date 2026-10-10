@@ -70,8 +70,6 @@ export function JoinInviteDialog({ link }: { link: string }): ReactElement {
   );
 }
 
-const trim = (url: string): string => url.replace(/\/+$/, '');
-
 export function AddFriendDialog(props: { riverId: string; serverUrl: string }): ReactElement {
   const s = useCommunity();
   const account = useRiver((r) => r.account);
@@ -82,9 +80,7 @@ export function AddFriendDialog(props: { riverId: string; serverUrl: string }): 
       ? 'You need an account first: join or create a community.'
       : account.riverId === props.riverId
         ? "That's your own friend link."
-        : trim(account.serverUrl) !== trim(props.serverUrl)
-          ? 'That person is on another River server. Friends need to be on the same server for now.'
-          : null;
+        : null;
   return (
     <Modal title="Add a friend?" onClose={() => s.setModal(null)}>
       <p className="modal__text">
