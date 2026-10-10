@@ -6,6 +6,23 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**No more server talk — River just connects.**
+
+### Fixed
+
+- **"Server unreachable" on the PC that hosts.** Your own River now talks to
+  your server directly, so it connects instantly and never chases a public
+  address. If it ever missed the switch before, it recovers by itself.
+
+### Changed
+
+- The interface drops the "server" language. **Settings → Account** leads with
+  your **@username** and a plain **Connected / Offline**; the account ID,
+  device and connection details move under **Technical details**. Elsewhere
+  River says "Connecting…" and "you're offline — messages send when you're
+  back", not "your River server".
+- People who have an account but no username yet are prompted to pick one.
+
 ## [1.0.13] - 2026-10-10
 
 **Usernames: add people the way you do on Discord.**
