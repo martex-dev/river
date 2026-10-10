@@ -23,6 +23,11 @@ export interface RiverDatabase {
   db: Kysely<Database>;
   dialect: Dialect;
   close(): Promise<void>;
+  /**
+   * SQLite only: writes a consistent copy of the database to `path` while the
+   * server keeps running (SQLite's online backup). PostgreSQL has its own tools.
+   */
+  backup?(path: string): Promise<void>;
 }
 
 /**
@@ -76,7 +81,15 @@ export function openDatabase(url: string): RiverDatabase {
   sqlite.pragma('busy_timeout = 5000');
   sqlite.pragma('secure_delete = ON');
   const db = new Kysely<Database>({ dialect: new RiverSqliteDialect({ database: sqlite }) });
-  return { db, dialect: 'sqlite', close: () => db.destroy() };
+  return {
+    db,
+    dialect: 'sqlite',
+    close: () => db.destroy(),
+    backup: async (to) => {
+      mkdirSync(dirname(resolve(to)), { recursive: true });
+      await sqlite.backup(resolve(to));
+    },
+  };
 }
 
 /** Applies all pending migrations in one transaction (where the database supports transactional DDL). */

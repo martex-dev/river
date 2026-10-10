@@ -14,7 +14,8 @@ export const databaseUrlSchema = z
 
 const envSchema = z.object({
   RIVER_HOST: z.string().min(1).default('127.0.0.1'),
-  RIVER_PORT: z.coerce.number().int().min(1).max(65535).default(8787),
+  /** 0 picks any free port (the River app does this when its preferred port is taken). */
+  RIVER_PORT: z.coerce.number().int().min(0).max(65535).default(8787),
   RIVER_DATABASE_URL: databaseUrlSchema.default('sqlite:./data/river.sqlite'),
   RIVER_LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'silent']).default('info'),
   /** Set only when running behind a reverse proxy you control; otherwise client IPs could be spoofed. */
