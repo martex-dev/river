@@ -107,6 +107,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       synced: z.boolean().optional(),
       announcement: z.boolean().optional(),
       slowmode: z.number().int().min(0).max(21_600).optional(),
+      userLimit: z.number().int().min(0).max(99).optional(),
     })
     .strict(),
   z.object({ a: z.literal('moveChannel'), channelId: id, direction }).strict(),

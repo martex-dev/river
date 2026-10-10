@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { Permission } from '@river/protocol/permissions';
 import type { CommunityAction, CommunityActionResult } from '../../../shared/community-actions.ts';
 import type { ChatMessage, CommunityEvent, CommunityView, Result } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
@@ -269,6 +270,19 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         }
         return;
       }
+      case 'voiceRefused': {
+        const call = get().call;
+        if (call && !call.channelId.startsWith('dm:')) {
+          set({ call: null });
+          void call.leave();
+        }
+        play('error');
+        get().notify(
+          event.reason === 'full' ? 'That voice channel is full.' : "You can't join that voice channel.",
+          'error',
+        );
+        return;
+      }
       case 'voiceDisconnect': {
         const call = get().call;
         if (!call) return;
@@ -337,6 +351,21 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   },
 
   joinVoice: async (channelId, me) => {
+    // Don't even try a full channel unless you may move members (the server checks too).
+    const community = get().communities.find((c) => c.channels.some((ch) => ch.id === channelId));
+    const target = community?.channels.find((ch) => ch.id === channelId);
+    const inside = community?.voice[channelId] ?? [];
+    if (
+      target &&
+      target.userLimit > 0 &&
+      inside.length >= target.userLimit &&
+      !inside.includes(me) &&
+      (target.permissions & Permission.MOVE_MEMBERS) === 0
+    ) {
+      play('error');
+      get().notify('That voice channel is full.', 'error');
+      return;
+    }
     await get().call?.leave();
     const voice = useRiver.getState().settings?.voice;
     const iceServers = await window.river.voice.iceServers().catch(() => []);

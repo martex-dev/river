@@ -637,4 +637,13 @@ describe('desktop ↔ server communities', () => {
     expect(view.permissions & Permission.SEND_MESSAGES).toBe(0);
     await expect(bob.community.send(general.id, 'can I post?')).rejects.toThrow();
   });
+
+  it('voice channels can have a user limit', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Voice');
+    const lounge = created.channels.find((c) => c.kind === 'voice')!;
+    expect(lounge.userLimit).toBe(0);
+    await alice.community.action({ a: 'updateChannel', channelId: lounge.id, userLimit: 4 });
+    expect((await alice.community.refresh())[0]!.channels.find((c) => c.id === lounge.id)?.userLimit).toBe(4);
+  });
 });
