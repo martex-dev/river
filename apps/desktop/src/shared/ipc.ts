@@ -151,6 +151,11 @@ export type AccountStatus =
       /** Host (and port) of the server, for display. */
       server: string;
       serverUrl: string;
+      /**
+       * The address to put in links you share (invites, friend links). Usually serverUrl; on
+       * the PC that hosts the server, where River talks to it over 127.0.0.1, its public address.
+       */
+      shareUrl: string;
       riverId: string;
       deviceId: number;
       devices: number;
