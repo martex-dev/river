@@ -73,10 +73,18 @@ function parse<T>(
 }
 
 /** Communities, roles, moderation, channels, messages, invites and the realtime socket. */
+/** What the operator's admin routes reuse, so removals behave exactly like members' own. */
+export interface CommunityOps {
+  /** Removes someone from every community they are in (key rotation, voice, notifications). */
+  removeEverywhere(riverId: string): Promise<void>;
+  /** Deletes a community and tells its members. */
+  deleteCommunity(communityId: string): Promise<boolean>;
+}
+
 export async function registerCommunityRoutes(
   app: FastifyInstance,
   deps: { config: ServerConfig; database: RiverDatabase; now: () => Date; hub: Hub },
-): Promise<void> {
+): Promise<CommunityOps> {
   const { db } = deps.database;
   const { hub } = deps;
   await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
@@ -292,12 +300,16 @@ export async function registerCommunityRoutes(
     return { ok: true };
   });
 
-  app.delete<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id`, authed, async (request) => {
-    const model = await community(request.params.id, me(request));
-    if (model.ownerId !== me(request)) throw forbidden('Only the owner can delete the community');
+  const deleteCommunity = async (model: CommunityModel): Promise<void> => {
     for (const m of model.members)
       hub.sendTo([m.riverId], { t: 'removed', communityId: model.id, reason: 'deleted' });
     await db.deleteFrom('communities').where('id', '=', model.id).execute();
+  };
+
+  app.delete<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    if (model.ownerId !== me(request)) throw forbidden('Only the owner can delete the community');
+    await deleteCommunity(model);
     return { ok: true };
   });
 
@@ -1434,4 +1446,26 @@ export async function registerCommunityRoutes(
 <li>Open River and create your identity.</li><li>Copy this page's full address and paste it anywhere in River (or in <b>Communities → Got an invite?</b>).</li></ol>
 <p style="color:#9ca8c6">The secret part of this link never reaches this server.</p></main></body>`);
   });
+
+  return {
+    removeEverywhere: async (riverId) => {
+      const rows = await db
+        .selectFrom('community_members')
+        .select('community_id')
+        .where('river_id', '=', riverId)
+        .execute();
+      for (const r of rows) {
+        const model = await loadCommunity(db, r.community_id);
+        if (!model) continue;
+        if (model.ownerId === riverId) await deleteCommunity(model);
+        else await removeMember(model, riverId, 'kicked', riverId);
+      }
+    },
+    deleteCommunity: async (communityId) => {
+      const model = await loadCommunity(db, communityId);
+      if (!model) return false;
+      await deleteCommunity(model);
+      return true;
+    },
+  };
 }
