@@ -6,7 +6,7 @@ import { serverUrlSchema, type Settings } from '../../../shared/settings.ts';
 import { ExternalIcon } from '../components/Icons.tsx';
 import { useRiver } from '../store.ts';
 
-const TABS = ['updates', 'server', 'backup', 'appearance', 'notifications', 'about'] as const;
+const TABS = ['updates', 'server', 'backup', 'appearance', 'notifications', 'system', 'about'] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   updates: 'Updates',
@@ -14,6 +14,7 @@ const TAB_LABEL: Record<Tab, string> = {
   backup: 'Backup',
   appearance: 'Appearance',
   notifications: 'Notifications',
+  system: 'System',
   about: 'About',
 };
 
@@ -79,6 +80,7 @@ export function SettingsPage(): ReactElement {
               {tab === 'backup' && <BackupPanel />}
               {tab === 'appearance' && <AppearancePanel settings={settings} />}
               {tab === 'notifications' && <NotificationsPanel settings={settings} />}
+              {tab === 'system' && <SystemPanel settings={settings} />}
               {tab === 'about' && <AboutPanel />}
             </>
           ) : (
@@ -428,6 +430,27 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
           ))}
         </div>
       </fieldset>
+    </div>
+  );
+}
+
+function SystemPanel({ settings }: { settings: Settings }): ReactElement {
+  const updateSettings = useRiver((s) => s.updateSettings);
+  return (
+    <div className="panel">
+      <h2 className="panel__title">System</h2>
+      <Toggle
+        label="Start River when I sign in"
+        hint="River opens quietly in the tray, so you get messages and calls right away."
+        checked={settings.system.startAtLogin}
+        onChange={(v) => void updateSettings({ system: { startAtLogin: v } })}
+      />
+      <Toggle
+        label="Keep River running when I close the window"
+        hint="River stays in the tray. Quit it from the tray icon's menu."
+        checked={settings.system.closeToTray}
+        onChange={(v) => void updateSettings({ system: { closeToTray: v } })}
+      />
     </div>
   );
 }

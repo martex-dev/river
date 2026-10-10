@@ -86,6 +86,7 @@ describe('SettingsStore', () => {
       notifications: { ...DEFAULT_SETTINGS.notifications, preview: 'sender' },
       server: { url: null },
       voice: DEFAULT_SETTINGS.voice,
+      system: DEFAULT_SETTINGS.system,
     });
     // A clean upgrade is not treated as corruption.
     expect(readdirSync(dir).some((n) => n.includes('.invalid-'))).toBe(false);

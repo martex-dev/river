@@ -1,5 +1,16 @@
 import { join } from 'node:path';
-import { BrowserWindow, app, desktopCapturer, net, powerMonitor, session } from 'electron';
+import {
+  BrowserWindow,
+  Menu,
+  Notification,
+  Tray,
+  app,
+  desktopCapturer,
+  nativeImage,
+  net,
+  powerMonitor,
+  session,
+} from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import { channelOfVersion } from '@river/release/channels';
@@ -14,6 +25,7 @@ import {
   registerIpc,
 } from './ipc.ts';
 import { CommunityService } from './community/community-service.ts';
+import { ServerLocator } from './community/server-locator.ts';
 import { createFileLogger } from './logger.ts';
 import {
   APP_ORIGIN,
@@ -82,6 +94,14 @@ async function start(): Promise<void> {
     requestJson: createRequestJson((input, init) => net.fetch(input as string, init)),
     log,
   });
+  const locator = new ServerLocator({
+    db: () => storage.db(),
+    account,
+    requestJson: createRequestJson((input, init) => net.fetch(input as string, init)),
+    fetchBytes: createFetchBytes((input, init) => net.fetch(input as string, init)),
+    log,
+    onMoved: (url) => settings.update({ server: { url } }),
+  });
   const community = new CommunityService({
     db: () => storage.db(),
     account,
@@ -90,6 +110,7 @@ async function start(): Promise<void> {
     requestBytes: createRequestBytes((input, init) => net.fetch(input as string, init)),
     blobDir: () => (storage.db() ? join(app.getPath('userData'), 'attachments') : null),
     log,
+    locator,
   });
   const dm = new DmService({ db: () => storage.db(), identity, account, community, log });
   const social = new SocialService({ db: () => storage.db(), identity, dm, log });
@@ -228,11 +249,58 @@ async function start(): Promise<void> {
     });
   }
 
-  app.on('second-instance', () => {
+  // Started at sign-in: stay in the tray until the user opens River.
+  const startedHidden = process.argv.includes('--hidden');
+  const show = (): void => {
     if (window.isMinimized()) window.restore();
+    window.show();
     window.focus();
+  };
+  window.once('ready-to-show', () => {
+    if (!startedHidden) window.show();
   });
-  app.on('window-all-closed', () => app.quit());
+  app.on('second-instance', show);
+
+  // The tray keeps River (calls, messages, notifications) running with the window closed.
+  let quitting = false;
+  let told = false;
+  app.on('before-quit', () => {
+    quitting = true;
+  });
+  const tray = new Tray(nativeImage.createFromPath(trayIconPath()).resize({ width: 16, height: 16 }));
+  tray.setToolTip('River');
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Open River', click: show },
+      { type: 'separator' },
+      { label: 'Quit River', click: () => app.quit() },
+    ]),
+  );
+  tray.on('click', show);
+  window.on('close', (event) => {
+    if (quitting || !settings.get().system.closeToTray) return;
+    event.preventDefault();
+    window.hide();
+    if (!told && Notification.isSupported()) {
+      told = true;
+      new Notification({
+        title: 'River is still running',
+        body: 'Calls and messages keep coming in. Quit from the River icon in the tray.',
+        silent: true,
+      }).show();
+    }
+  });
+  app.on('window-all-closed', () => {
+    if (!settings.get().system.closeToTray) app.quit();
+  });
+
+  // Start with the computer, if the user wants that (installed builds only).
+  const applyLoginItem = (on: boolean): void => {
+    if (!app.isPackaged || process.platform === 'linux') return;
+    app.setLoginItemSettings({ openAtLogin: on, args: ['--hidden'] });
+  };
+  applyLoginItem(settings.get().system.startAtLogin);
+  settings.onChange((s) => applyLoginItem(s.system.startAtLogin));
 }
 
 function createWindow(): BrowserWindow {
@@ -260,8 +328,12 @@ function createWindow(): BrowserWindow {
       devTools: !app.isPackaged,
     },
   });
-  window.once('ready-to-show', () => window.show());
   if (devServerUrl) void window.loadURL(devServerUrl);
   else void window.loadURL(`${APP_ORIGIN}/index.html`);
   return window;
+}
+
+/** The tray icon: next to the app in installed builds, in the source tree during development. */
+function trayIconPath(): string {
+  return app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(__dirname, '../../build/icon.png');
 }
