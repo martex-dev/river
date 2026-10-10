@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-10 · Current version: **1.0.6** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
+_Last updated: 2026-10-10 · Current version: **1.0.7** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
 
 ## Complete
 
