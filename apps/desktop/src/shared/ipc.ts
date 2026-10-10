@@ -17,6 +17,11 @@ export const IPC = {
   updatesStatusChanged: 'river:updates:status-changed',
   securityStatus: 'river:security:status',
   hostStatus: 'river:host:status',
+  hostEnable: 'river:host:enable',
+  hostDisable: 'river:host:disable',
+  hostBackup: 'river:host:backup',
+  hostOpenFolder: 'river:host:open-folder',
+  hostStatusChanged: 'river:host:status-changed',
   serverCheck: 'river:server:check',
   storageStatus: 'river:storage:status',
   storageSetup: 'river:storage:setup-passphrase',
@@ -331,7 +336,16 @@ export interface RiverApi {
   };
   security: { status(): Promise<SecurityStatus> };
   /** River Host on this PC, if it runs here. */
-  host: { status(): Promise<HostStatus> };
+  host: {
+    status(): Promise<HostStatus>;
+    /** Host communities on this PC from now on (also starts River with the PC). */
+    enable(): Promise<Result<HostStatus>>;
+    disable(): Promise<Result<HostStatus>>;
+    backupNow(): Promise<Result<HostStatus>>;
+    /** Opens the folder with the hosted data, backups and logs. */
+    openFolder(): Promise<void>;
+    onStatus(listener: (status: HostStatus) => void): () => void;
+  };
   server: { check(url: string): Promise<ServerCheckResult> };
   identity: {
     get(): Promise<IdentityInfo | null>;
@@ -396,15 +410,27 @@ export interface RiverApi {
   links: { open(id: ExternalLinkId): Promise<void> };
 }
 
-/** A River server run by River Host on this PC (see docs/deployment/host-on-your-pc.md). */
-export type HostStatus =
-  | { state: 'none' }
-  | {
-      state: 'running';
-      /** Its current public address, once the tunnel is up. */
-      address: string | null;
-      /** It is the server your account is on. */
-      yours: boolean;
-      /** Members' apps can follow it to a new address. */
-      followable: boolean;
-    };
+/** What hosting on this PC is doing right now (see main/host/host-manager.ts). */
+export interface HostRuntime {
+  state: 'off' | 'preparing' | 'starting' | 'online' | 'reconnecting';
+  /** The public address members reach, while it is reachable. */
+  address: string | null;
+  /** Members' apps follow the server to a new address by themselves. */
+  followable: boolean;
+  /** ISO time of the newest database backup. */
+  lastBackupAt: string | null;
+  instanceId?: string;
+  /** 0–1 while the tunnel tool downloads (first time only). */
+  progress?: number;
+  message?: string;
+}
+
+/** Hosting communities on this PC, as Settings and the start screen show it. */
+export interface HostStatus extends HostRuntime {
+  /** The user turned hosting on; River starts it with the PC. */
+  enabled: boolean;
+  /** Your own account is on this server. */
+  yours: boolean;
+  /** River Host, the separate host from 1.0.8, is set up ('installed') or running on this PC. */
+  legacy: 'none' | 'installed' | 'running';
+}

@@ -88,6 +88,7 @@ describe('SettingsStore', () => {
       server: { url: null },
       voice: DEFAULT_SETTINGS.voice,
       system: DEFAULT_SETTINGS.system,
+      hosting: { enabled: false, keepAwake: true },
     });
     // A clean upgrade is not treated as corruption.
     expect(readdirSync(dir).some((n) => n.includes('.invalid-'))).toBe(false);

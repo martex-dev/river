@@ -1298,33 +1298,78 @@ html[data-density='compact'] .member {
 }
 
 /* ---------- Hosting on this PC (1.0.10) ---------- */
-.host-panel {
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
-}
-.host-panel__card {
+.hosting {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 14px;
+}
+.hosting__hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(4, 8, 16, 0.4);
+  transition:
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+.hosting__hero.is-on {
+  border-color: rgba(62, 224, 143, 0.45);
+  box-shadow: 0 0 0 1px rgba(62, 224, 143, 0.15) inset;
+}
+.hosting__hero p {
+  margin: 6px 0 0;
+}
+.hosting__headline {
+  font-size: 1.02rem;
+}
+.hosting__switch {
+  flex: none;
+}
+.hosting__card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: rgba(4, 8, 16, 0.4);
   animation: fade-in var(--dur) var(--ease-out);
 }
-.host-panel__card p {
+.hosting__card p {
+  margin: 0;
+}
+.hosting__state {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0;
 }
-.host-panel__address {
+.hosting__progress {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.hosting__address,
+.hosting__backup {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
 }
-.host-panel__address code {
+.hosting__address code {
   overflow-wrap: anywhere;
+}
+.hosting__note,
+.hosting__confirm {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 181, 71, 0.08);
+}
+.hosting__confirm p {
+  margin: 0 0 8px;
 }

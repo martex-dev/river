@@ -6,6 +6,7 @@ import {
   Tray,
   app,
   desktopCapturer,
+  dialog,
   nativeImage,
   net,
   powerMonitor,
@@ -19,6 +20,7 @@ import {
   broadcastAccountStatus,
   broadcastCommunityEvents,
   broadcastDmEvents,
+  broadcastHostStatus,
   broadcastSocialEvents,
   broadcastStorageStatus,
   broadcastUpdateStatus,
@@ -26,8 +28,7 @@ import {
 } from './ipc.ts';
 import { CommunityService } from './community/community-service.ts';
 import { ServerLocator } from './community/server-locator.ts';
-import { API_PREFIX, instanceResponseSchema } from '@river/protocol';
-import type { HostStatus } from '../shared/ipc.ts';
+import { Hosting } from './host/hosting.ts';
 import { createFileLogger } from './logger.ts';
 import {
   APP_ORIGIN,
@@ -114,6 +115,24 @@ async function start(): Promise<void> {
     log,
     locator,
   });
+  // Hosting runs from sign-in, whether or not the user has unlocked their own River data.
+  const hosting = new Hosting({
+    userData: app.getPath('userData'),
+    // Development builds can look elsewhere for an older River Host, so a test run never takes over a real one.
+    homeDir: (!app.isPackaged && process.env.RIVER_DEV_HOME) || app.getPath('home'),
+    localOnly: !app.isPackaged && process.env.RIVER_DEV_LOCAL_HOSTING === 'true',
+    settings,
+    log,
+    pinnedId: () => locator.pinnedId(),
+    followOwnServer: (url) => {
+      const status = account.status();
+      if (status.state !== 'registered' || status.serverUrl === url) return;
+      account.moveServer(url);
+      settings.update({ server: { url } });
+      community.reconnectNow();
+    },
+  });
+  void hosting.init();
   const dm = new DmService({ db: () => storage.db(), identity, account, community, log });
   const social = new SocialService({ db: () => storage.db(), identity, dm, log });
   const backup = new BackupService({ db: () => storage.db() });
@@ -138,8 +157,14 @@ async function start(): Promise<void> {
   });
   app.on('will-quit', () => community.stop());
   // Waking up or getting the network back: reconnect now rather than after the backoff.
-  powerMonitor.on('resume', () => community.reconnectNow());
-  powerMonitor.on('unlock-screen', () => community.reconnectNow());
+  powerMonitor.on('resume', () => {
+    hosting.manager.nudge();
+    community.reconnectNow();
+  });
+  powerMonitor.on('unlock-screen', () => {
+    hosting.manager.nudge();
+    community.reconnectNow();
+  });
 
   // Screen sharing: River shows its own picker; the chosen source is used for the next request.
   let chosenScreen: string | null = null;
@@ -222,11 +247,7 @@ async function start(): Promise<void> {
     selectScreen: (id) => {
       chosenScreen = id;
     },
-    hostStatus: () =>
-      localHostStatus(
-        createRequestJson((input, init) => net.fetch(input as string, init)),
-        locator.pinnedId(),
-      ),
+    hosting,
   });
 
   const window = createWindow();
@@ -237,6 +258,7 @@ async function start(): Promise<void> {
   broadcastCommunityEvents(window.webContents, community);
   broadcastDmEvents(window.webContents, dm);
   broadcastSocialEvents(window.webContents, social);
+  broadcastHostStatus(window.webContents, hosting);
   startMessageNotifications({ community, dm, settings: () => settings.get(), window });
   window.on('focus', () => window.flashFrame(false));
   if (updates) {
@@ -271,18 +293,66 @@ async function start(): Promise<void> {
   // The tray keeps River (calls, messages, notifications) running with the window closed.
   let quitting = false;
   let told = false;
-  app.on('before-quit', () => {
+  let hostStopped = false;
+  app.on('before-quit', (event) => {
     quitting = true;
+    // Stop the community server cleanly before River exits (at most a few seconds).
+    if (hostStopped || hosting.manager.status().state === 'off') return;
+    event.preventDefault();
+    void hosting.stop().finally(() => {
+      hostStopped = true;
+      app.quit();
+    });
   });
+  // Quitting from the tray while hosting takes the community offline: say so first.
+  const quitFromTray = async (): Promise<void> => {
+    if (hosting.status().enabled && hosting.manager.status().state !== 'off') {
+      const { response } = await dialog.showMessageBox({
+        type: 'question',
+        buttons: ['Keep River running', 'Quit anyway'],
+        defaultId: 0,
+        cancelId: 0,
+        title: 'Quit River?',
+        message: 'Your communities go offline while River is closed.',
+        detail:
+          'This PC hosts them. Members can still open River and write; their messages are sent when River runs here again.',
+      });
+      if (response !== 1) return;
+    }
+    app.quit();
+  };
   const tray = new Tray(nativeImage.createFromPath(trayIconPath()).resize({ width: 16, height: 16 }));
-  tray.setToolTip('River');
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Open River', click: show },
-      { type: 'separator' },
-      { label: 'Quit River', click: () => app.quit() },
-    ]),
-  );
+  const trayLabel = (): string => {
+    const h = hosting.status();
+    if (!h.enabled) return 'River';
+    return h.state === 'online' ? 'River — hosting your communities' : 'River — starting hosting…';
+  };
+  const refreshTray = (): void => {
+    const h = hosting.status();
+    tray.setToolTip(trayLabel());
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: 'Open River', click: show },
+        ...(h.enabled
+          ? [
+              {
+                label: h.state === 'online' ? 'Hosting: online' : 'Hosting: connecting…',
+                enabled: false,
+              },
+            ]
+          : []),
+        { type: 'separator' },
+        { label: 'Quit River', click: () => void quitFromTray() },
+      ]),
+    );
+  };
+  refreshTray();
+  let lastTray = trayLabel();
+  hosting.onStatus(() => {
+    if (trayLabel() === lastTray) return;
+    lastTray = trayLabel();
+    refreshTray();
+  });
   tray.on('click', show);
   window.on('close', (event) => {
     if (quitting || !settings.get().system.closeToTray) return;
@@ -343,26 +413,4 @@ function createWindow(): BrowserWindow {
 /** The tray icon: next to the app in installed builds, in the source tree during development. */
 function trayIconPath(): string {
   return app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(__dirname, '../../build/icon.png');
-}
-
-/** River Host's server answers on this machine's port 8790 (see scripts/host). */
-async function localHostStatus(
-  requestJson: ReturnType<typeof createRequestJson>,
-  pinnedId: string | null,
-): Promise<HostStatus> {
-  try {
-    const info = await requestJson(
-      `http://127.0.0.1:8790${API_PREFIX}/instance`,
-      { method: 'GET' },
-      instanceResponseSchema,
-    );
-    return {
-      state: 'running',
-      address: info.address,
-      yours: info.id === pinnedId,
-      followable: info.beacon !== null,
-    };
-  } catch {
-    return { state: 'none' };
-  }
 }

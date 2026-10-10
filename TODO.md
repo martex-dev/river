@@ -75,10 +75,10 @@ Each line is one PR; each version ships when its section is done.
 
 ### 1.0.11 — Hosting built into River
 
-- [ ] The River server runs inside the app (no separate install); data in a permanent folder with daily backups
-- [ ] Public address opens by itself (verified cloudflared); members follow it automatically
-- [ ] Starts with the PC, keeps running in the tray, optional keep-awake; warns before going offline
-- [ ] "Host it on this PC" is the default when you start a community; adopts an existing River Host
+- [x] The River server runs inside the app (no separate install); data in a permanent folder with daily backups
+- [x] Public address opens by itself (verified cloudflared); members follow it automatically
+- [x] Starts with the PC, keeps running in the tray, optional keep-awake; warns before going offline
+- [x] "Host it on this PC" is the default when you start a community; adopts an existing River Host
 
 ### Later
 

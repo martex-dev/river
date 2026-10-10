@@ -1,16 +1,26 @@
-import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
+import { useState, type ReactElement, type ReactNode } from 'react';
 import { BackupPanel } from '../components/BackupPanel.tsx';
+import { HostingPanel } from '../components/HostingPanel.tsx';
 import type { ReleaseChannel } from '@river/release/channels';
-import type { AccountStatus, HostStatus, ServerCheckResult, UpdateStatus } from '../../../shared/ipc.ts';
+import type { AccountStatus, ServerCheckResult, UpdateStatus } from '../../../shared/ipc.ts';
 import { serverUrlSchema, type Settings } from '../../../shared/settings.ts';
 import { ExternalIcon } from '../components/Icons.tsx';
 import { useRiver } from '../store.ts';
-import { play } from '../community/sound.ts';
 
-const TABS = ['updates', 'server', 'backup', 'appearance', 'notifications', 'system', 'about'] as const;
+const TABS = [
+  'updates',
+  'hosting',
+  'server',
+  'backup',
+  'appearance',
+  'notifications',
+  'system',
+  'about',
+] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   updates: 'Updates',
+  hosting: 'Hosting',
   server: 'Server',
   backup: 'Backup',
   appearance: 'Appearance',
@@ -77,6 +87,7 @@ export function SettingsPage(): ReactElement {
           {settings ? (
             <>
               {tab === 'updates' && <UpdatesPanel settings={settings} />}
+              {tab === 'hosting' && <HostingTab />}
               {tab === 'server' && <ServerPanel settings={settings} />}
               {tab === 'backup' && <BackupPanel />}
               {tab === 'appearance' && <AppearancePanel settings={settings} />}
@@ -475,72 +486,16 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
         checked={settings.system.closeToTray}
         onChange={(v) => void updateSettings({ system: { closeToTray: v } })}
       />
-      <HostPanel />
     </div>
   );
 }
 
-/** Shows the River server this PC runs with River Host, if there is one. */
-function HostPanel(): ReactElement {
-  const [status, setStatus] = useState<HostStatus | null>(null);
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    let stop = false;
-    const load = (): void =>
-      void window.river.host.status().then((s) => {
-        if (!stop) setStatus(s);
-      });
-    load();
-    const timer = window.setInterval(load, 10_000);
-    return () => {
-      stop = true;
-      window.clearInterval(timer);
-    };
-  }, []);
+function HostingTab(): ReactElement {
   return (
-    <section className="host-panel" aria-labelledby="host-title">
-      <h3 id="host-title" className="field__label">
-        Hosting on this PC
-      </h3>
-      {status === null && <p className="muted small">Checking…</p>}
-      {status?.state === 'none' && (
-        <p className="muted small">
-          This PC is not running a River server. To host your community here and have it start with Windows,
-          use River Host (see “Host your community on your own PC” in River's documentation).
-        </p>
-      )}
-      {status?.state === 'running' && (
-        <div className="host-panel__card">
-          <p>
-            <span className="status-dot status-dot--active" aria-hidden="true" /> River Host is running
-            {status.yours ? ' — your account is on this server.' : '.'}
-          </p>
-          {status.address ? (
-            <div className="host-panel__address">
-              <code>{status.address}</code>
-              <button
-                className="btn btn--ghost btn--small"
-                onClick={() =>
-                  void navigator.clipboard.writeText(status.address!).then(() => {
-                    play('success');
-                    setCopied(true);
-                  })
-                }
-              >
-                {copied ? 'Copied ✓' : 'Copy address'}
-              </button>
-            </div>
-          ) : (
-            <p className="muted small">Opening the public address…</p>
-          )}
-          <p className="muted small">
-            {status.followable
-              ? 'When this PC restarts, the address changes and members’ River apps follow it automatically.'
-              : 'Address announcements are off, so members need the new address after this PC restarts.'}
-          </p>
-        </div>
-      )}
-    </section>
+    <div className="panel">
+      <h2 className="panel__title">Host on this PC</h2>
+      <HostingPanel />
+    </div>
   );
 }
 

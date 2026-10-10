@@ -13,8 +13,23 @@ export default defineConfig({
       // macOS automatic installation needs a Developer ID signature (see docs/deployment/updates.md).
       __RIVER_MAC_AUTO_INSTALL__: JSON.stringify(process.env.RIVER_MAC_SIGNED === 'true'),
     },
+    resolve: {
+      // The community server (bundled for hosting on this PC) uses the app's SQLite build.
+      alias: [
+        { find: /^better-sqlite3$/, replacement: resolve(__dirname, 'src/host/sqlite.ts') },
+        { find: /^pg$/, replacement: resolve(__dirname, 'src/host/no-postgres.ts') },
+      ],
+    },
     build: {
-      rollupOptions: { input: { index: resolve(__dirname, 'src/main/index.ts') } },
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          'host-server': resolve(__dirname, 'src/host/server-process.ts'),
+        },
+        // Optional native speed-ups of the WebSocket library. Bundled, they become empty stubs
+        // and the first frame crashes the server; left out, ws uses its JavaScript fallback.
+        external: ['bufferutil', 'utf-8-validate'],
+      },
     },
   },
   preload: {
