@@ -6,6 +6,23 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-10-10
+
+**Channels: threads, announcement channels and slowmode.**
+
+### Added
+
+- **Threads.** Start one from any message (🧵). Replies stay in a panel beside
+  the channel, and the starting message shows "Game night · 3 replies · 14:02".
+  Rename a thread by double-clicking its name; archive or unarchive it.
+  Thread names are encrypted like everything else.
+- **Announcement channels.** Turn any text channel into one in its settings:
+  only people who can manage messages post there, and everyone else reads and
+  reacts. Marked with 📢.
+- **Slowmode** from 5 seconds to 6 hours per channel. The composer says it is
+  on, and a too-early message tells you how long to wait. People who manage
+  messages are not slowed down.
+
 ## [1.0.6] - 2026-10-10
 
 **Roles and permissions: timeouts, an audit log, category permissions, hoisted roles and nicknames.**
@@ -578,7 +595,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.6...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.7...HEAD
+[1.0.7]: https://github.com/martex-dev/river/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/martex-dev/river/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/martex-dev/river/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/martex-dev/river/compare/v1.0.3...v1.0.4

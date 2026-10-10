@@ -53,8 +53,8 @@ Each line is one PR; each version ships when its section is done.
 
 ### 1.0.7 — Channels parity
 
-- [ ] Announcement channels; slowmode; channel topic in the header
-- [ ] Threads in text channels
+- [x] Announcement channels; slowmode; channel topic in the header
+- [x] Threads in text channels
 
 ### 1.0.8 — Voice parity
 
