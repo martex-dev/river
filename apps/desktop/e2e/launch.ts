@@ -12,11 +12,16 @@ export const TEST_NAME = 'E2E Tester';
  */
 export async function launchRiver(
   userData: string,
-  options: { completeOnboarding?: boolean; name?: string; args?: string[] } = {},
+  options: {
+    completeOnboarding?: boolean;
+    name?: string;
+    args?: string[];
+    env?: Record<string, string>;
+  } = {},
 ): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
     args: [resolve(__dirname, '..'), `--user-data-dir=${userData}`, ...(options.args ?? [])],
-    env: { ...process.env, ELECTRON_RENDERER_URL: '' },
+    env: { ...process.env, ELECTRON_RENDERER_URL: '', ...options.env },
   });
   const page = await app.firstWindow();
   await page.waitForSelector('.rail, .lock, .onboarding');
