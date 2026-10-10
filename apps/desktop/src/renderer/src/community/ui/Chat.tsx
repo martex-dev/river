@@ -12,6 +12,7 @@ import {
   EmojiPicker,
   HashIcon,
   Highlight,
+  MenuItem,
   PinIcon,
   PlusIcon,
   Popover,
@@ -312,6 +313,7 @@ function Message(props: {
   const { message: m, community, channel } = props;
   const s = useCommunity();
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const editing = s.editing === m.id;
   const member = memberOf(community, m.sender);
   const color = member?.color ? hex(member.color) : undefined;
@@ -342,6 +344,12 @@ function Message(props: {
     <div
       id={`msg-${m.id}`}
       className={`msg ${props.grouped ? 'msg--grouped' : ''} ${m.mine ? 'msg--mine' : ''} ${m.mentionsMe ? 'msg--mention' : ''} ${editing ? 'is-editing' : ''}`}
+      onContextMenu={(e) => {
+        // Keep the browser's own menu for selected text (copy).
+        if (window.getSelection()?.toString()) return;
+        e.preventDefault();
+        setMenu({ x: e.clientX, y: e.clientY });
+      }}
     >
       {props.replied !== undefined || m.replyTo ? (
         <button className="msg__reply" onClick={() => m.replyTo && props.onJump(m.replyTo)}>
@@ -516,6 +524,102 @@ function Message(props: {
             </button>
           )}
         </div>
+      )}
+      {menu && (
+        <Popover x={menu.x} y={menu.y} onClose={() => setMenu(null)} className="menu">
+          {canReact && (
+            <MenuItem
+              icon={<SmileIcon size={16} />}
+              onClick={() => {
+                setMenu(null);
+                setPicker({ x: menu.x, y: menu.y - 320 });
+              }}
+            >
+              Add reaction
+            </MenuItem>
+          )}
+          {can(channel.permissions, Permission.SEND_MESSAGES) && (
+            <MenuItem
+              icon={<ReplyIcon size={16} />}
+              onClick={() => {
+                setMenu(null);
+                useCommunity.setState({ replyTo: m });
+                document.querySelector<HTMLTextAreaElement>('.chat__composer textarea')?.focus();
+              }}
+            >
+              Reply
+            </MenuItem>
+          )}
+          {can(channel.permissions, Permission.SEND_MESSAGES) && !m.threadId && (
+            <MenuItem
+              icon={<span aria-hidden="true">🧵</span>}
+              onClick={() => {
+                setMenu(null);
+                if (m.thread) return void s.showThread(channel.id, m.id);
+                const name = (m.text.split('\n')[0] ?? '').slice(0, 40).trim() || 'Thread';
+                void s
+                  .run({ a: 'createThread', channelId: channel.id, messageId: m.id, name })
+                  .then(() => s.showThread(channel.id, m.id));
+              }}
+            >
+              {m.thread ? 'Open thread' : 'Create thread'}
+            </MenuItem>
+          )}
+          {m.text && (
+            <MenuItem
+              icon={<span aria-hidden="true">📋</span>}
+              onClick={() => {
+                setMenu(null);
+                void navigator.clipboard.writeText(m.text).then(() => play('success'));
+              }}
+            >
+              Copy text
+            </MenuItem>
+          )}
+          {m.mine && (
+            <MenuItem
+              icon={<EditIcon size={16} />}
+              onClick={() => {
+                setMenu(null);
+                useCommunity.setState({ editing: m.id });
+              }}
+            >
+              Edit message
+            </MenuItem>
+          )}
+          {canPin && (
+            <MenuItem
+              icon={<PinIcon size={16} />}
+              onClick={() => {
+                setMenu(null);
+                void s.run({ a: 'pin', messageId: m.id, pinned: !m.pinned });
+              }}
+            >
+              {m.pinned ? 'Unpin message' : 'Pin message'}
+            </MenuItem>
+          )}
+          <MenuItem
+            icon={<span aria-hidden="true">●</span>}
+            onClick={() => {
+              setMenu(null);
+              s.markUnreadFrom(m);
+            }}
+          >
+            Mark unread
+          </MenuItem>
+          {(m.mine || canManage) && (
+            <MenuItem
+              danger
+              icon={<TrashIcon size={16} />}
+              onClick={() => {
+                setMenu(null);
+                remove(false);
+              }}
+            >
+              Delete message
+            </MenuItem>
+          )}
+        </Popover>
       )}
       {picker && (
         <Popover x={picker.x} y={picker.y} onClose={() => setPicker(null)}>

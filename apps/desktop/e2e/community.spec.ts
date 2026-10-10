@@ -445,4 +445,12 @@ test('a brand-new user creates a community from a template in one step', async (
   await expect(dave.locator('.thread-panel')).toContainText('first reply in the thread', { timeout: 15_000 });
   await auditA11y(dave, 'Thread panel');
   await dave.getByRole('button', { name: 'Close thread' }).click();
+
+  // Right-click menus: mark a message unread, then the channel read again.
+  await dave.locator('.msg', { hasText: 'hello Dave, welcome!' }).click({ button: 'right' });
+  await expect(dave.getByRole('menuitem', { name: 'Copy text' })).toBeVisible();
+  await dave.getByRole('menuitem', { name: 'Mark unread' }).click();
+  await expect(dave.getByRole('separator', { name: 'New messages' })).toBeVisible();
+  await dave.locator('.channel-wrap', { hasText: 'general' }).click({ button: 'right' });
+  await dave.getByRole('menuitem', { name: 'Mark as read' }).click();
 });
