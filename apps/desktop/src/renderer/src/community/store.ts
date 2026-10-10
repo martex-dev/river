@@ -270,6 +270,9 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         }
         return;
       }
+      case 'serverMoved':
+        get().notify('Your server moved to a new address. River followed it automatically.');
+        return;
       case 'voiceRefused': {
         const call = get().call;
         if (call && !call.channelId.startsWith('dm:')) {
