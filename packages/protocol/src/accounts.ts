@@ -99,9 +99,30 @@ export const registerRequestSchema = z
     identitySignature: signatureSchema,
     /** The new device's auth key over the same message (proof of possession). */
     deviceSignature: signatureSchema,
+    /** A one-time sign-up code from the server's operator (1.0.13); it comes with a username. */
+    signupCode: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{22}$/)
+      .optional(),
   })
   .strict();
 export type RegisterRequest = z.infer<typeof registerRequestSchema>;
+
+/**
+ * A username: what people find each other by (1.0.13). 3–32 characters, lowercase letters,
+ * digits, "_" and "." (not first or last). Usernames are public on their server, like on
+ * Discord; display names stay end-to-end encrypted.
+ */
+export const usernameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9_][a-z0-9_.]{1,30}[a-z0-9_]$/, 'Use 3–32 letters, numbers, "_" or "."');
+
+export const setUsernameRequestSchema = z.object({ username: usernameSchema }).strict();
+export const usernameResponseSchema = z.object({ username: z.string(), riverId: riverIdSchema });
+export const usernamesRequestSchema = z.object({ riverIds: z.array(riverIdSchema).max(500) }).strict();
+export const usernamesResponseSchema = z.object({ usernames: z.record(z.string(), z.string()) });
 
 export const sessionResponseSchema = z.object({
   token: z.string().min(40).max(64),
@@ -132,6 +153,8 @@ export const accountResponseSchema = z.object({
   identityKey: publicKeySchema,
   deviceList: base64Bytes(undefined, MAX_DEVICE_LIST_BYTES),
   deviceListSignature: signatureSchema,
+  /** 1.0.13; absent until one is chosen (and on older servers). */
+  username: z.string().nullable().optional(),
 });
 export type AccountResponse = z.infer<typeof accountResponseSchema>;
 

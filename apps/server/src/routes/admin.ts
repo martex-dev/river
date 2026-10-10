@@ -1,11 +1,27 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { sql } from 'kysely';
-import { API_PREFIX, BANNED_UNTIL, adminSuspendRequestSchema, type AdminOverview } from '@river/protocol';
+import { randomBytes } from 'node:crypto';
+import {
+  API_PREFIX,
+  BANNED_UNTIL,
+  adminCreateSignupRequestSchema,
+  adminSettingsRequestSchema,
+  adminSuspendRequestSchema,
+  type AdminOverview,
+} from '@river/protocol';
 import type { ServerConfig } from '../config.ts';
 import type { RiverDatabase } from '../db/database.ts';
 import type { Hub } from '../communities/hub.ts';
 import { requireHost } from '../host-auth.ts';
 import { HttpError } from '../http-error.ts';
+import {
+  SIGNUP_TTL_MS,
+  purgeSignups,
+  setSignupMode,
+  sha256,
+  signupMode,
+  usernameFree,
+} from '../accounts/usernames.ts';
 import type { CommunityOps } from './communities.ts';
 
 /** WebSocket close code for "your account was suspended or removed by the operator". */
@@ -47,6 +63,7 @@ export function registerAdminRoutes(
         'created_on',
         'suspended_until',
         'suspend_reason',
+        'username',
         eb
           .selectFrom('devices')
           .select(sql<number>`count(*)`.as('n'))
@@ -84,6 +101,7 @@ export function registerAdminRoutes(
         const active = a.suspended_until !== null && a.suspended_until > now;
         return {
           riverId: a.river_id,
+          username: a.username,
           createdOn: a.created_on,
           devices: Number(a.devices ?? 0),
           communities: Number(a.communities ?? 0),
@@ -99,7 +117,55 @@ export function registerAdminRoutes(
         members: Number(c.members ?? 0),
         channels: Number(c.channels ?? 0),
       })),
+      signups: (
+        await db
+          .selectFrom('signups')
+          .select(['username', 'created_at', 'expires_at'])
+          .where('expires_at', '>', now)
+          .orderBy('created_at')
+          .execute()
+      ).map((s) => ({ username: s.username, createdAt: s.created_at, expiresAt: s.expires_at })),
+      signupMode: await signupMode(db),
     };
+  });
+
+  // Create an account for someone: a one-time sign-up code that comes with the username chosen
+  // here. The app turns it into a link; whoever opens it in River gets that account.
+  app.post(`${API_PREFIX}/admin/signups`, host, async (request) => {
+    const parsed = adminCreateSignupRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new HttpError(400, 'bad_username', 'Use 3 to 32 letters, numbers, _ or . for the username.');
+    }
+    const { username } = parsed.data;
+    const now = deps.now();
+    await purgeSignups(db, now);
+    if (!(await usernameFree(db, username, now))) {
+      throw new HttpError(409, 'username_taken', `@${username} is already taken.`);
+    }
+    const code = randomBytes(16).toString('base64url');
+    const expiresAt = new Date(now.getTime() + SIGNUP_TTL_MS).toISOString();
+    await db
+      .insertInto('signups')
+      .values({ code_hash: sha256(code), username, created_at: now.toISOString(), expires_at: expiresAt })
+      .execute();
+    return { username, code, expiresAt };
+  });
+
+  app.delete<{ Params: { username: string } }>(
+    `${API_PREFIX}/admin/signups/:username`,
+    host,
+    async (request) => {
+      await db.deleteFrom('signups').where('username', '=', request.params.username).execute();
+      return { ok: true };
+    },
+  );
+
+  // 'invite': only people the operator created an account for can join.
+  app.put(`${API_PREFIX}/admin/settings`, host, async (request) => {
+    const parsed = adminSettingsRequestSchema.safeParse(request.body);
+    if (!parsed.success) throw new HttpError(400, 'bad_request', 'Bad request');
+    await setSignupMode(db, parsed.data.signupMode);
+    return { ok: true };
   });
 
   // A timeout (until a time) or a ban (until lifted). Signs the person out everywhere at once.

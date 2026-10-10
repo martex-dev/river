@@ -9,11 +9,15 @@ import {
   registrationMessage,
   sessionMessage,
   sessionRequestSchema,
+  setUsernameRequestSchema,
+  usernameSchema,
+  usernamesRequestSchema,
   type AccountResponse,
   type ErrorResponse,
   type RegisterResponse,
 } from '@river/protocol';
 import type { ServerConfig } from '../config.ts';
+import { purgeSignups, sha256, signupMode, usernameFree } from '../accounts/usernames.ts';
 import type { RiverDatabase } from '../db/database.ts';
 import {
   authenticate,
@@ -113,12 +117,33 @@ export function registerAccountRoutes(
     if (!verify(b(device.authKey), message, b(req.deviceSignature))) {
       return fail(reply, 400, 'bad_signature', 'Device signature is invalid');
     }
+    if (!req.signupCode && (await signupMode(db)) === 'invite') {
+      return fail(
+        reply,
+        403,
+        'signup_invite_only',
+        'This River server only accepts people its owner invites. Ask them for a sign-up link.',
+      );
+    }
 
     try {
       await db.transaction().execute(async (trx) => {
+        let username: string | null = null;
+        if (req.signupCode) {
+          // A sign-up the operator created: one use, and it brings the username they chose.
+          const claimed = await trx
+            .deleteFrom('signups')
+            .where('code_hash', '=', sha256(req.signupCode))
+            .where('expires_at', '>', now.toISOString())
+            .returning('username')
+            .executeTakeFirst();
+          if (!claimed) throw new SignupError();
+          username = claimed.username;
+        }
         await trx
           .insertInto('accounts')
           .values({
+            username,
             river_id: list.riverId,
             identity_key: req.identityKey,
             device_list: req.deviceList,
@@ -138,7 +163,10 @@ export function registerAccountRoutes(
           })
           .execute();
       });
-    } catch {
+    } catch (err) {
+      if (err instanceof SignupError) {
+        return fail(reply, 400, 'invalid_signup', 'This sign-up link has expired or was already used.');
+      }
       return fail(reply, 409, 'account_exists', 'An account with this River ID already exists');
     }
 
@@ -177,7 +205,7 @@ export function registerAccountRoutes(
   app.get(`${API_PREFIX}/accounts/me`, { preHandler: requireSession }, async (request) => {
     const row = await db
       .selectFrom('accounts')
-      .select(['river_id', 'identity_key', 'device_list', 'device_list_signature'])
+      .select(['river_id', 'identity_key', 'device_list', 'device_list_signature', 'username'])
       .where('river_id', '=', request.session!.riverId)
       .executeTakeFirstOrThrow();
     const body: AccountResponse = {
@@ -185,7 +213,75 @@ export function registerAccountRoutes(
       identityKey: row.identity_key,
       deviceList: row.device_list,
       deviceListSignature: row.device_list_signature,
+      username: row.username,
     };
     return body;
   });
+
+  // ---- usernames (1.0.13) ----------------------------------------------------------------------
+  app.put(
+    `${API_PREFIX}/accounts/me/username`,
+    { preHandler: requireSession, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const parsed = setUsernameRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return fail(reply, 400, 'bad_username', 'Use 3 to 32 letters, numbers, _ or . for your username.');
+      }
+      const { username } = parsed.data;
+      const me = request.session!.riverId;
+      const now = deps.now();
+      await purgeSignups(db, now);
+      const current = await db
+        .selectFrom('accounts')
+        .select('username')
+        .where('river_id', '=', me)
+        .executeTakeFirst();
+      if (current?.username !== username) {
+        if (!(await usernameFree(db, username, now))) {
+          return fail(reply, 409, 'username_taken', `@${username} is taken. Try another one.`);
+        }
+        try {
+          await db.updateTable('accounts').set({ username }).where('river_id', '=', me).execute();
+        } catch {
+          return fail(reply, 409, 'username_taken', `@${username} is taken. Try another one.`);
+        }
+      }
+      return { username, riverId: me };
+    },
+  );
+
+  // Find someone by username to add them as a friend. Usernames are public on their server.
+  app.get<{ Querystring: { username?: string } }>(
+    `${API_PREFIX}/users/lookup`,
+    { preHandler: requireSession, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const parsed = usernameSchema.safeParse(String(request.query.username ?? '').replace(/^@/, ''));
+      if (!parsed.success) return fail(reply, 404, 'not_found', 'Nobody has that username.');
+      const row = await db
+        .selectFrom('accounts')
+        .select(['river_id', 'username'])
+        .where('username', '=', parsed.data)
+        .executeTakeFirst();
+      if (!row?.username) return fail(reply, 404, 'not_found', 'Nobody has that username.');
+      return { username: row.username, riverId: row.river_id };
+    },
+  );
+
+  app.post(`${API_PREFIX}/users/usernames`, { preHandler: requireSession }, async (request, reply) => {
+    const parsed = usernamesRequestSchema.safeParse(request.body);
+    if (!parsed.success) return fail(reply, 400, 'bad_request', 'Bad request');
+    if (parsed.data.riverIds.length === 0) return { usernames: {} };
+    const rows = await db
+      .selectFrom('accounts')
+      .select(['river_id', 'username'])
+      .where('river_id', 'in', parsed.data.riverIds)
+      .execute();
+    return {
+      usernames: Object.fromEntries(
+        rows.filter((r) => r.username !== null).map((r) => [r.river_id, r.username as string]),
+      ),
+    };
+  });
 }
+
+class SignupError extends Error {}
