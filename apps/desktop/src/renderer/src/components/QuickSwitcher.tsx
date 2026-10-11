@@ -109,6 +109,11 @@ export function typingSomewhere(target: EventTarget | null): boolean {
   return !!el.closest?.('[role="dialog"], .modal, .popover, [role="menu"]');
 }
 
+/** A popover, menu, dialog or panel is open: Esc belongs to it. */
+function somethingOpen(): boolean {
+  return !!document.querySelector('.modal, .popover, [role="dialog"], [role="menu"], .switcher-backdrop');
+}
+
 /** A plain character key (no Ctrl/Alt/⌘), which should go into the message box. */
 export function isPrintable(e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'altKey' | 'metaKey'>): boolean {
   return e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey;
@@ -159,8 +164,10 @@ export function QuickSwitcher(): ReactElement | null {
       } else if (mod && !e.shiftKey && e.code === 'KeyF' && useRiver.getState().section === 'communities') {
         e.preventDefault();
         useCommunity.setState({ showSearch: true });
-      } else if (e.key === 'Escape' && !typingSomewhere(e.target) && !document.querySelector('.modal')) {
-        if (markRead(e.shiftKey)) e.preventDefault();
+      } else if (e.key === 'Escape' && !typingSomewhere(e.target) && !somethingOpen()) {
+        // After this key press is fully handled, so other Esc handlers are never disturbed.
+        const whole = e.shiftKey;
+        window.setTimeout(() => markRead(whole), 0);
       } else if (isPrintable(e) && !typingSomewhere(e.target)) {
         // Start typing anywhere: the letters go into the message box, like on Discord.
         const box = document.querySelector<HTMLTextAreaElement>('.chat__composer textarea');
