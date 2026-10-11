@@ -40,6 +40,8 @@ async function reset(db: Kysely<Database>): Promise<void> {
     'invites',
     'channels',
     'categories',
+    'community_event_rsvps',
+    'community_events',
     'community_members',
     'communities',
     'sessions',
