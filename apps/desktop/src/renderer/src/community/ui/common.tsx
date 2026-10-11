@@ -12,6 +12,7 @@ import {
 import type { CommunityView, MemberView } from '../../../../shared/ipc.ts';
 import { highlight, languageOf } from './highlight.ts';
 import { recentEmoji, rememberEmoji, searchEmoji, useEmojiIndex } from '../emoji-data.ts';
+import { openMessageLink } from '../message-link.ts';
 
 // ---- helpers -------------------------------------------------------------------------------------
 
@@ -487,6 +488,8 @@ const INLINE =
   /(\\[\\*_~|`>#\-[\]()@<]|`[^`\n]+`|\|\|[^|\n]+\|\||\[[^\]\n]{1,200}\]\(https?:\/\/[^\s)]{1,2000}\)|https?:\/\/[^\s<>]+[^\s<>.,:;"')\]!?]|<t:\d{1,12}(?::[tTdDfFR])?>|\*\*\*[^*\n]+\*\*\*|\*\*(?:[^*\n]|\*[^*\n]+\*)+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|_[^_\n]+_|@everyone|@here|@[^\s@]+(?: [^\s@]+)?|#[\w-]+)/g;
 
 function openLink(url: string): void {
+  // A link to a River message opens it here; anything else goes to the browser after a confirmation.
+  if (openMessageLink(url)) return;
   void window.river.links.openUrl(url);
 }
 

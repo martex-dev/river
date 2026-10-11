@@ -1521,6 +1521,16 @@ export async function registerCommunityRoutes(
 <p style="color:#9ca8c6">River is end-to-end encrypted: this server never sees your messages.</p></main></body>`);
   });
 
+  // A link to a message, opened in a browser: explain where it opens (it reveals nothing).
+  app.get('/channels/*', async (_request, reply) => {
+    reply.header('content-type', 'text/html; charset=utf-8');
+    reply.header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'");
+    return reply.send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>River message</title>
+<body style="font-family:system-ui,sans-serif;background:#05070d;color:#e7ecf8;display:grid;place-items:center;min-height:100vh;margin:0">
+<main style="max-width:520px;padding:24px;line-height:1.5"><h1 style="margin:0 0 12px">This is a link to a River message</h1>
+<p>Paste it into River to open the message. Only members of its community can read it: messages are end-to-end encrypted and this server cannot show them.</p></main></body>`);
+  });
+
   app.get('/join', async (_request, reply) => {
     reply.header('content-type', 'text/html; charset=utf-8');
     reply.header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'");

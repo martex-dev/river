@@ -1,3 +1,7 @@
+import { formatMessageLink } from '../message-link.ts';
+import { ProfileCard } from './Members.tsx';
+import { ForwardDialog } from './Forward.tsx';
+import { useRiver } from '../../store.ts';
 import { replaceShortcodes, searchEmoji, useEmojiIndex } from '../emoji-data.ts';
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
@@ -106,6 +110,20 @@ export function TextChannel(props: {
     el.classList.add('is-flash');
     window.setTimeout(() => el.classList.remove('is-flash'), 1600);
   };
+
+  // A message link or search result for this channel: scroll to it once it is on screen.
+  const pendingJump = useCommunity((x) => x.pendingJump);
+  useEffect(() => {
+    if (!pendingJump || pendingJump.channelId !== channel.id) return;
+    if (messages.some((x) => x.id === pendingJump.messageId)) {
+      useCommunity.setState({ pendingJump: null });
+      window.setTimeout(() => jumpTo(pendingJump.messageId), 50);
+    } else if (messages.length > 0) {
+      useCommunity.setState({ pendingJump: null });
+      useCommunity.getState().notify('That message is further back. Scroll up to find it.');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingJump, messages.length, channel.id]);
 
   return (
     <div
@@ -315,7 +333,32 @@ function Message(props: {
   const s = useCommunity();
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [profile, setProfile] = useState<{ x: number; y: number } | null>(null);
+  const [forwarding, setForwarding] = useState(false);
+  const account = useRiver((r) => r.account);
   const editing = s.editing === m.id;
+  const link = (): string | null =>
+    account?.state === 'registered'
+      ? formatMessageLink(account.shareUrl, {
+          communityId: community.id,
+          channelId: channel.id,
+          messageId: m.id,
+        })
+      : null;
+  const copyLink = (): void => {
+    const l = link();
+    if (l) void navigator.clipboard.writeText(l).then(() => play('success'));
+  };
+  const quote = (): void => {
+    const quoted = m.text
+      .split('\n')
+      .map((line) => `> ${line}`)
+      .join('\n');
+    useCommunity.setState({ draftInsert: `${quoted}\n` });
+    document.querySelector<HTMLTextAreaElement>('.chat__composer textarea')?.focus();
+  };
+  const openProfile = (e: { clientX: number; clientY: number }): void =>
+    setProfile({ x: e.clientX + 12, y: e.clientY - 40 });
   const member = memberOf(community, m.sender);
   const color = member?.color ? hex(member.color) : undefined;
   const canManage = can(channel.permissions, Permission.MANAGE_MESSAGES);
@@ -370,14 +413,32 @@ function Message(props: {
           {props.grouped ? (
             <time className="msg__hover-time">{timeOf(m.sentAt)}</time>
           ) : (
-            <Avatar id={m.sender} name={m.senderName} avatar={member?.avatar} size={38} />
+            <button
+              type="button"
+              className="msg__avatar-btn"
+              aria-label={`${m.senderName}'s profile`}
+              onClick={openProfile}
+            >
+              <Avatar id={m.sender} name={m.senderName} avatar={member?.avatar} size={38} />
+            </button>
           )}
         </div>
         <div className="msg__body">
           {!props.grouped && (
             <div className="msg__meta">
-              <strong style={color ? { color } : undefined}>{m.senderName}</strong>
-              <time className="muted small" title={new Date(m.sentAt).toLocaleString()}>
+              <button
+                type="button"
+                className="msg__author"
+                style={color ? { color } : undefined}
+                onClick={openProfile}
+              >
+                {m.senderName}
+              </button>
+              <time
+                className="muted small msg__time"
+                title={`${new Date(m.sentAt).toLocaleString()} · click to copy a link to this message`}
+                onClick={copyLink}
+              >
                 {dayLabel(m.sentAt) === 'Today'
                   ? `Today at ${timeOf(m.sentAt)}`
                   : new Date(m.sentAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
@@ -577,6 +638,37 @@ function Message(props: {
               Copy text
             </MenuItem>
           )}
+          {m.text && can(channel.permissions, Permission.SEND_MESSAGES) && (
+            <MenuItem
+              icon={<span aria-hidden="true">❝</span>}
+              onClick={() => {
+                setMenu(null);
+                quote();
+              }}
+            >
+              Quote
+            </MenuItem>
+          )}
+          {m.text && (
+            <MenuItem
+              icon={<span aria-hidden="true">↪</span>}
+              onClick={() => {
+                setMenu(null);
+                setForwarding(true);
+              }}
+            >
+              Forward
+            </MenuItem>
+          )}
+          <MenuItem
+            icon={<span aria-hidden="true">🔗</span>}
+            onClick={() => {
+              setMenu(null);
+              copyLink();
+            }}
+          >
+            Copy message link
+          </MenuItem>
           {m.mine && (
             <MenuItem
               icon={<EditIcon size={16} />}
@@ -621,6 +713,18 @@ function Message(props: {
             </MenuItem>
           )}
         </Popover>
+      )}
+      {profile && member && (
+        <Popover x={profile.x} y={profile.y} onClose={() => setProfile(null)} className="profile-pop">
+          <ProfileCard community={community} member={member} me={props.me} onDone={() => setProfile(null)} />
+        </Popover>
+      )}
+      {forwarding && (
+        <ForwardDialog
+          text={m.text}
+          from={{ name: m.senderName, channel: channel.name }}
+          onClose={() => setForwarding(false)}
+        />
       )}
       {picker && (
         <Popover x={picker.x} y={picker.y} onClose={() => setPicker(null)}>
@@ -692,6 +796,13 @@ function Composer(props: {
   const { community, channel, me } = props;
   const s = useCommunity();
   const [text, setText] = useState('');
+  // Quote puts the quoted lines in front of whatever is being written.
+  const draftInsert = useCommunity((x) => x.draftInsert);
+  useEffect(() => {
+    if (draftInsert === null) return;
+    setText((t) => `${draftInsert}${t}`);
+    useCommunity.setState({ draftInsert: null });
+  }, [draftInsert]);
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const lastTyping = useRef(0);
