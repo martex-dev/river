@@ -29,6 +29,7 @@ import {
   timeoutRequestSchema,
   updateCategoryRequestSchema,
   createEventRequestSchema,
+  transferOwnershipRequestSchema,
   createEmojiRequestSchema,
   MAX_COMMUNITY_EMOJI,
   updateEventRequestSchema,
@@ -715,6 +716,33 @@ export async function registerCommunityRoutes(
     await db.deleteFrom('community_emojis').where('id', '=', id).execute();
     await audit(model.id, me(request), 'emoji.delete', id);
     emojisChanged(model);
+    return { ok: true };
+  });
+
+  // ---- ownership (1.0.19) ----------------------------------------------------------------------
+  app.post<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/transfer`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    if (model.ownerId !== me(request)) throw forbidden('Only the owner can hand over a community');
+    const req = parse(transferOwnershipRequestSchema, request.body);
+    if (req.riverId === me(request)) throw bad('You already own it');
+    if (!model.members.some((m) => m.riverId === req.riverId)) throw bad('They are not a member');
+    await db.transaction().execute(async (trx) => {
+      await trx.updateTable('communities').set({ owner: req.riverId }).where('id', '=', model.id).execute();
+      await trx
+        .updateTable('community_members')
+        .set({ role: 'member' })
+        .where('community_id', '=', model.id)
+        .where('river_id', '=', me(request))
+        .execute();
+      await trx
+        .updateTable('community_members')
+        .set({ role: 'owner' })
+        .where('community_id', '=', model.id)
+        .where('river_id', '=', req.riverId)
+        .execute();
+    });
+    await audit(model.id, me(request), 'community.transfer', req.riverId);
+    changed(model);
     return { ok: true };
   });
 

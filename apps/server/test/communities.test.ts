@@ -360,6 +360,22 @@ describe('communities', () => {
       expect(await status(a, 'GET', `/v1/communities/${cid}/events`, stranger.token)).not.toBe(200);
     });
 
+    it('ownership can be handed to a member, only by the owner', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const transfer = (token: string, riverId: string) =>
+        status(a, 'POST', `/v1/communities/${cid}/transfer`, token, { riverId });
+      expect(await transfer(member.token, member.riverId)).toBe(403);
+      const stranger = await user(a);
+      expect(await transfer(owner.token, stranger.riverId)).toBe(400);
+      expect(await transfer(owner.token, member.riverId)).toBe(200);
+      expect((await fetchCommunity(a, member.token, cid)).ownerId).toBe(member.riverId);
+      // The old owner is no longer the owner.
+      expect(await transfer(owner.token, owner.riverId)).toBe(403);
+    });
+
     it('custom emoji: managers add and remove, every member can list, strangers cannot', async () => {
       const a = await start();
       const owner = await user(a);

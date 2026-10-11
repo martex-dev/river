@@ -366,6 +366,9 @@ export const createEmojiRequestSchema = z
   .object({ id: z.string().regex(COMMUNITY_ID_RE), data: sealedSchema(SEALED_EMOJI) })
   .strict();
 
+/** Make another member the owner (1.0.19); only the owner may. */
+export const transferOwnershipRequestSchema = z.object({ riverId: riverIdSchema }).strict();
+
 export const callRoomSchema = z.string().regex(/^[A-Za-z0-9_-]{22,64}$/);
 /** Most people in one private call room. */
 export const MAX_CALL_ROOM = 8;

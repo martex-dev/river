@@ -15,6 +15,11 @@ All notable changes to River are documented here. The format follows
   voice" button while it is on). People with the new **Manage events**
   permission can edit, cancel or delete them. Name, description and place are
   end-to-end encrypted.
+- **Saved messages:** right-click → Save message, and find everything you
+  saved under 🔖 in any channel (kept only on this device).
+- **Transfer ownership** of a community from someone's profile card.
+- Each community reopens on the channel you used last; very long messages
+  start folded with **Show more**; profile cards can copy a River ID.
 - **Custom emoji.** Upload a community's own emoji in Community settings →
   Emoji (people with the new **Manage emoji** permission); everyone uses them
   with `:name:` in messages and as reactions, from the picker's community tab

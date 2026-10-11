@@ -1681,6 +1681,15 @@ export class CommunityService {
         return (await this.events(act.communityId)) as CommunityActionResult<A>;
       case 'emojis':
         return (await this.emojis(act.communityId)) as CommunityActionResult<A>;
+      case 'transferOwnership':
+        await this.call(
+          `/communities/${act.communityId}/transfer`,
+          'POST',
+          { riverId: act.riverId },
+          z.unknown(),
+        ).catch(explain);
+        await this.refresh();
+        break;
       case 'savedMessages':
         return this.savedMessages() as CommunityActionResult<A>;
       case 'saveMessage': {

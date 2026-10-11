@@ -292,6 +292,28 @@ export function ProfileCard(props: {
                 Ban
               </button>
             )}
+            {community.ownerId === me && member.riverId !== me && (
+              <button
+                className="btn btn--ghost btn--small btn--danger-text"
+                onClick={() =>
+                  s.setModal({
+                    kind: 'confirm',
+                    title: `Make ${member.name} the owner?`,
+                    body: `${member.name} will own ${community.name} and can do everything, including deleting it. You become an ordinary member with the roles you have. Only they can hand it back.`,
+                    action: 'Transfer ownership',
+                    run: async () => {
+                      await s.run({
+                        a: 'transferOwnership',
+                        communityId: community.id,
+                        riverId: member.riverId,
+                      });
+                    },
+                  })
+                }
+              >
+                Transfer ownership
+              </button>
+            )}
           </div>
         )}
       </div>
