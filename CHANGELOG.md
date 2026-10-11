@@ -22,6 +22,14 @@ All notable changes to River are documented here. The format follows
   zone. Code blocks get syntax highlighting and a Copy button.
 - **Links are safe to click.** River shows the real address (look-alike
   letters spelled out) and asks before opening your browser.
+- **Message links, Quote and Forward.** Right-click a message (or click its
+  time) to copy a link to it; in River the link opens the message, in a
+  browser it only says "open River". **Quote** puts the message in your reply
+  as a quote; **Forward** sends it to another channel or conversation.
+- **Click someone's avatar or name** in the chat to see their profile card.
+- **Keyboard:** Ctrl+F searches, Ctrl+Alt+↑/↓ switches communities, Esc marks
+  the channel read and jumps to the newest message (Shift+Esc: the whole
+  community), and you can start typing anywhere to write a message.
 - **Every emoji, searchable.** The picker has all Unicode emoji by category,
   search by name or keyword, and your recently used ones. Type `:` and two
   letters for suggestions; `:fire:` becomes 🔥 when you send.
