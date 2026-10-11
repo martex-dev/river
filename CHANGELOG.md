@@ -6,10 +6,6 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-## [1.0.17] - 2026-10-11
-
-**Express yourself: status, formatting, every emoji, message links.**
-
 ### Added
 
 - **Mute a community or channel** — for 15 minutes, an hour, 8 hours, a day,
@@ -27,11 +23,17 @@ All notable changes to River are documented here. The format follows
   colour, mark it read or ungroup it.
 - Coming back to a channel you had scrolled up in returns you to the same
   place.
+- **Zoom and pan in the image viewer** (wheel, +/−, double-click, drag) and
+  **Copy image**.
 
 ### Fixed
 
 - The Notifications settings no longer claim they take effect "when
   messaging arrives in River 0.2".
+
+## [1.0.17] - 2026-10-11
+
+**Express yourself: status, formatting, every emoji, message links.**
 
 ### Added
 
