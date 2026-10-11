@@ -531,3 +531,55 @@ test('voice goes through the server, encrypted, when members cannot connect dire
   await carol.getByRole('button', { name: 'Hang up' }).click();
   await expect(dave.locator('.dm-call')).toHaveCount(0, { timeout: 15_000 });
 });
+
+test('status menu: do not disturb and a custom status show to others; formatting and emoji work', async () => {
+  test.setTimeout(120_000);
+  const erin = await open('Erin');
+  await erin.getByRole('button', { name: 'Settings', exact: true }).click();
+  await erin.getByRole('button', { name: 'Account', exact: true }).click();
+  await erin.getByPlaceholder('https://river.example.org').fill(url);
+  await erin.getByRole('button', { name: 'Save', exact: true }).click();
+  await erin.getByRole('button', { name: 'Create account' }).click();
+  await expect(erin.locator('.account-card .chip')).toHaveText('Connected');
+  await erin.getByRole('button', { name: 'Communities', exact: true }).click();
+  await erin.getByPlaceholder('e.g. The Crew').fill('Status Crew');
+  await erin.getByRole('button', { name: 'Create community' }).click();
+  await erin.getByRole('button', { name: 'Invite people' }).first().click();
+  const invite = (await erin.locator('.invite-box__link').innerText()).trim();
+  await erin.getByRole('button', { name: 'Close', exact: true }).click();
+  const finn = await open('Finn');
+  await finn.getByRole('button', { name: 'Communities', exact: true }).click();
+  await finn.getByLabel('Invite link').fill(invite);
+  await finn.getByRole('button', { name: 'Join community' }).click();
+  await expect(finn.locator('.community__title strong')).toHaveText('Status Crew');
+
+  // Erin goes Do Not Disturb and sets a custom status from her name in the corner.
+  await erin.getByRole('button', { name: 'Set your status' }).click();
+  await erin.getByRole('menuitemradio', { name: /Do Not Disturb/ }).click();
+  await erin.getByRole('button', { name: 'Set your status' }).click();
+  await erin.getByRole('menuitem', { name: /Set a custom status/ }).click();
+  const dialog = erin.getByRole('dialog', { name: 'Set a custom status' });
+  await dialog.getByLabel('Custom status', { exact: true }).fill('heads down');
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(erin.locator('.user-panel__text')).toContainText('heads down');
+
+  if ((await finn.locator('.community__members').count()) === 0)
+    await finn.getByRole('button', { name: 'Member list' }).click();
+  const erinRow = finn.locator('.community__members .member', { hasText: 'Erin' });
+  await expect(erinRow.getByRole('img', { name: 'Do Not Disturb' })).toBeVisible({ timeout: 15_000 });
+  await expect(erinRow).toContainText('heads down', { timeout: 15_000 });
+
+  // Formatting and emoji shortcodes, live.
+  const narrow = await finn.evaluate(() => window.innerWidth < 1100);
+  if (narrow) await finn.getByRole('button', { name: 'Member list' }).click();
+  await finn.getByPlaceholder('Message #general').fill('||secret|| **bold** :fire');
+  await expect(finn.getByRole('option', { name: /:fire:/ })).toBeVisible({ timeout: 10_000 });
+  await finn.keyboard.press('Tab');
+  await finn.keyboard.press('Enter');
+  const msg = erin.locator('.msg', { hasText: 'bold' });
+  await expect(msg.getByRole('button', { name: 'Spoiler, press to reveal' })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(msg.locator('strong', { hasText: /^bold$/ })).toBeVisible();
+  await expect(msg).toContainText('🔥');
+});
