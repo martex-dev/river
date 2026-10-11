@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.16] - 2026-10-11
+
+**Voice that stays connected — on every network.**
+
 ### Added
 
 - **Voice works even when two people cannot connect directly.** Some networks
@@ -15,7 +19,8 @@ All notable changes to River are documented here. The format follows
   still end-to-end encrypted: the server forwards sealed audio frames and
   cannot listen. Tiles show "via server" while it is in use, and River
   switches back to a direct connection as soon as one works. Voice only:
-  camera and screen sharing still need a direct connection.
+  camera and screen sharing still need a direct connection. This works for
+  1:1 calls from a conversation too.
 - **Connection check** in Settings → System: one button tests the address
   relay, your account, the server (and how fast it answers), the live
   connection, hosting, what kind of network you are on for calls, and your
@@ -33,6 +38,8 @@ All notable changes to River are documented here. The format follows
 
 ### Fixed
 
+- **A 1:1 call now rings while you are in a voice channel.** River used to
+  answer "busy" without telling you; accepting now leaves the voice channel.
 - **Voice channels no longer drop everyone every minute or two.** A home
   server's public tunnel reconnects every few minutes, and each time every
   member's connection to the server was cut — and the server threw everyone out
@@ -841,7 +848,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.15...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.16...HEAD
+[1.0.16]: https://github.com/martex-dev/river/compare/v1.0.15...v1.0.16
 [1.0.15]: https://github.com/martex-dev/river/compare/v1.0.14...v1.0.15
 [1.0.14]: https://github.com/martex-dev/river/compare/v1.0.13...v1.0.14
 [1.0.13]: https://github.com/martex-dev/river/compare/v1.0.12...v1.0.13
