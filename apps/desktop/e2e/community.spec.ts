@@ -611,6 +611,35 @@ test('status menu: do not disturb and a custom status show to others; formatting
     timeout: 15_000,
   });
 
+  // Erin adds a custom emoji; Finn sees it as a picture in her message.
+  await erin.locator('.community__title').click();
+  await erin.getByRole('menuitem', { name: 'Community settings' }).click();
+  await erin.getByRole('dialog').getByRole('button', { name: 'Emoji', exact: true }).click();
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  await erin
+    .locator('.emoji-upload input[type=file]')
+    .setInputFiles({ name: 'river cat.png', mimeType: 'image/png', buffer: png });
+  await expect(erin.locator('.emoji-upload__pending input')).toHaveValue('river_cat');
+  await erin.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(erin.locator('.emoji-list')).toContainText(':river_cat:');
+  await erin.keyboard.press('Escape');
+  await erin.getByPlaceholder('Message #general').fill('meet :river_cat:');
+  await erin.keyboard.press('Enter');
+  await expect(finn.locator('.msg', { hasText: 'meet' }).locator('img.custom-emoji')).toHaveAttribute(
+    'alt',
+    ':river_cat:',
+    { timeout: 15_000 },
+  );
+  // Finn saves the message and finds it again.
+  await finn.locator('.msg', { hasText: 'meet' }).click({ button: 'right' });
+  await finn.getByRole('menuitem', { name: 'Save message' }).click();
+  await finn.getByRole('button', { name: 'Saved messages' }).click();
+  await expect(finn.locator('.saved__item')).toContainText('Erin');
+  await finn.getByRole('button', { name: 'Close saved messages' }).click();
+
   // Erin plans an event; Finn sees it and says he is interested.
   await erin.locator('.events-row').click();
   await erin.getByRole('button', { name: 'Create event' }).click();
