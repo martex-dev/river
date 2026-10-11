@@ -300,6 +300,10 @@ export const messagesResponseSchema = z.object({ messages: z.array(messageSchema
 
 // ---- Realtime (WebSocket /v1/ws) -------------------------------------------------------------
 
+export const callRoomSchema = z.string().regex(/^[A-Za-z0-9_-]{22,64}$/);
+/** Most people in one private call room. */
+export const MAX_CALL_ROOM = 8;
+
 export const voiceStateSchema = z.object({
   muted: z.boolean(),
   deafened: z.boolean(),
@@ -333,6 +337,13 @@ export const clientEventSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('signal'), to: riverIdSchema, data: sealedSchema(SEALED_SIGNAL) }),
   z.object({ t: z.literal('typing'), channelId: channelIdSchema }),
   z.object({ t: z.literal('ping') }),
+  /**
+   * Join (or leave, with null) a private call room so the server may relay
+   * encrypted voice between its members (1:1 calls, 1.0.16). The room ID is a
+   * hash of the call's secret ID: the server learns that these people are in a
+   * call together, nothing else.
+   */
+  z.object({ t: z.literal('call.room'), room: callRoomSchema.nullable() }),
 ]);
 export type ClientEvent = z.infer<typeof clientEventSchema>;
 

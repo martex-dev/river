@@ -337,6 +337,9 @@ export function registerIpc(deps: IpcDeps): void {
       // invalid or untrusted: dropped
     }
   });
+  handle(IPC.voiceCallRoom, (_e, room) => {
+    deps.community.callRoom(room === null ? null : z.string().max(64).parse(room));
+  });
   handle(IPC.diagnosticsRun, () => deps.diagnostics());
   handle(IPC.diagnosticsOpenLogs, () => deps.openLogs());
   handle(IPC.screenSources, async () => {

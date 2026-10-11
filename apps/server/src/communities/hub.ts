@@ -27,6 +27,10 @@ export class Hub {
   /** A seat's grace period ran out: the member is out of the channel; tell the others. */
   onSeatExpired: ((left: { channelId: string; communityId: string }) => void) | null = null;
   private readonly graceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Private call rooms (1:1 calls) whose members may relay voice to each other. */
+  private readonly callRooms = new Map<string, Set<string>>();
+  private readonly roomOf = new Map<string, string>();
+  private readonly roomTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(options: HubOptions = {}) {
     this.graceMs = options.voiceGraceMs ?? VOICE_GRACE_MS;
@@ -57,7 +61,58 @@ export class Hub {
     set?.delete(socket);
     if (set && set.size > 0) return { offline: false, held: null };
     this.sockets.delete(riverId);
+    this.holdRoom(riverId);
     return { offline: true, held: this.holdSeat(riverId) };
+  }
+
+  /** Joins a private call room (leaving any other); false if it is full. */
+  joinRoom(riverId: string, room: string, max: number): boolean {
+    this.clearRoomTimer(riverId);
+    if (this.roomOf.get(riverId) === room) return true;
+    const members = this.callRooms.get(room) ?? new Set<string>();
+    if (members.size >= max) return false;
+    this.leaveRoom(riverId);
+    members.add(riverId);
+    this.callRooms.set(room, members);
+    this.roomOf.set(riverId, room);
+    return true;
+  }
+
+  leaveRoom(riverId: string): void {
+    this.clearRoomTimer(riverId);
+    const room = this.roomOf.get(riverId);
+    if (!room) return;
+    this.roomOf.delete(riverId);
+    const members = this.callRooms.get(room);
+    members?.delete(riverId);
+    if (members && members.size === 0) this.callRooms.delete(room);
+  }
+
+  /** A dropped connection keeps its call room for the grace period (the call itself is peer to peer). */
+  private holdRoom(riverId: string): void {
+    if (!this.roomOf.has(riverId)) return;
+    this.clearRoomTimer(riverId);
+    const t = setTimeout(() => {
+      this.roomTimers.delete(riverId);
+      if (!this.isOnline(riverId)) this.leaveRoom(riverId);
+    }, this.graceMs);
+    t.unref?.();
+    this.roomTimers.set(riverId, t);
+  }
+
+  private clearRoomTimer(riverId: string): void {
+    const t = this.roomTimers.get(riverId);
+    if (t) clearTimeout(t);
+    this.roomTimers.delete(riverId);
+  }
+
+  /** Whether `a` may relay voice to `b`: same voice channel, or same private call room. */
+  sharesCall(a: string, b: string): boolean {
+    if (a === b) return false;
+    const ch = this.voiceOf.get(a);
+    if (ch && this.voiceOf.get(b) === ch) return true;
+    const room = this.roomOf.get(a);
+    return !!room && this.roomOf.get(b) === room;
   }
 
   /** Keeps a voice seat (marked reconnecting) until rejoin or the grace period ends. */
@@ -89,6 +144,8 @@ export class Hub {
   close(): void {
     for (const t of this.graceTimers.values()) clearTimeout(t);
     this.graceTimers.clear();
+    for (const t of this.roomTimers.values()) clearTimeout(t);
+    this.roomTimers.clear();
   }
 
   isOnline(riverId: string): boolean {
