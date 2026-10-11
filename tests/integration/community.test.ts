@@ -52,7 +52,12 @@ const deadSocket = (): WebSocket => ({ send() {}, close() {}, readyState: 0 }) a
 async function person(
   name: string,
   createSocket: (url: string) => WebSocket = deadSocket,
-): Promise<{ community: CommunityService; riverId: string; restart(): CommunityService }> {
+): Promise<{
+  community: CommunityService;
+  riverId: string;
+  restart(): CommunityService;
+  account: AccountService;
+}> {
   const local = migrateDatabase(join(dir, `${name}.db`), newDatabaseKey(), CLIENT_MIGRATIONS).db;
   locals.push(local);
   const identity = new IdentityService(() => local);
