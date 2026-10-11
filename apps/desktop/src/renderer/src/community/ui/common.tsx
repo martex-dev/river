@@ -44,12 +44,37 @@ export function nameOf(community: CommunityView | null | undefined, id: string):
 
 // ---- avatar --------------------------------------------------------------------------------------
 
+export type Presence = 'online' | 'idle' | 'dnd' | 'offline';
+export const PRESENCE_LABEL: Record<Presence, string> = {
+  online: 'Online',
+  idle: 'Idle',
+  dnd: 'Do Not Disturb',
+  offline: 'Offline',
+};
+
+/** How a member appears: offline, or online / idle / do not disturb. */
+export function presenceOf(m: Pick<MemberView, 'online' | 'status'>): Presence {
+  return m.online ? (m.status ?? 'online') : 'offline';
+}
+
+/** "🎮 Playing late tonight" — a member's custom status, if any. */
+export function CustomStatus({ member }: { member: Pick<MemberView, 'customStatus'> }): ReactElement | null {
+  const c = member.customStatus;
+  if (!c) return null;
+  return (
+    <span className="custom-status" title={`${c.emoji} ${c.text}`.trim()}>
+      {c.emoji && <span className="custom-status__emoji">{c.emoji}</span>}
+      {c.text}
+    </span>
+  );
+}
+
 export function Avatar(props: {
   id: string;
   name: string;
   avatar?: string | null;
   size?: number;
-  status?: 'online' | 'offline' | null;
+  status?: Presence | null;
   speaking?: boolean;
 }): ReactElement {
   const size = props.size ?? 32;
@@ -65,7 +90,14 @@ export function Avatar(props: {
           {initials(props.name)}
         </span>
       )}
-      {props.status && <span className={`avatar__status avatar__status--${props.status}`} />}
+      {props.status && (
+        <span
+          className={`avatar__status avatar__status--${props.status}`}
+          role="img"
+          aria-label={PRESENCE_LABEL[props.status]}
+          title={PRESENCE_LABEL[props.status]}
+        />
+      )}
     </span>
   );
 }

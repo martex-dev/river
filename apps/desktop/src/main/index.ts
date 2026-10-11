@@ -56,6 +56,7 @@ import { verifyDownloadedUpdate } from './updater/verify-download.ts';
 import { LaunchHealth } from './updater/launch-health.ts';
 import { runSelfTest, selfTestPath } from './self-test.ts';
 import { runMainDiagnostics } from './diagnostics.ts';
+import { PresenceTracker } from './presence.ts';
 import {
   RENDERER_RELOADS,
   SHOW_WINDOW_FALLBACK_MS,
@@ -170,6 +171,11 @@ async function start(): Promise<void> {
     log,
     onMoved: (url) => settings.update({ server: { url } }),
   });
+  // How you appear to others: chosen status, Idle after 10 minutes away, custom status (1.0.17).
+  const presence = new PresenceTracker({
+    settings: () => settings.get().presence,
+    idleSeconds: () => powerMonitor.getSystemIdleTime(),
+  });
   const community = new CommunityService({
     db: () => storage.db(),
     account,
@@ -179,6 +185,7 @@ async function start(): Promise<void> {
     blobDir: () => (storage.db() ? join(app.getPath('userData'), 'attachments') : null),
     log,
     locator,
+    presence,
   });
   // Hosting runs from sign-in, whether or not the user has unlocked their own River data.
   const hosting = new Hosting({
@@ -215,6 +222,14 @@ async function start(): Promise<void> {
     lastPublic = s.address;
     account.refresh();
   });
+  let lastCustom = JSON.stringify(presence.custom());
+  presence.onChange(() => {
+    const custom = JSON.stringify(presence.custom());
+    void community.presenceChanged(custom !== lastCustom);
+    lastCustom = custom;
+  });
+  settings.onChange(() => presence.check());
+  presence.start();
   void hosting.init();
   // New people get their account on River's server by themselves, as soon as they have a name.
   const homeAccount = new HomeAccount({

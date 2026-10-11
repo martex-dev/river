@@ -115,4 +115,7 @@ export const useRiver = create<RiverState>((set) => ({
 }));
 
 // Interface sounds follow Settings → Notifications (master switch, volume, groups).
-setSoundConfigSource(() => useRiver.getState().settings?.notifications);
+setSoundConfigSource(() => {
+  const s = useRiver.getState().settings;
+  return s ? { ...s.notifications, quiet: s.presence.status === 'dnd' } : undefined;
+});

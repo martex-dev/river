@@ -242,6 +242,10 @@ export interface MemberView {
   /** Colour of the highest coloured role, or null. */
   color: number | null;
   online: boolean;
+  /** Idle or Do Not Disturb while online (1.0.17). */
+  status?: 'idle' | 'dnd';
+  /** Their custom status, if set and not expired (end-to-end encrypted). */
+  customStatus?: { text: string; emoji: string } | null;
   owner: boolean;
   /** Hierarchy position (owner is highest). */
   rank: number;

@@ -17,6 +17,8 @@ export function startMessageNotifications(deps: {
   const { community, window } = deps;
   const show = (title: string, body: string, mention: boolean, onClick: () => void): void => {
     if (window.isDestroyed() || window.isFocused() || !Notification.isSupported()) return;
+    // Do Not Disturb: nothing pops up.
+    if (deps.settings().presence.status === 'dnd') return;
     const notification = new Notification({ title, body, silent: true });
     notification.on('click', () => {
       if (window.isDestroyed()) return;

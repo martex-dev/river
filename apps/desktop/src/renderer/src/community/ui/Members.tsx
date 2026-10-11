@@ -5,7 +5,7 @@ import { useRiver } from '../../store.ts';
 import { friendState, sendFriendRequest } from '../../dm/friends.ts';
 import { useDm } from '../../dm/store.ts';
 import { useCommunity } from '../store.ts';
-import { Avatar, CrownIcon, Popover, can, hex } from './common.tsx';
+import { Avatar, CrownIcon, CustomStatus, Popover, can, hex, presenceOf } from './common.tsx';
 
 export function MemberList({ community, me }: { community: CommunityView; me: string }): ReactElement {
   const [card, setCard] = useState<{ member: MemberView; x: number; y: number } | null>(null);
@@ -43,15 +43,12 @@ export function MemberList({ community, me }: { community: CommunityView; me: st
                 setCard({ member: m, x: e.clientX - 330, y: e.clientY - 40 });
               }}
             >
-              <Avatar
-                id={m.riverId}
-                name={m.name}
-                avatar={m.avatar}
-                size={32}
-                status={m.online ? 'online' : 'offline'}
-              />
-              <span className="member__name" style={m.color ? { color: hex(m.color) } : undefined}>
-                {m.name}
+              <Avatar id={m.riverId} name={m.name} avatar={m.avatar} size={32} status={presenceOf(m)} />
+              <span className="member__text">
+                <span className="member__name" style={m.color ? { color: hex(m.color) } : undefined}>
+                  {m.name}
+                </span>
+                <CustomStatus member={m} />
               </span>
               {m.owner && (
                 <span className="member__crown" title="Community owner">
@@ -130,13 +127,18 @@ export function ProfileCard(props: {
           name={member.name}
           avatar={member.avatar}
           size={76}
-          status={member.online ? 'online' : 'offline'}
+          status={presenceOf(member)}
         />
       </div>
       <div className="profile-card__body">
         <h3>
           {member.name} {member.owner && <CrownIcon size={15} />}
         </h3>
+        {member.customStatus && (
+          <div className="profile-card__custom">
+            <CustomStatus member={member} />
+          </div>
+        )}
         {member.timeoutUntil && (
           <div className="chip chip--error profile-card__timeout">
             Timed out until{' '}

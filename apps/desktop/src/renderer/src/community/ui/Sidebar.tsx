@@ -4,6 +4,7 @@ import type { ChannelView, CommunityView } from '../../../../shared/ipc.ts';
 import { useRiver } from '../../store.ts';
 import { useCommunity } from '../store.ts';
 import { ChannelList } from './ChannelList.tsx';
+import { CHOSEN_LABEL, StatusMenu, myPresence } from '../../components/StatusMenu.tsx';
 import {
   Avatar,
   ChevronIcon,
@@ -362,6 +363,10 @@ function VoicePanel({ community }: { community: CommunityView }): ReactElement |
 function UserPanel({ me, community }: { me: string; community: CommunityView }): ReactElement {
   const s = useCommunity();
   const identity = useRiver((r) => r.identity);
+  const settings = useRiver((r) => r.settings);
+  const [statusMenu, setStatusMenu] = useState<{ x: number; y: number } | null>(null);
+  const presence = myPresence(settings, s.connection === 'online');
+  const custom = settings?.presence.customText || settings?.presence.customEmoji;
   const member = memberOf(community, me);
   useCommunity((x) => x.callVersion);
   const ptt = s.call?.pushToTalk ?? false;
@@ -369,23 +374,42 @@ function UserPanel({ me, community }: { me: string; community: CommunityView }):
     <div className="user-panel">
       <button
         className="user-panel__me"
-        onClick={() => s.setModal({ kind: 'user-settings', tab: 'profile' })}
+        aria-haspopup="menu"
+        aria-label="Set your status"
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          setStatusMenu({ x: r.left, y: r.top - 8 - 300 });
+        }}
       >
         <Avatar
           id={me}
           name={member?.name ?? identity?.displayName ?? '?'}
           avatar={member?.avatar}
           size={32}
-          status={s.connection === 'online' ? 'online' : 'offline'}
+          status={presence}
           speaking={s.call?.speaking.has(me)}
         />
         <span className="user-panel__text">
           <strong>{member?.name ?? identity?.displayName ?? 'You'}</strong>
           <span className="muted small">
-            {s.connection === 'online' ? (ptt ? 'Push to talk' : 'Online') : 'Offline'}
+            {s.connection !== 'online'
+              ? 'Offline'
+              : ptt
+                ? 'Push to talk'
+                : custom
+                  ? `${settings!.presence.customEmoji} ${settings!.presence.customText}`.trim()
+                  : CHOSEN_LABEL[settings?.presence.status ?? 'online']}
           </span>
         </span>
       </button>
+      {statusMenu && (
+        <StatusMenu
+          x={statusMenu.x}
+          y={statusMenu.y}
+          onClose={() => setStatusMenu(null)}
+          onEditProfile={() => s.setModal({ kind: 'user-settings', tab: 'profile' })}
+        />
+      )}
       <button
         className={`icon-btn ${s.selfMuted ? 'icon-btn--off' : ''}`}
         aria-label={s.selfMuted ? 'Unmute' : 'Mute'}
