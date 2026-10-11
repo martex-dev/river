@@ -1,7 +1,7 @@
 import type { ServerEvent, VoiceState } from '@river/protocol';
 
 export interface HubSocket {
-  send(data: string): void;
+  send(data: string | Buffer): void;
   close(code?: number): void;
 }
 
@@ -103,6 +103,11 @@ export class Hub {
   sendTo(riverIds: Iterable<string>, event: ServerEvent): void {
     const data = JSON.stringify(event);
     for (const id of riverIds) for (const s of this.sockets.get(id) ?? []) s.send(data);
+  }
+
+  /** Relayed voice frames (binary) to every connection of one account. */
+  sendBinaryTo(riverId: string, frame: Buffer): void {
+    for (const s of this.sockets.get(riverId) ?? []) s.send(frame);
   }
 
   joinVoice(
