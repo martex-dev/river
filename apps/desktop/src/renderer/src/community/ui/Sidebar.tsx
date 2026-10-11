@@ -4,6 +4,8 @@ import type { ChannelView, CommunityView } from '../../../../shared/ipc.ts';
 import { useRiver } from '../../store.ts';
 import { useCommunity } from '../store.ts';
 import { ChannelList } from './ChannelList.tsx';
+import { NotifyMenuSection } from './NotifyMenu.tsx';
+import { isMuted } from '../../../../shared/notify-rules.ts';
 import { CHOSEN_LABEL, StatusMenu, myPresence } from '../../components/StatusMenu.tsx';
 import {
   Avatar,
@@ -170,7 +172,10 @@ export function ChannelRow(props: {
   const mentions = s.mentions[ch.id] ?? 0;
   const active = ch.id === s.selectedChannel;
   // Live count this session, or newer messages than where you stopped last time.
-  const unread = s.unread[ch.id] ?? (ch.unread && !active ? 1 : 0);
+  const notifyPrefs = useRiver((r) => r.settings?.notifications);
+  const muted = !!notifyPrefs && (isMuted(notifyPrefs, ch.id) || isMuted(notifyPrefs, community.id));
+  // Muted channels show no unread dot (mentions still badge).
+  const unread = muted ? 0 : (s.unread[ch.id] ?? (ch.unread && !active ? 1 : 0));
   const participants = community.voice[ch.id] ?? [];
   const canManage = can(ch.permissions, Permission.MANAGE_CHANNELS);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -222,9 +227,12 @@ export function ChannelRow(props: {
               Edit channel
             </MenuItem>
           )}
+          {ch.kind === 'text' && <NotifyMenuSection id={ch.id} kind="channel" onDone={() => setMenu(null)} />}
         </Popover>
       )}
-      <div className={`channel ${active ? 'is-active' : ''} ${unread ? 'is-unread' : ''}`}>
+      <div
+        className={`channel ${active ? 'is-active' : ''} ${unread ? 'is-unread' : ''} ${muted ? 'is-muted' : ''}`}
+      >
         <button
           className="channel__open"
           aria-current={active ? 'page' : undefined}

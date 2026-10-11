@@ -4,6 +4,7 @@ import type { CommunityAction, CommunityActionResult } from '../../../shared/com
 import type { ChatMessage, CommunityEvent, CommunityView, Result } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
 import { setMessageLinkOpener } from './message-link.ts';
+import { effectiveNotify, shouldAlert } from '../../../shared/notify-rules.ts';
 import { play } from './sound.ts';
 import { VoiceCall } from './voice.ts';
 import { WebCodecsRelay } from './relay-audio.ts';
@@ -257,9 +258,13 @@ export const useCommunity = create<CommunityState>((set, get) => ({
             set({ mentions: { ...get().mentions, [m.channelId]: (get().mentions[m.channelId] ?? 0) + 1 } });
           }
         }
-        const mode = settings?.notifications.mode ?? 'all';
+        // Muted channels and communities stay quiet; @mentions still come through (unless set to Nothing).
+        const alert = settings
+          ? shouldAlert(effectiveNotify(settings.notifications, m.communityId, m.channelId), m.mentionsMe)
+          : true;
+        if (!alert) return;
         if (m.mentionsMe) play('mention');
-        else if (!viewing && mode === 'all') play('message');
+        else if (!viewing) play('message');
         return;
       }
       case 'messageDelete': {

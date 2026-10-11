@@ -630,7 +630,10 @@ function NotificationsPanel({ settings }: { settings: Settings }): ReactElement 
           ))}
         </div>
       </fieldset>
-      <p className="muted small">Takes effect when messaging arrives in River 0.2.</p>
+      <p className="muted small">
+        Right-click a community or channel to mute it or choose All messages, Only @mentions or Nothing just
+        for it. Do Not Disturb (click your name) silences everything except your own sounds.
+      </p>
     </div>
   );
 }

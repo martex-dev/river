@@ -67,6 +67,16 @@ export const settingsSchema = z.object({
         interface: z.boolean(),
       })
       .strict(),
+    /** Added in 1.0.18: per-community and per-channel levels and mutes (see notify-rules.ts). */
+    overrides: z.record(
+      z.string().max(64),
+      z
+        .object({
+          level: z.enum(['default', 'all', 'mentions', 'nothing']),
+          muteUntil: z.string().max(40).nullable(),
+        })
+        .strict(),
+    ),
   }),
   /** Added in 0.0.2. */
   server: z.object({
@@ -125,6 +135,7 @@ export const DEFAULT_SETTINGS: Settings = {
     sounds: true,
     soundVolume: 0.8,
     soundGroups: { messages: true, voice: true, calls: true, social: true, interface: true },
+    overrides: {},
   },
   server: { url: null },
   voice: {
