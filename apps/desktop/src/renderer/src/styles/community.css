@@ -4039,3 +4039,29 @@ input.switch:disabled {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* Who reacted (1.0.18) */
+.reactions-pop {
+  width: 300px;
+  max-height: 320px;
+  padding: 8px;
+  overflow-y: auto;
+}
+.reactions-pop__row {
+  display: grid;
+  grid-template-columns: 26px 28px 1fr;
+  gap: 6px;
+  align-items: start;
+  padding: 6px 4px;
+  font-size: 13px;
+}
+.reactions-pop__emoji {
+  font-size: 18px;
+}
+.reactions-pop__count {
+  color: var(--text-faint);
+  font-weight: 700;
+}
+.reactions-pop__names {
+  color: var(--text-dim);
+}
