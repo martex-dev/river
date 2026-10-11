@@ -9,6 +9,7 @@ import {
   type SVGProps,
 } from 'react';
 import type { CommunityView, MemberView } from '../../../../shared/ipc.ts';
+import { highlight, languageOf } from './highlight.ts';
 
 // ---- helpers -------------------------------------------------------------------------------------
 
@@ -260,9 +261,12 @@ export function EmojiPicker(props: { onPick(emoji: string): void }): ReactElemen
 // ---- safe message formatting ------------------------------------------------------------------------
 
 /**
- * A small Markdown subset rendered to React elements (never HTML strings):
- * ```code blocks```, `code`, **bold**, *italic*, __underline__, ~~strike~~,
- * > quotes and @mentions.
+ * Discord-style Markdown rendered to React elements (never HTML strings):
+ * ```lang code blocks``` (highlighted, with Copy), `code`, **bold**, *italic*,
+ * __underline__, ~~strike~~, ||spoilers||, # headings, -# subtext, > quotes,
+ * - and 1. lists, links and [masked](https://…) links (opened only after a
+ * confirmation that shows the real address), <t:unix:F> timestamps, \escapes
+ * and @mentions / #channels.
  */
 /** Roles and channels a message can mention, for highlighting and navigation. */
 export interface MentionRefs {
@@ -271,58 +275,212 @@ export interface MentionRefs {
   onChannel?(id: string): void;
 }
 
+interface InlineCtx {
+  names: string[];
+  me: string | null;
+  refs?: MentionRefs | undefined;
+}
+
 export function RichText(props: {
   text: string;
   names: string[];
   me: string | null;
   refs?: MentionRefs;
 }): ReactElement {
+  const ctx: InlineCtx = { names: props.names, me: props.me, refs: props.refs };
   const blocks = props.text.split(/(```[\s\S]*?```)/g);
   return (
     <>
-      {blocks.map((block, i) => {
-        if (block.startsWith('```') && block.endsWith('```') && block.length >= 6) {
-          return (
-            <pre key={i} className="md-codeblock">
-              <code>{block.slice(3, -3).replace(/^\w*\n/, '')}</code>
-            </pre>
-          );
+      {blocks.map((block, i) =>
+        block.startsWith('```') && block.endsWith('```') && block.length >= 6 ? (
+          <CodeBlock key={i} raw={block.slice(3, -3)} />
+        ) : (
+          <Lines key={i} text={block} ctx={ctx} keyBase={String(i)} />
+        ),
+      )}
+    </>
+  );
+}
+
+function CodeBlock({ raw }: { raw: string }): ReactElement {
+  const firstLine = /^([\w+#-]{1,20})\n/.exec(raw);
+  const lang = firstLine ? languageOf(firstLine[1]!) : null;
+  const code = (firstLine ? raw.slice(firstLine[0].length) : raw.replace(/^\n/, '')).replace(/\n$/, '');
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="md-codeblock-wrap">
+      <pre className="md-codeblock">
+        <code>
+          {highlight(code, lang).map((t, i) =>
+            t.kind === 'plain' ? (
+              t.text
+            ) : (
+              <span key={i} className={`hl-${t.kind}`}>
+                {t.text}
+              </span>
+            ),
+          )}
+        </code>
+      </pre>
+      <button
+        type="button"
+        className="md-codeblock__copy"
+        aria-label="Copy code"
+        onClick={() =>
+          void navigator.clipboard.writeText(code).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          })
         }
-        return block.split('\n').map((line, j, lines) => {
-          const quote = line.startsWith('> ');
-          const content = inline(
-            quote ? line.slice(2) : line,
-            props.names,
-            props.me,
-            `${i}-${j}`,
-            props.refs,
-          );
-          return quote ? (
-            <blockquote key={`${i}-${j}`} className="md-quote">
-              {content}
-            </blockquote>
-          ) : (
-            <span key={`${i}-${j}`}>
-              {content}
-              {j < lines.length - 1 && <br />}
-            </span>
-          );
-        });
+      >
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+    </div>
+  );
+}
+
+type Line =
+  | { kind: 'text' | 'quote' | 'subtext'; text: string }
+  | { kind: 'heading'; level: 1 | 2 | 3; text: string }
+  | { kind: 'ul' | 'ol'; items: string[]; start: number };
+
+/** Groups a text block into lines, headings, quotes and lists. */
+export function parseLines(text: string): Line[] {
+  const out: Line[] = [];
+  for (const line of text.split('\n')) {
+    const heading = /^(#{1,3}) (.+)$/.exec(line);
+    const bullet = /^\s*[-*] (.+)$/.exec(line);
+    const numbered = /^\s*(\d{1,4})\. (.+)$/.exec(line);
+    const last = out.at(-1);
+    if (heading) out.push({ kind: 'heading', level: heading[1]!.length as 1 | 2 | 3, text: heading[2]! });
+    else if (line.startsWith('-# ')) out.push({ kind: 'subtext', text: line.slice(3) });
+    else if (line.startsWith('> ')) out.push({ kind: 'quote', text: line.slice(2) });
+    else if (bullet) {
+      if (last?.kind === 'ul') last.items.push(bullet[1]!);
+      else out.push({ kind: 'ul', items: [bullet[1]!], start: 1 });
+    } else if (numbered) {
+      if (last?.kind === 'ol') last.items.push(numbered[2]!);
+      else out.push({ kind: 'ol', items: [numbered[2]!], start: Number(numbered[1]) });
+    } else out.push({ kind: 'text', text: line });
+  }
+  return out;
+}
+
+function Lines({ text, ctx, keyBase }: { text: string; ctx: InlineCtx; keyBase: string }): ReactElement {
+  const lines = parseLines(text);
+  return (
+    <>
+      {lines.map((line, j) => {
+        const k = `${keyBase}-${j}`;
+        const content = (t: string, sub = ''): ReactNode[] => inline(t, ctx, `${k}${sub}`);
+        switch (line.kind) {
+          case 'heading':
+            return (
+              <div key={k} role="heading" aria-level={line.level + 2} className={`md-h md-h${line.level}`}>
+                {content(line.text)}
+              </div>
+            );
+          case 'subtext':
+            return (
+              <div key={k} className="md-subtext">
+                {content(line.text)}
+              </div>
+            );
+          case 'quote':
+            return (
+              <blockquote key={k} className="md-quote">
+                {content(line.text)}
+              </blockquote>
+            );
+          case 'ul':
+            return (
+              <ul key={k} className="md-list">
+                {line.items.map((it, n) => (
+                  <li key={n}>{content(it, `-${n}`)}</li>
+                ))}
+              </ul>
+            );
+          case 'ol':
+            return (
+              <ol key={k} className="md-list" start={line.start}>
+                {line.items.map((it, n) => (
+                  <li key={n}>{content(it, `-${n}`)}</li>
+                ))}
+              </ol>
+            );
+          default:
+            return (
+              <span key={k}>
+                {content(line.text)}
+                {j < lines.length - 1 && lines[j + 1]!.kind === 'text' && <br />}
+              </span>
+            );
+        }
       })}
     </>
   );
 }
 
 const INLINE =
-  /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|_[^_\n]+_|@everyone|@here|@[^\s@]+(?: [^\s@]+)?|#[\w-]+)/g;
+  /(\\[\\*_~|`>#\-[\]()@<]|`[^`\n]+`|\|\|[^|\n]+\|\||\[[^\]\n]{1,200}\]\(https?:\/\/[^\s)]{1,2000}\)|https?:\/\/[^\s<>]+[^\s<>.,:;"')\]!?]|<t:\d{1,12}(?::[tTdDfFR])?>|\*\*\*[^*\n]+\*\*\*|\*\*(?:[^*\n]|\*[^*\n]+\*)+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|_[^_\n]+_|@everyone|@here|@[^\s@]+(?: [^\s@]+)?|#[\w-]+)/g;
 
-function inline(
-  text: string,
-  names: string[],
-  me: string | null,
-  key: string,
-  refs?: MentionRefs,
-): ReactNode[] {
+function openLink(url: string): void {
+  void window.river.links.openUrl(url);
+}
+
+function Spoiler({ children }: { children: ReactNode }): ReactElement {
+  const [shown, setShown] = useState(false);
+  return (
+    <span
+      className={`md-spoiler ${shown ? 'is-shown' : ''}`}
+      role={shown ? undefined : 'button'}
+      tabIndex={shown ? undefined : 0}
+      aria-label={shown ? undefined : 'Spoiler, press to reveal'}
+      onClick={() => setShown(true)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setShown(true);
+        }
+      }}
+    >
+      <span aria-hidden={!shown}>{children}</span>
+    </span>
+  );
+}
+
+/** <t:unix:style> as Discord renders it, in the reader's own locale and time zone. */
+export function formatTimestamp(unix: number, style: string, now = Date.now()): string {
+  const d = new Date(unix * 1000);
+  switch (style) {
+    case 't':
+      return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    case 'T':
+      return d.toLocaleTimeString();
+    case 'd':
+      return d.toLocaleDateString();
+    case 'D':
+      return d.toLocaleDateString(undefined, { dateStyle: 'long' });
+    case 'F':
+      return d.toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' });
+    case 'R': {
+      const secs = Math.round((unix * 1000 - now) / 1000);
+      const abs = Math.abs(secs);
+      const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+      if (abs < 60) return rtf.format(secs, 'second');
+      if (abs < 3600) return rtf.format(Math.round(secs / 60), 'minute');
+      if (abs < 86400) return rtf.format(Math.round(secs / 3600), 'hour');
+      if (abs < 86400 * 30) return rtf.format(Math.round(secs / 86400), 'day');
+      if (abs < 86400 * 365) return rtf.format(Math.round(secs / (86400 * 30)), 'month');
+      return rtf.format(Math.round(secs / (86400 * 365)), 'year');
+    }
+    default:
+      return d.toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' });
+  }
+}
+
+function inline(text: string, ctx: InlineCtx, key: string): ReactNode[] {
+  const { names, me, refs } = ctx;
   const out: ReactNode[] = [];
   let last = 0;
   let n = 0;
@@ -331,16 +489,66 @@ function inline(
     const at = match.index ?? 0;
     if (at > last) out.push(text.slice(last, at));
     const k = `${key}-${n++}`;
-    if (token.startsWith('`'))
+    if (token.startsWith('\\')) out.push(token.slice(1));
+    else if (token.startsWith('`'))
       out.push(
         <code key={k} className="md-code">
           {token.slice(1, -1)}
         </code>,
       );
-    else if (token.startsWith('**')) out.push(<strong key={k}>{token.slice(2, -2)}</strong>);
-    else if (token.startsWith('__')) out.push(<u key={k}>{token.slice(2, -2)}</u>);
-    else if (token.startsWith('~~')) out.push(<s key={k}>{token.slice(2, -2)}</s>);
-    else if (token.startsWith('*') || token.startsWith('_')) out.push(<em key={k}>{token.slice(1, -1)}</em>);
+    else if (token.startsWith('||'))
+      out.push(<Spoiler key={k}>{inline(token.slice(2, -2), ctx, `${k}s`)}</Spoiler>);
+    else if (token.startsWith('[')) {
+      const label = token.slice(1, token.indexOf(']('));
+      const url = token.slice(token.indexOf('](') + 2, -1);
+      out.push(
+        <a
+          key={k}
+          href={url}
+          className="md-link"
+          title={url}
+          onClick={(e) => {
+            e.preventDefault();
+            openLink(url);
+          }}
+        >
+          {label}
+        </a>,
+      );
+    } else if (token.startsWith('http')) {
+      out.push(
+        <a
+          key={k}
+          href={token}
+          className="md-link"
+          onClick={(e) => {
+            e.preventDefault();
+            openLink(token);
+          }}
+        >
+          {token}
+        </a>,
+      );
+    } else if (token.startsWith('<t:')) {
+      const [, unix, style] = /^<t:(\d+)(?::(\w))?>$/.exec(token)!;
+      const date = new Date(Number(unix) * 1000);
+      out.push(
+        <time key={k} className="md-time" dateTime={date.toISOString()} title={date.toLocaleString()}>
+          {formatTimestamp(Number(unix), style ?? 'f')}
+        </time>,
+      );
+    } else if (token.startsWith('***'))
+      out.push(
+        <strong key={k}>
+          <em>{inline(token.slice(3, -3), ctx, `${k}bi`)}</em>
+        </strong>,
+      );
+    else if (token.startsWith('**'))
+      out.push(<strong key={k}>{inline(token.slice(2, -2), ctx, `${k}b`)}</strong>);
+    else if (token.startsWith('__')) out.push(<u key={k}>{inline(token.slice(2, -2), ctx, `${k}u`)}</u>);
+    else if (token.startsWith('~~')) out.push(<s key={k}>{inline(token.slice(2, -2), ctx, `${k}x`)}</s>);
+    else if (token.startsWith('*') || token.startsWith('_'))
+      out.push(<em key={k}>{inline(token.slice(1, -1), ctx, `${k}i`)}</em>);
     else if (token.startsWith('#')) {
       const channel = refs?.channels.find((c) => c.name.toLowerCase() === token.slice(1).toLowerCase());
       if (channel && refs?.onChannel) {
