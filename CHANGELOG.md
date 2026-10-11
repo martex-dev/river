@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.17] - 2026-10-11
+
+**Express yourself: status, formatting, every emoji, message links.**
+
 ### Added
 
 - **Mute a community or channel** — for 15 minutes, an hour, 8 hours, a day,
@@ -899,7 +903,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.16...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.17...HEAD
+[1.0.17]: https://github.com/martex-dev/river/compare/v1.0.16...v1.0.17
 [1.0.16]: https://github.com/martex-dev/river/compare/v1.0.15...v1.0.16
 [1.0.15]: https://github.com/martex-dev/river/compare/v1.0.14...v1.0.15
 [1.0.14]: https://github.com/martex-dev/river/compare/v1.0.13...v1.0.14
