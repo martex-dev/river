@@ -305,6 +305,12 @@ export const voiceStateSchema = z.object({
   deafened: z.boolean(),
   serverMuted: z.boolean(),
   streaming: z.boolean(),
+  /**
+   * The member's connection to the server dropped; their seat is kept for a
+   * short grace period while their app reconnects (1.0.16). Calls are peer to
+   * peer, so audio usually keeps flowing meanwhile.
+   */
+  reconnecting: z.boolean().optional(),
 });
 export type VoiceState = z.infer<typeof voiceStateSchema>;
 

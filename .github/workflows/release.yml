@@ -68,6 +68,15 @@ jobs:
         run: npx electron-builder ${{ matrix.target }} --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Allow Chromium sandbox on Ubuntu runners
+        if: runner.os == 'Linux'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Packaged app starts (self-test, Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum node scripts/release/self-test-packaged.ts
+      - name: Packaged app starts (self-test)
+        if: runner.os != 'Linux'
+        run: node scripts/release/self-test-packaged.ts
       - name: Collect release files
         shell: bash
         run: |

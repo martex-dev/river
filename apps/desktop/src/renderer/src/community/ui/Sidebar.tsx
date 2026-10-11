@@ -278,7 +278,11 @@ export function ChannelRow(props: {
           const state = community.voiceStates[id];
           const speaking = s.call?.channelId === ch.id && s.call.speaking.has(id);
           return (
-            <div key={id} className="channel__participant">
+            <div
+              key={id}
+              className={`channel__participant ${state?.reconnecting ? 'is-reconnecting' : ''}`}
+              title={state?.reconnecting ? 'Reconnecting…' : undefined}
+            >
               <Avatar id={id} name={m?.name ?? '?'} avatar={m?.avatar} size={22} speaking={speaking} />
               <span
                 className="channel__participant-name"
@@ -287,6 +291,7 @@ export function ChannelRow(props: {
                 {m?.name ?? 'Someone'}
                 {id === me ? ' (you)' : ''}
               </span>
+              {state?.reconnecting && <span className="voice-reconnecting">reconnecting…</span>}
               {state?.streaming && <span className="live-badge">LIVE</span>}
               {(state?.serverMuted || state?.muted) && (
                 <span

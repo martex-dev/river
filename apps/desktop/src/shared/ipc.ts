@@ -244,6 +244,8 @@ export interface VoiceStateView {
   deafened: boolean;
   serverMuted: boolean;
   streaming: boolean;
+  /** Their connection dropped; River is holding their seat while they reconnect. */
+  reconnecting?: boolean;
 }
 
 export interface CommunityView {

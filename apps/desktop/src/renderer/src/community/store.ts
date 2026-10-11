@@ -181,6 +181,8 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       case 'connection': {
         const was = get().connection;
         const away = Date.now() - get().connectionSince;
+        // Back online: participant lists refill as people reconnect; keep working calls meanwhile.
+        if (event.state === 'online' && was !== 'online') get().call?.resumed();
         set({
           connection: event.state,
           retryAt: event.retryAt ?? null,

@@ -26,6 +26,8 @@ export interface AppDeps {
   now?: () => Date;
   /** Outgoing requests to the address relay (tests). */
   fetch?: typeof fetch;
+  /** How long a dropped member keeps their voice seat (tests shorten it). */
+  voiceGraceMs?: number;
 }
 
 function errorBody(code: string, message: string): ErrorResponse {
@@ -127,7 +129,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   const now = deps.now ?? (() => new Date());
   registerAccountRoutes(app, { config, database: deps.database, now });
-  const hub = new Hub();
+  const hub = new Hub(deps.voiceGraceMs !== undefined ? { voiceGraceMs: deps.voiceGraceMs } : {});
+  app.addHook('onClose', async () => hub.close());
   const ops = await registerCommunityRoutes(app, { config, database: deps.database, now, hub });
   registerAdminRoutes(app, { config, database: deps.database, now, hub, ops });
   registerMessagingRoutes(app, { config, database: deps.database, now, hub });

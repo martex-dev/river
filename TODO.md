@@ -93,6 +93,19 @@ Each line is one PR; each version ships when its section is done.
 - [x] Add friends by @username (links and IDs still work)
 - [x] Operator can create accounts (sign-up links) and set the server invite-only
 
+### 1.0.16 — Voice that stays connected (maintainer report, 2026-10-11)
+
+- [x] Server keeps a voice seat for 45 s after a dropped connection; the app rejoins by itself
+- [x] Client and server heartbeats; signals queued while offline; presence grace
+- [x] Self-healing peer connections (ICE restart, unlimited backoff, ordered signals, stale-answer guard)
+- [x] Tests: simulated mesh of 4–6 people, lost offers/answers, blips, failing paths; real-socket reconnect tests
+
+### 1.0.17 — Voice works on every network
+
+- [ ] Relay fallback through the River server when two members cannot connect directly (no TURN needed)
+- [ ] Connection details per person (direct / relayed, ping, packet loss) in the voice panel
+- [ ] First-run reliability on fresh installs (onboarding when the home server moved)
+
 ### Later
 
 - [ ] Sealed sender for direct messages

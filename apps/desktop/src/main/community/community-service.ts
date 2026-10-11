@@ -137,6 +137,10 @@ function explain(err: unknown): never {
  * validated values. Permissions are enforced by the server; the views here
  * carry them so the UI can hide what the user cannot do.
  */
+/** Call setup held while offline: at most this many, and only this fresh when sent. */
+const PENDING_SIGNALS_MAX = 400;
+const PENDING_SIGNAL_TTL_MS = 30_000;
+
 export class CommunityService {
   private readonly deps: Deps;
   private communities: CommunityView[] = [];
@@ -171,6 +175,16 @@ export class CommunityService {
   private offlineSince: number | null = null;
   private lastFollow = 0;
   private retryAt: number | null = null;
+  /** The voice channel this app is in, so a reconnect can take the seat back (1.0.16). */
+  private activeVoice: string | null = null;
+  private lastVoiceState: { muted: boolean; deafened: boolean; streaming: boolean } | null = null;
+  /** Call setup produced while the connection was down; sent once it is back. */
+  private pendingSignals: Array<{ event: unknown; at: number }> = [];
+  private heartbeat: NodeJS.Timeout | null = null;
+  private lastHeard = 0;
+  /** How often the app pings the server, and how long silence means a dead connection (tests shorten them). */
+  heartbeatMs = 20_000;
+  deadAfterMs = 50_000;
   private readonly listeners = new Set<(e: CommunityEvent) => void>();
   private readonly rawListeners = new Set<(e: ServerEvent) => void>();
   /** Identity keys members published inside sealed community profiles. */
@@ -1552,12 +1566,8 @@ export class CommunityService {
         this.trySend({ t: 'typing', channelId: act.channelId });
         break;
       case 'voiceState':
-        this.trySend({
-          t: 'voice.state',
-          muted: act.muted,
-          deafened: act.deafened,
-          streaming: act.streaming,
-        });
+        this.lastVoiceState = { muted: act.muted, deafened: act.deafened, streaming: act.streaming };
+        this.trySend({ t: 'voice.state', ...this.lastVoiceState });
         break;
       case 'moderateVoice':
         this.sendEvent({
@@ -1748,10 +1758,16 @@ export class CommunityService {
   voiceJoin(channelId: string): void {
     this.communityOf(channelId);
     this.sendEvent({ t: 'voice.join', channelId });
+    this.activeVoice = channelId;
+    this.lastVoiceState = null;
   }
 
   voiceLeave(): void {
-    this.sendEvent({ t: 'voice.leave' });
+    this.activeVoice = null;
+    this.lastVoiceState = null;
+    this.pendingSignals = [];
+    // Offline: the server frees the seat by itself when the grace period ends.
+    this.trySend({ t: 'voice.leave' });
   }
 
   /** Call signalling (SDP / ICE) sealed with the community key, relayed by the server. */
@@ -1759,7 +1775,25 @@ export class CommunityService {
     const communityId = this.communityOf(channelId);
     const data = seal(this.requireKey(communityId), communityId, `signal:${channelId}`, payload);
     if (data.length > 30_000) throw new CommunityError('Signal too large');
-    this.sendEvent({ t: 'signal', to: z.uuid().parse(to), data });
+    const event = { t: 'signal', to: z.uuid().parse(to), data };
+    if (this.socketState === 'online' && this.socket?.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify(event));
+      return;
+    }
+    // The connection is down for a moment (a tunnel reconnecting): hold it, send it on return.
+    this.pendingSignals.push({ event, at: Date.now() });
+    if (this.pendingSignals.length > PENDING_SIGNALS_MAX) this.pendingSignals.shift();
+  }
+
+  /** After a reconnect: take the voice seat back, restore its state, then send held call setup. */
+  private resumeVoice(): void {
+    const fresh = this.pendingSignals.filter((p) => Date.now() - p.at < PENDING_SIGNAL_TTL_MS);
+    this.pendingSignals = [];
+    if (!this.activeVoice) return;
+    this.trySend({ t: 'voice.join', channelId: this.activeVoice });
+    if (this.lastVoiceState) this.trySend({ t: 'voice.state', ...this.lastVoiceState });
+    for (const p of fresh) this.trySend(p.event);
+    this.deps.log.info('voice: rejoined after reconnecting');
   }
 
   // ---- Realtime --------------------------------------------------------------------------------
@@ -1773,8 +1807,45 @@ export class CommunityService {
   stop(): void {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
+    this.stopHeartbeat();
     this.socket?.close();
     this.socket = null;
+  }
+
+  /** Pings keep tunnels from closing an idle connection and find dead ones fast. */
+  private startHeartbeat(socket: WebSocket): void {
+    this.stopHeartbeat();
+    this.lastHeard = Date.now();
+    this.heartbeat = setInterval(() => {
+      if (this.socket !== socket) return this.stopHeartbeat();
+      if (Date.now() - this.lastHeard > this.deadAfterMs) {
+        this.deps.log.warn('Realtime connection went silent; reconnecting');
+        this.dropSocket(socket);
+        return;
+      }
+      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ t: 'ping' }));
+    }, this.heartbeatMs);
+    this.heartbeat.unref?.();
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeat) clearInterval(this.heartbeat);
+    this.heartbeat = null;
+  }
+
+  /** Treats a connection as gone now (a dead one may take minutes to report closing). */
+  private dropSocket(socket: WebSocket): void {
+    if (this.socket !== socket) return;
+    this.socket = null;
+    this.stopHeartbeat();
+    this.voice.clear();
+    this.voiceStates.clear();
+    try {
+      socket.close();
+    } catch {
+      // already closing
+    }
+    this.scheduleReconnect(); // announces "offline" with the time of the next attempt
   }
 
   private async openSocket(): Promise<void> {
@@ -1791,21 +1862,19 @@ export class CommunityService {
     }
     const socket = (this.deps.createSocket ?? ((u: string) => new WebSocket(u)))(url);
     this.socket = socket;
-    socket.onopen = () => socket.send(JSON.stringify({ t: 'auth', token }));
+    socket.onopen = () => {
+      socket.send(JSON.stringify({ t: 'auth', token }));
+      this.startHeartbeat(socket);
+    };
     socket.onmessage = (msg) => {
+      if (this.socket === socket) this.lastHeard = Date.now();
       try {
         this.handle(serverEventSchema.parse(JSON.parse(String(msg.data))));
       } catch {
         this.deps.log.warn('Ignored malformed realtime event');
       }
     };
-    socket.onclose = () => {
-      if (this.socket !== socket) return;
-      this.socket = null;
-      this.voice.clear();
-      this.voiceStates.clear();
-      this.scheduleReconnect(); // announces "offline" with the time of the next attempt
-    };
+    socket.onclose = () => this.dropSocket(socket);
     socket.onerror = () => socket.close();
   }
 
@@ -1858,6 +1927,7 @@ export class CommunityService {
         this.backoff = 1000;
         this.offlineSince = null;
         this.setSocketState('online');
+        this.resumeVoice();
         void this.deps.locator?.pin().catch(() => undefined);
         void this.refresh()
           .then(() => this.republishProfilesOnce())

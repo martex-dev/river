@@ -54,6 +54,14 @@ import { UpdateService } from './updater/update-service.ts';
 import { createFetchBytes, createRequestBytes, createRequestJson } from './http.ts';
 import { verifyDownloadedUpdate } from './updater/verify-download.ts';
 import { LaunchHealth } from './updater/launch-health.ts';
+import { runSelfTest, selfTestPath } from './self-test.ts';
+import {
+  RENDERER_RELOADS,
+  SHOW_WINDOW_FALLBACK_MS,
+  describeStartupError,
+  readGpuState,
+  recordGpuCrash,
+} from './startup-guard.ts';
 
 const HEALTHY_AFTER_MS = 30_000;
 
@@ -66,10 +74,61 @@ app.setAppUserModelId('io.github.martex-dev.river');
 // Privacy: Chromium's Linux spellchecker downloads dictionaries from Google; keep it off until River bundles its own.
 app.commandLine.appendSwitch('disable-features', 'SpellcheckService');
 
-if (!app.requestSingleInstanceLock()) {
+const selfTest = selfTestPath(process.argv);
+if (selfTest) {
+  // Never touches the person's own data, and runs beside an open River.
+  app.setPath('userData', join(app.getPath('temp'), `river-self-test-${process.pid}`));
+}
+// A graphics driver that kept crashing Chromium's GPU process: run without hardware acceleration.
+const gpuStatePath = (): string => join(app.getPath('userData'), 'gpu.json');
+const gpuState = readGpuState(gpuStatePath());
+if (gpuState.disabled || process.argv.includes('--disable-gpu')) app.disableHardwareAcceleration();
+
+if (selfTest) {
+  void runSelfTest(selfTest, join(__dirname, '../renderer'), join(__dirname, '../preload/index.cjs'));
+} else if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  void start();
+  start().catch((err: unknown) => void startupFailed(err));
+}
+
+/**
+ * Something went wrong before River could show itself. Say so, with the
+ * details and where the log is, and quit — never linger invisibly holding the
+ * single-instance lock (which made every later launch do nothing).
+ */
+async function startupFailed(err: unknown): Promise<void> {
+  const details = describeStartupError(err, {
+    version: app.getVersion(),
+    platform: `${process.platform}-${process.arch}`,
+  });
+  const logDir = join(app.getPath('userData'), 'logs');
+  try {
+    createFileLogger(logDir).error(`${details}\n${(err as Error)?.stack ?? ''}`);
+  } catch {
+    // logging must not stop the message
+  }
+  try {
+    await app.whenReady();
+    const { response } = await dialog.showMessageBox({
+      type: 'error',
+      title: 'River could not start',
+      message: 'River could not start',
+      detail: `${details}\n\nThe log is in ${logDir}. Copy the details and send them to whoever helps you with River.`,
+      buttons: ['Copy details', 'Open log folder', 'Quit'],
+      defaultId: 0,
+      cancelId: 2,
+    });
+    if (response === 0) {
+      const { clipboard } = await import('electron');
+      clipboard.writeText(details);
+    } else if (response === 1) {
+      const { shell } = await import('electron');
+      await shell.openPath(logDir);
+    }
+  } finally {
+    app.exit(1);
+  }
 }
 
 async function start(): Promise<void> {
@@ -296,6 +355,16 @@ async function start(): Promise<void> {
   const window = createWindow();
   // Running for a while with a window up counts as a healthy start.
   window.once('ready-to-show', () => setTimeout(() => health.markHealthy(), HEALTHY_AFTER_MS));
+  watchWindow(window, log, process.argv.includes('--hidden'));
+  app.on('child-process-gone', (_e, details) => {
+    if (details.type !== 'GPU' || details.reason === 'clean-exit') return;
+    log.warn(`graphics process stopped (${details.reason})`);
+    if (recordGpuCrash(gpuStatePath(), details.reason)) {
+      log.warn('graphics kept crashing; restarting without hardware acceleration');
+      app.relaunch();
+      app.exit(0);
+    }
+  });
   broadcastStorageStatus(window.webContents, storage);
   broadcastAccountStatus(window.webContents, account, homeAccount);
   broadcastCommunityEvents(window.webContents, community);
@@ -421,6 +490,56 @@ async function start(): Promise<void> {
   };
   applyLoginItem(settings.get().system.startAtLogin);
   settings.onChange((s) => applyLoginItem(s.system.startAtLogin));
+}
+
+/**
+ * The window never stays invisible or blank: it is shown after a few seconds
+ * even if the first paint never comes, a crashed page is reloaded, and a page
+ * that keeps crashing is replaced by a plain explanation.
+ */
+function watchWindow(window: BrowserWindow, log: ReturnType<typeof createFileLogger>, hidden: boolean): void {
+  let painted = false;
+  window.once('ready-to-show', () => {
+    painted = true;
+  });
+  if (!hidden) {
+    setTimeout(() => {
+      if (painted || window.isDestroyed()) return;
+      log.warn('window did not paint in time; showing it anyway');
+      window.show();
+    }, SHOW_WINDOW_FALLBACK_MS);
+  }
+  let reloads = 0;
+  window.webContents.on('render-process-gone', (_e, details) => {
+    log.warn(`interface process stopped (${details.reason}, exit ${details.exitCode})`);
+    if (details.reason === 'clean-exit' || window.isDestroyed()) return;
+    if (reloads < RENDERER_RELOADS) {
+      reloads += 1;
+      window.reload();
+      return;
+    }
+    window.show();
+    void dialog
+      .showMessageBox(window, {
+        type: 'error',
+        title: "River's window keeps closing",
+        message: "River's window keeps closing",
+        detail: `The interface stopped ${reloads + 1} times (${details.reason}). Try again, or quit and start River with --disable-gpu. The log is in ${join(app.getPath('userData'), 'logs')}.`,
+        buttons: ['Try again', 'Quit River'],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      .then(({ response }) => {
+        if (response === 0) {
+          reloads = 0;
+          window.reload();
+        } else app.exit(1);
+      });
+  });
+  window.webContents.on('did-fail-load', (_e, code, description, url) => {
+    if (code === -3) return; // aborted by a newer navigation
+    log.warn(`interface failed to load (${code} ${description}) ${url.startsWith('data:') ? '' : url}`);
+  });
 }
 
 function createWindow(): BrowserWindow {

@@ -7,11 +7,31 @@ export interface HubSocket {
 
 const DEFAULT_STATE: VoiceState = { muted: false, deafened: false, serverMuted: false, streaming: false };
 
+/** How long a voice seat is kept after its member's last connection drops (tunnel hiccups). */
+export const VOICE_GRACE_MS = 45_000;
+
+export interface HubOptions {
+  voiceGraceMs?: number;
+}
+
 /**
  * In-memory realtime state: which sockets belong to which account, who is in
  * which voice channel, and their voice state. Nothing here is persisted.
+ *
+ * A dropped connection does not end a call at once: calls are peer to peer, so
+ * the seat is kept (marked reconnecting) until the app reconnects and rejoins,
+ * or the grace period runs out.
  */
 export class Hub {
+  private readonly graceMs: number;
+  /** A seat's grace period ran out: the member is out of the channel; tell the others. */
+  onSeatExpired: ((left: { channelId: string; communityId: string }) => void) | null = null;
+  private readonly graceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  constructor(options: HubOptions = {}) {
+    this.graceMs = options.voiceGraceMs ?? VOICE_GRACE_MS;
+  }
+
   private readonly sockets = new Map<string, Set<HubSocket>>();
   private readonly voice = new Map<string, { communityId: string; members: Set<string> }>();
   private readonly voiceOf = new Map<string, string>();
@@ -25,16 +45,50 @@ export class Hub {
     return cameOnline;
   }
 
-  /** Returns whether the user went offline and the voice channel they left (if any). */
+  /**
+   * Returns whether the user went offline and, if they were in a voice
+   * channel, that channel: their seat is now held for the grace period.
+   */
   remove(
     riverId: string,
     socket: HubSocket,
-  ): { offline: boolean; left: { channelId: string; communityId: string } | null } {
+  ): { offline: boolean; held: { channelId: string; communityId: string } | null } {
     const set = this.sockets.get(riverId);
     set?.delete(socket);
-    if (set && set.size > 0) return { offline: false, left: null };
+    if (set && set.size > 0) return { offline: false, held: null };
     this.sockets.delete(riverId);
-    return { offline: true, left: this.leaveVoice(riverId) };
+    return { offline: true, held: this.holdSeat(riverId) };
+  }
+
+  /** Keeps a voice seat (marked reconnecting) until rejoin or the grace period ends. */
+  private holdSeat(riverId: string): { channelId: string; communityId: string } | null {
+    const channelId = this.voiceOf.get(riverId);
+    const room = channelId ? this.voice.get(channelId) : undefined;
+    if (!channelId || !room) return null;
+    this.setState(riverId, { reconnecting: true });
+    this.clearGrace(riverId);
+    const timer = setTimeout(() => {
+      this.graceTimers.delete(riverId);
+      if (this.isOnline(riverId) && !this.stateOf(riverId).reconnecting) return;
+      if (this.voiceOf.get(riverId) !== channelId) return;
+      const left = this.leaveVoice(riverId);
+      if (left) this.onSeatExpired?.(left);
+    }, this.graceMs);
+    timer.unref?.();
+    this.graceTimers.set(riverId, timer);
+    return { channelId, communityId: room.communityId };
+  }
+
+  private clearGrace(riverId: string): void {
+    const t = this.graceTimers.get(riverId);
+    if (t) clearTimeout(t);
+    this.graceTimers.delete(riverId);
+  }
+
+  /** Stops every grace timer (server shutdown). */
+  close(): void {
+    for (const t of this.graceTimers.values()) clearTimeout(t);
+    this.graceTimers.clear();
   }
 
   isOnline(riverId: string): boolean {
@@ -61,12 +115,15 @@ export class Hub {
     if (!room) this.voice.set(channelId, (room = { communityId, members: new Set() }));
     room.members.add(riverId);
     this.voiceOf.set(riverId, channelId);
-    if (!this.states.has(riverId)) this.states.set(riverId, { ...DEFAULT_STATE });
+    this.clearGrace(riverId);
+    const { reconnecting: _back, ...state } = this.states.get(riverId) ?? DEFAULT_STATE;
+    this.states.set(riverId, state);
     return { left };
   }
 
   leaveVoice(riverId: string): { channelId: string; communityId: string } | null {
     const channelId = this.voiceOf.get(riverId);
+    this.clearGrace(riverId);
     if (!channelId) return null;
     this.voiceOf.delete(riverId);
     const room = this.voice.get(channelId);

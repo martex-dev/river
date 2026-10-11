@@ -15,16 +15,40 @@ const ICE_SERVERS: RTCIceServer[] = [
 const SLOTS = ['audio', 'camera', 'screen'] as const;
 type Slot = (typeof SLOTS)[number];
 
+/**
+ * `sid` names one connection attempt (set by the offering side), so answers and
+ * candidates from an attempt that was since replaced are ignored. Apps before
+ * 1.0.16 send no `sid`; those signals are always accepted.
+ */
 type Signal =
-  | { type: 'sdp'; description: RTCSessionDescriptionInit }
-  | { type: 'ice'; candidate: RTCIceCandidateInit }
+  | { type: 'sdp'; description: RTCSessionDescriptionInit; sid?: string }
+  | { type: 'ice'; candidate: RTCIceCandidateInit; sid?: string }
   /** Sent by the answering side when no offer arrived: "please (re)offer". */
   | { type: 'hello' }
+  /** Sent by the answering side when a working connection falters: "please restart ICE". */
+  | { type: 'restart'; sid?: string }
   /** What the sender is currently sending; receivers show tiles from this, not from track heuristics. */
   | { type: 'state'; camera: boolean; screen: boolean; muted: boolean };
 
-const OFFER_WAIT_MS = 4000;
-const MAX_RETRIES = 4;
+/** Answering side asks for an offer after this long without one (then less and less often). */
+const OFFER_WAIT_MS = 3000;
+/** A connection that is not up after this long is rebuilt. */
+const CONNECT_TIMEOUT_MS = 20_000;
+/** A setup this old no longer counts as "underway" when the other side asks for a new one. */
+const STALE_SETUP_MS = 10_000;
+/** A connection reported "disconnected" this long gets an ICE restart. */
+const DISCONNECTED_GRACE_MS = 3000;
+/** An ICE restart that has not reconnected after this long is replaced by a new connection. */
+const RESTART_TIMEOUT_MS = 8000;
+const RETRY_BASE_MS = 1000;
+const RETRY_MAX_MS = 15_000;
+/** Someone missing from the participant list keeps their working connection this long (server restart). */
+const MISSING_GRACE_MS = 10_000;
+
+function newSid(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(9));
+  return btoa(String.fromCharCode(...bytes));
+}
 
 export interface RemotePeer {
   id: string;
@@ -35,10 +59,19 @@ export interface RemotePeer {
   screenOn: boolean;
   muted: boolean;
   state: RTCPeerConnectionState;
+  /** The connection dropped and River is bringing it back. */
+  reconnecting: boolean;
 }
 
 interface Peer {
   pc: RTCPeerConnection;
+  /** This connection attempt's ID (see Signal). */
+  sid: string | undefined;
+  createdAt: number;
+  everConnected: boolean;
+  /** An ICE restart was tried since the connection last worked. */
+  restarted: boolean;
+  timers: Set<ReturnType<typeof setTimeout>>;
   remote: RemotePeer;
   /** Remote candidates that arrived before the remote description. */
   pendingIce: RTCIceCandidateInit[];
@@ -97,7 +130,7 @@ export class VoiceCall {
   private audioCtx: AudioContext | null = null;
   private readonly analysers = new Map<string, Analyser>();
   private readonly lastLoud = new Map<string, number>();
-  private speakingTimer: number | null = null;
+  private speakingTimer: ReturnType<typeof setInterval> | null = null;
   /** River IDs (including our own) currently speaking. */
   speaking = new Set<string>();
   deafened = false;
@@ -106,9 +139,19 @@ export class VoiceCall {
   pttActive = false;
   private readonly peers = new Map<string, Peer>();
   /** Candidates from peers we have not created yet (they can overtake the offer). */
-  private readonly earlyIce = new Map<string, RTCIceCandidateInit[]>();
+  private readonly earlyIce = new Map<string, Array<{ candidate: RTCIceCandidateInit; sid?: string }>>();
   private participants: string[] = [];
   private readonly retries = new Map<string, number>();
+  private readonly signalQueues = new Map<string, Promise<void>>();
+  /** Peers we are waiting on for an offer. */
+  private readonly awaiting = new Set<string>();
+  private readonly timers = new Set<ReturnType<typeof setTimeout>>();
+  /** When each person went missing from the participant list. */
+  private readonly missingSince = new Map<string, number>();
+  /** The server's latest participant list (without people kept through a gap). */
+  private listed: string[] = [];
+  /** When our own connection to the server last came back (participant lists refill after that). */
+  private resumedAt = 0;
   private local: Record<Slot, MediaStreamTrack | null> = { audio: null, camera: null, screen: null };
   private readonly onChange: () => void;
   muted = false;
@@ -176,7 +219,7 @@ export class VoiceCall {
       this.stopLocal();
       throw err;
     }
-    this.speakingTimer = window.setInterval(() => this.measure(), 80);
+    this.speakingTimer = setInterval(() => this.measure(), 80);
   }
 
   /** Whether our microphone is actually transmitting right now. */
@@ -281,11 +324,45 @@ export class VoiceCall {
     return this.local[slot];
   }
 
+  /**
+   * Our connection to the server just came back. The server may have
+   * restarted and be refilling its participant lists as people reconnect, so
+   * for a short while someone missing from the list keeps their connection.
+   */
+  resumed(): void {
+    this.resumedAt = Date.now();
+  }
+
   /** Called with the server's participant list for this channel. */
   updateParticipants(ids: string[]): void {
     if (this.closed) return;
-    this.participants = ids;
-    for (const id of [...this.peers.keys()]) if (!ids.includes(id)) this.dropPeer(id);
+    const now = Date.now();
+    this.listed = ids;
+    const refilling = now - this.resumedAt < MISSING_GRACE_MS;
+    for (const id of [...this.peers.keys()]) {
+      if (ids.includes(id)) {
+        this.missingSince.delete(id);
+        continue;
+      }
+      // A working connection outlives a short gap in the list (the server restarting); others go now.
+      const peer = this.peers.get(id)!;
+      if (!refilling || peer.pc.connectionState !== 'connected') {
+        this.missingSince.delete(id);
+        this.dropPeer(id);
+        continue;
+      }
+      if (!this.missingSince.has(id)) {
+        this.missingSince.set(id, now);
+        this.later(MISSING_GRACE_MS, () => {
+          if (this.missingSince.has(id) && !this.listed.includes(id)) {
+            this.missingSince.delete(id);
+            this.dropPeer(id);
+            this.onChange();
+          }
+        });
+      }
+    }
+    this.participants = [...ids, ...[...this.missingSince.keys()].filter((id) => !ids.includes(id))];
     for (const id of ids) {
       if (id === this.me || this.peers.has(id)) continue;
       // The participant with the smaller ID makes the offer, so each pair negotiates once.
@@ -295,13 +372,37 @@ export class VoiceCall {
     this.onChange();
   }
 
-  async handleSignal(from: string, data: unknown): Promise<void> {
+  /**
+   * Signals from one peer are handled strictly in order: an answer or ICE
+   * candidate must never be processed before the offer it belongs to.
+   */
+  handleSignal(from: string, data: unknown): Promise<void> {
+    const prev = this.signalQueues.get(from) ?? Promise.resolve();
+    const next = prev
+      .then(() => this.processSignal(from, data))
+      .catch((err: unknown) => console.warn(`voice: signal from ${from.slice(0, 4)} failed`, err));
+    this.signalQueues.set(from, next);
+    return next;
+  }
+
+  private async processSignal(from: string, data: unknown): Promise<void> {
     if (this.closed) return;
     const signal = data as Signal;
     if (signal.type === 'hello') {
+      // The other side has no working connection with us: (re)offer unless one is healthy or underway.
       if (this.me < from && this.participants.includes(from)) {
-        this.dropPeer(from);
-        void this.offer(from);
+        const peer = this.peers.get(from);
+        if (!peer || !this.healthy(peer)) this.rebuild(from);
+      }
+      return;
+    }
+    if (signal.type === 'restart') {
+      // The answering side saw the connection falter: restart ICE on the existing connection.
+      const peer = this.peers.get(from);
+      if (this.me < from && peer && (signal.sid === undefined || signal.sid === peer.sid)) {
+        await this.iceRestart(peer);
+      } else if (this.me < from && !peer && this.participants.includes(from)) {
+        this.rebuild(from);
       }
       return;
     }
@@ -318,21 +419,30 @@ export class VoiceCall {
     if (signal.type === 'sdp') {
       const desc = signal.description;
       if (desc.type === 'offer') {
-        this.dropPeer(from);
-        const peer = this.createPeer(from);
+        let peer = this.peers.get(from);
+        const renegotiation = !!peer && signal.sid !== undefined && peer.sid === signal.sid;
+        if (!peer || !renegotiation) {
+          this.dropPeer(from);
+          peer = this.createPeer(from, signal.sid);
+        }
         await peer.pc.setRemoteDescription(desc);
-        peer.pc.getTransceivers().forEach((t, i) => {
-          t.direction = 'sendrecv';
-          void t.sender.replaceTrack(this.local[SLOTS[i]!] ?? null);
-        });
+        if (!renegotiation) {
+          peer.pc.getTransceivers().forEach((t, i) => {
+            t.direction = 'sendrecv';
+            void t.sender.replaceTrack(this.local[SLOTS[i]!] ?? null).catch(() => undefined);
+          });
+        }
         await this.flushIce(peer);
         await peer.pc.setLocalDescription(await peer.pc.createAnswer());
+        if (this.peers.get(from) !== peer) return; // replaced meanwhile
         this.sendSdp(from, peer);
-        this.tuneScreenSender(peer);
+        if (!renegotiation) this.tuneScreenSender(peer);
         this.onChange();
       } else {
         const peer = this.peers.get(from);
-        if (!peer) return;
+        // An answer to an offer we have since replaced is stale: applying it would break the new one.
+        if (!peer || (signal.sid !== undefined && signal.sid !== peer.sid)) return;
+        if (peer.pc.signalingState !== 'have-local-offer') return;
         await peer.pc.setRemoteDescription(desc);
         await this.flushIce(peer);
       }
@@ -340,10 +450,11 @@ export class VoiceCall {
       const peer = this.peers.get(from);
       if (!peer) {
         const early = this.earlyIce.get(from) ?? [];
-        if (early.length < 50) early.push(signal.candidate);
+        if (early.length < 50) early.push({ candidate: signal.candidate, sid: signal.sid });
         this.earlyIce.set(from, early);
         return;
       }
+      if (signal.sid !== undefined && peer.sid !== undefined && signal.sid !== peer.sid) return;
       if (peer.pc.remoteDescription) await peer.pc.addIceCandidate(signal.candidate).catch(() => undefined);
       else peer.pendingIce.push(signal.candidate);
     }
@@ -388,7 +499,9 @@ export class VoiceCall {
   async leave(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
-    if (this.speakingTimer) window.clearInterval(this.speakingTimer);
+    if (this.speakingTimer) clearInterval(this.speakingTimer);
+    for (const t of this.timers) clearTimeout(t);
+    this.timers.clear();
     for (const id of [...this.peers.keys()]) this.dropPeer(id);
     this.stopLocal();
     for (const a of this.analysers.values()) a.source.disconnect();
@@ -414,13 +527,17 @@ export class VoiceCall {
     this.onChange();
   }
 
-  private createPeer(id: string): Peer {
+  private createPeer(id: string, sid?: string): Peer {
     const pc = new RTCPeerConnection({
       iceServers: [...ICE_SERVERS, ...this.options.iceServers],
       bundlePolicy: 'max-bundle',
     });
     const peer: Peer = {
       pc,
+      sid,
+      createdAt: Date.now(),
+      everConnected: false,
+      restarted: false,
       remote: {
         id,
         audio: null,
@@ -430,26 +547,24 @@ export class VoiceCall {
         screenOn: false,
         muted: false,
         state: 'new',
+        reconnecting: false,
       },
-      pendingIce: this.earlyIce.get(id) ?? [],
+      pendingIce: [],
       sdpSent: false,
       outgoingIce: [],
+      timers: new Set(),
     };
+    for (const early of this.earlyIce.get(id) ?? [])
+      if (early.sid === undefined || sid === undefined || early.sid === sid)
+        peer.pendingIce.push(early.candidate);
     this.earlyIce.delete(id);
     pc.onicecandidate = (e) => {
-      if (!e.candidate) return;
-      if (peer.sdpSent) this.send(id, { type: 'ice', candidate: e.candidate.toJSON() });
-      else peer.outgoingIce.push(e.candidate.toJSON());
+      if (!e.candidate || this.peers.get(id) !== peer) return;
+      const candidate = e.candidate.toJSON();
+      if (peer.sdpSent) this.send(id, { type: 'ice', candidate, ...(peer.sid ? { sid: peer.sid } : {}) });
+      else peer.outgoingIce.push(candidate);
     };
-    pc.onconnectionstatechange = () => {
-      peer.remote.state = pc.connectionState;
-      if (pc.connectionState === 'connected') {
-        this.retries.delete(id);
-        this.send(id, this.stateSignal());
-      }
-      if (pc.connectionState === 'failed') this.retry(id);
-      this.onChange();
-    };
+    pc.onconnectionstatechange = () => this.connectionChanged(id, peer);
     pc.ontrack = (e) => {
       const slot = SLOTS[pc.getTransceivers().indexOf(e.transceiver)];
       if (!slot) return;
@@ -458,41 +573,125 @@ export class VoiceCall {
       this.onChange();
     };
     this.peers.set(id, peer);
+    // A connection that never comes up is rebuilt rather than left hanging.
+    this.peerTimer(peer, CONNECT_TIMEOUT_MS, () => {
+      if (pc.connectionState !== 'connected') this.recover(id, peer, 'timeout');
+    });
     return peer;
   }
 
-  /** We are the answering side: if no offer shows up, ask for one. */
-  private awaitOffer(id: string): void {
-    setTimeout(() => {
-      if (this.closed || this.peers.has(id) || !this.participants.includes(id)) return;
-      this.send(id, { type: 'hello' });
-      this.awaitOffer(id);
-    }, OFFER_WAIT_MS);
+  private connectionChanged(id: string, peer: Peer): void {
+    if (this.peers.get(id) !== peer || this.closed) return;
+    const state = peer.pc.connectionState;
+    peer.remote.state = state;
+    if (state === 'connected') {
+      this.retries.delete(id);
+      peer.remote.reconnecting = false;
+      peer.everConnected = true;
+      peer.restarted = false;
+      this.send(id, this.stateSignal());
+    } else if (state === 'disconnected') {
+      // Often a short network blip that heals by itself; if not, restart ICE (audio may keep flowing).
+      peer.remote.reconnecting = true;
+      this.peerTimer(peer, DISCONNECTED_GRACE_MS, () => {
+        if (peer.pc.connectionState === 'disconnected') this.recover(id, peer, 'disconnected');
+      });
+    } else if (state === 'failed') {
+      peer.remote.reconnecting = true;
+      this.recover(id, peer, 'failed');
+    }
+    this.onChange();
   }
 
-  private retry(id: string): void {
+  /**
+   * Brings a faltering connection back: first an ICE restart on the same
+   * connection, then a fresh connection, retried with backoff for as long as
+   * the person is still in the channel.
+   */
+  private recover(id: string, peer: Peer, why: 'disconnected' | 'failed' | 'timeout'): void {
+    if (this.closed || this.peers.get(id) !== peer || !this.participants.includes(id)) return;
+    if (why === 'disconnected' && peer.everConnected && !peer.restarted) {
+      peer.restarted = true;
+      if (this.me < id) void this.iceRestart(peer);
+      else this.send(id, { type: 'restart', ...(peer.sid ? { sid: peer.sid } : {}) });
+      // If the restart does not bring it back, rebuild.
+      this.peerTimer(peer, RESTART_TIMEOUT_MS, () => {
+        if (peer.pc.connectionState !== 'connected') this.recover(id, peer, 'failed');
+      });
+      return;
+    }
     const n = (this.retries.get(id) ?? 0) + 1;
     this.retries.set(id, n);
-    if (n > MAX_RETRIES || this.closed) return;
-    setTimeout(() => {
-      if (this.closed || !this.participants.includes(id)) return;
-      this.dropPeer(id);
-      if (this.me < id) void this.offer(id);
-      else {
-        this.send(id, { type: 'hello' });
-        this.awaitOffer(id);
-      }
-    }, 1000 * n);
+    const delay = Math.min(RETRY_BASE_MS * 2 ** Math.min(n - 1, 4), RETRY_MAX_MS);
+    peer.remote.reconnecting = true;
+    this.onChange();
+    this.later(delay, () => {
+      if (this.closed || this.peers.get(id) !== peer || !this.participants.includes(id)) return;
+      if (peer.pc.connectionState === 'connected') return;
+      this.rebuild(id);
+    });
   }
 
-  private async offer(id: string): Promise<void> {
-    const peer = this.createPeer(id);
+  /** A brand-new connection with this person (offering side offers; answering side asks for an offer). */
+  private rebuild(id: string): void {
+    if (this.closed || !this.participants.includes(id)) return;
+    const reconnecting = !!this.peers.get(id);
+    this.dropPeer(id);
+    if (this.me < id) void this.offer(id, reconnecting);
+    else {
+      this.send(id, { type: 'hello' });
+      this.awaitOffer(id);
+    }
+  }
+
+  private async iceRestart(peer: Peer): Promise<void> {
+    const id = peer.remote.id;
+    if (this.peers.get(id) !== peer || peer.pc.signalingState !== 'stable') return;
+    try {
+      await peer.pc.setLocalDescription(await peer.pc.createOffer({ iceRestart: true }));
+      if (this.peers.get(id) !== peer) return;
+      this.sendSdp(id, peer);
+    } catch {
+      this.recover(id, peer, 'failed');
+    }
+  }
+
+  /** Whether this connection works or is still setting up within its time. */
+  private healthy(peer: Peer): boolean {
+    const s = peer.pc.connectionState;
+    if (s === 'connected') return true;
+    if (s === 'failed' || s === 'closed') return false;
+    return Date.now() - peer.createdAt < STALE_SETUP_MS;
+  }
+
+  /** We are the answering side: if no offer shows up, ask for one (less often as time goes on). */
+  private awaitOffer(id: string): void {
+    if (this.awaiting.has(id)) return;
+    this.awaiting.add(id);
+    const tick = (wait: number): void => {
+      this.later(wait, () => {
+        if (this.closed || this.peers.has(id) || !this.participants.includes(id)) {
+          this.awaiting.delete(id);
+          return;
+        }
+        this.send(id, { type: 'hello' });
+        tick(Math.min(wait * 2, RETRY_MAX_MS));
+      });
+    };
+    tick(OFFER_WAIT_MS);
+  }
+
+  private async offer(id: string, reconnecting = false): Promise<void> {
+    const peer = this.createPeer(id, newSid());
+    peer.remote.reconnecting = reconnecting;
     for (const slot of SLOTS) {
       const t = peer.pc.addTransceiver(slot === 'audio' ? 'audio' : 'video', { direction: 'sendrecv' });
-      await t.sender.replaceTrack(this.local[slot]);
+      await t.sender.replaceTrack(this.local[slot]).catch(() => undefined);
     }
+    if (this.peers.get(id) !== peer) return;
     this.tuneScreenSender(peer);
     await peer.pc.setLocalDescription(await peer.pc.createOffer());
+    if (this.peers.get(id) !== peer) return;
     this.sendSdp(id, peer);
   }
 
@@ -511,20 +710,25 @@ export class VoiceCall {
   }
 
   private sendSdp(to: string, peer: Peer): void {
-    this.send(to, { type: 'sdp', description: peer.pc.localDescription!.toJSON() });
+    const sid = peer.sid ? { sid: peer.sid } : {};
+    this.send(to, { type: 'sdp', description: peer.pc.localDescription!.toJSON(), ...sid });
     peer.sdpSent = true;
-    for (const candidate of peer.outgoingIce.splice(0)) this.send(to, { type: 'ice', candidate });
+    for (const candidate of peer.outgoingIce.splice(0)) this.send(to, { type: 'ice', candidate, ...sid });
   }
 
   /** Screen share gets more bandwidth and keeps resolution over frame rate. */
   private tuneScreenSender(peer: Peer): void {
     const sender = peer.pc.getTransceivers()[2]?.sender;
     if (!sender) return;
-    const params = sender.getParameters();
-    if (!params.encodings?.length) params.encodings = [{}];
-    params.encodings[0]!.maxBitrate = 2_500_000;
-    params.degradationPreference = 'maintain-resolution';
-    void sender.setParameters(params).catch(() => undefined);
+    try {
+      const params = sender.getParameters();
+      if (!params.encodings?.length) params.encodings = [{}];
+      params.encodings[0]!.maxBitrate = 2_500_000;
+      params.degradationPreference = 'maintain-resolution';
+      void sender.setParameters(params).catch(() => undefined);
+    } catch {
+      // not supported here
+    }
   }
 
   private async flushIce(peer: Peer): Promise<void> {
@@ -534,11 +738,32 @@ export class VoiceCall {
   private dropPeer(id: string): void {
     const peer = this.peers.get(id);
     if (!peer) return;
+    for (const t of peer.timers) clearTimeout(t);
+    peer.timers.clear();
+    peer.pc.onconnectionstatechange = null;
+    peer.pc.onicecandidate = null;
+    peer.pc.ontrack = null;
     peer.pc.close();
     this.peers.delete(id);
     this.analysers.get(id)?.source.disconnect();
     this.analysers.delete(id);
     this.speaking.delete(id);
+  }
+
+  private peerTimer(peer: Peer, ms: number, fn: () => void): void {
+    const t = setTimeout(() => {
+      peer.timers.delete(t);
+      fn();
+    }, ms);
+    peer.timers.add(t);
+  }
+
+  private later(ms: number, fn: () => void): void {
+    const t = setTimeout(() => {
+      this.timers.delete(t);
+      fn();
+    }, ms);
+    this.timers.add(t);
   }
 
   private stopLocal(): void {
