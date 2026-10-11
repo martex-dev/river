@@ -13,6 +13,7 @@ import {
   registerResponseSchema,
   registrationMessage,
 } from '@river/protocol';
+import { MAX_RELAY_PAYLOAD, RELAY_BURST, decodeRelayIn, encodeRelayOut } from '@river/protocol';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { migrateToLatest, openDatabase, type RiverDatabase } from '../src/db/database.ts';
@@ -912,6 +913,52 @@ describe('communities', () => {
         member.ws.close();
         await vi.waitFor(() => expect(lastVoice(host.events)?.participants).toEqual([owner.riverId]));
         host.ws.close();
+      });
+
+      it('relays voice frames only to people in the same voice channel, within limits', async () => {
+        const { owner, guest, voice, connect } = await setup(5_000);
+        const stranger = await user(app);
+        const host = await connect(owner.token);
+        const member = await connect(guest.token);
+        const other = await connect(stranger.token);
+        const binary = (ws: WebSocket) => {
+          const got: Uint8Array[] = [];
+          ws.binaryType = 'arraybuffer';
+          const prev = ws.onmessage;
+          ws.onmessage = (m) => {
+            if (m.data instanceof ArrayBuffer) got.push(new Uint8Array(m.data));
+            else prev?.call(ws, m);
+          };
+          return got;
+        };
+        const atMember = binary(member.ws);
+        const atOther = binary(other.ws);
+        const atHost = binary(host.ws);
+        // Not in voice yet: nothing is forwarded.
+        host.ws.send(encodeRelayOut([guest.riverId], new Uint8Array([1, 2, 3])));
+        host.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+        member.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+        await vi.waitFor(() =>
+          expect(host.events.filter((e) => e.t === 'voice').at(-1)?.participants).toHaveLength(2),
+        );
+
+        const payload = new Uint8Array([9, 8, 7, 6]);
+        host.ws.send(encodeRelayOut([guest.riverId, stranger.riverId, owner.riverId], payload));
+        await vi.waitFor(() => expect(atMember).toHaveLength(1));
+        expect(decodeRelayIn(atMember[0]!)).toEqual({ sender: owner.riverId, payload });
+        // Too big: dropped.
+        const big = new Uint8Array(2 + 16 + MAX_RELAY_PAYLOAD + 1);
+        big.set(encodeRelayOut([guest.riverId], new Uint8Array(1)).subarray(0, 18));
+        host.ws.send(big);
+        // A flood is thinned out, not a reason to close the connection.
+        for (let i = 0; i < RELAY_BURST + 200; i++) host.ws.send(encodeRelayOut([guest.riverId], payload));
+        await new Promise((r) => setTimeout(r, 300));
+        expect(atMember.length).toBeGreaterThan(RELAY_BURST - 10);
+        expect(atMember.length).toBeLessThan(RELAY_BURST + 150);
+        expect(host.ws.readyState).toBe(WebSocket.OPEN);
+        expect(atOther).toHaveLength(0);
+        expect(atHost).toHaveLength(0);
+        for (const c of [host, member, other]) c.ws.close();
       });
 
       it('leaving on purpose frees the seat at once', async () => {

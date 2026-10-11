@@ -33,6 +33,10 @@ import {
   updateCommunityRequestSchema,
   updateRoleRequestSchema,
   type ServerEvent,
+  RELAY_BURST,
+  RELAY_FRAMES_PER_SECOND,
+  decodeRelayOut,
+  encodeRelayIn,
 } from '@river/protocol';
 import { authenticate } from '../accounts/auth-store.ts';
 import type { Hub, HubSocket } from '../communities/hub.ts';
@@ -53,6 +57,8 @@ const MAX_TIMEOUT_MS = 28 * 24 * 60 * 60 * 1000;
 const PAGE = 100;
 /** Realtime events per second a client may send on average, and the burst allowed. */
 const SOCKET_RATE = 40;
+/** Bytes queued for a slow connection beyond which relayed voice frames are dropped. */
+const MAX_RELAY_BUFFER = 256 * 1024;
 /** Server → client WebSocket ping interval; two missed pongs close the connection. */
 const HEARTBEAT_MS = 25_000;
 /** A member whose last connection dropped is announced offline only after this long. */
@@ -1272,7 +1278,10 @@ export async function registerCommunityRoutes(
     let riverId: string | null = null;
     const hubSocket: HubSocket = {
       send: (d) => {
-        if (socket.readyState === socket.OPEN) socket.send(d);
+        if (socket.readyState !== socket.OPEN) return;
+        // A connection that cannot keep up gets no more voice frames rather than an ever-growing buffer.
+        if (typeof d !== 'string' && socket.bufferedAmount > MAX_RELAY_BUFFER) return;
+        socket.send(d);
       },
       close: (c) => socket.close(c),
     };
@@ -1427,8 +1436,32 @@ export async function registerCommunityRoutes(
     // Token bucket: bursts of call setup are fine, sustained floods close the socket.
     let tokens = SOCKET_BURST;
     let refilled = Date.now();
-    socket.on('message', (raw: Buffer) => {
+    // Voice relay frames have their own budget: ~50 a second while talking is normal.
+    let relayTokens = RELAY_BURST;
+    let relayRefilled = Date.now();
+    const relay = (raw: Buffer): void => {
+      const now = Date.now();
+      relayTokens = Math.min(
+        RELAY_BURST,
+        relayTokens + ((now - relayRefilled) / 1000) * RELAY_FRAMES_PER_SECOND,
+      );
+      relayRefilled = now;
+      if (relayTokens < 1 || !riverId) return; // over budget: drop (audio tolerates loss)
+      relayTokens -= 1;
+      const frame = decodeRelayOut(new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength));
+      const channelId = hub.voiceChannelOf(riverId);
+      if (!frame || !channelId) return;
+      const out = Buffer.from(encodeRelayIn(riverId, frame.payload));
+      for (const to of new Set(frame.recipients)) {
+        if (to !== riverId && hub.voiceChannelOf(to) === channelId) hub.sendBinaryTo(to, out);
+      }
+    };
+    socket.on('message', (raw: Buffer, isBinary: boolean) => {
       alive = true;
+      if (isBinary) {
+        relay(raw);
+        return;
+      }
       const now = Date.now();
       tokens = Math.min(SOCKET_BURST, tokens + ((now - refilled) / 1000) * SOCKET_RATE);
       refilled = now;

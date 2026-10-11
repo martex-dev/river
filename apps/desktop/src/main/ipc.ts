@@ -10,6 +10,7 @@ import {
   type WebContents,
 } from 'electron';
 import { z } from 'zod';
+import { MAX_RELAY_PAYLOAD, MAX_RELAY_RECIPIENTS } from '@river/protocol';
 import { createCommunityOptionsSchema } from '../shared/templates.ts';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import {
@@ -24,6 +25,7 @@ import {
   type CommunityEvent,
   type SecurityStatus,
   type StorageStatus,
+  type DiagnosticCheck,
 } from '../shared/ipc.ts';
 import type { FetchBytes } from './http.ts';
 import type { Hosting } from './host/hosting.ts';
@@ -70,6 +72,9 @@ export interface IpcDeps {
   selectScreen(sourceId: string): void;
   /** Creates the account on River's home server by itself. */
   homeAccount: Pick<HomeAccount, 'ensure' | 'kick' | 'isWaiting' | 'enabled'>;
+  /** Settings → System → Connection check. */
+  diagnostics(): Promise<DiagnosticCheck[]>;
+  openLogs(): Promise<void>;
   /** Hosting communities on this PC. */
   hosting: Pick<
     Hosting,
@@ -321,6 +326,19 @@ export function registerIpc(deps: IpcDeps): void {
     }),
   );
   handle(IPC.voiceIceServers, () => deps.community.iceServers());
+  // Voice relay frames: fire-and-forget (about 50 a second while talking), so no reply.
+  const relayTo = z.array(z.uuid()).min(1).max(MAX_RELAY_RECIPIENTS);
+  ipcMain.on(IPC.voiceRelay, (event, to: unknown, payload: unknown) => {
+    try {
+      assertTrustedSender(event as unknown as IpcMainInvokeEvent, deps.devServerUrl);
+      if (!(payload instanceof Uint8Array) || payload.length > MAX_RELAY_PAYLOAD) return;
+      deps.community.relaySend(relayTo.parse(to), payload);
+    } catch {
+      // invalid or untrusted: dropped
+    }
+  });
+  handle(IPC.diagnosticsRun, () => deps.diagnostics());
+  handle(IPC.diagnosticsOpenLogs, () => deps.openLogs());
   handle(IPC.screenSources, async () => {
     const sources = await desktopCapturer.getSources({
       types: ['screen', 'window'],
@@ -433,9 +451,16 @@ export function broadcastDmEvents(target: WebContents, dm: DmService): () => voi
 }
 
 export function broadcastCommunityEvents(target: WebContents, community: CommunityService): () => void {
-  return community.onEvent((event: CommunityEvent) => {
+  const offRelay = community.onRelay((from, payload) => {
+    if (!target.isDestroyed()) target.send(IPC.voiceRelayIn, from, payload);
+  });
+  const off = community.onEvent((event: CommunityEvent) => {
     if (!target.isDestroyed()) target.send(IPC.communityEvent, event);
   });
+  return () => {
+    off();
+    offRelay();
+  };
 }
 
 export function broadcastHostStatus(target: WebContents, hosting: Hosting): () => void {

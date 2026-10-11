@@ -57,6 +57,10 @@ export const IPC = {
   voiceLeave: 'river:voice:leave',
   voiceSignal: 'river:voice:signal',
   voiceIceServers: 'river:voice:ice-servers',
+  voiceRelay: 'river:voice:relay',
+  voiceRelayIn: 'river:voice:relay-in',
+  diagnosticsRun: 'river:diagnostics:run',
+  diagnosticsOpenLogs: 'river:diagnostics:open-logs',
   screenSources: 'river:voice:screen-sources',
   screenSelect: 'river:voice:screen-select',
   communityEvent: 'river:community:event',
@@ -237,6 +241,16 @@ export interface MemberView {
   rank: number;
   /** Timed out until then (cannot talk, react or join voice), or null. */
   timeoutUntil: string | null;
+}
+
+/** One line of Settings → System → Connection check. Never contains content, keys or tokens. */
+export interface DiagnosticCheck {
+  id: string;
+  label: string;
+  status: 'ok' | 'warn' | 'fail';
+  detail: string;
+  /** What the person can do about it, in plain words. */
+  advice?: string;
 }
 
 export interface VoiceStateView {
@@ -446,6 +460,9 @@ export interface RiverApi {
     iceServers(): Promise<Array<{ urls: string[]; username?: string; credential?: string }>>;
     screenSources(): Promise<ScreenSource[]>;
     selectScreen(sourceId: string): Promise<void>;
+    /** Sends an encrypted voice frame through the server to people we cannot reach directly. */
+    relay(to: string[], payload: Uint8Array): void;
+    onRelay(listener: (from: string, payload: Uint8Array) => void): () => void;
   };
   storage: {
     status(): Promise<StorageStatus>;
@@ -454,6 +471,11 @@ export interface RiverApi {
     onStatus(listener: (status: StorageStatus) => void): () => void;
   };
   links: { open(id: ExternalLinkId): Promise<void> };
+  diagnostics: {
+    /** Server, relay and connection checks (the renderer adds network and microphone checks). */
+    run(): Promise<DiagnosticCheck[]>;
+    openLogs(): Promise<void>;
+  };
 }
 
 /** What hosting on this PC is doing right now (see main/host/host-manager.ts). */

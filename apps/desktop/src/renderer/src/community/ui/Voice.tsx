@@ -308,7 +308,8 @@ function RemoteTile(props: {
   const member = memberOf(community, peer.id);
   const label = member?.name ?? 'Someone';
   const state = community.voiceStates[peer.id];
-  const connecting = peer.state !== 'connected';
+  // Relayed voice works while the direct connection is still being set up.
+  const connecting = peer.state !== 'connected' && !peer.relayed;
   return (
     <div
       className={`tile ${connecting ? 'tile--connecting' : ''} ${peer.screenOn ? 'tile--screen' : ''} ${props.speaking ? 'is-speaking' : ''} ${props.focused ? 'is-focused' : ''}`}
@@ -329,7 +330,8 @@ function RemoteTile(props: {
         {props.speaking && <SpeakingWaves />}
         {label}
         {peer.muted ? ' · muted' : ''}
-        {connecting || state?.reconnecting
+        {peer.relayed ? ' · via server' : ''}
+        {connecting || (!peer.relayed && state?.reconnecting)
           ? ` · ${peer.reconnecting || state?.reconnecting ? 'reconnecting…' : 'connecting…'}`
           : ''}
       </span>

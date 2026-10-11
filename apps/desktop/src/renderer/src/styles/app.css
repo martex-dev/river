@@ -1559,3 +1559,45 @@ html[data-density='compact'] .member {
 .username-prompt p {
   margin: 2px 0 0;
 }
+
+/* Settings → System → Connection check */
+.conn-check {
+  margin-top: 24px;
+  display: grid;
+  gap: 10px;
+}
+.conn-check__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.conn-check__item {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 13px;
+}
+.conn-check__mark {
+  font-weight: 700;
+  text-align: center;
+}
+.conn-check__item--ok .conn-check__mark {
+  color: var(--ok, #3ddc97);
+}
+.conn-check__item--warn .conn-check__mark {
+  color: var(--warn);
+}
+.conn-check__item--fail .conn-check__mark {
+  color: var(--danger);
+}
+.conn-check__advice {
+  display: block;
+  color: var(--text-dim);
+  margin-top: 2px;
+}

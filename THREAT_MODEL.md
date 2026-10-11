@@ -138,6 +138,17 @@ endpoints need a valid session. Operator-created accounts are one-time sign-up
 codes (hashed at rest, 7-day expiry) that carry a chosen username; in
 invite-only mode registration requires one.
 
+### 5e. Voice reliability (1.0.16) and the voice relay (1.0.17)
+
+The server keeps a member's voice seat for 45 seconds after their connection
+drops (shown to others as "reconnecting"), and announces them offline only
+after 15 seconds. For members who cannot connect directly it forwards
+end-to-end encrypted voice frames (CRYPTOGRAPHY.md §8): it learns that two
+members are talking through it, when, and roughly how much (frame sizes and
+timing), but not what is said. Frames go only to members of the sender's own
+voice channel, are rate-limited per connection, dropped for slow readers, and
+never stored.
+
 ## 6. Key threats and mitigations (STRIDE summary)
 
 | Threat          | Example                                | Mitigation                                                                                                                              | Status                                                 |

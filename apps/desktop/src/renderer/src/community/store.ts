@@ -5,6 +5,7 @@ import type { ChatMessage, CommunityEvent, CommunityView, Result } from '../../.
 import { useRiver } from '../store.ts';
 import { play } from './sound.ts';
 import { VoiceCall } from './voice.ts';
+import { WebCodecsRelay } from './relay-audio.ts';
 
 export type Modal =
   | { kind: 'community-settings'; communityId: string; tab?: CommunityTab }
@@ -411,13 +412,22 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         sendVoiceState();
       }
     };
-    const call = new VoiceCall(channelId, me, onChange, {
-      iceServers,
-      inputDeviceId: voice?.inputDeviceId ?? null,
-      noiseSuppression: voice?.noiseSuppression ?? true,
-      echoCancellation: voice?.echoCancellation ?? true,
-      pushToTalk: voice?.inputMode === 'push-to-talk',
-    });
+    // People who cannot connect directly hear each other through the server (encrypted end to end).
+    const relay = new WebCodecsRelay(me, (to, payload) => window.river.voice.relay(to, payload));
+    const call = new VoiceCall(
+      channelId,
+      me,
+      onChange,
+      {
+        iceServers,
+        inputDeviceId: voice?.inputDeviceId ?? null,
+        noiseSuppression: voice?.noiseSuppression ?? true,
+        echoCancellation: voice?.echoCancellation ?? true,
+        pushToTalk: voice?.inputMode === 'push-to-talk',
+      },
+      undefined,
+      relay,
+    );
     call.muted = get().selfMuted;
     call.deafened = get().selfDeafened;
     set({ call, callError: null });

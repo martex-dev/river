@@ -55,6 +55,7 @@ import { createFetchBytes, createRequestBytes, createRequestJson } from './http.
 import { verifyDownloadedUpdate } from './updater/verify-download.ts';
 import { LaunchHealth } from './updater/launch-health.ts';
 import { runSelfTest, selfTestPath } from './self-test.ts';
+import { runMainDiagnostics } from './diagnostics.ts';
 import {
   RENDERER_RELOADS,
   SHOW_WINDOW_FALLBACK_MS,
@@ -350,6 +351,20 @@ async function start(): Promise<void> {
     },
     hosting,
     homeAccount,
+    diagnostics: () =>
+      runMainDiagnostics({
+        fetchBytes: serverFetch,
+        account: () => account.status(),
+        connection: () => community.connectionState(),
+        hosting: () => hosting.manager.status(),
+        homeServerEnabled: homeAccount.enabled(),
+        version: app.getVersion(),
+        platform: `${process.platform}-${process.arch}${gpuState.disabled ? ' (graphics acceleration off)' : ''}`,
+      }),
+    openLogs: async () => {
+      const { shell } = await import('electron');
+      await shell.openPath(join(app.getPath('userData'), 'logs'));
+    },
   });
 
   const window = createWindow();

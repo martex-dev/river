@@ -178,12 +178,26 @@ of types are shown inline; everything else is saved only when the user chooses.
 - Device-to-device transfer (Stage 2) uses a libsignal session established by
   scanning a QR code.
 
-## 8. Calls (planned, 0.8.x)
+## 8. Calls (implemented: mesh 0.2.0, resilience 1.0.16, relay 1.0.17)
 
-- 1:1: WebRTC DTLS-SRTP; DTLS fingerprints are exchanged inside E2EE signalling,
-  binding the media channel to verified identities.
-- Group: frame-level encryption (insertable streams) with per-call keys sent
-  over River E2EE; the SFU cannot decrypt.
+- Media goes directly between participants (WebRTC mesh, DTLS-SRTP). Call
+  setup (SDP with DTLS fingerprints, ICE candidates) travels as sealed signals:
+  in communities sealed with the community key, in direct calls inside
+  libsignal messages. The server relays signals but cannot read them.
+- **Server relay (1.0.17).** When two members cannot connect directly (strict
+  NAT, blocked UDP, no TURN server), their apps send voice through the River
+  server over the existing WebSocket. Audio is Opus-encoded and each frame is
+  sealed with AES-256-GCM under a random per-call **sender key**; the frame is
+  `[4-byte sequence][12-byte random IV][ciphertext+tag]` with the sender's River
+  ID and the sequence as associated data, and receivers accept each sequence
+  once, in order. Sender keys are given only to the people relayed with, inside
+  sealed signals. The server forwards frames only between members of the same
+  voice channel, caps size and rate, and never stores them. It cannot decrypt,
+  alter, reorder or replay frames; it sees who relays to whom, when, and frame
+  sizes. Camera and screen sharing still need a direct connection.
+- Trust note: as with DTLS fingerprints today, a server colluding with another
+  community member who holds the community key could tamper with sealed call
+  setup; identity-bound call keys come with the protocol freeze (1.1).
 
 ## 9. What River will never do
 

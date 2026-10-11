@@ -82,6 +82,9 @@ export function App(): ReactElement {
     const offStorage = window.river.storage.onStatus((s) => void setStorage(s));
     const offAccount = window.river.account.onStatus((s) => void setAccount(s));
     const offCommunity = window.river.community.onEvent((e) => useCommunity.getState().handle(e));
+    const offRelay = window.river.voice.onRelay((from, payload) =>
+      useCommunity.getState().call?.receiveRelay(from, payload),
+    );
     const offDm = window.river.dm.onEvent((e) =>
       e.t === 'call' ? handleCallEvent(e) : useDm.getState().handle(e),
     );
@@ -92,6 +95,7 @@ export function App(): ReactElement {
       offStorage();
       offAccount();
       offCommunity();
+      offRelay();
       offDm();
       offSocial();
     };

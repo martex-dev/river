@@ -1,5 +1,6 @@
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { BackupPanel } from '../components/BackupPanel.tsx';
+import { ConnectionCheck } from '../components/ConnectionCheck.tsx';
 import { HostingPanel, useHostStatus } from '../components/HostingPanel.tsx';
 import type { ReleaseChannel } from '@river/release/channels';
 import type { AccountStatus, ServerCheckResult, UpdateStatus } from '../../../shared/ipc.ts';
@@ -584,6 +585,7 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
         checked={settings.system.closeToTray}
         onChange={(v) => void updateSettings({ system: { closeToTray: v } })}
       />
+      <ConnectionCheck />
     </div>
   );
 }
