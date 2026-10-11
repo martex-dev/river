@@ -116,6 +116,23 @@ export const settingsSchema = z.object({
     /** Keep the PC from going to sleep while it hosts, so members can reach it. */
     keepAwake: z.boolean(),
   }),
+  /** Added in 1.0.18: your order of communities and folders (see rail.ts). */
+  rail: z.object({
+    order: z.array(z.string().max(80)).max(1000),
+    folders: z
+      .array(
+        z
+          .object({
+            id: z.string().max(40),
+            name: z.string().max(40),
+            color: z.number().int().min(0).max(0xffffff),
+            items: z.array(z.string().max(64)).max(500),
+            open: z.boolean(),
+          })
+          .strict(),
+      )
+      .max(200),
+  }),
   /** Added in 1.0.17: how you appear to others. */
   presence: z.object({
     /** Online, Idle, Do Not Disturb (no notifications or sounds) or Invisible (appear offline). */
@@ -164,6 +181,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   system: { startAtLogin: false, closeToTray: true },
   hosting: { enabled: false, keepAwake: true },
+  rail: { order: [], folders: [] },
   presence: { status: 'online', autoIdle: true, customText: '', customEmoji: '', customUntil: null },
 };
 
@@ -175,6 +193,7 @@ export const SETTINGS_SECTIONS = [
   'voice',
   'system',
   'hosting',
+  'rail',
   'presence',
 ] as const;
 
@@ -208,6 +227,7 @@ export const settingsPatchSchema = z
     system: settingsSchema.shape.system.partial().strict().optional(),
     hosting: settingsSchema.shape.hosting.partial().strict().optional(),
     presence: settingsSchema.shape.presence.partial().strict().optional(),
+    rail: settingsSchema.shape.rail.partial().strict().optional(),
   })
   .strict();
 
@@ -224,5 +244,6 @@ export function applySettingsPatch(current: Settings, patch: z.output<typeof set
     system: { ...current.system, ...patch.system },
     hosting: { ...current.hosting, ...patch.hosting },
     presence: { ...current.presence, ...patch.presence },
+    rail: { ...current.rail, ...patch.rail },
   });
 }
