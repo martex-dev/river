@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-11 · Current version: **1.0.17** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
+_Last updated: 2026-10-11 · Current version: **1.0.18** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
 
 ## Complete
 
@@ -29,6 +29,7 @@ _Last updated: 2026-10-11 · Current version: **1.0.17** · Stage 1 complete · 
 | CI/CD                 | CI (lint, format, typecheck, unit, e2e on 3 OSes, audit), CodeQL, Dependabot, tag-driven signed release pipeline, packaged-app self-test on 3 OSes                                                          | `scripts/release/self-test-packaged.ts`                                                                           |
 | Voice reliability     | Seats held through dropped connections, heartbeats, self-healing peer connections, encrypted relay through the server for pairs that cannot connect directly (voice and 1:1 calls)                          | `voice-mesh.test.tsx`, `voice-reconnect.test.ts`, `relay.test.tsx`, e2e (relay with decoded audio)                |
 | Expression & presence | Online/Idle/DND/Invisible, encrypted custom status, full Markdown (spoilers, headings, lists, links, timestamps, highlighted code), every emoji with search and :shortcodes:, message links, quote, forward | `presence.test.ts`, `rich-text.test.tsx`, `emoji.test.tsx`, `message-link.test.tsx`, e2e                          |
+| Community life        | Scheduled events with reminders, polls, per-place mutes and notification levels, community folders, richer profiles, account deletion with device-key proof                                                 | `notify-rules.test.ts`, `rail.test.ts`, `poll.test.ts`, `delete-account.test.ts`, integration, e2e                |
 | Diagnostics           | Connection check (Settings → System), startup failure dialog, GPU fallback, `--self-test`                                                                                                                   | `diagnostics*.test.ts*`, `startup-guard.test.ts`                                                                  |
 
 ## Partially complete

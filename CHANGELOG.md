@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.18] - 2026-10-12
+
+**Plan together: events, polls, mutes, folders, profiles — and your account is yours to delete.**
+
 ### Added
 
 - **Scheduled events.** Plan a game night or a study call: name,
@@ -933,7 +937,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.17...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.18...HEAD
+[1.0.18]: https://github.com/martex-dev/river/compare/v1.0.17...v1.0.18
 [1.0.17]: https://github.com/martex-dev/river/compare/v1.0.16...v1.0.17
 [1.0.16]: https://github.com/martex-dev/river/compare/v1.0.15...v1.0.16
 [1.0.15]: https://github.com/martex-dev/river/compare/v1.0.14...v1.0.15
