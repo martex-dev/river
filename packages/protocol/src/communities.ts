@@ -309,6 +309,48 @@ export const messagesResponseSchema = z.object({ messages: z.array(messageSchema
 
 // ---- Realtime (WebSocket /v1/ws) -------------------------------------------------------------
 
+// ---- Scheduled events (1.0.18) ----------------------------------------------------------------
+
+export const SEALED_EVENT = 8 * 1024;
+const isoTime = z
+  .string()
+  .max(40)
+  .refine((v) => !Number.isNaN(Date.parse(v)), 'must be a time');
+
+export const eventSchema = z.object({
+  id: z.string().regex(COMMUNITY_ID_RE),
+  communityId: communityIdSchema,
+  createdBy: riverIdSchema,
+  /** Sealed { name, description, place }. */
+  data: sealedSchema(SEALED_EVENT),
+  startsAt: isoTime,
+  endsAt: isoTime,
+  /** The voice channel it happens in, if any. */
+  channelId: channelIdSchema.nullable(),
+  canceled: z.boolean(),
+  interested: z.array(riverIdSchema),
+});
+export type EventWire = z.infer<typeof eventSchema>;
+export const eventsResponseSchema = z.object({ events: z.array(eventSchema) });
+export const createEventRequestSchema = z
+  .object({
+    id: z.string().regex(COMMUNITY_ID_RE),
+    data: sealedSchema(SEALED_EVENT),
+    startsAt: isoTime,
+    endsAt: isoTime,
+    channelId: channelIdSchema.nullable(),
+  })
+  .strict();
+export const updateEventRequestSchema = z
+  .object({
+    data: sealedSchema(SEALED_EVENT).optional(),
+    startsAt: isoTime.optional(),
+    endsAt: isoTime.optional(),
+    channelId: channelIdSchema.nullable().optional(),
+    canceled: z.boolean().optional(),
+  })
+  .strict();
+
 export const callRoomSchema = z.string().regex(/^[A-Za-z0-9_-]{22,64}$/);
 /** Most people in one private call room. */
 export const MAX_CALL_ROOM = 8;
@@ -385,6 +427,8 @@ export const serverEventSchema = z.discriminatedUnion('t', [
     states: z.record(z.string(), voiceStateSchema).optional(),
   }),
   z.object({ t: z.literal('voice.disconnect') }),
+  /** A community's scheduled events changed: fetch them again (1.0.18). */
+  z.object({ t: z.literal('events'), communityId: communityIdSchema }),
   z.object({
     t: z.literal('signal'),
     from: riverIdSchema,
