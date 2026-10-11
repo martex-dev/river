@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VoiceCall, type CallTransport } from '../src/renderer/src/community/voice.ts';
+import type { RelayEngine } from '../src/renderer/src/community/relay-audio.ts';
 
 /**
  * A simulated WebRTC network. Two fake peer connections "connect" once both
@@ -180,13 +181,62 @@ class Relay {
 
 let relay: Relay;
 
-async function joinCall(id: string): Promise<VoiceCall> {
+/** A relay engine without audio: tracks keys and recipients and passes frames through the "server". */
+class FakeRelay implements RelayEngine {
+  readonly available = true;
+  readonly keys = new Map<string, string>();
+  recipients: string[] = [];
+  readonly got = new Map<string, number>();
+  private readonly raw: Uint8Array;
+  readonly me: string;
+  private readonly hub: Map<string, VoiceCall>;
+  constructor(me: string, hub: Map<string, VoiceCall>) {
+    this.me = me;
+    this.hub = hub;
+    this.raw = new Uint8Array(32).fill(me.charCodeAt(7));
+  }
+  async start(): Promise<void> {}
+  setMic(): void {}
+  setTransmitting(): void {}
+  setRecipients(ids: string[]): void {
+    this.recipients = ids;
+  }
+  ownKey(): Uint8Array {
+    return this.raw;
+  }
+  async setPeerKey(id: string, raw: Uint8Array): Promise<void> {
+    this.keys.set(id, String(raw[0]));
+  }
+  receive(from: string): void {
+    if (this.keys.has(from)) this.got.set(from, (this.got.get(from) ?? 0) + 1);
+  }
+  streamFor(): MediaStream {
+    return { getAudioTracks: () => [] } as unknown as MediaStream;
+  }
+  received(id: string): number {
+    return this.got.get(id) ?? 0;
+  }
+  dropPeer(id: string): void {
+    this.keys.delete(id);
+  }
+  close(): void {}
+  /** One voice frame to everyone currently relayed to. */
+  talk(): void {
+    for (const to of this.recipients) this.hub.get(to)?.receiveRelay(this.me, new Uint8Array([1]));
+  }
+}
+const relays = new Map<string, FakeRelay>();
+
+async function joinCall(id: string, withRelay = false): Promise<VoiceCall> {
+  const fake = withRelay ? new FakeRelay(id, relay.calls) : null;
+  if (fake) relays.set(id, fake);
   const call = new VoiceCall(
     'chan',
     id,
     () => undefined,
     { iceServers: [{ urls: `stun:owner-${id}` }] },
     relay.transport(id),
+    fake,
   );
   relay.calls.set(id, call);
   await call.start();
@@ -223,6 +273,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   net = new Net();
   relay = new Relay();
+  relays.clear();
   globalThis.RTCPeerConnection = FakePC as unknown as typeof RTCPeerConnection;
   globalThis.MediaStream = class {} as unknown as typeof MediaStream;
   (globalThis as { window?: unknown }).window = globalThis;
@@ -360,5 +411,60 @@ describe('voice mesh', () => {
     const sent = relay.sent;
     await vi.advanceTimersByTimeAsync(120_000);
     expect(relay.sent).toBe(sent);
+  });
+
+  describe('relay through the server', () => {
+    const relayedPairs = (calls: VoiceCall[]) =>
+      calls.flatMap((c) =>
+        c
+          .remotes()
+          .filter((r) => r.relayed)
+          .map((r) => `${(c as unknown as { me: string }).me.slice(7, 8)}>${r.id.slice(7, 8)}`),
+      );
+
+    it('a pair that cannot connect directly talks through the server, encrypted, and nobody else does', async () => {
+      const people = ids(3);
+      net.broken.add(Net.key(people[0]!, people[2]!));
+      const calls = await Promise.all(people.map((id) => joinCall(id, true)));
+      await runUntil(() => relayedPairs(calls).length === 2, 30_000);
+      expect(relayedPairs(calls).sort()).toEqual(['0>2', '2>0']);
+      // Keys were exchanged both ways, so each side can open the other's frames.
+      const [r0, , r2] = people.map((id) => relays.get(id)!);
+      expect(r0!.recipients).toEqual([people[2]]);
+      expect(r2!.recipients).toEqual([people[0]]);
+      r0!.talk();
+      r2!.talk();
+      expect(r2!.received(people[0]!)).toBe(1);
+      expect(r0!.received(people[2]!)).toBe(1);
+      expect(relays.get(people[1]!)!.recipients).toEqual([]);
+    });
+
+    it('switches back to the direct connection once it works', async () => {
+      const people = ids(2);
+      net.broken.add(Net.key(people[0]!, people[1]!));
+      const calls = await Promise.all(people.map((id) => joinCall(id, true)));
+      await runUntil(() => relayedPairs(calls).length === 2, 30_000);
+      net.broken.clear();
+      net.settle();
+      await runUntil(() => fullMesh(calls) && relayedPairs(calls).length === 0);
+      for (const id of people) expect(relays.get(id)!.recipients).toEqual([]);
+    });
+
+    it('stops relaying to someone who left', async () => {
+      const people = ids(2);
+      net.broken.add(Net.key(people[0]!, people[1]!));
+      const calls = await Promise.all(people.map((id) => joinCall(id, true)));
+      await runUntil(() => relayedPairs(calls).length === 2, 30_000);
+      await calls[1]!.leave();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(relays.get(people[0]!)!.recipients).toEqual([]);
+    });
+
+    it('direct pairs never use the relay', async () => {
+      const calls = await Promise.all(ids(4).map((id) => joinCall(id, true)));
+      await runUntil(() => fullMesh(calls));
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(relayedPairs(calls)).toEqual([]);
+    });
   });
 });

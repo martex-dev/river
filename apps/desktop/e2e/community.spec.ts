@@ -456,3 +456,57 @@ test('a brand-new user creates a community from a template in one step', async (
   await dave.locator('.channel-wrap', { hasText: 'general' }).click({ button: 'right' });
   await dave.getByRole('menuitem', { name: 'Mark as read' }).click();
 });
+
+test('voice goes through the server, encrypted, when members cannot connect directly', async () => {
+  test.setTimeout(120_000);
+  const carol = await open('Carol');
+  await carol.getByRole('button', { name: 'Settings', exact: true }).click();
+  await carol.getByRole('button', { name: 'Account', exact: true }).click();
+  await carol.getByPlaceholder('https://river.example.org').fill(url);
+  await carol.getByRole('button', { name: 'Save', exact: true }).click();
+  await carol.getByRole('button', { name: 'Create account' }).click();
+  await expect(carol.locator('.account-card .chip')).toHaveText('Connected');
+  await carol.getByRole('button', { name: 'Communities', exact: true }).click();
+  await carol.getByPlaceholder('e.g. The Crew').fill('Relay Crew');
+  await carol.getByRole('button', { name: 'Create community' }).click();
+  await carol.getByRole('button', { name: 'Invite people' }).first().click();
+  const invite = (await carol.locator('.invite-box__link').innerText()).trim();
+  await carol.getByRole('button', { name: 'Close', exact: true }).click();
+  const dave = await open('Dave');
+  await dave.getByRole('button', { name: 'Communities', exact: true }).click();
+  await dave.getByLabel('Invite link').fill(invite);
+  await dave.getByRole('button', { name: 'Join community' }).click();
+  await expect(dave.locator('.community__title strong')).toHaveText('Relay Crew');
+
+  // Neither app may connect directly (as behind strict NATs with no TURN server).
+  for (const p of [carol, dave]) {
+    await p.evaluate(() => {
+      (globalThis as { __riverForceRelay?: boolean }).__riverForceRelay = true;
+    });
+    await p.locator('.channel', { hasText: 'Lounge' }).click();
+  }
+  await expect(carol.locator('.tile', { hasText: 'Dave' })).toContainText('via server', { timeout: 30_000 });
+  await expect(dave.locator('.tile', { hasText: 'Carol' })).toContainText('via server', { timeout: 30_000 });
+
+  // Real sound arrives: the relayed stream carries the fake microphone's tone, decoded.
+  const loudness = (p: Page) =>
+    p.evaluate(async () => {
+      const el = document.querySelector<HTMLAudioElement>('.call-audio audio');
+      const stream = el?.srcObject as MediaStream | null;
+      if (!stream || stream.getAudioTracks().length === 0) return 0;
+      const ctx = new AudioContext();
+      const analyser = ctx.createAnalyser();
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      const buf = new Float32Array(analyser.fftSize);
+      let peak = 0;
+      for (let i = 0; i < 30; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        analyser.getFloatTimeDomainData(buf);
+        for (const v of buf) peak = Math.max(peak, Math.abs(v));
+      }
+      await ctx.close();
+      return peak;
+    });
+  await expect.poll(() => loudness(dave), { timeout: 30_000 }).toBeGreaterThan(0.01);
+  await expect.poll(() => loudness(carol), { timeout: 30_000 }).toBeGreaterThan(0.01);
+});

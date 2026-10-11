@@ -1,3 +1,6 @@
+import { fromBase64, toBase64 } from './relay-crypto.ts';
+import type { RelayEngine } from './relay-audio.ts';
+
 /**
  * Voice/video calls as a WebRTC mesh: every participant connects directly to
  * every other participant. Media is encrypted with DTLS-SRTP between the two
@@ -28,7 +31,11 @@ type Signal =
   /** Sent by the answering side when a working connection falters: "please restart ICE". */
   | { type: 'restart'; sid?: string }
   /** What the sender is currently sending; receivers show tiles from this, not from track heuristics. */
-  | { type: 'state'; camera: boolean; screen: boolean; muted: boolean };
+  | { type: 'state'; camera: boolean; screen: boolean; muted: boolean }
+  /** "I can't reach you directly: here is my relay key; let's talk through the server" (1.0.17). */
+  | { type: 'relay'; key: string }
+  /** "We are connected directly again: stop relaying to me." */
+  | { type: 'relay-off' };
 
 /** Answering side asks for an offer after this long without one (then less and less often). */
 const OFFER_WAIT_MS = 3000;
@@ -44,6 +51,8 @@ const RETRY_BASE_MS = 1000;
 const RETRY_MAX_MS = 15_000;
 /** Someone missing from the participant list keeps their working connection this long (server restart). */
 const MISSING_GRACE_MS = 10_000;
+/** A pair not connected directly after this long talks through the server meanwhile. */
+const RELAY_AFTER_MS = 6000;
 
 function newSid(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(9));
@@ -61,6 +70,8 @@ export interface RemotePeer {
   state: RTCPeerConnectionState;
   /** The connection dropped and River is bringing it back. */
   reconnecting: boolean;
+  /** Voice goes through the River server (no direct connection); audio only. */
+  relayed: boolean;
 }
 
 interface Peer {
@@ -72,6 +83,8 @@ interface Peer {
   /** An ICE restart was tried since the connection last worked. */
   restarted: boolean;
   timers: Set<ReturnType<typeof setTimeout>>;
+  /** Voice from the direct connection (kept while voice is relayed). */
+  directAudio: MediaStream | null;
   remote: RemotePeer;
   /** Remote candidates that arrived before the remote description. */
   pendingIce: RTCIceCandidateInit[];
@@ -152,6 +165,11 @@ export class VoiceCall {
   private listed: string[] = [];
   /** When our own connection to the server last came back (participant lists refill after that). */
   private resumedAt = 0;
+  private relay: RelayEngine | null;
+  /** People whose voice goes through the server. */
+  private readonly relayPeers = new Set<string>();
+  /** People we gave our relay key to. */
+  private readonly keySentTo = new Set<string>();
   private local: Record<Slot, MediaStreamTrack | null> = { audio: null, camera: null, screen: null };
   private readonly onChange: () => void;
   muted = false;
@@ -165,8 +183,10 @@ export class VoiceCall {
     onChange: () => void,
     options?: Partial<CallOptions>,
     transport?: CallTransport,
+    relay?: RelayEngine | null,
   ) {
     this.channelId = channelId;
+    this.relay = relay ?? null;
     this.transport = transport ?? channelTransport(channelId);
     this.me = me;
     this.onChange = onChange;
@@ -211,6 +231,14 @@ export class VoiceCall {
 
   async start(): Promise<void> {
     this.local.audio = await this.microphone();
+    if (this.relay?.available) {
+      try {
+        await this.relay.start(this.local.audio);
+      } catch (err) {
+        console.warn('voice relay unavailable', err);
+        this.relay = null;
+      }
+    } else this.relay = null;
     this.applyMic();
     this.watch(this.me, this.local.audio);
     try {
@@ -233,6 +261,55 @@ export class VoiceCall {
 
   private applyMic(): void {
     if (this.local.audio) this.local.audio.enabled = this.transmitting;
+    this.relay?.setTransmitting(this.transmitting);
+  }
+
+  /** A relayed voice frame arrived from the server. */
+  receiveRelay(from: string, payload: Uint8Array): void {
+    if (!this.closed && this.relayPeers.has(from)) this.relay?.receive(from, payload);
+  }
+
+  /** Talk to this person through the server until a direct connection works. */
+  private enableRelay(id: string): void {
+    if (!this.relay || this.closed || !this.participants.includes(id)) return;
+    if (!this.relayPeers.has(id)) {
+      this.relayPeers.add(id);
+      this.relay.setRecipients([...this.relayPeers]);
+    }
+    if (!this.keySentTo.has(id)) {
+      this.keySentTo.add(id);
+      this.send(id, { type: 'relay', key: toBase64(this.relay.ownKey()) });
+    }
+    this.refreshAudio(id);
+  }
+
+  private disableRelay(id: string, tell: boolean): void {
+    if (!this.relayPeers.delete(id)) return;
+    this.relay?.setRecipients([...this.relayPeers]);
+    if (tell) this.send(id, { type: 'relay-off' });
+    this.refreshAudio(id);
+  }
+
+  /** Person left the call: forget everything relay-related about them. */
+  private forgetRelay(id: string): void {
+    this.relayPeers.delete(id);
+    this.keySentTo.delete(id);
+    this.relay?.setRecipients([...this.relayPeers]);
+    this.relay?.dropPeer(id);
+  }
+
+  /** Plays the relayed voice while relayed, the direct one otherwise. */
+  private refreshAudio(id: string): void {
+    const peer = this.peers.get(id);
+    if (!peer) return;
+    const relayed = this.relayPeers.has(id);
+    const stream = relayed ? (this.relay?.streamFor(id) ?? null) : peer.directAudio;
+    peer.remote.relayed = relayed;
+    if (peer.remote.audio !== stream) {
+      peer.remote.audio = stream;
+      this.watch(id, stream?.getAudioTracks()[0] ?? null);
+    }
+    this.onChange();
   }
 
   async updateOptions(next: Partial<CallOptions>): Promise<void> {
@@ -349,6 +426,7 @@ export class VoiceCall {
       if (!refilling || peer.pc.connectionState !== 'connected') {
         this.missingSince.delete(id);
         this.dropPeer(id);
+        this.forgetRelay(id);
         continue;
       }
       if (!this.missingSince.has(id)) {
@@ -357,6 +435,7 @@ export class VoiceCall {
           if (this.missingSince.has(id) && !this.listed.includes(id)) {
             this.missingSince.delete(id);
             this.dropPeer(id);
+            this.forgetRelay(id);
             this.onChange();
           }
         });
@@ -404,6 +483,21 @@ export class VoiceCall {
       } else if (this.me < from && !peer && this.participants.includes(from)) {
         this.rebuild(from);
       }
+      return;
+    }
+    if (signal.type === 'relay') {
+      if (!this.relay || !this.participants.includes(from)) return;
+      try {
+        await this.relay.setPeerKey(from, fromBase64(signal.key));
+      } catch {
+        return;
+      }
+      this.enableRelay(from);
+      return;
+    }
+    if (signal.type === 'relay-off') {
+      const peer = this.peers.get(from);
+      if (peer?.pc.connectionState === 'connected') this.disableRelay(from, false);
       return;
     }
     if (signal.type === 'state') {
@@ -503,6 +597,8 @@ export class VoiceCall {
     for (const t of this.timers) clearTimeout(t);
     this.timers.clear();
     for (const id of [...this.peers.keys()]) this.dropPeer(id);
+    this.relay?.close();
+    this.relayPeers.clear();
     this.stopLocal();
     for (const a of this.analysers.values()) a.source.disconnect();
     this.analysers.clear();
@@ -516,6 +612,7 @@ export class VoiceCall {
   private async setSlot(slot: Slot, track: MediaStreamTrack | null): Promise<void> {
     this.local[slot]?.stop();
     this.local[slot] = track;
+    if (slot === 'audio') this.relay?.setMic(track);
     const index = SLOTS.indexOf(slot);
     await Promise.all(
       [...this.peers.values()].map((p) => {
@@ -531,6 +628,10 @@ export class VoiceCall {
     const pc = new RTCPeerConnection({
       iceServers: [...ICE_SERVERS, ...this.options.iceServers],
       bundlePolicy: 'max-bundle',
+      // End-to-end tests set this to make direct connections impossible and exercise the relay.
+      ...((globalThis as { __riverForceRelay?: boolean }).__riverForceRelay
+        ? { iceTransportPolicy: 'relay' as const, iceServers: [] }
+        : {}),
     });
     const peer: Peer = {
       pc,
@@ -548,11 +649,13 @@ export class VoiceCall {
         muted: false,
         state: 'new',
         reconnecting: false,
+        relayed: false,
       },
       pendingIce: [],
       sdpSent: false,
       outgoingIce: [],
       timers: new Set(),
+      directAudio: null,
     };
     for (const early of this.earlyIce.get(id) ?? [])
       if (early.sid === undefined || sid === undefined || early.sid === sid)
@@ -568,11 +671,21 @@ export class VoiceCall {
     pc.ontrack = (e) => {
       const slot = SLOTS[pc.getTransceivers().indexOf(e.transceiver)];
       if (!slot) return;
-      peer.remote[slot] = new MediaStream([e.track]);
-      if (slot === 'audio') this.watch(id, e.track);
+      const stream = new MediaStream([e.track]);
+      if (slot === 'audio') {
+        peer.directAudio = stream;
+        this.refreshAudio(id);
+        return;
+      }
+      peer.remote[slot] = stream;
       this.onChange();
     };
     this.peers.set(id, peer);
+    if (this.relayPeers.has(id)) queueMicrotask(() => this.refreshAudio(id));
+    // Not connected directly after a few seconds: talk through the server meanwhile.
+    this.peerTimer(peer, RELAY_AFTER_MS, () => {
+      if (pc.connectionState !== 'connected') this.enableRelay(id);
+    });
     // A connection that never comes up is rebuilt rather than left hanging.
     this.peerTimer(peer, CONNECT_TIMEOUT_MS, () => {
       if (pc.connectionState !== 'connected') this.recover(id, peer, 'timeout');
@@ -586,6 +699,7 @@ export class VoiceCall {
     peer.remote.state = state;
     if (state === 'connected') {
       this.retries.delete(id);
+      this.disableRelay(id, true);
       peer.remote.reconnecting = false;
       peer.everConnected = true;
       peer.restarted = false;
@@ -598,6 +712,7 @@ export class VoiceCall {
       });
     } else if (state === 'failed') {
       peer.remote.reconnecting = true;
+      this.enableRelay(id);
       this.recover(id, peer, 'failed');
     }
     this.onChange();
