@@ -75,7 +75,7 @@ export function highlight(code: string, lang: string | null): Token[] {
   let i = 0;
   while (i < code.length) {
     const rest = code.slice(i);
-    let m: RegExpMatchArray | null = null;
+    let m: RegExpMatchArray | null;
     if (rest.startsWith(lineComment)) {
       const end = code.indexOf('\n', i);
       flush();
