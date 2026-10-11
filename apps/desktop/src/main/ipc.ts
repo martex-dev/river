@@ -179,7 +179,7 @@ export function registerIpc(deps: IpcDeps): void {
     result(async () => {
       const made = await deps.hosting.adminCreateSignup(usernameArg.parse(username));
       const base = deps.account.status();
-      const server = base.state === 'registered' ? base.serverUrl : 'https://river.invalid';
+      const server = base.state === 'registered' ? base.shareUrl : 'https://river.invalid';
       return { username: made.username, link: `${server}/add#s=${made.code}`, expiresAt: made.expiresAt };
     }),
   );

@@ -6,6 +6,14 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Invite links from the hosting PC work for everyone.** Since 1.0.14 the host
+  talks to its own server over 127.0.0.1, and its invite, friend and sign-up
+  links carried that private address. Links now always use the public address.
+- Friend links that name an older address of your server are no longer
+  refused as "another server".
+
 ## [1.0.15] - 2026-10-10
 
 ### Fixed

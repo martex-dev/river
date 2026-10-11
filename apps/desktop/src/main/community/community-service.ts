@@ -220,6 +220,13 @@ export class CommunityService {
     return s.serverUrl;
   }
 
+  /** The address for links other people open (never this PC's 127.0.0.1). */
+  private shareServer(): string {
+    const s = this.deps.account.status();
+    if (s.state !== 'registered') throw new CommunityError('Create an account first.');
+    return s.shareUrl;
+  }
+
   private async token(): Promise<string> {
     let token = this.deps.account.sessionToken();
     if (!token) {
@@ -941,7 +948,7 @@ export class CommunityService {
       { check },
       inviteResponseSchema,
     );
-    return formatInvite(this.server(), res.code, key, epoch);
+    return formatInvite(this.shareServer(), res.code, key, epoch);
   }
 
   /**

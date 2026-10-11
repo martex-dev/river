@@ -93,11 +93,14 @@ async function start(): Promise<void> {
   });
   storage.start();
   const identity = new IdentityService(() => storage.db());
+  // Set once hosting exists (below); the account asks it for links people can open.
+  let publicAddress: () => string | null = () => null;
   const account = new AccountService({
     db: () => storage.db(),
     identity,
     requestJson: createRequestJson((input, init) => net.fetch(input as string, init)),
     log,
+    publicAddress: () => publicAddress(),
   });
   const locator = new ServerLocator({
     db: () => storage.db(),
@@ -144,6 +147,13 @@ async function start(): Promise<void> {
         community.ensureSocket();
       });
     },
+  });
+  publicAddress = () => hosting.manager.status().address;
+  let lastPublic: string | null = null;
+  hosting.manager.onStatus((s) => {
+    if (s.address === lastPublic) return;
+    lastPublic = s.address;
+    account.refresh();
   });
   void hosting.init();
   // New people get their account on River's server by themselves, as soon as they have a name.

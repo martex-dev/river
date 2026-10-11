@@ -42,7 +42,11 @@ export interface AccountServiceDeps {
   requestJson: RequestJson;
   log: Logger;
   now?: () => Date;
+  /** This PC's public server address while it hosts the server (for links people can open). */
+  publicAddress?: () => string | null;
 }
+
+const LOOPBACK = /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
 
 /**
  * The user's account on a River server. Registration proves possession of the
@@ -68,6 +72,7 @@ export class AccountService {
       state: 'registered',
       server: new URL(row.server_url).host,
       serverUrl: row.server_url,
+      shareUrl: (LOOPBACK.test(row.server_url) && this.deps.publicAddress?.()) || row.server_url,
       riverId: row.river_id,
       username: row.username,
       deviceId: row.device_id,
@@ -347,6 +352,11 @@ export class AccountService {
     if (!db) return;
     db.prepare('UPDATE account SET server_url = ? WHERE id = 1').run(url);
     this.setConnection('connecting');
+  }
+
+  /** Tells listeners again (the share address can change without the connection changing). */
+  refresh(): void {
+    this.setConnection(this.connection, this.message);
   }
 
   private setConnection(connection: typeof this.connection, message?: string): void {

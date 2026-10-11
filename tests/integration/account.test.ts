@@ -169,6 +169,26 @@ describe('desktop ↔ server accounts', () => {
     expect(await c.account.canSignInAt('http://127.0.0.1:9999')).toBe(false);
   });
 
+  it('shares the public address, not 127.0.0.1, when this PC hosts the server', async () => {
+    const identity = new IdentityService(() => local);
+    let address: string | null = 'https://crew-public.trycloudflare.com';
+    const account = new AccountService({
+      db: () => local,
+      identity,
+      requestJson: createRequestJson(injectFetch),
+      log: nullLogger,
+      publicAddress: () => address,
+    });
+    identity.create('');
+    await account.register(SERVER); // SERVER is a loopback address in these tests
+    const status = account.status();
+    expect(status.state === 'registered' && status.shareUrl).toBe('https://crew-public.trycloudflare.com');
+    // Not hosting (no public address): links fall back to the address the account uses.
+    address = null;
+    const after = account.status();
+    expect(after.state === 'registered' && after.shareUrl).toBe(SERVER);
+  });
+
   it('refuses a second account on the same device', async () => {
     const c = client();
     c.identity.create('');

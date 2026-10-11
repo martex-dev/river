@@ -117,7 +117,7 @@ export function FriendsPage(): ReactElement {
 
       {tab === 'add' ? (
         <AddFriend
-          serverUrl={account.serverUrl}
+          serverUrl={account.shareUrl}
           myId={account.riverId}
           myUsername={account.username}
           onSent={() => setTab('all')}
@@ -313,10 +313,6 @@ function AddFriend(props: {
       if (link.riverId === props.myId) {
         setBusy(false);
         return setError("That's you!");
-      }
-      if (link.serverUrl && link.serverUrl !== props.serverUrl.replace(/\/+$/, '')) {
-        setBusy(false);
-        return setError('That link is for a different River server.');
       }
       riverId = link.riverId;
     } else {
