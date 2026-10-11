@@ -23,6 +23,8 @@ import {
   type MessageWire,
   type ServerEvent,
   type VoiceState,
+  decodeRelayIn,
+  encodeRelayOut,
 } from '@river/protocol';
 import { z } from 'zod';
 import {
@@ -186,6 +188,7 @@ export class CommunityService {
   heartbeatMs = 20_000;
   deadAfterMs = 50_000;
   private readonly listeners = new Set<(e: CommunityEvent) => void>();
+  private readonly relayListeners = new Set<(from: string, payload: Uint8Array) => void>();
   private readonly rawListeners = new Set<(e: ServerEvent) => void>();
   /** Identity keys members published inside sealed community profiles. */
   private readonly profileKeys = new Map<string, string>();
@@ -198,6 +201,22 @@ export class CommunityService {
 
   constructor(deps: Deps) {
     this.deps = deps;
+  }
+
+  /** Relayed voice frames (encrypted end to end by their sender) as they arrive. */
+  onRelay(listener: (from: string, payload: Uint8Array) => void): () => void {
+    this.relayListeners.add(listener);
+    return () => this.relayListeners.delete(listener);
+  }
+
+  /**
+   * Sends an encrypted voice frame through the server to people in our voice
+   * channel we cannot reach directly. Dropped while offline (audio is live).
+   */
+  relaySend(recipients: string[], payload: Uint8Array): void {
+    if (!this.activeVoice || this.socketState !== 'online' || this.socket?.readyState !== WebSocket.OPEN)
+      return;
+    this.socket.send(encodeRelayOut(recipients, payload));
   }
 
   onEvent(listener: (e: CommunityEvent) => void): () => void {
@@ -1866,8 +1885,14 @@ export class CommunityService {
       socket.send(JSON.stringify({ t: 'auth', token }));
       this.startHeartbeat(socket);
     };
+    socket.binaryType = 'arraybuffer';
     socket.onmessage = (msg) => {
       if (this.socket === socket) this.lastHeard = Date.now();
+      if (msg.data instanceof ArrayBuffer) {
+        const frame = decodeRelayIn(new Uint8Array(msg.data));
+        if (frame) for (const l of this.relayListeners) l(frame.sender, frame.payload);
+        return;
+      }
       try {
         this.handle(serverEventSchema.parse(JSON.parse(String(msg.data))));
       } catch {

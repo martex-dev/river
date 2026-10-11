@@ -130,6 +130,12 @@ const api: RiverApi = {
     leave: () => ipcRenderer.invoke(IPC.voiceLeave),
     signal: (to, channelId, payload) => ipcRenderer.invoke(IPC.voiceSignal, to, channelId, payload),
     iceServers: () => ipcRenderer.invoke(IPC.voiceIceServers),
+    relay: (to, payload) => ipcRenderer.send(IPC.voiceRelay, to, payload),
+    onRelay: (listener) => {
+      const wrapped = (_e: unknown, from: string, payload: Uint8Array): void => listener(from, payload);
+      ipcRenderer.on(IPC.voiceRelayIn, wrapped);
+      return () => ipcRenderer.removeListener(IPC.voiceRelayIn, wrapped);
+    },
     screenSources: () => ipcRenderer.invoke(IPC.screenSources),
     selectScreen: (id) => ipcRenderer.invoke(IPC.screenSelect, id),
   },
