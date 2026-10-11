@@ -311,7 +311,7 @@ function RemoteTile(props: {
   const connecting = peer.state !== 'connected';
   return (
     <div
-      className={`tile ${peer.screenOn ? 'tile--screen' : ''} ${props.speaking ? 'is-speaking' : ''} ${props.focused ? 'is-focused' : ''}`}
+      className={`tile ${connecting ? 'tile--connecting' : ''} ${peer.screenOn ? 'tile--screen' : ''} ${props.speaking ? 'is-speaking' : ''} ${props.focused ? 'is-focused' : ''}`}
       {...tileControls(label, props.speaking, props.focused, props.onClick)}
     >
       {peer.screenOn && peer.screen ? (
@@ -329,7 +329,9 @@ function RemoteTile(props: {
         {props.speaking && <SpeakingWaves />}
         {label}
         {peer.muted ? ' · muted' : ''}
-        {connecting ? ` · ${peer.state === 'failed' ? 'could not connect' : 'connecting…'}` : ''}
+        {connecting || state?.reconnecting
+          ? ` · ${peer.reconnecting || state?.reconnecting ? 'reconnecting…' : 'connecting…'}`
+          : ''}
       </span>
       {peer.screenOn && <span className="live-badge tile__live">LIVE</span>}
     </div>

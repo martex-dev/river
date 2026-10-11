@@ -260,6 +260,16 @@
   color: var(--text-dim);
   animation: slide-in var(--dur) var(--ease-out);
 }
+.channel__participant.is-reconnecting {
+  opacity: 0.6;
+}
+.voice-reconnecting {
+  font-size: 11px;
+  color: var(--warn);
+}
+.tile--connecting {
+  opacity: 0.75;
+}
 .channel__participant-name {
   flex: 1;
   min-width: 0;
