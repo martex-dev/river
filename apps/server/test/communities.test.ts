@@ -961,6 +961,40 @@ describe('communities', () => {
         for (const c of [host, member, other]) c.ws.close();
       });
 
+      it('relays voice between the members of a private call room only', async () => {
+        const { owner, guest, connect } = await setup(5_000);
+        const stranger = await user(app);
+        const a = await connect(owner.token);
+        const b = await connect(guest.token);
+        const c = await connect(stranger.token);
+        const inbox = (ws: WebSocket) => {
+          const got: Uint8Array[] = [];
+          ws.binaryType = 'arraybuffer';
+          const prev = ws.onmessage;
+          ws.onmessage = (m) => {
+            if (m.data instanceof ArrayBuffer) got.push(new Uint8Array(m.data));
+            else prev?.call(ws, m);
+          };
+          return got;
+        };
+        const atB = inbox(b.ws);
+        const atC = inbox(c.ws);
+        const room = 'r'.repeat(32);
+        a.ws.send(JSON.stringify({ t: 'call.room', room }));
+        b.ws.send(JSON.stringify({ t: 'call.room', room }));
+        c.ws.send(JSON.stringify({ t: 'call.room', room: 's'.repeat(32) }));
+        await new Promise((r) => setTimeout(r, 100));
+        a.ws.send(encodeRelayOut([guest.riverId, stranger.riverId], new Uint8Array([1])));
+        await vi.waitFor(() => expect(atB).toHaveLength(1));
+        b.ws.send(JSON.stringify({ t: 'call.room', room: null }));
+        await new Promise((r) => setTimeout(r, 100));
+        a.ws.send(encodeRelayOut([guest.riverId], new Uint8Array([2])));
+        await new Promise((r) => setTimeout(r, 200));
+        expect(atB).toHaveLength(1);
+        expect(atC).toHaveLength(0);
+        for (const x of [a, b, c]) x.ws.close();
+      });
+
       it('leaving on purpose frees the seat at once', async () => {
         const { owner, guest, voice, connect, lastVoice } = await setup(60_000);
         const host = await connect(owner.token);

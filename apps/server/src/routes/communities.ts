@@ -33,6 +33,7 @@ import {
   updateCommunityRequestSchema,
   updateRoleRequestSchema,
   type ServerEvent,
+  MAX_CALL_ROOM,
   RELAY_BURST,
   RELAY_FRAMES_PER_SECOND,
   decodeRelayOut,
@@ -1353,6 +1354,10 @@ export async function registerCommunityRoutes(
       switch (event.t) {
         case 'ping':
           return send({ t: 'pong' });
+        case 'call.room':
+          if (event.room === null) hub.leaveRoom(self);
+          else if (!hub.joinRoom(self, event.room, MAX_CALL_ROOM)) send({ t: 'error', code: 'room_full' });
+          return;
         case 'voice.join': {
           const cid = await communityOfChannel(db, event.channelId);
           const model = cid ? await loadCommunity(db, cid) : null;
@@ -1449,12 +1454,10 @@ export async function registerCommunityRoutes(
       if (relayTokens < 1 || !riverId) return; // over budget: drop (audio tolerates loss)
       relayTokens -= 1;
       const frame = decodeRelayOut(new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength));
-      const channelId = hub.voiceChannelOf(riverId);
-      if (!frame || !channelId) return;
-      const out = Buffer.from(encodeRelayIn(riverId, frame.payload));
-      for (const to of new Set(frame.recipients)) {
-        if (to !== riverId && hub.voiceChannelOf(to) === channelId) hub.sendBinaryTo(to, out);
-      }
+      if (!frame) return;
+      const sender = riverId;
+      const out = Buffer.from(encodeRelayIn(sender, frame.payload));
+      for (const to of new Set(frame.recipients)) if (hub.sharesCall(sender, to)) hub.sendBinaryTo(to, out);
     };
     socket.on('message', (raw: Buffer, isBinary: boolean) => {
       alive = true;
