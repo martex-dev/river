@@ -19,9 +19,9 @@ import {
 import { MemberList } from '../community/ui/Members.tsx';
 import { UserSettings } from '../community/ui/UserSettings.tsx';
 import { VoiceChannel } from '../community/ui/Voice.tsx';
-import { MenuItem, PlusIcon, Popover, can, initials } from '../community/ui/common.tsx';
+import { MenuItem, Popover, can } from '../community/ui/common.tsx';
 import { NotifyMenuSection } from '../community/ui/NotifyMenu.tsx';
-import { isMuted } from '../../../shared/notify-rules.ts';
+import { CommunityRail } from '../community/ui/Rail.tsx';
 import { Permission } from '@river/protocol/permissions';
 import type { CommunityView } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
@@ -29,7 +29,6 @@ import { CallPill, IncomingCall } from '../dm/CallUi.tsx';
 
 export function CommunitiesPage(): ReactElement {
   const s = useCommunity();
-  const settings = useRiver((r) => r.settings);
   const identity = useRiver((r) => r.identity);
   const account = useRiver((r) => r.account);
   const [adding, setAdding] = useState(false);
@@ -73,61 +72,11 @@ export function CommunitiesPage(): ReactElement {
 
   return (
     <div className={`community ${s.showMembers && channel?.kind === 'text' ? '' : 'community--no-members'}`}>
-      <nav className="community__servers" aria-label="Your communities">
-        {s.communities.map((c) => {
-          const prefs = settings?.notifications;
-          const communityMuted = !!prefs && isMuted(prefs, c.id);
-          const unread =
-            !communityMuted &&
-            c.channels.some(
-              (ch) =>
-                !(prefs && isMuted(prefs, ch.id)) &&
-                ((s.unread[ch.id] ?? 0) > 0 || (ch.unread && ch.id !== s.selectedChannel)),
-            );
-          const mentions = c.channels.reduce((n, ch) => n + (s.mentions[ch.id] ?? 0), 0);
-          return (
-            <div
-              key={c.id}
-              className={`community__server-wrap ${c.id === community?.id ? 'is-active' : ''} ${unread ? 'is-unread' : ''} ${communityMuted ? 'is-muted' : ''}`}
-            >
-              <span className="community__pill" aria-hidden="true" />
-              <button
-                className={`community__server ${c.id === community?.id ? 'is-active' : ''}`}
-                title={c.name}
-                aria-label={c.name}
-                onClick={() => s.select(c.id)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setServerMenu({ id: c.id, x: e.clientX, y: e.clientY });
-                }}
-              >
-                {c.icon ? (
-                  <span className="community__server-icon" aria-hidden="true">
-                    {c.icon}
-                  </span>
-                ) : (
-                  initials(c.name)
-                )}
-              </button>
-              {mentions > 0 && (
-                <span key={mentions} className="badge badge--mention community__server-badge">
-                  {mentions}
-                </span>
-              )}
-            </div>
-          );
-        })}
-        <div className="community__server-wrap">
-          <button
-            className="community__server community__server--add"
-            title="Create or join a community"
-            aria-label="Create or join a community"
-            onClick={() => setAdding(true)}
-          >
-            <PlusIcon size={22} />
-          </button>
-        </div>
-      </nav>
+      <CommunityRail
+        activeId={community?.id ?? null}
+        onAdd={() => setAdding(true)}
+        onMenu={(id, x, y) => setServerMenu({ id, x, y })}
+      />
       {serverMenu && (
         <CommunityMenu
           community={s.communities.find((c) => c.id === serverMenu.id)}

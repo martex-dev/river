@@ -597,4 +597,18 @@ test('status menu: do not disturb and a custom status show to others; formatting
   await expect
     .poll(() => apps.at(-2)!.evaluate(({ clipboard }) => clipboard.readText()), { timeout: 5000 })
     .toMatch(/\/channels\/[\w-]{22}\/[\w-]{22}\/[\w-]{22}$/);
+
+  // A second community, dropped onto the first in the list on the left, makes a folder.
+  await erin.getByRole('button', { name: 'Create or join a community' }).click();
+  await erin.getByPlaceholder('e.g. The Crew').fill('Second Place');
+  await erin.getByRole('button', { name: 'Create community' }).click();
+  await expect(erin.locator('.community__title strong')).toHaveText('Second Place');
+  const rail = erin.getByRole('navigation', { name: 'Your communities' });
+  await rail
+    .getByRole('button', { name: 'Second Place', exact: true })
+    .dragTo(rail.getByRole('button', { name: 'Status Crew', exact: true }));
+  const folder = erin.getByRole('button', { name: /^Folder New folder, 2 communities, open/ });
+  await expect(folder).toBeVisible();
+  await folder.click();
+  await expect(erin.getByRole('button', { name: /^Folder New folder, 2 communities, closed/ })).toBeVisible();
 });

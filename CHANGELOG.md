@@ -17,6 +17,10 @@ All notable changes to River are documented here. The format follows
   Ctrl+0), message text size, 12- or 24-hour clock, and a **high-contrast**
   mode that also turns on when your system asks for more contrast
   (Settings → Appearance).
+- **Folders and your own order for communities.** Drag communities in the
+  list on the left to reorder them; drop one onto another to make a folder.
+  Click a folder to open or close it; right-click it to rename it, pick a
+  colour, mark it read or ungroup it.
 - Coming back to a channel you had scrolled up in returns you to the same
   place.
 
