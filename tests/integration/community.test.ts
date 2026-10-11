@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Permission } from '@river/protocol';
+import { tally, voteEmoji } from '../../apps/desktop/src/shared/poll.ts';
 import type { CommunityEvent } from '../../apps/desktop/src/shared/ipc.ts';
 // Desktop main-process code under test.
 import { AccountService } from '../../apps/desktop/src/main/account/account-service.ts';
@@ -175,6 +176,70 @@ describe('profiles', () => {
     const stored = JSON.stringify(await serverDb.db.selectFrom('community_members').selectAll().execute());
     expect(stored).not.toContain('I build bikes');
     expect(stored).not.toContain('he/him');
+  });
+});
+
+describe('polls', () => {
+  it('are encrypted end to end, votes included, and cannot be edited', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Poll Club');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.name === 'general')!;
+    await bob.community.refresh();
+    const sent = await alice.community.action({
+      a: 'send',
+      channelId: general.id,
+      text: '📊 Movie or games?',
+      poll: {
+        question: 'Movie or games?',
+        options: ['Movie', 'Games'],
+        multi: false,
+        endsAt: new Date(Date.now() + 3600_000).toISOString(),
+      },
+    });
+    const [seen] = await bob.community.messages(general.id);
+    expect(seen!.poll).toMatchObject({ question: 'Movie or games?', options: ['Movie', 'Games'] });
+    await bob.community.action({
+      a: 'react',
+      channelId: general.id,
+      messageId: sent.id,
+      emoji: voteEmoji(1),
+      on: true,
+    });
+    const [after] = await alice.community.messages(general.id);
+    expect(tally(after!.poll!, after!.reactions, bob.riverId)).toMatchObject({
+      counts: [0, 1],
+      mine: [1],
+      voters: 1,
+    });
+    const stored =
+      JSON.stringify(await serverDb.db.selectFrom('messages').selectAll().execute()) +
+      JSON.stringify(await serverDb.db.selectFrom('message_reactions').selectAll().execute());
+    expect(stored).not.toContain('Movie');
+    expect(stored).not.toContain('poll');
+    await expect(
+      alice.community.action({ a: 'edit', channelId: general.id, messageId: sent.id, text: 'changed' }),
+    ).rejects.toThrow(/cannot be edited/);
+  });
+
+  it('editing a message keeps its reactions', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Edit Club');
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.name === 'general')!;
+    const m = await alice.community.send(general.id, 'helo');
+    await alice.community.action({
+      a: 'react',
+      channelId: general.id,
+      messageId: m.id,
+      emoji: '🔥',
+      on: true,
+    });
+    await alice.community.action({ a: 'edit', channelId: general.id, messageId: m.id, text: 'hello' });
+    const [after] = await alice.community.messages(general.id);
+    expect(after).toMatchObject({ text: 'hello' });
+    expect(after!.reactions.map((r) => r.emoji)).toEqual(['🔥']);
+    void created;
   });
 });
 

@@ -15,6 +15,10 @@ All notable changes to River are documented here. The format follows
   voice" button while it is on). People with the new **Manage events**
   permission can edit, cancel or delete them. Name, description and place are
   end-to-end encrypted.
+- **Polls.** Click 📊 next to the message box: a question, up to ten
+  answers, one or several choices, open for an hour to a week. Results show
+  as bars that update live. Questions, answers and votes are end-to-end
+  encrypted — the server cannot tell who picked what.
 - **Richer profiles:** About me, pronouns and a banner colour, with a live
   preview in Settings → Profile; shown on your profile card in every
   community, end-to-end encrypted.
@@ -43,6 +47,9 @@ All notable changes to River are documented here. The format follows
 
 ### Fixed
 
+- Editing a message no longer drops its reactions after the community key
+  changed (the edit is now sealed with the message's own key), and keeps
+  everything else in it.
 - The Notifications settings no longer claim they take effect "when
   messaging arrives in River 0.2".
 

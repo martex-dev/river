@@ -44,6 +44,7 @@ import { communityIconSchema, templateById, type TemplateId } from '../../shared
 import { describeAudit } from './audit-text.ts';
 import type { ServerLocator } from './server-locator.ts';
 import type { PresenceTracker } from '../presence.ts';
+import { readPoll, type Poll } from '../../shared/poll.ts';
 import type {
   CategoryView,
   ChannelView,
@@ -838,6 +839,7 @@ export class CommunityService {
         text: string;
         replyTo?: string;
         noPing?: unknown;
+        poll?: unknown;
         attachments?: unknown[];
       }>(communityId, `message:${m.channelId}`, m.body);
       const body = opened.value;
@@ -877,6 +879,7 @@ export class CommunityService {
         sender: m.sender,
         senderName: sender?.name ?? `Member ${m.sender.slice(0, 4)}`,
         text,
+        poll: readPoll(body.poll),
         sentAt: m.sentAt,
         editedAt: m.editedAt,
         pinned: m.pinned,
@@ -1179,6 +1182,7 @@ export class CommunityService {
     attachments: AttachmentPointer[] = [],
     threadId?: string,
     noPing = false,
+    poll?: Poll,
   ): Promise<ChatMessage> {
     const text = attachments.length ? z.string().max(4000).parse(rawText) : textSchema.parse(rawText);
     const communityId = this.communityOf(channelId);
@@ -1189,6 +1193,7 @@ export class CommunityService {
       text,
       ...(replyTo ? { replyTo } : {}),
       ...(replyTo && noPing ? { noPing: true } : {}),
+      ...(poll ? { poll } : {}),
       ...(attachments.length ? { attachments } : {}),
     };
     const sent = await this.call(
@@ -1524,6 +1529,7 @@ export class CommunityService {
           act.attachments,
           act.threadId,
           act.noPing,
+          act.poll,
         )) as CommunityActionResult<A>;
       case 'createThread': {
         const communityId = this.communityOf(act.channelId);
@@ -1579,7 +1585,10 @@ export class CommunityService {
       case 'edit': {
         const communityId = this.communityOf(act.channelId);
         const existing = await this.findMessage(act.channelId, act.messageId);
-        const body = seal(this.requireKey(communityId), communityId, `message:${act.channelId}`, {
+        if (existing?.poll) throw new CommunityError('Polls cannot be edited.');
+        // Seal with the message's own key: its reactions are tagged with it and must keep matching.
+        const key = this.messageKeys.get(act.messageId) ?? this.requireKey(communityId);
+        const body = seal(key, communityId, `message:${act.channelId}`, {
           text: act.text,
           ...(existing?.replyTo ? { replyTo: existing.replyTo } : {}),
           ...(existing?.attachments.length ? { attachments: existing.attachments } : {}),

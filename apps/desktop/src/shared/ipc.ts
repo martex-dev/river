@@ -1,3 +1,4 @@
+import type { Poll } from './poll.ts';
 import type { AdminOverview } from '@river/protocol/admin';
 import type { ReleaseChannel } from '@river/release/channels';
 import type { CreateCommunityOptions } from './templates.ts';
@@ -324,6 +325,8 @@ export interface ChatMessage {
   threadId: string | null;
   /** The thread started from this message, if any. */
   thread: ThreadView | null;
+  /** A poll, if this message is one (1.0.18). Votes are in `reactions` (see shared/poll.ts). */
+  poll?: Poll | null;
 }
 
 export interface ThreadView {
