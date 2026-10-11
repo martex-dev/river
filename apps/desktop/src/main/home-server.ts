@@ -64,6 +64,8 @@ export interface HomeAccountDeps extends HomeServerDeps {
   ready(): boolean;
   /** A server the user chose themselves (Settings → Server); then River leaves the choice to them. */
   chosenServer(): string | null;
+  /** False after the user deleted their account: no account is made unless they ask (1.0.18). */
+  autoAccount?(): boolean;
   onRegistered(url: string): void;
   log: Logger;
 }
@@ -109,7 +111,7 @@ export class HomeAccount {
 
   /** Tries now, and keeps trying every minute until it works. Never throws. */
   kick(): void {
-    if (!this.needed()) return;
+    if (!this.needed() || this.deps.autoAccount?.() === false) return;
     void this.ensure().catch(() => {
       if (this.timer) return;
       this.timer = setTimeout(() => {

@@ -15,6 +15,12 @@ All notable changes to River are documented here. The format follows
   voice" button while it is on). People with the new **Manage events**
   permission can edit, cancel or delete them. Name, description and place are
   end-to-end encrypted.
+- **Delete your account** (Settings → Account). It is removed from your
+  server for good — you leave your communities, communities you own are
+  deleted, and your keys and devices are gone there — after you confirm, and
+  River proves the request with your device key, so a stolen session alone
+  can never delete an account. River will not quietly make a new account for
+  you afterwards.
 - **Polls.** Click 📊 next to the message box: a question, up to ten
   answers, one or several choices, open for an hour to a week. Results show
   as bars that update live. Questions, answers and votes are end-to-end

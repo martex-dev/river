@@ -364,6 +364,15 @@ export function registerIpc(deps: IpcDeps): void {
       return status;
     }),
   );
+  handle(IPC.accountDelete, () =>
+    result(async () => {
+      await deps.account.deleteAccount();
+      deps.community.forgetAll();
+      // Never quietly make a new account on River's server after this.
+      deps.settings.update({ server: { autoAccount: false } });
+      return null;
+    }),
+  );
   handle(IPC.usersLookup, (_e, username) =>
     result(() => deps.account.lookupUser(z.string().max(64).parse(username))),
   );

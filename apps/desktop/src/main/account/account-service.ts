@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { generateKeyPair, sign, verify } from '@river/crypto';
 import {
   API_PREFIX,
@@ -10,6 +11,7 @@ import {
   registerResponseSchema,
   registrationMessage,
   sessionMessage,
+  deleteAccountMessage,
   sessionResponseSchema,
   versionResponseSchema,
   type DeviceList,
@@ -277,6 +279,35 @@ export class AccountService {
       }
     }
     return this.status();
+  }
+
+  /**
+   * Deletes this account from its server for good (1.0.18): proves it with a
+   * fresh challenge signed by this device's key, then forgets the account on
+   * this device. Your identity, contacts and messages on this device stay.
+   */
+  async deleteAccount(): Promise<void> {
+    const row = this.row();
+    if (!row) throw new UserFacingError('There is no account to delete.');
+    const token = this.token ?? (await this.connect(), this.token);
+    if (!token) throw new UserFacingError('Connect to your server first, then try again.');
+    const { requestJson } = this.deps;
+    const { challenge } = await requestJson(
+      `${row.server_url}${API_PREFIX}/auth/challenge`,
+      { method: 'POST', body: { purpose: 'session' } },
+      challengeResponseSchema,
+    );
+    const signature = this.signWithDevice(
+      deleteAccountMessage(unb64(challenge), row.river_id, row.device_id),
+    );
+    await requestJson(
+      `${row.server_url}${API_PREFIX}/accounts/me`,
+      { method: 'DELETE', token, body: { challenge, deviceId: row.device_id, signature: b64(signature) } },
+      z.object({ ok: z.literal(true) }),
+    );
+    this.token = null;
+    this.deps.db()?.prepare('DELETE FROM account WHERE id = 1').run();
+    this.setConnection('offline');
   }
 
   private signWithDevice(message: Uint8Array): Uint8Array {

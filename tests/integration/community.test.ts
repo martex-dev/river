@@ -75,7 +75,7 @@ async function person(
       log: nullLogger,
       createSocket,
     });
-  return { community: start(), riverId: created.riverId, restart: start };
+  return { community: start(), riverId: created.riverId, restart: start, account };
 }
 
 beforeEach(async () => {
@@ -240,6 +240,24 @@ describe('polls', () => {
     expect(after).toMatchObject({ text: 'hello' });
     expect(after!.reactions.map((r) => r.emoji)).toEqual(['🔥']);
     void created;
+  });
+});
+
+describe('deleting your account', () => {
+  it('removes it from the server and forgets it and its communities on this device', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Leaving Club');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    await bob.account.connect();
+    await bob.account.deleteAccount();
+    bob.community.forgetAll();
+    expect(bob.account.status().state).toBe('none');
+    expect(bob.community.cached()).toEqual([]);
+    const accounts = await serverDb.db.selectFrom('accounts').select('river_id').execute();
+    expect(accounts.map((a) => a.river_id)).toEqual([alice.riverId]);
+    // Bob is gone from the community too.
+    expect((await alice.community.refresh())[0]!.members.map((m) => m.riverId)).toEqual([alice.riverId]);
   });
 });
 

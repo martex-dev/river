@@ -2367,6 +2367,16 @@ export class CommunityService {
   }
 
   /** Drops a community's keys after leaving or being removed. */
+  /** After deleting the account: drop every community and its keys from this device. */
+  forgetAll(): void {
+    for (const c of [...this.communities]) this.forget(c.id);
+    for (const row of (this.deps.db()?.prepare('SELECT id FROM communities').all() ?? []) as Array<{
+      id: string;
+    }>)
+      this.forget(row.id);
+    this.stop();
+  }
+
   private forget(id: string): void {
     this.deps.db()?.prepare('DELETE FROM community_keys WHERE community_id = ?').run(id);
     this.deps.db()?.prepare('DELETE FROM communities WHERE id = ?').run(id);
