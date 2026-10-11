@@ -146,6 +146,10 @@ const api: RiverApi = {
     },
   },
   links: { open: (id) => ipcRenderer.invoke(IPC.openLink, id) },
+  diagnostics: {
+    run: () => ipcRenderer.invoke(IPC.diagnosticsRun),
+    openLogs: () => ipcRenderer.invoke(IPC.diagnosticsOpenLogs),
+  },
 };
 
 contextBridge.exposeInMainWorld('river', api);

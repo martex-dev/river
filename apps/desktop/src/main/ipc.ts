@@ -24,6 +24,7 @@ import {
   type CommunityEvent,
   type SecurityStatus,
   type StorageStatus,
+  type DiagnosticCheck,
 } from '../shared/ipc.ts';
 import type { FetchBytes } from './http.ts';
 import type { Hosting } from './host/hosting.ts';
@@ -70,6 +71,9 @@ export interface IpcDeps {
   selectScreen(sourceId: string): void;
   /** Creates the account on River's home server by itself. */
   homeAccount: Pick<HomeAccount, 'ensure' | 'kick' | 'isWaiting' | 'enabled'>;
+  /** Settings → System → Connection check. */
+  diagnostics(): Promise<DiagnosticCheck[]>;
+  openLogs(): Promise<void>;
   /** Hosting communities on this PC. */
   hosting: Pick<
     Hosting,
@@ -321,6 +325,8 @@ export function registerIpc(deps: IpcDeps): void {
     }),
   );
   handle(IPC.voiceIceServers, () => deps.community.iceServers());
+  handle(IPC.diagnosticsRun, () => deps.diagnostics());
+  handle(IPC.diagnosticsOpenLogs, () => deps.openLogs());
   handle(IPC.screenSources, async () => {
     const sources = await desktopCapturer.getSources({
       types: ['screen', 'window'],
