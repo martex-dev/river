@@ -8,6 +8,25 @@ All notable changes to River are documented here. The format follows
 
 ### Fixed
 
+- **Voice channels no longer drop everyone every minute or two.** A home
+  server's public tunnel reconnects every few minutes, and each time every
+  member's connection to the server was cut — and the server threw everyone out
+  of voice at once. Calls run directly between members' computers, so now the
+  server keeps your seat for 45 seconds (shown as "reconnecting…"), River
+  reconnects and takes it back by itself, and the call keeps playing the whole
+  time. Call setup sent during the gap is delivered afterwards.
+- **Joining a voice channel with several people now always connects.**
+  Connections between members repair themselves: a network blip gets an ICE
+  restart on the same connection, a failed connection is rebuilt with backoff
+  for as long as the person stays in the channel (it used to give up after four
+  tries), answers and candidates from a replaced attempt are ignored, and call
+  setup from each person is handled strictly in order.
+- River pings the server every 20 seconds, so tunnels never close the
+  connection for being idle, and a connection that silently died is replaced
+  within a minute instead of hanging. The server pings too, and announces
+  someone offline only after 15 seconds, so short drops no longer flash
+  everyone offline.
+
 - **Invite links from the hosting PC work for everyone.** Since 1.0.14 the host
   talks to its own server over 127.0.0.1, and its invite, friend and sign-up
   links carried that private address. Links now always use the public address.
