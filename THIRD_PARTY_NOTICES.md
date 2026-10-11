@@ -63,5 +63,6 @@ POSSIBILITY OF SUCH DAMAGE.
 | [SQLite3 Multiple Ciphers](https://github.com/utelle/SQLite3MultipleCiphers) via better-sqlite3-multiple-ciphers | MIT                                                             |
 | [libsodium](https://libsodium.org) via libsodium-wrappers-sumo                                                   | ISC                                                             |
 | [React](https://react.dev), [Zustand](https://github.com/pmndrs/zustand), [zod](https://zod.dev)                 | MIT                                                             |
+| [Emojibase](https://emojibase.dev) emoji names, keywords and shortcodes (emojibase-data)                         | MIT                                                             |
 | [Inter](https://rsms.me/inter/) and [JetBrains Mono](https://www.jetbrains.com/lp/mono/) fonts                   | SIL Open Font License 1.1                                       |
 | Server: [Fastify](https://fastify.dev), [Kysely](https://kysely.dev), better-sqlite3, pg                         | MIT                                                             |

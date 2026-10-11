@@ -1287,9 +1287,28 @@
 .emoji-picker {
   display: flex;
   flex-direction: column;
-  width: 320px;
-  height: 300px;
+  width: 340px;
+  height: 360px;
   padding: 8px;
+}
+.emoji-picker__search {
+  margin-bottom: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.emoji-picker__search:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.mention-menu__emoji {
+  width: 20px;
+  text-align: center;
+  font-size: 17px;
 }
 .emoji-picker__tabs {
   display: flex;

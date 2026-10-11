@@ -1,6 +1,7 @@
 import {
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactElement,
@@ -10,6 +11,7 @@ import {
 } from 'react';
 import type { CommunityView, MemberView } from '../../../../shared/ipc.ts';
 import { highlight, languageOf } from './highlight.ts';
+import { recentEmoji, rememberEmoji, searchEmoji, useEmojiIndex } from '../emoji-data.ts';
 
 // ---- helpers -------------------------------------------------------------------------------------
 
@@ -203,54 +205,82 @@ export function Toggle(props: {
 
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
-const EMOJI_GROUPS: Array<[string, string[]]> = [
-  [
-    'Smileys',
-    '😀 😃 😄 😁 😆 😅 🤣 😂 🙂 🙃 😉 😊 😇 🥰 😍 🤩 😘 😋 😛 😜 🤪 😝 🤑 🤗 🤭 🤫 🤔 🤐 🤨 😐 😑 😶 😏 😒 🙄 😬 😌 😔 😪 😴 😷 🤒 🤕 🤢 🤮 🥵 🥶 🥴 😵 🤯 🤠 🥳 😎 🤓 🧐 😕 😟 🙁 😮 😯 😲 😳 🥺 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 🥱 😤 😡 😠 🤬 😈 💀 💩 🤡 👻 👽 🤖'.split(
-      ' ',
-    ),
-  ],
-  [
-    'Gestures',
-    '👋 🤚 ✋ 🖖 👌 🤌 🤏 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ 👍 👎 ✊ 👊 🤛 🤜 👏 🙌 👐 🤲 🤝 🙏 💪 🫡 👀 🧠'.split(
-      ' ',
-    ),
-  ],
-  [
-    'Hearts',
-    '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💯 💢 💥 💫 💦 💨 🔥 ✨ ⭐ 🌟 ⚡'.split(' '),
-  ],
-  [
-    'Things',
-    '🎉 🎊 🎁 🏆 🥇 🎮 🎧 🎤 🎵 🎶 📷 🎥 💻 🖥️ 📱 ⌨️ 🖱️ 💡 📌 📎 🔒 🔑 🛡️ ⚙️ 🧪 🚀 ✈️ 🚗 🏠 ☕ 🍕 🍔 🍟 🍿 🍩 🍪 🍺 🍻 🥂 🍷 🌍 🌙 ☀️ 🌈 ❄️ 🌊 🌲 🌸 🐶 🐱 🦊 🐻 🐼 🐸 🐵 🦄 🐍 🐢'.split(
-      ' ',
-    ),
-  ],
-  ['Symbols', '✅ ❌ ❓ ❗ ⚠️ 🚫 ⛔ 🔴 🟢 🔵 🟡 ⬆️ ⬇️ ➡️ ⬅️ 🔁 ➕ ➖ 💤 🆗 🆕 🆒 ™️ ©️'.split(' ')],
-];
-
 export function EmojiPicker(props: { onPick(emoji: string): void }): ReactElement {
-  const [group, setGroup] = useState(0);
-  const current = EMOJI_GROUPS[group]!;
+  const index = useEmojiIndex();
+  const [query, setQuery] = useState('');
+  const recent = useMemo(() => recentEmoji(), []);
+  const [group, setGroup] = useState(recent.length > 0 ? -1 : 0);
+  const pick = (emoji: string): void => {
+    rememberEmoji(emoji);
+    props.onPick(emoji);
+  };
+  const results = index && query ? searchEmoji(index, query) : null;
+  const shown: Array<{ emoji: string; label: string }> = results
+    ? results
+    : group === -1
+      ? recent.map((e) => ({ emoji: e, label: index?.all.find((x) => x.emoji === e)?.label ?? e }))
+      : (index?.groups[group]?.items ?? []);
+  const heading = results
+    ? results.length
+      ? `Results for “${query}”`
+      : `No emoji match “${query}”`
+    : group === -1
+      ? 'Recently used'
+      : (index?.groups[group]?.name ?? 'Loading…');
   return (
     <div className="emoji-picker">
-      <div className="emoji-picker__tabs">
-        {EMOJI_GROUPS.map(([label, list], i) => (
-          <button
-            key={label}
-            className={`emoji-picker__tab ${i === group ? 'is-active' : ''}`}
-            title={label}
-            onClick={() => setGroup(i)}
-          >
-            {list[0]}
-          </button>
-        ))}
-      </div>
-      <div className="emoji-picker__label">{current[0]}</div>
+      <input
+        className="emoji-picker__search"
+        placeholder="Search emoji"
+        aria-label="Search emoji"
+        value={query}
+        autoFocus
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && results?.[0]) {
+            e.preventDefault();
+            pick(results[0].emoji);
+          }
+        }}
+      />
+      {!query && (
+        <div className="emoji-picker__tabs" role="tablist" aria-label="Emoji categories">
+          {recent.length > 0 && (
+            <button
+              role="tab"
+              aria-selected={group === -1}
+              className={`emoji-picker__tab ${group === -1 ? 'is-active' : ''}`}
+              title="Recently used"
+              onClick={() => setGroup(-1)}
+            >
+              🕘
+            </button>
+          )}
+          {(index?.groups ?? []).map((g, i) => (
+            <button
+              key={g.name}
+              role="tab"
+              aria-selected={i === group}
+              className={`emoji-picker__tab ${i === group ? 'is-active' : ''}`}
+              title={g.name}
+              onClick={() => setGroup(i)}
+            >
+              {g.icon}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="emoji-picker__label">{heading}</div>
       <div className="emoji-picker__grid">
-        {current[1].map((e) => (
-          <button key={e} className="emoji-picker__emoji" onClick={() => props.onPick(e)}>
-            {e}
+        {shown.map((e) => (
+          <button
+            key={e.emoji}
+            className="emoji-picker__emoji"
+            title={e.label}
+            aria-label={e.label}
+            onClick={() => pick(e.emoji)}
+          >
+            {e.emoji}
           </button>
         ))}
       </div>
