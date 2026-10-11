@@ -4363,3 +4363,44 @@ input.switch:disabled {
   padding: 0;
   font-size: 12.5px;
 }
+
+/* Connection bars on call tiles (1.0.19) */
+.link-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 12px;
+  margin-right: 4px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.link-bars i {
+  display: block;
+  width: 3px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.35;
+}
+.link-bars i:nth-child(1) {
+  height: 4px;
+}
+.link-bars i:nth-child(2) {
+  height: 8px;
+}
+.link-bars i:nth-child(3) {
+  height: 12px;
+}
+.link-bars--good {
+  color: var(--ok);
+}
+.link-bars--good i,
+.link-bars--fair i:nth-child(-n + 2),
+.link-bars--poor i:nth-child(1) {
+  opacity: 1;
+}
+.link-bars--fair {
+  color: var(--warn);
+}
+.link-bars--poor {
+  color: var(--danger);
+}

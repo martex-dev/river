@@ -15,6 +15,8 @@ All notable changes to River are documented here. The format follows
   voice" button while it is on). People with the new **Manage events**
   permission can edit, cancel or delete them. Name, description and place are
   end-to-end encrypted.
+- **See how each person's call is doing:** little bars on every call tile;
+  hover for "Direct · 38 ms · 0% loss" or "Via your server".
 - **Saved messages:** right-click → Save message, and find everything you
   saved under 🔖 in any channel (kept only on this device).
 - **Transfer ownership** of a community from someone's profile card.

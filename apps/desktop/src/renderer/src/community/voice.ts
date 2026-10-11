@@ -1,5 +1,6 @@
 import { fromBase64, toBase64 } from './relay-crypto.ts';
 import type { RelayEngine } from './relay-audio.ts';
+import { readLinkStats, type LinkStats } from './link-stats.ts';
 
 /**
  * Voice/video calls as a WebRTC mesh: every participant connects directly to
@@ -208,6 +209,39 @@ export class VoiceCall {
       report.forEach((r: { type: string; kind?: string }) => {
         if ((r.type === 'inbound-rtp' || r.type === 'outbound-rtp') && r.kind === 'video') out.push(r);
       });
+    }
+    return out;
+  }
+
+  private readonly linkCounts = new Map<string, { received: number; lost: number }>();
+
+  /** Connection details per person, for the call tiles (1.0.19). */
+  async linkStats(): Promise<Record<string, LinkStats>> {
+    const out: Record<string, LinkStats> = {};
+    for (const [id, p] of this.peers) {
+      if (p.remote.relayed && p.pc.connectionState !== 'connected') {
+        out[id] = { path: 'server', rttMs: null, loss: null };
+        continue;
+      }
+      if (p.pc.connectionState !== 'connected') {
+        out[id] = { path: 'connecting', rttMs: null, loss: null };
+        continue;
+      }
+      try {
+        const report: Array<Record<string, unknown> & { type: string; id: string }> = [];
+        (await p.pc.getStats()).forEach((r) =>
+          report.push(r as Record<string, unknown> & { type: string; id: string }),
+        );
+        const { stats, counts } = readLinkStats(report, this.linkCounts.get(id) ?? null);
+        this.linkCounts.set(id, counts);
+        out[id] = {
+          path: stats.candidateType === 'relay' ? 'relay-turn' : 'direct',
+          rttMs: stats.rttMs,
+          loss: stats.loss,
+        };
+      } catch {
+        out[id] = { path: 'direct', rttMs: null, loss: null };
+      }
     }
     return out;
   }
