@@ -4021,3 +4021,21 @@ input.switch:disabled {
   min-width: 42px;
   text-align: right;
 }
+
+/* Reply ping toggle (1.0.18) */
+.reply-bar__ping {
+  margin-left: auto;
+  margin-right: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.reply-bar__ping.is-on {
+  border-color: var(--accent);
+  color: var(--accent);
+}

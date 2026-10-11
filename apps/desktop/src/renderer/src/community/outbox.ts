@@ -14,6 +14,8 @@ export interface Outgoing {
   channelId: string;
   text: string;
   replyTo?: string;
+  /** Reply without notifying the person replied to. */
+  noPing?: boolean;
   attachments?: AttachmentPointer[];
   /** A reply inside this thread. */
   threadId?: string;
@@ -69,6 +71,7 @@ export const useOutbox = create<OutboxState>((set, get) => {
       channelId: item.channelId,
       text: item.text,
       ...(item.replyTo ? { replyTo: item.replyTo } : {}),
+      ...(item.replyTo && item.noPing ? { noPing: true } : {}),
       ...(item.attachments ? { attachments: item.attachments } : {}),
       ...(item.threadId ? { threadId: item.threadId } : {}),
     })) as Result<ChatMessage>;

@@ -214,6 +214,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       attachments: z.array(attachmentPointerSchema).max(10).optional(),
       /** Reply inside the thread started from this message. */
       threadId: id.optional(),
+      /** A reply that should not notify the person replied to (1.0.18). */
+      noPing: z.boolean().optional(),
     })
     .strict()
     .refine((v) => v.text.trim().length > 0 || (v.attachments?.length ?? 0) > 0, 'empty'),

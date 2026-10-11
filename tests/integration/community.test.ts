@@ -98,6 +98,30 @@ afterEach(async () => {
   rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
 });
 
+describe('replies', () => {
+  it('notify the person replied to, unless the reply turned that off', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Reply Club');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.name === 'general')!;
+    await bob.community.refresh();
+    const original = await alice.community.send(general.id, 'who is up for games?');
+    await bob.community.messages(general.id);
+    await bob.community.action({ a: 'send', channelId: general.id, text: 'me!', replyTo: original.id });
+    await bob.community.action({
+      a: 'send',
+      channelId: general.id,
+      text: 'me too, quietly',
+      replyTo: original.id,
+      noPing: true,
+    });
+    const seen = await alice.community.messages(general.id);
+    expect(seen.find((m) => m.text === 'me!')?.mentionsMe).toBe(true);
+    expect(seen.find((m) => m.text === 'me too, quietly')?.mentionsMe).toBe(false);
+  });
+});
+
 describe('desktop ↔ server communities', () => {
   it('roles, private channels, reactions, edits and profiles work end to end, encrypted', async () => {
     const alice = await person('Alice');

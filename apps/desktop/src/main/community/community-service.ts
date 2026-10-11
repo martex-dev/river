@@ -807,11 +807,12 @@ export class CommunityService {
     const ring = this.keys.get(communityId);
     if (!ring) return null;
     try {
-      const opened = ring.openWith<{ text: string; replyTo?: string; attachments?: unknown[] }>(
-        communityId,
-        `message:${m.channelId}`,
-        m.body,
-      );
+      const opened = ring.openWith<{
+        text: string;
+        replyTo?: string;
+        noPing?: unknown;
+        attachments?: unknown[];
+      }>(communityId, `message:${m.channelId}`, m.body);
       const body = opened.value;
       const key = opened.key;
       this.messageKeys.set(m.id, key);
@@ -855,7 +856,10 @@ export class CommunityService {
         reactions,
         replyTo,
         attachments,
-        mentionsMe: m.sender !== me && this.mentions(text, community, m.sender, replyTo ?? undefined),
+        // A reply pings the person replied to, unless the sender turned that off.
+        mentionsMe:
+          m.sender !== me &&
+          this.mentions(text, community, m.sender, body.noPing === true ? undefined : (replyTo ?? undefined)),
         mine: m.sender === me,
         threadId: m.threadId,
         thread: m.thread
@@ -1147,6 +1151,7 @@ export class CommunityService {
     replyTo?: string,
     attachments: AttachmentPointer[] = [],
     threadId?: string,
+    noPing = false,
   ): Promise<ChatMessage> {
     const text = attachments.length ? z.string().max(4000).parse(rawText) : textSchema.parse(rawText);
     const communityId = this.communityOf(channelId);
@@ -1156,6 +1161,7 @@ export class CommunityService {
     const body = {
       text,
       ...(replyTo ? { replyTo } : {}),
+      ...(replyTo && noPing ? { noPing: true } : {}),
       ...(attachments.length ? { attachments } : {}),
     };
     const sent = await this.call(
@@ -1490,6 +1496,7 @@ export class CommunityService {
           act.replyTo,
           act.attachments,
           act.threadId,
+          act.noPing,
         )) as CommunityActionResult<A>;
       case 'createThread': {
         const communityId = this.communityOf(act.channelId);

@@ -808,6 +808,8 @@ function Composer(props: {
   const { community, channel, me } = props;
   const s = useCommunity();
   const [text, setText] = useState('');
+  // Replies notify the person you reply to, unless you switch it off for that reply (like Discord's "@ ON").
+  const [pingOffFor, setPingOffFor] = useState<string | null>(null);
   // Quote puts the quoted lines in front of whatever is being written.
   useEffect(
     () =>
@@ -829,6 +831,7 @@ function Composer(props: {
   const typers = typingNames(channel.id, community, me);
   const canSend = can(channel.permissions, Permission.SEND_MESSAGES);
   const replyTo = s.replyTo && s.replyTo.channelId === channel.id ? s.replyTo : null;
+  const replyPing = !replyTo || pingOffFor !== replyTo.id;
 
   // Autocomplete for @people, @roles, @everyone/@here and #channels: the word being typed at the caret.
   const trigger = /(?:^|\s)([@#])([^\s@#]*)$/.exec(text);
@@ -883,6 +886,7 @@ function Composer(props: {
       channelId: channel.id,
       text: value,
       ...(replyTo ? { replyTo: replyTo.id } : {}),
+      ...(replyTo && !replyPing ? { noPing: true } : {}),
       ...(attachments ? { attachments } : {}),
     });
   };
@@ -963,6 +967,21 @@ function Composer(props: {
           <span>
             Replying to <strong>{replyTo.senderName}</strong>
           </span>
+          {!replyTo.mine && (
+            <button
+              type="button"
+              className={`reply-bar__ping ${replyPing ? 'is-on' : ''}`}
+              aria-pressed={replyPing}
+              title={
+                replyPing
+                  ? `${replyTo.senderName} will be notified`
+                  : `${replyTo.senderName} won't be notified`
+              }
+              onClick={() => setPingOffFor(replyPing ? replyTo.id : null)}
+            >
+              @ {replyPing ? 'ON' : 'OFF'}
+            </button>
+          )}
           <button
             className="icon-btn"
             aria-label="Cancel reply"
