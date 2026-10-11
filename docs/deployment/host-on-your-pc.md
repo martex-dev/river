@@ -75,6 +75,29 @@ you are happy.
 The scripts in `scripts/host` still work for people who run a server without
 the River app.
 
+## How steady the public address is
+
+River's public address is a free Cloudflare "quick tunnel". It needs no
+account, but it carries one connection to Cloudflare, and that connection is
+re-established every few minutes (measured on the maintainer's PC on
+2026-10-10/11: every 1–4 minutes at worst; in a 36-minute test both the
+`http2` and `quic` transports reconnected 1–3 times, so changing the transport
+does not help). Each reconnect cuts everyone's live connection for a moment.
+
+Since 1.0.16 nobody notices: calls run directly between members (or through
+the encrypted relay), the server keeps voice seats for 45 seconds, and every
+app reconnects and rejoins within seconds by itself. Messages sent meanwhile
+wait and go out automatically.
+
+If the tunnel stops answering for three minutes, or the PC restarts, the
+address changes; members' apps find the new one through the signed address
+note (see "River's home server").
+
+**A permanent address** (a named Cloudflare tunnel on your own domain, or a
+small server with a fixed name) removes the address changes. It needs a
+Cloudflare account and a domain, so it is the host's choice; River works the
+same either way. See [self-hosting.md](self-hosting.md).
+
 ## When your PC is off
 
 A community hosted on your PC is reachable while your PC is on and River is

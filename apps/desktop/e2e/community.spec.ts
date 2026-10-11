@@ -582,4 +582,19 @@ test('status menu: do not disturb and a custom status show to others; formatting
   });
   await expect(msg.locator('strong', { hasText: /^bold$/ })).toBeVisible();
   await expect(msg).toContainText('🔥');
+
+  // Clicking the author opens their profile card.
+  await msg.locator('.msg__author').click();
+  await expect(erin.locator('.profile-card')).toContainText('Finn');
+  await erin.keyboard.press('Escape');
+
+  // Right-click → Quote puts the quoted message in the composer; Copy message link gives a link that jumps back.
+  await msg.click({ button: 'right' });
+  await erin.getByRole('menuitem', { name: 'Quote' }).click();
+  await expect(erin.getByPlaceholder('Message #general')).toHaveValue(/^> \|\|secret\|\|/);
+  await msg.click({ button: 'right' });
+  await erin.getByRole('menuitem', { name: 'Copy message link' }).click();
+  await expect
+    .poll(() => apps.at(-2)!.evaluate(({ clipboard }) => clipboard.readText()), { timeout: 5000 })
+    .toMatch(/\/channels\/[\w-]{22}\/[\w-]{22}\/[\w-]{22}$/);
 });

@@ -3,6 +3,7 @@ import { Permission } from '@river/protocol/permissions';
 import type { CommunityAction, CommunityActionResult } from '../../../shared/community-actions.ts';
 import type { ChatMessage, CommunityEvent, CommunityView, Result } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
+import { setMessageLinkOpener } from './message-link.ts';
 import { play } from './sound.ts';
 import { VoiceCall } from './voice.ts';
 import { WebCodecsRelay } from './relay-audio.ts';
@@ -67,6 +68,12 @@ interface CommunityState {
   markUnreadFrom(message: ChatMessage): void;
   /** Channels whose older history is exhausted. */
   noMore: Record<string, boolean>;
+  /** A message to scroll to and flash once its channel shows it (message links, search). */
+  pendingJump: { channelId: string; messageId: string } | null;
+  /** Opens a message: its community and channel, then scrolls to it. False if you cannot see it. */
+  openMessage(communityId: string, channelId: string, messageId: string): boolean;
+  /** Text to put in front of the composer's draft (Quote). */
+  draftInsert: string | null;
   loadOlder(channelId: string): Promise<number>;
 
   load(): Promise<void>;
@@ -347,6 +354,21 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     }
   },
 
+  pendingJump: null,
+  draftInsert: null,
+  openMessage: (communityId, channelId, messageId) => {
+    const c = get().communities.find((x) => x.id === communityId);
+    if (!c || !c.channels.some((ch) => ch.id === channelId)) {
+      get().notify("You can't see that message: it's in a community or channel you're not in.", 'error');
+      return false;
+    }
+    useRiver.getState().navigate('communities');
+    if (get().selectedCommunity !== communityId) get().select(communityId, channelId);
+    else if (get().selectedChannel !== channelId) get().selectChannel(channelId);
+    set({ pendingJump: { channelId, messageId } });
+    return true;
+  },
+
   select: (communityId, channelId) => {
     const c = get().communities.find((x) => x.id === communityId);
     const channel =
@@ -526,3 +548,6 @@ export function typingNames(channelId: string, community: CommunityView | undefi
     .filter(([id, at]) => id !== me && now - at < TYPING_MS)
     .map(([id]) => community?.members.find((m) => m.riverId === id)?.name ?? 'Someone');
 }
+
+// Message links (in any message, DM or post) open the message here.
+setMessageLinkOpener((l) => useCommunity.getState().openMessage(l.communityId, l.channelId, l.messageId));

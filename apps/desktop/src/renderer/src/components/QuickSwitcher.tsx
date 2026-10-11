@@ -89,6 +89,49 @@ function stepChannel(direction: 1 | -1, unreadOnly: boolean): boolean {
   return false;
 }
 
+/** Ctrl+Alt+↑/↓: the previous or next community, in the order of the community list. */
+function stepCommunity(direction: 1 | -1): boolean {
+  if (useRiver.getState().section !== 'communities') return false;
+  const s = useCommunity.getState();
+  if (s.communities.length < 2) return false;
+  const at = s.communities.findIndex((c) => c.id === s.selectedCommunity);
+  const next = s.communities[(at + direction + s.communities.length) % s.communities.length]!;
+  s.select(next.id);
+  return true;
+}
+
+/** Whether a key press is meant for a text field, button or dialog rather than the app. */
+export function typingSomewhere(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el || !('tagName' in el)) return false;
+  if (el.isContentEditable) return true;
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) return true;
+  return !!el.closest?.('[role="dialog"], .modal, .popover, [role="menu"]');
+}
+
+/** A popover, menu, dialog or panel is open: Esc belongs to it. */
+function somethingOpen(): boolean {
+  return !!document.querySelector('.modal, .popover, [role="dialog"], [role="menu"], .switcher-backdrop');
+}
+
+/** A plain character key (no Ctrl/Alt/⌘), which should go into the message box. */
+export function isPrintable(e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'altKey' | 'metaKey'>): boolean {
+  return e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey;
+}
+
+/** Esc: the open channel counts as read (Shift+Esc: the whole community), and the chat jumps to the end. */
+function markRead(wholeCommunity: boolean): boolean {
+  if (useRiver.getState().section !== 'communities') return false;
+  const s = useCommunity.getState();
+  const community = s.communities.find((c) => c.id === s.selectedCommunity);
+  if (!community || !s.selectedChannel) return false;
+  s.markChannelsRead(wholeCommunity ? community.channels.map((c) => c.id) : [s.selectedChannel]);
+  useCommunity.setState({ divider: null });
+  const log = document.querySelector('.chat__messages');
+  if (log) log.scrollTop = log.scrollHeight;
+  return true;
+}
+
 function rank(t: Target, q: string): number {
   const label = t.label.toLowerCase();
   if (!q) return t.hint.endsWith('unread') ? 0 : 1;
@@ -114,8 +157,21 @@ export function QuickSwitcher(): ReactElement | null {
       } else if (mod && e.code === 'Slash') {
         e.preventDefault();
         setOpen((o) => (o === 'shortcuts' ? null : 'shortcuts'));
+      } else if (mod && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        if (stepCommunity(e.key === 'ArrowDown' ? 1 : -1)) e.preventDefault();
       } else if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         if (stepChannel(e.key === 'ArrowDown' ? 1 : -1, e.shiftKey)) e.preventDefault();
+      } else if (mod && !e.shiftKey && e.code === 'KeyF' && useRiver.getState().section === 'communities') {
+        e.preventDefault();
+        useCommunity.setState({ showSearch: true });
+      } else if (e.key === 'Escape' && !typingSomewhere(e.target) && !somethingOpen()) {
+        // After this key press is fully handled, so other Esc handlers are never disturbed.
+        const whole = e.shiftKey;
+        window.setTimeout(() => markRead(whole), 0);
+      } else if (isPrintable(e) && !typingSomewhere(e.target)) {
+        // Start typing anywhere: the letters go into the message box, like on Discord.
+        const box = document.querySelector<HTMLTextAreaElement>('.chat__composer textarea');
+        if (box && !box.disabled) box.focus();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -213,11 +269,16 @@ const SHORTCUTS: Array<[string, string]> = [
   ['Ctrl+/', 'Show these shortcuts'],
   ['Alt+↑ / Alt+↓', 'Previous / next channel'],
   ['Alt+Shift+↑ / Alt+Shift+↓', 'Previous / next unread channel'],
+  ['Ctrl+Alt+↑ / Ctrl+Alt+↓', 'Previous / next community'],
+  ['Ctrl+F', 'Search the community'],
+  ['Esc', 'Mark the channel read and jump to the newest message'],
+  ['Shift+Esc', 'Mark the whole community read'],
+  ['Any letter', 'Start typing a message (from anywhere in the channel)'],
   ['Enter', 'Send the message'],
   ['Shift+Enter', 'New line'],
   ['↑ (empty message box)', 'Edit your last message'],
   ['Tab or Enter', 'Accept a @mention or #channel suggestion'],
-  ['Esc', 'Cancel a reply, close a dialog or panel'],
+  ['Esc (while writing)', 'Cancel a reply, close a dialog or panel'],
   ['Ctrl+Shift+M', 'Mute or unmute your microphone'],
   ['Ctrl+Shift+D', 'Deafen or undeafen'],
   ['Push-to-talk key', 'Talk while held (set in User settings → Voice)'],
