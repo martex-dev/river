@@ -1,3 +1,4 @@
+import { clockTime } from '../time.ts';
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import type { ConversationView, DirectMessageView } from '../../../shared/dm.ts';
 import { play } from '../community/sound.ts';
@@ -38,8 +39,7 @@ import { joinWithLink } from '../community/ui/StartScreen.tsx';
 const GROUP_MS = 5 * 60_000;
 const RIVER_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const timeOf = (iso: string): string =>
-  new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const timeOf = (iso: string): string => clockTime(iso);
 
 function shortWhen(iso: string): string {
   const d = new Date(iso);

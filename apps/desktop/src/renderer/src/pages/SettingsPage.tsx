@@ -541,6 +541,86 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
           ))}
         </div>
       </fieldset>
+      <label className="field slider-field">
+        <span className="field__label">
+          Interface size <span className="muted small">{Math.round(settings.appearance.zoom * 100)}%</span>
+        </span>
+        <input
+          type="range"
+          min={0.7}
+          max={1.6}
+          step={0.05}
+          value={settings.appearance.zoom}
+          aria-label="Interface size"
+          onChange={(e) => void updateSettings({ appearance: { zoom: Number(e.target.value) } })}
+        />
+        <span className="muted small">Shortcut: Ctrl+= bigger, Ctrl+− smaller, Ctrl+0 normal.</span>
+      </label>
+      <label className="field slider-field">
+        <span className="field__label">
+          Message text size <span className="muted small">{settings.appearance.fontSize}px</span>
+        </span>
+        <input
+          type="range"
+          min={12}
+          max={22}
+          step={1}
+          value={settings.appearance.fontSize}
+          aria-label="Message text size"
+          onChange={(e) => void updateSettings({ appearance: { fontSize: Number(e.target.value) } })}
+        />
+        <span className="msg__text slider-field__preview" style={{ fontSize: settings.appearance.fontSize }}>
+          The quick brown fox says hi 👋
+        </span>
+      </label>
+      <fieldset className="field">
+        <legend className="field__label">Clock</legend>
+        <div className="choice-grid">
+          {(
+            [
+              ['system', 'Automatic', 'Follow your language settings.'],
+              ['12h', '12-hour', '2:05 PM'],
+              ['24h', '24-hour', '14:05'],
+            ] as const
+          ).map(([id, name, text]) => (
+            <label key={id} className={`choice ${settings.appearance.clock === id ? 'is-selected' : ''}`}>
+              <input
+                type="radio"
+                name="clock"
+                value={id}
+                checked={settings.appearance.clock === id}
+                onChange={() => void updateSettings({ appearance: { clock: id } })}
+              />
+              <span className="choice__name">{name}</span>
+              <span className="choice__text">{text}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset className="field">
+        <legend className="field__label">Contrast</legend>
+        <div className="choice-grid">
+          {(
+            [
+              ['system', 'Follow system', 'Use high contrast when your system asks for more contrast.'],
+              ['normal', 'Standard', 'River’s usual colours.'],
+              ['high', 'High contrast', 'Brighter text, clearer borders and strong focus outlines.'],
+            ] as const
+          ).map(([id, name, text]) => (
+            <label key={id} className={`choice ${settings.appearance.contrast === id ? 'is-selected' : ''}`}>
+              <input
+                type="radio"
+                name="contrast"
+                value={id}
+                checked={settings.appearance.contrast === id}
+                onChange={() => void updateSettings({ appearance: { contrast: id } })}
+              />
+              <span className="choice__name">{name}</span>
+              <span className="choice__text">{text}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <fieldset className="field">
         <legend className="field__label">Message density</legend>
         <div className="choice-grid">
@@ -630,7 +710,10 @@ function NotificationsPanel({ settings }: { settings: Settings }): ReactElement 
           ))}
         </div>
       </fieldset>
-      <p className="muted small">Takes effect when messaging arrives in River 0.2.</p>
+      <p className="muted small">
+        Right-click a community or channel to mute it or choose All messages, Only @mentions or Nothing just
+        for it. Do Not Disturb (click your name) silences everything except your own sounds.
+      </p>
     </div>
   );
 }

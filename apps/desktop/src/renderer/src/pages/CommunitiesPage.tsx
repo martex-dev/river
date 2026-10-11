@@ -20,6 +20,8 @@ import { MemberList } from '../community/ui/Members.tsx';
 import { UserSettings } from '../community/ui/UserSettings.tsx';
 import { VoiceChannel } from '../community/ui/Voice.tsx';
 import { MenuItem, PlusIcon, Popover, can, initials } from '../community/ui/common.tsx';
+import { NotifyMenuSection } from '../community/ui/NotifyMenu.tsx';
+import { isMuted } from '../../../shared/notify-rules.ts';
 import { Permission } from '@river/protocol/permissions';
 import type { CommunityView } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
@@ -27,6 +29,7 @@ import { CallPill, IncomingCall } from '../dm/CallUi.tsx';
 
 export function CommunitiesPage(): ReactElement {
   const s = useCommunity();
+  const settings = useRiver((r) => r.settings);
   const identity = useRiver((r) => r.identity);
   const account = useRiver((r) => r.account);
   const [adding, setAdding] = useState(false);
@@ -72,14 +75,20 @@ export function CommunitiesPage(): ReactElement {
     <div className={`community ${s.showMembers && channel?.kind === 'text' ? '' : 'community--no-members'}`}>
       <nav className="community__servers" aria-label="Your communities">
         {s.communities.map((c) => {
-          const unread = c.channels.some(
-            (ch) => (s.unread[ch.id] ?? 0) > 0 || (ch.unread && ch.id !== s.selectedChannel),
-          );
+          const prefs = settings?.notifications;
+          const communityMuted = !!prefs && isMuted(prefs, c.id);
+          const unread =
+            !communityMuted &&
+            c.channels.some(
+              (ch) =>
+                !(prefs && isMuted(prefs, ch.id)) &&
+                ((s.unread[ch.id] ?? 0) > 0 || (ch.unread && ch.id !== s.selectedChannel)),
+            );
           const mentions = c.channels.reduce((n, ch) => n + (s.mentions[ch.id] ?? 0), 0);
           return (
             <div
               key={c.id}
-              className={`community__server-wrap ${c.id === community?.id ? 'is-active' : ''} ${unread ? 'is-unread' : ''}`}
+              className={`community__server-wrap ${c.id === community?.id ? 'is-active' : ''} ${unread ? 'is-unread' : ''} ${communityMuted ? 'is-muted' : ''}`}
             >
               <span className="community__pill" aria-hidden="true" />
               <button
@@ -308,6 +317,7 @@ function CommunityMenu(props: {
       <MenuItem onClick={run(() => s.setModal({ kind: 'nickname', communityId: c.id }))}>
         Change nickname
       </MenuItem>
+      <NotifyMenuSection id={c.id} kind="community" onDone={props.onClose} />
       {c.ownerId !== props.me && (
         <MenuItem
           danger

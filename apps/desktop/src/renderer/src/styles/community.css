@@ -692,6 +692,7 @@
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.45;
+  font-size: var(--chat-font-size, 14px);
 }
 .msg__edited {
   font-size: 11px;
@@ -3894,4 +3895,45 @@ input.switch:disabled {
 .forward__item:hover,
 .forward__item:focus-visible {
   background: rgba(255, 255, 255, 0.06);
+}
+
+/* Notification settings in menus; muted channels and communities (1.0.18) */
+.menu__sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+.menu__hint {
+  margin-left: auto;
+  padding-left: 12px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+.menu__indent {
+  padding-left: 22px;
+  color: var(--text-dim);
+}
+.channel.is-muted .channel__name,
+.channel.is-muted .channel__icon {
+  opacity: 0.45;
+}
+.community__server-wrap.is-muted .community__server {
+  opacity: 0.55;
+}
+
+/* High contrast (1.0.18): brighter text, visible borders, thicker focus rings. */
+:root[data-contrast='high'] {
+  --text: #ffffff;
+  --text-dim: #d6deef;
+  --text-faint: #b9c3db;
+  --border: rgba(200, 215, 255, 0.35);
+  --border-strong: rgba(220, 230, 255, 0.6);
+}
+:root[data-contrast='high'] :focus-visible {
+  outline: 3px solid #ffd27a !important;
+  outline-offset: 2px;
+}
+:root[data-contrast='high'] .channel.is-muted .channel__name,
+:root[data-contrast='high'] .channel.is-muted .channel__icon {
+  opacity: 0.7;
 }

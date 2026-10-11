@@ -12,6 +12,25 @@ All notable changes to River are documented here. The format follows
 
 ### Added
 
+- **Mute a community or channel** — for 15 minutes, an hour, 8 hours, a day,
+  or until you turn it back on — and choose **All messages**, **Only
+  @mentions** or **Nothing** for any community or channel. Right-click it in
+  the list. Muted places are dimmed and quiet; @mentions still reach you
+  unless you chose Nothing.
+- **Make River the size you like:** interface size (Ctrl+= / Ctrl+− /
+  Ctrl+0), message text size, 12- or 24-hour clock, and a **high-contrast**
+  mode that also turns on when your system asks for more contrast
+  (Settings → Appearance).
+- Coming back to a channel you had scrolled up in returns you to the same
+  place.
+
+### Fixed
+
+- The Notifications settings no longer claim they take effect "when
+  messaging arrives in River 0.2".
+
+### Added
+
 - **Status, like on Discord.** Click your name in the corner to be Online,
   Idle, Do Not Disturb (no notifications or notification sounds) or Invisible
   (appear offline but use River as usual). River shows you as Idle after ten

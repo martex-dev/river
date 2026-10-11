@@ -1,3 +1,4 @@
+import { effectiveNotify, shouldAlert } from '../shared/notify-rules.ts';
 import { Notification, type BrowserWindow } from 'electron';
 import type { Settings } from '../shared/settings.ts';
 import type { CommunityService } from './community/community-service.ts';
@@ -51,7 +52,9 @@ export function startMessageNotifications(deps: {
     if (event.t !== 'message' || !event.isNew || event.message.mine) return;
     const prefs = deps.settings().notifications;
     if (!prefs.desktop) return;
-    if (prefs.mode === 'mentions' && !event.message.mentionsMe) return;
+    if (deps.settings().presence.status === 'dnd') return;
+    const m0 = event.message;
+    if (!shouldAlert(effectiveNotify(prefs, m0.communityId, m0.channelId), m0.mentionsMe)) return;
     if (window.isDestroyed() || window.isFocused()) return;
     if (!Notification.isSupported()) return;
     const m = event.message;

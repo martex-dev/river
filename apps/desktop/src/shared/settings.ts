@@ -48,6 +48,14 @@ export const settingsSchema = z.object({
     motion: z.enum(['system', 'reduced', 'full']),
     /** Added in 1.0.9: how tightly messages are packed. */
     density: z.enum(['cozy', 'compact']),
+    /** Added in 1.0.18: the whole interface's size (Ctrl+= / Ctrl+− / Ctrl+0). */
+    zoom: z.number().min(0.7).max(1.6),
+    /** Message text size in pixels. */
+    fontSize: z.number().int().min(12).max(22),
+    /** 'system' follows the locale. */
+    clock: z.enum(['system', '12h', '24h']),
+    /** Stronger text and borders; 'system' follows the OS high-contrast preference. */
+    contrast: z.enum(['system', 'normal', 'high']),
   }),
   notifications: z.object({
     /** Default 'none': notifications say "New River message" with no sender or content. */
@@ -67,6 +75,16 @@ export const settingsSchema = z.object({
         interface: z.boolean(),
       })
       .strict(),
+    /** Added in 1.0.18: per-community and per-channel levels and mutes (see notify-rules.ts). */
+    overrides: z.record(
+      z.string().max(64),
+      z
+        .object({
+          level: z.enum(['default', 'all', 'mentions', 'nothing']),
+          muteUntil: z.string().max(40).nullable(),
+        })
+        .strict(),
+    ),
   }),
   /** Added in 0.0.2. */
   server: z.object({
@@ -117,7 +135,14 @@ export type Settings = z.infer<typeof settingsSchema>;
 export const DEFAULT_SETTINGS: Settings = {
   schemaVersion: 1,
   updates: { channel: 'stable', autoCheck: true, autoDownload: true, installOnQuit: true },
-  appearance: { motion: 'system', density: 'cozy' },
+  appearance: {
+    motion: 'system',
+    density: 'cozy',
+    zoom: 1,
+    fontSize: 14,
+    clock: 'system',
+    contrast: 'system',
+  },
   notifications: {
     preview: 'none',
     desktop: true,
@@ -125,6 +150,7 @@ export const DEFAULT_SETTINGS: Settings = {
     sounds: true,
     soundVolume: 0.8,
     soundGroups: { messages: true, voice: true, calls: true, social: true, interface: true },
+    overrides: {},
   },
   server: { url: null },
   voice: {

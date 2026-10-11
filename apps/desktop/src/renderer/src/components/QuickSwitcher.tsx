@@ -109,6 +109,14 @@ export function typingSomewhere(target: EventTarget | null): boolean {
   return !!el.closest?.('[role="dialog"], .modal, .popover, [role="menu"]');
 }
 
+const ZOOM_STEPS = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6];
+
+/** The next interface size up or down. */
+export function nextZoom(current: number, direction: 1 | -1): number {
+  if (direction > 0) return ZOOM_STEPS.find((z) => z > current + 0.001) ?? ZOOM_STEPS.at(-1)!;
+  return [...ZOOM_STEPS].reverse().find((z) => z < current - 0.001) ?? ZOOM_STEPS[0]!;
+}
+
 /** A popover, menu, dialog or panel is open: Esc belongs to it. */
 function somethingOpen(): boolean {
   return !!document.querySelector('.modal, .popover, [role="dialog"], [role="menu"], .switcher-backdrop');
@@ -161,6 +169,12 @@ export function QuickSwitcher(): ReactElement | null {
         if (stepCommunity(e.key === 'ArrowDown' ? 1 : -1)) e.preventDefault();
       } else if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         if (stepChannel(e.key === 'ArrowDown' ? 1 : -1, e.shiftKey)) e.preventDefault();
+      } else if (mod && !e.altKey && (e.key === '=' || e.key === '+' || e.key === '-' || e.key === '0')) {
+        // Interface size, like a browser: Ctrl+= bigger, Ctrl+− smaller, Ctrl+0 back to normal.
+        e.preventDefault();
+        const current = useRiver.getState().settings?.appearance.zoom ?? 1;
+        const next = e.key === '0' ? 1 : nextZoom(current, e.key === '-' ? -1 : 1);
+        void useRiver.getState().updateSettings({ appearance: { zoom: next } });
       } else if (mod && !e.shiftKey && e.code === 'KeyF' && useRiver.getState().section === 'communities') {
         e.preventDefault();
         useCommunity.setState({ showSearch: true });
@@ -271,6 +285,7 @@ const SHORTCUTS: Array<[string, string]> = [
   ['Alt+Shift+↑ / Alt+Shift+↓', 'Previous / next unread channel'],
   ['Ctrl+Alt+↑ / Ctrl+Alt+↓', 'Previous / next community'],
   ['Ctrl+F', 'Search the community'],
+  ['Ctrl+= / Ctrl+− / Ctrl+0', 'Make everything bigger / smaller / normal size'],
   ['Esc', 'Mark the channel read and jump to the newest message'],
   ['Shift+Esc', 'Mark the whole community read'],
   ['Any letter', 'Start typing a message (from anywhere in the channel)'],
