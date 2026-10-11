@@ -6,6 +6,31 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Voice works even when two people cannot connect directly.** Some networks
+  (mobile data, strict routers, school or work firewalls) block direct calls
+  between certain people, and River had no fallback, so they simply could not
+  hear each other. Now River sends their voice through your River server —
+  still end-to-end encrypted: the server forwards sealed audio frames and
+  cannot listen. Tiles show "via server" while it is in use, and River
+  switches back to a direct connection as soon as one works. Voice only:
+  camera and screen sharing still need a direct connection.
+- **Connection check** in Settings → System: one button tests the address
+  relay, your account, the server (and how fast it answers), the live
+  connection, hosting, what kind of network you are on for calls, and your
+  microphone — with plain-language advice and a report you can copy.
+- **River never fails to open silently.** If something goes wrong while
+  starting, River now says what happened (with a "Copy details" button and the
+  log folder) instead of staying invisible in the background, which made every
+  later launch do nothing until a restart. The window appears even if the
+  graphics driver is slow to draw, a crashed window reloads itself, and if the
+  graphics driver keeps crashing River restarts without hardware acceleration.
+- `River --self-test` checks that an installation works (encryption
+  libraries, database, keys, interface) without touching your data. Every CI
+  run and every release now runs it against the packaged app on Windows,
+  macOS and Linux.
+
 ### Fixed
 
 - **Voice channels no longer drop everyone every minute or two.** A home

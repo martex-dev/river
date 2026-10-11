@@ -100,11 +100,15 @@ Each line is one PR; each version ships when its section is done.
 - [x] Self-healing peer connections (ICE restart, unlimited backoff, ordered signals, stale-answer guard)
 - [x] Tests: simulated mesh of 4–6 people, lost offers/answers, blips, failing paths; real-socket reconnect tests
 
-### 1.0.17 — Voice works on every network
+- [x] Encrypted voice relay through the River server when two members cannot connect directly (real-app e2e with direct paths blocked)
+- [x] Connection check in Settings → System (relay, account, server, live connection, NAT type, microphone)
+- [x] Startup never fails silently; window/GPU fallbacks; `--self-test` run on the packaged app in CI and releases
 
-- [ ] Relay fallback through the River server when two members cannot connect directly (no TURN needed)
+### 1.0.17 — Calls everywhere
+
+- [ ] Relay for 1:1 direct-message calls (today: direct only)
 - [ ] Connection details per person (direct / relayed, ping, packet loss) in the voice panel
-- [ ] First-run reliability on fresh installs (onboarding when the home server moved)
+- [ ] Fresh-install walkthrough on a clean Windows VM (needs a VM or a second PC)
 
 ### Later
 
