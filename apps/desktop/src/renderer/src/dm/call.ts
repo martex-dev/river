@@ -3,6 +3,7 @@ import type { DmEvent } from '../../../shared/dm.ts';
 import { play } from '../community/sound.ts';
 import { useCommunity } from '../community/store.ts';
 import { VoiceCall, type CallTransport } from '../community/voice.ts';
+import { WebCodecsRelay } from '../community/relay-audio.ts';
 import { useRiver } from '../store.ts';
 import { useDm } from './store.ts';
 
@@ -105,7 +106,7 @@ async function begin(
     me,
     () => {
       community.setState({ callVersion: community.getState().callVersion + 1 });
-      const connected = call.remotes().some((r) => r.state === 'connected');
+      const connected = call.remotes().some((r) => r.state === 'connected' || r.relayed);
       const active = useDmCall.getState().active;
       if (connected && !wasConnected && active?.callId === callId) {
         wasConnected = true;
@@ -122,6 +123,8 @@ async function begin(
       pushToTalk: voice?.inputMode === 'push-to-talk',
     },
     transport(peer, callId, role, video),
+    // If the two cannot connect directly, voice goes through the server, encrypted end to end.
+    new WebCodecsRelay(me, (to, payload) => window.river.voice.relay(to, payload)),
   );
   call.muted = community.getState().selfMuted;
   call.deafened = community.getState().selfDeafened;
@@ -146,9 +149,19 @@ async function begin(
       );
     return false;
   }
+  void callRoomOf(callId).then((room) => window.river.voice.callRoom(room));
   if (video) await call.setCamera(true).catch(() => undefined);
   if (role === 'callee') call.updateParticipants([me, peer]);
   return true;
+}
+
+/** The private relay room for a call: a hash of its secret ID, so the server never learns the ID. */
+async function callRoomOf(callId: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`river-call-room:${callId}`));
+  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 }
 
 export async function startDmCall(peer: string, video: boolean): Promise<void> {
@@ -191,6 +204,7 @@ export async function endDmCall(): Promise<void> {
   const call = useCommunity.getState().call;
   useDmCall.setState({ active: null });
   if (call?.channelId.startsWith('dm:')) {
+    void window.river.voice.callRoom(null);
     useCommunity.setState({ call: null });
     play('callEnded');
     await call.leave();
@@ -202,7 +216,8 @@ export function handleCallEvent(e: Extract<DmEvent, { t: 'call' }>): void {
   const name = useDm.getState().conversations.find((c) => c.riverId === e.peer)?.name ?? 'They';
   switch (e.kind) {
     case 'invite': {
-      if (active || incoming || useCommunity.getState().call) {
+      // Only another 1:1 call makes you busy; in a voice channel the call rings, and accepting leaves voice.
+      if (active || incoming) {
         void send(e.peer, e.callId, 'busy').catch(() => undefined);
         return;
       }

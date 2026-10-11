@@ -509,4 +509,25 @@ test('voice goes through the server, encrypted, when members cannot connect dire
     });
   await expect.poll(() => loudness(dave), { timeout: 30_000 }).toBeGreaterThan(0.01);
   await expect.poll(() => loudness(carol), { timeout: 30_000 }).toBeGreaterThan(0.01);
+
+  // A 1:1 call between the same two, still unable to connect directly, also goes through the server.
+  await carol.locator('.channel', { hasText: 'general' }).click();
+  if ((await carol.locator('.community__members').count()) === 0)
+    await carol.getByRole('button', { name: 'Member list' }).click();
+  await carol.locator('.community__members .member', { hasText: 'Dave' }).click();
+  await carol.getByRole('button', { name: 'Message', exact: true }).click();
+  await carol.getByPlaceholder('Message Dave').fill('call me?');
+  await carol.keyboard.press('Enter');
+  await dave.getByRole('button', { name: /^Messages/ }).click();
+  await dave.locator('.dm-row', { hasText: 'Carol' }).click();
+  await dave.getByRole('button', { name: 'Accept', exact: true }).click();
+  await carol.getByRole('button', { name: 'Start voice call' }).click();
+  await expect(dave.locator('.incoming-call')).toContainText('Carol', { timeout: 15_000 });
+  await dave.getByRole('button', { name: 'Accept', exact: true }).click();
+  for (const p of [carol, dave]) {
+    await expect(p.locator('.dm-call__status')).toContainText('through your server', { timeout: 30_000 });
+  }
+  await expect.poll(() => loudness(dave), { timeout: 30_000 }).toBeGreaterThan(0.01);
+  await carol.getByRole('button', { name: 'Hang up' }).click();
+  await expect(dave.locator('.dm-call')).toHaveCount(0, { timeout: 15_000 });
 });

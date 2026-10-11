@@ -131,6 +131,7 @@ const api: RiverApi = {
     signal: (to, channelId, payload) => ipcRenderer.invoke(IPC.voiceSignal, to, channelId, payload),
     iceServers: () => ipcRenderer.invoke(IPC.voiceIceServers),
     relay: (to, payload) => ipcRenderer.send(IPC.voiceRelay, to, payload),
+    callRoom: (room) => ipcRenderer.invoke(IPC.voiceCallRoom, room),
     onRelay: (listener) => {
       const wrapped = (_e: unknown, from: string, payload: Uint8Array): void => listener(from, payload);
       ipcRenderer.on(IPC.voiceRelayIn, wrapped);

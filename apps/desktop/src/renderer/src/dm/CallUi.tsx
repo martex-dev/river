@@ -99,9 +99,11 @@ export function DmCallPanel({ conversation: c }: { conversation: ConversationVie
   const status =
     active.state === 'ringing'
       ? 'Ringing…'
-      : active.state === 'connecting' || remote?.state !== 'connected'
-        ? 'Connecting…'
-        : 'Connected · encrypted directly between your devices';
+      : remote?.relayed && active.state === 'connected'
+        ? 'Connected · through your server, end-to-end encrypted'
+        : active.state === 'connecting' || remote?.state !== 'connected'
+          ? 'Connecting…'
+          : 'Connected · encrypted directly between your devices';
   return (
     <div className="dm-call">
       <div className="dm-call__stage">

@@ -23,6 +23,7 @@ import {
   type MessageWire,
   type ServerEvent,
   type VoiceState,
+  callRoomSchema,
   decodeRelayIn,
   encodeRelayOut,
 } from '@river/protocol';
@@ -179,6 +180,8 @@ export class CommunityService {
   private retryAt: number | null = null;
   /** The voice channel this app is in, so a reconnect can take the seat back (1.0.16). */
   private activeVoice: string | null = null;
+  /** The private call room of a 1:1 call in progress (lets the server relay its voice). */
+  private activeRoom: string | null = null;
   private lastVoiceState: { muted: boolean; deafened: boolean; streaming: boolean } | null = null;
   /** Call setup produced while the connection was down; sent once it is back. */
   private pendingSignals: Array<{ event: unknown; at: number }> = [];
@@ -214,7 +217,11 @@ export class CommunityService {
    * channel we cannot reach directly. Dropped while offline (audio is live).
    */
   relaySend(recipients: string[], payload: Uint8Array): void {
-    if (!this.activeVoice || this.socketState !== 'online' || this.socket?.readyState !== WebSocket.OPEN)
+    if (
+      (!this.activeVoice && !this.activeRoom) ||
+      this.socketState !== 'online' ||
+      this.socket?.readyState !== WebSocket.OPEN
+    )
       return;
     this.socket.send(encodeRelayOut(recipients, payload));
   }
@@ -1778,6 +1785,8 @@ export class CommunityService {
     this.communityOf(channelId);
     this.sendEvent({ t: 'voice.join', channelId });
     this.activeVoice = channelId;
+    // One call at a time: joining a voice channel ends any 1:1 call's relay room.
+    if (this.activeRoom) this.callRoom(null);
     this.lastVoiceState = null;
   }
 
@@ -1804,10 +1813,17 @@ export class CommunityService {
     if (this.pendingSignals.length > PENDING_SIGNALS_MAX) this.pendingSignals.shift();
   }
 
+  /** Joins (or with null leaves) the private relay room of a 1:1 call. */
+  callRoom(room: string | null): void {
+    this.activeRoom = room === null ? null : callRoomSchema.parse(room);
+    this.trySend({ t: 'call.room', room: this.activeRoom });
+  }
+
   /** After a reconnect: take the voice seat back, restore its state, then send held call setup. */
   private resumeVoice(): void {
     const fresh = this.pendingSignals.filter((p) => Date.now() - p.at < PENDING_SIGNAL_TTL_MS);
     this.pendingSignals = [];
+    if (this.activeRoom) this.trySend({ t: 'call.room', room: this.activeRoom });
     if (!this.activeVoice) return;
     this.trySend({ t: 'voice.join', channelId: this.activeVoice });
     if (this.lastVoiceState) this.trySend({ t: 'voice.state', ...this.lastVoiceState });

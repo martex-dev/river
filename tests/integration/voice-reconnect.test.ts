@@ -210,4 +210,36 @@ describe('voice survives dropped connections', () => {
       timeout: 15_000,
     });
   }, 20_000);
+
+  it('relays a 1:1 call between people who share only its private room, also after a reconnect', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    alice.community.ensureSocket();
+    bob.community.ensureSocket();
+    await vi.waitFor(online(alice.community), { timeout: 5000 });
+    await vi.waitFor(online(bob.community), { timeout: 5000 });
+    const got: Array<{ from: string; payload: number[] }> = [];
+    bob.community.onRelay((from, payload) => got.push({ from, payload: [...payload] }));
+    const room = 'q'.repeat(43);
+    alice.community.callRoom(room);
+    bob.community.callRoom(room);
+    await new Promise((r) => setTimeout(r, 100));
+    alice.community.relaySend([bob.riverId], new Uint8Array([7, 7]));
+    await vi.waitFor(() => expect(got).toEqual([{ from: alice.riverId, payload: [7, 7] }]));
+
+    // Bob's connection drops; he rejoins the room by himself and frames flow again.
+    bob.sockets.at(-1)!.close();
+    await vi.waitFor(() => expect(bob.sockets.length).toBe(2), { timeout: 10_000 });
+    await vi.waitFor(online(bob.community), { timeout: 10_000 });
+    await new Promise((r) => setTimeout(r, 100));
+    alice.community.relaySend([bob.riverId], new Uint8Array([8]));
+    await vi.waitFor(() => expect(got.at(-1)).toEqual({ from: alice.riverId, payload: [8] }));
+
+    // After hanging up nothing more is accepted for Bob.
+    bob.community.callRoom(null);
+    await new Promise((r) => setTimeout(r, 100));
+    alice.community.relaySend([bob.riverId], new Uint8Array([9]));
+    await new Promise((r) => setTimeout(r, 300));
+    expect(got.at(-1)!.payload).toEqual([8]);
+  }, 20_000);
 });
