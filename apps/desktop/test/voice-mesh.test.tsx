@@ -305,6 +305,7 @@ describe('voice mesh', () => {
     await runUntil(() => fullMesh(calls));
     const before = net.created;
     // The server restarted and only one person has rejoined so far.
+    for (const c of calls) c.resumed();
     for (const c of calls) c.updateParticipants([people[0]!]);
     await vi.advanceTimersByTimeAsync(3000);
     for (const c of calls) c.updateParticipants(people);
@@ -321,6 +322,27 @@ describe('voice mesh', () => {
     await vi.advanceTimersByTimeAsync(11_000);
     expect(calls[0]!.remotes().map((r) => r.id)).toEqual([people[1]]);
     expect(calls[1]!.remotes().map((r) => r.id)).toEqual([people[0]]);
+  });
+
+  it('someone leaving while their connection still looks fine disappears at once', async () => {
+    const people = ids(3);
+    const calls = await Promise.all(people.map((id) => joinCall(id)));
+    await runUntil(() => fullMesh(calls));
+    // Real WebRTC notices a closed far end only seconds later: the list is what counts.
+    for (const c of calls.slice(0, 2)) c.updateParticipants(people.slice(0, 2));
+    expect(calls[0]!.remotes().map((r) => r.id)).toEqual([people[1]]);
+    expect(calls[1]!.remotes().map((r) => r.id)).toEqual([people[0]]);
+  });
+
+  it('after a server restart, someone who never comes back is dropped when the grace ends', async () => {
+    const people = ids(3);
+    const calls = await Promise.all(people.map((id) => joinCall(id)));
+    await runUntil(() => fullMesh(calls));
+    for (const c of calls) c.resumed();
+    for (const c of calls.slice(0, 2)) c.updateParticipants(people.slice(0, 2));
+    expect(calls[0]!.remotes()).toHaveLength(2); // kept for now
+    await vi.advanceTimersByTimeAsync(11_000);
+    expect(calls[0]!.remotes().map((r) => r.id)).toEqual([people[1]]);
   });
 
   it('a late joiner connects to everyone already talking', async () => {

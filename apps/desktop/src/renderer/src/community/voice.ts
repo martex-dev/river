@@ -148,6 +148,10 @@ export class VoiceCall {
   private readonly timers = new Set<ReturnType<typeof setTimeout>>();
   /** When each person went missing from the participant list. */
   private readonly missingSince = new Map<string, number>();
+  /** The server's latest participant list (without people kept through a gap). */
+  private listed: string[] = [];
+  /** When our own connection to the server last came back (participant lists refill after that). */
+  private resumedAt = 0;
   private local: Record<Slot, MediaStreamTrack | null> = { audio: null, camera: null, screen: null };
   private readonly onChange: () => void;
   muted = false;
@@ -320,10 +324,21 @@ export class VoiceCall {
     return this.local[slot];
   }
 
+  /**
+   * Our connection to the server just came back. The server may have
+   * restarted and be refilling its participant lists as people reconnect, so
+   * for a short while someone missing from the list keeps their connection.
+   */
+  resumed(): void {
+    this.resumedAt = Date.now();
+  }
+
   /** Called with the server's participant list for this channel. */
   updateParticipants(ids: string[]): void {
     if (this.closed) return;
     const now = Date.now();
+    this.listed = ids;
+    const refilling = now - this.resumedAt < MISSING_GRACE_MS;
     for (const id of [...this.peers.keys()]) {
       if (ids.includes(id)) {
         this.missingSince.delete(id);
@@ -331,14 +346,15 @@ export class VoiceCall {
       }
       // A working connection outlives a short gap in the list (the server restarting); others go now.
       const peer = this.peers.get(id)!;
-      if (peer.pc.connectionState !== 'connected') {
+      if (!refilling || peer.pc.connectionState !== 'connected') {
+        this.missingSince.delete(id);
         this.dropPeer(id);
         continue;
       }
       if (!this.missingSince.has(id)) {
         this.missingSince.set(id, now);
         this.later(MISSING_GRACE_MS, () => {
-          if (this.missingSince.has(id) && !this.participants.includes(id)) {
+          if (this.missingSince.has(id) && !this.listed.includes(id)) {
             this.missingSince.delete(id);
             this.dropPeer(id);
             this.onChange();
