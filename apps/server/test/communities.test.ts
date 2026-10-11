@@ -31,7 +31,7 @@ const b64 = (u: Uint8Array): string => Buffer.from(u).toString('base64');
 const id = (): string => randomBytes(16).toString('base64url');
 const sealed = (): string => randomBytes(40).toString('base64');
 
-async function start(): Promise<FastifyInstance> {
+async function start(options: { voiceGraceMs?: number } = {}): Promise<FastifyInstance> {
   database = openDatabase('sqlite::memory:');
   await migrateToLatest(database.db);
   app = await buildApp({
@@ -41,6 +41,7 @@ async function start(): Promise<FastifyInstance> {
       RIVER_RATE_LIMIT_PER_MINUTE: '10000',
     }),
     database,
+    ...options,
   });
   return app;
 }
@@ -841,6 +842,89 @@ describe('communities', () => {
         expect(boss.events.some((e) => e.t === 'voice' && e.participants?.length === 2)).toBe(true),
       );
       for (const c of [one, two, boss]) c.ws.close();
+    });
+    describe('voice survives dropped connections', () => {
+      type Ev = {
+        t: string;
+        code?: string;
+        participants?: string[];
+        states?: Record<string, { reconnecting?: boolean }>;
+        online?: boolean;
+        riverId?: string;
+      };
+      const setup = async (voiceGraceMs: number) => {
+        const a = await start({ voiceGraceMs });
+        const owner = await user(a);
+        const { cid, voice } = await createCommunity(a, owner.token);
+        const guest = await join(a, owner.token, cid);
+        await a.listen({ host: '127.0.0.1', port: 0 });
+        const { port } = a.server.address() as { port: number };
+        const connect = async (token: string) => {
+          const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/ws`);
+          const events: Ev[] = [];
+          ws.onmessage = (m) => events.push(JSON.parse(String(m.data)));
+          await new Promise((resolve, reject) => {
+            ws.onopen = resolve;
+            ws.onerror = reject;
+          });
+          ws.send(JSON.stringify({ t: 'auth', token }));
+          await vi.waitFor(() => expect(events.some((e) => e.t === 'ready')).toBe(true));
+          return { ws, events };
+        };
+        const lastVoice = (events: Ev[]) => events.filter((e) => e.t === 'voice').at(-1);
+        return { owner, guest, voice, connect, lastVoice };
+      };
+
+      it('keeps the seat (marked reconnecting) and resumes it when the app rejoins', async () => {
+        const { owner, guest, voice, connect, lastVoice } = await setup(5_000);
+        const host = await connect(owner.token);
+        let member = await connect(guest.token);
+        host.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+        member.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+        await vi.waitFor(() => expect(lastVoice(host.events)?.participants).toHaveLength(2));
+
+        member.ws.close(); // the tunnel dropped
+        await vi.waitFor(() =>
+          expect(lastVoice(host.events)?.states?.[guest.riverId]?.reconnecting).toBe(true),
+        );
+        expect(lastVoice(host.events)?.participants).toContain(guest.riverId);
+        // Nobody is announced offline for a brief drop.
+        expect(host.events.some((e) => e.t === 'presence' && e.online === false)).toBe(false);
+
+        member = await connect(guest.token);
+        member.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+        await vi.waitFor(() =>
+          expect(lastVoice(host.events)?.states?.[guest.riverId]?.reconnecting).toBeFalsy(),
+        );
+        // The seat was never given up in between.
+        const seen = host.events.filter((e) => e.t === 'voice').map((e) => e.participants?.length);
+        expect(seen.slice(seen.indexOf(2))).not.toContain(1);
+        for (const c of [host, member]) c.ws.close();
+      });
+
+      it('gives the seat up when the app does not come back in time', async () => {
+        const { owner, guest, voice, connect, lastVoice } = await setup(200);
+        const host = await connect(owner.token);
+        const member = await connect(guest.token);
+        host.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+        member.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+        await vi.waitFor(() => expect(lastVoice(host.events)?.participants).toHaveLength(2));
+        member.ws.close();
+        await vi.waitFor(() => expect(lastVoice(host.events)?.participants).toEqual([owner.riverId]));
+        host.ws.close();
+      });
+
+      it('leaving on purpose frees the seat at once', async () => {
+        const { owner, guest, voice, connect, lastVoice } = await setup(60_000);
+        const host = await connect(owner.token);
+        const member = await connect(guest.token);
+        host.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+        member.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+        await vi.waitFor(() => expect(lastVoice(host.events)?.participants).toHaveLength(2));
+        member.ws.send(JSON.stringify({ t: 'voice.leave' }));
+        await vi.waitFor(() => expect(lastVoice(host.events)?.participants).toEqual([owner.riverId]));
+        for (const c of [host, member]) c.ws.close();
+      });
     });
   });
   describe('attachments', () => {

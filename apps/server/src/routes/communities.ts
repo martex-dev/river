@@ -53,6 +53,10 @@ const MAX_TIMEOUT_MS = 28 * 24 * 60 * 60 * 1000;
 const PAGE = 100;
 /** Realtime events per second a client may send on average, and the burst allowed. */
 const SOCKET_RATE = 40;
+/** Server → client WebSocket ping interval; two missed pongs close the connection. */
+const HEARTBEAT_MS = 25_000;
+/** A member whose last connection dropped is announced offline only after this long. */
+const PRESENCE_GRACE_MS = 15_000;
 const SOCKET_BURST = 400;
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
@@ -147,6 +151,7 @@ export async function registerCommunityRoutes(
       states: hub.statesOf(channelId),
     });
   };
+  hub.onSeatExpired = (left) => void voiceUpdate(left.communityId, left.channelId).catch(() => undefined);
   const pushMessage = async (model: CommunityModel, messageId: string): Promise<void> => {
     const row = await db.selectFrom('messages').selectAll().where('id', '=', messageId).executeTakeFirst();
     if (!row) return;
@@ -1275,6 +1280,25 @@ export async function registerCommunityRoutes(
     const authTimer = setTimeout(() => {
       if (!riverId) socket.close(4401);
     }, 10_000);
+    // WebSocket-level pings keep the connection busy (proxies and tunnels drop idle ones)
+    // and find dead connections, whose voice seats then go into their grace period.
+    let alive = true;
+    socket.on('pong', () => {
+      alive = true;
+    });
+    const heartbeat = setInterval(() => {
+      if (!alive) {
+        socket.terminate();
+        return;
+      }
+      alive = false;
+      try {
+        socket.ping();
+      } catch {
+        // closing already
+      }
+    }, HEARTBEAT_MS);
+    heartbeat.unref?.();
 
     const handle = async (raw: Buffer): Promise<void> => {
       let event;
@@ -1404,6 +1428,7 @@ export async function registerCommunityRoutes(
     let tokens = SOCKET_BURST;
     let refilled = Date.now();
     socket.on('message', (raw: Buffer) => {
+      alive = true;
       const now = Date.now();
       tokens = Math.min(SOCKET_BURST, tokens + ((now - refilled) / 1000) * SOCKET_RATE);
       refilled = now;
@@ -1417,11 +1442,20 @@ export async function registerCommunityRoutes(
 
     socket.on('close', () => {
       clearTimeout(authTimer);
+      clearInterval(heartbeat);
       if (!riverId) return;
-      const { offline, left } = hub.remove(riverId, hubSocket);
+      const gone = riverId;
+      const { offline, held } = hub.remove(gone, hubSocket);
       // Background updates after a disconnect must never crash the server (e.g. during shutdown).
-      if (left) void voiceUpdate(left.communityId, left.channelId).catch(() => undefined);
-      if (offline) void presence(riverId, false).catch(() => undefined);
+      // A held seat shows as "reconnecting" until the app rejoins or the grace period ends.
+      if (held) void voiceUpdate(held.communityId, held.channelId).catch(() => undefined);
+      if (offline) {
+        // Brief drops (a tunnel reconnecting) should not flash everyone offline.
+        const t = setTimeout(() => {
+          if (!hub.isOnline(gone)) void presence(gone, false).catch(() => undefined);
+        }, PRESENCE_GRACE_MS);
+        t.unref?.();
+      }
     });
   });
 
