@@ -73,6 +73,9 @@ const fileBytes = z.custom<Uint8Array>(
   'file too large',
 );
 
+/** Custom emoji names: 2–32 letters, digits or underscores. */
+export const EMOJI_NAME = /^[A-Za-z0-9_]{2,32}$/;
+
 const eventTime = z
   .string()
   .max(40)
@@ -266,7 +269,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       a: z.literal('react'),
       channelId: id,
       messageId: id,
-      emoji: z.string().min(1).max(32),
+      // Up to 64 characters so custom emoji (<:name:id>) can be reactions too.
+      emoji: z.string().min(1).max(64),
       on: z.boolean(),
     })
     .strict(),
@@ -322,7 +326,28 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     .strict(),
   z.object({ a: z.literal('deleteEvent'), eventId: id }).strict(),
   z.object({ a: z.literal('eventInterest'), eventId: id, on: z.boolean() }).strict(),
+  // Custom emoji (1.0.19): name and image are sealed with the community key.
+  z.object({ a: z.literal('emojis'), communityId: id }).strict(),
+  z
+    .object({
+      a: z.literal('addEmoji'),
+      communityId: id,
+      name: z.string().regex(EMOJI_NAME),
+      image: z
+        .string()
+        .max(90_000)
+        .regex(/^data:image\/(png|webp|gif);base64,[A-Za-z0-9+/]+=*$/),
+    })
+    .strict(),
+  z.object({ a: z.literal('deleteEmoji'), emojiId: id }).strict(),
 ]);
+
+/** A community's custom emoji, decrypted (1.0.19). Used in text as `<:name:id>`. */
+export interface EmojiView {
+  id: string;
+  name: string;
+  image: string;
+}
 
 /** A scheduled event, decrypted (1.0.18). */
 export interface EventView {
@@ -363,6 +388,8 @@ interface Results {
   download: Uint8Array;
   events: EventView[];
   createEvent: string;
+  emojis: EmojiView[];
+  addEmoji: string;
 }
 
 export type CommunityActionResult<A extends CommunityAction> = A['a'] extends keyof Results

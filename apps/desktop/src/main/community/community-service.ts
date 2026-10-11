@@ -24,6 +24,7 @@ import {
   type ServerEvent,
   type VoiceState,
   callRoomSchema,
+  emojisResponseSchema,
   eventsResponseSchema,
   decodeRelayIn,
   encodeRelayOut,
@@ -37,6 +38,8 @@ import {
   type CommunityAction,
   type CommunityActionResult,
   type EventView,
+  type EmojiView,
+  EMOJI_NAME,
   type SavedOutgoing,
 } from '../../shared/community-actions.ts';
 import { layoutChanges, moveChannel as moveInLayout, sidebarGroups } from '../../shared/layout.ts';
@@ -862,7 +865,7 @@ export class CommunityService {
         try {
           const emoji = String(
             open<{ emoji: string }>(key, communityId, `reaction:${m.id}`, r.emoji).emoji,
-          ).slice(0, 32);
+          ).slice(0, 64);
           // Only show a reaction whose tag matches its emoji, so nobody can relabel a reaction.
           if (reactionTag(key, communityId, m.id, emoji) !== r.tag) return [];
           return [{ tag: r.tag, emoji, count: r.users.length, mine: r.users.includes(me), users: r.users }];
@@ -1675,6 +1678,28 @@ export class CommunityService {
         break;
       case 'events':
         return (await this.events(act.communityId)) as CommunityActionResult<A>;
+      case 'emojis':
+        return (await this.emojis(act.communityId)) as CommunityActionResult<A>;
+      case 'addEmoji': {
+        const existing = await this.emojis(act.communityId);
+        if (existing.some((e) => e.name.toLowerCase() === act.name.toLowerCase()))
+          throw new CommunityError(`There is already an emoji called :${act.name}:.`);
+        const emojiId = randomId();
+        const data = seal(this.requireKey(act.communityId), act.communityId, `emoji:${emojiId}`, {
+          name: act.name,
+          image: act.image,
+        });
+        await this.call(
+          `/communities/${act.communityId}/emojis`,
+          'POST',
+          { id: emojiId, data },
+          z.unknown(),
+        ).catch(explain);
+        return emojiId as CommunityActionResult<A>;
+      }
+      case 'deleteEmoji':
+        await this.call(`/emojis/${act.emojiId}`, 'DELETE', undefined, z.unknown()).catch(explain);
+        break;
       case 'createEvent': {
         const eventId = randomId();
         await this.call(
@@ -1984,6 +2009,26 @@ export class CommunityService {
     this.deps.log.info('voice: rejoined after reconnecting');
   }
 
+  // ---- Custom emoji (1.0.19) ------------------------------------------------------------------
+
+  async emojis(communityId: string): Promise<EmojiView[]> {
+    const ring = this.keys.get(communityId);
+    if (!ring) throw new CommunityError('Waiting for the community key…');
+    const res = await this.call(`/communities/${communityId}/emojis`, 'GET', undefined, emojisResponseSchema);
+    return res.emojis.flatMap((e): EmojiView[] => {
+      try {
+        const data = ring.open<{ name?: unknown; image?: unknown }>(communityId, `emoji:${e.id}`, e.data);
+        const name = String(data.name ?? '');
+        const image = String(data.image ?? '');
+        if (!EMOJI_NAME.test(name) || !/^data:image\/(png|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(image))
+          return [];
+        return [{ id: e.id, name, image }];
+      } catch {
+        return [];
+      }
+    });
+  }
+
   // ---- Scheduled events (1.0.18) ------------------------------------------------------------
 
   /** Events seen so far, per community, for start reminders. */
@@ -2271,6 +2316,9 @@ export class CommunityService {
       }
       case 'events':
         this.emit({ t: 'events', communityId: e.communityId });
+        return;
+      case 'emojis':
+        this.emit({ t: 'emojis', communityId: e.communityId });
         return;
       case 'voice.disconnect':
         this.emit({ t: 'voiceDisconnect' });

@@ -4,7 +4,7 @@ import type { CommunityAction, CommunityActionResult } from '../../../shared/com
 import type { ChatMessage, CommunityEvent, CommunityView, Result } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
 import { setMessageLinkOpener } from './message-link.ts';
-import type { EventView } from '../../../shared/community-actions.ts';
+import type { EmojiView, EventView } from '../../../shared/community-actions.ts';
 import { effectiveNotify, shouldAlert } from '../../../shared/notify-rules.ts';
 import { play } from './sound.ts';
 import { VoiceCall } from './voice.ts';
@@ -23,7 +23,7 @@ export type Modal =
   | { kind: 'events'; communityId: string }
   | { kind: 'confirm'; title: string; body: string; action: string; run: () => Promise<void> };
 
-export type CommunityTab = 'overview' | 'roles' | 'members' | 'bans' | 'audit';
+export type CommunityTab = 'overview' | 'roles' | 'members' | 'emoji' | 'bans' | 'audit';
 export type UserTab = 'profile' | 'voice' | 'notifications' | 'appearance';
 
 const TYPING_MS = 7000;
@@ -80,6 +80,9 @@ interface CommunityState {
   /** Scheduled events per community, once loaded (1.0.18). */
   events: Record<string, EventView[]>;
   loadEvents(communityId: string): Promise<void>;
+  /** Custom emoji per community, once loaded (1.0.19). */
+  emojis: Record<string, EmojiView[]>;
+  loadEmojis(communityId: string): Promise<void>;
   loadOlder(channelId: string): Promise<number>;
 
   load(): Promise<void>;
@@ -360,6 +363,9 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         // Only refresh lists someone has looked at.
         if (get().events[event.communityId]) void get().loadEvents(event.communityId);
         return;
+      case 'emojis':
+        if (get().emojis[event.communityId]) void get().loadEmojis(event.communityId);
+        return;
       case 'eventStarting':
         play('success');
         get().notify(`${event.name} is starting now.`);
@@ -374,6 +380,11 @@ export const useCommunity = create<CommunityState>((set, get) => ({
 
   pendingJump: null,
   draftInsert: null,
+  emojis: {},
+  loadEmojis: async (communityId) => {
+    const res = await window.river.community.action({ a: 'emojis', communityId });
+    if (res.ok) set({ emojis: { ...get().emojis, [communityId]: res.value } });
+  },
   events: {},
   loadEvents: async (communityId) => {
     const res = await window.river.community.action({ a: 'events', communityId });
@@ -397,6 +408,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     const channel =
       channelId ?? c?.channels.find((ch) => ch.kind === 'text')?.id ?? c?.channels[0]?.id ?? null;
     set({ selectedCommunity: communityId, selectedChannel: channel, replyTo: null, editing: null });
+    if (!get().emojis[communityId]) void get().loadEmojis(communityId);
     if (channel) get().selectChannel(channel);
   },
 

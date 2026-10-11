@@ -15,6 +15,11 @@ All notable changes to River are documented here. The format follows
   voice" button while it is on). People with the new **Manage events**
   permission can edit, cancel or delete them. Name, description and place are
   end-to-end encrypted.
+- **Custom emoji.** Upload a community's own emoji in Community settings →
+  Emoji (people with the new **Manage emoji** permission); everyone uses them
+  with `:name:` in messages and as reactions, from the picker's community tab
+  or by typing `:` and part of the name. A message that is only an emoji shows
+  it big. Pictures and names are end-to-end encrypted.
 - **Delete your account** (Settings → Account). It is removed from your
   server for good — you leave your communities, communities you own are
   deleted, and your keys and devices are gone there — after you confirm, and

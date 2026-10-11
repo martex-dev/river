@@ -4281,3 +4281,47 @@ input.switch:disabled {
   gap: 6px;
   padding-bottom: 10px;
 }
+
+/* Custom emoji (1.0.19) */
+.custom-emoji {
+  display: inline-block;
+  width: 1.375em;
+  height: 1.375em;
+  vertical-align: -0.3em;
+  object-fit: contain;
+}
+.custom-emoji--big {
+  width: 48px;
+  height: 48px;
+}
+.custom-emoji--missing {
+  color: var(--text-faint);
+}
+.emoji-upload {
+  margin: 10px 0 16px;
+}
+.emoji-upload__pending {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+.emoji-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.emoji-list__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.emoji-list__item .btn {
+  margin-left: auto;
+}

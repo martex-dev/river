@@ -5,7 +5,7 @@ import { formatMessageLink } from '../message-link.ts';
 import { ProfileCard } from './Members.tsx';
 import { ForwardDialog } from './Forward.tsx';
 import { useRiver } from '../../store.ts';
-import { replaceShortcodes, searchEmoji, useEmojiIndex } from '../emoji-data.ts';
+import { replaceCustomShortcodes, replaceShortcodes, searchEmoji, useEmojiIndex } from '../emoji-data.ts';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, ChatMessage, CommunityView } from '../../../../shared/ipc.ts';
@@ -17,7 +17,9 @@ import { AttachmentList, PendingFiles, pendingFrom, uploadAll, type PendingFile 
 import {
   Avatar,
   EditIcon,
+  EmojiGlyph,
   EmojiPicker,
+  customEmojiText,
   HashIcon,
   Highlight,
   MenuItem,
@@ -507,7 +509,9 @@ function Message(props: {
                     setReactionsAt({ x: e.clientX, y: e.clientY });
                   }}
                 >
-                  <span className="reaction__emoji">{r.emoji}</span>
+                  <span className="reaction__emoji">
+                    <EmojiGlyph emoji={r.emoji} />
+                  </span>
                   <span key={r.count} className="reaction__count">
                     {r.count}
                   </span>
@@ -764,7 +768,7 @@ function Message(props: {
             {reactions.map((r) => (
               <div key={r.tag} role="listitem" className="reactions-pop__row">
                 <span className="reactions-pop__emoji" aria-hidden="true">
-                  {r.emoji}
+                  <EmojiGlyph emoji={r.emoji} />
                 </span>
                 <span className="reactions-pop__count">{r.count}</span>
                 <span className="reactions-pop__names">
@@ -785,6 +789,7 @@ function Message(props: {
       {picker && (
         <Popover x={picker.x} y={picker.y} onClose={() => setPicker(null)}>
           <EmojiPicker
+            custom={s.emojis[community.id]}
             onPick={(e) => {
               setPicker(null);
               const existing = m.reactions.find((r) => r.emoji === e);
@@ -884,17 +889,33 @@ function Composer(props: {
   const emojiTrigger = /(?:^|\s):([a-z0-9_+-]{2,32})$/i.exec(text);
   const emojiIndex = useEmojiIndex(!!emojiTrigger || text.includes(':'));
   const mentionChoices = trigger ? suggest(community, channel, trigger[1] as '@' | '#', trigger[2]!) : [];
+  const customEmoji = s.emojis[community.id] ?? [];
+  const customChoices: Suggestion[] = emojiTrigger
+    ? customEmoji
+        .filter((e) => e.name.toLowerCase().includes(emojiTrigger[1]!.toLowerCase()))
+        .slice(0, 8)
+        .map((e) => ({
+          key: `ce:${e.id}`,
+          insert: customEmojiText(e),
+          symbol: ':' as const,
+          hint: community.name,
+          label: `:${e.name}:`,
+        }))
+    : [];
   const suggestions: Suggestion[] =
     mentionChoices.length > 0
       ? mentionChoices
-      : emojiTrigger && emojiIndex
-        ? searchEmoji(emojiIndex, emojiTrigger[1]!, 8).map((e) => ({
-            key: `e:${e.emoji}`,
-            insert: e.emoji,
-            symbol: ':' as const,
-            hint: e.label,
-            label: `:${e.shortcodes[0] ?? e.label.replace(/\s+/g, '_')}:`,
-          }))
+      : emojiTrigger && (emojiIndex || customChoices.length)
+        ? [
+            ...customChoices,
+            ...(emojiIndex ? searchEmoji(emojiIndex, emojiTrigger[1]!, 8) : []).map((e) => ({
+              key: `e:${e.emoji}`,
+              insert: e.emoji,
+              symbol: ':' as const,
+              hint: e.label,
+              label: `:${e.shortcodes[0] ?? e.label.replace(/\s+/g, '_')}:`,
+            })),
+          ].slice(0, 8)
         : [];
 
   const complete = (choice: Suggestion): void => {
@@ -905,7 +926,8 @@ function Composer(props: {
   };
 
   const send = async (): Promise<void> => {
-    const value = emojiIndex ? replaceShortcodes(text.trim(), emojiIndex) : text.trim();
+    const withCustom = replaceCustomShortcodes(text.trim(), customEmoji);
+    const value = emojiIndex ? replaceShortcodes(withCustom, emojiIndex) : withCustom;
     const files = props.pending;
     if ((!value && files.length === 0) || uploading) return;
     let attachments;
@@ -978,7 +1000,7 @@ function Composer(props: {
             >
               {choice.symbol === ':' ? (
                 <span className="mention-menu__emoji" aria-hidden="true">
-                  {choice.insert}
+                  <EmojiGlyph emoji={choice.insert} />
                 </span>
               ) : choice.member ? (
                 <Avatar
@@ -1176,6 +1198,7 @@ function Composer(props: {
       {picker && (
         <Popover x={picker.x} y={picker.y} onClose={() => setPicker(null)}>
           <EmojiPicker
+            custom={s.emojis[community.id]}
             onPick={(e) => {
               setText(text + e);
               setPicker(null);
