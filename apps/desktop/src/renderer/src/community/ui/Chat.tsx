@@ -1,3 +1,4 @@
+import { clockDateTime, clockTime } from '../../time.ts';
 import { formatMessageLink } from '../message-link.ts';
 import { ProfileCard } from './Members.tsx';
 import { ForwardDialog } from './Forward.tsx';
@@ -37,8 +38,7 @@ import {
 
 const GROUP_MS = 5 * 60_000;
 
-const timeOf = (iso: string): string =>
-  new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const timeOf = (iso: string): string => clockTime(iso);
 
 function dayLabel(iso: string): string {
   const d = new Date(iso);
@@ -439,9 +439,7 @@ function Message(props: {
                 title={`${new Date(m.sentAt).toLocaleString()} · click to copy a link to this message`}
                 onClick={copyLink}
               >
-                {dayLabel(m.sentAt) === 'Today'
-                  ? `Today at ${timeOf(m.sentAt)}`
-                  : new Date(m.sentAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                {dayLabel(m.sentAt) === 'Today' ? `Today at ${timeOf(m.sentAt)}` : clockDateTime(m.sentAt)}
               </time>
               {m.pinned && (
                 <span className="msg__pinned" title="Pinned">

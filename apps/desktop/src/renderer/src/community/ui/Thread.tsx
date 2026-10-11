@@ -1,3 +1,4 @@
+import { clockTime } from '../../time.ts';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import { useShallow } from 'zustand/react/shallow';
@@ -7,8 +8,7 @@ import { useCommunity } from '../store.ts';
 import { AttachmentList } from './Attachments.tsx';
 import { Avatar, RichText, XIcon, can, hex, memberOf } from './common.tsx';
 
-const timeOf = (iso: string): string =>
-  new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const timeOf = (iso: string): string => clockTime(iso);
 
 /**
  * A thread beside the channel: the starting message, its replies, and a

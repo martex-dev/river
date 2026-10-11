@@ -110,6 +110,24 @@ export function App(): ReactElement {
     document.documentElement.dataset.density = density;
   }, [density]);
 
+  const fontSize = useRiver((r) => r.settings?.appearance.fontSize ?? 14);
+  useEffect(() => {
+    document.documentElement.style.setProperty('--chat-font-size', `${fontSize}px`);
+  }, [fontSize]);
+
+  // High contrast: chosen, or following the system's "increase contrast" preference.
+  const contrast = useRiver((r) => r.settings?.appearance.contrast ?? 'system');
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-contrast: more)');
+    const apply = (): void => {
+      const high = contrast === 'high' || (contrast === 'system' && media.matches);
+      document.documentElement.dataset.contrast = high ? 'high' : 'normal';
+    };
+    apply();
+    media.addEventListener('change', apply);
+    return () => media.removeEventListener('change', apply);
+  }, [contrast]);
+
   useEffect(() => {
     if (info) document.documentElement.dataset.platform = info.platform;
   }, [info]);

@@ -386,6 +386,12 @@ async function start(): Promise<void> {
   // Running for a while with a window up counts as a healthy start.
   window.once('ready-to-show', () => setTimeout(() => health.markHealthy(), HEALTHY_AFTER_MS));
   watchWindow(window, log, process.argv.includes('--hidden'));
+  // Settings → Appearance → interface size.
+  const applyZoom = (): void => {
+    if (!window.isDestroyed()) window.webContents.setZoomFactor(settings.get().appearance.zoom);
+  };
+  window.webContents.on('did-finish-load', applyZoom);
+  settings.onChange(applyZoom);
   app.on('child-process-gone', (_e, details) => {
     if (details.type !== 'GPU' || details.reason === 'clean-exit') return;
     log.warn(`graphics process stopped (${details.reason})`);

@@ -1601,3 +1601,20 @@ html[data-density='compact'] .member {
   color: var(--text-dim);
   margin-top: 2px;
 }
+
+/* Appearance sliders (1.0.18) */
+.slider-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.slider-field input[type='range'] {
+  width: min(360px, 100%);
+  accent-color: var(--accent);
+}
+.slider-field__preview {
+  display: block;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}

@@ -48,6 +48,14 @@ export const settingsSchema = z.object({
     motion: z.enum(['system', 'reduced', 'full']),
     /** Added in 1.0.9: how tightly messages are packed. */
     density: z.enum(['cozy', 'compact']),
+    /** Added in 1.0.18: the whole interface's size (Ctrl+= / Ctrl+− / Ctrl+0). */
+    zoom: z.number().min(0.7).max(1.6),
+    /** Message text size in pixels. */
+    fontSize: z.number().int().min(12).max(22),
+    /** 'system' follows the locale. */
+    clock: z.enum(['system', '12h', '24h']),
+    /** Stronger text and borders; 'system' follows the OS high-contrast preference. */
+    contrast: z.enum(['system', 'normal', 'high']),
   }),
   notifications: z.object({
     /** Default 'none': notifications say "New River message" with no sender or content. */
@@ -127,7 +135,14 @@ export type Settings = z.infer<typeof settingsSchema>;
 export const DEFAULT_SETTINGS: Settings = {
   schemaVersion: 1,
   updates: { channel: 'stable', autoCheck: true, autoDownload: true, installOnQuit: true },
-  appearance: { motion: 'system', density: 'cozy' },
+  appearance: {
+    motion: 'system',
+    density: 'cozy',
+    zoom: 1,
+    fontSize: 14,
+    clock: 'system',
+    contrast: 'system',
+  },
   notifications: {
     preview: 'none',
     desktop: true,
