@@ -797,12 +797,16 @@ function Composer(props: {
   const s = useCommunity();
   const [text, setText] = useState('');
   // Quote puts the quoted lines in front of whatever is being written.
-  const draftInsert = useCommunity((x) => x.draftInsert);
-  useEffect(() => {
-    if (draftInsert === null) return;
-    setText((t) => `${draftInsert}${t}`);
-    useCommunity.setState({ draftInsert: null });
-  }, [draftInsert]);
+  useEffect(
+    () =>
+      useCommunity.subscribe((state) => {
+        const insert = state.draftInsert;
+        if (insert === null) return;
+        useCommunity.setState({ draftInsert: null });
+        setText((t) => `${insert}${t}`);
+      }),
+    [],
+  );
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const lastTyping = useRef(0);
