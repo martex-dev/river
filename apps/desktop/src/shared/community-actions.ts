@@ -266,7 +266,15 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z
-    .object({ a: z.literal('setProfile'), name: name.optional(), avatar: avatarSchema.nullable().optional() })
+    .object({
+      a: z.literal('setProfile'),
+      name: name.optional(),
+      avatar: avatarSchema.nullable().optional(),
+      /** About me (also your bio on your social profile). */
+      bio: z.string().max(190).optional(),
+      pronouns: z.string().max(40).optional(),
+      banner: z.number().int().min(0).max(0xffffff).nullable().optional(),
+    })
     .strict(),
   // Scheduled events (1.0.18): name, description and place are sealed with the community key.
   z.object({ a: z.literal('events'), communityId: id }).strict(),

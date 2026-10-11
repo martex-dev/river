@@ -153,6 +153,31 @@ describe('scheduled events', () => {
   });
 });
 
+describe('profiles', () => {
+  it('carry About me, pronouns and a banner colour to other members, encrypted', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Profile Club');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    await bob.community.action({
+      a: 'setProfile',
+      bio: 'I build bikes',
+      pronouns: 'he/him',
+      banner: 0x3ee08f,
+    });
+    expect(bob.community.profile()).toMatchObject({
+      bio: 'I build bikes',
+      pronouns: 'he/him',
+      banner: 0x3ee08f,
+    });
+    const seen = (await alice.community.refresh())[0]!.members.find((m) => m.riverId === bob.riverId)!;
+    expect(seen).toMatchObject({ bio: 'I build bikes', pronouns: 'he/him', banner: 0x3ee08f });
+    const stored = JSON.stringify(await serverDb.db.selectFrom('community_members').selectAll().execute());
+    expect(stored).not.toContain('I build bikes');
+    expect(stored).not.toContain('he/him');
+  });
+});
+
 describe('replies', () => {
   it('notify the person replied to, unless the reply turned that off', async () => {
     const alice = await person('Alice');

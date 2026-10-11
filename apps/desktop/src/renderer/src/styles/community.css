@@ -4162,3 +4162,45 @@ input.switch:disabled {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+
+/* About me, pronouns, banner (1.0.18) */
+.profile-card__bio {
+  margin: 0 0 8px;
+  color: var(--text-dim);
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.profile-card__pronouns {
+  margin-top: -2px;
+}
+.profile-preview {
+  position: relative;
+  width: 240px;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--surface-strong);
+}
+.profile-preview .profile-card__banner {
+  height: 60px;
+}
+.profile-preview__avatar {
+  margin: -40px 0 0 14px;
+}
+.profile-preview__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 14px 14px;
+}
+.profile-preview__bio {
+  margin: 6px 0 0;
+  color: var(--text-dim);
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.swatch--none {
+  background: repeating-linear-gradient(45deg, transparent 0 4px, var(--border-strong) 4px 6px);
+}

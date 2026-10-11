@@ -246,6 +246,10 @@ export interface MemberView {
   status?: 'idle' | 'dnd';
   /** Their custom status, if set and not expired (end-to-end encrypted). */
   customStatus?: { text: string; emoji: string } | null;
+  /** About me, pronouns and banner colour (1.0.18). */
+  bio?: string;
+  pronouns?: string;
+  banner?: number | null;
   owner: boolean;
   /** Hierarchy position (owner is highest). */
   rank: number;
@@ -460,7 +464,13 @@ export interface RiverApi {
     connection(): Promise<'online' | 'offline' | 'connecting'>;
     /** Every other community operation; validated in main against communityActionSchema. */
     action<A extends CommunityAction>(action: A): Promise<Result<CommunityActionResult<A>>>;
-    profile(): Promise<{ name: string; avatar: string | null }>;
+    profile(): Promise<{
+      name: string;
+      avatar: string | null;
+      bio: string;
+      pronouns: string;
+      banner: number | null;
+    }>;
     /** Decrypts an attachment and asks where to save it. */
     saveAttachment(pointer: AttachmentPointer): Promise<Result<boolean>>;
     onEvent(listener: (event: CommunityEvent) => void): () => void;

@@ -15,6 +15,9 @@ All notable changes to River are documented here. The format follows
   voice" button while it is on). People with the new **Manage events**
   permission can edit, cancel or delete them. Name, description and place are
   end-to-end encrypted.
+- **Richer profiles:** About me, pronouns and a banner colour, with a live
+  preview in Settings → Profile; shown on your profile card in every
+  community, end-to-end encrypted.
 - **@ ON/OFF on replies:** choose whether the person you reply to is
   notified.
 - **View reactions:** right-click a message or a reaction to see who reacted

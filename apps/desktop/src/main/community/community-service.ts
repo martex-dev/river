@@ -122,6 +122,10 @@ interface SealedProfile {
   avatar?: string | null;
   /** Custom status (1.0.17), end-to-end encrypted like the rest of the profile. */
   status?: { text?: unknown; emoji?: unknown; until?: unknown };
+  /** About me, pronouns, banner colour (1.0.18). */
+  bio?: unknown;
+  pronouns?: unknown;
+  banner?: unknown;
 }
 
 /** A custom status from a sealed profile, if valid and not expired. */
@@ -529,6 +533,14 @@ export class CommunityService {
     return this.deps.identity.get()?.displayName ?? null;
   }
 
+  /** About me, pronouns and banner colour (1.0.18), shared only inside sealed profiles. */
+  private myProfileExtras(): { bio: string; pronouns: string; banner: number | null } {
+    const db = this.deps.db();
+    const row = db?.prepare('SELECT bio, pronouns, banner FROM profile WHERE id = 1').get() as
+      { bio: string | null; pronouns: string | null; banner: number | null } | undefined;
+    return { bio: row?.bio ?? '', pronouns: row?.pronouns ?? '', banner: row?.banner ?? null };
+  }
+
   private myAvatar(): string | null {
     const db = this.deps.db();
     if (!db) return null;
@@ -548,11 +560,15 @@ export class CommunityService {
 
   private sealedProfile(communityId: string): string {
     const custom = this.deps.presence?.custom() ?? null;
+    const extras = this.myProfileExtras();
     const profile: SealedProfile = {
       name: this.nickname(communityId) ?? this.myName(),
       avatar: this.myAvatar(),
       identityKey: this.myIdentityKey(),
       ...(custom ? { status: custom } : {}),
+      ...(extras.bio ? { bio: extras.bio } : {}),
+      ...(extras.pronouns ? { pronouns: extras.pronouns } : {}),
+      ...(extras.banner !== null ? { banner: extras.banner } : {}),
     };
     return seal(this.requireKey(communityId), communityId, 'profile', profile);
   }
@@ -707,6 +723,15 @@ export class CommunityService {
           return live === 'idle' || live === 'dnd' ? { status: live } : {};
         })(),
         customStatus: readCustomStatus(profile.status),
+        bio: typeof profile.bio === 'string' ? profile.bio.slice(0, 190) : '',
+        pronouns: typeof profile.pronouns === 'string' ? profile.pronouns.slice(0, 40) : '',
+        banner:
+          typeof profile.banner === 'number' &&
+          Number.isInteger(profile.banner) &&
+          profile.banner >= 0 &&
+          profile.banner <= 0xffffff
+            ? profile.banner
+            : null,
         owner: m.riverId === ownerId,
         rank: topPosition(ownerId, wireRoles, { riverId: m.riverId, roles: m.roles }),
         timeoutUntil: m.timeoutUntil && Date.parse(m.timeoutUntil) > Date.now() ? m.timeoutUntil : null,
@@ -1093,8 +1118,8 @@ export class CommunityService {
     );
   }
 
-  profile(): { name: string; avatar: string | null } {
-    return { name: this.myName() ?? '', avatar: this.myAvatar() };
+  profile(): { name: string; avatar: string | null; bio: string; pronouns: string; banner: number | null } {
+    return { name: this.myName() ?? '', avatar: this.myAvatar(), ...this.myProfileExtras() };
   }
 
   /**
@@ -1721,6 +1746,18 @@ export class CommunityService {
               'INSERT INTO profile (id, avatar) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET avatar = excluded.avatar',
             )
             .run(act.avatar);
+        }
+        for (const [column, value] of [
+          ['bio', act.bio],
+          ['pronouns', act.pronouns],
+          ['banner', act.banner],
+        ] as const) {
+          if (value === undefined) continue;
+          this.db()
+            .prepare(
+              `INSERT INTO profile (id, ${column}) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET ${column} = excluded.${column}`,
+            )
+            .run(value);
         }
         if (this.deps.account.status().state === 'registered') {
           this.loadKeys();

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { useRiver } from '../../store.ts';
 import { SOUND_GROUPS, play, type SoundGroup, type SoundName } from '../sound.ts';
 import { useCommunity, type UserTab } from '../store.ts';
-import { Avatar, Modal, Toggle, XIcon } from './common.tsx';
+import { Avatar, Modal, Toggle, XIcon, hex } from './common.tsx';
 
 export function UserSettings(props: { tab?: UserTab }): ReactElement {
   const s = useCommunity();
@@ -85,29 +85,55 @@ async function toAvatar(file: File): Promise<string> {
   }
 }
 
+interface ProfileDraft {
+  name: string;
+  avatar: string | null;
+  bio: string;
+  pronouns: string;
+  banner: number | null;
+}
+
+const BANNER_COLORS = [0x4fe3d1, 0x5865f2, 0x3ee08f, 0xf0b232, 0xf47fff, 0xed4245, 0x9b59b6, 0x1f2937];
+
 function Profile(): ReactElement {
   const s = useCommunity();
   const identity = useRiver((r) => r.identity);
-  const [name, setName] = useState('');
-  const [avatar, setAvatar] = useState<string | null>(null);
-  const [saved, setSaved] = useState<{ name: string; avatar: string | null } | null>(null);
+  const [draft, setDraft] = useState<ProfileDraft>({
+    name: '',
+    avatar: null,
+    bio: '',
+    pronouns: '',
+    banner: null,
+  });
+  const [saved, setSaved] = useState<ProfileDraft | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     void window.river.community.profile().then((p) => {
-      setName(p.name);
-      setAvatar(p.avatar);
+      setDraft(p);
       setSaved(p);
     });
   }, []);
-  const dirty = saved !== null && (name !== saved.name || avatar !== saved.avatar);
+  const set = (patch: Partial<ProfileDraft>): void => setDraft((d) => ({ ...d, ...patch }));
+  const dirty = saved !== null && JSON.stringify(draft) !== JSON.stringify(saved);
   const save = async (): Promise<void> => {
+    if (!saved) return;
+    const next = {
+      ...draft,
+      name: draft.name.trim(),
+      bio: draft.bio.trim(),
+      pronouns: draft.pronouns.trim(),
+    };
     const res = await window.river.community.action({
       a: 'setProfile',
-      ...(name !== saved?.name ? { name: name.trim() } : {}),
-      ...(avatar !== saved?.avatar ? { avatar } : {}),
+      ...(next.name !== saved.name ? { name: next.name } : {}),
+      ...(next.avatar !== saved.avatar ? { avatar: next.avatar } : {}),
+      ...(next.bio !== saved.bio ? { bio: next.bio } : {}),
+      ...(next.pronouns !== saved.pronouns ? { pronouns: next.pronouns } : {}),
+      ...(next.banner !== saved.banner ? { banner: next.banner } : {}),
     });
     if (!res.ok) return s.notify(res.message, 'error');
-    setSaved({ name: name.trim(), avatar });
+    setSaved(next);
+    setDraft(next);
     const updated = await window.river.identity.get();
     if (updated) await useRiver.getState().identityCreated(updated);
     s.notify('Profile saved');
@@ -117,13 +143,31 @@ function Profile(): ReactElement {
       <h2>My profile</h2>
       <div className="profile-editor">
         <div className="profile-editor__avatar">
-          <Avatar id={identity?.riverId ?? 'me'} name={name || '?'} avatar={avatar} size={96} />
+          <div className="profile-preview" aria-label="Preview of your profile card">
+            <div
+              className="profile-card__banner"
+              style={draft.banner !== null ? { background: hex(draft.banner) } : undefined}
+            />
+            <div className="profile-preview__avatar">
+              <Avatar
+                id={identity?.riverId ?? 'me'}
+                name={draft.name || '?'}
+                avatar={draft.avatar}
+                size={80}
+              />
+            </div>
+            <div className="profile-preview__body">
+              <strong>{draft.name || 'Your name'}</strong>
+              {draft.pronouns && <span className="muted small">{draft.pronouns}</span>}
+              {draft.bio && <p className="profile-preview__bio">{draft.bio}</p>}
+            </div>
+          </div>
           <div className="button-row">
             <button className="btn btn--ghost btn--small" onClick={() => fileRef.current?.click()}>
               Change avatar
             </button>
-            {avatar && (
-              <button className="btn btn--link" onClick={() => setAvatar(null)}>
+            {draft.avatar && (
+              <button className="btn btn--link" onClick={() => set({ avatar: null })}>
                 Remove
               </button>
             )}
@@ -139,7 +183,7 @@ function Profile(): ReactElement {
               if (!file) return;
               if (file.size > 15 * 1024 * 1024) return s.notify('That image is too large.', 'error');
               void toAvatar(file)
-                .then(setAvatar)
+                .then((avatar) => set({ avatar }))
                 .catch(() => s.notify('River could not read that image.', 'error'));
             }}
           />
@@ -147,11 +191,55 @@ function Profile(): ReactElement {
         <div className="profile-editor__fields">
           <label className="textfield">
             <span className="field__label">Display name</span>
-            <input value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
+            <input value={draft.name} maxLength={64} onChange={(e) => set({ name: e.target.value })} />
           </label>
+          <label className="textfield">
+            <span className="field__label">Pronouns</span>
+            <input
+              value={draft.pronouns}
+              maxLength={40}
+              placeholder="she/her, they/them…"
+              onChange={(e) => set({ pronouns: e.target.value })}
+            />
+          </label>
+          <label className="textfield">
+            <span className="field__label">
+              About me <span className="muted small">{190 - draft.bio.length}</span>
+            </span>
+            <textarea
+              value={draft.bio}
+              maxLength={190}
+              rows={3}
+              placeholder="A little about you"
+              onChange={(e) => set({ bio: e.target.value })}
+            />
+          </label>
+          <fieldset className="field">
+            <legend className="field__label">Banner colour</legend>
+            <div className="swatches">
+              <button
+                type="button"
+                className={`swatch swatch--none ${draft.banner === null ? 'is-selected' : ''}`}
+                aria-label="No banner colour"
+                aria-pressed={draft.banner === null}
+                onClick={() => set({ banner: null })}
+              />
+              {BANNER_COLORS.map((c) => (
+                <button
+                  type="button"
+                  key={c}
+                  className={`swatch ${draft.banner === c ? 'is-selected' : ''}`}
+                  style={{ background: hex(c) }}
+                  aria-label={`Banner colour ${hex(c)}`}
+                  aria-pressed={draft.banner === c}
+                  onClick={() => set({ banner: c })}
+                />
+              ))}
+            </div>
+          </fieldset>
           <p className="muted small">
-            Your name and avatar are encrypted separately for each community you are in; the server only
-            stores ciphertext.
+            Your profile is encrypted separately for each community you are in; the server only stores
+            ciphertext. About me is also your bio on your social profile.
           </p>
           <div className="field__label">River ID</div>
           <code className="mono small">{identity?.riverId}</code>
@@ -160,18 +248,12 @@ function Profile(): ReactElement {
       {dirty && (
         <div className="save-bar">
           <span>Careful — you have unsaved changes!</span>
-          <button
-            className="btn btn--link"
-            onClick={() => {
-              setName(saved.name);
-              setAvatar(saved.avatar);
-            }}
-          >
+          <button className="btn btn--link" onClick={() => setDraft(saved)}>
             Reset
           </button>
           <button
             className="btn btn--primary btn--small"
-            disabled={name.trim() === ''}
+            disabled={draft.name.trim() === ''}
             onClick={() => void save()}
           >
             Save changes
