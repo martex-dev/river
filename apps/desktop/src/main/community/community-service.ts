@@ -24,6 +24,7 @@ import {
   type ServerEvent,
   type VoiceState,
   callRoomSchema,
+  eventsResponseSchema,
   decodeRelayIn,
   encodeRelayOut,
 } from '@river/protocol';
@@ -35,6 +36,7 @@ import {
   type BanView,
   type CommunityAction,
   type CommunityActionResult,
+  type EventView,
   type SavedOutgoing,
 } from '../../shared/community-actions.ts';
 import { layoutChanges, moveChannel as moveInLayout, sidebarGroups } from '../../shared/layout.ts';
@@ -1637,6 +1639,66 @@ export class CommunityService {
           ...(act.disconnect ? { disconnect: true } : {}),
         });
         break;
+      case 'events':
+        return (await this.events(act.communityId)) as CommunityActionResult<A>;
+      case 'createEvent': {
+        const eventId = randomId();
+        await this.call(
+          `/communities/${act.communityId}/events`,
+          'POST',
+          {
+            id: eventId,
+            data: this.sealEvent(act.communityId, eventId, {
+              name: act.name,
+              description: act.description,
+              place: act.place,
+            }),
+            startsAt: act.startsAt,
+            endsAt: act.endsAt,
+            channelId: act.channelId,
+          },
+          z.unknown(),
+        ).catch(explain);
+        return eventId as CommunityActionResult<A>;
+      }
+      case 'updateEvent': {
+        const current = [...this.eventCache.values()].flat().find((e) => e.id === act.eventId);
+        if (!current) throw new CommunityError('That event no longer exists.');
+        const contentChanged =
+          act.name !== undefined || act.description !== undefined || act.place !== undefined;
+        await this.call(
+          `/events/${act.eventId}`,
+          'PATCH',
+          {
+            ...(contentChanged
+              ? {
+                  data: this.sealEvent(current.communityId, act.eventId, {
+                    name: act.name ?? current.name,
+                    description: act.description ?? current.description,
+                    place: act.place ?? current.place,
+                  }),
+                }
+              : {}),
+            ...(act.startsAt ? { startsAt: act.startsAt } : {}),
+            ...(act.endsAt ? { endsAt: act.endsAt } : {}),
+            ...(act.channelId !== undefined ? { channelId: act.channelId } : {}),
+            ...(act.canceled !== undefined ? { canceled: act.canceled } : {}),
+          },
+          z.unknown(),
+        ).catch(explain);
+        break;
+      }
+      case 'deleteEvent':
+        await this.call(`/events/${act.eventId}`, 'DELETE', undefined, z.unknown()).catch(explain);
+        break;
+      case 'eventInterest':
+        await this.call(
+          `/events/${act.eventId}/interested`,
+          act.on ? 'PUT' : 'DELETE',
+          undefined,
+          z.unknown(),
+        ).catch(explain);
+        break;
       case 'setNickname': {
         if (act.nickname === null)
           this.db().prepare('DELETE FROM community_nicknames WHERE community_id = ?').run(act.communityId);
@@ -1876,6 +1938,84 @@ export class CommunityService {
     this.deps.log.info('voice: rejoined after reconnecting');
   }
 
+  // ---- Scheduled events (1.0.18) ------------------------------------------------------------
+
+  /** Events seen so far, per community, for start reminders. */
+  private readonly eventCache = new Map<string, EventView[]>();
+  private readonly remindedEvents = new Set<string>();
+  private eventTimer: NodeJS.Timeout | null = null;
+
+  async events(communityId: string): Promise<EventView[]> {
+    const ring = this.keys.get(communityId);
+    if (!ring) throw new CommunityError('Waiting for the community key…');
+    const res = await this.call(`/communities/${communityId}/events`, 'GET', undefined, eventsResponseSchema);
+    const views = res.events.flatMap((e): EventView[] => {
+      try {
+        const data = ring.open<{ name?: unknown; description?: unknown; place?: unknown }>(
+          communityId,
+          `event:${e.id}`,
+          e.data,
+        );
+        return [
+          {
+            id: e.id,
+            communityId,
+            createdBy: e.createdBy,
+            name: String(data.name ?? '').slice(0, 100) || 'Event',
+            description: String(data.description ?? '').slice(0, 1000),
+            place: String(data.place ?? '').slice(0, 200),
+            startsAt: e.startsAt,
+            endsAt: e.endsAt,
+            channelId: e.channelId,
+            canceled: e.canceled,
+            interested: e.interested,
+          },
+        ];
+      } catch {
+        return []; // sealed with a key we do not have
+      }
+    });
+    this.eventCache.set(communityId, views);
+    this.watchEvents();
+    return views;
+  }
+
+  private sealEvent(
+    communityId: string,
+    eventId: string,
+    data: { name: string; description: string; place: string },
+  ): string {
+    return seal(this.requireKey(communityId), communityId, `event:${eventId}`, data);
+  }
+
+  /** Every 30 s: tell the app when an event you are interested in starts. */
+  private watchEvents(): void {
+    if (this.eventTimer) return;
+    this.eventTimer = setInterval(() => this.remindEvents(), 30_000);
+    this.eventTimer.unref?.();
+  }
+
+  remindEvents(now = Date.now()): void {
+    const me = this.me();
+    for (const list of this.eventCache.values()) {
+      for (const e of list) {
+        const start = Date.parse(e.startsAt);
+        if (e.canceled || this.remindedEvents.has(e.id) || !e.interested.includes(me)) continue;
+        // Only right around the start: a reminder an hour late helps nobody.
+        if (start <= now && now - start < 5 * 60_000) {
+          this.remindedEvents.add(e.id);
+          this.emit({
+            t: 'eventStarting',
+            communityId: e.communityId,
+            eventId: e.id,
+            name: e.name,
+            channelId: e.channelId,
+          });
+        }
+      }
+    }
+  }
+
   // ---- Realtime --------------------------------------------------------------------------------
 
   /** Starts (or keeps) the realtime connection when an account exists. */
@@ -2083,6 +2223,9 @@ export class CommunityService {
         });
         return;
       }
+      case 'events':
+        this.emit({ t: 'events', communityId: e.communityId });
+        return;
       case 'voice.disconnect':
         this.emit({ t: 'voiceDisconnect' });
         return;

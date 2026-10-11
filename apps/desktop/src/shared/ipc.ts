@@ -342,6 +342,9 @@ export type CommunityEvent =
       states: Record<string, VoiceStateView>;
     }
   | { t: 'voiceDisconnect' }
+  /** A community's events changed (fetch them again), or one you are interested in starts now. */
+  | { t: 'events'; communityId: string }
+  | { t: 'eventStarting'; communityId: string; eventId: string; name: string; channelId: string | null }
   /** Your server moved to a new address and River followed it. */
   | { t: 'serverMoved'; url: string }
   /** The server would not let you into a voice channel. */

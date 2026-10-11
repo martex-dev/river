@@ -98,6 +98,61 @@ afterEach(async () => {
   rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
 });
 
+describe('scheduled events', () => {
+  it('are sealed end to end, can be joined, cancelled, and remind interested people when they start', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Event Club');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const lounge = (await alice.community.refresh())[0]!.channels.find((c) => c.kind === 'voice')!;
+    await bob.community.refresh();
+    const start = new Date(Date.now() + 60_000);
+    const eventId = await alice.community.action({
+      a: 'createEvent',
+      communityId: created.id,
+      name: 'Game night',
+      description: 'Bring snacks',
+      place: '',
+      startsAt: start.toISOString(),
+      endsAt: new Date(start.getTime() + 3600_000).toISOString(),
+      channelId: lounge.id,
+    });
+    // The server holds only sealed details.
+    const stored = JSON.stringify(await serverDb.db.selectFrom('community_events').selectAll().execute());
+    expect(stored).not.toContain('Game night');
+    expect(stored).not.toContain('Bring snacks');
+
+    const [seen] = await bob.community.events(created.id);
+    expect(seen).toMatchObject({
+      id: eventId,
+      name: 'Game night',
+      description: 'Bring snacks',
+      channelId: lounge.id,
+    });
+    await bob.community.action({ a: 'eventInterest', eventId, on: true });
+    expect((await alice.community.events(created.id))[0]!.interested).toEqual([bob.riverId]);
+
+    // Bob is reminded once, right when it starts; Alice (not interested) is not.
+    const reminders: string[] = [];
+    bob.community.onEvent((e) => e.t === 'eventStarting' && reminders.push(e.name));
+    await bob.community.events(created.id);
+    bob.community.remindEvents(start.getTime() - 1000);
+    expect(reminders).toEqual([]);
+    bob.community.remindEvents(start.getTime() + 1000);
+    bob.community.remindEvents(start.getTime() + 2000);
+    expect(reminders).toEqual(['Game night']);
+
+    await alice.community.action({ a: 'updateEvent', eventId, name: 'Game night (moved)', canceled: true });
+    expect((await bob.community.events(created.id))[0]).toMatchObject({
+      name: 'Game night (moved)',
+      canceled: true,
+    });
+    await expect(bob.community.action({ a: 'deleteEvent', eventId })).rejects.toThrow();
+    await alice.community.action({ a: 'deleteEvent', eventId });
+    expect(await bob.community.events(created.id)).toEqual([]);
+  });
+});
+
 describe('replies', () => {
   it('notify the person replied to, unless the reply turned that off', async () => {
     const alice = await person('Alice');

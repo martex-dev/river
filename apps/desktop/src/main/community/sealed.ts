@@ -17,6 +17,7 @@ export type SealPurpose =
   | `signal:${string}`
   | `role:${string}`
   | `reaction:${string}`
+  | `event:${string}`
   | 'invite';
 
 const aad = (communityId: string, purpose: SealPurpose): Buffer =>

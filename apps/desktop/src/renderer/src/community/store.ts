@@ -4,6 +4,7 @@ import type { CommunityAction, CommunityActionResult } from '../../../shared/com
 import type { ChatMessage, CommunityEvent, CommunityView, Result } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
 import { setMessageLinkOpener } from './message-link.ts';
+import type { EventView } from '../../../shared/community-actions.ts';
 import { effectiveNotify, shouldAlert } from '../../../shared/notify-rules.ts';
 import { play } from './sound.ts';
 import { VoiceCall } from './voice.ts';
@@ -19,6 +20,7 @@ export type Modal =
   | { kind: 'nickname'; communityId: string }
   | { kind: 'add-friend'; riverId: string; serverUrl: string }
   | { kind: 'user-settings'; tab?: UserTab }
+  | { kind: 'events'; communityId: string }
   | { kind: 'confirm'; title: string; body: string; action: string; run: () => Promise<void> };
 
 export type CommunityTab = 'overview' | 'roles' | 'members' | 'bans' | 'audit';
@@ -75,6 +77,9 @@ interface CommunityState {
   openMessage(communityId: string, channelId: string, messageId: string): boolean;
   /** Text to put in front of the composer's draft (Quote). */
   draftInsert: string | null;
+  /** Scheduled events per community, once loaded (1.0.18). */
+  events: Record<string, EventView[]>;
+  loadEvents(communityId: string): Promise<void>;
   loadOlder(channelId: string): Promise<number>;
 
   load(): Promise<void>;
@@ -349,7 +354,15 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       }
       case 'focusChannel':
         useRiver.getState().navigate('communities');
-        get().select(event.communityId, event.channelId);
+        get().select(event.communityId, event.channelId || undefined);
+        return;
+      case 'events':
+        // Only refresh lists someone has looked at.
+        if (get().events[event.communityId]) void get().loadEvents(event.communityId);
+        return;
+      case 'eventStarting':
+        play('success');
+        get().notify(`${event.name} is starting now.`);
         return;
       case 'signal': {
         const call = get().call;
@@ -361,6 +374,11 @@ export const useCommunity = create<CommunityState>((set, get) => ({
 
   pendingJump: null,
   draftInsert: null,
+  events: {},
+  loadEvents: async (communityId) => {
+    const res = await window.river.community.action({ a: 'events', communityId });
+    if (res.ok) set({ events: { ...get().events, [communityId]: res.value } });
+  },
   openMessage: (communityId, channelId, messageId) => {
     const c = get().communities.find((x) => x.id === communityId);
     if (!c || !c.channels.some((ch) => ch.id === channelId)) {

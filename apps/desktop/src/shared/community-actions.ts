@@ -72,6 +72,11 @@ const fileBytes = z.custom<Uint8Array>(
   'file too large',
 );
 
+const eventTime = z
+  .string()
+  .max(40)
+  .refine((v) => !Number.isNaN(Date.parse(v)), 'must be a time');
+
 export const communityActionSchema = z.discriminatedUnion('a', [
   z
     .object({
@@ -263,7 +268,52 @@ export const communityActionSchema = z.discriminatedUnion('a', [
   z
     .object({ a: z.literal('setProfile'), name: name.optional(), avatar: avatarSchema.nullable().optional() })
     .strict(),
+  // Scheduled events (1.0.18): name, description and place are sealed with the community key.
+  z.object({ a: z.literal('events'), communityId: id }).strict(),
+  z
+    .object({
+      a: z.literal('createEvent'),
+      communityId: id,
+      name: z.string().trim().min(1).max(100),
+      description: z.string().max(1000),
+      place: z.string().max(200),
+      startsAt: eventTime,
+      endsAt: eventTime,
+      channelId: id.nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      a: z.literal('updateEvent'),
+      eventId: id,
+      name: z.string().trim().min(1).max(100).optional(),
+      description: z.string().max(1000).optional(),
+      place: z.string().max(200).optional(),
+      startsAt: eventTime.optional(),
+      endsAt: eventTime.optional(),
+      channelId: id.nullable().optional(),
+      canceled: z.boolean().optional(),
+    })
+    .strict(),
+  z.object({ a: z.literal('deleteEvent'), eventId: id }).strict(),
+  z.object({ a: z.literal('eventInterest'), eventId: id, on: z.boolean() }).strict(),
 ]);
+
+/** A scheduled event, decrypted (1.0.18). */
+export interface EventView {
+  id: string;
+  communityId: string;
+  createdBy: string;
+  name: string;
+  description: string;
+  /** Where, when it is not a voice channel ("Our usual café"). */
+  place: string;
+  startsAt: string;
+  endsAt: string;
+  channelId: string | null;
+  canceled: boolean;
+  interested: string[];
+}
 
 export type CommunityAction = z.input<typeof communityActionSchema>;
 
@@ -286,6 +336,8 @@ interface Results {
   threadMessages: ChatMessage[];
   search: ChatMessage[];
   download: Uint8Array;
+  events: EventView[];
+  createEvent: string;
 }
 
 export type CommunityActionResult<A extends CommunityAction> = A['a'] extends keyof Results
