@@ -9,6 +9,7 @@ import { HttpError } from '../http-error.ts';
 import type { CommunityOps } from './communities.ts';
 
 const b = (s: string): Uint8Array => new Uint8Array(Buffer.from(s, 'base64'));
+const bearer = (header: string | undefined): string => /^Bearer (\S+)$/.exec(header ?? '')?.[1] ?? '';
 
 /**
  * DELETE /v1/accounts/me (1.0.18): people delete their own account. Besides a
@@ -22,9 +23,8 @@ export function registerSelfRoutes(
 ): void {
   const { db } = deps.database;
   app.delete(`${API_PREFIX}/accounts/me`, async (request) => {
-    const header = request.headers.authorization ?? '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-    const session = token ? await authenticate(db, token, deps.now()) : null;
+    // Always looked up (authenticate rejects malformed tokens); only the database decides.
+    const session = await authenticate(db, bearer(request.headers.authorization), deps.now());
     if (!session) throw new HttpError(401, 'unauthorized', 'A valid session is required');
     const parsed = deleteAccountRequestSchema.safeParse(request.body);
     if (!parsed.success) throw new HttpError(400, 'bad_request', 'Bad request');
