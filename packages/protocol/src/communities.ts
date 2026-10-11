@@ -95,12 +95,21 @@ export const communityRoleSchema = z.object({
 });
 export type RoleWire = z.infer<typeof communityRoleSchema>;
 
+/** What others see of someone's presence (1.0.17). Invisible people are simply offline. */
+export const presenceStatusSchema = z.enum(['online', 'idle', 'dnd']);
+export type PresenceStatus = z.infer<typeof presenceStatusSchema>;
+/** What someone may choose. */
+export const chosenStatusSchema = z.enum(['online', 'idle', 'dnd', 'invisible']);
+export type ChosenStatus = z.infer<typeof chosenStatusSchema>;
+
 export const memberSchema = z.object({
   riverId: riverIdSchema,
   role: roleSchema,
   roles: z.array(roleIdSchema).default([]),
   profile: sealedSchema(SEALED_PROFILE),
   online: z.boolean().default(false),
+  /** Idle or Do Not Disturb while online (1.0.17); absent means plain online. */
+  status: presenceStatusSchema.optional(),
   /** Timed out until this moment (1.0.6); null when not timed out. */
   timeoutUntil: z.string().max(40).nullable().default(null),
 });
@@ -319,7 +328,9 @@ export const voiceStateSchema = z.object({
 export type VoiceState = z.infer<typeof voiceStateSchema>;
 
 export const clientEventSchema = z.discriminatedUnion('t', [
-  z.object({ t: z.literal('auth'), token: z.string().max(64) }),
+  /** `status`: the presence to start with (so invisible people never flash online). */
+  z.object({ t: z.literal('auth'), token: z.string().max(64), status: chosenStatusSchema.optional() }),
+  z.object({ t: z.literal('presence.set'), status: chosenStatusSchema }),
   z.object({ t: z.literal('voice.join'), channelId: channelIdSchema }),
   z.object({ t: z.literal('voice.leave') }),
   z.object({
@@ -386,7 +397,12 @@ export const serverEventSchema = z.discriminatedUnion('t', [
     channelId: channelIdSchema,
     riverId: riverIdSchema,
   }),
-  z.object({ t: z.literal('presence'), riverId: riverIdSchema, online: z.boolean() }),
+  z.object({
+    t: z.literal('presence'),
+    riverId: riverIdSchema,
+    online: z.boolean(),
+    status: presenceStatusSchema.optional(),
+  }),
   z.object({ t: z.literal('error'), code: z.string() }),
   z.object({ t: z.literal('pong') }),
   /** An end-to-end encrypted direct-message envelope for one of your devices. */

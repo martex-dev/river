@@ -246,7 +246,7 @@ export async function registerCommunityRoutes(
       models.flatMap((m) => m.channels.map((c) => c.id)),
     );
     return {
-      communities: models.map((m) => m.wireFor(me(request), (id) => hub.isOnline(id), last)),
+      communities: models.map((m) => m.wireFor(me(request), (id) => hub.visibleStatus(id), last)),
     };
   });
 
@@ -299,7 +299,7 @@ export async function registerCommunityRoutes(
       throw new HttpError(409, 'conflict', 'Community or channel ID already exists');
     }
     const model = await loadCommunity(db, req.id);
-    return reply.code(201).send(model!.wireFor(me(request), (id) => hub.isOnline(id)));
+    return reply.code(201).send(model!.wireFor(me(request), (id) => hub.visibleStatus(id)));
   });
 
   app.patch<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id`, authed, async (request) => {
@@ -969,7 +969,10 @@ export async function registerCommunityRoutes(
         db,
         model.channels.map((c) => c.id),
       );
-      return { ...model.wireFor(me(request), (id) => hub.isOnline(id), last), inviteCheck: invite.check };
+      return {
+        ...model.wireFor(me(request), (id) => hub.visibleStatus(id), last),
+        inviteCheck: invite.check,
+      };
     },
   );
 
@@ -1257,7 +1260,9 @@ export async function registerCommunityRoutes(
   );
 
   // ---- realtime --------------------------------------------------------------------------------
-  const presence = async (riverId: string, online: boolean): Promise<void> => {
+  /** Tells everyone who shares a community with this person how they appear now. */
+  const presence = async (riverId: string): Promise<void> => {
+    const status = hub.visibleStatus(riverId);
     const rows = await db
       .selectFrom('community_members')
       .select('community_id')
@@ -1272,7 +1277,12 @@ export async function registerCommunityRoutes(
         .execute();
       for (const m of members) peers.add(m.river_id);
     }
-    hub.sendTo(peers, { t: 'presence', riverId, online });
+    hub.sendTo(peers, {
+      t: 'presence',
+      riverId,
+      online: status !== null,
+      ...(status && status !== 'online' ? { status } : {}),
+    });
   };
 
   app.get(`${API_PREFIX}/ws`, { websocket: true }, (socket) => {
@@ -1328,6 +1338,7 @@ export async function registerCommunityRoutes(
         }
         clearTimeout(authTimer);
         riverId = session.riverId;
+        hub.setStatus(riverId, event.status ?? 'online');
         const cameOnline = hub.add(riverId, hubSocket);
         send({ t: 'ready', riverId });
         const rows = await db
@@ -1346,7 +1357,7 @@ export async function registerCommunityRoutes(
             });
           }
         }
-        if (cameOnline) await presence(riverId, true);
+        if (cameOnline) await presence(riverId);
         return;
       }
       if (!riverId) return send({ t: 'error', code: 'unauthorized' });
@@ -1354,6 +1365,10 @@ export async function registerCommunityRoutes(
       switch (event.t) {
         case 'ping':
           return send({ t: 'pong' });
+        case 'presence.set':
+          hub.setStatus(self, event.status);
+          await presence(self);
+          return;
         case 'call.room':
           if (event.room === null) hub.leaveRoom(self);
           else if (!hub.joinRoom(self, event.room, MAX_CALL_ROOM)) send({ t: 'error', code: 'room_full' });
@@ -1488,7 +1503,7 @@ export async function registerCommunityRoutes(
       if (offline) {
         // Brief drops (a tunnel reconnecting) should not flash everyone offline.
         const t = setTimeout(() => {
-          if (!hub.isOnline(gone)) void presence(gone, false).catch(() => undefined);
+          if (!hub.isOnline(gone)) void presence(gone).catch(() => undefined);
         }, PRESENCE_GRACE_MS);
         t.unref?.();
       }

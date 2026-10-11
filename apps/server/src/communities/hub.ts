@@ -1,4 +1,4 @@
-import type { ServerEvent, VoiceState } from '@river/protocol';
+import type { ChosenStatus, PresenceStatus, ServerEvent, VoiceState } from '@river/protocol';
 
 export interface HubSocket {
   send(data: string | Buffer): void;
@@ -40,6 +40,8 @@ export class Hub {
   private readonly voice = new Map<string, { communityId: string; members: Set<string> }>();
   private readonly voiceOf = new Map<string, string>();
   private readonly states = new Map<string, VoiceState>();
+  /** Chosen presence per account (in memory; apps send it again when they connect). */
+  private readonly chosen = new Map<string, ChosenStatus>();
 
   add(riverId: string, socket: HubSocket): boolean {
     let set = this.sockets.get(riverId);
@@ -146,6 +148,17 @@ export class Hub {
     this.graceTimers.clear();
     for (const t of this.roomTimers.values()) clearTimeout(t);
     this.roomTimers.clear();
+  }
+
+  setStatus(riverId: string, status: ChosenStatus): void {
+    this.chosen.set(riverId, status);
+  }
+
+  /** What others see: null (offline, or invisible), or online / idle / dnd. */
+  visibleStatus(riverId: string): PresenceStatus | null {
+    if (!this.isOnline(riverId)) return null;
+    const s = this.chosen.get(riverId) ?? 'online';
+    return s === 'invisible' ? null : s;
   }
 
   isOnline(riverId: string): boolean {

@@ -9,6 +9,7 @@ import {
   type OverwriteWire,
   type ReactionWire,
   type RoleWire,
+  type PresenceStatus,
 } from '@river/protocol';
 import type { Database } from '../db/schema.ts';
 
@@ -148,7 +149,7 @@ export class CommunityModel {
   /** The community as one member sees it: only channels they may view. */
   wireFor(
     riverId: string,
-    online: (id: string) => boolean,
+    presence: (id: string) => PresenceStatus | null,
     last: ReadonlyMap<string, string> = new Map(),
   ): CommunityWire {
     const visible = this.channels.filter((c) => this.can(riverId, Permission.VIEW_CHANNELS, c.id));
@@ -185,7 +186,11 @@ export class CommunityModel {
         role: m.legacyRole,
         roles: m.roles,
         profile: m.profile,
-        online: online(m.riverId),
+        online: presence(m.riverId) !== null,
+        ...((): { status?: PresenceStatus } => {
+          const p = presence(m.riverId);
+          return p && p !== 'online' ? { status: p } : {};
+        })(),
         timeoutUntil: this.timedOut(m.riverId) ? m.timeoutUntil : null,
       })),
     };

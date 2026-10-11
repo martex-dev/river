@@ -41,6 +41,7 @@ import { layoutChanges, moveChannel as moveInLayout, sidebarGroups } from '../..
 import { communityIconSchema, templateById, type TemplateId } from '../../shared/templates.ts';
 import { describeAudit } from './audit-text.ts';
 import type { ServerLocator } from './server-locator.ts';
+import type { PresenceTracker } from '../presence.ts';
 import type {
   CategoryView,
   ChannelView,
@@ -108,6 +109,8 @@ interface Deps {
   createSocket?: (url: string) => WebSocket;
   /** Finds the server again if its address changes. */
   locator?: ServerLocator;
+  /** How this person appears (status and custom status), 1.0.17. */
+  presence?: Pick<PresenceTracker, 'status' | 'custom'>;
 }
 
 interface SealedProfile {
@@ -115,6 +118,21 @@ interface SealedProfile {
   identityKey?: string;
   name: string | null;
   avatar?: string | null;
+  /** Custom status (1.0.17), end-to-end encrypted like the rest of the profile. */
+  status?: { text?: unknown; emoji?: unknown; until?: unknown };
+}
+
+/** A custom status from a sealed profile, if valid and not expired. */
+export function readCustomStatus(
+  raw: SealedProfile['status'],
+  now = Date.now(),
+): { text: string; emoji: string } | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const text = typeof raw.text === 'string' ? raw.text.slice(0, 128) : '';
+  const emoji = typeof raw.emoji === 'string' ? raw.emoji.slice(0, 16) : '';
+  if (!text && !emoji) return null;
+  if (typeof raw.until === 'string' && Date.parse(raw.until) <= now) return null;
+  return { text, emoji };
 }
 
 const AVATAR_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/;
@@ -164,6 +182,8 @@ export class CommunityService {
   private readonly voice = new Map<string, string[]>();
   private readonly voiceStates = new Map<string, VoiceState>();
   private readonly online = new Map<string, boolean>();
+  /** Idle / Do Not Disturb from live presence events (undefined: plain online). */
+  private readonly statuses = new Map<string, 'idle' | 'dnd' | undefined>();
   /** Names seen for River IDs, so ban lists can show who was banned. */
   private readonly knownNames = new Map<string, string>();
   /** Message IDs seen recently, to tell new messages from edits and reactions. */
@@ -525,10 +545,12 @@ export class CommunityService {
   }
 
   private sealedProfile(communityId: string): string {
+    const custom = this.deps.presence?.custom() ?? null;
     const profile: SealedProfile = {
       name: this.nickname(communityId) ?? this.myName(),
       avatar: this.myAvatar(),
       identityKey: this.myIdentityKey(),
+      ...(custom ? { status: custom } : {}),
     };
     return seal(this.requireKey(communityId), communityId, 'profile', profile);
   }
@@ -678,6 +700,11 @@ export class CommunityService {
         roles: m.roles,
         color: colored?.color ?? null,
         online: this.online.get(m.riverId) ?? m.online,
+        ...((): { status?: 'idle' | 'dnd' } => {
+          const live = this.statuses.has(m.riverId) ? this.statuses.get(m.riverId) : m.status;
+          return live === 'idle' || live === 'dnd' ? { status: live } : {};
+        })(),
+        customStatus: readCustomStatus(profile.status),
         owner: m.riverId === ownerId,
         rank: topPosition(ownerId, wireRoles, { riverId: m.riverId, roles: m.roles }),
         timeoutUntil: m.timeoutUntil && Date.parse(m.timeoutUntil) > Date.now() ? m.timeoutUntil : null,
@@ -1813,6 +1840,17 @@ export class CommunityService {
     if (this.pendingSignals.length > PENDING_SIGNALS_MAX) this.pendingSignals.shift();
   }
 
+  /**
+   * Status or custom status changed: tell the server how we appear, and
+   * republish our sealed profile (which carries the custom status) everywhere.
+   */
+  async presenceChanged(customChanged: boolean): Promise<void> {
+    const status = this.deps.presence?.status();
+    if (status) this.trySend({ t: 'presence.set', status });
+    if (!customChanged) return;
+    for (const c of this.communities) await this.publishProfile(c.id).catch(() => undefined);
+  }
+
   /** Joins (or with null leaves) the private relay room of a 1:1 call. */
   callRoom(room: string | null): void {
     this.activeRoom = room === null ? null : callRoomSchema.parse(room);
@@ -1898,7 +1936,8 @@ export class CommunityService {
     const socket = (this.deps.createSocket ?? ((u: string) => new WebSocket(u)))(url);
     this.socket = socket;
     socket.onopen = () => {
-      socket.send(JSON.stringify({ t: 'auth', token }));
+      const status = this.deps.presence?.status();
+      socket.send(JSON.stringify({ t: 'auth', token, ...(status ? { status } : {}) }));
       this.startHeartbeat(socket);
     };
     socket.binaryType = 'arraybuffer';
@@ -1996,14 +2035,21 @@ export class CommunityService {
         this.emit({ t: 'removed', communityId: e.communityId, reason: e.reason });
         this.scheduleRefresh();
         return;
-      case 'presence':
+      case 'presence': {
         this.online.set(e.riverId, e.online);
+        const status = e.online && e.status && e.status !== 'online' ? e.status : undefined;
+        this.statuses.set(e.riverId, status);
         this.communities = this.communities.map((c) => ({
           ...c,
-          members: c.members.map((m) => (m.riverId === e.riverId ? { ...m, online: e.online } : m)),
+          members: c.members.map((m) => {
+            if (m.riverId !== e.riverId) return m;
+            const { status: _old, ...rest } = m;
+            return { ...rest, online: e.online, ...(status ? { status } : {}) };
+          }),
         }));
         this.emit({ t: 'communities', communities: this.communities });
         return;
+      }
       case 'voice': {
         this.voice.set(e.channelId, e.participants);
         const states: Record<string, VoiceState> = {};

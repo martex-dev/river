@@ -873,7 +873,7 @@ describe('communities', () => {
           return { ws, events };
         };
         const lastVoice = (events: Ev[]) => events.filter((e) => e.t === 'voice').at(-1);
-        return { owner, guest, voice, connect, lastVoice };
+        return { owner, guest, cid, voice, connect, lastVoice };
       };
 
       it('keeps the seat (marked reconnecting) and resumes it when the app rejoins', async () => {
@@ -993,6 +993,50 @@ describe('communities', () => {
         expect(atB).toHaveLength(1);
         expect(atC).toHaveLength(0);
         for (const x of [a, b, c]) x.ws.close();
+      });
+
+      it('presence: invisible looks offline, idle and do-not-disturb show to others', async () => {
+        const { owner, guest, cid, connect } = await setup(5_000);
+        const watcher = await connect(owner.token);
+        const memberOf = async () =>
+          (await fetchCommunity(app, owner.token, cid)).members.find((m) => m.riverId === guest.riverId)!;
+
+        // Connecting invisible: never announced online, offline in the member list.
+        const ghost = new WebSocket(
+          `ws://127.0.0.1:${(app.server.address() as { port: number }).port}/v1/ws`,
+        );
+        await new Promise((r) => (ghost.onopen = r));
+        ghost.send(JSON.stringify({ t: 'auth', token: guest.token, status: 'invisible' }));
+        await new Promise((r) => setTimeout(r, 200));
+        expect(
+          watcher.events.some((e) => e.t === 'presence' && e.riverId === guest.riverId && e.online),
+        ).toBe(false);
+        expect((await memberOf()).online).toBe(false);
+
+        ghost.send(JSON.stringify({ t: 'presence.set', status: 'dnd' }));
+        await vi.waitFor(() =>
+          expect(watcher.events.filter((e) => e.t === 'presence').at(-1)).toMatchObject({
+            riverId: guest.riverId,
+            online: true,
+            status: 'dnd',
+          }),
+        );
+        expect(await memberOf()).toMatchObject({ online: true, status: 'dnd' });
+
+        ghost.send(JSON.stringify({ t: 'presence.set', status: 'online' }));
+        await vi.waitFor(() =>
+          expect(watcher.events.filter((e) => e.t === 'presence').at(-1)).toEqual({
+            t: 'presence',
+            riverId: guest.riverId,
+            online: true,
+          }),
+        );
+        ghost.send(JSON.stringify({ t: 'presence.set', status: 'invisible' }));
+        await vi.waitFor(() =>
+          expect(watcher.events.filter((e) => e.t === 'presence').at(-1)).toMatchObject({ online: false }),
+        );
+        ghost.close();
+        watcher.ws.close();
       });
 
       it('leaving on purpose frees the seat at once', async () => {

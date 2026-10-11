@@ -60,3 +60,21 @@ describe('main-process connection checks', () => {
     expect(text).not.toContain('srv.example');
   });
 });
+
+describe('links from messages', () => {
+  it('only web addresses without embedded credentials may be offered to the browser', async () => {
+    const { safeExternalUrl } = await import('../src/main/ipc.ts');
+    expect(safeExternalUrl('https://example.org/x')?.href).toBe('https://example.org/x');
+    expect(safeExternalUrl('http://example.org')?.hostname).toBe('example.org');
+    expect(safeExternalUrl('https://аpple.com')?.hostname).toBe('xn--pple-43d.com'); // look-alike shown as punycode
+    for (const bad of [
+      'javascript:alert(1)',
+      'file:///etc/passwd',
+      'river://x',
+      'https://u:p@example.org',
+      42,
+      'x'.repeat(3000),
+    ])
+      expect(safeExternalUrl(bad)).toBeNull();
+  });
+});

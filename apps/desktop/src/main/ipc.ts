@@ -412,6 +412,30 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.openLink, async (_e, id) => {
     await shell.openExternal(EXTERNAL_LINKS[linkIdSchema.parse(id)]);
   });
+  handle(IPC.openUrl, async (event, raw) => {
+    const url = safeExternalUrl(raw);
+    if (!url) return false;
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      type: 'question' as const,
+      title: 'Open link',
+      message: `Open this link in your browser?`,
+      detail: `${url.hostname}
+
+${url.href}
+
+Links can lead anywhere. Only open it if you trust where it goes.`,
+      buttons: ['Open link', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+    };
+    const { response } = window
+      ? await dialog.showMessageBox(window, options)
+      : await dialog.showMessageBox(options);
+    if (response !== 0) return false;
+    await shell.openExternal(url.href);
+    return true;
+  });
 }
 
 export function broadcastUpdateStatus(target: WebContents, updates: UpdateService): () => void {
@@ -602,4 +626,17 @@ export function securityStatus({
     ],
     releaseKeys: TRUSTED_RELEASE_KEYS.map((k) => ({ keyId: k.keyId, comment: k.comment })),
   };
+}
+
+/** A link from a message that may be offered to the browser: http(s) only, no embedded credentials. */
+export function safeExternalUrl(raw: unknown): URL | null {
+  if (typeof raw !== 'string' || raw.length > 2048) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    if (url.username || url.password) return null;
+    return url;
+  } catch {
+    return null;
+  }
 }

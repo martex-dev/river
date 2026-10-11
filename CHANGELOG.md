@@ -6,6 +6,26 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Status, like on Discord.** Click your name in the corner to be Online,
+  Idle, Do Not Disturb (no notifications or notification sounds) or Invisible
+  (appear offline but use River as usual). River shows you as Idle after ten
+  minutes away from the computer. Idle and Do Not Disturb have their own
+  shapes, not just colours.
+- **Custom status** with an emoji and "clear after" (today, 4 hours, 1 hour,
+  30 minutes or never). It shows under your name in member lists and on your
+  profile card, and it is end-to-end encrypted like the rest of your profile.
+- **Full message formatting:** `||spoilers||`, `# headings`, `-# small text`,
+  bulleted and numbered lists, `***bold italic***`, `\` escapes, links and
+  `[masked links](https://…)`, and `<t:…>` timestamps shown in your own time
+  zone. Code blocks get syntax highlighting and a Copy button.
+- **Links are safe to click.** River shows the real address (look-alike
+  letters spelled out) and asks before opening your browser.
+- **Every emoji, searchable.** The picker has all Unicode emoji by category,
+  search by name or keyword, and your recently used ones. Type `:` and two
+  letters for suggestions; `:fire:` becomes 🔥 when you send.
+
 ## [1.0.16] - 2026-10-11
 
 **Voice that stays connected — on every network.**

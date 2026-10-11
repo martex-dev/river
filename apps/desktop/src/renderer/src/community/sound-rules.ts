@@ -66,10 +66,22 @@ export interface SoundConfig {
   /** 0–1. */
   soundVolume: number;
   soundGroups: Record<SoundGroup, boolean>;
+  /** Do Not Disturb (1.0.17): sounds that announce something from others stay silent. */
+  quiet?: boolean;
 }
+
+/** Sounds about others reaching you, silenced in Do Not Disturb (your own actions still click). */
+const ATTENTION: ReadonlySet<SoundName> = new Set<SoundName>([
+  'message',
+  'mention',
+  'dm',
+  'reaction',
+  'ring',
+]);
 
 /** Whether `name` would be heard with these settings. */
 export function audible(name: SoundName, config: SoundConfig | undefined): boolean {
   if (!config) return true;
+  if (config.quiet && (ATTENTION.has(name) || SOUND_GROUP[name] === 'social')) return false;
   return config.sounds && config.soundVolume > 0 && config.soundGroups[SOUND_GROUP[name]] !== false;
 }

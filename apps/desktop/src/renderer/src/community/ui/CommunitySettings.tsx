@@ -4,7 +4,18 @@ import type { BanView } from '../../../../shared/community-actions.ts';
 import type { AuditView, CommunityView, RoleView } from '../../../../shared/ipc.ts';
 import { COMMUNITY_ICONS } from '../../../../shared/templates.ts';
 import { useCommunity, type CommunityTab } from '../store.ts';
-import { ArrowDownIcon, ArrowUpIcon, Avatar, Modal, Toggle, XIcon, can, hex, initials } from './common.tsx';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  Avatar,
+  Modal,
+  Toggle,
+  XIcon,
+  can,
+  hex,
+  initials,
+  presenceOf,
+} from './common.tsx';
 
 export const ROLE_COLORS = [
   0x1abc9c, 0x2ecc71, 0x3498db, 0x9b59b6, 0xe91e63, 0xf1c40f, 0xe67e22, 0xe74c3c, 0x95a5a6, 0x607d8b,
@@ -477,13 +488,7 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
           const canRoles = can(perms, Permission.MANAGE_ROLES) && (outranks || m.riverId === me);
           return (
             <div key={m.riverId} className="member-table__row">
-              <Avatar
-                id={m.riverId}
-                name={m.name}
-                avatar={m.avatar}
-                size={32}
-                status={m.online ? 'online' : 'offline'}
-              />
+              <Avatar id={m.riverId} name={m.name} avatar={m.avatar} size={32} status={presenceOf(m)} />
               <div className="member-table__who">
                 <strong style={m.color ? { color: hex(m.color) } : undefined}>
                   {m.name}

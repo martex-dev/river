@@ -1,3 +1,4 @@
+import { replaceShortcodes, searchEmoji, useEmojiIndex } from '../emoji-data.ts';
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, ChatMessage, CommunityView } from '../../../../shared/ipc.ts';
@@ -704,16 +705,32 @@ function Composer(props: {
 
   // Autocomplete for @people, @roles, @everyone/@here and #channels: the word being typed at the caret.
   const trigger = /(?:^|\s)([@#])([^\s@#]*)$/.exec(text);
-  const suggestions = trigger ? suggest(community, channel, trigger[1] as '@' | '#', trigger[2]!) : [];
+  // …and for :emoji: — type a colon and two letters.
+  const emojiTrigger = /(?:^|\s):([a-z0-9_+-]{2,32})$/i.exec(text);
+  const emojiIndex = useEmojiIndex(!!emojiTrigger || text.includes(':'));
+  const mentionChoices = trigger ? suggest(community, channel, trigger[1] as '@' | '#', trigger[2]!) : [];
+  const suggestions: Suggestion[] =
+    mentionChoices.length > 0
+      ? mentionChoices
+      : emojiTrigger && emojiIndex
+        ? searchEmoji(emojiIndex, emojiTrigger[1]!, 8).map((e) => ({
+            key: `e:${e.emoji}`,
+            insert: e.emoji,
+            symbol: ':' as const,
+            hint: e.label,
+            label: `:${e.shortcodes[0] ?? e.label.replace(/\s+/g, '_')}:`,
+          }))
+        : [];
 
   const complete = (choice: Suggestion): void => {
-    setText(text.replace(/([@#])([^\s@#]*)$/, `$1${choice.insert} `));
+    if (choice.symbol === ':') setText(text.replace(/:([a-z0-9_+-]*)$/i, `${choice.insert} `));
+    else setText(text.replace(/([@#])([^\s@#]*)$/, `$1${choice.insert} `));
     setMentionIndex(0);
     ref.current?.focus();
   };
 
   const send = async (): Promise<void> => {
-    const value = text.trim();
+    const value = emojiIndex ? replaceShortcodes(text.trim(), emojiIndex) : text.trim();
     const files = props.pending;
     if ((!value && files.length === 0) || uploading) return;
     let attachments;
@@ -783,7 +800,11 @@ function Composer(props: {
                 complete(choice);
               }}
             >
-              {choice.member ? (
+              {choice.symbol === ':' ? (
+                <span className="mention-menu__emoji" aria-hidden="true">
+                  {choice.insert}
+                </span>
+              ) : choice.member ? (
                 <Avatar
                   id={choice.member.riverId}
                   name={choice.member.name}
@@ -803,8 +824,7 @@ function Composer(props: {
                 className="mention-menu__label"
                 style={choice.color ? { color: hex(choice.color) } : undefined}
               >
-                {choice.symbol === '#' ? '#' : '@'}
-                {choice.insert}
+                {choice.symbol === ':' ? choice.label : `${choice.symbol}${choice.insert}`}
               </span>
               {choice.hint && <span className="mention-menu__hint">{choice.hint}</span>}
             </button>
@@ -1137,9 +1157,11 @@ function WelcomeActions(props: { community: CommunityView; channel: ChannelView 
 
 interface Suggestion {
   key: string;
-  /** Text inserted after the @ or #. */
+  /** Text inserted after the @ or # (an emoji replaces the whole :code). */
   insert: string;
-  symbol: '@' | '#';
+  symbol: '@' | '#' | ':';
+  /** Shown instead of the inserted text (emoji: their :shortcode:). */
+  label?: string;
   hint: string;
   color?: number;
   member?: { riverId: string; name: string; avatar: string | null };

@@ -77,9 +77,14 @@ export const IPC = {
   profileGet: 'river:profile:get',
   attachmentSave: 'river:attachment:save',
   openLink: 'river:link:open',
+  openUrl: 'river:link:open-url',
 } as const;
 
-/** Links the renderer may ask main to open. Arbitrary URLs are never accepted from the renderer. */
+/**
+ * Links the renderer may ask main to open directly. Links in messages go
+ * through `links.openUrl`, which main opens only after the person confirms the
+ * exact address in a native dialog the renderer cannot draw or skip.
+ */
 export const EXTERNAL_LINKS = {
   source: 'https://github.com/martex-dev/river',
   releases: 'https://github.com/martex-dev/river/releases',
@@ -237,6 +242,10 @@ export interface MemberView {
   /** Colour of the highest coloured role, or null. */
   color: number | null;
   online: boolean;
+  /** Idle or Do Not Disturb while online (1.0.17). */
+  status?: 'idle' | 'dnd';
+  /** Their custom status, if set and not expired (end-to-end encrypted). */
+  customStatus?: { text: string; emoji: string } | null;
   owner: boolean;
   /** Hierarchy position (owner is highest). */
   rank: number;
@@ -473,7 +482,11 @@ export interface RiverApi {
     unlock(passphrase: string): Promise<PassphraseResult>;
     onStatus(listener: (status: StorageStatus) => void): () => void;
   };
-  links: { open(id: ExternalLinkId): Promise<void> };
+  links: {
+    open(id: ExternalLinkId): Promise<void>;
+    /** A link from a message: main shows the real address and asks before opening it. */
+    openUrl(url: string): Promise<boolean>;
+  };
   diagnostics: {
     /** Server, relay and connection checks (the renderer adds network and microphone checks). */
     run(): Promise<DiagnosticCheck[]>;

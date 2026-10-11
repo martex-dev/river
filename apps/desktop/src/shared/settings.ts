@@ -98,6 +98,18 @@ export const settingsSchema = z.object({
     /** Keep the PC from going to sleep while it hosts, so members can reach it. */
     keepAwake: z.boolean(),
   }),
+  /** Added in 1.0.17: how you appear to others. */
+  presence: z.object({
+    /** Online, Idle, Do Not Disturb (no notifications or sounds) or Invisible (appear offline). */
+    status: z.enum(['online', 'idle', 'dnd', 'invisible']),
+    /** Shown as Idle after 10 minutes away from the computer (while Online). */
+    autoIdle: z.boolean(),
+    /** Custom status, end-to-end encrypted inside your community profile. */
+    customText: z.string().max(128),
+    customEmoji: z.string().max(16),
+    /** When the custom status clears itself (ISO time), or null for never. */
+    customUntil: z.string().max(40).nullable(),
+  }),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -126,6 +138,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   system: { startAtLogin: false, closeToTray: true },
   hosting: { enabled: false, keepAwake: true },
+  presence: { status: 'online', autoIdle: true, customText: '', customEmoji: '', customUntil: null },
 };
 
 export const SETTINGS_SECTIONS = [
@@ -136,6 +149,7 @@ export const SETTINGS_SECTIONS = [
   'voice',
   'system',
   'hosting',
+  'presence',
 ] as const;
 
 /**
@@ -167,6 +181,7 @@ export const settingsPatchSchema = z
     voice: settingsSchema.shape.voice.partial().strict().optional(),
     system: settingsSchema.shape.system.partial().strict().optional(),
     hosting: settingsSchema.shape.hosting.partial().strict().optional(),
+    presence: settingsSchema.shape.presence.partial().strict().optional(),
   })
   .strict();
 
@@ -182,5 +197,6 @@ export function applySettingsPatch(current: Settings, patch: z.output<typeof set
     voice: { ...current.voice, ...patch.voice },
     system: { ...current.system, ...patch.system },
     hosting: { ...current.hosting, ...patch.hosting },
+    presence: { ...current.presence, ...patch.presence },
   });
 }

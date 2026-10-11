@@ -60,7 +60,10 @@ class FreezableSocket extends WebSocket {
   }
 }
 
-async function person(name: string): Promise<{
+async function person(
+  name: string,
+  presence?: ConstructorParameters<typeof CommunityService>[0]['presence'],
+): Promise<{
   community: CommunityService;
   riverId: string;
   sockets: FreezableSocket[];
@@ -85,6 +88,7 @@ async function person(name: string): Promise<{
     requestJson: createRequestJson(injectFetch),
     requestBytes: createRequestBytes(injectFetch),
     log: nullLogger,
+    ...(presence ? { presence } : {}),
     createSocket: (url) => {
       const s = new FreezableSocket(url.replace(':8787', `:${port}`));
       sockets.push(s);
@@ -126,9 +130,9 @@ afterEach(async () => {
   rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
 });
 
-async function inCall(fastHeartbeat = false) {
+async function inCall(fastHeartbeat = false, bobPresence?: Parameters<typeof person>[1]) {
   const alice = await person('Alice');
-  const bob = await person('Bob');
+  const bob = await person('Bob', bobPresence);
   if (fastHeartbeat) {
     bob.community.heartbeatMs = 100;
     bob.community.deadAfterMs = 400;
@@ -241,5 +245,29 @@ describe('voice survives dropped connections', () => {
     alice.community.relaySend([bob.riverId], new Uint8Array([9]));
     await new Promise((r) => setTimeout(r, 300));
     expect(got.at(-1)!.payload).toEqual([8]);
+  }, 20_000);
+
+  it('presence: Do Not Disturb, invisible and a custom status reach others (the text encrypted)', async () => {
+    let status: 'online' | 'idle' | 'dnd' | 'invisible' = 'dnd';
+    let custom: { text: string; emoji: string; until: string | null } | null = null;
+    const { alice, bob } = await inCall(false, { status: () => status, custom: () => custom });
+    const bobAsSeen = () => alice.community.cached()[0]!.members.find((m) => m.riverId === bob.riverId)!;
+    // Connected as Do Not Disturb from the start.
+    await alice.community.refresh();
+    await vi.waitFor(() => expect(bobAsSeen()).toMatchObject({ online: true, status: 'dnd' }));
+
+    custom = { text: 'deep in focus', emoji: '🎧', until: null };
+    status = 'online';
+    await bob.community.presenceChanged(true);
+    await vi.waitFor(() => expect(bobAsSeen().status).toBeUndefined());
+    await alice.community.refresh();
+    expect(bobAsSeen().customStatus).toEqual({ text: 'deep in focus', emoji: '🎧' });
+    // The server only ever holds the sealed profile.
+    const stored = JSON.stringify(await serverDb.db.selectFrom('community_members').selectAll().execute());
+    expect(stored).not.toContain('deep in focus');
+
+    status = 'invisible';
+    await bob.community.presenceChanged(false);
+    await vi.waitFor(() => expect(bobAsSeen().online).toBe(false));
   }, 20_000);
 });
