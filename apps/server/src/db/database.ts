@@ -18,6 +18,7 @@ import * as m0011 from './migrations/0011_voice_limits.ts';
 import * as m0012 from './migrations/0012_account_suspension.ts';
 import * as m0013 from './migrations/0013_usernames.ts';
 import * as m0014 from './migrations/0014_events.ts';
+import * as m0015 from './migrations/0015_emojis.ts';
 import type { Database } from './schema.ts';
 
 export type Dialect = 'sqlite' | 'postgres';
@@ -52,6 +53,7 @@ export const MIGRATIONS: Record<string, Migration> = {
   '0012_account_suspension': m0012,
   '0013_usernames': m0013,
   '0014_events': m0014,
+  '0015_emojis': m0015,
 };
 
 /**

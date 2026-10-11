@@ -235,7 +235,16 @@ export interface CommunityEventRsvpsTable {
   river_id: string;
 }
 
+export interface CommunityEmojisTable {
+  id: string;
+  community_id: string;
+  created_by: string;
+  data: string;
+  created_at: string;
+}
+
 export interface Database {
+  community_emojis: CommunityEmojisTable;
   community_events: CommunityEventsTable;
   community_event_rsvps: CommunityEventRsvpsTable;
   signed_prekeys: SignedPreKeysTable;

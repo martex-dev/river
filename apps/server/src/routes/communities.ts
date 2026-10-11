@@ -29,6 +29,8 @@ import {
   timeoutRequestSchema,
   updateCategoryRequestSchema,
   createEventRequestSchema,
+  createEmojiRequestSchema,
+  MAX_COMMUNITY_EMOJI,
   updateEventRequestSchema,
   updateChannelRequestSchema,
   updateThreadRequestSchema,
@@ -648,6 +650,71 @@ export async function registerCommunityRoutes(
       .where('river_id', '=', me(request))
       .execute();
     eventsChanged(model);
+    return { ok: true };
+  });
+
+  // ---- custom emoji (1.0.19) -------------------------------------------------------------------
+  const emojisChanged = (model: CommunityModel): void =>
+    toMembers(model, { t: 'emojis', communityId: model.id });
+
+  app.get<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/emojis`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    const rows = await db
+      .selectFrom('community_emojis')
+      .select(['id', 'created_by', 'data'])
+      .where('community_id', '=', model.id)
+      .orderBy('created_at')
+      .execute();
+    return { emojis: rows.map((r) => ({ id: r.id, createdBy: r.created_by, data: r.data })) };
+  });
+
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/communities/:id/emojis`,
+    authed,
+    async (request, reply) => {
+      const model = await community(request.params.id, me(request));
+      if (!model.can(me(request), Permission.MANAGE_EXPRESSIONS)) throw forbidden();
+      const req = parse(createEmojiRequestSchema, request.body);
+      const count = await db
+        .selectFrom('community_emojis')
+        .select(db.fn.countAll<number>().as('n'))
+        .where('community_id', '=', model.id)
+        .executeTakeFirstOrThrow();
+      if (Number(count.n) >= MAX_COMMUNITY_EMOJI)
+        throw bad(`A community can have up to ${MAX_COMMUNITY_EMOJI} emoji`);
+      try {
+        await db
+          .insertInto('community_emojis')
+          .values({
+            id: req.id,
+            community_id: model.id,
+            created_by: me(request),
+            data: req.data,
+            created_at: deps.now().toISOString(),
+          })
+          .execute();
+      } catch {
+        throw new HttpError(409, 'conflict', 'Emoji ID already exists');
+      }
+      await audit(model.id, me(request), 'emoji.create', req.id);
+      emojisChanged(model);
+      return reply.code(201).send({ id: req.id });
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(`${API_PREFIX}/emojis/:id`, authed, async (request) => {
+    const id = parse(channelIdSchema, request.params.id);
+    const row = await db
+      .selectFrom('community_emojis')
+      .select(['community_id'])
+      .where('id', '=', id)
+      .executeTakeFirst();
+    if (!row) throw notFound();
+    const model = await community(row.community_id, me(request));
+    if (!model.can(me(request), Permission.MANAGE_EXPRESSIONS)) throw forbidden();
+    await db.deleteFrom('community_emojis').where('id', '=', id).execute();
+    await audit(model.id, me(request), 'emoji.delete', id);
+    emojisChanged(model);
     return { ok: true };
   });
 

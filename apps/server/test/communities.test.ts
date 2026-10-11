@@ -19,6 +19,7 @@ import {
   decodeRelayIn,
   encodeRelayOut,
   eventsResponseSchema,
+  emojisResponseSchema,
 } from '@river/protocol';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
@@ -357,6 +358,27 @@ describe('communities', () => {
       // Strangers see nothing.
       const stranger = await user(a);
       expect(await status(a, 'GET', `/v1/communities/${cid}/events`, stranger.token)).not.toBe(200);
+    });
+
+    it('custom emoji: managers add and remove, every member can list, strangers cannot', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const add = (token: string, emojiId = id()) =>
+        status(a, 'POST', `/v1/communities/${cid}/emojis`, token, { id: emojiId, data: sealed() });
+      expect(await add(member.token)).toBe(403);
+      const e = id();
+      expect(await add(owner.token, e)).toBe(201);
+      expect(await add(owner.token, e)).toBe(409);
+      const list = (
+        await a.inject({ method: 'GET', url: `/v1/communities/${cid}/emojis`, headers: auth(member.token) })
+      ).json();
+      expect(emojisResponseSchema.parse(list).emojis.map((x) => x.id)).toEqual([e]);
+      expect(await status(a, 'DELETE', `/v1/emojis/${e}`, member.token)).toBe(403);
+      expect(await status(a, 'DELETE', `/v1/emojis/${e}`, owner.token)).toBe(200);
+      const stranger = await user(a);
+      expect(await status(a, 'GET', `/v1/communities/${cid}/emojis`, stranger.token)).not.toBe(200);
     });
 
     it('new communities get an @everyone role with default permissions', async () => {

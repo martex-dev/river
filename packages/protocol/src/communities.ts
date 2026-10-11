@@ -351,6 +351,21 @@ export const updateEventRequestSchema = z
   })
   .strict();
 
+// ---- Custom emoji (1.0.19) ---------------------------------------------------------------------
+
+/** A sealed { name, image } — the image is a small PNG/WebP/GIF data URL. */
+export const SEALED_EMOJI = 96 * 1024;
+export const MAX_COMMUNITY_EMOJI = 100;
+export const emojiSchema = z.object({
+  id: z.string().regex(COMMUNITY_ID_RE),
+  createdBy: riverIdSchema,
+  data: sealedSchema(SEALED_EMOJI),
+});
+export const emojisResponseSchema = z.object({ emojis: z.array(emojiSchema) });
+export const createEmojiRequestSchema = z
+  .object({ id: z.string().regex(COMMUNITY_ID_RE), data: sealedSchema(SEALED_EMOJI) })
+  .strict();
+
 export const callRoomSchema = z.string().regex(/^[A-Za-z0-9_-]{22,64}$/);
 /** Most people in one private call room. */
 export const MAX_CALL_ROOM = 8;
@@ -429,6 +444,8 @@ export const serverEventSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('voice.disconnect') }),
   /** A community's scheduled events changed: fetch them again (1.0.18). */
   z.object({ t: z.literal('events'), communityId: communityIdSchema }),
+  /** A community's custom emoji changed (1.0.19). */
+  z.object({ t: z.literal('emojis'), communityId: communityIdSchema }),
   z.object({
     t: z.literal('signal'),
     from: riverIdSchema,
