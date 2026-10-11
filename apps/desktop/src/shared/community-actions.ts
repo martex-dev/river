@@ -340,7 +340,21 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('deleteEmoji'), emojiId: id }).strict(),
+  // Saved messages (1.0.19): kept only on this device.
+  z.object({ a: z.literal('savedMessages') }).strict(),
+  z.object({ a: z.literal('saveMessage'), channelId: id, messageId: id, on: z.boolean() }).strict(),
 ]);
+
+/** A message you saved for later (1.0.19). */
+export interface SavedMessageView {
+  messageId: string;
+  communityId: string;
+  channelId: string;
+  senderName: string;
+  text: string;
+  sentAt: string;
+  savedAt: string;
+}
 
 /** A community's custom emoji, decrypted (1.0.19). Used in text as `<:name:id>`. */
 export interface EmojiView {
@@ -390,6 +404,7 @@ interface Results {
   createEvent: string;
   emojis: EmojiView[];
   addEmoji: string;
+  savedMessages: SavedMessageView[];
 }
 
 export type CommunityActionResult<A extends CommunityAction> = A['a'] extends keyof Results

@@ -1,3 +1,4 @@
+import { SavedPanel } from './Saved.tsx';
 import { CreatePollDialog, PollView } from './Poll.tsx';
 import { isVote } from '../../../../shared/poll.ts';
 import { clockDateTime, clockTime } from '../../time.ts';
@@ -190,6 +191,14 @@ export function TextChannel(props: {
             🔍
           </button>
           <button
+            className={`icon-btn ${s.showSaved ? 'is-on' : ''}`}
+            aria-label="Saved messages"
+            title="Saved messages"
+            onClick={() => useCommunity.setState({ showSaved: !s.showSaved, showPins: false })}
+          >
+            🔖
+          </button>
+          <button
             className={`icon-btn ${s.showPins ? 'is-on' : ''}`}
             aria-label="Pinned messages"
             title="Pinned messages"
@@ -217,6 +226,7 @@ export function TextChannel(props: {
           </button>
         </div>
       )}
+      {s.showSaved && <SavedPanel />}
       {s.showPins && <PinsPanel community={community} channel={channel} me={me} onJump={jumpTo} />}
       {s.showSearch && <SearchPanel community={community} onJump={jumpTo} />}
       <div
@@ -385,6 +395,10 @@ function Message(props: {
   const canReact = can(channel.permissions, Permission.ADD_REACTIONS);
   // Poll votes are reactions underneath; they show in the poll, not as reactions.
   const reactions = m.reactions.filter((r) => !isVote(r.emoji));
+  const isSaved = useCommunity((x) => !!x.saved?.some((v) => v.messageId === m.id));
+  // Very long messages start folded so the conversation stays readable.
+  const long = m.text.length > 1500 || m.text.split('\n').length > 30;
+  const [expanded, setExpanded] = useState(false);
 
   const react = (emoji: string, on: boolean): void => {
     if (on) play('reaction');
@@ -473,7 +487,16 @@ function Message(props: {
             <EditBox message={m} />
           ) : (
             <div className="msg__text">
-              {m.text && <RichText text={m.text} names={props.names} me={props.myName} refs={props.refs} />}
+              {m.text && (
+                <div className={long && !expanded ? 'msg__long is-collapsed' : undefined}>
+                  <RichText text={m.text} names={props.names} me={props.myName} refs={props.refs} />
+                </div>
+              )}
+              {long && (
+                <button className="btn btn--link msg__more" onClick={() => setExpanded(!expanded)}>
+                  {expanded ? 'Show less' : 'Show more'}
+                </button>
+              )}
               {m.editedAt && (
                 <span className="msg__edited" title={new Date(m.editedAt).toLocaleString()}>
                   {' '}
@@ -698,6 +721,15 @@ function Message(props: {
               View reactions
             </MenuItem>
           )}
+          <MenuItem
+            icon={<span aria-hidden="true">🔖</span>}
+            onClick={() => {
+              setMenu(null);
+              void s.toggleSaved(channel.id, m.id, !isSaved);
+            }}
+          >
+            {isSaved ? 'Remove from saved' : 'Save message'}
+          </MenuItem>
           <MenuItem
             icon={<span aria-hidden="true">🔗</span>}
             onClick={() => {

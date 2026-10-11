@@ -152,9 +152,17 @@ export function ProfileCard(props: {
             {new Date(member.timeoutUntil).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
           </div>
         )}
-        <div className="muted small mono" title="River ID">
-          {member.riverId.slice(0, 8)}…
-        </div>
+        <button
+          className="btn btn--link profile-card__id mono small"
+          title="Copy River ID"
+          onClick={() =>
+            void navigator.clipboard
+              .writeText(member.riverId)
+              .then(() => useCommunity.getState().notify('River ID copied.'))
+          }
+        >
+          {member.riverId.slice(0, 8)}… · Copy ID
+        </button>
         {member.bio && (
           <>
             <div className="profile-card__section">About me</div>

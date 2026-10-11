@@ -308,4 +308,22 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       db.exec(`ALTER TABLE profile ADD COLUMN banner INTEGER`);
     },
   },
+  {
+    version: 18,
+    name: '0018_saved_messages',
+    up(db) {
+      // Messages you saved for later (1.0.19); only in this encrypted database.
+      db.exec(`
+        CREATE TABLE saved_messages (
+          message_id   TEXT PRIMARY KEY,
+          community_id TEXT NOT NULL,
+          channel_id   TEXT NOT NULL,
+          sender_name  TEXT NOT NULL,
+          text         TEXT NOT NULL,
+          sent_at      TEXT NOT NULL,
+          saved_at     TEXT NOT NULL
+        ) STRICT;
+      `);
+    },
+  },
 ];

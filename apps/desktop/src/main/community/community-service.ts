@@ -39,6 +39,7 @@ import {
   type CommunityActionResult,
   type EventView,
   type EmojiView,
+  type SavedMessageView,
   EMOJI_NAME,
   type SavedOutgoing,
 } from '../../shared/community-actions.ts';
@@ -1680,6 +1681,31 @@ export class CommunityService {
         return (await this.events(act.communityId)) as CommunityActionResult<A>;
       case 'emojis':
         return (await this.emojis(act.communityId)) as CommunityActionResult<A>;
+      case 'savedMessages':
+        return this.savedMessages() as CommunityActionResult<A>;
+      case 'saveMessage': {
+        if (!act.on) {
+          this.db().prepare('DELETE FROM saved_messages WHERE message_id = ?').run(act.messageId);
+          break;
+        }
+        const m = await this.findMessage(act.channelId, act.messageId);
+        if (!m) throw new CommunityError('That message is no longer here.');
+        this.db()
+          .prepare(
+            `INSERT INTO saved_messages (message_id, community_id, channel_id, sender_name, text, sent_at, saved_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (message_id) DO NOTHING`,
+          )
+          .run(
+            m.id,
+            m.communityId,
+            m.channelId,
+            m.senderName,
+            m.text.slice(0, 4000),
+            m.sentAt,
+            new Date().toISOString(),
+          );
+        break;
+      }
       case 'addEmoji': {
         const existing = await this.emojis(act.communityId);
         if (existing.some((e) => e.name.toLowerCase() === act.name.toLowerCase()))
@@ -2007,6 +2033,30 @@ export class CommunityService {
     if (this.lastVoiceState) this.trySend({ t: 'voice.state', ...this.lastVoiceState });
     for (const p of fresh) this.trySend(p.event);
     this.deps.log.info('voice: rejoined after reconnecting');
+  }
+
+  // ---- Saved messages (1.0.19) ----------------------------------------------------------------
+
+  savedMessages(): SavedMessageView[] {
+    const rows = (this.deps.db()?.prepare('SELECT * FROM saved_messages ORDER BY saved_at DESC').all() ??
+      []) as Array<{
+      message_id: string;
+      community_id: string;
+      channel_id: string;
+      sender_name: string;
+      text: string;
+      sent_at: string;
+      saved_at: string;
+    }>;
+    return rows.map((r) => ({
+      messageId: r.message_id,
+      communityId: r.community_id,
+      channelId: r.channel_id,
+      senderName: r.sender_name,
+      text: r.text,
+      sentAt: r.sent_at,
+      savedAt: r.saved_at,
+    }));
   }
 
   // ---- Custom emoji (1.0.19) ------------------------------------------------------------------

@@ -4325,3 +4325,41 @@ input.switch:disabled {
 .emoji-list__item .btn {
   margin-left: auto;
 }
+
+/* Saved messages (1.0.19) */
+.saved__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.saved__open {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.saved__text {
+  overflow: hidden;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Long messages fold (1.0.19) */
+.msg__long.is-collapsed {
+  max-height: 22em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 75%, transparent);
+  mask-image: linear-gradient(to bottom, #000 75%, transparent);
+}
+.msg__more {
+  padding: 0;
+  font-size: 12.5px;
+}

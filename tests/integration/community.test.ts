@@ -308,6 +308,24 @@ describe('custom emoji', () => {
   });
 });
 
+describe('saved messages', () => {
+  it('are kept on this device, newest first, and can be removed', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Save Club');
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.name === 'general')!;
+    const first = await alice.community.send(general.id, 'remember this');
+    const second = await alice.community.send(general.id, 'and this');
+    await alice.community.action({ a: 'saveMessage', channelId: general.id, messageId: first.id, on: true });
+    await alice.community.action({ a: 'saveMessage', channelId: general.id, messageId: second.id, on: true });
+    await alice.community.action({ a: 'saveMessage', channelId: general.id, messageId: second.id, on: true });
+    const saved = alice.community.savedMessages();
+    expect(saved.map((m) => m.text).sort()).toEqual(['and this', 'remember this']);
+    expect(saved[0]).toMatchObject({ communityId: created.id, channelId: general.id, senderName: 'Alice' });
+    await alice.community.action({ a: 'saveMessage', channelId: general.id, messageId: first.id, on: false });
+    expect(alice.community.savedMessages().map((m) => m.text)).toEqual(['and this']);
+  });
+});
+
 describe('replies', () => {
   it('notify the person replied to, unless the reply turned that off', async () => {
     const alice = await person('Alice');

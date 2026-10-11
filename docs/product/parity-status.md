@@ -30,7 +30,7 @@ are named where it helps. This file is updated with every release.
 | Mutual friends / communities                   | 🔨      | Mutual communities ✅ (Friends page); mutual friends ⏳                                                                        |
 | Shared roles, message/add-friend/block buttons | ✅      | Profile card                                                                                                                   |
 | Report button                                  | ⏳      | Reporting system planned (§13)                                                                                                 |
-| Copy user ID, context menu                     | 🔨      | ID shown on card; dedicated copy ⏳                                                                                            |
+| Copy user ID, context menu                     | ✅      | Copy ID on the profile card (1.0.19)                                                                                           |
 | Change e-mail/password, 2FA, backup codes      | 🔒      | No password: device key + optional passphrase lock; recovery phrase = backup codes                                             |
 | Active devices / sessions management           | 🔨      | Device count shown; management with linked devices (1.2)                                                                       |
 | Login alerts, security notifications           | 🔨      | Safety-number change warnings ✅; new-device alerts with linked devices                                                        |
@@ -41,7 +41,7 @@ are named where it helps. This file is updated with every release.
 | ---------------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------- |
 | Send/accept/reject/cancel/remove, incoming/outgoing, pending                 | ✅      | Friends page tabs (1.0.3)                                                                                      |
 | Request limits, duplicates, blocked requests                                 | ✅      | Server abuse limits; duplicate requests collapse                                                               |
-| Search / sort / online filter                                                | 🔨      | Online/All/Pending/Blocked ✅; search box ⏳                                                                   |
+| Search / sort / online filter                                                | ✅      | Online/All/Pending/Blocked, with search                                                                        |
 | Username search, ID lookup, invite-based discovery                           | ✅      | 1.0.13                                                                                                         |
 | Display-name discovery                                                       | 🔒      | Display names are encrypted; usernames are the public handle                                                   |
 | Contact syncing                                                              | 🔒      | Never uploads contacts                                                                                         |
@@ -85,7 +85,7 @@ are named where it helps. This file is updated with every release.
 | Scroll restore after navigation           | ✅      | 1.0.18                                                                                |
 | Jump to latest / unread / reply origin    | ✅      |                                                                                       |
 | Date separators, relative times, grouping | ✅      |                                                                                       |
-| Expand/collapse long messages             | ⏳      |                                                                                       |
+| Expand/collapse long messages             | ✅      | Show more / Show less (1.0.19)                                                        |
 | Spoilers, highlighted code + copy         | ✅      | 1.0.17                                                                                |
 | Embeds with loading/failed states         | 🔒 ⏳   | See link previews                                                                     |
 | Empty/loading/error/permission states     | ✅      |                                                                                       |
@@ -124,19 +124,19 @@ are named where it helps. This file is updated with every release.
 
 ## 6. Navigation, channels and categories
 
-| Item                                                                | Status | Notes                                            |
-| ------------------------------------------------------------------- | ------ | ------------------------------------------------ |
-| Server icons, unread, mention badges, active indicator              | ✅     |                                                  |
-| Drag-and-drop server order, folders (create/rename/colour/collapse) | ✅     | 1.0.18                                           |
-| Categories create/rename/reorder/collapse/delete/permissions        | ✅     | 1.0.0/1.0.6                                      |
-| Text, voice, announcement channels                                  | ✅     | Forum ⏳, stage ⏳, media ⏳                     |
-| Duplicate channel                                                   | ⏳     |                                                  |
-| Topic, slowmode, per-channel notifications, permissions             | ✅     | NSFW flag ⏳                                     |
-| Private channels, synced/unsynced overrides                         | ✅     |                                                  |
-| Channel search, unread navigation, recent history                   | ✅     | Quick switcher, Alt+Shift+↑/↓                    |
-| Muted / locked indicators                                           | ✅     | 1.0.18                                           |
-| Confirm before deleting populated channel                           | ✅     |                                                  |
-| Restore navigation after restart                                    | 🔨     | Last community ✅; last channel per community ⏳ |
+| Item                                                                | Status | Notes                                          |
+| ------------------------------------------------------------------- | ------ | ---------------------------------------------- |
+| Server icons, unread, mention badges, active indicator              | ✅     |                                                |
+| Drag-and-drop server order, folders (create/rename/colour/collapse) | ✅     | 1.0.18                                         |
+| Categories create/rename/reorder/collapse/delete/permissions        | ✅     | 1.0.0/1.0.6                                    |
+| Text, voice, announcement channels                                  | ✅     | Forum ⏳, stage ⏳, media ⏳                   |
+| Duplicate channel                                                   | ⏳     |                                                |
+| Topic, slowmode, per-channel notifications, permissions             | ✅     | NSFW flag ⏳                                   |
+| Private channels, synced/unsynced overrides                         | ✅     |                                                |
+| Channel search, unread navigation, recent history                   | ✅     | Quick switcher, Alt+Shift+↑/↓                  |
+| Muted / locked indicators                                           | ✅     | 1.0.18                                         |
+| Confirm before deleting populated channel                           | ✅     |                                                |
+| Restore navigation after restart                                    | ✅     | Last channel per community remembered (1.0.19) |
 
 ## 7. Roles and permissions
 
@@ -185,18 +185,18 @@ are named where it helps. This file is updated with every release.
 
 ## 10–12. Search, threads, forums, mentions
 
-| Item                                               | Status | Notes                         |
-| -------------------------------------------------- | ------ | ----------------------------- |
-| Search channel/community on device, jump to result | ✅     | Filters (author/date/has:) ⏳ |
-| Quick switcher, recent channels                    | ✅     |                               |
-| Back/forward navigation                            | ⏳     |                               |
-| Threads from messages, replies, archive            | ✅     | Follow/unfollow ⏳            |
-| Forums                                             | ⏳     |                               |
-| Mentions with autocomplete, role checks, highlight | ✅     |                               |
-| Mention suppression per message                    | ✅     | @ON/OFF on replies (1.0.18)   |
-| Pins, pinned list                                  | ✅     |                               |
-| Bookmarks / saved messages                         | ⏳     |                               |
-| Polls                                              | ✅     | 1.0.18                        |
+| Item                                               | Status | Notes                                   |
+| -------------------------------------------------- | ------ | --------------------------------------- |
+| Search channel/community on device, jump to result | ✅     | Filters (author/date/has:) ⏳           |
+| Quick switcher, recent channels                    | ✅     |                                         |
+| Back/forward navigation                            | ⏳     |                                         |
+| Threads from messages, replies, archive            | ✅     | Follow/unfollow ⏳                      |
+| Forums                                             | ⏳     |                                         |
+| Mentions with autocomplete, role checks, highlight | ✅     |                                         |
+| Mention suppression per message                    | ✅     | @ON/OFF on replies (1.0.18)             |
+| Pins, pinned list                                  | ✅     |                                         |
+| Bookmarks / saved messages                         | ✅     | Saved messages, on this device (1.0.19) |
+| Polls                                              | ✅     | 1.0.18                                  |
 
 ## 13–14. Moderation and audit
 
