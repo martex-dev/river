@@ -7,6 +7,7 @@ import type { RiverDatabase } from './db/database.ts';
 import { registerAccountRoutes } from './routes/accounts.ts';
 import { HttpError } from './http-error.ts';
 import { Hub } from './communities/hub.ts';
+import { registerSelfRoutes } from './routes/self.ts';
 import { registerAttachmentRoutes } from './routes/attachments.ts';
 import { registerMessagingRoutes } from './routes/messaging.ts';
 import { registerTurnRoutes } from './routes/turn.ts';
@@ -133,6 +134,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.addHook('onClose', async () => hub.close());
   const ops = await registerCommunityRoutes(app, { config, database: deps.database, now, hub });
   registerAdminRoutes(app, { config, database: deps.database, now, hub, ops });
+  registerSelfRoutes(app, { database: deps.database, now, hub, ops });
   registerMessagingRoutes(app, { config, database: deps.database, now, hub });
   registerTurnRoutes(app, { config, database: deps.database, now });
   registerInstanceRoutes(app, {

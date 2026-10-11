@@ -299,4 +299,13 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       db.exec(`ALTER TABLE account ADD COLUMN username TEXT`);
     },
   },
+  {
+    version: 17,
+    name: '0017_profile_pronouns_banner',
+    up(db) {
+      // Pronouns and a banner colour for your profile card (1.0.18); shared only inside sealed profiles.
+      db.exec(`ALTER TABLE profile ADD COLUMN pronouns TEXT`);
+      db.exec(`ALTER TABLE profile ADD COLUMN banner INTEGER`);
+    },
+  },
 ];

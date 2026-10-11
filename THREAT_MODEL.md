@@ -156,6 +156,15 @@ The server stores when it starts and ends (to order and list them), which
 voice channel it is in (an ID), who created it and who marked themselves
 interested.
 
+### 5g. Deleting your account (1.0.18)
+
+`DELETE /v1/accounts/me` needs a valid session **and** a fresh one-time
+challenge signed by one of the account's device keys under its own signing
+context (`river-delete-account-v1`), so a leaked session token cannot delete
+an account. Deletion leaves every community (owned communities are deleted)
+and removes keys, devices, sessions, reactions, event interest, bans, blocks
+and undelivered mail. Messages already sent remain as ciphertext.
+
 ## 6. Key threats and mitigations (STRIDE summary)
 
 | Threat          | Example                                | Mitigation                                                                                                                              | Status                                                 |

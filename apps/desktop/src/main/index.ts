@@ -243,8 +243,9 @@ async function start(): Promise<void> {
     account,
     ready: () => storage.db() !== null && identity.get() !== null,
     chosenServer: () => settings.get().server.url,
+    autoAccount: () => settings.get().server.autoAccount,
     onRegistered: (url) => {
-      settings.update({ server: { url } });
+      settings.update({ server: { url, autoAccount: true } });
       community.ensureSocket();
     },
     log,

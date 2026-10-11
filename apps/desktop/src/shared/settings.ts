@@ -89,6 +89,8 @@ export const settingsSchema = z.object({
   /** Added in 0.0.2. */
   server: z.object({
     url: serverUrlSchema.nullable(),
+    /** Create an account on River's server by itself (off after you delete your account, 1.0.18). */
+    autoAccount: z.boolean(),
   }),
   /** Added in 0.3. */
   voice: z.object({
@@ -169,7 +171,7 @@ export const DEFAULT_SETTINGS: Settings = {
     soundGroups: { messages: true, voice: true, calls: true, social: true, interface: true },
     overrides: {},
   },
-  server: { url: null },
+  server: { url: null, autoAccount: true },
   voice: {
     inputDeviceId: null,
     outputDeviceId: null,

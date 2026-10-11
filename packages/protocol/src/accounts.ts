@@ -12,6 +12,8 @@ export const SIGNING_CONTEXT = {
   register: 'river-register-v1\n',
   session: 'river-session-v1\n',
   deviceList: 'river-device-list-v1\n',
+  /** Proof for deleting your own account (1.0.18): a fresh challenge signed by a device key. */
+  deleteAccount: 'river-delete-account-v1\n',
 } as const;
 
 export const CHALLENGE_BYTES = 32;
@@ -175,6 +177,19 @@ export function sessionMessage(challenge: Uint8Array, riverId: string, deviceId:
   if (challenge.length !== CHALLENGE_BYTES) throw new Error('bad challenge');
   return Buffer.concat([utf8(SIGNING_CONTEXT.session), challenge, utf8(`${riverId}:${deviceId}`)]);
 }
+
+export function deleteAccountMessage(challenge: Uint8Array, riverId: string, deviceId: number): Uint8Array {
+  if (challenge.length !== CHALLENGE_BYTES) throw new Error('bad challenge');
+  return Buffer.concat([utf8(SIGNING_CONTEXT.deleteAccount), challenge, utf8(`${riverId}:${deviceId}`)]);
+}
+
+export const deleteAccountRequestSchema = z
+  .object({
+    challenge: challengeSchema,
+    deviceId: z.number().int().min(1).max(1000),
+    signature: base64Bytes(64),
+  })
+  .strict();
 
 /** Parses device-list bytes (call only after the signature has been verified). */
 export function parseDeviceList(bytes: Uint8Array): DeviceList {

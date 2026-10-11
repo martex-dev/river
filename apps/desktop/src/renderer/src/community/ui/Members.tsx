@@ -119,7 +119,13 @@ export function ProfileCard(props: {
     <div className="profile-card">
       <div
         className="profile-card__banner"
-        style={member.color ? { background: hex(member.color) } : undefined}
+        style={
+          member.banner !== null && member.banner !== undefined
+            ? { background: hex(member.banner) }
+            : member.color
+              ? { background: hex(member.color) }
+              : undefined
+        }
       />
       <div className="profile-card__avatar">
         <Avatar
@@ -134,6 +140,7 @@ export function ProfileCard(props: {
         <h3>
           {member.name} {member.owner && <CrownIcon size={15} />}
         </h3>
+        {member.pronouns && <div className="muted small profile-card__pronouns">{member.pronouns}</div>}
         {member.customStatus && (
           <div className="profile-card__custom">
             <CustomStatus member={member} />
@@ -148,6 +155,12 @@ export function ProfileCard(props: {
         <div className="muted small mono" title="River ID">
           {member.riverId.slice(0, 8)}…
         </div>
+        {member.bio && (
+          <>
+            <div className="profile-card__section">About me</div>
+            <p className="profile-card__bio">{member.bio}</p>
+          </>
+        )}
         <div className="profile-card__section">Roles</div>
         <div className="role-chips">
           {roles.map((r) => (

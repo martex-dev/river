@@ -85,7 +85,7 @@ describe('SettingsStore', () => {
       ...v001,
       appearance: { ...DEFAULT_SETTINGS.appearance, motion: 'reduced' },
       notifications: { ...DEFAULT_SETTINGS.notifications, preview: 'sender' },
-      server: { url: null },
+      server: DEFAULT_SETTINGS.server,
       voice: DEFAULT_SETTINGS.voice,
       system: DEFAULT_SETTINGS.system,
       hosting: { enabled: false, keepAwake: true },

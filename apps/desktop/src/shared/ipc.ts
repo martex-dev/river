@@ -1,3 +1,4 @@
+import type { Poll } from './poll.ts';
 import type { AdminOverview } from '@river/protocol/admin';
 import type { ReleaseChannel } from '@river/release/channels';
 import type { CreateCommunityOptions } from './templates.ts';
@@ -43,6 +44,7 @@ export const IPC = {
   accountRegister: 'river:account:register',
   accountConnect: 'river:account:connect',
   accountSetUsername: 'river:account:set-username',
+  accountDelete: 'river:account:delete',
   accountRedeemSignup: 'river:account:redeem-signup',
   usersLookup: 'river:users:lookup',
   accountStatusChanged: 'river:account:status-changed',
@@ -246,6 +248,10 @@ export interface MemberView {
   status?: 'idle' | 'dnd';
   /** Their custom status, if set and not expired (end-to-end encrypted). */
   customStatus?: { text: string; emoji: string } | null;
+  /** About me, pronouns and banner colour (1.0.18). */
+  bio?: string;
+  pronouns?: string;
+  banner?: number | null;
   owner: boolean;
   /** Hierarchy position (owner is highest). */
   rank: number;
@@ -320,6 +326,8 @@ export interface ChatMessage {
   threadId: string | null;
   /** The thread started from this message, if any. */
   thread: ThreadView | null;
+  /** A poll, if this message is one (1.0.18). Votes are in `reactions` (see shared/poll.ts). */
+  poll?: Poll | null;
 }
 
 export interface ThreadView {
@@ -426,6 +434,8 @@ export interface RiverApi {
     setUsername(username: string): Promise<Result<AccountStatus>>;
     /** Use an operator's sign-up link (`…/add#s=…`) to create this account. */
     redeemSignup(link: string): Promise<Result<AccountStatus>>;
+    /** Delete your account from its server for good (1.0.18). */
+    deleteAccount(): Promise<Result<null>>;
     onStatus(listener: (status: AccountStatus) => void): () => void;
   };
   /** Find people by @username to add them. */
@@ -460,7 +470,13 @@ export interface RiverApi {
     connection(): Promise<'online' | 'offline' | 'connecting'>;
     /** Every other community operation; validated in main against communityActionSchema. */
     action<A extends CommunityAction>(action: A): Promise<Result<CommunityActionResult<A>>>;
-    profile(): Promise<{ name: string; avatar: string | null }>;
+    profile(): Promise<{
+      name: string;
+      avatar: string | null;
+      bio: string;
+      pronouns: string;
+      banner: number | null;
+    }>;
     /** Decrypts an attachment and asks where to save it. */
     saveAttachment(pointer: AttachmentPointer): Promise<Result<boolean>>;
     onEvent(listener: (event: CommunityEvent) => void): () => void;

@@ -598,6 +598,19 @@ test('status menu: do not disturb and a custom status show to others; formatting
     .poll(() => apps.at(-2)!.evaluate(({ clipboard }) => clipboard.readText()), { timeout: 5000 })
     .toMatch(/\/channels\/[\w-]{22}\/[\w-]{22}\/[\w-]{22}$/);
 
+  // Finn asks a poll; Erin votes and both see the result.
+  await finn.getByRole('button', { name: 'Create a poll' }).click();
+  await finn.getByLabel('Question').fill('Movie or games?');
+  await finn.getByLabel('Answer 1').fill('Movie');
+  await finn.getByLabel('Answer 2').fill('Games');
+  await finn.getByRole('button', { name: 'Post poll' }).click();
+  const poll = erin.getByRole('group', { name: 'Poll: Movie or games?' });
+  await expect(poll).toBeVisible({ timeout: 15_000 });
+  await poll.getByRole('button', { name: /Games/ }).click();
+  await expect(finn.getByRole('group', { name: 'Poll: Movie or games?' })).toContainText('1 vote', {
+    timeout: 15_000,
+  });
+
   // Erin plans an event; Finn sees it and says he is interested.
   await erin.locator('.events-row').click();
   await erin.getByRole('button', { name: 'Create event' }).click();

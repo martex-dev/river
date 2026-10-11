@@ -15,6 +15,19 @@ All notable changes to River are documented here. The format follows
   voice" button while it is on). People with the new **Manage events**
   permission can edit, cancel or delete them. Name, description and place are
   end-to-end encrypted.
+- **Delete your account** (Settings → Account). It is removed from your
+  server for good — you leave your communities, communities you own are
+  deleted, and your keys and devices are gone there — after you confirm, and
+  River proves the request with your device key, so a stolen session alone
+  can never delete an account. River will not quietly make a new account for
+  you afterwards.
+- **Polls.** Click 📊 next to the message box: a question, up to ten
+  answers, one or several choices, open for an hour to a week. Results show
+  as bars that update live. Questions, answers and votes are end-to-end
+  encrypted — the server cannot tell who picked what.
+- **Richer profiles:** About me, pronouns and a banner colour, with a live
+  preview in Settings → Profile; shown on your profile card in every
+  community, end-to-end encrypted.
 - **@ ON/OFF on replies:** choose whether the person you reply to is
   notified.
 - **View reactions:** right-click a message or a reaction to see who reacted
@@ -40,6 +53,9 @@ All notable changes to River are documented here. The format follows
 
 ### Fixed
 
+- Editing a message no longer drops its reactions after the community key
+  changed (the edit is now sealed with the message's own key), and keeps
+  everything else in it.
 - The Notifications settings no longer claim they take effect "when
   messaging arrives in River 0.2".
 

@@ -1,3 +1,4 @@
+import { POLL_LIMITS } from './poll.ts';
 import { z } from 'zod';
 import type { AuditView, ChatMessage } from './ipc.ts';
 import { communityIconSchema } from './templates.ts';
@@ -221,6 +222,22 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       threadId: id.optional(),
       /** A reply that should not notify the person replied to (1.0.18). */
       noPing: z.boolean().optional(),
+      /** Make this message a poll (1.0.18); `text` is the question. */
+      poll: z
+        .object({
+          question: z.string().trim().min(1).max(POLL_LIMITS.question),
+          options: z
+            .array(z.string().trim().min(1).max(POLL_LIMITS.option))
+            .min(POLL_LIMITS.minOptions)
+            .max(POLL_LIMITS.maxOptions),
+          multi: z.boolean(),
+          endsAt: z
+            .string()
+            .max(40)
+            .refine((v) => !Number.isNaN(Date.parse(v))),
+        })
+        .strict()
+        .optional(),
     })
     .strict()
     .refine((v) => v.text.trim().length > 0 || (v.attachments?.length ?? 0) > 0, 'empty'),
@@ -266,7 +283,15 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z
-    .object({ a: z.literal('setProfile'), name: name.optional(), avatar: avatarSchema.nullable().optional() })
+    .object({
+      a: z.literal('setProfile'),
+      name: name.optional(),
+      avatar: avatarSchema.nullable().optional(),
+      /** About me (also your bio on your social profile). */
+      bio: z.string().max(190).optional(),
+      pronouns: z.string().max(40).optional(),
+      banner: z.number().int().min(0).max(0xffffff).nullable().optional(),
+    })
     .strict(),
   // Scheduled events (1.0.18): name, description and place are sealed with the community key.
   z.object({ a: z.literal('events'), communityId: id }).strict(),

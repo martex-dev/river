@@ -44,6 +44,7 @@ import { communityIconSchema, templateById, type TemplateId } from '../../shared
 import { describeAudit } from './audit-text.ts';
 import type { ServerLocator } from './server-locator.ts';
 import type { PresenceTracker } from '../presence.ts';
+import { readPoll, type Poll } from '../../shared/poll.ts';
 import type {
   CategoryView,
   ChannelView,
@@ -122,6 +123,10 @@ interface SealedProfile {
   avatar?: string | null;
   /** Custom status (1.0.17), end-to-end encrypted like the rest of the profile. */
   status?: { text?: unknown; emoji?: unknown; until?: unknown };
+  /** About me, pronouns, banner colour (1.0.18). */
+  bio?: unknown;
+  pronouns?: unknown;
+  banner?: unknown;
 }
 
 /** A custom status from a sealed profile, if valid and not expired. */
@@ -529,6 +534,14 @@ export class CommunityService {
     return this.deps.identity.get()?.displayName ?? null;
   }
 
+  /** About me, pronouns and banner colour (1.0.18), shared only inside sealed profiles. */
+  private myProfileExtras(): { bio: string; pronouns: string; banner: number | null } {
+    const db = this.deps.db();
+    const row = db?.prepare('SELECT bio, pronouns, banner FROM profile WHERE id = 1').get() as
+      { bio: string | null; pronouns: string | null; banner: number | null } | undefined;
+    return { bio: row?.bio ?? '', pronouns: row?.pronouns ?? '', banner: row?.banner ?? null };
+  }
+
   private myAvatar(): string | null {
     const db = this.deps.db();
     if (!db) return null;
@@ -548,11 +561,15 @@ export class CommunityService {
 
   private sealedProfile(communityId: string): string {
     const custom = this.deps.presence?.custom() ?? null;
+    const extras = this.myProfileExtras();
     const profile: SealedProfile = {
       name: this.nickname(communityId) ?? this.myName(),
       avatar: this.myAvatar(),
       identityKey: this.myIdentityKey(),
       ...(custom ? { status: custom } : {}),
+      ...(extras.bio ? { bio: extras.bio } : {}),
+      ...(extras.pronouns ? { pronouns: extras.pronouns } : {}),
+      ...(extras.banner !== null ? { banner: extras.banner } : {}),
     };
     return seal(this.requireKey(communityId), communityId, 'profile', profile);
   }
@@ -707,6 +724,15 @@ export class CommunityService {
           return live === 'idle' || live === 'dnd' ? { status: live } : {};
         })(),
         customStatus: readCustomStatus(profile.status),
+        bio: typeof profile.bio === 'string' ? profile.bio.slice(0, 190) : '',
+        pronouns: typeof profile.pronouns === 'string' ? profile.pronouns.slice(0, 40) : '',
+        banner:
+          typeof profile.banner === 'number' &&
+          Number.isInteger(profile.banner) &&
+          profile.banner >= 0 &&
+          profile.banner <= 0xffffff
+            ? profile.banner
+            : null,
         owner: m.riverId === ownerId,
         rank: topPosition(ownerId, wireRoles, { riverId: m.riverId, roles: m.roles }),
         timeoutUntil: m.timeoutUntil && Date.parse(m.timeoutUntil) > Date.now() ? m.timeoutUntil : null,
@@ -813,6 +839,7 @@ export class CommunityService {
         text: string;
         replyTo?: string;
         noPing?: unknown;
+        poll?: unknown;
         attachments?: unknown[];
       }>(communityId, `message:${m.channelId}`, m.body);
       const body = opened.value;
@@ -852,6 +879,7 @@ export class CommunityService {
         sender: m.sender,
         senderName: sender?.name ?? `Member ${m.sender.slice(0, 4)}`,
         text,
+        poll: readPoll(body.poll),
         sentAt: m.sentAt,
         editedAt: m.editedAt,
         pinned: m.pinned,
@@ -1093,8 +1121,8 @@ export class CommunityService {
     );
   }
 
-  profile(): { name: string; avatar: string | null } {
-    return { name: this.myName() ?? '', avatar: this.myAvatar() };
+  profile(): { name: string; avatar: string | null; bio: string; pronouns: string; banner: number | null } {
+    return { name: this.myName() ?? '', avatar: this.myAvatar(), ...this.myProfileExtras() };
   }
 
   /**
@@ -1154,6 +1182,7 @@ export class CommunityService {
     attachments: AttachmentPointer[] = [],
     threadId?: string,
     noPing = false,
+    poll?: Poll,
   ): Promise<ChatMessage> {
     const text = attachments.length ? z.string().max(4000).parse(rawText) : textSchema.parse(rawText);
     const communityId = this.communityOf(channelId);
@@ -1164,6 +1193,7 @@ export class CommunityService {
       text,
       ...(replyTo ? { replyTo } : {}),
       ...(replyTo && noPing ? { noPing: true } : {}),
+      ...(poll ? { poll } : {}),
       ...(attachments.length ? { attachments } : {}),
     };
     const sent = await this.call(
@@ -1499,6 +1529,7 @@ export class CommunityService {
           act.attachments,
           act.threadId,
           act.noPing,
+          act.poll,
         )) as CommunityActionResult<A>;
       case 'createThread': {
         const communityId = this.communityOf(act.channelId);
@@ -1554,7 +1585,10 @@ export class CommunityService {
       case 'edit': {
         const communityId = this.communityOf(act.channelId);
         const existing = await this.findMessage(act.channelId, act.messageId);
-        const body = seal(this.requireKey(communityId), communityId, `message:${act.channelId}`, {
+        if (existing?.poll) throw new CommunityError('Polls cannot be edited.');
+        // Seal with the message's own key: its reactions are tagged with it and must keep matching.
+        const key = this.messageKeys.get(act.messageId) ?? this.requireKey(communityId);
+        const body = seal(key, communityId, `message:${act.channelId}`, {
           text: act.text,
           ...(existing?.replyTo ? { replyTo: existing.replyTo } : {}),
           ...(existing?.attachments.length ? { attachments: existing.attachments } : {}),
@@ -1721,6 +1755,18 @@ export class CommunityService {
               'INSERT INTO profile (id, avatar) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET avatar = excluded.avatar',
             )
             .run(act.avatar);
+        }
+        for (const [column, value] of [
+          ['bio', act.bio],
+          ['pronouns', act.pronouns],
+          ['banner', act.banner],
+        ] as const) {
+          if (value === undefined) continue;
+          this.db()
+            .prepare(
+              `INSERT INTO profile (id, ${column}) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET ${column} = excluded.${column}`,
+            )
+            .run(value);
         }
         if (this.deps.account.status().state === 'registered') {
           this.loadKeys();
@@ -2321,6 +2367,16 @@ export class CommunityService {
   }
 
   /** Drops a community's keys after leaving or being removed. */
+  /** After deleting the account: drop every community and its keys from this device. */
+  forgetAll(): void {
+    for (const c of [...this.communities]) this.forget(c.id);
+    for (const row of (this.deps.db()?.prepare('SELECT id FROM communities').all() ?? []) as Array<{
+      id: string;
+    }>)
+      this.forget(row.id);
+    this.stop();
+  }
+
   private forget(id: string): void {
     this.deps.db()?.prepare('DELETE FROM community_keys WHERE community_id = ?').run(id);
     this.deps.db()?.prepare('DELETE FROM communities WHERE id = ?').run(id);

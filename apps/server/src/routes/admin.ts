@@ -23,9 +23,9 @@ import {
   usernameFree,
 } from '../accounts/usernames.ts';
 import type { CommunityOps } from './communities.ts';
+import { CLOSE_SUSPENDED, purgeAccount } from '../accounts/purge.ts';
 
-/** WebSocket close code for "your account was suspended or removed by the operator". */
-export const CLOSE_SUSPENDED = 4403;
+export { CLOSE_SUSPENDED } from '../accounts/purge.ts';
 
 /**
  * The server operator's view: every account and community on this server,
@@ -207,22 +207,7 @@ export function registerAdminRoutes(
   app.delete<{ Params: { id: string } }>(`${API_PREFIX}/admin/accounts/:id`, host, async (request) => {
     const id = request.params.id;
     await exists(id);
-    hub.disconnect(id, CLOSE_SUSPENDED);
-    await ops.removeEverywhere(id);
-    await db.transaction().execute(async (trx) => {
-      await trx.deleteFrom('prekeys').where('river_id', '=', id).execute();
-      await trx.deleteFrom('signed_prekeys').where('river_id', '=', id).execute();
-      await trx.deleteFrom('kyber_prekeys').where('river_id', '=', id).execute();
-      await trx.deleteFrom('message_reactions').where('river_id', '=', id).execute();
-      await trx.deleteFrom('bans').where('river_id', '=', id).execute();
-      await trx
-        .deleteFrom('blocks')
-        .where((eb) => eb.or([eb('river_id', '=', id), eb('blocked', '=', id)]))
-        .execute();
-      await trx.deleteFrom('mailbox').where('recipient', '=', id).execute();
-      // Devices and sessions go with the account (foreign keys).
-      await trx.deleteFrom('accounts').where('river_id', '=', id).execute();
-    });
+    await purgeAccount(db, hub, ops, id);
     return { ok: true };
   });
 

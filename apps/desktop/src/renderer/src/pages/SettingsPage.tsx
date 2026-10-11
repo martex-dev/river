@@ -6,6 +6,8 @@ import type { ReleaseChannel } from '@river/release/channels';
 import type { AccountStatus, ServerCheckResult, UpdateStatus } from '../../../shared/ipc.ts';
 import { serverUrlSchema, type Settings } from '../../../shared/settings.ts';
 import { ExternalIcon } from '../components/Icons.tsx';
+import { Modal } from '../community/ui/common.tsx';
+import { useCommunity } from '../community/store.ts';
 import { useRiver } from '../store.ts';
 import { play } from '../community/sound.ts';
 
@@ -360,7 +362,61 @@ function AccountPanel({
           your name.
         </p>
       </details>
+      <DeleteAccount />
     </div>
+  );
+}
+
+/** Settings → Account → Delete account (1.0.18). */
+function DeleteAccount(): ReactElement {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const run = async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    const res = await window.river.account.deleteAccount();
+    setBusy(false);
+    if (!res.ok) return setError(res.message);
+    setOpen(false);
+    useCommunity.getState().notify('Your account was deleted.');
+    void useCommunity.getState().load();
+  };
+  return (
+    <section className="danger-zone">
+      <h3>Delete account</h3>
+      <p className="muted small">
+        Removes your account from your server for good: you leave every community (communities you own are
+        deleted), and your keys and devices are removed there. Messages you already sent stay where they are,
+        encrypted. Your identity and the messages on this device stay on this device.
+      </p>
+      <button className="btn btn--danger btn--small" onClick={() => setOpen(true)}>
+        Delete account…
+      </button>
+      {open && (
+        <Modal title="Delete your account?" onClose={() => setOpen(false)}>
+          <p>This cannot be undone. Type DELETE to confirm.</p>
+          <label className="textfield">
+            <span className="field__label">Confirmation</span>
+            <input autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="DELETE" />
+          </label>
+          {error && <p className="field__error">{error}</p>}
+          <div className="modal__foot">
+            <button className="btn btn--link" onClick={() => setOpen(false)}>
+              Keep my account
+            </button>
+            <button
+              className="btn btn--danger"
+              disabled={typed !== 'DELETE' || busy}
+              onClick={() => void run()}
+            >
+              {busy ? 'Deleting…' : 'Delete account'}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </section>
   );
 }
 

@@ -1618,3 +1618,16 @@ html[data-density='compact'] .member {
   border: 1px solid var(--border);
   border-radius: 10px;
 }
+
+/* Danger zone (1.0.18) */
+.danger-zone {
+  margin-top: 24px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
+  border-radius: 12px;
+}
+.danger-zone h3 {
+  margin: 0 0 6px;
+  color: var(--danger);
+  font-size: 14px;
+}

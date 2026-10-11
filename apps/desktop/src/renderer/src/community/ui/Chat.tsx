@@ -1,3 +1,5 @@
+import { CreatePollDialog, PollView } from './Poll.tsx';
+import { isVote } from '../../../../shared/poll.ts';
 import { clockDateTime, clockTime } from '../../time.ts';
 import { formatMessageLink } from '../message-link.ts';
 import { ProfileCard } from './Members.tsx';
@@ -379,6 +381,8 @@ function Message(props: {
   const canManage = can(channel.permissions, Permission.MANAGE_MESSAGES);
   const canPin = canManage || can(channel.permissions, Permission.PIN_MESSAGES);
   const canReact = can(channel.permissions, Permission.ADD_REACTIONS);
+  // Poll votes are reactions underneath; they show in the poll, not as reactions.
+  const reactions = m.reactions.filter((r) => !isVote(r.emoji));
 
   const react = (emoji: string, on: boolean): void => {
     if (on) play('reaction');
@@ -476,6 +480,7 @@ function Message(props: {
               )}
             </div>
           )}
+          {m.poll && <PollView message={m} me={props.me} canVote={canReact} />}
           {m.attachments.length > 0 && <AttachmentList attachments={m.attachments} />}
           {m.thread && (
             <button className="thread-summary" onClick={() => void s.showThread(channel.id, m.id)}>
@@ -488,9 +493,9 @@ function Message(props: {
               {m.thread.archived && <span className="chip">Archived</span>}
             </button>
           )}
-          {m.reactions.length > 0 && (
+          {reactions.length > 0 && (
             <div className="reactions">
-              {m.reactions.map((r) => (
+              {reactions.map((r) => (
                 <button
                   key={r.tag}
                   className={`reaction ${r.mine ? 'is-mine' : ''}`}
@@ -573,7 +578,7 @@ function Message(props: {
               🧵
             </button>
           )}
-          {m.mine && (
+          {m.mine && !m.poll && (
             <button
               className="msg__action"
               aria-label="Edit"
@@ -678,7 +683,7 @@ function Message(props: {
               Forward
             </MenuItem>
           )}
-          {m.reactions.length > 0 && (
+          {reactions.length > 0 && (
             <MenuItem
               icon={<SmileIcon size={16} />}
               onClick={() => {
@@ -698,7 +703,7 @@ function Message(props: {
           >
             Copy message link
           </MenuItem>
-          {m.mine && (
+          {m.mine && !m.poll && (
             <MenuItem
               icon={<EditIcon size={16} />}
               onClick={() => {
@@ -756,7 +761,7 @@ function Message(props: {
           className="reactions-pop"
         >
           <div role="list" aria-label="Who reacted">
-            {m.reactions.map((r) => (
+            {reactions.map((r) => (
               <div key={r.tag} role="listitem" className="reactions-pop__row">
                 <span className="reactions-pop__emoji" aria-hidden="true">
                   {r.emoji}
@@ -849,6 +854,7 @@ function Composer(props: {
   const [text, setText] = useState('');
   // Replies notify the person you reply to, unless you switch it off for that reply (like Discord's "@ ON").
   const [pingOffFor, setPingOffFor] = useState<string | null>(null);
+  const [polling, setPolling] = useState(false);
   // Quote puts the quoted lines in front of whatever is being written.
   useEffect(
     () =>
@@ -1046,6 +1052,7 @@ function Composer(props: {
           />
         </div>
       )}
+      {polling && <CreatePollDialog channelId={channel.id} onClose={() => setPolling(false)} />}
       <form
         className={`chat__composer ${replyTo ? 'has-reply' : ''}`}
         onSubmit={(e) => {
@@ -1053,6 +1060,15 @@ function Composer(props: {
           void send();
         }}
       >
+        <button
+          type="button"
+          className="icon-btn composer__poll"
+          aria-label="Create a poll"
+          title="Create a poll"
+          onClick={() => setPolling(true)}
+        >
+          📊
+        </button>
         {props.canAttach && (
           <>
             <button
@@ -1113,7 +1129,7 @@ function Composer(props: {
             }
             if (e.key === 'Escape' && replyTo) useCommunity.setState({ replyTo: null });
             if (e.key === 'ArrowUp' && text === '') {
-              const mine = [...(s.messages[channel.id] ?? [])].reverse().find((m) => m.mine);
+              const mine = [...(s.messages[channel.id] ?? [])].reverse().find((m) => m.mine && !m.poll);
               if (mine) {
                 e.preventDefault();
                 useCommunity.setState({ editing: mine.id });
