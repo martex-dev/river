@@ -4,7 +4,7 @@ import { ProfileCard } from './Members.tsx';
 import { ForwardDialog } from './Forward.tsx';
 import { useRiver } from '../../store.ts';
 import { replaceShortcodes, searchEmoji, useEmojiIndex } from '../emoji-data.ts';
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, ChatMessage, CommunityView } from '../../../../shared/ipc.ts';
 import { useShallow } from 'zustand/react/shallow';
@@ -83,6 +83,14 @@ export function TextChannel(props: {
   const scrolledToNew = useRef<string | null>(null);
   const lastOutgoing = useRef(0);
 
+  // Coming back to a channel you had scrolled up in returns you to the same place.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    const fromBottom = scrollMemory.get(channel.id);
+    if (!el || fromBottom === undefined || fromBottom < 40) return;
+    el.scrollTop = el.scrollHeight - el.clientHeight - fromBottom;
+  }, [channel.id]);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -99,7 +107,8 @@ export function TextChannel(props: {
       document.getElementById(`msg-${firstNew.id}`)?.scrollIntoView({ block: 'center' });
       return;
     }
-    if (atBottom) el.scrollTop = el.scrollHeight;
+    // Follow new messages at the bottom, but not if you had scrolled up in this channel.
+    if (atBottom && (scrollMemory.get(channel.id) ?? 0) < 40) el.scrollTop = el.scrollHeight;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, channel.id, outgoing.length]);
 
@@ -217,7 +226,9 @@ export function TextChannel(props: {
         }}
         onScroll={(e) => {
           const el = e.currentTarget;
-          setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
+          const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+          scrollMemory.set(channel.id, fromBottom);
+          setAtBottom(fromBottom < 40);
         }}
       >
         {messages.length >= 100 && !s.noMore[channel.id] && (
@@ -316,6 +327,9 @@ export function TextChannel(props: {
     </div>
   );
 }
+
+/** How far from the newest message each channel was left, for this session. */
+const scrollMemory = new Map<string, number>();
 
 function Message(props: {
   message: ChatMessage;
