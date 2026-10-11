@@ -27,6 +27,8 @@ export const Permission = {
   MODERATE_MEMBERS: 1 << 19,
   /** Read the community's audit log (1.0.6). */
   VIEW_AUDIT_LOG: 1 << 20,
+  /** Create, edit and cancel scheduled events (1.0.18). */
+  MANAGE_EVENTS: 1 << 21,
 } as const;
 export type PermissionName = keyof typeof Permission;
 
@@ -105,6 +107,7 @@ export const PERMISSION_INFO: Array<{ key: PermissionName; label: string; help: 
     label: 'Move & disconnect members',
     help: 'Move people between voice channels or disconnect them.',
   },
+  { key: 'MANAGE_EVENTS', label: 'Manage events', help: 'Create, edit and cancel scheduled events.' },
 ];
 
 export interface PermissionRole {

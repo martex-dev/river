@@ -5,6 +5,7 @@ import { useRiver } from '../../store.ts';
 import { useCommunity } from '../store.ts';
 import { ChannelList } from './ChannelList.tsx';
 import { NotifyMenuSection } from './NotifyMenu.tsx';
+import { eventPhase, useEvents, whenLabel } from './Events.tsx';
 import { isMuted } from '../../../../shared/notify-rules.ts';
 import { CHOSEN_LABEL, StatusMenu, myPresence } from '../../components/StatusMenu.tsx';
 import {
@@ -146,6 +147,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
           Invite people
         </button>
       )}
+      <EventsRow community={community} />
       <ChannelList community={community} me={me} />
       <VoicePanel community={community} />
       <UserPanel me={me} community={community} />
@@ -365,6 +367,30 @@ function VoicePanel({ community }: { community: CommunityView }): ReactElement |
         </button>
       </div>
     </div>
+  );
+}
+
+/** "📅 Events · Game night today at 19:00" — opens the community's events. */
+function EventsRow({ community }: { community: CommunityView }): ReactElement {
+  const s = useCommunity();
+  const events = useEvents(community.id);
+  const active = (events ?? []).filter((e) => !e.canceled && eventPhase(e) !== 'past');
+  const live = active.find((e) => eventPhase(e) === 'live');
+  const next = live ?? active[0];
+  return (
+    <button
+      className={`events-row ${live ? 'is-live' : ''}`}
+      onClick={() => s.setModal({ kind: 'events', communityId: community.id })}
+    >
+      <span aria-hidden="true">📅</span>
+      <span className="events-row__text">
+        <strong>
+          {active.length ? `${active.length} ${active.length === 1 ? 'event' : 'events'}` : 'Events'}
+        </strong>
+        {next && <span className="muted small">{`${next.name} · ${whenLabel(next)}`}</span>}
+      </span>
+      {live && <span className="live-badge">LIVE</span>}
+    </button>
   );
 }
 

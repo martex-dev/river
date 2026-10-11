@@ -1,0 +1,353 @@
+import { useEffect, useState, type ReactElement } from 'react';
+import { Permission } from '@river/protocol/permissions';
+import type { EventView } from '../../../../shared/community-actions.ts';
+import type { CommunityView } from '../../../../shared/ipc.ts';
+import { clockDateTime, clockTime } from '../../time.ts';
+import { useCommunity } from '../store.ts';
+import { Modal, can, memberOf } from './common.tsx';
+
+/** "live", "upcoming" or "past" at this moment. */
+export function eventPhase(
+  e: Pick<EventView, 'startsAt' | 'endsAt'>,
+  now = Date.now(),
+): 'live' | 'upcoming' | 'past' {
+  if (Date.parse(e.endsAt) <= now) return 'past';
+  return Date.parse(e.startsAt) <= now ? 'live' : 'upcoming';
+}
+
+/** "in 3 hours", "tomorrow at 19:00", "Fri 12 Oct, 19:00". */
+export function whenLabel(e: Pick<EventView, 'startsAt' | 'endsAt'>, now = Date.now()): string {
+  const start = new Date(e.startsAt);
+  const phase = eventPhase(e, now);
+  if (phase === 'live') return `Happening now · until ${clockTime(e.endsAt)}`;
+  if (phase === 'past') return `Ended ${clockDateTime(e.endsAt)}`;
+  const mins = Math.round((start.getTime() - now) / 60_000);
+  if (mins < 60) return `Starts in ${Math.max(1, mins)} min`;
+  const today = new Date(now);
+  const tomorrow = new Date(now + 86_400_000);
+  if (start.toDateString() === today.toDateString()) return `Today at ${clockTime(start)}`;
+  if (start.toDateString() === tomorrow.toDateString()) return `Tomorrow at ${clockTime(start)}`;
+  return `${start.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}, ${clockTime(start)}`;
+}
+
+/** The current time, updated every 30 seconds (so "starts in 5 min" stays right). */
+export function useNow(everyMs = 30_000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), everyMs);
+    return () => window.clearInterval(t);
+  }, [everyMs]);
+  return now;
+}
+
+/** The community's upcoming and live events (used by the sidebar too). */
+export function useEvents(communityId: string): EventView[] | null {
+  const events = useCommunity((s) => s.events[communityId] ?? null);
+  const load = useCommunity((s) => s.loadEvents);
+  useEffect(() => {
+    void load(communityId);
+  }, [communityId, load]);
+  return events;
+}
+
+export function EventsDialog({ community, me }: { community: CommunityView; me: string }): ReactElement {
+  const s = useCommunity();
+  const events = useEvents(community.id);
+  const [editing, setEditing] = useState<EventView | 'new' | null>(null);
+  const manage = can(community.permissions, Permission.MANAGE_EVENTS);
+  const now = useNow();
+  if (editing) {
+    return (
+      <EventForm
+        community={community}
+        event={editing === 'new' ? null : editing}
+        onClose={() => setEditing(null)}
+      />
+    );
+  }
+  const groups = (['live', 'upcoming', 'past'] as const).map((phase) => ({
+    phase,
+    items: (events ?? []).filter((e) => eventPhase(e, now) === phase),
+  }));
+  return (
+    <Modal title="Events" onClose={() => s.setModal(null)} wide>
+      <div className="events__head">
+        <h2>Events in {community.name}</h2>
+        {manage && (
+          <button className="btn btn--primary" onClick={() => setEditing('new')}>
+            Create event
+          </button>
+        )}
+      </div>
+      {events === null && <p className="muted">Loading…</p>}
+      {events?.length === 0 && (
+        <div className="empty">
+          <p>No events yet.</p>
+          <p className="muted small">
+            {manage
+              ? 'Plan a game night, a study session or a call: everyone here can see it and say they are interested.'
+              : 'When someone plans one, it shows up here.'}
+          </p>
+        </div>
+      )}
+      {groups.map(
+        (g) =>
+          g.items.length > 0 && (
+            <section key={g.phase} aria-label={g.phase}>
+              <h3 className="events__group">
+                {g.phase === 'live' ? 'Happening now' : g.phase === 'upcoming' ? 'Upcoming' : 'Past week'}
+              </h3>
+              {g.items.map((e) => (
+                <EventCard
+                  key={e.id}
+                  event={e}
+                  community={community}
+                  me={me}
+                  manage={manage}
+                  onEdit={() => setEditing(e)}
+                />
+              ))}
+            </section>
+          ),
+      )}
+    </Modal>
+  );
+}
+
+function EventCard(props: {
+  event: EventView;
+  community: CommunityView;
+  me: string;
+  manage: boolean;
+  onEdit(): void;
+}): ReactElement {
+  const { event: e, community } = props;
+  const s = useCommunity();
+  const interested = e.interested.includes(props.me);
+  const channel = e.channelId ? community.channels.find((c) => c.id === e.channelId) : null;
+  const phase = eventPhase(e);
+  return (
+    <article className={`event-card ${e.canceled ? 'is-canceled' : ''} event-card--${phase}`}>
+      <div className="event-card__when">
+        {phase === 'live' && !e.canceled && <span className="live-badge">LIVE</span>}
+        {e.canceled ? <strong>Cancelled</strong> : whenLabel(e)}
+      </div>
+      <h4 className="event-card__name">{e.name}</h4>
+      {e.description && <p className="event-card__desc">{e.description}</p>}
+      <div className="event-card__meta muted small">
+        {channel ? `🔊 ${channel.name}` : e.place ? `📍 ${e.place}` : null}
+        <span>
+          {e.interested.length} interested · by {memberOf(community, e.createdBy)?.name ?? 'someone'}
+        </span>
+      </div>
+      <div className="event-card__actions">
+        {!e.canceled && phase !== 'past' && (
+          <button
+            className={`btn ${interested ? 'btn--primary' : 'btn--ghost'}`}
+            aria-pressed={interested}
+            onClick={() => void s.run({ a: 'eventInterest', eventId: e.id, on: !interested })}
+          >
+            {interested ? '★ Interested' : '☆ Interested'}
+          </button>
+        )}
+        {channel && phase === 'live' && !e.canceled && (
+          <button
+            className="btn btn--ghost"
+            onClick={() => {
+              s.setModal(null);
+              s.selectChannel(channel.id);
+              void s.joinVoice(channel.id, props.me);
+            }}
+          >
+            Join voice
+          </button>
+        )}
+        {props.manage && (
+          <>
+            <button className="btn btn--link" onClick={props.onEdit}>
+              Edit
+            </button>
+            <button
+              className="btn btn--link"
+              onClick={() => void s.run({ a: 'updateEvent', eventId: e.id, canceled: !e.canceled })}
+            >
+              {e.canceled ? 'Restore' : 'Cancel event'}
+            </button>
+            <button
+              className="btn btn--link btn--danger"
+              onClick={() =>
+                s.setModal({
+                  kind: 'confirm',
+                  title: `Delete ${e.name}`,
+                  body: 'The event disappears for everyone. This cannot be undone.',
+                  action: 'Delete event',
+                  run: async () => {
+                    await s.run({ a: 'deleteEvent', eventId: e.id });
+                    s.setModal({ kind: 'events', communityId: community.id });
+                  },
+                })
+              }
+            >
+              Delete
+            </button>
+          </>
+        )}
+      </div>
+    </article>
+  );
+}
+
+/** A datetime-local value ("2026-10-11T19:00") for a time in the reader's zone. */
+export function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const DURATIONS = [
+  { label: '30 minutes', ms: 30 * 60_000 },
+  { label: '1 hour', ms: 3600_000 },
+  { label: '2 hours', ms: 2 * 3600_000 },
+  { label: '3 hours', ms: 3 * 3600_000 },
+  { label: 'All day', ms: 24 * 3600_000 },
+];
+
+function EventForm(props: {
+  community: CommunityView;
+  event: EventView | null;
+  onClose(): void;
+}): ReactElement {
+  const s = useCommunity();
+  const e = props.event;
+  const voice = props.community.channels.filter((c) => c.kind === 'voice');
+  const [name, setName] = useState(e?.name ?? '');
+  const [description, setDescription] = useState(e?.description ?? '');
+  // New events default to the next full hour.
+  const [start, setStart] = useState(() => {
+    if (e) return toLocalInput(e.startsAt);
+    const d = new Date(Date.now() + 3600_000);
+    d.setMinutes(0, 0, 0);
+    return toLocalInput(d.toISOString());
+  });
+  const initialDuration = e ? Date.parse(e.endsAt) - Date.parse(e.startsAt) : 3600_000;
+  const [duration, setDuration] = useState(
+    DURATIONS.some((d) => d.ms === initialDuration) ? initialDuration : 3600_000,
+  );
+  const [where, setWhere] = useState<string>(e ? (e.channelId ?? 'place') : (voice[0]?.id ?? 'place'));
+  const [place, setPlace] = useState(e?.place ?? '');
+  const [busy, setBusy] = useState(false);
+  const startsAt = new Date(start).toISOString();
+  const endsAt = new Date(Date.parse(startsAt) + duration).toISOString();
+  const save = async (): Promise<void> => {
+    setBusy(true);
+    const channelId = where === 'place' ? null : where;
+    const res = e
+      ? await window.river.community.action({
+          a: 'updateEvent',
+          eventId: e.id,
+          name: name.trim(),
+          description,
+          place: channelId ? '' : place,
+          startsAt,
+          endsAt,
+          channelId,
+        })
+      : await window.river.community.action({
+          a: 'createEvent',
+          communityId: props.community.id,
+          name: name.trim(),
+          description,
+          place: channelId ? '' : place,
+          startsAt,
+          endsAt,
+          channelId,
+        });
+    setBusy(false);
+    if (res.ok) props.onClose();
+    else s.notify(res.message, 'error');
+  };
+  return (
+    <Modal title={e ? 'Edit event' : 'Create event'} onClose={props.onClose}>
+      <form
+        onSubmit={(ev) => {
+          ev.preventDefault();
+          void save();
+        }}
+      >
+        <label className="textfield">
+          <span className="field__label">Event name</span>
+          <input
+            autoFocus
+            required
+            maxLength={100}
+            value={name}
+            onChange={(ev) => setName(ev.target.value)}
+          />
+        </label>
+        <label className="textfield">
+          <span className="field__label">Description</span>
+          <textarea
+            maxLength={1000}
+            rows={3}
+            value={description}
+            onChange={(ev) => setDescription(ev.target.value)}
+          />
+        </label>
+        <div className="event-form__row">
+          <label className="textfield">
+            <span className="field__label">Starts</span>
+            <input
+              type="datetime-local"
+              required
+              value={start}
+              onChange={(ev) => setStart(ev.target.value)}
+            />
+          </label>
+          <label className="textfield">
+            <span className="field__label">Lasts</span>
+            <select value={duration} onChange={(ev) => setDuration(Number(ev.target.value))}>
+              {DURATIONS.map((d) => (
+                <option key={d.ms} value={d.ms}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="textfield">
+          <span className="field__label">Where</span>
+          <select value={where} onChange={(ev) => setWhere(ev.target.value)}>
+            {voice.map((c) => (
+              <option key={c.id} value={c.id}>
+                🔊 {c.name}
+              </option>
+            ))}
+            <option value="place">Somewhere else…</option>
+          </select>
+        </label>
+        {where === 'place' && (
+          <label className="textfield">
+            <span className="field__label">Place</span>
+            <input
+              maxLength={200}
+              placeholder="Our usual café, a game server…"
+              value={place}
+              onChange={(ev) => setPlace(ev.target.value)}
+            />
+          </label>
+        )}
+        <p className="muted small">
+          Name, description and place are end-to-end encrypted; the server only sees when it starts and ends.
+        </p>
+        <div className="modal__foot">
+          <button type="button" className="btn btn--link" onClick={props.onClose}>
+            Back
+          </button>
+          <button className="btn btn--primary" disabled={busy || !name.trim()}>
+            {e ? 'Save' : 'Create event'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}

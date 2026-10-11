@@ -8,6 +8,18 @@ All notable changes to River are documented here. The format follows
 
 ### Added
 
+- **Scheduled events.** Plan a game night or a study call: name,
+  description, start time, how long, and a voice channel or a place. Everyone
+  sees upcoming and live events at the top of the channel list, can mark
+  themselves **Interested**, and gets a reminder when it starts (with a "Join
+  voice" button while it is on). People with the new **Manage events**
+  permission can edit, cancel or delete them. Name, description and place are
+  end-to-end encrypted.
+- **@ ON/OFF on replies:** choose whether the person you reply to is
+  notified.
+- **View reactions:** right-click a message or a reaction to see who reacted
+  with what.
+
 - **Mute a community or channel** — for 15 minutes, an hour, 8 hours, a day,
   or until you turn it back on — and choose **All messages**, **Only
   @mentions** or **Nothing** for any community or channel. Right-click it in

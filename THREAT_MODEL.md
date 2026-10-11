@@ -149,6 +149,13 @@ timing), but not what is said. Frames go only to members of the sender's own
 voice channel, are rate-limited per connection, dropped for slow readers, and
 never stored.
 
+### 5f. Scheduled events (1.0.18)
+
+An event's name, description and place are sealed with the community key.
+The server stores when it starts and ends (to order and list them), which
+voice channel it is in (an ID), who created it and who marked themselves
+interested.
+
 ## 6. Key threats and mitigations (STRIDE summary)
 
 | Threat          | Example                                | Mitigation                                                                                                                              | Status                                                 |

@@ -218,7 +218,26 @@ export interface BlocksTable {
   blocked: string;
 }
 
+export interface CommunityEventsTable {
+  id: string;
+  community_id: string;
+  created_by: string;
+  data: string;
+  starts_at: string;
+  ends_at: string;
+  channel_id: string | null;
+  canceled: number;
+  created_at: string;
+}
+
+export interface CommunityEventRsvpsTable {
+  event_id: string;
+  river_id: string;
+}
+
 export interface Database {
+  community_events: CommunityEventsTable;
+  community_event_rsvps: CommunityEventRsvpsTable;
   signed_prekeys: SignedPreKeysTable;
   prekeys: PreKeysTable;
   kyber_prekeys: KyberPreKeysTable;

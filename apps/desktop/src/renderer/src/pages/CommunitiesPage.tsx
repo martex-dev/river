@@ -22,6 +22,7 @@ import { VoiceChannel } from '../community/ui/Voice.tsx';
 import { MenuItem, Popover, can } from '../community/ui/common.tsx';
 import { NotifyMenuSection } from '../community/ui/NotifyMenu.tsx';
 import { CommunityRail } from '../community/ui/Rail.tsx';
+import { EventsDialog } from '../community/ui/Events.tsx';
 import { Permission } from '@river/protocol/permissions';
 import type { CommunityView } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
@@ -141,6 +142,10 @@ function Modals({ me }: { me: string }): ReactElement | null {
       return <ConfirmDialog modal={modal} />;
     case 'user-settings':
       return <UserSettings tab={modal.tab} />;
+    case 'events': {
+      const c = communityById(modal.communityId);
+      return c ? <EventsDialog community={c} me={me} /> : null;
+    }
     case 'nickname': {
       const c = communityById(modal.communityId);
       return c ? <NicknameDialog community={c} /> : null;

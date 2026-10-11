@@ -48,6 +48,17 @@ export function startMessageNotifications(deps: {
         : 'New direct message';
     show(title, body, true, () => deps.dm.focus(m.peer));
   });
+  const offEvents = community.onEvent((event) => {
+    if (event.t !== 'eventStarting') return;
+    if (!deps.settings().notifications.desktop || deps.settings().presence.status === 'dnd') return;
+    const preview = deps.settings().notifications.preview;
+    show(
+      preview === 'none' ? 'River' : event.name,
+      preview === 'none' ? 'An event you are interested in is starting' : 'Starting now',
+      true,
+      () => community.focusChannel(event.communityId, event.channelId ?? ''),
+    );
+  });
   const offCommunity = community.onEvent((event) => {
     if (event.t !== 'message' || !event.isNew || event.message.mine) return;
     const prefs = deps.settings().notifications;
@@ -78,6 +89,7 @@ export function startMessageNotifications(deps: {
   });
   return () => {
     offDm();
+    offEvents();
     offCommunity();
   };
 }

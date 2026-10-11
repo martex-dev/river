@@ -13,7 +13,13 @@ import {
   registerResponseSchema,
   registrationMessage,
 } from '@river/protocol';
-import { MAX_RELAY_PAYLOAD, RELAY_BURST, decodeRelayIn, encodeRelayOut } from '@river/protocol';
+import {
+  MAX_RELAY_PAYLOAD,
+  RELAY_BURST,
+  decodeRelayIn,
+  encodeRelayOut,
+  eventsResponseSchema,
+} from '@river/protocol';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { migrateToLatest, openDatabase, type RiverDatabase } from '../src/db/database.ts';
@@ -300,6 +306,58 @@ describe('communities', () => {
           .json()
           .communities.find((c: { id: string }) => c.id === cid),
       );
+
+    it('scheduled events: managers create and cancel, everyone sees them and can be interested', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, voice } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const hour = 3600_000;
+      const event = (over: object = {}) => ({
+        id: id(),
+        data: sealed(),
+        startsAt: new Date(Date.now() + hour).toISOString(),
+        endsAt: new Date(Date.now() + 2 * hour).toISOString(),
+        channelId: voice,
+        ...over,
+      });
+      const list = async (token: string) =>
+        eventsResponseSchema.parse(
+          (
+            await a.inject({ method: 'GET', url: `/v1/communities/${cid}/events`, headers: auth(token) })
+          ).json(),
+        ).events;
+
+      // Members cannot create events by default; the owner can.
+      expect(await status(a, 'POST', `/v1/communities/${cid}/events`, member.token, event())).toBe(403);
+      const e = event();
+      expect(await status(a, 'POST', `/v1/communities/${cid}/events`, owner.token, e)).toBe(201);
+      // Nonsense times are refused.
+      const backwards = event({ endsAt: new Date(Date.now()).toISOString() });
+      expect(await status(a, 'POST', `/v1/communities/${cid}/events`, owner.token, backwards)).toBe(400);
+      const over = event({
+        startsAt: new Date(Date.now() - 3 * hour).toISOString(),
+        endsAt: new Date(Date.now() - 2 * hour).toISOString(),
+      });
+      expect(await status(a, 'POST', `/v1/communities/${cid}/events`, owner.token, over)).toBe(400);
+
+      expect((await list(member.token)).map((x) => x.id)).toEqual([e.id]);
+      expect(await status(a, 'PUT', `/v1/events/${e.id}/interested`, member.token)).toBe(200);
+      expect(await status(a, 'PUT', `/v1/events/${e.id}/interested`, member.token)).toBe(200);
+      expect((await list(owner.token))[0]!.interested).toEqual([member.riverId]);
+      expect(await status(a, 'DELETE', `/v1/events/${e.id}/interested`, member.token)).toBe(200);
+      expect((await list(owner.token))[0]!.interested).toEqual([]);
+
+      expect(await status(a, 'PATCH', `/v1/events/${e.id}`, member.token, { canceled: true })).toBe(403);
+      expect(await status(a, 'PATCH', `/v1/events/${e.id}`, owner.token, { canceled: true })).toBe(200);
+      expect((await list(member.token))[0]!.canceled).toBe(true);
+      expect(await status(a, 'DELETE', `/v1/events/${e.id}`, owner.token)).toBe(200);
+      expect(await list(member.token)).toEqual([]);
+
+      // Strangers see nothing.
+      const stranger = await user(a);
+      expect(await status(a, 'GET', `/v1/communities/${cid}/events`, stranger.token)).not.toBe(200);
+    });
 
     it('new communities get an @everyone role with default permissions', async () => {
       const a = await start();

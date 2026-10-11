@@ -598,6 +598,24 @@ test('status menu: do not disturb and a custom status show to others; formatting
     .poll(() => apps.at(-2)!.evaluate(({ clipboard }) => clipboard.readText()), { timeout: 5000 })
     .toMatch(/\/channels\/[\w-]{22}\/[\w-]{22}\/[\w-]{22}$/);
 
+  // Erin plans an event; Finn sees it and says he is interested.
+  await erin.locator('.events-row').click();
+  await erin.getByRole('button', { name: 'Create event' }).click();
+  await erin.getByLabel('Event name').fill('Game night');
+  await erin.getByLabel('Description').fill('Bring snacks');
+  await erin
+    .getByRole('dialog', { name: 'Create event' })
+    .getByRole('button', { name: 'Create event' })
+    .click();
+  await expect(erin.locator('.event-card')).toContainText('Game night');
+  await erin.keyboard.press('Escape');
+  await expect(finn.locator('.events-row')).toContainText('1 event', { timeout: 15_000 });
+  await finn.locator('.events-row').click();
+  await finn.getByRole('button', { name: '☆ Interested' }).click();
+  await expect(finn.getByRole('button', { name: '★ Interested' })).toBeVisible();
+  await expect(finn.locator('.event-card')).toContainText('1 interested');
+  await finn.keyboard.press('Escape');
+
   // A second community, dropped onto the first in the list on the left, makes a folder.
   await erin.getByRole('button', { name: 'Create or join a community' }).click();
   await erin.getByPlaceholder('e.g. The Crew').fill('Second Place');

@@ -349,6 +349,7 @@ function Message(props: {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [profile, setProfile] = useState<{ x: number; y: number } | null>(null);
   const [forwarding, setForwarding] = useState(false);
+  const [reactionsAt, setReactionsAt] = useState<{ x: number; y: number } | null>(null);
   const account = useRiver((r) => r.account);
   const editing = s.editing === m.id;
   const link = (): string | null =>
@@ -495,6 +496,11 @@ function Message(props: {
                   className={`reaction ${r.mine ? 'is-mine' : ''}`}
                   title={r.users.map((u) => memberOf(community, u)?.name ?? 'Someone').join(', ')}
                   onClick={() => react(r.emoji, !r.mine)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setReactionsAt({ x: e.clientX, y: e.clientY });
+                  }}
                 >
                   <span className="reaction__emoji">{r.emoji}</span>
                   <span key={r.count} className="reaction__count">
@@ -672,6 +678,17 @@ function Message(props: {
               Forward
             </MenuItem>
           )}
+          {m.reactions.length > 0 && (
+            <MenuItem
+              icon={<SmileIcon size={16} />}
+              onClick={() => {
+                setMenu(null);
+                setReactionsAt(menu);
+              }}
+            >
+              View reactions
+            </MenuItem>
+          )}
           <MenuItem
             icon={<span aria-hidden="true">🔗</span>}
             onClick={() => {
@@ -729,6 +746,28 @@ function Message(props: {
       {profile && member && (
         <Popover x={profile.x} y={profile.y} onClose={() => setProfile(null)} className="profile-pop">
           <ProfileCard community={community} member={member} me={props.me} onDone={() => setProfile(null)} />
+        </Popover>
+      )}
+      {reactionsAt && (
+        <Popover
+          x={reactionsAt.x}
+          y={reactionsAt.y}
+          onClose={() => setReactionsAt(null)}
+          className="reactions-pop"
+        >
+          <div role="list" aria-label="Who reacted">
+            {m.reactions.map((r) => (
+              <div key={r.tag} role="listitem" className="reactions-pop__row">
+                <span className="reactions-pop__emoji" aria-hidden="true">
+                  {r.emoji}
+                </span>
+                <span className="reactions-pop__count">{r.count}</span>
+                <span className="reactions-pop__names">
+                  {r.users.map((u) => memberOf(community, u)?.name ?? 'Someone').join(', ')}
+                </span>
+              </div>
+            ))}
+          </div>
         </Popover>
       )}
       {forwarding && (
@@ -808,6 +847,8 @@ function Composer(props: {
   const { community, channel, me } = props;
   const s = useCommunity();
   const [text, setText] = useState('');
+  // Replies notify the person you reply to, unless you switch it off for that reply (like Discord's "@ ON").
+  const [pingOffFor, setPingOffFor] = useState<string | null>(null);
   // Quote puts the quoted lines in front of whatever is being written.
   useEffect(
     () =>
@@ -829,6 +870,7 @@ function Composer(props: {
   const typers = typingNames(channel.id, community, me);
   const canSend = can(channel.permissions, Permission.SEND_MESSAGES);
   const replyTo = s.replyTo && s.replyTo.channelId === channel.id ? s.replyTo : null;
+  const replyPing = !replyTo || pingOffFor !== replyTo.id;
 
   // Autocomplete for @people, @roles, @everyone/@here and #channels: the word being typed at the caret.
   const trigger = /(?:^|\s)([@#])([^\s@#]*)$/.exec(text);
@@ -883,6 +925,7 @@ function Composer(props: {
       channelId: channel.id,
       text: value,
       ...(replyTo ? { replyTo: replyTo.id } : {}),
+      ...(replyTo && !replyPing ? { noPing: true } : {}),
       ...(attachments ? { attachments } : {}),
     });
   };
@@ -963,6 +1006,21 @@ function Composer(props: {
           <span>
             Replying to <strong>{replyTo.senderName}</strong>
           </span>
+          {!replyTo.mine && (
+            <button
+              type="button"
+              className={`reply-bar__ping ${replyPing ? 'is-on' : ''}`}
+              aria-pressed={replyPing}
+              title={
+                replyPing
+                  ? `${replyTo.senderName} will be notified`
+                  : `${replyTo.senderName} won't be notified`
+              }
+              onClick={() => setPingOffFor(replyPing ? replyTo.id : null)}
+            >
+              @ {replyPing ? 'ON' : 'OFF'}
+            </button>
+          )}
           <button
             className="icon-btn"
             aria-label="Cancel reply"

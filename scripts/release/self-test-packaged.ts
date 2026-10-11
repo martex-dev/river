@@ -14,7 +14,11 @@ const release = resolve(import.meta.dirname, '../../apps/desktop/release');
 function binary(): string {
   if (process.platform === 'win32') return join(release, 'win-unpacked', 'River.exe');
   if (process.platform === 'darwin') {
-    const dir = readdirSync(release).find((d) => d.startsWith('mac') && existsSync(join(release, d, 'River.app')));
+    // Release builds make both Intel and Apple-silicon apps: test the one this Mac runs natively
+    // (an Intel app under Rosetta can take minutes to start the first time).
+    const dirs = readdirSync(release).filter((d) => d.startsWith('mac') && existsSync(join(release, d, 'River.app')));
+    const native = process.arch === 'arm64' ? 'mac-arm64' : 'mac';
+    const dir = dirs.find((d) => d === native) ?? dirs[0];
     if (!dir) throw new Error('no packaged River.app found');
     return join(release, dir, 'River.app', 'Contents', 'MacOS', 'River');
   }
@@ -24,7 +28,7 @@ function binary(): string {
 const exe = binary();
 if (!existsSync(exe)) throw new Error(`packaged app not found at ${exe}`);
 const report = join(tmpdir(), `river-self-test-${Date.now()}.json`);
-const run = spawnSync(exe, [`--self-test=${report}`], { stdio: 'inherit', timeout: 120_000 });
+const run = spawnSync(exe, [`--self-test=${report}`], { stdio: 'inherit', timeout: 240_000 });
 if (run.error) throw run.error;
 if (!existsSync(report)) throw new Error(`self-test wrote no report (exit ${run.status})`);
 const result = JSON.parse(readFileSync(report, 'utf8')) as {

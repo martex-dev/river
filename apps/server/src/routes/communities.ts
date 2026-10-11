@@ -28,6 +28,8 @@ import {
   sendMessageRequestSchema,
   timeoutRequestSchema,
   updateCategoryRequestSchema,
+  createEventRequestSchema,
+  updateEventRequestSchema,
   updateChannelRequestSchema,
   updateThreadRequestSchema,
   updateCommunityRequestSchema,
@@ -480,6 +482,172 @@ export async function registerCommunityRoutes(
     await db.deleteFrom('channels').where('id', '=', channelId).execute();
     await audit(model.id, me(request), 'channel.delete', channelId);
     changed(model);
+    return { ok: true };
+  });
+
+  // ---- scheduled events (1.0.18) --------------------------------------------------------------
+  const MAX_EVENTS = 100;
+  /** How long after it ends an event is still listed (as past). */
+  const KEEP_PAST_MS = 7 * 24 * 3600_000;
+  const eventsChanged = (model: CommunityModel): void =>
+    toMembers(model, { t: 'events', communityId: model.id });
+
+  app.get<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/events`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    const since = new Date(deps.now().getTime() - KEEP_PAST_MS).toISOString();
+    const rows = await db
+      .selectFrom('community_events')
+      .selectAll()
+      .where('community_id', '=', model.id)
+      .where('ends_at', '>=', since)
+      .orderBy('starts_at')
+      .execute();
+    const rsvps = rows.length
+      ? await db
+          .selectFrom('community_event_rsvps')
+          .selectAll()
+          .where(
+            'event_id',
+            'in',
+            rows.map((r) => r.id),
+          )
+          .execute()
+      : [];
+    return {
+      events: rows
+        // An event in a voice channel you cannot see stays hidden from you.
+        .filter((r) => !r.channel_id || model.can(me(request), Permission.VIEW_CHANNELS, r.channel_id))
+        .map((r) => ({
+          id: r.id,
+          communityId: r.community_id,
+          createdBy: r.created_by,
+          data: r.data,
+          startsAt: r.starts_at,
+          endsAt: r.ends_at,
+          channelId: r.channel_id,
+          canceled: r.canceled === 1,
+          interested: rsvps.filter((x) => x.event_id === r.id).map((x) => x.river_id),
+        })),
+    };
+  });
+
+  const checkEventTimes = (startsAt: string, endsAt: string): void => {
+    const start = Date.parse(startsAt);
+    const end = Date.parse(endsAt);
+    if (end <= start) throw bad('An event must end after it starts');
+    if (end - start > 14 * 24 * 3600_000) throw bad('An event can last at most two weeks');
+  };
+
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/communities/:id/events`,
+    authed,
+    async (request, reply) => {
+      const model = await community(request.params.id, me(request));
+      if (!model.can(me(request), Permission.MANAGE_EVENTS)) throw forbidden();
+      const req = parse(createEventRequestSchema, request.body);
+      checkEventTimes(req.startsAt, req.endsAt);
+      if (Date.parse(req.endsAt) < deps.now().getTime()) throw bad('That event would already be over');
+      if (req.channelId && model.channel(req.channelId)?.kind !== 'voice') throw bad('Unknown voice channel');
+      const upcoming = await db
+        .selectFrom('community_events')
+        .select(db.fn.countAll<number>().as('n'))
+        .where('community_id', '=', model.id)
+        .where('ends_at', '>=', deps.now().toISOString())
+        .executeTakeFirstOrThrow();
+      if (Number(upcoming.n) >= MAX_EVENTS) throw bad('Too many upcoming events');
+      try {
+        await db
+          .insertInto('community_events')
+          .values({
+            id: req.id,
+            community_id: model.id,
+            created_by: me(request),
+            data: req.data,
+            starts_at: new Date(req.startsAt).toISOString(),
+            ends_at: new Date(req.endsAt).toISOString(),
+            channel_id: req.channelId,
+            canceled: 0,
+            created_at: deps.now().toISOString(),
+          })
+          .execute();
+      } catch {
+        throw new HttpError(409, 'conflict', 'Event ID already exists');
+      }
+      await audit(model.id, me(request), 'event.create', req.id);
+      eventsChanged(model);
+      return reply.code(201).send({ id: req.id });
+    },
+  );
+
+  const eventOf = async (
+    eventId: unknown,
+    riverId: string,
+  ): Promise<{
+    model: CommunityModel;
+    row: { id: string; created_by: string; starts_at: string; ends_at: string };
+  }> => {
+    const id = parse(channelIdSchema, eventId);
+    const row = await db
+      .selectFrom('community_events')
+      .select(['id', 'community_id', 'created_by', 'starts_at', 'ends_at'])
+      .where('id', '=', id)
+      .executeTakeFirst();
+    if (!row) throw notFound();
+    return { model: await community(row.community_id, riverId), row };
+  };
+
+  app.patch<{ Params: { id: string } }>(`${API_PREFIX}/events/:id`, authed, async (request) => {
+    const { model, row } = await eventOf(request.params.id, me(request));
+    if (!model.can(me(request), Permission.MANAGE_EVENTS)) throw forbidden();
+    const req = parse(updateEventRequestSchema, request.body);
+    const startsAt = req.startsAt ? new Date(req.startsAt).toISOString() : row.starts_at;
+    const endsAt = req.endsAt ? new Date(req.endsAt).toISOString() : row.ends_at;
+    checkEventTimes(startsAt, endsAt);
+    if (req.channelId && model.channel(req.channelId)?.kind !== 'voice') throw bad('Unknown voice channel');
+    await db
+      .updateTable('community_events')
+      .set({
+        ...(req.data ? { data: req.data } : {}),
+        starts_at: startsAt,
+        ends_at: endsAt,
+        ...(req.channelId !== undefined ? { channel_id: req.channelId } : {}),
+        ...(req.canceled !== undefined ? { canceled: req.canceled ? 1 : 0 } : {}),
+      })
+      .where('id', '=', row.id)
+      .execute();
+    await audit(model.id, me(request), req.canceled ? 'event.cancel' : 'event.update', row.id);
+    eventsChanged(model);
+    return { ok: true };
+  });
+
+  app.delete<{ Params: { id: string } }>(`${API_PREFIX}/events/:id`, authed, async (request) => {
+    const { model, row } = await eventOf(request.params.id, me(request));
+    if (!model.can(me(request), Permission.MANAGE_EVENTS)) throw forbidden();
+    await db.deleteFrom('community_events').where('id', '=', row.id).execute();
+    await audit(model.id, me(request), 'event.delete', row.id);
+    eventsChanged(model);
+    return { ok: true };
+  });
+
+  app.put<{ Params: { id: string } }>(`${API_PREFIX}/events/:id/interested`, authed, async (request) => {
+    const { model, row } = await eventOf(request.params.id, me(request));
+    await db
+      .insertInto('community_event_rsvps')
+      .values({ event_id: row.id, river_id: me(request) })
+      .onConflict((oc) => oc.doNothing())
+      .execute();
+    eventsChanged(model);
+    return { ok: true };
+  });
+
+  app.delete<{ Params: { id: string } }>(`${API_PREFIX}/events/:id/interested`, authed, async (request) => {
+    const { model, row } = await eventOf(request.params.id, me(request));
+    await db
+      .deleteFrom('community_event_rsvps')
+      .where('event_id', '=', row.id)
+      .where('river_id', '=', me(request))
+      .execute();
+    eventsChanged(model);
     return { ok: true };
   });
 
