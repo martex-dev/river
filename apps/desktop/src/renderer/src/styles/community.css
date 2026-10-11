@@ -4006,3 +4006,18 @@ input.switch:disabled {
 .swatch.is-selected {
   border-color: var(--text);
 }
+
+/* Image viewer zoom and pan (1.0.18) */
+.lightbox img {
+  transition: transform var(--dur-fast) var(--ease-out);
+  cursor: zoom-in;
+  touch-action: none;
+}
+.lightbox img.is-zoomed {
+  cursor: grab;
+  transition: none;
+}
+.lightbox__zoom {
+  min-width: 42px;
+  text-align: right;
+}

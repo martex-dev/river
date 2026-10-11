@@ -205,20 +205,80 @@ function FileCard({ pointer }: { pointer: AttachmentPointer }): ReactElement {
   );
 }
 
+/** The next zoom level for the image viewer: wheel and keys step by 25 %, from 100 % to 800 %. */
+export function stepZoom(scale: number, direction: 1 | -1): number {
+  const next = Math.round(scale * (direction > 0 ? 1.25 : 0.8) * 100) / 100;
+  return Math.min(8, Math.max(1, next));
+}
+
 function Lightbox({ pointer, onClose }: { pointer: AttachmentPointer; onClose(): void }): ReactElement {
   const url = urls.get(pointer.id);
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [copied, setCopied] = useState(false);
+  const dragFrom = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  const zoom = (direction: 1 | -1): void => {
+    setScale((s) => {
+      const next = stepZoom(s, direction);
+      if (next === 1) setOffset({ x: 0, y: 0 });
+      return next;
+    });
+  };
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose();
+      else if (e.key === '+' || e.key === '=') zoom(1);
+      else if (e.key === '-') zoom(-1);
+      else if (e.key === '0') {
+        setScale(1);
+        setOffset({ x: 0, y: 0 });
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+  const copy = async (): Promise<void> => {
+    if (!url) return;
+    try {
+      // Redraw the decrypted image as PNG (the format the clipboard takes everywhere).
+      const png = await new Promise<Blob>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext('2d')!.drawImage(img, 0, 0);
+          canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('convert'))), 'image/png');
+        };
+        img.onerror = () => reject(new Error('load'));
+        img.src = url;
+      });
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      useCommunity.getState().notify('River could not copy this image.', 'error');
+    }
+  };
   return (
     <div className="lightbox" role="dialog" aria-label={pointer.name} onClick={onClose}>
       <div className="lightbox__bar" onClick={(e) => e.stopPropagation()}>
         <span>{pointer.name}</span>
         <span className="muted small">{formatBytes(pointer.size)}</span>
+        <span className="muted small lightbox__zoom" aria-live="polite">
+          {Math.round(scale * 100)}%
+        </span>
+        <button className="icon-btn" aria-label="Zoom out" disabled={scale <= 1} onClick={() => zoom(-1)}>
+          −
+        </button>
+        <button className="icon-btn" aria-label="Zoom in" disabled={scale >= 8} onClick={() => zoom(1)}>
+          +
+        </button>
+        {pointer.mime.startsWith('image/') && (
+          <button className="btn btn--ghost btn--small" onClick={() => void copy()}>
+            {copied ? 'Copied' : 'Copy image'}
+          </button>
+        )}
         <button className="btn btn--ghost btn--small" onClick={() => void saveAttachment(pointer)}>
           Save
         </button>
@@ -226,7 +286,36 @@ function Lightbox({ pointer, onClose }: { pointer: AttachmentPointer; onClose():
           <XIcon />
         </button>
       </div>
-      {url && <img src={url} alt={pointer.name} onClick={(e) => e.stopPropagation()} />}
+      {url && (
+        <img
+          src={url}
+          alt={pointer.name}
+          draggable={false}
+          className={scale > 1 ? 'is-zoomed' : ''}
+          style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            if (scale > 1) {
+              setScale(1);
+              setOffset({ x: 0, y: 0 });
+            } else setScale(2);
+          }}
+          onWheel={(e) => zoom(e.deltaY < 0 ? 1 : -1)}
+          onPointerDown={(e) => {
+            if (scale <= 1) return;
+            e.currentTarget.setPointerCapture(e.pointerId);
+            dragFrom.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
+          }}
+          onPointerMove={(e) => {
+            const d = dragFrom.current;
+            if (d) setOffset({ x: d.ox + e.clientX - d.x, y: d.oy + e.clientY - d.y });
+          }}
+          onPointerUp={() => {
+            dragFrom.current = null;
+          }}
+        />
+      )}
     </div>
   );
 }
