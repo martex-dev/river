@@ -25,34 +25,47 @@ export function AvatarCropDialog(props: {
   onDone(avatar: string): void;
   onClose(): void;
 }): ReactElement {
-  // Only ever a blob: URL made here from the chosen file.
-  const [url] = useState(() => {
-    const made = URL.createObjectURL(props.file);
-    return made.startsWith('blob:') ? made : '';
-  });
-  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  // The picture is decoded straight into a bitmap and drawn on canvases: no URL of it ever enters the page.
+  const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
+  const [failed, setFailed] = useState(false);
+  const size = bitmap ? { w: bitmap.width, h: bitmap.height } : null;
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
-  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  const previewRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    let alive = true;
+    void createImageBitmap(props.file).then(
+      (b) => (alive ? setBitmap(b) : b.close()),
+      () => alive && setFailed(true),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [props.file]);
   const base = size ? VIEW / Math.min(size.w, size.h) : 1;
-  const save = (): void => {
-    const img = imgRef.current;
-    if (!img || !size) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = OUT;
-    const ctx = canvas.getContext('2d')!;
-    const scale = (base * zoom * OUT) / VIEW;
+  /** Draws the picture as framed into a square canvas of `side` pixels. */
+  const draw = (canvas: HTMLCanvasElement, side: number): void => {
+    if (!bitmap || !size) return;
+    canvas.width = canvas.height = side;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const scale = (base * zoom * side) / VIEW;
     const w = size.w * scale;
     const h = size.h * scale;
-    const k = OUT / VIEW;
-    ctx.drawImage(img, (OUT - w) / 2 + offset.x * k, (OUT - h) / 2 + offset.y * k, w, h);
-    props.onDone(
-      canvas.toDataURL('image/webp', 0.85).startsWith('data:image/webp')
-        ? canvas.toDataURL('image/webp', 0.85)
-        : canvas.toDataURL('image/png'),
-    );
+    const k = side / VIEW;
+    ctx.clearRect(0, 0, side, side);
+    ctx.drawImage(bitmap, (side - w) / 2 + offset.x * k, (side - h) / 2 + offset.y * k, w, h);
+  };
+  useEffect(() => {
+    if (previewRef.current) draw(previewRef.current, VIEW);
+  });
+  const save = (): void => {
+    if (!bitmap) return;
+    const canvas = document.createElement('canvas');
+    draw(canvas, OUT);
+    const webp = canvas.toDataURL('image/webp', 0.85);
+    props.onDone(webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/png'));
   };
   const onDown = (e: PointerEvent<HTMLDivElement>): void => {
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -74,23 +87,9 @@ export function AvatarCropDialog(props: {
         role="img"
         aria-label="Drag to position your picture"
       >
-        <img
-          ref={imgRef}
-          src={url}
-          alt=""
-          draggable={false}
-          onLoad={(e) => setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
-          style={
-            size
-              ? {
-                  width: size.w * base * zoom,
-                  height: size.h * base * zoom,
-                  transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`,
-                }
-              : { visibility: 'hidden' }
-          }
-        />
+        <canvas ref={previewRef} width={VIEW} height={VIEW} />
       </div>
+      {failed && <p className="field__error">River could not read that picture.</p>}
       <label className="avatar-crop__zoom">
         <span className="field__label">Zoom</span>
         <input
