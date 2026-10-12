@@ -241,6 +241,8 @@ export interface AuditView {
   id: string;
   actor: string;
   actorName: string;
+  /** The raw action, e.g. "member.ban" (1.0.24), for filtering. */
+  action?: string;
   summary: string;
   at: string;
 }
@@ -314,6 +316,13 @@ export interface CommunityView {
   /** voice channel ID → River IDs currently in it */
   voice: Record<string, string[]>;
   voiceStates: Record<string, VoiceStateView>;
+  /** Onboarding (1.0.24): the rules, a welcome note, whether newcomers must accept, roles to pick. */
+  rules: string[];
+  welcomeNote: string;
+  screening: boolean;
+  selfRoles: string[];
+  /** You have not accepted the rules yet, so you can only read. */
+  myPending: boolean;
 }
 
 export interface ReactionView {
@@ -359,6 +368,8 @@ export interface ChatMessage {
   tags?: string[];
   /** A link preview the sender added (1.0.23). */
   embed?: LinkEmbed | null;
+  /** A community sticker (1.0.24): its ID, shown from the community's stickers. */
+  sticker?: string | null;
 }
 
 export interface ThreadView {
@@ -386,6 +397,7 @@ export type CommunityEvent =
   | { t: 'emojis'; communityId: string }
   | { t: 'reports'; communityId: string }
   | { t: 'sounds'; communityId: string }
+  | { t: 'stickers'; communityId: string }
   | { t: 'voiceSound'; communityId: string; from: string; soundId: string }
   /** The server said no to something that is not a voice join (1.0.22). */
   | { t: 'refused'; reason: 'forbidden' | 'slow_down' }

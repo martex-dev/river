@@ -31,6 +31,11 @@ import {
   createEventRequestSchema,
   transferOwnershipRequestSchema,
   createReportRequestSchema,
+  createStickerRequestSchema,
+  MAX_COMMUNITY_STICKERS,
+  bulkDeleteRequestSchema,
+  updateOnboardingRequestSchema,
+  selfRolesRequestSchema,
   createNoteRequestSchema,
   MAX_NOTES_PER_MEMBER,
   createSoundRequestSchema,
@@ -325,6 +330,95 @@ export async function registerCommunityRoutes(
     const req = parse(updateCommunityRequestSchema, request.body);
     await db.updateTable('communities').set({ meta: req.meta }).where('id', '=', model.id).execute();
     await audit(model.id, me(request), 'community.update', model.id);
+    changed(model);
+    return { ok: true };
+  });
+
+  // ---- onboarding (1.0.24) ----------------------------------------------------------------------
+  /** Permissions a self-assignable role may not carry: nothing that moderates or manages. */
+  const SELF_ROLE_FORBIDDEN =
+    Permission.ADMINISTRATOR |
+    Permission.MANAGE_COMMUNITY |
+    Permission.MANAGE_CHANNELS |
+    Permission.MANAGE_ROLES |
+    Permission.MANAGE_MESSAGES |
+    Permission.KICK_MEMBERS |
+    Permission.BAN_MEMBERS |
+    Permission.MUTE_MEMBERS |
+    Permission.MOVE_MEMBERS |
+    Permission.MODERATE_MEMBERS |
+    Permission.VIEW_AUDIT_LOG |
+    Permission.MENTION_EVERYONE |
+    Permission.MANAGE_EVENTS |
+    Permission.MANAGE_EXPRESSIONS;
+
+  app.put<{ Params: { id: string } }>(
+    `${API_PREFIX}/communities/:id/onboarding`,
+    { ...authed, bodyLimit: 64 * 1024 },
+    async (request) => {
+      const model = await community(request.params.id, me(request));
+      if (!model.can(me(request), Permission.MANAGE_COMMUNITY)) throw forbidden();
+      const req = parse(updateOnboardingRequestSchema, request.body);
+      const top = model.ownerId === me(request) ? Infinity : model.top(me(request));
+      for (const id of req.selfRoles) {
+        const role = model.role(id);
+        if (!role || id === model.everyoneRoleId) throw bad('Unknown role');
+        if (role.permissions & SELF_ROLE_FORBIDDEN)
+          throw bad('Roles members give themselves cannot moderate or manage anything');
+        if (role.position >= top) throw forbidden('You can only offer roles below your highest role');
+      }
+      await db
+        .updateTable('communities')
+        .set({
+          onboarding: req.onboarding,
+          screening: req.screening ? 1 : 0,
+          self_roles: JSON.stringify([...new Set(req.selfRoles)]),
+        })
+        .where('id', '=', model.id)
+        .execute();
+      await audit(model.id, me(request), 'community.onboarding', model.id, {
+        screening: req.screening,
+        selfRoles: req.selfRoles.length,
+      });
+      changed(model);
+      return { ok: true };
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/accept`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    await db
+      .updateTable('community_members')
+      .set({ accepted: 1 })
+      .where('community_id', '=', model.id)
+      .where('river_id', '=', me(request))
+      .execute();
+    changed(model);
+    return { ok: true };
+  });
+
+  app.put<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/self-roles`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    if (model.pending(me(request))) throw forbidden('Accept the rules first');
+    const req = parse(selfRolesRequestSchema, request.body);
+    if (req.roles.some((id) => !model.selfRoles.includes(id)))
+      throw forbidden('That role is not self-assignable');
+    const current = model.member(me(request))!.roles;
+    // Keep every role that is not self-assignable; set the self-assignable ones to the choice.
+    const next = [...new Set([...current.filter((id) => !model.selfRoles.includes(id)), ...req.roles])];
+    await db.transaction().execute(async (trx) => {
+      await trx
+        .deleteFrom('member_roles')
+        .where('community_id', '=', model.id)
+        .where('river_id', '=', me(request))
+        .execute();
+      for (const id of next)
+        await trx
+          .insertInto('member_roles')
+          .values({ community_id: model.id, river_id: me(request), role_id: id })
+          .execute();
+    });
+    await audit(model.id, me(request), 'member.selfRoles', me(request), { roles: req.roles });
     changed(model);
     return { ok: true };
   });
@@ -754,6 +848,68 @@ export async function registerCommunityRoutes(
     await db.updateTable('community_emojis').set({ data: req.data }).where('id', '=', id).execute();
     await audit(model.id, me(request), 'emoji.update', id);
     emojisChanged(model);
+    return { ok: true };
+  });
+
+  // ---- stickers (1.0.24) -----------------------------------------------------------------------
+  app.get<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/stickers`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    const rows = await db
+      .selectFrom('community_stickers')
+      .select(['id', 'created_by', 'data'])
+      .where('community_id', '=', model.id)
+      .orderBy('created_at')
+      .execute();
+    return { stickers: rows.map((r) => ({ id: r.id, createdBy: r.created_by, data: r.data })) };
+  });
+
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/communities/:id/stickers`,
+    { ...authed, bodyLimit: 320 * 1024 },
+    async (request, reply) => {
+      const model = await community(request.params.id, me(request));
+      if (!model.can(me(request), Permission.MANAGE_EXPRESSIONS)) throw forbidden();
+      const req = parse(createStickerRequestSchema, request.body);
+      const count = await db
+        .selectFrom('community_stickers')
+        .select(db.fn.countAll<number>().as('n'))
+        .where('community_id', '=', model.id)
+        .executeTakeFirstOrThrow();
+      if (Number(count.n) >= MAX_COMMUNITY_STICKERS)
+        throw bad(`A community can have up to ${MAX_COMMUNITY_STICKERS} stickers`);
+      try {
+        await db
+          .insertInto('community_stickers')
+          .values({
+            id: req.id,
+            community_id: model.id,
+            created_by: me(request),
+            data: req.data,
+            created_at: deps.now().toISOString(),
+          })
+          .execute();
+      } catch {
+        throw new HttpError(409, 'conflict', 'Sticker ID already exists');
+      }
+      await audit(model.id, me(request), 'sticker.create', req.id);
+      toMembers(model, { t: 'stickers', communityId: model.id });
+      return reply.code(201).send({ id: req.id });
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(`${API_PREFIX}/stickers/:id`, authed, async (request) => {
+    const id = parse(channelIdSchema, request.params.id);
+    const row = await db
+      .selectFrom('community_stickers')
+      .select(['community_id'])
+      .where('id', '=', id)
+      .executeTakeFirst();
+    if (!row) throw notFound();
+    const model = await community(row.community_id, me(request));
+    if (!model.can(me(request), Permission.MANAGE_EXPRESSIONS)) throw forbidden();
+    await db.deleteFrom('community_stickers').where('id', '=', id).execute();
+    await audit(model.id, me(request), 'sticker.delete', id);
+    toMembers(model, { t: 'stickers', communityId: model.id });
     return { ok: true };
   });
 
@@ -1566,6 +1722,7 @@ export async function registerCommunityRoutes(
               role: 'member',
               profile: req.profile,
               joined_on: day(now),
+              accepted: model.screening ? 0 : 1,
             })
             .execute();
           await trx
@@ -1846,6 +2003,50 @@ export async function registerCommunityRoutes(
     });
     return { ok: true };
   });
+
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/channels/:id/messages/bulk-delete`,
+    authed,
+    async (request) => {
+      const { model, channelId } = await channelCommunity(request.params.id, me(request));
+      if (!model.can(me(request), Permission.MANAGE_MESSAGES, channelId)) throw forbidden();
+      const req = parse(bulkDeleteRequestSchema, request.body);
+      const rows = await db
+        .selectFrom('messages')
+        .select(['id', 'thread_id'])
+        .where('channel_id', '=', channelId)
+        .where('id', 'in', [...new Set(req.ids)])
+        .execute();
+      if (!rows.length) return { ok: true, deleted: 0 };
+      const ids = rows.map((r) => r.id);
+      const touched = new Set<string>();
+      await db.transaction().execute(async (trx) => {
+        for (const r of rows) {
+          await trx.deleteFrom('messages').where('thread_id', '=', r.id).execute();
+          await trx.deleteFrom('threads').where('id', '=', r.id).execute();
+          if (r.thread_id && !ids.includes(r.thread_id)) {
+            touched.add(r.thread_id);
+            await trx
+              .updateTable('threads')
+              .set((eb) => ({ count: eb('count', '-', 1) }))
+              .where('id', '=', r.thread_id)
+              .execute();
+          }
+        }
+        await trx.deleteFrom('messages').where('id', 'in', ids).execute();
+      });
+      for (const t of touched) await pushMessage(model, t);
+      for (const id of ids)
+        hub.sendTo(model.viewers(channelId), {
+          t: 'message.delete',
+          communityId: model.id,
+          channelId,
+          messageId: id,
+        });
+      await audit(model.id, me(request), 'message.bulkDelete', null, { channelId, count: ids.length });
+      return { ok: true, deleted: ids.length };
+    },
+  );
 
   const setPinned = (pinned: 0 | 1) => async (request: FastifyRequest<{ Params: { id: string } }>) => {
     const { model, msg } = await messageContext(request.params.id, me(request));

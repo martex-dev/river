@@ -48,6 +48,10 @@ export function describeAudit(
         return `dismissed a report about ${person(t)}`;
       case 'report.open':
         return `reopened a report about ${person(t)}`;
+      case 'sticker.create':
+        return 'added a sticker';
+      case 'sticker.delete':
+        return 'removed a sticker';
       case 'sound.create':
         return 'added a soundboard sound';
       case 'sound.update':
@@ -72,6 +76,16 @@ export function describeAudit(
         return `added a moderator note about ${person(t)}`;
       case 'note.delete':
         return `removed a moderator note about ${person(t)}`;
+      case 'community.onboarding':
+        return d.screening
+          ? 'changed the rules (new members must accept them)'
+          : 'changed the rules and onboarding';
+      case 'member.selfRoles':
+        return 'picked their roles';
+      case 'message.bulkDelete': {
+        const n = Number(d.count ?? 0);
+        return `deleted ${n} message${n === 1 ? '' : 's'} in ${channel(typeof d.channelId === 'string' ? d.channelId : null)}`;
+      }
       case 'member.kick':
         return `kicked ${person(t)}`;
       case 'member.ban':
@@ -120,5 +134,5 @@ export function describeAudit(
         return e.action;
     }
   })();
-  return { id: e.id, actor: e.actor, actorName: person(e.actor), summary, at: e.at };
+  return { id: e.id, actor: e.actor, actorName: person(e.actor), action: e.action, summary, at: e.at };
 }

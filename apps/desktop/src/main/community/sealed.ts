@@ -9,6 +9,7 @@ import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } f
  */
 export type SealPurpose =
   | 'meta'
+  | 'onboarding'
   | 'profile'
   | `channel:${string}`
   | `category:${string}`
@@ -22,6 +23,7 @@ export type SealPurpose =
   | `report:${string}`
   | `sound:${string}`
   | `note:${string}`
+  | `sticker:${string}`
   | 'invite';
 
 const aad = (communityId: string, purpose: SealPurpose): Buffer =>

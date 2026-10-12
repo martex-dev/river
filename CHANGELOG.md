@@ -6,6 +6,21 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Stickers:** communities add their own (Community settings → Stickers);
+  send one with the 🗒️ button next to the message box. End-to-end encrypted.
+- **Delete many messages at once:** moderators right-click → Select
+  messages, click the ones to remove (up to 100) and delete them together.
+- **Audit log filters:** by kind of change, by person and by text, and copy
+  what you see.
+- **Rules and onboarding** (Community settings → Rules & roles): a welcome
+  note and rules new members see first; optionally they must accept the
+  rules before they can post, react or join voice (the server enforces it).
+- **Pick your roles:** offer roles members can give themselves (never ones
+  that moderate); new members are asked after accepting the rules, and
+  anyone can change them from the community menu.
+
 ## [1.0.23] - 2026-10-12
 
 **Yours to keep: export your data, private link previews and moderator notes.**

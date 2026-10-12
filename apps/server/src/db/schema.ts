@@ -55,6 +55,11 @@ export interface CommunitiesTable {
   created_on: string;
   key_epoch: Generated<number>;
   rotation_needed: Generated<number>;
+  /** Sealed rules and welcome note (1.0.24). */
+  onboarding: string | null;
+  screening: Generated<number>;
+  /** JSON array of role IDs members may give themselves. */
+  self_roles: Generated<string>;
 }
 
 export interface CommunityMembersTable {
@@ -64,6 +69,8 @@ export interface CommunityMembersTable {
   profile: string;
   joined_on: string;
   timeout_until: string | null;
+  /** 0 while a new member has not accepted the rules of a screened community (1.0.24). */
+  accepted: Generated<number>;
 }
 
 export interface ChannelsTable {
@@ -278,7 +285,16 @@ export interface MemberNotesTable {
   created_at: string;
 }
 
+export interface CommunityStickersTable {
+  id: string;
+  community_id: string;
+  created_by: string;
+  data: string;
+  created_at: string;
+}
+
 export interface Database {
+  community_stickers: CommunityStickersTable;
   member_notes: MemberNotesTable;
   community_sounds: CommunitySoundsTable;
   community_reports: CommunityReportsTable;

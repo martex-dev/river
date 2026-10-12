@@ -23,6 +23,7 @@ import {
   reportsResponseSchema,
   soundsResponseSchema,
   notesResponseSchema,
+  stickersResponseSchema,
 } from '@river/protocol';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
@@ -418,6 +419,91 @@ describe('communities', () => {
         ).json(),
       ).reports[0]!;
       expect([after.status, after.resolvedBy]).toEqual(['resolved', mod.riverId]);
+    });
+
+    it('onboarding: screened newcomers only read until they accept; self-assignable roles are safe', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const old = await join(a, owner.token, cid);
+      const { rid: gamer } = await role(a, owner.token, cid, 0);
+      const { rid: mod } = await role(a, owner.token, cid, Permission.KICK_MEMBERS);
+      const put = (token: string, body: object) =>
+        status(a, 'PUT', `/v1/communities/${cid}/onboarding`, token, body);
+      expect(await put(old.token, { onboarding: sealed(), screening: true, selfRoles: [] })).toBe(403);
+      expect(await put(owner.token, { onboarding: sealed(), screening: true, selfRoles: [mod] })).toBe(400);
+      expect(await put(owner.token, { onboarding: sealed(), screening: true, selfRoles: [gamer] })).toBe(200);
+      const fresh = await join(a, owner.token, cid);
+      const send = (token: string) =>
+        status(a, 'POST', `/v1/channels/${text}/messages`, token, { id: id(), body: sealed() });
+      expect(await send(old.token)).toBe(201); // members from before keep talking
+      expect(await send(fresh.token)).toBe(403);
+      const listed = await fetchCommunity(a, owner.token, cid);
+      expect(listed.screening).toBe(true);
+      expect(listed.members.find((m) => m.riverId === fresh.riverId)?.pending).toBe(true);
+      expect(
+        await status(a, 'PUT', `/v1/communities/${cid}/self-roles`, fresh.token, { roles: [gamer] }),
+      ).toBe(403);
+      expect(await status(a, 'POST', `/v1/communities/${cid}/accept`, fresh.token)).toBe(200);
+      expect(await send(fresh.token)).toBe(201);
+      expect(await status(a, 'PUT', `/v1/communities/${cid}/self-roles`, fresh.token, { roles: [mod] })).toBe(
+        403,
+      );
+      expect(
+        await status(a, 'PUT', `/v1/communities/${cid}/self-roles`, fresh.token, { roles: [gamer] }),
+      ).toBe(200);
+      expect(
+        (await fetchCommunity(a, owner.token, cid)).members.find((m) => m.riverId === fresh.riverId)?.roles,
+      ).toEqual([gamer]);
+      expect(await status(a, 'PUT', `/v1/communities/${cid}/self-roles`, fresh.token, { roles: [] })).toBe(
+        200,
+      );
+      expect(
+        (await fetchCommunity(a, owner.token, cid)).members.find((m) => m.riverId === fresh.riverId)?.roles,
+      ).toEqual([]);
+    });
+
+    it('bulk delete: message managers remove up to 100 messages of one channel', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const ids = [id(), id(), id()];
+      for (const mid of ids)
+        await status(a, 'POST', `/v1/channels/${text}/messages`, member.token, { id: mid, body: sealed() });
+      const url = `/v1/channels/${text}/messages/bulk-delete`;
+      expect(await status(a, 'POST', url, member.token, { ids })).toBe(403);
+      expect(await status(a, 'POST', url, owner.token, { ids: [] })).toBe(400);
+      const res = await a.inject({
+        method: 'POST',
+        url,
+        headers: auth(owner.token),
+        payload: { ids: [ids[0], ids[1], id()] },
+      });
+      expect(res.json()).toEqual({ ok: true, deleted: 2 });
+      const left = (
+        await a.inject({ method: 'GET', url: `/v1/channels/${text}/messages`, headers: auth(owner.token) })
+      ).json().messages as Array<{ id: string }>;
+      expect(left.map((m) => m.id)).toEqual([ids[2]]);
+    });
+
+    it('stickers: managers add and remove, members list them, strangers cannot', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const url = `/v1/communities/${cid}/stickers`;
+      expect(await status(a, 'POST', url, member.token, { id: id(), data: sealed() })).toBe(403);
+      const sid = id();
+      expect(await status(a, 'POST', url, owner.token, { id: sid, data: sealed() })).toBe(201);
+      const list = stickersResponseSchema.parse(
+        (await a.inject({ method: 'GET', url, headers: auth(member.token) })).json(),
+      );
+      expect(list.stickers.map((x) => x.id)).toEqual([sid]);
+      expect(await status(a, 'DELETE', `/v1/stickers/${sid}`, member.token)).toBe(403);
+      expect(await status(a, 'DELETE', `/v1/stickers/${sid}`, owner.token)).toBe(200);
+      const stranger = await user(a);
+      expect(await status(a, 'GET', url, stranger.token)).not.toBe(200);
     });
 
     it('moderator notes are only for people who moderate members', async () => {

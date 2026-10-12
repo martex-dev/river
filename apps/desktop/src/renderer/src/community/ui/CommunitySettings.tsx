@@ -1,3 +1,6 @@
+import { StickerSettings } from './Stickers.tsx';
+import { AUDIT_GROUPS, auditText, filterAudit, type AuditFilter } from '../../../../shared/audit-filter.ts';
+import { OnboardingSettings } from './Onboarding.tsx';
 import { SoundSettings } from './Soundboard.tsx';
 import { ReportsPanel } from './Reports.tsx';
 import { useEffect, useState, type ReactElement } from 'react';
@@ -37,9 +40,11 @@ export function CommunitySettings(props: {
   const perms = community.permissions;
   const tabs: Array<[CommunityTab, string, boolean]> = [
     ['overview', 'Overview', can(perms, Permission.MANAGE_COMMUNITY)],
+    ['onboarding', 'Rules & roles', can(perms, Permission.MANAGE_COMMUNITY)],
     ['roles', 'Roles', can(perms, Permission.MANAGE_ROLES)],
     ['members', 'Members', true],
     ['emoji', 'Emoji', true],
+    ['stickers', 'Stickers', true],
     ['sounds', 'Soundboard', true],
     ['bans', 'Bans', can(perms, Permission.BAN_MEMBERS)],
     ['reports', 'Reports', can(perms, Permission.MANAGE_MESSAGES)],
@@ -92,9 +97,11 @@ export function CommunitySettings(props: {
             <XIcon />
           </button>
           {tab === 'overview' && <Overview community={community} />}
+          {tab === 'onboarding' && <OnboardingSettings community={community} />}
           {tab === 'roles' && <Roles community={community} me={me} />}
           {tab === 'members' && <Members community={community} me={me} />}
           {tab === 'emoji' && <EmojiSettings community={community} />}
+          {tab === 'stickers' && <StickerSettings community={community} />}
           {tab === 'sounds' && <SoundSettings community={community} />}
           {tab === 'bans' && <Bans community={community} />}
           {tab === 'reports' && <ReportsPanel community={community} />}
@@ -720,6 +727,9 @@ function AuditLog({ community }: { community: CommunityView }): ReactElement {
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => load(), [community.id]);
+  const [filter, setFilter] = useState<AuditFilter>({ group: null, actor: null, text: '' });
+  const shown = entries ? filterAudit(entries, filter) : null;
+  const actors = [...new Map((entries ?? []).map((e) => [e.actor, e.actorName])).entries()];
   return (
     <div className="settings-page">
       <h2>Audit log</h2>
@@ -727,10 +737,57 @@ function AuditLog({ community }: { community: CommunityView }): ReactElement {
         Changes to roles, channels and settings, and moderation, for the last 90 days. The server keeps only
         IDs; names are filled in on your computer.
       </p>
+      {entries && entries.length > 0 && (
+        <div className="audit-filter">
+          <select
+            aria-label="Kind of change"
+            value={filter.group ?? ''}
+            onChange={(e) => setFilter({ ...filter, group: e.target.value || null })}
+          >
+            <option value="">Everything</option>
+            {AUDIT_GROUPS.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.label}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Who"
+            value={filter.actor ?? ''}
+            onChange={(e) => setFilter({ ...filter, actor: e.target.value || null })}
+          >
+            <option value="">Anyone</option>
+            {actors.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <input
+            className="search"
+            placeholder="Search"
+            aria-label="Search the audit log"
+            value={filter.text}
+            onChange={(e) => setFilter({ ...filter, text: e.target.value })}
+          />
+          <button
+            className="btn btn--ghost btn--small"
+            disabled={!shown?.length}
+            onClick={() =>
+              void navigator.clipboard
+                .writeText(auditText(shown ?? []))
+                .then(() => s.notify(`Copied ${shown?.length ?? 0} entries.`))
+            }
+          >
+            Copy
+          </button>
+        </div>
+      )}
       {entries === null && <p className="muted">Loading…</p>}
       {entries?.length === 0 && <p className="muted">Nothing has happened yet.</p>}
+      {entries && entries.length > 0 && shown?.length === 0 && <p className="muted">Nothing matches.</p>}
       <ol className="audit">
-        {entries?.map((e) => {
+        {shown?.map((e) => {
           const actor = community.members.find((m) => m.riverId === e.actor);
           return (
             <li key={e.id} className="audit__row">

@@ -27,6 +27,7 @@ import {
   emojisResponseSchema,
   reportsResponseSchema,
   soundsResponseSchema,
+  stickersResponseSchema,
   notesResponseSchema,
   eventsResponseSchema,
   decodeRelayIn,
@@ -46,6 +47,8 @@ import {
   linkEmbedSchema,
   type SoundView,
   type NoteView,
+  type StickerView,
+  STICKER_IMAGE,
   SOUND_DATA_URL,
   type SavedMessageView,
   EMOJI_NAME,
@@ -678,9 +681,12 @@ export class CommunityService {
     };
     const myRoles = c.members.find((m) => m.riverId === me)?.roles ?? [];
     const myTimeout = c.members.find((m) => m.riverId === me)?.timeoutUntil;
+    const myPending = !!c.screening && !!c.members.find((m) => m.riverId === me)?.pending && me !== ownerId;
     const timedOut = !!myTimeout && Date.parse(myTimeout) > Date.now() && me !== ownerId;
     const permsOfMe = (overwrites?: ChannelView['overwrites'], announcement = false): number => {
       let p = permsOf(me, myRoles, overwrites);
+      // Same rule as the server: until you accept the rules, you can only look around.
+      if (myPending && !(p & Permission.ADMINISTRATOR)) return p & Permission.VIEW_CHANNELS;
       if (timedOut && !(p & Permission.ADMINISTRATOR)) p &= ~TIMEOUT_DENIES;
       // Same rule as the server: announcement channels are for people who manage messages.
       if (announcement && !(p & Permission.MANAGE_MESSAGES)) p &= ~Permission.SEND_MESSAGES;
@@ -810,6 +816,24 @@ export class CommunityService {
       members,
       voice,
       voiceStates,
+      ...((): Pick<CommunityView, 'rules' | 'welcomeNote'> => {
+        if (!c.onboarding) return { rules: [], welcomeNote: '' };
+        try {
+          const o = ring.open<{ rules?: unknown; welcome?: unknown }>(c.id, 'onboarding', c.onboarding);
+          return {
+            rules: (Array.isArray(o.rules) ? o.rules : [])
+              .filter((r): r is string => typeof r === 'string')
+              .slice(0, 20)
+              .map((r) => r.slice(0, 300)),
+            welcomeNote: typeof o.welcome === 'string' ? o.welcome.slice(0, 1000) : '',
+          };
+        } catch {
+          return { rules: [], welcomeNote: '' };
+        }
+      })(),
+      screening: c.screening ?? false,
+      selfRoles: (c.selfRoles ?? []).filter((id) => roles.some((r) => r.id === id)),
+      myPending: myPending,
     };
   }
 
@@ -892,6 +916,7 @@ export class CommunityService {
         alts?: unknown;
         tags?: unknown;
         embed?: unknown;
+        sticker?: unknown;
       }>(communityId, `message:${m.channelId}`, m.body);
       const body = opened.value;
       const key = opened.key;
@@ -949,6 +974,9 @@ export class CommunityService {
           const tags = readTags(body.tags, 5);
           return tags.length ? { tags } : {};
         })(),
+        ...(typeof body.sticker === 'string' && /^[A-Za-z0-9_-]{22}$/.test(body.sticker)
+          ? { sticker: body.sticker }
+          : {}),
         ...((): { embed?: LinkEmbed } => {
           const e = linkEmbedSchema.safeParse(body.embed);
           // Only a preview of a link that is really in the message.
@@ -1254,8 +1282,10 @@ export class CommunityService {
     alts: Record<string, string> = {},
     post?: { title?: string; tags?: string[] },
     embed?: LinkEmbed,
+    sticker?: string,
   ): Promise<ChatMessage> {
-    const text = attachments.length ? z.string().max(4000).parse(rawText) : textSchema.parse(rawText);
+    const text =
+      attachments.length || sticker ? z.string().max(4000).parse(rawText) : textSchema.parse(rawText);
     const communityId = this.communityOf(channelId);
     const key = this.requireKey(communityId);
     const id = randomId();
@@ -1267,6 +1297,7 @@ export class CommunityService {
       ...(poll ? { poll } : {}),
       ...(post?.tags?.length ? { tags: post.tags } : {}),
       ...(embed ? { embed } : {}),
+      ...(sticker ? { sticker } : {}),
       ...(attachments.length ? { attachments } : {}),
       // Kept beside the pointers (not in them) so older Rivers, which reject unknown pointer fields, still
       // show the attachments.
@@ -1314,6 +1345,36 @@ export class CommunityService {
         await this.call(`/communities/${act.communityId}`, 'PATCH', { meta }, z.unknown());
         break;
       }
+      case 'updateOnboarding': {
+        const has = act.rules.length > 0 || act.welcome.trim().length > 0;
+        const onboarding = has
+          ? seal(this.requireKey(act.communityId), act.communityId, 'onboarding', {
+              rules: act.rules,
+              welcome: act.welcome.trim(),
+            })
+          : null;
+        await this.call(
+          `/communities/${act.communityId}/onboarding`,
+          'PUT',
+          { onboarding, screening: act.screening && act.rules.length > 0, selfRoles: act.selfRoles },
+          z.unknown(),
+        ).catch(explain);
+        await this.refresh();
+        break;
+      }
+      case 'acceptRules':
+        await this.call(`/communities/${act.communityId}/accept`, 'POST', {}, z.unknown()).catch(explain);
+        await this.refresh();
+        break;
+      case 'setSelfRoles':
+        await this.call(
+          `/communities/${act.communityId}/self-roles`,
+          'PUT',
+          { roles: act.roles },
+          z.unknown(),
+        ).catch(explain);
+        await this.refresh();
+        break;
       case 'deleteCommunity':
         await this.call(`/communities/${act.communityId}`, 'DELETE', undefined, z.unknown());
         this.forget(act.communityId);
@@ -1374,6 +1435,14 @@ export class CommunityService {
         await this.call(`/channels/${act.channelId}`, 'PATCH', body, z.unknown());
         break;
       }
+      case 'bulkDelete':
+        await this.call(
+          `/channels/${act.channelId}/messages/bulk-delete`,
+          'POST',
+          { ids: act.messageIds },
+          z.unknown(),
+        ).catch(explain);
+        break;
       case 'duplicateChannel': {
         const communityId = this.communityOf(act.channelId);
         // Copy what the server has now, not what this device last saw.
@@ -1673,6 +1742,7 @@ export class CommunityService {
           act.alts,
           act.title || act.tags ? { title: act.title, tags: act.tags } : undefined,
           act.embed,
+          act.sticker,
         )) as CommunityActionResult<A>;
       case 'createThread': {
         const communityId = this.communityOf(act.channelId);
@@ -1846,6 +1916,47 @@ export class CommunityService {
         return (await this.reports(act.communityId)) as CommunityActionResult<A>;
       case 'sounds':
         return (await this.sounds(act.communityId)) as CommunityActionResult<A>;
+      case 'stickers': {
+        const ring = this.keys.get(act.communityId);
+        if (!ring) throw new CommunityError('Waiting for the community key…');
+        const res = await this.call(
+          `/communities/${act.communityId}/stickers`,
+          'GET',
+          undefined,
+          stickersResponseSchema,
+        );
+        return res.stickers.flatMap((x): StickerView[] => {
+          try {
+            const d = ring.open<{ name?: unknown; image?: unknown }>(
+              act.communityId,
+              `sticker:${x.id}`,
+              x.data,
+            );
+            const name = String(d.name ?? '').slice(0, 30);
+            const image = String(d.image ?? '');
+            return name && STICKER_IMAGE.test(image) ? [{ id: x.id, name, image }] : [];
+          } catch {
+            return [];
+          }
+        }) as CommunityActionResult<A>;
+      }
+      case 'addSticker': {
+        const stickerId = randomId();
+        const data = seal(this.requireKey(act.communityId), act.communityId, `sticker:${stickerId}`, {
+          name: act.name,
+          image: act.image,
+        });
+        await this.call(
+          `/communities/${act.communityId}/stickers`,
+          'POST',
+          { id: stickerId, data },
+          z.unknown(),
+        ).catch(explain);
+        return stickerId as CommunityActionResult<A>;
+      }
+      case 'deleteSticker':
+        await this.call(`/stickers/${act.stickerId}`, 'DELETE', undefined, z.unknown()).catch(explain);
+        break;
       case 'notes': {
         const ring = this.keys.get(act.communityId);
         if (!ring) throw new CommunityError('Waiting for the community key…');
@@ -2715,6 +2826,9 @@ export class CommunityService {
         break;
       case 'sounds':
         this.emit({ t: 'sounds', communityId: e.communityId });
+        break;
+      case 'stickers':
+        this.emit({ t: 'stickers', communityId: e.communityId });
         break;
       case 'voice.sound':
         this.emit({ t: 'voiceSound', communityId: e.communityId, from: e.from, soundId: e.soundId });

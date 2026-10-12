@@ -10,6 +10,7 @@ import type {
   ReportView,
   SavedMessageView,
   SoundView,
+  StickerView,
 } from '../../../shared/community-actions.ts';
 import { playLocally } from './soundboard-player.ts';
 import { effectiveNotify, newReactions, shouldAlert, silenced } from '../../../shared/notify-rules.ts';
@@ -29,11 +30,21 @@ export type Modal =
   | { kind: 'user-settings'; tab?: UserTab }
   | { kind: 'events'; communityId: string }
   | { kind: 'report'; communityId: string; message: ChatMessage }
+  | { kind: 'pick-roles'; communityId: string }
   | { kind: 'ban'; communityId: string; riverId: string; name: string; then?: Modal }
   | { kind: 'confirm'; title: string; body: string; action: string; run: () => Promise<void> };
 
 export type CommunityTab =
-  'overview' | 'roles' | 'members' | 'emoji' | 'sounds' | 'bans' | 'reports' | 'audit';
+  | 'overview'
+  | 'onboarding'
+  | 'roles'
+  | 'members'
+  | 'emoji'
+  | 'stickers'
+  | 'sounds'
+  | 'bans'
+  | 'reports'
+  | 'audit';
 export type UserTab = 'profile' | 'voice' | 'notifications' | 'appearance';
 
 const TYPING_MS = 7000;
@@ -101,6 +112,11 @@ interface CommunityState {
   loadSaved(): Promise<void>;
   toggleSaved(channelId: string, messageId: string, on: boolean): Promise<void>;
   loadOlder(channelId: string): Promise<number>;
+  /** Stickers per community (1.0.24), loaded on first use. */
+  stickers: Record<string, StickerView[]>;
+  loadStickers(communityId: string): Promise<void>;
+  /** Moderators picking messages to delete together (1.0.24). */
+  selecting: { channelId: string; ids: string[] } | null;
   /** Reports per community (1.0.21), loaded when a moderator opens them. */
   reports: Record<string, ReportView[]>;
   loadReports(communityId: string): Promise<void>;
@@ -204,6 +220,12 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   },
   noMore: {},
 
+  selecting: null,
+  stickers: {},
+  loadStickers: async (communityId) => {
+    const res = await window.river.community.action({ a: 'stickers', communityId });
+    if (res.ok) set({ stickers: { ...get().stickers, [communityId]: res.value } });
+  },
   sounds: {},
   loadSounds: async (communityId) => {
     const res = await window.river.community.action({ a: 'sounds', communityId });
@@ -453,6 +475,9 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       case 'sounds':
         if (get().sounds[event.communityId]) void get().loadSounds(event.communityId);
         return;
+      case 'stickers':
+        if (get().stickers[event.communityId]) void get().loadStickers(event.communityId);
+        return;
       case 'voiceSound': {
         const call = get().call;
         if (!call || call.hearingOff) return;
@@ -538,6 +563,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       null;
     set({ selectedCommunity: communityId, selectedChannel: channel, replyTo: null, editing: null });
     if (!get().emojis[communityId]) void get().loadEmojis(communityId);
+    if (!get().stickers[communityId]) void get().loadStickers(communityId);
     if (get().saved === null) void get().loadSaved();
     if (channel) get().selectChannel(channel);
   },
@@ -559,7 +585,15 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     void markRead(channelId);
     const { [channelId]: _u, ...unread } = get().unread;
     const { [channelId]: _m, ...mentions } = get().mentions;
-    set({ selectedChannel: channelId, unread, mentions, replyTo: null, editing: null, showPins: false });
+    set({
+      selectedChannel: channelId,
+      unread,
+      mentions,
+      replyTo: null,
+      editing: null,
+      showPins: false,
+      selecting: null,
+    });
     if (channel?.kind === 'text') {
       const owner = get().communities.find((c) => c.channels.some((ch) => ch.id === channelId));
       if (owner) rememberChannel(owner.id, channelId);

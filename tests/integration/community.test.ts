@@ -373,6 +373,78 @@ describe('reports', () => {
   });
 });
 
+describe('onboarding', () => {
+  it('sealed rules; newcomers accept them before talking, then pick their own roles', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Rules');
+    const gamer = await alice.community.action({
+      a: 'createRole',
+      communityId: created.id,
+      name: 'Gamer',
+      color: 0,
+      permissions: 0,
+    });
+    await alice.community.action({
+      a: 'updateOnboarding',
+      communityId: created.id,
+      rules: ['Be kind', 'No spam'],
+      welcome: 'Hello there',
+      screening: true,
+      selfRoles: [gamer],
+    });
+    const stored = JSON.stringify(await serverDb.db.selectFrom('communities').selectAll().execute());
+    expect(stored).not.toContain('Be kind');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    let mine = (await bob.community.refresh())[0]!;
+    expect(mine).toMatchObject({
+      rules: ['Be kind', 'No spam'],
+      welcomeNote: 'Hello there',
+      myPending: true,
+      screening: true,
+    });
+    const general = mine.channels.find((c) => c.name === 'general')!;
+    await expect(bob.community.send(general.id, 'hi before accepting')).rejects.toThrow();
+    await bob.community.action({ a: 'acceptRules', communityId: created.id });
+    mine = (await bob.community.refresh())[0]!;
+    expect(mine.myPending).toBe(false);
+    await bob.community.send(general.id, 'hi');
+    await bob.community.action({ a: 'setSelfRoles', communityId: created.id, roles: [gamer] });
+    mine = (await bob.community.refresh())[0]!;
+    expect(mine.members.find((m) => m.riverId === bob.riverId)?.roles).toEqual([gamer]);
+  });
+});
+
+describe('stickers', () => {
+  it('are sealed and can be sent as a message', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Stickers');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.name === 'general')!;
+    await bob.community.refresh();
+    const image =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    const id = await alice.community.action({
+      a: 'addSticker',
+      communityId: created.id,
+      name: 'Wave',
+      image,
+    });
+    expect(await bob.community.action({ a: 'stickers', communityId: created.id })).toEqual([
+      { id, name: 'Wave', image },
+    ]);
+    const stored = JSON.stringify(await serverDb.db.selectFrom('community_stickers').selectAll().execute());
+    expect(stored).not.toContain('Wave');
+    await alice.community.action({ a: 'send', channelId: general.id, text: '', sticker: id });
+    const [m] = (await bob.community.messages(general.id)).slice(-1);
+    expect(m!.sticker).toBe(id);
+    await expect(
+      bob.community.action({ a: 'addSticker', communityId: created.id, name: 'nope', image }),
+    ).rejects.toThrow();
+  });
+});
+
 describe('moderator notes', () => {
   it('are sealed, shown to moderators with their author, and hidden from others', async () => {
     const alice = await person('Alice');
