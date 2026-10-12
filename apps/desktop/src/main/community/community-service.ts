@@ -179,6 +179,19 @@ function explain(err: unknown): never {
 const PENDING_SIGNALS_MAX = 400;
 const PENDING_SIGNAL_TTL_MS = 30_000;
 
+/** Forum tags from decrypted data: short, unique strings only (1.0.22). */
+function readTags(raw: unknown, max: number): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const t of raw) {
+    if (typeof t !== 'string') continue;
+    const tag = t.trim().slice(0, 24);
+    if (tag && !out.includes(tag)) out.push(tag);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
 export class CommunityService {
   private readonly deps: Deps;
   private communities: CommunityView[] = [];
@@ -669,10 +682,16 @@ export class CommunityService {
       .map((ch) => {
         let name = 'channel';
         let topic = '';
+        let tags: string[] = [];
         try {
-          const opened = ring.open<{ name: string; topic?: string }>(c.id, `channel:${ch.id}`, ch.name);
+          const opened = ring.open<{ name: string; topic?: string; tags?: unknown }>(
+            c.id,
+            `channel:${ch.id}`,
+            ch.name,
+          );
           name = String(opened.name).slice(0, 64);
           topic = String(opened.topic ?? '').slice(0, 300);
+          tags = readTags(opened.tags, 20);
         } catch {
           // keep placeholder for undecryptable names
         }
@@ -693,6 +712,8 @@ export class CommunityService {
           announcement: ch.announcement,
           slowmode: ch.slowmode,
           userLimit: ch.userLimit,
+          forum: ch.forum,
+          tags,
         };
       })
       .sort((a, b) => a.position - b.position);
@@ -859,6 +880,7 @@ export class CommunityService {
         poll?: unknown;
         attachments?: unknown[];
         alts?: unknown;
+        tags?: unknown;
       }>(communityId, `message:${m.channelId}`, m.body);
       const body = opened.value;
       const key = opened.key;
@@ -912,6 +934,10 @@ export class CommunityService {
         replyTo,
         attachments,
         ...(Object.keys(alts).length ? { alts } : {}),
+        ...((): { tags?: string[] } => {
+          const tags = readTags(body.tags, 5);
+          return tags.length ? { tags } : {};
+        })(),
         // A reply pings the person replied to, unless the sender turned that off.
         mentionsMe:
           m.sender !== me &&
@@ -1210,6 +1236,7 @@ export class CommunityService {
     noPing = false,
     poll?: Poll,
     alts: Record<string, string> = {},
+    post?: { title?: string; tags?: string[] },
   ): Promise<ChatMessage> {
     const text = attachments.length ? z.string().max(4000).parse(rawText) : textSchema.parse(rawText);
     const communityId = this.communityOf(channelId);
@@ -1221,6 +1248,7 @@ export class CommunityService {
       ...(replyTo ? { replyTo } : {}),
       ...(replyTo && noPing ? { noPing: true } : {}),
       ...(poll ? { poll } : {}),
+      ...(post?.tags?.length ? { tags: post.tags } : {}),
       ...(attachments.length ? { attachments } : {}),
       // Kept beside the pointers (not in them) so older Rivers, which reject unknown pointer fields, still
       // show the attachments.
@@ -1239,6 +1267,9 @@ export class CommunityService {
         body: seal(key, communityId, `message:${channelId}`, body),
         ...(attachments.length ? { attachments: attachments.map((a) => a.id) } : {}),
         ...(threadId ? { threadId } : {}),
+        ...(post?.title && !threadId
+          ? { thread: { name: seal(key, communityId, `thread:${id}`, { name: post.title }) } }
+          : {}),
       },
       messageSchema,
     );
@@ -1296,6 +1327,7 @@ export class CommunityService {
             name: seal(key, act.communityId, `channel:${id}`, { name: act.name, topic: act.topic ?? '' }),
             ...(overwrites ? { overwrites } : {}),
             ...(act.parentId ? { parentId: act.parentId } : {}),
+            ...(act.forum && act.kind === 'text' ? { forum: true } : {}),
           },
           z.unknown(),
         );
@@ -1305,12 +1337,15 @@ export class CommunityService {
         const communityId = this.communityOf(act.channelId);
         const current = this.requireCommunity(communityId).channels.find((c) => c.id === act.channelId);
         const body: Record<string, unknown> = {};
-        if (act.name !== undefined || act.topic !== undefined) {
+        if (act.name !== undefined || act.topic !== undefined || act.tags !== undefined) {
+          const tags = act.tags ?? current?.tags ?? [];
           body.name = seal(this.requireKey(communityId), communityId, `channel:${act.channelId}`, {
             name: act.name ?? current?.name ?? 'channel',
             topic: act.topic ?? current?.topic ?? '',
+            ...(tags.length ? { tags } : {}),
           });
         }
+        if (act.forum !== undefined) body.forum = act.forum;
         if (act.overwrites) body.overwrites = act.overwrites;
         if (act.synced !== undefined) body.synced = act.synced;
         if (act.announcement !== undefined) body.announcement = act.announcement;
@@ -1335,7 +1370,9 @@ export class CommunityService {
             name: seal(this.requireKey(communityId), communityId, `channel:${id}`, {
               name: act.name,
               topic: source.topic,
+              ...(source.tags.length ? { tags: source.tags } : {}),
             }),
+            ...(source.forum ? { forum: true } : {}),
             ...(source.synced ? {} : { overwrites: source.overwrites }),
             ...(source.parentId ? { parentId: source.parentId } : {}),
           },
@@ -1609,6 +1646,7 @@ export class CommunityService {
           act.noPing,
           act.poll,
           act.alts,
+          act.title || act.tags ? { title: act.title, tags: act.tags } : undefined,
         )) as CommunityActionResult<A>;
       case 'createThread': {
         const communityId = this.communityOf(act.channelId);

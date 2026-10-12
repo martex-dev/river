@@ -1,3 +1,4 @@
+import { ForumChannel } from '../community/ui/Forum.tsx';
 import { matches, withDefaults } from '../../../shared/keybinds.ts';
 import { ReportDialog } from '../community/ui/Reports.tsx';
 import { useEffect, useState, type ReactElement } from 'react';
@@ -95,15 +96,18 @@ export function CommunitiesPage(): ReactElement {
 
       <section className="community__main">
         <ConnectionBanner />
-        {community && channel?.kind === 'text' && (
+        {community && channel?.kind === 'text' && !channel.forum && (
           <TextChannel key={channel.id} community={community} channel={channel} me={me} />
+        )}
+        {community && channel?.kind === 'text' && channel.forum && (
+          <ForumChannel key={channel.id} community={community} channel={channel} />
         )}
         {community && channel?.kind === 'voice' && (
           <VoiceChannel community={community} channel={channel} me={me} />
         )}
       </section>
 
-      {community && s.showMembers && channel?.kind === 'text' && !s.openThread && (
+      {community && s.showMembers && channel?.kind === 'text' && !channel.forum && !s.openThread && (
         <MemberList community={community} me={me} />
       )}
       {community && channel?.kind === 'text' && s.openThread?.channelId === channel.id && (

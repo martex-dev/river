@@ -257,6 +257,10 @@ export function ChannelRow(props: {
           <span className="channel__icon">
             {ch.kind === 'voice' ? (
               <SpeakerIcon size={17} />
+            ) : ch.forum ? (
+              <span className="channel__emoji" aria-hidden="true">
+                🗂️
+              </span>
             ) : ch.announcement ? (
               <span className="channel__emoji" aria-hidden="true">
                 📢

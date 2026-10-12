@@ -21,6 +21,7 @@ import * as m0014 from './migrations/0014_events.ts';
 import * as m0015 from './migrations/0015_emojis.ts';
 import * as m0016 from './migrations/0016_reports.ts';
 import * as m0017 from './migrations/0017_sounds.ts';
+import * as m0018 from './migrations/0018_forums.ts';
 import type { Database } from './schema.ts';
 
 export type Dialect = 'sqlite' | 'postgres';
@@ -58,6 +59,7 @@ export const MIGRATIONS: Record<string, Migration> = {
   '0015_emojis': m0015,
   '0016_reports': m0016,
   '0017_sounds': m0017,
+  '0018_forums': m0018,
 };
 
 /**

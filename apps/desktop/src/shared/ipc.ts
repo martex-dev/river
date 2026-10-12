@@ -219,6 +219,10 @@ export interface ChannelView {
   slowmode: number;
   /** Most people in this voice channel at once (0 = no limit). */
   userLimit: number;
+  /** A forum: every message starts a titled post (1.0.22). */
+  forum: boolean;
+  /** Tags posts in this forum can have (encrypted with the channel name). */
+  tags: string[];
 }
 
 export interface CategoryView {
@@ -337,6 +341,8 @@ export interface ChatMessage {
   thread: ThreadView | null;
   /** A poll, if this message is one (1.0.18). Votes are in `reactions` (see shared/poll.ts). */
   poll?: Poll | null;
+  /** Forum post tags (1.0.22). */
+  tags?: string[];
 }
 
 export interface ThreadView {

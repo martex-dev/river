@@ -12,6 +12,9 @@ const id = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 const riverId = z.uuid();
 const name = z.string().trim().min(1).max(64);
 const soundName = z.string().trim().min(1).max(32);
+/** A forum tag (1.0.22). */
+const forumTag = z.string().trim().min(1).max(24);
+export const MAX_FORUM_TAGS = 20;
 /** A soundboard clip as a data URL (1.0.22): mp3, ogg, wav or webm, at most 160 KB. */
 export const SOUND_DATA_URL = /^data:audio\/(mpeg|ogg|wav|webm|x-wav);base64,[A-Za-z0-9+/]+=*$/;
 export const SOUND_MAX_BYTES = 160 * 1024;
@@ -112,6 +115,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       topic: z.string().max(300).optional(),
       private: z.boolean().optional(),
       parentId: id.nullable().optional(),
+      /** A forum channel (1.0.22). */
+      forum: z.boolean().optional(),
     })
     .strict(),
   z
@@ -126,6 +131,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       announcement: z.boolean().optional(),
       slowmode: z.number().int().min(0).max(21_600).optional(),
       userLimit: z.number().int().min(0).max(99).optional(),
+      forum: z.boolean().optional(),
+      tags: z.array(forumTag).max(MAX_FORUM_TAGS).optional(),
     })
     .strict(),
   z.object({ a: z.literal('moveChannel'), channelId: id, direction }).strict(),
@@ -248,6 +255,10 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       attachments: z.array(attachmentPointerSchema).max(10).optional(),
       /** Descriptions of attached pictures, by attachment ID (1.0.21). */
       alts: z.record(id, z.string().trim().max(1000)).optional(),
+      /** Start a forum post with this title (1.0.22). */
+      title: z.string().trim().min(1).max(100).optional(),
+      /** Forum post tags (1.0.22). */
+      tags: z.array(forumTag).max(5).optional(),
       /** Reply inside the thread started from this message. */
       threadId: id.optional(),
       /** A reply that should not notify the person replied to (1.0.18). */

@@ -1,3 +1,4 @@
+import { ForumSettings } from './Forum.tsx';
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, CommunityView } from '../../../../shared/ipc.ts';
@@ -141,11 +142,11 @@ export function CreateChannelDialog(props: {
   parentId?: string;
 }): ReactElement {
   const s = useCommunity();
-  const [kind, setKind] = useState(props.kind);
+  const [kind, setKind] = useState<'text' | 'voice' | 'forum'>(props.kind);
   const [name, setName] = useState('');
   const [isPrivate, setPrivate] = useState(false);
   const [busy, setBusy] = useState(false);
-  const cleaned = kind === 'text' ? name.toLowerCase().replace(/\s+/g, '-') : name;
+  const cleaned = kind !== 'voice' ? name.toLowerCase().replace(/\s+/g, '-') : name;
   const submit = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
     if (!cleaned.trim()) return;
@@ -153,7 +154,8 @@ export function CreateChannelDialog(props: {
     await s.run({
       a: 'createChannel',
       communityId: props.community.id,
-      kind,
+      kind: kind === 'voice' ? 'voice' : 'text',
+      ...(kind === 'forum' ? { forum: true } : {}),
       name: cleaned.trim(),
       private: isPrivate,
       ...(props.parentId ? { parentId: props.parentId } : {}),
@@ -165,16 +167,26 @@ export function CreateChannelDialog(props: {
     <Modal title="Create channel" onClose={() => s.setModal(null)}>
       <form onSubmit={(e) => void submit(e)} className="create-channel">
         <div className="field__label">Channel type</div>
-        {(['text', 'voice'] as const).map((k) => (
+        {(['text', 'voice', 'forum'] as const).map((k) => (
           <label key={k} className={`kind-option ${kind === k ? 'is-active' : ''}`}>
             <input type="radio" name="kind" checked={kind === k} onChange={() => setKind(k)} />
-            {k === 'text' ? <HashIcon /> : <SpeakerIcon />}
+            {k === 'text' ? (
+              <HashIcon />
+            ) : k === 'voice' ? (
+              <SpeakerIcon />
+            ) : (
+              <span aria-hidden="true" style={{ fontSize: 20 }}>
+                🗂️
+              </span>
+            )}
             <span>
-              <strong>{k === 'text' ? 'Text' : 'Voice'}</strong>
+              <strong>{k === 'text' ? 'Text' : k === 'voice' ? 'Voice' : 'Forum'}</strong>
               <span className="muted small">
                 {k === 'text'
                   ? 'Messages, emoji, opinions and puns'
-                  : 'Hang out with voice, video and screen share'}
+                  : k === 'voice'
+                    ? 'Hang out with voice, video and screen share'
+                    : 'Organised posts with titles and tags, each with its own replies'}
               </span>
             </span>
           </label>
@@ -503,6 +515,13 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
               )}
               {channel.kind === 'text' && (
                 <>
+                  <Toggle
+                    label="Forum"
+                    help="Every message starts a post with a title and its own replies, shown as a list of posts."
+                    checked={channel.forum}
+                    onChange={(on) => void s.run({ a: 'updateChannel', channelId: channel.id, forum: on })}
+                  />
+                  {channel.forum && <ForumSettings channel={channel} />}
                   <Toggle
                     label="Announcement channel"
                     help="Only people who can manage messages post here; everyone else reads and reacts."

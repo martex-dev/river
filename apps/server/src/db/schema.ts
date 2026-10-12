@@ -75,6 +75,7 @@ export interface ChannelsTable {
   parent_id: string | null;
   synced: Generated<number>;
   announcement: Generated<number>;
+  forum: Generated<number>;
   slowmode: Generated<number>;
   user_limit: Generated<number>;
 }

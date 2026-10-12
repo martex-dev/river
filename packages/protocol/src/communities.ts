@@ -72,6 +72,8 @@ export const channelSchema = z.object({
   slowmode: z.number().int().min(0).max(21_600).default(0),
   /** Most people in a voice channel at once; 0 = no limit (1.0.8). */
   userLimit: z.number().int().min(0).max(99).default(0),
+  /** Every top-level message starts a titled thread: a post (1.0.22). */
+  forum: z.boolean().default(false),
 });
 export type ChannelWire = z.infer<typeof channelSchema>;
 
@@ -162,6 +164,7 @@ export const createChannelRequestSchema = z
     name: sealedSchema(SEALED_SMALL),
     overwrites: z.array(overwriteSchema).max(50).optional(),
     parentId: channelIdSchema.nullable().optional(),
+    forum: z.boolean().optional(),
   })
   .strict();
 
@@ -176,6 +179,7 @@ export const updateChannelRequestSchema = z
     announcement: z.boolean().optional(),
     slowmode: z.number().int().min(0).max(21_600).optional(),
     userLimit: z.number().int().min(0).max(99).optional(),
+    forum: z.boolean().optional(),
   })
   .strict();
 
@@ -302,6 +306,11 @@ export const sendMessageRequestSchema = z
     attachments: z.array(attachmentIdSchema).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
     /** Reply inside the thread started from this message (1.0.7). */
     threadId: messageIdSchema.optional(),
+    /** Start a thread from this message at once, with this sealed name: a forum post (1.0.22). */
+    thread: z
+      .object({ name: sealedSchema(SEALED_SMALL) })
+      .strict()
+      .optional(),
   })
   .strict();
 export const createThreadRequestSchema = z.object({ name: sealedSchema(SEALED_SMALL) }).strict();

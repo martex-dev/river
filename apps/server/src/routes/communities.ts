@@ -397,6 +397,7 @@ export async function registerCommunityRoutes(
               position,
               parent_id: parentId,
               synced: parentId && !req.overwrites?.length ? 1 : 0,
+              forum: req.forum && req.kind === 'text' ? 1 : 0,
             })
             .execute();
           for (const o of req.overwrites ?? []) {
@@ -445,7 +446,8 @@ export async function registerCommunityRoutes(
         req.parentId !== undefined ||
         req.announcement !== undefined ||
         req.slowmode !== undefined ||
-        req.userLimit !== undefined
+        req.userLimit !== undefined ||
+        req.forum !== undefined
       ) {
         await trx
           .updateTable('channels')
@@ -456,6 +458,7 @@ export async function registerCommunityRoutes(
             ...(req.announcement !== undefined ? { announcement: req.announcement ? 1 : 0 } : {}),
             ...(req.slowmode !== undefined ? { slowmode: req.slowmode } : {}),
             ...(req.userLimit !== undefined ? { user_limit: req.userLimit } : {}),
+            ...(req.forum !== undefined ? { forum: req.forum ? 1 : 0 } : {}),
           })
           .where('id', '=', channelId)
           .execute();
@@ -480,6 +483,7 @@ export async function registerCommunityRoutes(
       ...(req.announcement !== undefined ? { announcement: req.announcement } : {}),
       ...(req.slowmode !== undefined ? { slowmode: req.slowmode } : {}),
       ...(req.userLimit !== undefined ? { userLimit: req.userLimit } : {}),
+      ...(req.forum !== undefined ? { forum: req.forum } : {}),
     });
     changed(model);
     return { ok: true };
@@ -1550,6 +1554,10 @@ export async function registerCommunityRoutes(
       if (!model.can(me(request), Permission.SEND_MESSAGES, channelId))
         throw forbidden('You cannot send messages here');
       const req = parse(sendMessageRequestSchema, request.body);
+      if (req.thread && req.threadId) throw bad('A thread cannot start inside another thread');
+      // In a forum every top-level message is a post: it starts its own titled thread.
+      if (ch.forum && !req.threadId && !req.thread)
+        throw new HttpError(400, 'forum_post', 'This is a forum: start a post with a title');
       const attachments = req.attachments ?? [];
       const managesMessages = model.can(me(request), Permission.MANAGE_MESSAGES, channelId);
       if (req.threadId) {
@@ -1597,6 +1605,19 @@ export async function registerCommunityRoutes(
             })
             .execute();
           await linkAttachments(trx, attachments, me(request), req.id);
+          if (req.thread) {
+            await trx
+              .insertInto('threads')
+              .values({
+                id: req.id,
+                channel_id: channelId,
+                name: req.thread.name,
+                creator: me(request),
+                created_at: deps.now().toISOString(),
+                last_at: null,
+              })
+              .execute();
+          }
           if (req.threadId) {
             await trx
               .updateTable('threads')

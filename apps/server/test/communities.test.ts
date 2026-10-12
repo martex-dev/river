@@ -517,6 +517,52 @@ describe('communities', () => {
       expect((await fetchCommunity(a, member.token, cid)).channels.map((ch) => ch.id)).toContain(secret);
     });
 
+    it('forums: top-level messages must start a titled thread, replies go inside it', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      expect(await status(a, 'PATCH', `/v1/channels/${text}`, member.token, { forum: true })).toBe(403);
+      expect(await status(a, 'PATCH', `/v1/channels/${text}`, owner.token, { forum: true })).toBe(200);
+      expect((await fetchCommunity(a, member.token, cid)).channels.find((c) => c.id === text)?.forum).toBe(
+        true,
+      );
+      const plain = await a.inject({
+        method: 'POST',
+        url: `/v1/channels/${text}/messages`,
+        headers: auth(member.token),
+        payload: { id: id(), body: sealed() },
+      });
+      expect([plain.statusCode, plain.json().error.code]).toEqual([400, 'forum_post']);
+      const post = id();
+      expect(
+        await status(a, 'POST', `/v1/channels/${text}/messages`, member.token, {
+          id: post,
+          body: sealed(),
+          thread: { name: sealed() },
+        }),
+      ).toBe(201);
+      expect(
+        await status(a, 'POST', `/v1/channels/${text}/messages`, owner.token, {
+          id: id(),
+          body: sealed(),
+          threadId: post,
+        }),
+      ).toBe(201);
+      expect(
+        await status(a, 'POST', `/v1/channels/${text}/messages`, owner.token, {
+          id: id(),
+          body: sealed(),
+          threadId: post,
+          thread: { name: sealed() },
+        }),
+      ).toBe(400);
+      const list = (
+        await a.inject({ method: 'GET', url: `/v1/channels/${text}/messages`, headers: auth(owner.token) })
+      ).json().messages as Array<{ id: string; thread: { count: number } | null }>;
+      expect(list.find((m) => m.id === post)?.thread?.count).toBe(1);
+    });
+
     it('a ban can delete the person’s recent messages, and only those', async () => {
       const a = await start();
       const owner = await user(a);
