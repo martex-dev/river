@@ -20,7 +20,9 @@ describe('slash commands', () => {
   });
 
   it('shows the shrug with its arms', () => {
-    const { container } = render(<RichText text={slashText({ command: 'shrug', arg: 'fine' })!} />);
+    const { container } = render(
+      <RichText text={slashText({ command: 'shrug', arg: 'fine' })!} names={[]} me={null} />,
+    );
     expect(container.textContent).toBe(String.raw`fine ¯\_(ツ)_/¯`);
   });
 
