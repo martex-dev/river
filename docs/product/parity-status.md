@@ -117,7 +117,7 @@ are named where it helps. This file is updated with every release.
 | Icon, name, description, banner, splash               | 🔨     | Banner/splash ⏳; image icons ⏳ (emoji icons today)                                   |
 | Scheduled events, RSVP, reminders, cancel, delete     | ✅     | 1.0.18                                                                                 |
 | Announcement channels                                 | ✅     | Following across communities ⏳                                                        |
-| Ownership transfer                                    | ⏳     |                                                                                        |
+| Ownership transfer                                    | ✅     | 1.0.19, owner only, audited                                                            |
 | Server deletion with confirmation                     | ✅     |                                                                                        |
 | Templates                                             | ✅     |                                                                                        |
 | Insights / analytics                                  | 🔒     | Server cannot see content; local stats possible ⏳                                     |
@@ -154,21 +154,21 @@ are named where it helps. This file is updated with every release.
 
 ## 8. Voice, audio and calls
 
-| Item                                           | Status  | Notes                                    |
-| ---------------------------------------------- | ------- | ---------------------------------------- |
-| Join/leave/move, states, participant counts    | ✅      | Reconnect-safe (1.0.16)                  |
-| Full / locked / unavailable channels           | ✅      |                                          |
-| Device change without dropping                 | ✅      |                                          |
-| Connection quality display                     | 🔨      | Connection check ✅; per-person stats ⏳ |
-| Mute/deafen, devices, volumes, per-user volume | ✅      |                                          |
-| Mic test, input sensitivity, PTT, noise/echo   | ✅ / 🔨 | Sensitivity slider ⏳                    |
-| Server mute/deafen, move, disconnect           | ✅ / 🔨 | Server deafen ⏳                         |
-| Speaking indicators, priority speaker          | ✅ / ⏳ |                                          |
-| Camera, screen share, grid/focus, pin          | ✅      | Stream quality settings ⏳               |
-| Stream audio                                   | ⏳      |                                          |
-| Relay when direct connection impossible        | ✅      | 1.0.16 (voice; video still direct)       |
-| Stage channels                                 | ⏳      |                                          |
-| Soundboard                                     | ⏳      |                                          |
+| Item                                           | Status  | Notes                                            |
+| ---------------------------------------------- | ------- | ------------------------------------------------ |
+| Join/leave/move, states, participant counts    | ✅      | Reconnect-safe (1.0.16)                          |
+| Full / locked / unavailable channels           | ✅      |                                                  |
+| Device change without dropping                 | ✅      |                                                  |
+| Connection quality display                     | ✅      | Connection check ✅; per-person bars (1.0.19) ✅ |
+| Mute/deafen, devices, volumes, per-user volume | ✅      |                                                  |
+| Mic test, input sensitivity, PTT, noise/echo   | ✅ / 🔨 | Sensitivity slider ⏳                            |
+| Server mute/deafen, move, disconnect           | ✅ / 🔨 | Server deafen ⏳                                 |
+| Speaking indicators, priority speaker          | ✅ / ⏳ |                                                  |
+| Camera, screen share, grid/focus, pin          | ✅      | Stream quality settings ⏳                       |
+| Stream audio                                   | ⏳      |                                                  |
+| Relay when direct connection impossible        | ✅      | 1.0.16 (voice; video still direct)               |
+| Stage channels                                 | ⏳      |                                                  |
+| Soundboard                                     | ⏳      |                                                  |
 
 ## 9. Notifications and sounds
 
