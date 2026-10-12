@@ -1,3 +1,5 @@
+import type { CallView } from '../../../shared/dm.ts';
+import { callNote, callsBetween } from '../dm/call-notes.ts';
 import { NotifyMenuSection } from '../community/ui/NotifyMenu.tsx';
 import { ForwardDialog } from '../community/ui/Forward.tsx';
 import { useDraft } from '../community/drafts.ts';
@@ -257,6 +259,16 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
   const dm = useDm();
   const messages = useDm((x) => x.messages[c.riverId]) ?? [];
   const [showPins, setShowPins] = useState(false);
+  // Calls with this person, from the local call history, shown between messages (1.0.29).
+  const [calls, setCalls] = useState<CallView[]>([]);
+  // Re-read after a call with this person starts or ends, and when a call was missed.
+  const callBusy = useDmCall((x) => x.active?.peer === c.riverId || x.incoming?.peer === c.riverId);
+  useEffect(() => {
+    if (c.kind === 'group') return;
+    void window.river.dm.action({ a: 'calls' }).then((r) => {
+      if (r.ok) setCalls((r.value as CallView[]).filter((x) => x.peer === c.riverId));
+    });
+  }, [c.riverId, c.kind, callBusy]);
   const pinned = messages.filter((m) => m.pinned);
   const myName = useRiver((r) => r.identity?.displayName) ?? 'You';
   const myId = dm.myId ?? '';
@@ -625,6 +637,9 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
             Date.parse(m.sentAt) - Date.parse(prev.sentAt) < GROUP_MS;
           return (
             <div key={m.id}>
+              {callsBetween(calls, prev?.sentAt ?? null, m.sentAt).map((call) => (
+                <CallNote key={call.id} call={call} />
+              ))}
               {newDay && (
                 <div className="chat__day">
                   <span>{dayLabel(m.sentAt)}</span>
@@ -642,6 +657,9 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
             </div>
           );
         })}
+        {callsBetween(calls, messages.at(-1)?.sentAt ?? null, null).map((call) => (
+          <CallNote key={call.id} call={call} />
+        ))}
       </div>
       {c.state === 'left' ? (
         <div className="chat__composer chat__composer--locked">
@@ -717,6 +735,17 @@ function ConvAvatar({ c, size }: { c: ConversationView; size: number }): ReactEl
       </span>
     );
   return <Avatar id={c.riverId} name={c.name} avatar={c.avatar} size={size} />;
+}
+
+function CallNote({ call }: { call: CallView }): ReactElement {
+  return (
+    <div className={`call-note ${!call.answered && call.direction === 'in' ? 'is-missed' : ''}`}>
+      <span>{callNote(call)}</span>
+      <time className="muted small" title={new Date(call.startedAt).toLocaleString()}>
+        {timeOf(call.startedAt)}
+      </time>
+    </div>
+  );
 }
 
 function DmMessage(props: {

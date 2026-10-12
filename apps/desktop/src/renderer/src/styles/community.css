@@ -5436,3 +5436,17 @@ input.switch:disabled {
   display: flex;
   gap: 4px;
 }
+
+/* Call notes in conversations (1.0.29) */
+.call-note {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.call-note.is-missed {
+  color: #da373c;
+}
