@@ -448,6 +448,7 @@ describe('communities', () => {
       const { cid } = await createCommunity(a, owner.token);
       const c = await fetchCommunity(a, owner.token, cid);
       expect(c.ownerId).toBe(owner.riverId);
+      expect(c.members[0]!.joinedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(c.roles).toEqual([{ id: cid, name: '', color: 0, permissions: DEFAULT_EVERYONE, position: 0 }]);
     });
 

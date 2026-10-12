@@ -172,6 +172,12 @@ export function ProfileCard(props: {
         >
           {member.riverId.slice(0, 8)}… · Copy ID
         </button>
+        {member.joinedOn && (
+          <div className="muted small profile-card__since">
+            Member of {community.name} since{' '}
+            {new Date(`${member.joinedOn}T12:00:00`).toLocaleDateString([], { dateStyle: 'medium' })}
+          </div>
+        )}
         {member.bio && (
           <>
             <div className="profile-card__section">About me</div>

@@ -261,6 +261,8 @@ export interface MemberView {
   rank: number;
   /** Timed out until then (cannot talk, react or join voice), or null. */
   timeoutUntil: string | null;
+  /** The day they joined this community, YYYY-MM-DD (1.0.21). */
+  joinedOn?: string;
 }
 
 /** One line of Settings → System → Connection check. Never contains content, keys or tokens. */

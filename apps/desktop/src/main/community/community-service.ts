@@ -749,6 +749,7 @@ export class CommunityService {
         owner: m.riverId === ownerId,
         rank: topPosition(ownerId, wireRoles, { riverId: m.riverId, roles: m.roles }),
         timeoutUntil: m.timeoutUntil && Date.parse(m.timeoutUntil) > Date.now() ? m.timeoutUntil : null,
+        ...(m.joinedOn ? { joinedOn: m.joinedOn } : {}),
       };
     });
 

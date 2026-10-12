@@ -363,6 +363,7 @@ export async function registerCommunityRoutes(
         profile: req.profile,
         online: true,
         timeoutUntil: model.timedOut(m.riverId) ? m.timeoutUntil : null,
+        ...(/^\d{4}-\d{2}-\d{2}$/.test(m.joinedOn) ? { joinedOn: m.joinedOn } : {}),
       },
     });
     return { ok: true };
@@ -1391,6 +1392,7 @@ export async function registerCommunityRoutes(
             profile: req.profile,
             online: true,
             timeoutUntil: null,
+            joinedOn: day(now),
           },
         });
         await audit(model.id, me(request), 'member.join', me(request));

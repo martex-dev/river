@@ -112,6 +112,11 @@ export const memberSchema = z.object({
   status: presenceStatusSchema.optional(),
   /** Timed out until this moment (1.0.6); null when not timed out. */
   timeoutUntil: z.string().max(40).nullable().default(null),
+  /** The day they joined, YYYY-MM-DD (1.0.21). */
+  joinedOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 export type MemberWire = z.infer<typeof memberSchema>;
 
