@@ -345,4 +345,12 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 20,
+    name: '0020_group_icons',
+    up(db) {
+      // An emoji for a group conversation (1.0.25), set by its admins.
+      db.exec(`ALTER TABLE dm_groups ADD COLUMN icon TEXT;`);
+    },
+  },
 ];

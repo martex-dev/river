@@ -217,11 +217,7 @@ function ConversationRow({ c }: { c: ConversationView }): ReactElement {
       className={`dm-row ${dm.selected === c.riverId ? 'is-active' : ''} ${c.unread ? 'is-unread' : ''} ${c.state === 'blocked' ? 'is-blocked' : ''}`}
       onClick={() => dm.select(c.riverId)}
     >
-      {c.kind === 'group' ? (
-        <GroupAvatar c={c} size={36} />
-      ) : (
-        <Avatar id={c.riverId} name={c.name} avatar={c.avatar} size={36} />
-      )}
+      {c.kind === 'group' ? <GroupAvatar c={c} size={36} /> : <ConvAvatar c={c} size={36} />}
       <span className="dm-row__text">
         <span className="dm-row__top">
           <strong>{c.name}</strong>
@@ -270,6 +266,7 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
   const activeCall = useDmCall((s) => s.active);
   const [showMembers, setShowMembers] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [iconPicker, setIconPicker] = useState<{ x: number; y: number } | null>(null);
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
@@ -327,11 +324,7 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
         </div>
       )}
       <header className="chat__head">
-        {c.kind === 'group' ? (
-          <GroupAvatar c={c} size={28} />
-        ) : (
-          <Avatar id={c.riverId} name={c.name} avatar={c.avatar} size={28} />
-        )}
+        {c.kind === 'group' ? <GroupAvatar c={c} size={28} /> : <ConvAvatar c={c} size={28} />}
         <strong>{c.name}</strong>
         {c.kind === 'group' ? (
           <button className="chip dm-lock" onClick={() => setShowMembers(!showMembers)} title="Group members">
@@ -402,6 +395,16 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
                   }}
                 >
                   Rename group
+                </MenuItem>
+              )}
+              {c.isAdmin && (
+                <MenuItem
+                  onClick={() => {
+                    setIconPicker(menu);
+                    setMenu(null);
+                  }}
+                >
+                  Change icon
                 </MenuItem>
               )}
               {c.isAdmin && (
@@ -490,6 +493,17 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
       )}
       <DmCallPanel conversation={c} />
       {showMembers && c.kind === 'group' && <GroupMembers c={c} onClose={() => setShowMembers(false)} />}
+      {iconPicker && (
+        <Popover x={iconPicker.x} y={iconPicker.y} onClose={() => setIconPicker(null)}>
+          <EmojiPicker
+            onPick={(e) => {
+              setIconPicker(null);
+              if (!e.startsWith('<'))
+                void useDm.getState().run({ a: 'setGroupIcon', peer: c.riverId, icon: e });
+            }}
+          />
+        </Popover>
+      )}
       {renaming !== null && (
         <Modal title="Rename group" onClose={() => setRenaming(null)}>
           <form
@@ -548,7 +562,7 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
       )}
       <div className="chat__messages" ref={scrollRef}>
         <div className="chat__welcome">
-          <Avatar id={c.riverId} name={c.name} avatar={c.avatar} size={72} />
+          <ConvAvatar c={c} size={72} />
           <h2>{c.name}</h2>
           <p className="muted">
             This is the beginning of your conversation with {c.name}. Messages are end-to-end encrypted.
@@ -643,6 +657,21 @@ const STATUS_LABEL: Record<DirectMessageView['status'], string> = {
   failed: 'Not sent',
   received: '',
 };
+
+/** A conversation's picture: a group's emoji, else the person's avatar. */
+function ConvAvatar({ c, size }: { c: ConversationView; size: number }): ReactElement {
+  if (c.icon)
+    return (
+      <span
+        className="group-icon"
+        style={{ width: size, height: size, fontSize: size * 0.55 }}
+        aria-hidden="true"
+      >
+        {c.icon}
+      </span>
+    );
+  return <Avatar id={c.riverId} name={c.name} avatar={c.avatar} size={size} />;
+}
 
 function DmMessage(props: {
   m: DirectMessageView;

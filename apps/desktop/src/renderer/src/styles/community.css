@@ -5120,3 +5120,14 @@ input.switch:disabled {
   font-weight: 800;
   letter-spacing: 0.04em;
 }
+
+/* Group icons (1.0.25) */
+.group-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 50%;
+  background: var(--surface-hover);
+  line-height: 1;
+}

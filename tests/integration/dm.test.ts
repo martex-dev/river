@@ -288,6 +288,10 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     );
     await alice.dm.action({ a: 'removeGroupMember', peer: group.riverId, member: carol.riverId });
     await alice.dm.action({ a: 'renameGroup', peer: group.riverId, name: 'Trip (final)' });
+    await alice.dm.action({ a: 'setGroupIcon', peer: group.riverId, icon: '⛺' });
+    await expect(bob.dm.action({ a: 'setGroupIcon', peer: group.riverId, icon: '💀' })).rejects.toThrow(
+      /admins/,
+    );
     await alice.dm.action({ a: 'send', peer: group.riverId, text: 'tent sorted' });
     await carol.dm.sync();
     await bob.dm.sync();
@@ -299,6 +303,7 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     expect((await bob.dm.action({ a: 'conversations' })).find((c) => c.kind === 'group')!.name).toBe(
       'Trip (final)',
     );
+    expect((await bob.dm.action({ a: 'conversations' })).find((c) => c.kind === 'group')!.icon).toBe('⛺');
 
     // Someone outside the group cannot post into it.
     await (dave.dm as unknown as { sendContent(p: string, c: unknown): Promise<void> }).sendContent(
