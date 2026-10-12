@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.24] - 2026-10-12
+
+**Welcome people well: rules, pick-your-roles, stickers and cleaner moderation.**
+
 ### Added
 
 - **Stickers:** communities add their own (Community settings → Stickers);
