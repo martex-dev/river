@@ -8,6 +8,9 @@ All notable changes to River are documented here. The format follows
 
 ### Added (1.0.25)
 
+- **Screen share quality:** choose Sharp text (1080p, 15 fps), Balanced
+  (720p, 30 fps) or Smooth motion (1080p, 60 fps) when you share; River
+  remembers your choice.
 - **Group icons:** group admins pick an emoji for the conversation
   (right-click the group → Change icon).
 - **Your GIFs, privately:** click ☆ on any GIF or picture in a chat to keep
