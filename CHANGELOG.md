@@ -8,6 +8,9 @@ All notable changes to River are documented here. The format follows
 
 ### Added
 
+- **Export my data** (Settings → Account): save a readable copy of your
+  profile, settings, contacts, direct messages, groups, calls, posts and
+  saved messages. It never contains your keys.
 - **Soundboard.** Play short sounds to everyone in a voice channel from the
   🎵 button; right-click one to hear it yourself first. People with *Manage
   emoji & sounds* upload clips (up to 5.5 seconds) with a name and emoji in

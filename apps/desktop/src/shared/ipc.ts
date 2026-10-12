@@ -45,6 +45,7 @@ export const IPC = {
   accountConnect: 'river:account:connect',
   accountSetUsername: 'river:account:set-username',
   accountDelete: 'river:account:delete',
+  accountExport: 'river:account:export',
   accountRedeemSignup: 'river:account:redeem-signup',
   usersLookup: 'river:users:lookup',
   accountStatusChanged: 'river:account:status-changed',
@@ -461,6 +462,8 @@ export interface RiverApi {
     redeemSignup(link: string): Promise<Result<AccountStatus>>;
     /** Delete your account from its server for good (1.0.18). */
     deleteAccount(): Promise<Result<null>>;
+    /** Save a readable copy of your data (1.0.23); false when the save dialog was cancelled. */
+    exportData(): Promise<Result<boolean>>;
     onStatus(listener: (status: AccountStatus) => void): () => void;
   };
   /** Find people by @username to add them. */

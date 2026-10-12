@@ -1,3 +1,4 @@
+import { buildExport } from './data-export.ts';
 import { writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import {
@@ -371,6 +372,25 @@ export function registerIpc(deps: IpcDeps): void {
       // Never quietly make a new account on River's server after this.
       deps.settings.update({ server: { autoAccount: false } });
       return null;
+    }),
+  );
+  handle(IPC.accountExport, (event) =>
+    result(async () => {
+      const db = deps.storage.db();
+      if (!db) throw new UserFacingError('Unlock River first.');
+      const data = buildExport(db, deps.settings.get(), deps.appInfo().version);
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const options = {
+        defaultPath: join(
+          app.getPath('documents'),
+          `river-data-${new Date().toISOString().slice(0, 10)}.json`,
+        ),
+        filters: [{ name: 'River data (JSON)', extensions: ['json'] }],
+      };
+      const choice = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+      if (choice.canceled || !choice.filePath) return false;
+      await writeFile(choice.filePath, JSON.stringify(data, null, 2), 'utf8');
+      return true;
     }),
   );
   handle(IPC.usersLookup, (_e, username) =>

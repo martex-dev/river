@@ -69,6 +69,7 @@ const api: RiverApi = {
     setUsername: (username) => ipcRenderer.invoke(IPC.accountSetUsername, username),
     redeemSignup: (link) => ipcRenderer.invoke(IPC.accountRedeemSignup, link),
     deleteAccount: () => ipcRenderer.invoke(IPC.accountDelete),
+    exportData: () => ipcRenderer.invoke(IPC.accountExport),
     onStatus: (listener) => {
       const handler = (_event: unknown, status: AccountStatus): void => listener(status);
       ipcRenderer.on(IPC.accountStatusChanged, handler);
