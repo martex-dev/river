@@ -5107,7 +5107,11 @@ input.switch:disabled {
   opacity: 0;
   transition: opacity var(--dur);
 }
-.attachment-image:hover .favorite-star,
+.attachment-image-wrap {
+  position: relative;
+  max-width: 100%;
+}
+.attachment-image-wrap:hover .favorite-star,
 .favorite-star:focus-visible,
 .favorite-star.is-on {
   opacity: 1;
