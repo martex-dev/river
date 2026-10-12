@@ -50,7 +50,7 @@ are named where it helps. This file is updated with every release.
 | DM: send/edit/delete/reply/react/pin?                                        | ✅ / 🔨 | All but DM pins ⏳                                                                                             |
 | Quote, forward, copy, copy link, jump, mark unread                           | 🔨      | In channels ✅ (1.0.17); in DMs: copy/quote ✅, forward from DM ⏳                                             |
 | Report message                                                               | ⏳      |                                                                                                                |
-| Multiline, Enter/Shift+Enter, drafts                                         | ✅      | Drafts kept while open; persisted drafts ⏳                                                                    |
+| Multiline, Enter/Shift+Enter, drafts                                         | ✅      | Per-channel drafts while open (1.0.20); on-disk drafts 🔒 (would store unsent text)                            |
 | Emoji picker                                                                 | ✅      | 1.0.17 (+ custom emoji 1.0.19)                                                                                 |
 | GIF picker                                                                   | 🔒 ⏳   | Public GIF services see searches and IPs; a privacy-respecting option (proxied or local favourites) is planned |
 | Sticker picker                                                               | ⏳      |                                                                                                                |
@@ -60,7 +60,7 @@ are named where it helps. This file is updated with every release.
 | Image/video/audio/document attachments, size, progress, retry                | ✅      | Cancel upload ⏳; alt text ⏳; captions = message text                                                         |
 | Message states (sending/sent/failed/retrying/edited/deleted)                 | ✅      | Outbox (1.0.5)                                                                                                 |
 | New-message divider, unread, typing, read receipts (DM)                      | ✅      |                                                                                                                |
-| Search conversation, load older, newest button, scroll-to-bottom             | ✅      | Jump to date ⏳                                                                                                |
+| Search conversation, load older, newest button, scroll-to-bottom             | ✅      | Jump to date ✅ (1.0.20)                                                                                       |
 | Close/hide DM, group DMs (create, rename, icon, add/remove, leave)           | ✅ / 🔨 | Group icon ⏳                                                                                                  |
 | Who can message you, message requests, blocks                                | ✅      |                                                                                                                |
 | Spam filtering, suspicious links                                             | 🔨      | Link confirmation shows real address (1.0.17); filtering ⏳                                                    |
@@ -92,18 +92,18 @@ are named where it helps. This file is updated with every release.
 
 ## 4. Formatting, reactions and expression
 
-| Item                                              | Status  | Notes                               |
-| ------------------------------------------------- | ------- | ----------------------------------- |
-| Emoji picker, search, recent, categories          | ✅      | Favorites ⏳                        |
-| Custom emoji: upload, rename, delete, permissions | ✅ / 🔨 | 1.0.19; rename ⏳ (delete + re-add) |
-| Animated custom emoji                             | ✅      | Small GIFs kept as-is               |
-| Stickers                                          | ⏳      |                                     |
-| GIFs                                              | 🔒 ⏳   | See §2                              |
-| Multiple reactions, counts, removal, user list    | ✅      |                                     |
-| Super reactions                                   | ✖       | Paid feature                        |
-| Markdown incl. escaping, malformed fallback       | ✅      |                                     |
-| Timestamps `<t:…>`, message links, channel refs   | ✅      |                                     |
-| Soundboard                                        | ⏳      | Planned with voice polish           |
+| Item                                              | Status | Notes                     |
+| ------------------------------------------------- | ------ | ------------------------- |
+| Emoji picker, search, recent, categories          | ✅     | Favourites (1.0.20)       |
+| Custom emoji: upload, rename, delete, permissions | ✅     | 1.0.19; rename 1.0.20     |
+| Animated custom emoji                             | ✅     | Small GIFs kept as-is     |
+| Stickers                                          | ⏳     |                           |
+| GIFs                                              | 🔒 ⏳  | See §2                    |
+| Multiple reactions, counts, removal, user list    | ✅     |                           |
+| Super reactions                                   | ✖      | Paid feature              |
+| Markdown incl. escaping, malformed fallback       | ✅     |                           |
+| Timestamps `<t:…>`, message links, channel refs   | ✅     |                           |
+| Soundboard                                        | ⏳     | Planned with voice polish |
 
 ## 5. Communities
 
@@ -130,7 +130,7 @@ are named where it helps. This file is updated with every release.
 | Drag-and-drop server order, folders (create/rename/colour/collapse) | ✅     | 1.0.18                                         |
 | Categories create/rename/reorder/collapse/delete/permissions        | ✅     | 1.0.0/1.0.6                                    |
 | Text, voice, announcement channels                                  | ✅     | Forum ⏳, stage ⏳, media ⏳                   |
-| Duplicate channel                                                   | ⏳     |                                                |
+| Duplicate channel                                                   | ✅     | 1.0.20                                         |
 | Topic, slowmode, per-channel notifications, permissions             | ✅     | NSFW flag ⏳                                   |
 | Private channels, synced/unsynced overrides                         | ✅     |                                                |
 | Channel search, unread navigation, recent history                   | ✅     | Quick switcher, Alt+Shift+↑/↓                  |
@@ -142,7 +142,7 @@ are named where it helps. This file is updated with every release.
 
 | Item                                                 | Status  | Notes                                                                                          |
 | ---------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
-| Create/edit/delete roles, colour, hoist, mentionable | ✅      | Duplicate ⏳, icons ⏳                                                                         |
+| Create/edit/delete roles, colour, hoist, mentionable | ✅      | Duplicate ✅ (1.0.20), icons ⏳                                                                |
 | Drag-and-drop hierarchy                              | 🔨      | Up/down arrows today                                                                           |
 | Assign/remove, view members                          | ✅      | Bulk ⏳                                                                                        |
 | Self-assignable / reaction roles                     | ⏳      |                                                                                                |
@@ -161,8 +161,8 @@ are named where it helps. This file is updated with every release.
 | Device change without dropping                 | ✅      |                                                  |
 | Connection quality display                     | ✅      | Connection check ✅; per-person bars (1.0.19) ✅ |
 | Mute/deafen, devices, volumes, per-user volume | ✅      |                                                  |
-| Mic test, input sensitivity, PTT, noise/echo   | ✅ / 🔨 | Sensitivity slider ⏳                            |
-| Server mute/deafen, move, disconnect           | ✅ / 🔨 | Server deafen ⏳                                 |
+| Mic test, input sensitivity, PTT, noise/echo   | ✅      | Sensitivity slider (1.0.20)                      |
+| Server mute/deafen, move, disconnect           | ✅      | Server deafen (1.0.20)                           |
 | Speaking indicators, priority speaker          | ✅ / ⏳ |                                                  |
 | Camera, screen share, grid/focus, pin          | ✅      | Stream quality settings ⏳                       |
 | Stream audio                                   | ⏳      |                                                  |
@@ -180,23 +180,23 @@ are named where it helps. This file is updated with every release.
 | DND suppression                                                    | ✅      | 1.0.17                                     |
 | Preview choice                                                     | ✅      |                                            |
 | Mobile push, e-mail                                                | ⏳ / 🔒 | Push with mobile apps (Stage 2); no e-mail |
-| Quiet hours                                                        | ⏳      |                                            |
+| Quiet hours                                                        | ✅      | 1.0.20                                     |
 | Sound registry with groups and volume                              | ✅      | 1.0.1                                      |
 
 ## 10–12. Search, threads, forums, mentions
 
-| Item                                               | Status | Notes                                   |
-| -------------------------------------------------- | ------ | --------------------------------------- |
-| Search channel/community on device, jump to result | ✅     | Filters (author/date/has:) ⏳           |
-| Quick switcher, recent channels                    | ✅     |                                         |
-| Back/forward navigation                            | ⏳     |                                         |
-| Threads from messages, replies, archive            | ✅     | Follow/unfollow ⏳                      |
-| Forums                                             | ⏳     |                                         |
-| Mentions with autocomplete, role checks, highlight | ✅     |                                         |
-| Mention suppression per message                    | ✅     | @ON/OFF on replies (1.0.18)             |
-| Pins, pinned list                                  | ✅     |                                         |
-| Bookmarks / saved messages                         | ✅     | Saved messages, on this device (1.0.19) |
-| Polls                                              | ✅     | 1.0.18                                  |
+| Item                                               | Status | Notes                                                                    |
+| -------------------------------------------------- | ------ | ------------------------------------------------------------------------ |
+| Search channel/community on device, jump to result | ✅     | Filters from:/in:/has:/before:/after:/during:/pinned:/mentions: (1.0.20) |
+| Quick switcher, recent channels                    | ✅     |                                                                          |
+| Back/forward navigation                            | ✅     | Alt+←/→, ⌘[/⌘], mouse buttons (1.0.20)                                   |
+| Threads from messages, replies, archive            | ✅     | Follow/unfollow ⏳                                                       |
+| Forums                                             | ⏳     |                                                                          |
+| Mentions with autocomplete, role checks, highlight | ✅     |                                                                          |
+| Mention suppression per message                    | ✅     | @ON/OFF on replies (1.0.18)                                              |
+| Pins, pinned list                                  | ✅     |                                                                          |
+| Bookmarks / saved messages                         | ✅     | Saved messages, on this device (1.0.19)                                  |
+| Polls                                              | ✅     | 1.0.18                                                                   |
 
 ## 13–14. Moderation and audit
 
