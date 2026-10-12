@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-12 · Current version: **1.0.25** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
+_Last updated: 2026-10-12 · Current version: **1.0.26** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
 
 ## Complete
 
@@ -37,6 +37,7 @@ _Last updated: 2026-10-12 · Current version: **1.0.25** · Stage 1 complete · 
 | Data & safety           | Export my data, sender-made link previews (opt-in), moderator notes, reaction notices, DM forward                                                                                                           | `data-export.test.ts`, `link-preview.test.ts`, integration                                                           |
 | Onboarding & moderation | Rules screening, self-assignable roles, stickers, bulk delete, audit filters                                                                                                                                | `communities.test.ts`, integration, `audit-filter.test.ts`, e2e                                                      |
 | Comfort & expression    | Favourite GIFs, group icons, per-community pictures, avatar crop, screen quality, followed threads, forum pin/close, slash commands                                                                         | `slash.test.tsx`, `avatar-crop.test.tsx`, `thread-follow.test.tsx`, integration, e2e                                 |
+| Understanding & media   | Access check (permission explainer), insights, conversation mute, entrance sounds, leave when alone, media channels                                                                                         | `permission-explain.test.ts`, `insights.test.ts`, `media-gallery.test.tsx`, e2e                                      |
 | Diagnostics             | Connection check (Settings → System), startup failure dialog, GPU fallback, `--self-test`                                                                                                                   | `diagnostics*.test.ts*`, `startup-guard.test.ts`                                                                     |
 
 ## Partially complete

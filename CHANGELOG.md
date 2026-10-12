@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.26] - 2026-10-12
+
+**Understand your community: why someone can or can't, insights, and media channels.**
+
 ### Added
 
 - **Media channels:** turn a text channel into a gallery of the pictures
