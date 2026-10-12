@@ -6,10 +6,6 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-## [1.0.23] - 2026-10-12
-
-**Yours to keep: export your data, private link previews and moderator notes.**
-
 ### Added
 
 - **Stickers:** communities add their own (Community settings → Stickers);
@@ -24,6 +20,13 @@ All notable changes to River are documented here. The format follows
 - **Pick your roles:** offer roles members can give themselves (never ones
   that moderate); new members are asked after accepting the rules, and
   anyone can change them from the community menu.
+
+## [1.0.23] - 2026-10-12
+
+**Yours to keep: export your data, private link previews and moderator notes.**
+
+### Added
+
 - **Link previews, made privately** (Settings → Appearance, off by
   default): when you send a link, your River fetches the page's title and
   description and seals them into your message, so people reading it never
