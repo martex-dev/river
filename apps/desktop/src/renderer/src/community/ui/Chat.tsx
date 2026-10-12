@@ -13,6 +13,7 @@ import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, ChatMessage, CommunityView } from '../../../../shared/ipc.ts';
 import { useShallow } from 'zustand/react/shallow';
 import { useOutbox, type Outgoing } from '../outbox.ts';
+import { useDraft } from '../drafts.ts';
 import { play } from '../sound.ts';
 import { typingNames, useCommunity } from '../store.ts';
 import { AttachmentList, PendingFiles, pendingFrom, uploadAll, type PendingFile } from './Attachments.tsx';
@@ -902,7 +903,8 @@ function Composer(props: {
 }): ReactElement {
   const { community, channel, me } = props;
   const s = useCommunity();
-  const [text, setText] = useState('');
+  // Each channel keeps its own unsent text while River is open (never written to disk).
+  const [text, setText] = useDraft(`c:${channel.id}`);
   // Replies notify the person you reply to, unless you switch it off for that reply (like Discord's "@ ON").
   const [pingOffFor, setPingOffFor] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
@@ -915,7 +917,7 @@ function Composer(props: {
         useCommunity.setState({ draftInsert: null });
         setText((t) => `${insert}${t}`);
       }),
-    [],
+    [setText],
   );
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);

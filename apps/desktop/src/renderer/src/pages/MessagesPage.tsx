@@ -1,3 +1,4 @@
+import { useDraft } from '../community/drafts.ts';
 import { clockTime } from '../time.ts';
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import type { ConversationView, DirectMessageView } from '../../../shared/dm.ts';
@@ -845,7 +846,7 @@ function DmComposer(props: {
 }): ReactElement {
   const c = props.conversation;
   const dm = useDm();
-  const [text, setText] = useState('');
+  const [text, setText] = useDraft(`d:${c.riverId}`);
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null);
   const lastTyping = useRef(0);
