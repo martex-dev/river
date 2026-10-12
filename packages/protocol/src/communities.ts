@@ -394,6 +394,23 @@ export const createEmojiRequestSchema = z
 /** Rename (1.0.20): the whole sealed { name, image } is replaced. */
 export const updateEmojiRequestSchema = z.object({ data: sealedSchema(SEALED_EMOJI) }).strict();
 
+/** Moderator notes about a member (1.0.23): a sealed { text }. */
+export const SEALED_NOTE = 4 * 1024;
+export const MAX_NOTES_PER_MEMBER = 50;
+export const createNoteRequestSchema = z
+  .object({ id: z.string().regex(COMMUNITY_ID_RE), data: sealedSchema(SEALED_NOTE) })
+  .strict();
+export const notesResponseSchema = z.object({
+  notes: z.array(
+    z.object({
+      id: z.string().regex(COMMUNITY_ID_RE),
+      author: riverIdSchema,
+      data: sealedSchema(SEALED_NOTE),
+      createdAt: z.string(),
+    }),
+  ),
+});
+
 /** A sealed { name, emoji, audio } soundboard sound (1.0.22); audio is a short clip as a data URL. */
 export const SEALED_SOUND = 240 * 1024;
 export const MAX_COMMUNITY_SOUNDS = 48;

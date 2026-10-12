@@ -427,6 +427,12 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('reports'), communityId: id }).strict(),
+  // Moderator notes (1.0.23): sealed with the community key, listed only to moderators.
+  z.object({ a: z.literal('notes'), communityId: id, riverId }).strict(),
+  z
+    .object({ a: z.literal('addNote'), communityId: id, riverId, text: z.string().trim().min(1).max(1000) })
+    .strict(),
+  z.object({ a: z.literal('deleteNote'), noteId: id }).strict(),
   // Soundboard (1.0.22): name, emoji and clip sealed with the community key.
   z.object({ a: z.literal('sounds'), communityId: id }).strict(),
   z
@@ -496,6 +502,14 @@ export const REPORT_REASONS = [
   'Something else',
 ];
 
+export interface NoteView {
+  id: string;
+  author: string;
+  authorName: string;
+  text: string;
+  createdAt: string;
+}
+
 export interface SoundView {
   id: string;
   name: string;
@@ -538,6 +552,8 @@ export interface BanView {
 
 interface Results {
   createRole: string;
+  notes: NoteView[];
+  addNote: string;
   sounds: SoundView[];
   addSound: string;
   report: string;

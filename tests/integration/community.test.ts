@@ -373,6 +373,38 @@ describe('reports', () => {
   });
 });
 
+describe('moderator notes', () => {
+  it('are sealed, shown to moderators with their author, and hidden from others', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Notes');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    await alice.community.refresh();
+    await alice.community.action({
+      a: 'addNote',
+      communityId: created.id,
+      riverId: bob.riverId,
+      text: 'warned about spam',
+    });
+    const [note] = await alice.community.action({
+      a: 'notes',
+      communityId: created.id,
+      riverId: bob.riverId,
+    });
+    expect(note).toMatchObject({ authorName: 'Alice', text: 'warned about spam' });
+    const stored = JSON.stringify(await serverDb.db.selectFrom('member_notes').selectAll().execute());
+    expect(stored).not.toContain('spam');
+    await bob.community.refresh();
+    await expect(
+      bob.community.action({ a: 'notes', communityId: created.id, riverId: bob.riverId }),
+    ).rejects.toThrow();
+    await alice.community.action({ a: 'deleteNote', noteId: note!.id });
+    expect(
+      await alice.community.action({ a: 'notes', communityId: created.id, riverId: bob.riverId }),
+    ).toEqual([]);
+  });
+});
+
 describe('soundboard', () => {
   it('sounds are sealed, renamed and shared with members', async () => {
     const alice = await person('Alice');

@@ -27,6 +27,7 @@ import {
   emojisResponseSchema,
   reportsResponseSchema,
   soundsResponseSchema,
+  notesResponseSchema,
   eventsResponseSchema,
   decodeRelayIn,
   encodeRelayOut,
@@ -44,6 +45,7 @@ import {
   type ReportView,
   linkEmbedSchema,
   type SoundView,
+  type NoteView,
   SOUND_DATA_URL,
   type SavedMessageView,
   EMOJI_NAME,
@@ -1844,6 +1846,53 @@ export class CommunityService {
         return (await this.reports(act.communityId)) as CommunityActionResult<A>;
       case 'sounds':
         return (await this.sounds(act.communityId)) as CommunityActionResult<A>;
+      case 'notes': {
+        const ring = this.keys.get(act.communityId);
+        if (!ring) throw new CommunityError('Waiting for the community key…');
+        const community = this.requireCommunity(act.communityId);
+        const res = await this.call(
+          `/communities/${act.communityId}/members/${act.riverId}/notes`,
+          'GET',
+          undefined,
+          notesResponseSchema,
+        ).catch(explain);
+        return res.notes.map((n): NoteView => {
+          let text: string;
+          try {
+            text = String(
+              ring.open<{ text?: unknown }>(act.communityId, `note:${n.id}`, n.data).text ?? '',
+            ).slice(0, 1000);
+          } catch {
+            text = '(cannot be read on this device)';
+          }
+          return {
+            id: n.id,
+            author: n.author,
+            authorName:
+              community.members.find((m) => m.riverId === n.author)?.name ??
+              this.knownNames.get(n.author) ??
+              'A former moderator',
+            text,
+            createdAt: n.createdAt,
+          };
+        }) as CommunityActionResult<A>;
+      }
+      case 'addNote': {
+        const noteId = randomId();
+        const data = seal(this.requireKey(act.communityId), act.communityId, `note:${noteId}`, {
+          text: act.text,
+        });
+        await this.call(
+          `/communities/${act.communityId}/members/${act.riverId}/notes`,
+          'POST',
+          { id: noteId, data },
+          z.unknown(),
+        ).catch(explain);
+        return noteId as CommunityActionResult<A>;
+      }
+      case 'deleteNote':
+        await this.call(`/notes/${act.noteId}`, 'DELETE', undefined, z.unknown()).catch(explain);
+        break;
       case 'addSound': {
         const soundId = randomId();
         const data = seal(this.requireKey(act.communityId), act.communityId, `sound:${soundId}`, {

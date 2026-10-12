@@ -4886,3 +4886,30 @@ input.switch:disabled {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
+
+/* Moderator notes (1.0.23) */
+.mod-notes__note {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  background: rgba(240, 178, 50, 0.08);
+  border-left: 3px solid #f0b232;
+}
+.mod-notes__text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.mod-notes__add input {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+}

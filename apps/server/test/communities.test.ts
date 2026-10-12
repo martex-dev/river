@@ -22,6 +22,7 @@ import {
   emojisResponseSchema,
   reportsResponseSchema,
   soundsResponseSchema,
+  notesResponseSchema,
 } from '@river/protocol';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
@@ -417,6 +418,25 @@ describe('communities', () => {
         ).json(),
       ).reports[0]!;
       expect([after.status, after.resolvedBy]).toEqual(['resolved', mod.riverId]);
+    });
+
+    it('moderator notes are only for people who moderate members', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const other = await join(a, owner.token, cid);
+      const url = `/v1/communities/${cid}/members/${other.riverId}/notes`;
+      expect(await status(a, 'POST', url, member.token, { id: id(), data: sealed() })).toBe(403);
+      expect(await status(a, 'GET', url, member.token)).toBe(403);
+      const nid = id();
+      expect(await status(a, 'POST', url, owner.token, { id: nid, data: sealed() })).toBe(201);
+      const notes = notesResponseSchema.parse(
+        (await a.inject({ method: 'GET', url, headers: auth(owner.token) })).json(),
+      ).notes;
+      expect(notes.map((n) => [n.id, n.author])).toEqual([[nid, owner.riverId]]);
+      expect(await status(a, 'DELETE', `/v1/notes/${nid}`, member.token)).toBe(403);
+      expect(await status(a, 'DELETE', `/v1/notes/${nid}`, owner.token)).toBe(200);
     });
 
     it('custom emoji: managers add and remove, every member can list, strangers cannot', async () => {

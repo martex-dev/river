@@ -68,6 +68,10 @@ export function describeAudit(
       }
       case 'member.tempban':
         return `made ${person(t)}'s ban end ${typeof d.until === 'string' ? new Date(d.until).toLocaleString() : 'later'}`;
+      case 'note.create':
+        return `added a moderator note about ${person(t)}`;
+      case 'note.delete':
+        return `removed a moderator note about ${person(t)}`;
       case 'member.kick':
         return `kicked ${person(t)}`;
       case 'member.ban':
