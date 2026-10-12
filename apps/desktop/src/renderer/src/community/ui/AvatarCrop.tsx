@@ -25,7 +25,11 @@ export function AvatarCropDialog(props: {
   onDone(avatar: string): void;
   onClose(): void;
 }): ReactElement {
-  const [url] = useState(() => URL.createObjectURL(props.file));
+  // Only ever a blob: URL made here from the chosen file.
+  const [url] = useState(() => {
+    const made = URL.createObjectURL(props.file);
+    return made.startsWith('blob:') ? made : '';
+  });
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
