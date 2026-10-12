@@ -459,6 +459,22 @@ function VoiceSettings(): ReactElement {
           <p className="muted small">Push to talk works while the River window is focused.</p>
         </div>
       )}
+      <label className="sensitivity__slider">
+        <span className="field__label">Soundboard volume</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={Math.round(voice.soundboardVolume * 100)}
+          aria-valuetext={
+            voice.soundboardVolume === 0 ? 'Off' : `${Math.round(voice.soundboardVolume * 100)}%`
+          }
+          onChange={(e) => apply({ soundboardVolume: Number(e.target.value) / 100 })}
+        />
+        <span className="muted small">
+          How loud other people&apos;s soundboard sounds play for you (0 turns them off).
+        </span>
+      </label>
       <div className="perm-group__title">Voice processing</div>
       <Toggle
         label="Noise suppression"

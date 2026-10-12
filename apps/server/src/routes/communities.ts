@@ -31,6 +31,10 @@ import {
   createEventRequestSchema,
   transferOwnershipRequestSchema,
   createReportRequestSchema,
+  createSoundRequestSchema,
+  updateSoundRequestSchema,
+  MAX_COMMUNITY_SOUNDS,
+  SOUND_COOLDOWN_MS,
   banRequestSchema,
   MAX_BAN_DELETES,
   updateReportRequestSchema,
@@ -740,6 +744,89 @@ export async function registerCommunityRoutes(
     await db.updateTable('community_emojis').set({ data: req.data }).where('id', '=', id).execute();
     await audit(model.id, me(request), 'emoji.update', id);
     emojisChanged(model);
+    return { ok: true };
+  });
+
+  // ---- soundboard (1.0.22) ---------------------------------------------------------------------
+  const soundsChanged = (model: CommunityModel): void =>
+    toMembers(model, { t: 'sounds', communityId: model.id });
+
+  app.get<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/sounds`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    const rows = await db
+      .selectFrom('community_sounds')
+      .select(['id', 'created_by', 'data'])
+      .where('community_id', '=', model.id)
+      .orderBy('created_at')
+      .execute();
+    return { sounds: rows.map((r) => ({ id: r.id, createdBy: r.created_by, data: r.data })) };
+  });
+
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/communities/:id/sounds`,
+    { ...authed, bodyLimit: 400 * 1024 },
+    async (request, reply) => {
+      const model = await community(request.params.id, me(request));
+      if (!model.can(me(request), Permission.MANAGE_EXPRESSIONS)) throw forbidden();
+      const req = parse(createSoundRequestSchema, request.body);
+      const count = await db
+        .selectFrom('community_sounds')
+        .select(db.fn.countAll<number>().as('n'))
+        .where('community_id', '=', model.id)
+        .executeTakeFirstOrThrow();
+      if (Number(count.n) >= MAX_COMMUNITY_SOUNDS)
+        throw bad(`A community can have up to ${MAX_COMMUNITY_SOUNDS} sounds`);
+      try {
+        await db
+          .insertInto('community_sounds')
+          .values({
+            id: req.id,
+            community_id: model.id,
+            created_by: me(request),
+            data: req.data,
+            created_at: deps.now().toISOString(),
+          })
+          .execute();
+      } catch {
+        throw new HttpError(409, 'conflict', 'Sound ID already exists');
+      }
+      await audit(model.id, me(request), 'sound.create', req.id);
+      soundsChanged(model);
+      return reply.code(201).send({ id: req.id });
+    },
+  );
+
+  const soundOf = async (request: FastifyRequest<{ Params: { id: string } }>) => {
+    const id = parse(channelIdSchema, request.params.id);
+    const row = await db
+      .selectFrom('community_sounds')
+      .select(['community_id'])
+      .where('id', '=', id)
+      .executeTakeFirst();
+    if (!row) throw notFound();
+    const model = await community(row.community_id, me(request));
+    if (!model.can(me(request), Permission.MANAGE_EXPRESSIONS)) throw forbidden();
+    return { id, model };
+  };
+
+  app.patch<{ Params: { id: string } }>(
+    `${API_PREFIX}/sounds/:id`,
+    { ...authed, bodyLimit: 400 * 1024 },
+    async (request) => {
+      const { id, model } = await soundOf(request);
+      const req = parse(updateSoundRequestSchema, request.body);
+      await db.updateTable('community_sounds').set({ data: req.data }).where('id', '=', id).execute();
+      await audit(model.id, me(request), 'sound.update', id);
+      soundsChanged(model);
+      return { ok: true };
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(`${API_PREFIX}/sounds/:id`, authed, async (request) => {
+    const { id, model } = await soundOf(request);
+    await db.deleteFrom('community_sounds').where('id', '=', id).execute();
+    await audit(model.id, me(request), 'sound.delete', id);
+    soundsChanged(model);
     return { ok: true };
   });
 
@@ -1805,6 +1892,37 @@ export async function registerCommunityRoutes(
           if (event.room === null) hub.leaveRoom(self);
           else if (!hub.joinRoom(self, event.room, MAX_CALL_ROOM)) send({ t: 'error', code: 'room_full' });
           return;
+        case 'voice.sound': {
+          const channelId = hub.voiceChannelOf(self);
+          if (!channelId) return send({ t: 'error', code: 'not_in_call' });
+          const cid = await communityOfChannel(db, channelId);
+          const model = cid ? await loadCommunity(db, cid) : null;
+          // Playing a sound is speaking: it needs Speak there, and not being server-muted or timed out.
+          if (
+            !model ||
+            !model.can(self, Permission.SPEAK, channelId) ||
+            model.timedOut(self) ||
+            hub.stateOf(self).serverMuted
+          )
+            return send({ t: 'error', code: 'forbidden' });
+          const sound = await db
+            .selectFrom('community_sounds')
+            .select('id')
+            .where('id', '=', event.soundId)
+            .where('community_id', '=', model.id)
+            .executeTakeFirst();
+          if (!sound) return send({ t: 'error', code: 'not_found' });
+          if (!hub.takeSoundTurn(self, deps.now().getTime(), SOUND_COOLDOWN_MS))
+            return send({ t: 'error', code: 'slow_down' });
+          hub.sendTo(hub.participants(channelId), {
+            t: 'voice.sound',
+            communityId: model.id,
+            channelId,
+            from: self,
+            soundId: sound.id,
+          });
+          return;
+        }
         case 'voice.join': {
           const cid = await communityOfChannel(db, event.channelId);
           const model = cid ? await loadCommunity(db, cid) : null;

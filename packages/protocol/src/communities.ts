@@ -374,6 +374,22 @@ export const createEmojiRequestSchema = z
 /** Rename (1.0.20): the whole sealed { name, image } is replaced. */
 export const updateEmojiRequestSchema = z.object({ data: sealedSchema(SEALED_EMOJI) }).strict();
 
+/** A sealed { name, emoji, audio } soundboard sound (1.0.22); audio is a short clip as a data URL. */
+export const SEALED_SOUND = 240 * 1024;
+export const MAX_COMMUNITY_SOUNDS = 48;
+/** Seconds between two sounds from the same person. */
+export const SOUND_COOLDOWN_MS = 2500;
+export const soundSchema = z.object({
+  id: z.string().regex(COMMUNITY_ID_RE),
+  createdBy: riverIdSchema,
+  data: sealedSchema(SEALED_SOUND),
+});
+export const soundsResponseSchema = z.object({ sounds: z.array(soundSchema) });
+export const createSoundRequestSchema = z
+  .object({ id: z.string().regex(COMMUNITY_ID_RE), data: sealedSchema(SEALED_SOUND) })
+  .strict();
+export const updateSoundRequestSchema = z.object({ data: sealedSchema(SEALED_SOUND) }).strict();
+
 /** A sealed { reason, text, senderName } — what the reporter saw (1.0.21). */
 export const SEALED_REPORT = 8 * 1024;
 export const reportStatusSchema = z.enum(['open', 'resolved', 'dismissed']);
@@ -467,6 +483,8 @@ export const clientEventSchema = z.discriminatedUnion('t', [
    * call together, nothing else.
    */
   z.object({ t: z.literal('call.room'), room: callRoomSchema.nullable() }),
+  /** Play a soundboard sound to everyone in your voice channel (1.0.22). */
+  z.object({ t: z.literal('voice.sound'), soundId: z.string().regex(COMMUNITY_ID_RE) }),
 ]);
 export type ClientEvent = z.infer<typeof clientEventSchema>;
 
@@ -497,6 +515,16 @@ export const serverEventSchema = z.discriminatedUnion('t', [
     states: z.record(z.string(), voiceStateSchema).optional(),
   }),
   z.object({ t: z.literal('voice.disconnect') }),
+  /** Someone in your voice channel played a soundboard sound (1.0.22). */
+  z.object({
+    t: z.literal('voice.sound'),
+    communityId: communityIdSchema,
+    channelId: channelIdSchema,
+    from: riverIdSchema,
+    soundId: z.string().regex(COMMUNITY_ID_RE),
+  }),
+  /** A community's soundboard changed (1.0.22). */
+  z.object({ t: z.literal('sounds'), communityId: communityIdSchema }),
   /** A community's scheduled events changed: fetch them again (1.0.18). */
   z.object({ t: z.literal('events'), communityId: communityIdSchema }),
   /** A community's custom emoji changed (1.0.19). */

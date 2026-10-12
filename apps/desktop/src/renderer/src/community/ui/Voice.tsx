@@ -1,3 +1,4 @@
+import { SoundboardButton } from './Soundboard.tsx';
 import { describeLink, linkQuality, type LinkStats } from '../link-stats.ts';
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
@@ -178,6 +179,7 @@ export function VoiceChannel(props: {
             >
               <ScreenIcon />
             </button>
+            <SoundboardButton community={community} channelId={call.channelId} />
             <button
               className="round-btn round-btn--danger"
               aria-label="Leave"

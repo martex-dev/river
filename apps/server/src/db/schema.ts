@@ -257,7 +257,16 @@ export interface CommunityReportsTable {
   resolved_at: string | null;
 }
 
+export interface CommunitySoundsTable {
+  id: string;
+  community_id: string;
+  created_by: string;
+  data: string;
+  created_at: string;
+}
+
 export interface Database {
+  community_sounds: CommunitySoundsTable;
   community_reports: CommunityReportsTable;
   community_emojis: CommunityEmojisTable;
   community_events: CommunityEventsTable;

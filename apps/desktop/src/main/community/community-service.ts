@@ -26,6 +26,7 @@ import {
   callRoomSchema,
   emojisResponseSchema,
   reportsResponseSchema,
+  soundsResponseSchema,
   eventsResponseSchema,
   decodeRelayIn,
   encodeRelayOut,
@@ -41,6 +42,8 @@ import {
   type EventView,
   type EmojiView,
   type ReportView,
+  type SoundView,
+  SOUND_DATA_URL,
   type SavedMessageView,
   EMOJI_NAME,
   type SavedOutgoing,
@@ -1771,6 +1774,40 @@ export class CommunityService {
       }
       case 'reports':
         return (await this.reports(act.communityId)) as CommunityActionResult<A>;
+      case 'sounds':
+        return (await this.sounds(act.communityId)) as CommunityActionResult<A>;
+      case 'addSound': {
+        const soundId = randomId();
+        const data = seal(this.requireKey(act.communityId), act.communityId, `sound:${soundId}`, {
+          name: act.name,
+          emoji: act.emoji,
+          audio: act.audio,
+        });
+        await this.call(
+          `/communities/${act.communityId}/sounds`,
+          'POST',
+          { id: soundId, data },
+          z.unknown(),
+        ).catch(explain);
+        return soundId as CommunityActionResult<A>;
+      }
+      case 'updateSound': {
+        const sound = (await this.sounds(act.communityId)).find((x) => x.id === act.soundId);
+        if (!sound) throw new CommunityError('That sound no longer exists.');
+        const data = seal(this.requireKey(act.communityId), act.communityId, `sound:${act.soundId}`, {
+          name: act.name ?? sound.name,
+          emoji: act.emoji !== undefined ? act.emoji : sound.emoji,
+          audio: sound.audio,
+        });
+        await this.call(`/sounds/${act.soundId}`, 'PATCH', { data }, z.unknown()).catch(explain);
+        break;
+      }
+      case 'deleteSound':
+        await this.call(`/sounds/${act.soundId}`, 'DELETE', undefined, z.unknown()).catch(explain);
+        break;
+      case 'playSound':
+        this.sendEvent({ t: 'voice.sound', soundId: act.soundId });
+        break;
       case 'updateReport':
         await this.call(`/reports/${act.reportId}`, 'PATCH', { status: act.status }, z.unknown()).catch(
           explain,
@@ -2091,9 +2128,13 @@ export class CommunityService {
     return (await this.messages(channelId)).find((m) => m.id === messageId);
   }
 
+  /** A voice join is waiting for the server's answer. */
+  private joiningVoice = false;
+
   voiceJoin(channelId: string): void {
     this.communityOf(channelId);
     this.sendEvent({ t: 'voice.join', channelId });
+    this.joiningVoice = true;
     this.activeVoice = channelId;
     // One call at a time: joining a voice channel ends any 1:1 call's relay room.
     if (this.activeRoom) this.callRoom(null);
@@ -2190,6 +2231,30 @@ export class CommunityService {
         if (!EMOJI_NAME.test(name) || !/^data:image\/(png|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(image))
           return [];
         return [{ id: e.id, name, image }];
+      } catch {
+        return [];
+      }
+    });
+  }
+
+  // ---- Soundboard (1.0.22) -------------------------------------------------------------------
+
+  async sounds(communityId: string): Promise<SoundView[]> {
+    const ring = this.keys.get(communityId);
+    if (!ring) throw new CommunityError('Waiting for the community key…');
+    const res = await this.call(`/communities/${communityId}/sounds`, 'GET', undefined, soundsResponseSchema);
+    return res.sounds.flatMap((x): SoundView[] => {
+      try {
+        const data = ring.open<{ name?: unknown; emoji?: unknown; audio?: unknown }>(
+          communityId,
+          `sound:${x.id}`,
+          x.data,
+        );
+        const name = String(data.name ?? '').slice(0, 32);
+        const emoji = typeof data.emoji === 'string' && data.emoji.length <= 16 ? data.emoji : null;
+        const audio = String(data.audio ?? '');
+        if (!name.trim() || !SOUND_DATA_URL.test(audio)) return [];
+        return [{ id: x.id, name, emoji, audio }];
       } catch {
         return [];
       }
@@ -2496,6 +2561,7 @@ export class CommunityService {
         return;
       }
       case 'voice': {
+        if (e.participants.includes(this.me())) this.joiningVoice = false;
         this.voice.set(e.channelId, e.participants);
         const states: Record<string, VoiceState> = {};
         for (const id of e.participants) {
@@ -2529,14 +2595,26 @@ export class CommunityService {
         break;
       case 'reports':
         this.emit({ t: 'reports', communityId: e.communityId });
+        break;
+      case 'sounds':
+        this.emit({ t: 'sounds', communityId: e.communityId });
+        break;
+      case 'voice.sound':
+        this.emit({ t: 'voiceSound', communityId: e.communityId, from: e.from, soundId: e.soundId });
         return;
       case 'voice.disconnect':
         this.emit({ t: 'voiceDisconnect' });
         return;
       case 'error':
         if (e.code === 'voice_full') this.emit({ t: 'voiceRefused', reason: 'full' });
-        else if (e.code === 'voice_forbidden' || e.code === 'forbidden')
+        // Servers before 1.0.8 refused a voice join with a plain "forbidden": only count it as one while a
+        // join is waiting; otherwise it answers something else (a moderation action, a sound) and must not
+        // end the call.
+        else if (e.code === 'voice_forbidden' || (e.code === 'forbidden' && this.joiningVoice))
           this.emit({ t: 'voiceRefused', reason: 'forbidden' });
+        else if (e.code === 'forbidden') this.emit({ t: 'refused', reason: 'forbidden' });
+        else if (e.code === 'slow_down') this.emit({ t: 'refused', reason: 'slow_down' });
+        this.joiningVoice = false;
         return;
       case 'typing':
         this.emit({ t: 'typing', communityId: e.communityId, channelId: e.channelId, riverId: e.riverId });

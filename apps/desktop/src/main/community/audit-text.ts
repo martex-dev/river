@@ -48,6 +48,12 @@ export function describeAudit(
         return `dismissed a report about ${person(t)}`;
       case 'report.open':
         return `reopened a report about ${person(t)}`;
+      case 'sound.create':
+        return 'added a soundboard sound';
+      case 'sound.update':
+        return 'changed a soundboard sound';
+      case 'sound.delete':
+        return 'removed a soundboard sound';
       case 'emoji.update':
         return 'renamed a custom emoji';
       case 'emoji.delete':

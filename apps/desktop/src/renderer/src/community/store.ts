@@ -9,7 +9,9 @@ import type {
   EventView,
   ReportView,
   SavedMessageView,
+  SoundView,
 } from '../../../shared/community-actions.ts';
+import { playLocally } from './soundboard-player.ts';
 import { effectiveNotify, shouldAlert } from '../../../shared/notify-rules.ts';
 import { play } from './sound.ts';
 import { VoiceCall } from './voice.ts';
@@ -30,7 +32,8 @@ export type Modal =
   | { kind: 'ban'; communityId: string; riverId: string; name: string; then?: Modal }
   | { kind: 'confirm'; title: string; body: string; action: string; run: () => Promise<void> };
 
-export type CommunityTab = 'overview' | 'roles' | 'members' | 'emoji' | 'bans' | 'reports' | 'audit';
+export type CommunityTab =
+  'overview' | 'roles' | 'members' | 'emoji' | 'sounds' | 'bans' | 'reports' | 'audit';
 export type UserTab = 'profile' | 'voice' | 'notifications' | 'appearance';
 
 const TYPING_MS = 7000;
@@ -99,6 +102,9 @@ interface CommunityState {
   /** Reports per community (1.0.21), loaded when a moderator opens them. */
   reports: Record<string, ReportView[]>;
   loadReports(communityId: string): Promise<void>;
+  /** Soundboard sounds per community (1.0.22), loaded on first use. */
+  sounds: Record<string, SoundView[]>;
+  loadSounds(communityId: string): Promise<SoundView[] | null>;
 
   load(): Promise<void>;
   handle(event: CommunityEvent): void;
@@ -195,6 +201,13 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   },
   noMore: {},
 
+  sounds: {},
+  loadSounds: async (communityId) => {
+    const res = await window.river.community.action({ a: 'sounds', communityId });
+    if (!res.ok) return null;
+    set({ sounds: { ...get().sounds, [communityId]: res.value } });
+    return res.value;
+  },
   reports: {},
   loadReports: async (communityId) => {
     const res = await window.river.community.action({ a: 'reports', communityId });
@@ -408,6 +421,31 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         return;
       case 'reports':
         if (get().reports[event.communityId]) void get().loadReports(event.communityId);
+        return;
+      case 'sounds':
+        if (get().sounds[event.communityId]) void get().loadSounds(event.communityId);
+        return;
+      case 'voiceSound': {
+        const call = get().call;
+        if (!call || call.hearingOff) return;
+        const volume = useRiver.getState().settings?.voice.soundboardVolume ?? 0.6;
+        // Muting someone for yourself (volume 0) silences their sounds too.
+        const personal = useRiver.getState().settings?.voice.userVolumes[event.from] ?? 1;
+        if (volume <= 0 || personal <= 0) return;
+        const known = get().sounds[event.communityId]?.find((x) => x.id === event.soundId);
+        const go = (list: SoundView[] | null | undefined): void => {
+          const sound = list?.find((x) => x.id === event.soundId);
+          if (sound) playLocally(sound, volume * Math.min(1, personal));
+        };
+        if (known) go([known]);
+        else void get().loadSounds(event.communityId).then(go);
+        return;
+      }
+      case 'refused':
+        get().notify(
+          event.reason === 'slow_down' ? 'Slow down a little.' : "You don't have permission to do that.",
+          'error',
+        );
         return;
       case 'eventStarting':
         play('success');

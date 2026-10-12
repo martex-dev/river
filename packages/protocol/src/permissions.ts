@@ -114,7 +114,11 @@ export const PERMISSION_INFO: Array<{ key: PermissionName; label: string; help: 
     help: 'Move people between voice channels or disconnect them.',
   },
   { key: 'MANAGE_EVENTS', label: 'Manage events', help: 'Create, edit and cancel scheduled events.' },
-  { key: 'MANAGE_EXPRESSIONS', label: 'Manage emoji', help: 'Add and remove the community’s custom emoji.' },
+  {
+    key: 'MANAGE_EXPRESSIONS',
+    label: 'Manage emoji & sounds',
+    help: 'Add, rename and remove the community’s custom emoji and soundboard sounds.',
+  },
 ];
 
 export interface PermissionRole {

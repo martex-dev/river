@@ -1,3 +1,4 @@
+import { SoundSettings } from './Soundboard.tsx';
 import { ReportsPanel } from './Reports.tsx';
 import { useEffect, useState, type ReactElement } from 'react';
 import { PERMISSION_INFO, Permission } from '@river/protocol/permissions';
@@ -39,6 +40,7 @@ export function CommunitySettings(props: {
     ['roles', 'Roles', can(perms, Permission.MANAGE_ROLES)],
     ['members', 'Members', true],
     ['emoji', 'Emoji', true],
+    ['sounds', 'Soundboard', true],
     ['bans', 'Bans', can(perms, Permission.BAN_MEMBERS)],
     ['reports', 'Reports', can(perms, Permission.MANAGE_MESSAGES)],
     ['audit', 'Audit log', can(perms, Permission.VIEW_AUDIT_LOG)],
@@ -93,6 +95,7 @@ export function CommunitySettings(props: {
           {tab === 'roles' && <Roles community={community} me={me} />}
           {tab === 'members' && <Members community={community} me={me} />}
           {tab === 'emoji' && <EmojiSettings community={community} />}
+          {tab === 'sounds' && <SoundSettings community={community} />}
           {tab === 'bans' && <Bans community={community} />}
           {tab === 'reports' && <ReportsPanel community={community} />}
           {tab === 'audit' && <AuditLog community={community} />}

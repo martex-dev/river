@@ -4604,3 +4604,61 @@ input.switch:disabled {
 .attachment-image__alt {
   cursor: help;
 }
+
+/* Soundboard (1.0.22) */
+.soundboard {
+  width: 300px;
+  padding: 10px;
+}
+.soundboard__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+.soundboard__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.soundboard__sound {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  font: inherit;
+  font-size: 20px;
+  cursor: pointer;
+  transition:
+    transform var(--dur) var(--ease-spring),
+    background var(--dur);
+}
+.soundboard__sound:hover:not(:disabled),
+.soundboard__sound:focus-visible {
+  background: var(--surface-hover);
+  transform: translateY(-1px);
+}
+.soundboard__sound:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.soundboard__sound:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.soundboard__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.sound-list .emoji-list__item {
+  gap: 8px;
+}

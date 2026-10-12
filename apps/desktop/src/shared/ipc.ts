@@ -363,6 +363,10 @@ export type CommunityEvent =
   | { t: 'events'; communityId: string }
   | { t: 'emojis'; communityId: string }
   | { t: 'reports'; communityId: string }
+  | { t: 'sounds'; communityId: string }
+  | { t: 'voiceSound'; communityId: string; from: string; soundId: string }
+  /** The server said no to something that is not a voice join (1.0.22). */
+  | { t: 'refused'; reason: 'forbidden' | 'slow_down' }
   | { t: 'eventStarting'; communityId: string; eventId: string; name: string; channelId: string | null }
   /** Your server moved to a new address and River followed it. */
   | { t: 'serverMoved'; url: string }

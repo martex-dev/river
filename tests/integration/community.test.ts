@@ -373,6 +373,46 @@ describe('reports', () => {
   });
 });
 
+describe('soundboard', () => {
+  it('sounds are sealed, renamed and shared with members', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Sounds');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    await bob.community.refresh();
+    const audio = `data:audio/mpeg;base64,${Buffer.from('ID3 tiny honk').toString('base64')}`;
+    const id = await alice.community.action({
+      a: 'addSound',
+      communityId: created.id,
+      name: 'Honk',
+      emoji: '📯',
+      audio,
+    });
+    expect(await bob.community.action({ a: 'sounds', communityId: created.id })).toEqual([
+      { id, name: 'Honk', emoji: '📯', audio },
+    ]);
+    const stored = JSON.stringify(await serverDb.db.selectFrom('community_sounds').selectAll().execute());
+    expect(stored).not.toContain('Honk');
+    expect(stored).not.toContain('tiny honk');
+    await alice.community.action({
+      a: 'updateSound',
+      communityId: created.id,
+      soundId: id,
+      name: 'Big honk',
+    });
+    expect((await bob.community.action({ a: 'sounds', communityId: created.id }))[0]).toMatchObject({
+      name: 'Big honk',
+      emoji: '📯',
+      audio,
+    });
+    await expect(
+      bob.community.action({ a: 'addSound', communityId: created.id, name: 'nope', emoji: null, audio }),
+    ).rejects.toThrow();
+    await alice.community.action({ a: 'deleteSound', soundId: id });
+    expect(await bob.community.action({ a: 'sounds', communityId: created.id })).toEqual([]);
+  });
+});
+
 describe('saved messages', () => {
   it('are kept on this device, newest first, and can be removed', async () => {
     const alice = await person('Alice');

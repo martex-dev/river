@@ -21,6 +21,7 @@ import {
   eventsResponseSchema,
   emojisResponseSchema,
   reportsResponseSchema,
+  soundsResponseSchema,
 } from '@river/protocol';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
@@ -1014,6 +1015,68 @@ describe('communities', () => {
       );
       for (const c of [one, two, boss]) c.ws.close();
     });
+    it('soundboard: managers add sounds, people in voice who may speak play them, with a cooldown', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, voice } = await createCommunity(a, owner.token);
+      const guest = await join(a, owner.token, cid);
+      const sid = id();
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/sounds`, guest.token, { id: id(), data: sealed() }),
+      ).toBe(403);
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/sounds`, owner.token, { id: sid, data: sealed() }),
+      ).toBe(201);
+      expect(await status(a, 'PATCH', `/v1/sounds/${sid}`, guest.token, { data: sealed() })).toBe(403);
+      expect(await status(a, 'PATCH', `/v1/sounds/${sid}`, owner.token, { data: sealed() })).toBe(200);
+      const listed = (
+        await a.inject({ method: 'GET', url: `/v1/communities/${cid}/sounds`, headers: auth(guest.token) })
+      ).json();
+      expect(soundsResponseSchema.parse(listed).sounds.map((x) => x.id)).toEqual([sid]);
+
+      await a.listen({ host: '127.0.0.1', port: 0 });
+      const { port } = a.server.address() as { port: number };
+      type Ev = { t: string; code?: string; from?: string; soundId?: string };
+      const connect = async (token: string) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/ws`);
+        const events: Ev[] = [];
+        ws.onmessage = (m) => events.push(JSON.parse(String(m.data)));
+        await new Promise((resolve, reject) => {
+          ws.onopen = resolve;
+          ws.onerror = reject;
+        });
+        ws.send(JSON.stringify({ t: 'auth', token }));
+        await vi.waitFor(() => expect(events.some((e) => e.t === 'ready')).toBe(true));
+        return { ws, events };
+      };
+      const boss = await connect(owner.token);
+      const other = await connect(guest.token);
+      // Not in voice yet.
+      other.ws.send(JSON.stringify({ t: 'voice.sound', soundId: sid }));
+      await vi.waitFor(() => expect(other.events).toContainEqual({ t: 'error', code: 'not_in_call' }));
+      boss.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      other.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      await vi.waitFor(() => expect(boss.events.some((e) => e.t === 'voice')).toBe(true));
+      await new Promise((r) => setTimeout(r, 100));
+      other.ws.send(JSON.stringify({ t: 'voice.sound', soundId: sid }));
+      await vi.waitFor(() =>
+        expect(boss.events).toContainEqual(
+          expect.objectContaining({ t: 'voice.sound', from: guest.riverId, soundId: sid }),
+        ),
+      );
+      other.ws.send(JSON.stringify({ t: 'voice.sound', soundId: sid }));
+      await vi.waitFor(() => expect(other.events).toContainEqual({ t: 'error', code: 'slow_down' }));
+      boss.ws.send(JSON.stringify({ t: 'voice.sound', soundId: id() }));
+      await vi.waitFor(() => expect(boss.events).toContainEqual({ t: 'error', code: 'not_found' }));
+      // Server-muted people cannot play sounds.
+      boss.ws.send(JSON.stringify({ t: 'voice.moderate', target: guest.riverId, serverMuted: true }));
+      await new Promise((r) => setTimeout(r, 2600));
+      other.ws.send(JSON.stringify({ t: 'voice.sound', soundId: sid }));
+      await vi.waitFor(() => expect(other.events).toContainEqual({ t: 'error', code: 'forbidden' }));
+      expect(await status(a, 'DELETE', `/v1/sounds/${sid}`, owner.token)).toBe(200);
+      for (const c of [boss, other]) c.ws.close();
+    }, 15_000);
+
     it('server mute and deafen need Mute members, follow the hierarchy, and stick through a rejoin', async () => {
       const a = await start();
       const owner = await user(a);

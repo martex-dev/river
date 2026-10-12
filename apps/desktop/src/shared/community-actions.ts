@@ -11,6 +11,11 @@ import { communityIconSchema } from './templates.ts';
 const id = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 const riverId = z.uuid();
 const name = z.string().trim().min(1).max(64);
+const soundName = z.string().trim().min(1).max(32);
+/** A soundboard clip as a data URL (1.0.22): mp3, ogg, wav or webm, at most 160 KB. */
+export const SOUND_DATA_URL = /^data:audio\/(mpeg|ogg|wav|webm|x-wav);base64,[A-Za-z0-9+/]+=*$/;
+export const SOUND_MAX_BYTES = 160 * 1024;
+export const SOUND_AUDIO_CHARS = Math.ceil((SOUND_MAX_BYTES * 4) / 3) + 64;
 /** A role icon: one emoji (a few code points), 1.0.21. */
 const roleIcon = z.string().min(1).max(16);
 /** How far back a ban may delete someone's messages (matches the server's list, 1.0.21). */
@@ -379,6 +384,28 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('reports'), communityId: id }).strict(),
+  // Soundboard (1.0.22): name, emoji and clip sealed with the community key.
+  z.object({ a: z.literal('sounds'), communityId: id }).strict(),
+  z
+    .object({
+      a: z.literal('addSound'),
+      communityId: id,
+      name: soundName,
+      emoji: z.string().min(1).max(16).nullable(),
+      audio: z.string().max(SOUND_AUDIO_CHARS).regex(SOUND_DATA_URL),
+    })
+    .strict(),
+  z
+    .object({
+      a: z.literal('updateSound'),
+      communityId: id,
+      soundId: id,
+      name: soundName.optional(),
+      emoji: z.string().min(1).max(16).nullable().optional(),
+    })
+    .strict(),
+  z.object({ a: z.literal('deleteSound'), soundId: id }).strict(),
+  z.object({ a: z.literal('playSound'), soundId: id }).strict(),
   z
     .object({ a: z.literal('updateReport'), reportId: id, status: z.enum(['open', 'resolved', 'dismissed']) })
     .strict(),
@@ -426,6 +453,14 @@ export const REPORT_REASONS = [
   'Something else',
 ];
 
+export interface SoundView {
+  id: string;
+  name: string;
+  emoji: string | null;
+  /** data: URL of the clip. */
+  audio: string;
+}
+
 export interface EmojiView {
   id: string;
   name: string;
@@ -458,6 +493,8 @@ export interface BanView {
 
 interface Results {
   createRole: string;
+  sounds: SoundView[];
+  addSound: string;
   report: string;
   reports: ReportView[];
   duplicateChannel: string;
