@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.22] - 2026-10-12
+
+**Bring the room to life: soundboard, forums, stages and your own shortcuts.**
+
 ### Added
 
 - **Soundboard.** Play short sounds to everyone in a voice channel from the

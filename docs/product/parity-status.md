@@ -92,18 +92,18 @@ are named where it helps. This file is updated with every release.
 
 ## 4. Formatting, reactions and expression
 
-| Item                                              | Status | Notes                     |
-| ------------------------------------------------- | ------ | ------------------------- |
-| Emoji picker, search, recent, categories          | ✅     | Favourites (1.0.20)       |
-| Custom emoji: upload, rename, delete, permissions | ✅     | 1.0.19; rename 1.0.20     |
-| Animated custom emoji                             | ✅     | Small GIFs kept as-is     |
-| Stickers                                          | ⏳     |                           |
-| GIFs                                              | 🔒 ⏳  | See §2                    |
-| Multiple reactions, counts, removal, user list    | ✅     |                           |
-| Super reactions                                   | ✖      | Paid feature              |
-| Markdown incl. escaping, malformed fallback       | ✅     |                           |
-| Timestamps `<t:…>`, message links, channel refs   | ✅     |                           |
-| Soundboard                                        | ⏳     | Planned with voice polish |
+| Item                                              | Status | Notes                                                                 |
+| ------------------------------------------------- | ------ | --------------------------------------------------------------------- |
+| Emoji picker, search, recent, categories          | ✅     | Favourites (1.0.20)                                                   |
+| Custom emoji: upload, rename, delete, permissions | ✅     | 1.0.19; rename 1.0.20                                                 |
+| Animated custom emoji                             | ✅     | Small GIFs kept as-is                                                 |
+| Stickers                                          | ⏳     |                                                                       |
+| GIFs                                              | 🔒 ⏳  | See §2                                                                |
+| Multiple reactions, counts, removal, user list    | ✅     |                                                                       |
+| Super reactions                                   | ✖      | Paid feature                                                          |
+| Markdown incl. escaping, malformed fallback       | ✅     |                                                                       |
+| Timestamps `<t:…>`, message links, channel refs   | ✅     |                                                                       |
+| Soundboard                                        | ✅     | 1.0.22: upload, rename, emoji, preview, volume, cooldown, permissions |
 
 ## 5. Communities
 
@@ -129,7 +129,7 @@ are named where it helps. This file is updated with every release.
 | Server icons, unread, mention badges, active indicator              | ✅     |                                                |
 | Drag-and-drop server order, folders (create/rename/colour/collapse) | ✅     | 1.0.18                                         |
 | Categories create/rename/reorder/collapse/delete/permissions        | ✅     | 1.0.0/1.0.6                                    |
-| Text, voice, announcement channels                                  | ✅     | Forum ⏳, stage ⏳, media ⏳                   |
+| Text, voice, announcement channels                                  | ✅     | Forum ✅, stage ✅ (1.0.22); media ⏳          |
 | Duplicate channel                                                   | ✅     | 1.0.20                                         |
 | Topic, slowmode, per-channel notifications, permissions             | ✅     | NSFW flag ⏳                                   |
 | Private channels, synced/unsynced overrides                         | ✅     |                                                |
@@ -154,21 +154,21 @@ are named where it helps. This file is updated with every release.
 
 ## 8. Voice, audio and calls
 
-| Item                                           | Status  | Notes                                            |
-| ---------------------------------------------- | ------- | ------------------------------------------------ |
-| Join/leave/move, states, participant counts    | ✅      | Reconnect-safe (1.0.16)                          |
-| Full / locked / unavailable channels           | ✅      |                                                  |
-| Device change without dropping                 | ✅      |                                                  |
-| Connection quality display                     | ✅      | Connection check ✅; per-person bars (1.0.19) ✅ |
-| Mute/deafen, devices, volumes, per-user volume | ✅      |                                                  |
-| Mic test, input sensitivity, PTT, noise/echo   | ✅      | Sensitivity slider (1.0.20)                      |
-| Server mute/deafen, move, disconnect           | ✅      | Server deafen (1.0.20)                           |
-| Speaking indicators, priority speaker          | ✅ / ⏳ |                                                  |
-| Camera, screen share, grid/focus, pin          | ✅      | Stream quality settings ⏳                       |
-| Stream audio                                   | ⏳      |                                                  |
-| Relay when direct connection impossible        | ✅      | 1.0.16 (voice; video still direct)               |
-| Stage channels                                 | ⏳      |                                                  |
-| Soundboard                                     | ⏳      |                                                  |
+| Item                                           | Status  | Notes                                                                 |
+| ---------------------------------------------- | ------- | --------------------------------------------------------------------- |
+| Join/leave/move, states, participant counts    | ✅      | Reconnect-safe (1.0.16)                                               |
+| Full / locked / unavailable channels           | ✅      |                                                                       |
+| Device change without dropping                 | ✅      |                                                                       |
+| Connection quality display                     | ✅      | Connection check ✅; per-person bars (1.0.19) ✅                      |
+| Mute/deafen, devices, volumes, per-user volume | ✅      |                                                                       |
+| Mic test, input sensitivity, PTT, noise/echo   | ✅      | Sensitivity slider (1.0.20)                                           |
+| Server mute/deafen, move, disconnect           | ✅      | Server deafen (1.0.20)                                                |
+| Speaking indicators, priority speaker          | ✅ / ⏳ |                                                                       |
+| Camera, screen share, grid/focus, pin          | ✅      | Stream quality settings ⏳                                            |
+| Stream audio                                   | ⏳      |                                                                       |
+| Relay when direct connection impossible        | ✅      | 1.0.16 (voice; video still direct)                                    |
+| Stage channels                                 | ✅      | 1.0.22: audience, hands, invite to speak, move to audience            |
+| Soundboard                                     | ✅      | 1.0.22: upload, rename, emoji, preview, volume, cooldown, permissions |
 
 ## 9. Notifications and sounds
 
@@ -191,7 +191,7 @@ are named where it helps. This file is updated with every release.
 | Quick switcher, recent channels                    | ✅     |                                                                          |
 | Back/forward navigation                            | ✅     | Alt+←/→, ⌘[/⌘], mouse buttons (1.0.20)                                   |
 | Threads from messages, replies, archive            | ✅     | Follow/unfollow ⏳                                                       |
-| Forums                                             | ⏳     |                                                                          |
+| Forums                                             | ✅     | 1.0.22: posts with titles and tags, search, filter, sort                 |
 | Mentions with autocomplete, role checks, highlight | ✅     |                                                                          |
 | Mention suppression per message                    | ✅     | @ON/OFF on replies (1.0.18)                                              |
 | Pins, pinned list                                  | ✅     |                                                                          |
@@ -202,7 +202,7 @@ are named where it helps. This file is updated with every release.
 
 | Item                                       | Status | Notes                                                           |
 | ------------------------------------------ | ------ | --------------------------------------------------------------- |
-| Delete messages, timeout, kick, ban, unban | ✅     | Ban can delete recent messages (1.0.21); temp bans ⏳           |
+| Delete messages, timeout, kick, ban, unban | ✅     | Ban cleanup (1.0.21), temporary bans (1.0.22)                   |
 | AutoMod keyword rules                      | 🔒 ⏳  | Server cannot read messages; client-side filters possible       |
 | Reports, cases, mod notes                  | 🔨     | Reports with resolve/dismiss and audit (1.0.21); notes/cases ⏳ |
 | Audit log with actor/action/target         | ✅     | Filters/export ⏳                                               |
@@ -219,13 +219,13 @@ are named where it helps. This file is updated with every release.
 
 ## 18–20. Settings, motion, keyboard
 
-| Item                                                                      | Status | Notes                      |
-| ------------------------------------------------------------------------- | ------ | -------------------------- |
-| Appearance: density, zoom, text size, clock, contrast, motion             | ✅     | 1.0.9/1.0.18               |
-| Language selection                                                        | ⏳     | English only               |
-| Keybind editor                                                            | 🔨     | PTT key ✅; full editor ⏳ |
-| Shortcuts list, Ctrl+K, Ctrl+F, Esc, Alt+↑/↓, Ctrl+Alt+↑/↓, type-anywhere | ✅     | 1.0.17                     |
-| Animations with reduced motion                                            | ✅     |                            |
+| Item                                                                      | Status | Notes                                         |
+| ------------------------------------------------------------------------- | ------ | --------------------------------------------- |
+| Appearance: density, zoom, text size, clock, contrast, motion             | ✅     | 1.0.9/1.0.18                                  |
+| Language selection                                                        | ⏳     | English only                                  |
+| Keybind editor                                                            | ✅     | Voice shortcuts with clash detection (1.0.22) |
+| Shortcuts list, Ctrl+K, Ctrl+F, Esc, Alt+↑/↓, Ctrl+Alt+↑/↓, type-anywhere | ✅     | 1.0.17                                        |
+| Animations with reduced motion                                            | ✅     |                                               |
 
 ## 21–25. Media, calls, security, reliability, accessibility
 
