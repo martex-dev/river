@@ -6,7 +6,7 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-### Added (1.0.22)
+### Added
 
 - **Soundboard.** Play short sounds to everyone in a voice channel from the
   🎵 button; right-click one to hear it yourself first. People with *Manage
@@ -26,10 +26,14 @@ All notable changes to River are documented here. The format follows
 - **Change your voice shortcuts** (Settings → Voice → Keyboard shortcuts):
   mute, deafen, camera and leave voice, with clash warnings.
 
-### Fixed (1.0.22)
+### Fixed
 
 - A permission refusal for something other than joining (for example a
   moderation action) no longer drops you from the voice channel.
+
+## [1.0.21] - 2026-10-12
+
+**Keep it friendly: reports, cleaner bans, role icons and pictures everyone can follow.**
 
 ### Added
 

@@ -20,7 +20,7 @@ are named where it helps. This file is updated with every release.
 | Animated avatar                                | ⏳      | GIF avatars resized to static today                                                                                            |
 | Banner, profile colour, bio, pronouns          | ✅      | 1.0.18 (banner colour, About me, pronouns), encrypted                                                                          |
 | Decorations, badges, effects                   | ✖       | Paid cosmetics; not in River's model                                                                                           |
-| Account creation date                          | ⏳      |                                                                                                                                |
+| Account creation date                          | 🔨      | Member since (per community, 1.0.21)                                                                                           |
 | Online / idle / DND / invisible                | ✅      | 1.0.17, auto-idle                                                                                                              |
 | Custom status, emoji status, expiry            | ✅      | 1.0.17, encrypted                                                                                                              |
 | Playing/listening activity                     | 🔒 ⏳   | Would require process/app tracking; opt-in manual "activity" could come later                                                  |
@@ -29,7 +29,7 @@ are named where it helps. This file is updated with every release.
 | Profile popover, full profile                  | ✅ / 🔨 | Popover from member list and chat (1.0.17); separate full-profile page ⏳                                                      |
 | Mutual friends / communities                   | 🔨      | Mutual communities ✅ (Friends page); mutual friends ⏳                                                                        |
 | Shared roles, message/add-friend/block buttons | ✅      | Profile card                                                                                                                   |
-| Report button                                  | ⏳      | Reporting system planned (§13)                                                                                                 |
+| Report button                                  | ✅      | Report a message to the community’s moderators (1.0.21)                                                                        |
 | Copy user ID, context menu                     | ✅      | Copy ID on the profile card (1.0.19)                                                                                           |
 | Change e-mail/password, 2FA, backup codes      | 🔒      | No password: device key + optional passphrase lock; recovery phrase = backup codes                                             |
 | Active devices / sessions management           | 🔨      | Device count shown; management with linked devices (1.2)                                                                       |
@@ -49,7 +49,7 @@ are named where it helps. This file is updated with every release.
 | Last-active visibility                                                       | 🔒      | Not stored                                                                                                     |
 | DM: send/edit/delete/reply/react/pin?                                        | ✅ / 🔨 | All but DM pins ⏳                                                                                             |
 | Quote, forward, copy, copy link, jump, mark unread                           | 🔨      | In channels ✅ (1.0.17); in DMs: copy/quote ✅, forward from DM ⏳                                             |
-| Report message                                                               | ⏳      |                                                                                                                |
+| Report message                                                               | ✅      | Community messages (1.0.21); DMs: block instead                                                                |
 | Multiline, Enter/Shift+Enter, drafts                                         | ✅      | Per-channel drafts while open (1.0.20); on-disk drafts 🔒 (would store unsent text)                            |
 | Emoji picker                                                                 | ✅      | 1.0.17 (+ custom emoji 1.0.19)                                                                                 |
 | GIF picker                                                                   | 🔒 ⏳   | Public GIF services see searches and IPs; a privacy-respecting option (proxied or local favourites) is planned |
@@ -57,7 +57,7 @@ are named where it helps. This file is updated with every release.
 | Attachments, paste, drag-and-drop                                            | ✅      | 0.4                                                                                                            |
 | Link previews                                                                | 🔒 ⏳   | Fetching previews leaks your IP to sites; opt-in, sender-side previews planned                                 |
 | Markdown, code, quotes, headings, lists, spoilers                            | ✅      | 1.0.17                                                                                                         |
-| Image/video/audio/document attachments, size, progress, retry                | ✅      | Cancel upload ⏳; alt text ⏳; captions = message text                                                         |
+| Image/video/audio/document attachments, size, progress, retry                | ✅      | Cancel upload and alt text (1.0.21)                                                                            |
 | Message states (sending/sent/failed/retrying/edited/deleted)                 | ✅      | Outbox (1.0.5)                                                                                                 |
 | New-message divider, unread, typing, read receipts (DM)                      | ✅      |                                                                                                                |
 | Search conversation, load older, newest button, scroll-to-bottom             | ✅      | Jump to date ✅ (1.0.20)                                                                                       |
@@ -142,7 +142,7 @@ are named where it helps. This file is updated with every release.
 
 | Item                                                 | Status  | Notes                                                                                          |
 | ---------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
-| Create/edit/delete roles, colour, hoist, mentionable | ✅      | Duplicate ✅ (1.0.20), icons ⏳                                                                |
+| Create/edit/delete roles, colour, hoist, mentionable | ✅      | Duplicate (1.0.20), icons (1.0.21)                                                             |
 | Drag-and-drop hierarchy                              | 🔨      | Up/down arrows today                                                                           |
 | Assign/remove, view members                          | ✅      | Bulk ⏳                                                                                        |
 | Self-assignable / reaction roles                     | ⏳      |                                                                                                |
@@ -200,12 +200,12 @@ are named where it helps. This file is updated with every release.
 
 ## 13–14. Moderation and audit
 
-| Item                                       | Status | Notes                                                     |
-| ------------------------------------------ | ------ | --------------------------------------------------------- |
-| Delete messages, timeout, kick, ban, unban | ✅     | Bulk delete ⏳, temp bans ⏳                              |
-| AutoMod keyword rules                      | 🔒 ⏳  | Server cannot read messages; client-side filters possible |
-| Reports, cases, mod notes                  | ⏳     |                                                           |
-| Audit log with actor/action/target         | ✅     | Filters/export ⏳                                         |
+| Item                                       | Status | Notes                                                           |
+| ------------------------------------------ | ------ | --------------------------------------------------------------- |
+| Delete messages, timeout, kick, ban, unban | ✅     | Ban can delete recent messages (1.0.21); temp bans ⏳           |
+| AutoMod keyword rules                      | 🔒 ⏳  | Server cannot read messages; client-side filters possible       |
+| Reports, cases, mod notes                  | 🔨     | Reports with resolve/dismiss and audit (1.0.21); notes/cases ⏳ |
+| Audit log with actor/action/target         | ✅     | Filters/export ⏳                                               |
 
 ## 15–17. Apps, events, growth
 
