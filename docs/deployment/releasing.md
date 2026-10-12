@@ -16,10 +16,10 @@ Releases are produced only by GitHub Actions from a signed-off tag.
    ```
 5. Update STATUS.md (current version, next milestone).
 6. Commit: `build(release): prepare X.Y.Z`, push to `main`, wait for CI.
-7. Tag and push:
+7. Tag and push, with the guarded script (it refuses unless the release PR is
+   merged, `main`'s packages say X.Y.Z and the tag is new):
    ```bash
-   git tag -a vX.Y.Z -m "River X.Y.Z"
-   git push origin vX.Y.Z
+   bash scripts/release/tag-release.sh X.Y.Z <release PR number>
    ```
 8. Watch **Actions → Release**. It verifies, builds all platforms, signs and
    publishes. Check the release page has installers for all three OSes,
