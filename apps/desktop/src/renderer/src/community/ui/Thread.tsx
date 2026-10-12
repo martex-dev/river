@@ -1,3 +1,4 @@
+import { isFollowing, setFollowing } from '../thread-follow.ts';
 import { clockTime } from '../../time.ts';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
@@ -51,6 +52,7 @@ export function ThreadPanel(props: {
     useOutbox.getState().send({ channelId: channel.id, text: value, threadId: rootId });
   };
 
+  const [following, setFollowingState] = useState(() => isFollowing(rootId));
   return (
     <aside className="thread-panel" aria-label={`Thread ${thread?.name ?? ''}`}>
       <header className="thread-panel__head">
@@ -86,6 +88,17 @@ export function ThreadPanel(props: {
         )}
         {thread?.archived && <span className="chip">Archived</span>}
         <span className="thread-panel__actions">
+          <button
+            className={`btn btn--small ${following ? 'btn--ghost' : 'btn--primary'}`}
+            aria-pressed={following}
+            title={following ? 'Stop hearing about new replies' : 'Hear about new replies'}
+            onClick={() => {
+              setFollowing(rootId, !following);
+              setFollowingState(!following);
+            }}
+          >
+            {following ? 'Following' : 'Follow'}
+          </button>
           {mayEdit && (
             <button
               className="btn btn--ghost btn--small"

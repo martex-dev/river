@@ -337,6 +337,12 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('download'), pointer: attachmentPointerSchema }).strict(),
+  // Favourite GIFs and pictures (1.0.25): kept on this device only.
+  z.object({ a: z.literal('favoriteMedia'), pointer: attachmentPointerSchema, on: z.boolean() }).strict(),
+  z.object({ a: z.literal('favoriteMediaList') }).strict(),
+  z.object({ a: z.literal('removeFavorite'), id }).strict(),
+  z.object({ a: z.literal('favoriteMediaBytes'), id }).strict(),
+  z.object({ a: z.literal('sendFavorite'), channelId: id, id }).strict(),
   z.object({ a: z.literal('edit'), channelId: id, messageId: id, text }).strict(),
   z.object({ a: z.literal('deleteMessage'), messageId: id }).strict(),
   z.object({ a: z.literal('pin'), messageId: id, pinned: z.boolean() }).strict(),
@@ -373,6 +379,13 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       serverDeafened: z.boolean().optional(),
       speaker: z.boolean().optional(),
       disconnect: z.boolean().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      a: z.literal('setCommunityAvatar'),
+      communityId: id,
+      avatar: avatarSchema.nullable(),
     })
     .strict(),
   z
@@ -531,6 +544,18 @@ export const REPORT_REASONS = [
   'Something else',
 ];
 
+export interface FavoriteMediaView {
+  id: string;
+  name: string;
+  mime: string;
+  width: number | null;
+  height: number | null;
+}
+
+/** Most favourites, and the largest file kept as one (1.0.25). */
+export const MAX_FAVORITE_MEDIA = 100;
+export const MAX_FAVORITE_BYTES = 8 * 1024 * 1024;
+
 export interface StickerView {
   id: string;
   name: string;
@@ -587,6 +612,8 @@ export interface BanView {
 
 interface Results {
   createRole: string;
+  favoriteMediaList: FavoriteMediaView[];
+  favoriteMediaBytes: Uint8Array;
   stickers: StickerView[];
   addSticker: string;
   notes: NoteView[];
@@ -601,6 +628,7 @@ interface Results {
   audit: AuditView[];
   bans: BanView[];
   send: ChatMessage;
+  sendFavorite: ChatMessage;
   pins: ChatMessage[];
   upload: AttachmentPointer;
   history: ChatMessage[];

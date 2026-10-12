@@ -1,3 +1,4 @@
+import { FavoriteStar } from './Favorites.tsx';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { AttachmentPointer } from '../../../../shared/community-actions.ts';
 import { MAX_ATTACHMENT_BYTES } from '../../../../shared/community-actions.ts';
@@ -122,35 +123,39 @@ function ImageAttachment({
   const ratio = pointer.width && pointer.height ? pointer.width / pointer.height : 4 / 3;
   const width = Math.max(64, Math.min(400, pointer.width ?? 400, 300 * ratio));
   return (
-    <div
-      ref={ref}
-      className="attachment-image"
-      style={{ width, aspectRatio: String(ratio) }}
-      role="button"
-      tabIndex={0}
-      aria-label={alt ? `Image: ${alt}` : `Image ${pointer.name}`}
-      onClick={() => (url ? onOpen() : setManual(true))}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          if (url) onOpen();
-          else setManual(true);
-        }
-      }}
-    >
-      {pointer.thumb && !url && <img className="attachment-image__thumb" src={pointer.thumb} alt="" />}
-      {url && (
-        <img className="attachment-image__full" src={url} alt={alt || pointer.name} draggable={false} />
-      )}
-      {alt && (
-        <span className="attachment-image__alt" title={alt}>
-          ALT
-        </span>
-      )}
-      {!url && !error && (visible || manual) && <span className="attachment-image__spinner" />}
-      {!url && !error && !manual && pointer.size > AUTO_LOAD_BYTES && (
-        <span className="attachment-image__hint">Click to load · {formatBytes(pointer.size)}</span>
-      )}
-      {error && <span className="attachment-image__hint attachment-image__hint--error">{error}</span>}
+    // The star sits beside the picture (not inside its button), so controls are never nested.
+    <div className="attachment-image-wrap" style={{ width }}>
+      <div
+        ref={ref}
+        className="attachment-image"
+        style={{ width, aspectRatio: String(ratio) }}
+        role="button"
+        tabIndex={0}
+        aria-label={alt ? `Image: ${alt}` : `Image ${pointer.name}`}
+        onClick={() => (url ? onOpen() : setManual(true))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            if (url) onOpen();
+            else setManual(true);
+          }
+        }}
+      >
+        {pointer.thumb && !url && <img className="attachment-image__thumb" src={pointer.thumb} alt="" />}
+        {url && (
+          <img className="attachment-image__full" src={url} alt={alt || pointer.name} draggable={false} />
+        )}
+        {alt && (
+          <span className="attachment-image__alt" title={alt}>
+            ALT
+          </span>
+        )}
+        {!url && !error && (visible || manual) && <span className="attachment-image__spinner" />}
+        {!url && !error && !manual && pointer.size > AUTO_LOAD_BYTES && (
+          <span className="attachment-image__hint">Click to load · {formatBytes(pointer.size)}</span>
+        )}
+        {error && <span className="attachment-image__hint attachment-image__hint--error">{error}</span>}
+      </div>
+      {url && <FavoriteStar pointer={pointer} />}
     </div>
   );
 }

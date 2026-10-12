@@ -1,3 +1,4 @@
+import { SCREEN_QUALITIES, saveQuality, savedQuality, type ScreenQuality } from '../screen-quality.ts';
 import { StagePanel } from './Stage.tsx';
 import { SoundboardButton } from './Soundboard.tsx';
 import { describeLink, linkQuality, type LinkStats } from '../link-stats.ts';
@@ -36,6 +37,7 @@ export function VoiceChannel(props: {
   const links = useLinkStats(inThisCall ? call : null);
   const participants = community.voice[channel.id] ?? [];
   const [picker, setPicker] = useState<ScreenSource[] | null>(null);
+  const [quality, setQuality] = useState<ScreenQuality>(savedQuality);
   const [focus, setFocus] = useState<string | null>(null);
   const placesTaken = (community.voice[channel.id] ?? []).length;
   const full =
@@ -209,6 +211,24 @@ export function VoiceChannel(props: {
                 needs PipeWire and the desktop portal.
               </p>
             )}
+            <div className="segmented picker__quality" role="radiogroup" aria-label="Quality">
+              {SCREEN_QUALITIES.map((q) => (
+                <button
+                  key={q.id}
+                  role="radio"
+                  aria-checked={quality === q.id}
+                  title={q.hint}
+                  className={`segmented__item ${quality === q.id ? 'is-active' : ''}`}
+                  onClick={() => {
+                    setQuality(q.id);
+                    saveQuality(q.id);
+                  }}
+                >
+                  {q.label}
+                </button>
+              ))}
+            </div>
+            <p className="muted small">{SCREEN_QUALITIES.find((q) => q.id === quality)?.hint}</p>
             <div className="picker__grid">
               {picker.map((src) => (
                 <button
@@ -218,7 +238,7 @@ export function VoiceChannel(props: {
                     setPicker(null);
                     void window.river.voice
                       .selectScreen(src.id)
-                      .then(() => call.setScreen(true))
+                      .then(() => call.setScreen(true, quality))
                       .then(() => {
                         play('streamStart');
                         sendVoiceState();

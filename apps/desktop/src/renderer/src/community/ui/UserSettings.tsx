@@ -1,3 +1,4 @@
+import { AvatarCropDialog } from './AvatarCrop.tsx';
 import {
   DEFAULT_KEYBINDS,
   KEYBIND_ACTIONS,
@@ -66,37 +67,6 @@ export function UserSettings(props: { tab?: UserTab }): ReactElement {
   );
 }
 
-/** Crops an image to a centred square and encodes it small enough for a sealed profile. */
-async function toAvatar(file: File): Promise<string> {
-  const url = URL.createObjectURL(file);
-  try {
-    const img = new Image();
-    img.src = url;
-    await img.decode();
-    const side = Math.min(img.naturalWidth, img.naturalHeight);
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 128;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('no canvas');
-    ctx.drawImage(
-      img,
-      (img.naturalWidth - side) / 2,
-      (img.naturalHeight - side) / 2,
-      side,
-      side,
-      0,
-      0,
-      128,
-      128,
-    );
-    let data = canvas.toDataURL('image/webp', 0.85);
-    if (!data.startsWith('data:image/webp')) data = canvas.toDataURL('image/jpeg', 0.85);
-    return data;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
-
 interface ProfileDraft {
   name: string;
   avatar: string | null;
@@ -125,6 +95,7 @@ function Profile(): ReactElement {
       setSaved(p);
     });
   }, []);
+  const [cropping, setCropping] = useState<File | null>(null);
   const set = (patch: Partial<ProfileDraft>): void => setDraft((d) => ({ ...d, ...patch }));
   const dirty = saved !== null && JSON.stringify(draft) !== JSON.stringify(saved);
   const save = async (): Promise<void> => {
@@ -194,11 +165,19 @@ function Profile(): ReactElement {
               e.target.value = '';
               if (!file) return;
               if (file.size > 15 * 1024 * 1024) return s.notify('That image is too large.', 'error');
-              void toAvatar(file)
-                .then((avatar) => set({ avatar }))
-                .catch(() => s.notify('River could not read that image.', 'error'));
+              setCropping(file);
             }}
           />
+          {cropping && (
+            <AvatarCropDialog
+              file={cropping}
+              onClose={() => setCropping(null)}
+              onDone={(avatar) => {
+                setCropping(null);
+                set({ avatar });
+              }}
+            />
+          )}
         </div>
         <div className="profile-editor__fields">
           <label className="textfield">

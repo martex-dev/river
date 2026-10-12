@@ -129,7 +129,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
               s.setModal({ kind: 'nickname', communityId: community.id });
             }}
           >
-            Change nickname
+            Nickname &amp; picture here
           </MenuItem>
           {community.ownerId !== me && (
             <MenuItem

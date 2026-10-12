@@ -5089,3 +5089,96 @@ input.switch:disabled {
   margin: 0;
   font-size: 12px;
 }
+
+/* Favourite GIFs (1.0.25) */
+.favorite-star {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur);
+}
+.attachment-image-wrap {
+  position: relative;
+  max-width: 100%;
+}
+.attachment-image-wrap:hover .favorite-star,
+.favorite-star:focus-visible,
+.favorite-star.is-on {
+  opacity: 1;
+}
+.favorite-star.is-on {
+  color: #f0b232;
+}
+.composer__gif {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+/* Group icons (1.0.25) */
+.group-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 50%;
+  background: var(--surface-hover);
+  line-height: 1;
+}
+
+/* Per-community avatar (1.0.25) */
+.community-avatar {
+  margin: 4px 0 10px;
+}
+.community-avatar__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.community-avatar__img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Avatar crop (1.0.25) */
+.avatar-crop {
+  position: relative;
+  margin: 0 auto 10px;
+  overflow: hidden;
+  border-radius: 50%;
+  cursor: grab;
+  touch-action: none;
+  background: #000;
+  box-shadow: 0 0 0 2px var(--border-strong);
+}
+.avatar-crop:active {
+  cursor: grabbing;
+}
+.avatar-crop canvas {
+  display: block;
+  pointer-events: none;
+}
+.avatar-crop__zoom {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.avatar-crop__zoom input {
+  accent-color: var(--accent);
+}
+.forum-post.is-pinned {
+  border-color: rgba(240, 178, 50, 0.5);
+}

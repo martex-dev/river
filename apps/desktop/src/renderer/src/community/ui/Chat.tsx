@@ -1,3 +1,7 @@
+import { setFollowing } from '../thread-follow.ts';
+import { muteLength, parseSlash, slashText, suggestCommands, type ParsedSlash } from '../slash.ts';
+import { muteUntil, withOverride } from '../../../../shared/notify-rules.ts';
+import { GifButton } from './Favorites.tsx';
 import { StickerButton, StickerImage } from './Stickers.tsx';
 import { SavedPanel } from './Saved.tsx';
 import { CreatePollDialog, PollView } from './Poll.tsx';
@@ -651,9 +655,10 @@ function Message(props: {
               onClick={() => {
                 if (m.thread) return void s.showThread(channel.id, m.id);
                 const name = (m.text.split('\n')[0] ?? '').slice(0, 40).trim() || 'Thread';
-                void s
-                  .run({ a: 'createThread', channelId: channel.id, messageId: m.id, name })
-                  .then(() => s.showThread(channel.id, m.id));
+                void s.run({ a: 'createThread', channelId: channel.id, messageId: m.id, name }).then(() => {
+                  setFollowing(m.id, true);
+                  s.showThread(channel.id, m.id);
+                });
               }}
             >
               🧵
@@ -723,9 +728,10 @@ function Message(props: {
                 setMenu(null);
                 if (m.thread) return void s.showThread(channel.id, m.id);
                 const name = (m.text.split('\n')[0] ?? '').slice(0, 40).trim() || 'Thread';
-                void s
-                  .run({ a: 'createThread', channelId: channel.id, messageId: m.id, name })
-                  .then(() => s.showThread(channel.id, m.id));
+                void s.run({ a: 'createThread', channelId: channel.id, messageId: m.id, name }).then(() => {
+                  setFollowing(m.id, true);
+                  s.showThread(channel.id, m.id);
+                });
               }}
             >
               {m.thread ? 'Open thread' : 'Create thread'}
@@ -1013,31 +1019,121 @@ function Composer(props: {
           label: `:${e.name}:`,
         }))
     : [];
+  // Slash commands: "/" at the start, before the first space.
+  const slashTrigger = /^\/([a-z]*)$/i.exec(text);
+  const slashChoices: Suggestion[] = slashTrigger
+    ? suggestCommands(slashTrigger[1]!).map((c) => ({
+        key: `s:${c.name}`,
+        insert: c.name,
+        symbol: '/' as const,
+        hint: c.help,
+        label: `/${c.name}${c.args ? ` ${c.args}` : ''}`,
+      }))
+    : [];
   const suggestions: Suggestion[] =
-    mentionChoices.length > 0
-      ? mentionChoices
-      : emojiTrigger && (emojiIndex || customChoices.length)
-        ? [
-            ...customChoices,
-            ...(emojiIndex ? searchEmoji(emojiIndex, emojiTrigger[1]!, 8) : []).map((e) => ({
-              key: `e:${e.emoji}`,
-              insert: e.emoji,
-              symbol: ':' as const,
-              hint: e.label,
-              label: `:${e.shortcodes[0] ?? e.label.replace(/\s+/g, '_')}:`,
-            })),
-          ].slice(0, 8)
-        : [];
+    slashChoices.length > 0
+      ? slashChoices
+      : mentionChoices.length > 0
+        ? mentionChoices
+        : emojiTrigger && (emojiIndex || customChoices.length)
+          ? [
+              ...customChoices,
+              ...(emojiIndex ? searchEmoji(emojiIndex, emojiTrigger[1]!, 8) : []).map((e) => ({
+                key: `e:${e.emoji}`,
+                insert: e.emoji,
+                symbol: ':' as const,
+                hint: e.label,
+                label: `:${e.shortcodes[0] ?? e.label.replace(/\s+/g, '_')}:`,
+              })),
+            ].slice(0, 8)
+          : [];
 
   const complete = (choice: Suggestion): void => {
-    if (choice.symbol === ':') setText(text.replace(/:([a-z0-9_+-]*)$/i, `${choice.insert} `));
+    if (choice.symbol === '/') setText(`/${choice.insert} `);
+    else if (choice.symbol === ':') setText(text.replace(/:([a-z0-9_+-]*)$/i, `${choice.insert} `));
     else setText(text.replace(/([@#])([^\s@#]*)$/, `$1${choice.insert} `));
     setMentionIndex(0);
     ref.current?.focus();
   };
 
+  /** Runs a slash command; true when it was handled (nothing more to send). */
+  const runSlash = async (cmd: ParsedSlash): Promise<string | true> => {
+    const asText = slashText(cmd);
+    if (asText !== null) return asText;
+    const done = (): true => {
+      setText('');
+      return true;
+    };
+    switch (cmd.command) {
+      case 'poll':
+        setPolling(true);
+        return done();
+      case 'nick':
+        await s.run({
+          a: 'setNickname',
+          communityId: community.id,
+          nickname: cmd.arg ? cmd.arg.slice(0, 64) : null,
+        });
+        s.notify(
+          cmd.arg ? `Your nickname here is now ${cmd.arg.slice(0, 64)}.` : 'Back to your River name here.',
+        );
+        return done();
+      case 'status':
+        await useRiver.getState().updateSettings({
+          presence: { customText: cmd.arg.slice(0, 128), customEmoji: '', customUntil: null },
+        });
+        s.notify(cmd.arg ? 'Custom status set.' : 'Custom status cleared.');
+        return done();
+      case 'online':
+      case 'idle':
+      case 'dnd':
+      case 'invisible':
+        await useRiver.getState().updateSettings({ presence: { status: cmd.command } });
+        s.notify(
+          cmd.command === 'dnd'
+            ? 'Do Not Disturb is on.'
+            : cmd.command === 'invisible'
+              ? 'You appear offline.'
+              : `You are ${cmd.command === 'idle' ? 'Idle' : 'Online'}.`,
+        );
+        return done();
+      case 'mute':
+      case 'unmute': {
+        const settings = useRiver.getState().settings;
+        if (!settings) return done();
+        const ms = cmd.command === 'unmute' ? 0 : muteLength(cmd.arg);
+        if (ms === undefined) {
+          s.notify('Try /mute 15m, /mute 1h or /mute 8h.', 'error');
+          return true;
+        }
+        await useRiver.getState().updateSettings({
+          notifications: {
+            overrides: withOverride(settings.notifications.overrides, channel.id, {
+              muteUntil: cmd.command === 'unmute' ? null : muteUntil(ms),
+            }),
+          },
+        });
+        s.notify(cmd.command === 'unmute' ? `#${channel.name} is unmuted.` : `#${channel.name} is muted.`);
+        return done();
+      }
+      default:
+        return true;
+    }
+  };
+
   const send = async (): Promise<void> => {
-    const withCustom = replaceCustomShortcodes(text.trim(), customEmoji);
+    const slash = props.pending.length === 0 ? parseSlash(text) : null;
+    if (slash) {
+      const out = await runSlash(slash);
+      if (out === true) return;
+      setText(out);
+      return void sendText(out);
+    }
+    return sendText(text);
+  };
+
+  const sendText = async (raw: string): Promise<void> => {
+    const withCustom = replaceCustomShortcodes(raw.trim(), customEmoji);
     const value = emojiIndex ? replaceShortcodes(withCustom, emojiIndex) : withCustom;
     const files = props.pending;
     if ((!value && files.length === 0) || uploading) return;
@@ -1136,7 +1232,11 @@ function Composer(props: {
                 complete(choice);
               }}
             >
-              {choice.symbol === ':' ? (
+              {choice.symbol === '/' ? (
+                <span className="mention-menu__dot" aria-hidden="true">
+                  /
+                </span>
+              ) : choice.symbol === ':' ? (
                 <span className="mention-menu__emoji" aria-hidden="true">
                   <EmojiGlyph emoji={choice.insert} />
                 </span>
@@ -1240,6 +1340,7 @@ function Composer(props: {
           📊
         </button>
         <StickerButton community={community} channelId={channel.id} />
+        {props.canAttach && <GifButton channelId={channel.id} />}
         {props.canAttach && (
           <>
             <button
@@ -1657,7 +1758,7 @@ interface Suggestion {
   key: string;
   /** Text inserted after the @ or # (an emoji replaces the whole :code). */
   insert: string;
-  symbol: '@' | '#' | ':';
+  symbol: '@' | '#' | ':' | '/';
   /** Shown instead of the inserted text (emoji: their :shortcode:). */
   label?: string;
   hint: string;

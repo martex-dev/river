@@ -60,6 +60,17 @@ describe('forum posts', () => {
   });
 });
 
+describe('pinned forum posts', () => {
+  it('stay on top', () => {
+    const list = [post('1'), post('2', { pinned: true }), post('3')];
+    expect(forumPosts(list, { query: '', tag: null, sort: 'newest' }).map((m) => m.id)).toEqual([
+      '2',
+      '3',
+      '1',
+    ]);
+  });
+});
+
 describe('relative time', () => {
   const now = Date.parse('2026-10-12T12:00:00Z');
   it('reads naturally', () => {

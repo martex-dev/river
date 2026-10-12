@@ -1,6 +1,7 @@
 import { fromBase64, toBase64 } from './relay-crypto.ts';
 import type { RelayEngine } from './relay-audio.ts';
 import { VoiceGate, levelOf } from './voice-gate.ts';
+import { screenConstraints, type ScreenQuality } from './screen-quality.ts';
 import { readLinkStats, type LinkStats } from './link-stats.ts';
 
 /**
@@ -654,15 +655,13 @@ export class VoiceCall {
   }
 
   /** Call after the user picked a screen/window with window.river.voice.selectScreen(). */
-  async setScreen(on: boolean): Promise<void> {
+  async setScreen(on: boolean, quality: ScreenQuality = 'balanced'): Promise<void> {
     if (on && !this.local.screen) {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: { ideal: 30 } },
-        audio: false,
-      });
+      const wanted = screenConstraints(quality);
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: wanted.video, audio: false });
       const track = stream.getVideoTracks()[0] ?? null;
       if (track) {
-        track.contentHint = 'detail';
+        track.contentHint = wanted.contentHint;
         track.onended = () => void this.setScreen(false);
       }
       await this.setSlot('screen', track);

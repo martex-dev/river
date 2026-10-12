@@ -81,6 +81,8 @@ const contentSchema = z.discriminatedUnion('t', [
     name: z.string().min(1).max(64),
     members: z.array(z.uuid()).min(1).max(32),
     admins: z.array(z.uuid()).min(1).max(32),
+    /** An emoji for the group (1.0.25); older apps ignore it. */
+    icon: z.string().min(1).max(16).nullable().optional(),
   }),
   z.object({ v: z.literal(1), t: z.literal('groupLeave'), groupId: msgId }),
   z.object({
@@ -177,6 +179,8 @@ interface GroupRow {
   state: 'accepted' | 'request' | 'left';
   created_at: string;
   last_read: string | null;
+  /** Emoji icon (1.0.25), or null. */
+  icon?: string | null;
 }
 
 const PREKEY_TARGET = 100;
@@ -669,18 +673,18 @@ export class DmService {
   private saveGroup(g: GroupRow): void {
     this.db()
       .prepare(
-        `INSERT INTO dm_groups (id, name, members, admins, profiles, state, created_at, last_read)
-         VALUES (@id, @name, @members, @admins, @profiles, @state, @created_at, @last_read)
+        `INSERT INTO dm_groups (id, name, members, admins, profiles, state, created_at, last_read, icon)
+         VALUES (@id, @name, @members, @admins, @profiles, @state, @created_at, @last_read, @icon)
          ON CONFLICT(id) DO UPDATE SET name = @name, members = @members, admins = @admins,
-           profiles = @profiles, state = @state, last_read = @last_read`,
+           profiles = @profiles, state = @state, last_read = @last_read, icon = @icon`,
       )
-      .run(g);
+      .run({ ...g, icon: g.icon ?? null });
   }
 
   /** Group state from an admin (or a new group that includes us). */
   private applyGroupUpdate(
     sender: string,
-    update: { groupId: string; name: string; members: string[]; admins: string[] },
+    update: { groupId: string; name: string; members: string[]; admins: string[]; icon?: string | null },
   ): boolean {
     const me = this.me();
     const members = [...new Set(update.members)].slice(0, MAX_GROUP);
@@ -691,6 +695,7 @@ export class DmService {
       const stillIn = members.includes(me);
       this.saveGroup({
         ...existing,
+        icon: update.icon ?? null,
         name: update.name.slice(0, 64),
         members: JSON.stringify(members),
         admins: JSON.stringify(admins),
@@ -701,6 +706,7 @@ export class DmService {
       if (this.contact(sender)?.state === 'blocked') return true;
       this.saveGroup({
         id: update.groupId,
+        icon: update.icon ?? null,
         name: update.name.slice(0, 64),
         members: JSON.stringify(members),
         admins: JSON.stringify(admins),
@@ -749,6 +755,7 @@ export class DmService {
       name: g.name,
       members: this.list(g.members),
       admins: this.list(g.admins),
+      ...(g.icon ? { icon: g.icon } : {}),
     };
     for (const m of recipients) {
       // The group must exist on their side before our group-scoped profile arrives.
@@ -1227,6 +1234,17 @@ export class DmService {
           this.emitConversations();
           return out(this.conversations().find((c) => c.riverId === g.id)!);
         }
+        case 'setGroupIcon': {
+          const g = this.group(act.peer);
+          if (!g || !this.list(g.admins).includes(this.me())) {
+            throw new CommunityError('Only group admins can change the group.');
+          }
+          const next: GroupRow = { ...g, icon: act.icon };
+          this.saveGroup(next);
+          await this.sendGroupState(next);
+          this.emitConversations();
+          return out(null);
+        }
         case 'renameGroup':
         case 'addGroupMembers':
         case 'removeGroupMember': {
@@ -1409,6 +1427,7 @@ export class DmService {
         isAdmin: admins.includes(me),
         name: g.name,
         avatar: null,
+        icon: g.icon ?? null,
         state: g.state,
         last: this.lastOf(g.id),
         unread,

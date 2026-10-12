@@ -6,6 +6,27 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Slash commands:** type `/` for /shrug, /tableflip, /me, /spoiler,
+  /poll, /nick, /status, /online, /idle, /dnd, /invisible, /mute 1h and
+  /unmute, with suggestions as you type.
+- **Pin and close forum posts** (moderators: right-click a post); pinned
+  posts stay on top.
+- **Follow threads:** threads you start or reply in are followed, so you
+  hear about new replies; Follow / Following in the thread header.
+- **Crop your picture:** drag and zoom to choose exactly what shows.
+- **A different picture per community:** right-click a community →
+  Nickname & picture here.
+- **Screen share quality:** choose Sharp text (1080p, 15 fps), Balanced
+  (720p, 30 fps) or Smooth motion (1080p, 60 fps) when you share; River
+  remembers your choice.
+- **Group icons:** group admins pick an emoji for the conversation
+  (right-click the group → Change icon).
+- **Your GIFs, privately:** click ☆ on any GIF or picture in a chat to keep
+  it, then send it again from the GIF button. They stay in your encrypted
+  database; no GIF service ever sees what you look for.
+
 ## [1.0.24] - 2026-10-12
 
 **Welcome people well: rules, pick-your-roles, stickers and cleaner moderation.**

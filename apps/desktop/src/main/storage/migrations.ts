@@ -326,4 +326,44 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 19,
+    name: '0019_favorite_media',
+    up(db) {
+      // GIFs and pictures you favourited (1.0.25), kept decrypted only in this encrypted database,
+      // so you can send them again without any outside GIF service.
+      db.exec(`
+        CREATE TABLE favorite_media (
+          id       TEXT PRIMARY KEY,
+          name     TEXT NOT NULL,
+          mime     TEXT NOT NULL,
+          width    INTEGER,
+          height   INTEGER,
+          bytes    BLOB NOT NULL,
+          added_at TEXT NOT NULL
+        ) STRICT;
+      `);
+    },
+  },
+  {
+    version: 20,
+    name: '0020_group_icons',
+    up(db) {
+      // An emoji for a group conversation (1.0.25), set by its admins.
+      db.exec(`ALTER TABLE dm_groups ADD COLUMN icon TEXT;`);
+    },
+  },
+  {
+    version: 21,
+    name: '0021_community_avatars',
+    up(db) {
+      // A picture used in one community instead of your usual avatar (1.0.25).
+      db.exec(`
+        CREATE TABLE community_avatars (
+          community_id TEXT PRIMARY KEY,
+          avatar       TEXT NOT NULL
+        ) STRICT;
+      `);
+    },
+  },
 ];

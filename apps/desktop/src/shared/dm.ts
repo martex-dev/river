@@ -17,6 +17,8 @@ export interface ConversationView {
   isAdmin: boolean;
   name: string;
   avatar: string | null;
+  /** A group's emoji (1.0.25). */
+  icon?: string | null;
   state: 'accepted' | 'request' | 'blocked' | 'left';
   /** You started this conversation and they have not answered yet (a sent friend request). */
   awaitingReply: boolean;
@@ -169,6 +171,7 @@ export const dmActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('renameGroup'), peer: id, name: z.string().trim().min(1).max(64) }).strict(),
+  z.object({ a: z.literal('setGroupIcon'), peer: id, icon: z.string().min(1).max(16).nullable() }).strict(),
   z.object({ a: z.literal('addGroupMembers'), peer: id, members: z.array(riverId).min(1).max(31) }).strict(),
   z.object({ a: z.literal('removeGroupMember'), peer: id, member: riverId }).strict(),
   z.object({ a: z.literal('leaveGroup'), peer: id }).strict(),
