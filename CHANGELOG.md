@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.27] - 2026-10-12
+
+**Speak your language: a language setting, plus age-restricted channels and clearer roles.**
+
 ### Added
 
 - **Role mentions explain themselves:** hover or focus one to see the role,
