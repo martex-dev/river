@@ -44,7 +44,7 @@ describe('link previews', () => {
     routes: Record<string, Response | (() => Response)>,
     dns: Record<string, string[]> = {},
   ): PreviewDeps => ({
-    fetch: (async (input: RequestInfo | URL) => {
+    fetch: (async (input: string | URL | Request) => {
       const r = routes[String(input)];
       if (!r) throw new Error(`unexpected ${String(input)}`);
       return typeof r === 'function' ? r() : r;
