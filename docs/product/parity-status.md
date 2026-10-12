@@ -1,6 +1,6 @@
 # River 1.0 parity status (audit of parity-checklist.md)
 
-Last audited: **2026-10-12**, against `main` + open PRs for 1.0.18/1.0.19.
+Last audited: **2026-10-12**, against `main` + open PRs up to 1.0.27.
 Status: ✅ done · 🔨 partial · ⏳ to do · 🔒 privacy-preserving equivalent ·
 ✖ not planned (reason given). Each ✅ is backed by code and tests; the tests
 are named where it helps. This file is updated with every release.
@@ -16,7 +16,7 @@ are named where it helps. This file is updated with every release.
 | Suspicious-login challenges                    | 🔒      | No passwords to guess; every session needs the device key                                                                      |
 | Account deletion                               | ✅      | 1.0.18, device-key proof; deactivation ✖ (deletion or leaving communities covers it)                                           |
 | Unique ID, username availability, display name | ✅      | River ID, @username (1.0.13), display name                                                                                     |
-| Avatar, crop/preview                           | ✅ / 🔨 | Avatar with preview; manual crop ⏳ (auto centre-crop today)                                                                   |
+| Avatar, crop/preview                           | ✅      | Crop and zoom dialog (1.0.25)                                                                                                  |
 | Animated avatar                                | ⏳      | GIF avatars resized to static today                                                                                            |
 | Banner, profile colour, bio, pronouns          | ✅      | 1.0.18 (banner colour, About me, pronouns), encrypted                                                                          |
 | Decorations, badges, effects                   | ✖       | Paid cosmetics; not in River's model                                                                                           |
@@ -25,7 +25,7 @@ are named where it helps. This file is updated with every release.
 | Custom status, emoji status, expiry            | ✅      | 1.0.17, encrypted                                                                                                              |
 | Playing/listening activity                     | 🔒 ⏳   | Would require process/app tracking; opt-in manual "activity" could come later                                                  |
 | Per-community nickname                         | ✅      | 1.0.6                                                                                                                          |
-| Per-community avatar                           | ⏳      |                                                                                                                                |
+| Per-community avatar                           | ✅      | 1.0.25                                                                                                                         |
 | Profile popover, full profile                  | ✅ / 🔨 | Popover from member list and chat (1.0.17); separate full-profile page ⏳                                                      |
 | Mutual friends / communities                   | 🔨      | Mutual communities ✅ (Friends page); mutual friends ⏳                                                                        |
 | Shared roles, message/add-friend/block buttons | ✅      | Profile card                                                                                                                   |
@@ -37,36 +37,36 @@ are named where it helps. This file is updated with every release.
 
 ## 2. Friends, contacts and direct messages
 
-| Item                                                                         | Status  | Notes                                                                                                          |
-| ---------------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------- |
-| Send/accept/reject/cancel/remove, incoming/outgoing, pending                 | ✅      | Friends page tabs (1.0.3)                                                                                      |
-| Request limits, duplicates, blocked requests                                 | ✅      | Server abuse limits; duplicate requests collapse                                                               |
-| Search / sort / online filter                                                | ✅      | Online/All/Pending/Blocked, with search                                                                        |
-| Username search, ID lookup, invite-based discovery                           | ✅      | 1.0.13                                                                                                         |
-| Display-name discovery                                                       | 🔒      | Display names are encrypted; usernames are the public handle                                                   |
-| Contact syncing                                                              | 🔒      | Never uploads contacts                                                                                         |
-| Favorites                                                                    | ⏳      |                                                                                                                |
-| Last-active visibility                                                       | 🔒      | Not stored                                                                                                     |
-| DM: send/edit/delete/reply/react/pin?                                        | ✅ / 🔨 | All but DM pins ⏳                                                                                             |
-| Quote, forward, copy, copy link, jump, mark unread                           | 🔨      | In channels ✅ (1.0.17); in DMs: copy/quote ✅, forward from DM ⏳                                             |
-| Report message                                                               | ✅      | Community messages (1.0.21); DMs: block instead                                                                |
-| Multiline, Enter/Shift+Enter, drafts                                         | ✅      | Per-channel drafts while open (1.0.20); on-disk drafts 🔒 (would store unsent text)                            |
-| Emoji picker                                                                 | ✅      | 1.0.17 (+ custom emoji 1.0.19)                                                                                 |
-| GIF picker                                                                   | 🔒 ⏳   | Public GIF services see searches and IPs; a privacy-respecting option (proxied or local favourites) is planned |
-| Sticker picker                                                               | ⏳      |                                                                                                                |
-| Attachments, paste, drag-and-drop                                            | ✅      | 0.4                                                                                                            |
-| Link previews                                                                | 🔒 ⏳   | Fetching previews leaks your IP to sites; opt-in, sender-side previews planned                                 |
-| Markdown, code, quotes, headings, lists, spoilers                            | ✅      | 1.0.17                                                                                                         |
-| Image/video/audio/document attachments, size, progress, retry                | ✅      | Cancel upload and alt text (1.0.21)                                                                            |
-| Message states (sending/sent/failed/retrying/edited/deleted)                 | ✅      | Outbox (1.0.5)                                                                                                 |
-| New-message divider, unread, typing, read receipts (DM)                      | ✅      |                                                                                                                |
-| Search conversation, load older, newest button, scroll-to-bottom             | ✅      | Jump to date ✅ (1.0.20)                                                                                       |
-| Close/hide DM, group DMs (create, rename, icon, add/remove, leave)           | ✅ / 🔨 | Group icon ⏳                                                                                                  |
-| Who can message you, message requests, blocks                                | ✅      |                                                                                                                |
-| Spam filtering, suspicious links                                             | 🔨      | Link confirmation shows real address (1.0.17); filtering ⏳                                                    |
-| DM calls: start/answer/decline/hang up/duration/ringing/missed/camera/screen | ✅      | 1:1 calls via relay too (1.0.16)                                                                               |
-| Rejoin ongoing call                                                          | ⏳      |                                                                                                                |
-| Message context menu                                                         | ✅ / 🔨 | Translate ✖ (would send text to a service); report ⏳                                                          |
+| Item                                                                         | Status  | Notes                                                                               |
+| ---------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------- |
+| Send/accept/reject/cancel/remove, incoming/outgoing, pending                 | ✅      | Friends page tabs (1.0.3)                                                           |
+| Request limits, duplicates, blocked requests                                 | ✅      | Server abuse limits; duplicate requests collapse                                    |
+| Search / sort / online filter                                                | ✅      | Online/All/Pending/Blocked, with search                                             |
+| Username search, ID lookup, invite-based discovery                           | ✅      | 1.0.13                                                                              |
+| Display-name discovery                                                       | 🔒      | Display names are encrypted; usernames are the public handle                        |
+| Contact syncing                                                              | 🔒      | Never uploads contacts                                                              |
+| Favorites                                                                    | ✅      | Favourite emoji (1.0.20) and GIFs (1.0.25)                                          |
+| Last-active visibility                                                       | 🔒      | Not stored                                                                          |
+| DM: send/edit/delete/reply/react/pin?                                        | ✅ / 🔨 | All but DM pins ⏳                                                                  |
+| Quote, forward, copy, copy link, jump, mark unread                           | ✅      | Channels (1.0.17); forward from DMs (1.0.23)                                        |
+| Report message                                                               | ✅      | Community messages (1.0.21); DMs: block instead                                     |
+| Multiline, Enter/Shift+Enter, drafts                                         | ✅      | Per-channel drafts while open (1.0.20); on-disk drafts 🔒 (would store unsent text) |
+| Emoji picker                                                                 | ✅      | 1.0.17 (+ custom emoji 1.0.19)                                                      |
+| GIF picker                                                                   | 🔒      | Favourite any GIF or picture and send it again (1.0.25); no outside GIF service     |
+| Sticker picker                                                               | ✅      | Community stickers (1.0.24)                                                         |
+| Attachments, paste, drag-and-drop                                            | ✅      | 0.4                                                                                 |
+| Link previews                                                                | 🔒      | Opt-in, made by the sender, public addresses only (1.0.23)                          |
+| Markdown, code, quotes, headings, lists, spoilers                            | ✅      | 1.0.17                                                                              |
+| Image/video/audio/document attachments, size, progress, retry                | ✅      | Cancel upload and alt text (1.0.21)                                                 |
+| Message states (sending/sent/failed/retrying/edited/deleted)                 | ✅      | Outbox (1.0.5)                                                                      |
+| New-message divider, unread, typing, read receipts (DM)                      | ✅      |                                                                                     |
+| Search conversation, load older, newest button, scroll-to-bottom             | ✅      | Jump to date ✅ (1.0.20)                                                            |
+| Close/hide DM, group DMs (create, rename, icon, add/remove, leave)           | ✅      | Group icons (1.0.25)                                                                |
+| Who can message you, message requests, blocks                                | ✅      |                                                                                     |
+| Spam filtering, suspicious links                                             | 🔨      | Link confirmation shows real address (1.0.17); filtering ⏳                         |
+| DM calls: start/answer/decline/hang up/duration/ringing/missed/camera/screen | ✅      | 1:1 calls via relay too (1.0.16)                                                    |
+| Rejoin ongoing call                                                          | ⏳      |                                                                                     |
+| Message context menu                                                         | ✅      | Report (1.0.21), save, forward; translate ✖ (would send text to a service)          |
 
 ## 3. The chat interface
 
@@ -87,7 +87,7 @@ are named where it helps. This file is updated with every release.
 | Date separators, relative times, grouping | ✅      |                                                                                       |
 | Expand/collapse long messages             | ✅      | Show more / Show less (1.0.19)                                                        |
 | Spoilers, highlighted code + copy         | ✅      | 1.0.17                                                                                |
-| Embeds with loading/failed states         | 🔒 ⏳   | See link previews                                                                     |
+| Embeds with loading/failed states         | 🔒      | Sender-made previews (1.0.23)                                                         |
 | Empty/loading/error/permission states     | ✅      |                                                                                       |
 
 ## 4. Formatting, reactions and expression
@@ -97,8 +97,8 @@ are named where it helps. This file is updated with every release.
 | Emoji picker, search, recent, categories          | ✅     | Favourites (1.0.20)                                                   |
 | Custom emoji: upload, rename, delete, permissions | ✅     | 1.0.19; rename 1.0.20                                                 |
 | Animated custom emoji                             | ✅     | Small GIFs kept as-is                                                 |
-| Stickers                                          | ⏳     |                                                                       |
-| GIFs                                              | 🔒 ⏳  | See §2                                                                |
+| Stickers                                          | ✅     | 1.0.24: upload, picker, send, permissions, limit 60                   |
+| GIFs                                              | 🔒     | Favourites (1.0.25), see §2                                           |
 | Multiple reactions, counts, removal, user list    | ✅     |                                                                       |
 | Super reactions                                   | ✖      | Paid feature                                                          |
 | Markdown incl. escaping, malformed fallback       | ✅     |                                                                       |
@@ -112,7 +112,7 @@ are named where it helps. This file is updated with every release.
 | Create with name, icon, template, channels            | ✅     | 1.0.2                                                                                  |
 | Join by invite, preview                               | ✅     |                                                                                        |
 | Discovery / public listing                            | ✖ / ⏳ | Communities are private and encrypted; an opt-in directory would need a public profile |
-| Rules screening, onboarding questions, welcome screen | 🔨     | Welcome screen ✅; rules/onboarding ⏳                                                 |
+| Rules screening, onboarding questions, welcome screen | ✅     | Rules screening and welcome note (1.0.24); role picker after accepting                 |
 | Leave, rejoin, new invites, expiry & usage limits     | ✅     |                                                                                        |
 | Icon, name, description, banner, splash               | 🔨     | Banner/splash ⏳; image icons ⏳ (emoji icons today)                                   |
 | Scheduled events, RSVP, reminders, cancel, delete     | ✅     | 1.0.18                                                                                 |
@@ -120,7 +120,7 @@ are named where it helps. This file is updated with every release.
 | Ownership transfer                                    | ✅     | 1.0.19, owner only, audited                                                            |
 | Server deletion with confirmation                     | ✅     |                                                                                        |
 | Templates                                             | ✅     |                                                                                        |
-| Insights / analytics                                  | 🔒     | Server cannot see content; local stats possible ⏳                                     |
+| Insights / analytics                                  | 🔒     | Counted on the device (1.0.26)                                                         |
 
 ## 6. Navigation, channels and categories
 
@@ -129,7 +129,7 @@ are named where it helps. This file is updated with every release.
 | Server icons, unread, mention badges, active indicator              | ✅     |                                                |
 | Drag-and-drop server order, folders (create/rename/colour/collapse) | ✅     | 1.0.18                                         |
 | Categories create/rename/reorder/collapse/delete/permissions        | ✅     | 1.0.0/1.0.6                                    |
-| Text, voice, announcement channels                                  | ✅     | Forum ✅, stage ✅ (1.0.22); media ⏳          |
+| Text, voice, announcement channels                                  | ✅     | Forum, stage (1.0.22), media (1.0.26)          |
 | Duplicate channel                                                   | ✅     | 1.0.20                                         |
 | Topic, slowmode, per-channel notifications, permissions             | ✅     | NSFW flag ⏳                                   |
 | Private channels, synced/unsynced overrides                         | ✅     |                                                |
@@ -144,11 +144,11 @@ are named where it helps. This file is updated with every release.
 | ---------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
 | Create/edit/delete roles, colour, hoist, mentionable | ✅      | Duplicate (1.0.20), icons (1.0.21)                                                             |
 | Drag-and-drop hierarchy                              | 🔨      | Up/down arrows today                                                                           |
-| Assign/remove, view members                          | ✅      | Bulk ⏳                                                                                        |
-| Self-assignable / reaction roles                     | ⏳      |                                                                                                |
+| Assign/remove, view members                          | ✅      | Bulk via self-roles; bulk moderator assign ⏳                                                  |
+| Self-assignable / reaction roles                     | ✅      | Self-assignable roles (1.0.24)                                                                 |
 | Temporary roles                                      | ⏳      |                                                                                                |
 | Hierarchy enforcement, owner protection              | ✅      | Server-side                                                                                    |
-| View as role / effective permission explainer        | ⏳      |                                                                                                |
+| View as role / effective permission explainer        | ✅      | Check someone’s access, and why (1.0.26)                                                       |
 | Permission categories                                | 🔨      | 23 permissions incl. events and emoji; threads/forums/apps follow those features               |
 | Evaluation rules 1–12                                | ✅ / 🔨 | Discord's algorithm, server-enforced, audited; individual member overrides ⏳; diff preview ⏳ |
 
@@ -164,7 +164,7 @@ are named where it helps. This file is updated with every release.
 | Mic test, input sensitivity, PTT, noise/echo   | ✅      | Sensitivity slider (1.0.20)                                           |
 | Server mute/deafen, move, disconnect           | ✅      | Server deafen (1.0.20)                                                |
 | Speaking indicators, priority speaker          | ✅ / ⏳ |                                                                       |
-| Camera, screen share, grid/focus, pin          | ✅      | Stream quality settings ⏳                                            |
+| Camera, screen share, grid/focus, pin          | ✅      | Stream quality presets (1.0.25)                                       |
 | Stream audio                                   | ⏳      |                                                                       |
 | Relay when direct connection impossible        | ✅      | 1.0.16 (voice; video still direct)                                    |
 | Stage channels                                 | ✅      | 1.0.22: audience, hands, invite to speak, move to audience            |
@@ -190,7 +190,7 @@ are named where it helps. This file is updated with every release.
 | Search channel/community on device, jump to result | ✅     | Filters from:/in:/has:/before:/after:/during:/pinned:/mentions: (1.0.20) |
 | Quick switcher, recent channels                    | ✅     |                                                                          |
 | Back/forward navigation                            | ✅     | Alt+←/→, ⌘[/⌘], mouse buttons (1.0.20)                                   |
-| Threads from messages, replies, archive            | ✅     | Follow/unfollow ⏳                                                       |
+| Threads from messages, replies, archive            | ✅     | Follow threads (1.0.25)                                                  |
 | Forums                                             | ✅     | 1.0.22: posts with titles and tags, search, filter, sort                 |
 | Mentions with autocomplete, role checks, highlight | ✅     |                                                                          |
 | Mention suppression per message                    | ✅     | @ON/OFF on replies (1.0.18)                                              |
@@ -200,44 +200,44 @@ are named where it helps. This file is updated with every release.
 
 ## 13–14. Moderation and audit
 
-| Item                                       | Status | Notes                                                           |
-| ------------------------------------------ | ------ | --------------------------------------------------------------- |
-| Delete messages, timeout, kick, ban, unban | ✅     | Ban cleanup (1.0.21), temporary bans (1.0.22)                   |
-| AutoMod keyword rules                      | 🔒 ⏳  | Server cannot read messages; client-side filters possible       |
-| Reports, cases, mod notes                  | 🔨     | Reports with resolve/dismiss and audit (1.0.21); notes/cases ⏳ |
-| Audit log with actor/action/target         | ✅     | Filters/export ⏳                                               |
+| Item                                       | Status | Notes                                                     |
+| ------------------------------------------ | ------ | --------------------------------------------------------- |
+| Delete messages, timeout, kick, ban, unban | ✅     | Ban cleanup (1.0.21), temporary bans (1.0.22)             |
+| AutoMod keyword rules                      | 🔒 ⏳  | Server cannot read messages; client-side filters possible |
+| Reports, cases, mod notes                  | ✅     | Reports (1.0.21), moderator notes (1.0.23)                |
+| Audit log with actor/action/target         | ✅     | Filters and copy (1.0.24)                                 |
 
 ## 15–17. Apps, events, growth
 
-| Item                            | Status | Notes                                  |
-| ------------------------------- | ------ | -------------------------------------- |
-| Bots, slash commands, webhooks  | ⏳     | Need an end-to-end-encrypted bot model |
-| Activities                      | ⏳     |                                        |
-| Events                          | ✅     | 1.0.18                                 |
-| Vanity invites, invite tracking | ⏳     |                                        |
-| Paid perks                      | ✖      | Not in River's model                   |
+| Item                            | Status | Notes                                                                              |
+| ------------------------------- | ------ | ---------------------------------------------------------------------------------- |
+| Bots, slash commands, webhooks  | 🔨     | Built-in slash commands (1.0.25); bots/webhooks need an end-to-end-encrypted model |
+| Activities                      | ⏳     |                                                                                    |
+| Events                          | ✅     | 1.0.18                                                                             |
+| Vanity invites, invite tracking | ⏳     |                                                                                    |
+| Paid perks                      | ✖      | Not in River's model                                                               |
 
 ## 18–20. Settings, motion, keyboard
 
 | Item                                                                      | Status | Notes                                         |
 | ------------------------------------------------------------------------- | ------ | --------------------------------------------- |
 | Appearance: density, zoom, text size, clock, contrast, motion             | ✅     | 1.0.9/1.0.18                                  |
-| Language selection                                                        | ⏳     | English only                                  |
+| Language selection                                                        | 🔨     | English; Bulgarian beta (1.0.27)              |
 | Keybind editor                                                            | ✅     | Voice shortcuts with clash detection (1.0.22) |
 | Shortcuts list, Ctrl+K, Ctrl+F, Esc, Alt+↑/↓, Ctrl+Alt+↑/↓, type-anywhere | ✅     | 1.0.17                                        |
 | Animations with reduced motion                                            | ✅     |                                               |
 
 ## 21–25. Media, calls, security, reliability, accessibility
 
-| Item                                                       | Status  | Notes                                            |
-| ---------------------------------------------------------- | ------- | ------------------------------------------------ |
-| Attachments end to end, viewer, save                       | ✅      | PDF preview ⏳                                   |
-| Call state machine, reconnection                           | ✅      | 1.0.16                                           |
-| Rate limiting, server-side permission checks               | ✅      |                                                  |
-| Data export                                                | ⏳      | Encrypted backup exists; readable export planned |
-| Crash recovery, startup diagnostics, self-test             | ✅      | 1.0.16                                           |
-| Keyboard navigation, focus, screen-reader labels, contrast | ✅ / 🔨 | axe audits in CI                                 |
-| Localization                                               | ⏳      |                                                  |
+| Item                                                       | Status  | Notes                                 |
+| ---------------------------------------------------------- | ------- | ------------------------------------- |
+| Attachments end to end, viewer, save                       | ✅      | PDF preview ⏳                        |
+| Call state machine, reconnection                           | ✅      | 1.0.16                                |
+| Rate limiting, server-side permission checks               | ✅      |                                       |
+| Data export                                                | ✅      | Export my data (1.0.23)               |
+| Crash recovery, startup diagnostics, self-test             | ✅      | 1.0.16                                |
+| Keyboard navigation, focus, screen-reader labels, contrast | ✅ / 🔨 | axe audits in CI                      |
+| Localization                                               | 🔨      | Framework and Bulgarian beta (1.0.27) |
 
 ## 26–27. Analytics and premium
 
