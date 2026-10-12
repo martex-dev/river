@@ -5362,3 +5362,34 @@ input.switch:disabled {
   color: #da373c;
   border: 1px solid currentColor;
 }
+
+/* Word filter (1.0.28) */
+.word-filter {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.word-filter h3 {
+  margin: 0;
+}
+.word-filter textarea {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.msg__filtered {
+  font-style: italic;
+}
+.msg__filter-chip {
+  margin-left: 6px;
+  color: #f0b232;
+  border-color: rgba(240, 178, 50, 0.5);
+  text-transform: none;
+  letter-spacing: 0;
+}

@@ -6,6 +6,13 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (1.0.28)
+
+- **Word filter** (Community settings → Rules & roles): words and phrases
+  that River hides (with Show anyway) or stops people from sending. It
+  ignores case, accents and look-alikes; moderators still see everything.
+  Because the server cannot read messages, each River app applies it.
+
 ### Added (1.0.27)
 
 - **Role mentions explain themselves:** hover or focus one to see the role,
