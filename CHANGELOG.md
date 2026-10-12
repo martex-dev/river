@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.21] - 2026-10-12
+
+**Keep it friendly: reports, cleaner bans, role icons and pictures everyone can follow.**
+
 ### Added
 
 - **Report a message** (right-click → Report message): pick a reason and
