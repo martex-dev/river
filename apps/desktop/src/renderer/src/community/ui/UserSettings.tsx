@@ -1,3 +1,14 @@
+import {
+  DEFAULT_KEYBINDS,
+  KEYBIND_ACTIONS,
+  KEYBIND_LABELS,
+  clashOf,
+  comboLabel,
+  comboOf,
+  usable,
+  withDefaults,
+  type KeybindAction,
+} from '../../../../shared/keybinds.ts';
 import { levelOf } from '../voice-gate.ts';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { useRiver } from '../../store.ts';
@@ -489,9 +500,7 @@ function VoiceSettings(): ReactElement {
         onChange={(v) => apply({ echoCancellation: v })}
       />
       <div className="perm-group__title">Keyboard shortcuts</div>
-      <p className="muted small">
-        Ctrl+Shift+M toggles mute · Ctrl+Shift+D toggles deafen (while River is focused).
-      </p>
+      <KeybindEditor />
     </div>
   );
 }
@@ -692,6 +701,78 @@ function AppearanceSettings(): ReactElement {
           </label>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** Settings → Voice → Keyboard shortcuts (1.0.22): click a shortcut, press keys, done. */
+function KeybindEditor(): ReactElement {
+  const settings = useRiver((r) => r.settings);
+  const update = useRiver((r) => r.updateSettings);
+  const mac = useRiver((r) => r.info?.platform === 'darwin');
+  const binds = withDefaults(settings?.voice.keybinds);
+  const [capturing, setCapturing] = useState<KeybindAction | null>(null);
+  const [problem, setProblem] = useState<{ action: KeybindAction; text: string } | null>(null);
+  useEffect(() => {
+    if (!capturing) return;
+    const onKey = (e: KeyboardEvent): void => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.code === 'Escape') return setCapturing(null);
+      const combo = comboOf(e);
+      if (!combo) return; // still holding modifiers
+      setCapturing(null);
+      if (!usable(combo)) {
+        setProblem({
+          action: capturing,
+          text: 'Use Ctrl or Alt with a key (or an F key), so typing never sets it off.',
+        });
+        return;
+      }
+      const clash = clashOf(combo, binds, capturing);
+      if (clash) {
+        setProblem({ action: capturing, text: `${comboLabel(combo, mac)} is already used for ${clash}.` });
+        return;
+      }
+      setProblem(null);
+      void update({ voice: { keybinds: { ...binds, [capturing]: combo } } });
+    };
+    window.addEventListener('keydown', onKey, { capture: true });
+    return () => window.removeEventListener('keydown', onKey, { capture: true });
+  }, [capturing, binds, update, mac]);
+  return (
+    <div className="keybinds">
+      {KEYBIND_ACTIONS.map((action) => (
+        <div key={action} className="keybinds__row">
+          <span>{KEYBIND_LABELS[action]}</span>
+          <button
+            className={`keycap ${capturing === action ? 'is-capturing' : ''}`}
+            aria-label={`${KEYBIND_LABELS[action]}: ${comboLabel(binds[action], mac)}. Click to change.`}
+            onClick={() => {
+              setProblem(null);
+              setCapturing(capturing === action ? null : action);
+            }}
+          >
+            {capturing === action ? 'Press keys…' : comboLabel(binds[action], mac)}
+          </button>
+          {binds[action] && (
+            <button
+              className="btn btn--link btn--small"
+              onClick={() => void update({ voice: { keybinds: { ...binds, [action]: '' } } })}
+            >
+              Clear
+            </button>
+          )}
+          {problem?.action === action && <span className="field__error">{problem.text}</span>}
+        </div>
+      ))}
+      <button
+        className="btn btn--link btn--small"
+        onClick={() => void update({ voice: { keybinds: { ...DEFAULT_KEYBINDS } } })}
+      >
+        Restore defaults
+      </button>
+      <p className="muted small">Shortcuts work while River is focused. Press Esc to stop changing one.</p>
     </div>
   );
 }

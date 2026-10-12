@@ -1,3 +1,4 @@
+import { matches, withDefaults } from '../../../shared/keybinds.ts';
 import { ReportDialog } from '../community/ui/Reports.tsx';
 import { useEffect, useState, type ReactElement } from 'react';
 import { Celebrations } from '../community/fx.tsx';
@@ -204,18 +205,35 @@ function Toast(): ReactElement | null {
  */
 export function VoiceHotkeys(): null {
   const pttKey = useRiver((r) => r.settings?.voice.pushToTalkKey ?? 'Backquote');
+  const keybinds = useRiver((r) => r.settings?.voice.keybinds);
   useEffect(() => {
+    const binds = withDefaults(keybinds);
     const down = (e: KeyboardEvent): void => {
       const s = useCommunity.getState();
-      if (e.ctrlKey && e.shiftKey && e.code === 'KeyM') {
-        e.preventDefault();
-        s.toggleMute();
-        return;
-      }
-      if (e.ctrlKey && e.shiftKey && e.code === 'KeyD') {
-        e.preventDefault();
-        s.toggleDeafen();
-        return;
+      if (!e.repeat) {
+        if (matches(binds.toggleMute, e)) {
+          e.preventDefault();
+          s.toggleMute();
+          return;
+        }
+        if (matches(binds.toggleDeafen, e)) {
+          e.preventDefault();
+          s.toggleDeafen();
+          return;
+        }
+        if (matches(binds.toggleCamera, e) && s.call) {
+          e.preventDefault();
+          const call = s.call;
+          void call
+            .setCamera(!call.localTrack('camera'))
+            .catch(() => s.notify('Could not start your camera.', 'error'));
+          return;
+        }
+        if (matches(binds.leaveVoice, e) && s.call) {
+          e.preventDefault();
+          void s.leaveVoice();
+          return;
+        }
       }
       if (e.code === pttKey && s.call?.pushToTalk && !e.repeat) {
         e.preventDefault();
@@ -235,7 +253,7 @@ export function VoiceHotkeys(): null {
       window.removeEventListener('keyup', up);
       window.removeEventListener('blur', blur);
     };
-  }, [pttKey]);
+  }, [pttKey, keybinds]);
   return null;
 }
 

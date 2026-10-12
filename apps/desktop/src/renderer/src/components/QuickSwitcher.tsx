@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { sidebarGroups } from '../../../shared/layout.ts';
+import { KEYBIND_ACTIONS, KEYBIND_LABELS, comboLabel, withDefaults } from '../../../shared/keybinds.ts';
 import { useCommunity } from '../community/store.ts';
 import { useDm } from '../dm/store.ts';
 import { SECTIONS, useRiver, type Section } from '../store.ts';
@@ -295,13 +296,21 @@ const SHORTCUTS: Array<[string, string]> = [
   ['↑ (empty message box)', 'Edit your last message'],
   ['Tab or Enter', 'Accept a @mention or #channel suggestion'],
   ['Esc (while writing)', 'Cancel a reply, close a dialog or panel'],
-  ['Ctrl+Shift+M', 'Mute or unmute your microphone'],
-  ['Ctrl+Shift+D', 'Deafen or undeafen'],
   ['Push-to-talk key', 'Talk while held (set in User settings → Voice)'],
   ['F or double-click a video', 'Fullscreen in a call'],
 ];
 
 function Shortcuts({ onClose }: { onClose(): void }): ReactElement {
+  const keybinds = useRiver((r) => r.settings?.voice.keybinds);
+  const binds = withDefaults(keybinds);
+  // Voice shortcuts are yours to change (User settings → Voice), so show what they are now.
+  const rows: Array<[string, string]> = [
+    ...SHORTCUTS,
+    ...KEYBIND_ACTIONS.filter((a) => binds[a]).map((a): [string, string] => [
+      comboLabel(binds[a]),
+      KEYBIND_LABELS[a],
+    ]),
+  ];
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose();
@@ -322,7 +331,7 @@ function Shortcuts({ onClose }: { onClose(): void }): ReactElement {
           Keyboard shortcuts
         </h2>
         <dl className="shortcuts__list" tabIndex={0} aria-label="Shortcuts">
-          {SHORTCUTS.map(([keys, what]) => (
+          {rows.map(([keys, what]) => (
             <div key={keys} className="shortcuts__row">
               <dt>
                 {keys.split(' / ').map((k, i) => (
