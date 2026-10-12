@@ -281,6 +281,7 @@ function Switcher({ onClose }: { onClose(): void }): ReactElement {
 const SHORTCUTS: Array<[string, string]> = [
   ['Ctrl+K', 'Quick switcher: jump to a channel, person or section'],
   ['Ctrl+/', 'Show these shortcuts'],
+  ['Alt+← / Alt+→ (⌘[ / ⌘])', 'Back / forward (also the mouse buttons)'],
   ['Alt+↑ / Alt+↓', 'Previous / next channel'],
   ['Alt+Shift+↑ / Alt+Shift+↓', 'Previous / next unread channel'],
   ['Ctrl+Alt+↑ / Ctrl+Alt+↓', 'Previous / next community'],

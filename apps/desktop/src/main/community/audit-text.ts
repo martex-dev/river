@@ -42,6 +42,8 @@ export function describeAudit(
         return 'deleted an event';
       case 'emoji.create':
         return 'added a custom emoji';
+      case 'emoji.update':
+        return 'renamed a custom emoji';
       case 'emoji.delete':
         return 'removed a custom emoji';
       case 'member.join':

@@ -120,6 +120,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('moveChannel'), channelId: id, direction }).strict(),
+  /** A copy with the same kind, category, permissions and settings (1.0.20); no messages. */
+  z.object({ a: z.literal('duplicateChannel'), channelId: id, name }).strict(),
   z.object({ a: z.literal('deleteChannel'), channelId: id }).strict(),
   z.object({ a: z.literal('createThread'), channelId: id, messageId: id, name }).strict(),
   z
@@ -283,6 +285,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       a: z.literal('moderateVoice'),
       riverId,
       serverMuted: z.boolean().optional(),
+      serverDeafened: z.boolean().optional(),
       disconnect: z.boolean().optional(),
     })
     .strict(),
@@ -340,6 +343,9 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('deleteEmoji'), emojiId: id }).strict(),
+  z
+    .object({ a: z.literal('renameEmoji'), communityId: id, emojiId: id, name: z.string().regex(EMOJI_NAME) })
+    .strict(),
   // Saved messages (1.0.19): kept only on this device.
   z.object({ a: z.literal('savedMessages') }).strict(),
   z.object({ a: z.literal('transferOwnership'), communityId: id, riverId }).strict(),
@@ -390,6 +396,7 @@ export interface BanView {
 
 interface Results {
   createRole: string;
+  duplicateChannel: string;
   createCategory: string;
   outboxList: SavedOutgoing[];
   audit: AuditView[];

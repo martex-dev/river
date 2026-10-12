@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { QuickSwitcher } from './components/QuickSwitcher.tsx';
+import { startNavHistory } from './nav-history.ts';
 import { RiverMark } from './components/RiverMark.tsx';
 import { SECTION_ICONS, LockIcon } from './components/Icons.tsx';
 import { LockScreen } from './components/LockScreen.tsx';
@@ -100,6 +101,8 @@ export function App(): ReactElement {
       offSocial();
     };
   }, [load, setUpdate, setStorage, setAccount]);
+
+  useEffect(() => startNavHistory(), []);
 
   useEffect(() => {
     document.documentElement.dataset.motion = reducedMotion ? 'reduced' : 'full';

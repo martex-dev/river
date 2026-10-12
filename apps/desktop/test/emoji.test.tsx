@@ -1,3 +1,4 @@
+/** @vitest-environment jsdom */
 import { describe, expect, it } from 'vitest';
 import data from 'emojibase-data/en/compact.json';
 import codes from 'emojibase-data/en/shortcodes/github.json';
@@ -27,5 +28,17 @@ describe('emoji', () => {
     expect(replaceShortcodes('nice :fire: :+1: :nope:', index)).toMatch(/^nice 🔥 👍️? :nope:$/u);
     expect(replaceShortcodes('`:fire:` and ```\n:fire:\n```', index)).toBe('`:fire:` and ```\n:fire:\n```');
     expect(replaceShortcodes('10:30:45', index)).toBe('10:30:45');
+  });
+});
+
+describe('favourite emoji', () => {
+  it('toggles and keeps order', async () => {
+    const { favoriteEmoji, toggleFavoriteEmoji } =
+      await import('../src/renderer/src/community/emoji-data.ts');
+    localStorage.removeItem('river.emoji.favorites');
+    expect(toggleFavoriteEmoji('🔥')).toEqual(['🔥']);
+    expect(toggleFavoriteEmoji('👍')).toEqual(['🔥', '👍']);
+    expect(toggleFavoriteEmoji('🔥')).toEqual(['👍']);
+    expect(favoriteEmoji()).toEqual(['👍']);
   });
 });

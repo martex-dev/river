@@ -5,6 +5,7 @@ import { HostingPanel, useHostStatus } from '../components/HostingPanel.tsx';
 import type { ReleaseChannel } from '@river/release/channels';
 import type { AccountStatus, ServerCheckResult, UpdateStatus } from '../../../shared/ipc.ts';
 import { serverUrlSchema, type Settings } from '../../../shared/settings.ts';
+import { inQuietHours } from '../../../shared/notify-rules.ts';
 import { ExternalIcon } from '../components/Icons.tsx';
 import { Modal } from '../community/ui/common.tsx';
 import { useCommunity } from '../community/store.ts';
@@ -766,10 +767,53 @@ function NotificationsPanel({ settings }: { settings: Settings }): ReactElement 
           ))}
         </div>
       </fieldset>
+      <QuietHours settings={settings} />
       <p className="muted small">
         Right-click a community or channel to mute it or choose All messages, Only @mentions or Nothing just
         for it. Do Not Disturb (click your name) silences everything except your own sounds.
       </p>
+    </div>
+  );
+}
+
+function QuietHours({ settings }: { settings: Settings }): ReactElement {
+  const updateSettings = useRiver((s) => s.updateSettings);
+  const q = settings.notifications.quietHours;
+  const save = (patch: Partial<typeof q>): void =>
+    void updateSettings({ notifications: { quietHours: { ...q, ...patch } } });
+  const valid = (v: string): boolean => /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
+  return (
+    <div className="field quiet-hours">
+      <Toggle
+        label="Quiet hours"
+        hint={
+          inQuietHours(q)
+            ? 'On now: no pop-ups or notification sounds until it ends.'
+            : 'Every day, no pop-ups or notification sounds between these times.'
+        }
+        checked={q.enabled}
+        onChange={(enabled) => save({ enabled })}
+      />
+      {q.enabled && (
+        <div className="quiet-hours__times">
+          <label>
+            From{' '}
+            <input
+              type="time"
+              value={q.start}
+              onChange={(e) => valid(e.target.value) && save({ start: e.target.value })}
+            />
+          </label>
+          <label>
+            to{' '}
+            <input
+              type="time"
+              value={q.end}
+              onChange={(e) => valid(e.target.value) && save({ end: e.target.value })}
+            />
+          </label>
+        </div>
+      )}
     </div>
   );
 }

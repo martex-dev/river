@@ -1,6 +1,7 @@
 import { SavedPanel } from './Saved.tsx';
 import { CreatePollDialog, PollView } from './Poll.tsx';
 import { isVote } from '../../../../shared/poll.ts';
+import { hasCriteria, parseSearch } from '../../../../shared/search-query.ts';
 import { clockDateTime, clockTime } from '../../time.ts';
 import { formatMessageLink } from '../message-link.ts';
 import { ProfileCard } from './Members.tsx';
@@ -12,6 +13,7 @@ import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, ChatMessage, CommunityView } from '../../../../shared/ipc.ts';
 import { useShallow } from 'zustand/react/shallow';
 import { useOutbox, type Outgoing } from '../outbox.ts';
+import { useDraft } from '../drafts.ts';
 import { play } from '../sound.ts';
 import { typingNames, useCommunity } from '../store.ts';
 import { AttachmentList, PendingFiles, pendingFrom, uploadAll, type PendingFile } from './Attachments.tsx';
@@ -127,14 +129,27 @@ export function TextChannel(props: {
 
   // A message link or search result for this channel: scroll to it once it is on screen.
   const pendingJump = useCommunity((x) => x.pendingJump);
+  const loadingBack = useRef(false);
   useEffect(() => {
     if (!pendingJump || pendingJump.channelId !== channel.id) return;
     if (messages.some((x) => x.id === pendingJump.messageId)) {
       useCommunity.setState({ pendingJump: null });
       window.setTimeout(() => jumpTo(pendingJump.messageId), 50);
-    } else if (messages.length > 0) {
-      useCommunity.setState({ pendingJump: null });
-      useCommunity.getState().notify('That message is further back. Scroll up to find it.');
+    } else if (messages.length > 0 && !loadingBack.current) {
+      // Further back: load older pages (up to ~2000 messages) until it is there.
+      loadingBack.current = true;
+      void (async () => {
+        const target = pendingJump.messageId;
+        for (let i = 0; i < 20; i++) {
+          if ((useCommunity.getState().messages[channel.id] ?? []).some((x) => x.id === target)) break;
+          if ((await useCommunity.getState().loadOlder(channel.id)) === 0) break;
+        }
+        loadingBack.current = false;
+        const found = (useCommunity.getState().messages[channel.id] ?? []).some((x) => x.id === target);
+        useCommunity.setState({ pendingJump: null });
+        if (found) window.setTimeout(() => jumpTo(target), 80);
+        else useCommunity.getState().notify('That message is too far back to show.');
+      })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingJump, messages.length, channel.id]);
@@ -888,7 +903,8 @@ function Composer(props: {
 }): ReactElement {
   const { community, channel, me } = props;
   const s = useCommunity();
-  const [text, setText] = useState('');
+  // Each channel keeps its own unsent text while River is open (never written to disk).
+  const [text, setText] = useDraft(`c:${channel.id}`);
   // Replies notify the person you reply to, unless you switch it off for that reply (like Discord's "@ ON").
   const [pingOffFor, setPingOffFor] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
@@ -901,7 +917,7 @@ function Composer(props: {
         useCommunity.setState({ draftInsert: null });
         setText((t) => `${insert}${t}`);
       }),
-    [],
+    [setText],
   );
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -1289,19 +1305,59 @@ function PinsPanel(props: {
   );
 }
 
+const SEARCH_HINTS: Array<[string, string]> = [
+  ['from:', 'from a person'],
+  ['in:', 'in a channel'],
+  ['has:image', 'with a picture'],
+  ['has:file', 'with a file'],
+  ['has:link', 'with a link'],
+  ['mentions:me', 'mentioning you'],
+  ['pinned:true', 'pinned'],
+  ['before:', 'before a date (YYYY-MM-DD)'],
+  ['after:', 'after a date'],
+];
+
 function SearchPanel(props: { community: CommunityView; onJump(id: string): void }): ReactElement {
   const s = useCommunity();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ChatMessage[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [date, setDate] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
   const channelName = (id: string): string =>
     props.community.channels.find((c) => c.id === id)?.name ?? 'channel';
-  const run = async (): Promise<void> => {
-    if (query.trim().length < 2) return;
+  const parsed = parseSearch(query);
+  const search = async (q: string): Promise<ChatMessage[] | null> => {
+    if (!hasCriteria(parseSearch(q))) return null;
     setBusy(true);
-    const found = await s.run({ a: 'search', communityId: props.community.id, query: query.trim() });
+    const found = await s.run({
+      a: 'search',
+      communityId: props.community.id,
+      query: q.trim().slice(0, 100),
+    });
     setBusy(false);
-    setResults(found ?? []);
+    return found ?? [];
+  };
+  const run = async (): Promise<void> => {
+    const found = await search(query);
+    if (found) setResults(found);
+  };
+  const open = (m: ChatMessage): void => {
+    useCommunity.setState({ showSearch: false });
+    s.openMessage(m.communityId, m.channelId, m.id);
+  };
+  const jumpToDate = async (): Promise<void> => {
+    const here = props.community.channels.find((c) => c.id === s.selectedChannel);
+    if (!date || !here) return;
+    const found = (await search(`in:"${here.name}" during:${date}`))?.filter((m) => m.channelId === here.id);
+    const first = found?.at(-1);
+    if (first) open(first);
+    else s.notify(`No messages in #${here.name} on that day.`);
+  };
+  const addHint = (hint: string): void => {
+    const next = `${query.trim()} ${hint}`.trimStart();
+    setQuery(next);
+    inputRef.current?.focus();
   };
   return (
     <div className="pins search-panel">
@@ -1322,28 +1378,46 @@ function SearchPanel(props: { community: CommunityView; onJump(id: string): void
         }}
       >
         <input
+          ref={inputRef}
           autoFocus
           className="search"
-          placeholder="Search messages and files"
+          placeholder="Search — try from:name has:image"
+          aria-label="Search messages and files"
           value={query}
+          maxLength={100}
           onChange={(e) => setQuery(e.target.value)}
         />
       </form>
+      {results === null && (
+        <div className="search-hints" aria-label="Search filters">
+          {SEARCH_HINTS.map(([hint, label]) => (
+            <button key={hint} className="chip" title={label} onClick={() => addHint(hint)}>
+              {hint}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="search-date">
+        <label className="muted small" htmlFor="jump-date">
+          Jump to a date in this channel
+        </label>
+        <input id="jump-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <button className="btn btn--small" disabled={!date || busy} onClick={() => void jumpToDate()}>
+          Go
+        </button>
+      </div>
       <p className="muted small">
         Searched on this device — the server cannot read your messages, so it cannot search them.
       </p>
       {busy && <p className="muted small">Decrypting and searching…</p>}
       {results?.length === 0 && !busy && <p className="muted small">No results.</p>}
+      {results && results.length > 0 && !busy && (
+        <p className="muted small">
+          {results.length === 100 ? 'The 100 newest results' : `${results.length} results`}
+        </p>
+      )}
       {results?.map((m) => (
-        <button
-          key={m.id}
-          className="pins__item"
-          onClick={() => {
-            useCommunity.setState({ showSearch: false });
-            if (s.selectedChannel !== m.channelId) s.selectChannel(m.channelId);
-            window.setTimeout(() => props.onJump(m.id), 400);
-          }}
-        >
+        <button key={m.id} className="pins__item" onClick={() => open(m)}>
           <span>
             <strong>{m.senderName}</strong>{' '}
             <span className="muted small">
@@ -1351,7 +1425,7 @@ function SearchPanel(props: { community: CommunityView; onJump(id: string): void
             </span>
             <span className="pins__text">
               {m.text ? (
-                <Highlight text={m.text} query={query} />
+                <Highlight text={m.text} query={parsed.text} />
               ) : (
                 m.attachments.map((a) => a.name).join(', ')
               )}

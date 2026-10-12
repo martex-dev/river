@@ -1631,3 +1631,17 @@ html[data-density='compact'] .member {
   color: var(--danger);
   font-size: 14px;
 }
+.quiet-hours__times {
+  display: flex;
+  gap: 12px;
+  margin: 6px 0 0 4px;
+  font-size: 13px;
+}
+.quiet-hours__times input {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+}

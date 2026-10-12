@@ -366,6 +366,9 @@ export const createEmojiRequestSchema = z
   .object({ id: z.string().regex(COMMUNITY_ID_RE), data: sealedSchema(SEALED_EMOJI) })
   .strict();
 
+/** Rename (1.0.20): the whole sealed { name, image } is replaced. */
+export const updateEmojiRequestSchema = z.object({ data: sealedSchema(SEALED_EMOJI) }).strict();
+
 /** Make another member the owner (1.0.19); only the owner may. */
 export const transferOwnershipRequestSchema = z.object({ riverId: riverIdSchema }).strict();
 
@@ -377,6 +380,8 @@ export const voiceStateSchema = z.object({
   muted: z.boolean(),
   deafened: z.boolean(),
   serverMuted: z.boolean(),
+  /** A moderator turned their sound off for everyone (1.0.20); they hear nothing and cannot speak. */
+  serverDeafened: z.boolean().optional(),
   streaming: z.boolean(),
   /**
    * The member's connection to the server dropped; their seat is kept for a
@@ -403,6 +408,7 @@ export const clientEventSchema = z.discriminatedUnion('t', [
     t: z.literal('voice.moderate'),
     target: riverIdSchema,
     serverMuted: z.boolean().optional(),
+    serverDeafened: z.boolean().optional(),
     disconnect: z.boolean().optional(),
   }),
   z.object({ t: z.literal('signal'), to: riverIdSchema, data: sealedSchema(SEALED_SIGNAL) }),

@@ -8,10 +8,18 @@ import {
   type CSSProperties,
   type ReactNode,
   type SVGProps,
+  type MouseEvent as ReactMouseEvent,
 } from 'react';
 import type { CommunityView, MemberView } from '../../../../shared/ipc.ts';
 import { highlight, languageOf } from './highlight.ts';
-import { recentEmoji, rememberEmoji, searchEmoji, useEmojiIndex } from '../emoji-data.ts';
+import {
+  favoriteEmoji,
+  recentEmoji,
+  rememberEmoji,
+  searchEmoji,
+  toggleFavoriteEmoji,
+  useEmojiIndex,
+} from '../emoji-data.ts';
 import { openMessageLink } from '../message-link.ts';
 import { useCommunity } from '../store.ts';
 
@@ -248,8 +256,16 @@ export function EmojiPicker(props: {
   const custom = props.custom ?? [];
   const [query, setQuery] = useState('');
   const recent = useMemo(() => recentEmoji(), []);
-  // -2: the community's own emoji, -1: recently used, 0…: Unicode categories.
-  const [group, setGroup] = useState(custom.length > 0 ? -2 : recent.length > 0 ? -1 : 0);
+  const [favorites, setFavorites] = useState(() => favoriteEmoji());
+  // -3: favourites, -2: the community's own emoji, -1: recently used, 0…: Unicode categories.
+  const [group, setGroup] = useState(
+    favorites.length > 0 ? -3 : custom.length > 0 ? -2 : recent.length > 0 ? -1 : 0,
+  );
+  const labelOf = (e: string): string => index?.all.find((x) => x.emoji === e)?.label ?? e;
+  const favorite = (e: ReactMouseEvent, emoji: string): void => {
+    e.preventDefault();
+    setFavorites(toggleFavoriteEmoji(emoji));
+  };
   const pick = (emoji: string): void => {
     rememberEmoji(emoji);
     props.onPick(emoji);
@@ -260,10 +276,12 @@ export function EmojiPicker(props: {
   const shown: Array<{ emoji: string; label: string }> = results
     ? results
     : group === -1
-      ? recent.map((e) => ({ emoji: e, label: index?.all.find((x) => x.emoji === e)?.label ?? e }))
-      : group === -2
-        ? []
-        : (index?.groups[group]?.items ?? []);
+      ? recent.map((e) => ({ emoji: e, label: labelOf(e) }))
+      : group === -3
+        ? favorites.map((e) => ({ emoji: e, label: labelOf(e) }))
+        : group === -2
+          ? []
+          : (index?.groups[group]?.items ?? []);
   const customShown = results ? customMatches : group === -2 ? custom : [];
   const heading = results
     ? results.length + customMatches.length
@@ -273,7 +291,9 @@ export function EmojiPicker(props: {
       ? 'This community'
       : group === -1
         ? 'Recently used'
-        : (index?.groups[group]?.name ?? 'Loading…');
+        : group === -3
+          ? 'Favourites — right-click to remove'
+          : (index?.groups[group]?.name ?? 'Loading…');
   const first = customMatches[0] ? customEmojiText(customMatches[0]) : results?.[0]?.emoji;
   return (
     <div className="emoji-picker">
@@ -293,6 +313,17 @@ export function EmojiPicker(props: {
       />
       {!query && (
         <div className="emoji-picker__tabs" role="tablist" aria-label="Emoji categories">
+          {favorites.length > 0 && (
+            <button
+              role="tab"
+              aria-selected={group === -3}
+              className={`emoji-picker__tab ${group === -3 ? 'is-active' : ''}`}
+              title="Favourites"
+              onClick={() => setGroup(-3)}
+            >
+              ⭐
+            </button>
+          )}
           {custom.length > 0 && (
             <button
               role="tab"
@@ -335,9 +366,10 @@ export function EmojiPicker(props: {
           <button
             key={e.id}
             className="emoji-picker__emoji"
-            title={`:${e.name}:`}
+            title={`:${e.name}: — right-click to ${favorites.includes(customEmojiText(e)) ? 'unfavourite' : 'favourite'}`}
             aria-label={`:${e.name}:`}
             onClick={() => pick(customEmojiText(e))}
+            onContextMenu={(ev) => favorite(ev, customEmojiText(e))}
           >
             <img className="custom-emoji" src={e.image} alt="" />
           </button>
@@ -346,11 +378,12 @@ export function EmojiPicker(props: {
           <button
             key={e.emoji}
             className="emoji-picker__emoji"
-            title={e.label}
-            aria-label={e.label}
+            title={`${e.label} — right-click to ${favorites.includes(e.emoji) ? 'unfavourite' : 'favourite'}`}
+            aria-label={`${e.label}${favorites.includes(e.emoji) ? ', favourite' : ''}`}
             onClick={() => pick(e.emoji)}
+            onContextMenu={(ev) => favorite(ev, e.emoji)}
           >
-            {/* Recently used may hold custom emoji too. */}
+            {/* Recently used and favourites may hold custom emoji too. */}
             <EmojiGlyph emoji={e.emoji} />
           </button>
         ))}

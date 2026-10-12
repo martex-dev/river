@@ -56,6 +56,20 @@ export function EmojiSettings({ community }: { community: CommunityView }): Reac
   const [pending, setPending] = useState<{ name: string; image: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const nameOk = !!pending && EMOJI_NAME.test(pending.name);
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  const rename = async (): Promise<void> => {
+    if (!renaming || !EMOJI_NAME.test(renaming.name)) return;
+    const res = await s.run({
+      a: 'renameEmoji',
+      communityId: community.id,
+      emojiId: renaming.id,
+      name: renaming.name,
+    });
+    if (res !== null) {
+      setRenaming(null);
+      void s.loadEmojis(community.id);
+    }
+  };
   const save = async (): Promise<void> => {
     if (!pending) return;
     setBusy(true);
@@ -75,8 +89,8 @@ export function EmojiSettings({ community }: { community: CommunityView }): Reac
     <div className="settings-page">
       <h2>Emoji</h2>
       <p className="muted small">
-        Everyone here can use these with <code>:name:</code> in messages and reactions. Pictures and names are
-        end-to-end encrypted. Up to 100.
+        Everyone here can use these with <code>:name:</code> in messages and reactions. Click a name to rename
+        it. Pictures and names are end-to-end encrypted. Up to 100.
       </p>
       {manage && (
         <div className="emoji-upload">
@@ -132,7 +146,37 @@ export function EmojiSettings({ community }: { community: CommunityView }): Reac
           {emojis.map((e) => (
             <li key={e.id} className="emoji-list__item">
               <img className="custom-emoji custom-emoji--big" src={e.image} alt="" />
-              <code>:{e.name}:</code>
+              {renaming?.id === e.id ? (
+                <form
+                  className="emoji-list__rename"
+                  onSubmit={(ev) => {
+                    ev.preventDefault();
+                    void rename();
+                  }}
+                >
+                  <input
+                    autoFocus
+                    aria-label={`New name for :${e.name}:`}
+                    value={renaming.name}
+                    maxLength={32}
+                    onChange={(ev) => setRenaming({ id: e.id, name: ev.target.value })}
+                    onKeyDown={(ev) => ev.key === 'Escape' && setRenaming(null)}
+                  />
+                  <button className="btn btn--small" disabled={!EMOJI_NAME.test(renaming.name)}>
+                    Save
+                  </button>
+                </form>
+              ) : manage ? (
+                <button
+                  className="btn btn--link emoji-list__name"
+                  title="Rename"
+                  onClick={() => setRenaming({ id: e.id, name: e.name })}
+                >
+                  <code>:{e.name}:</code>
+                </button>
+              ) : (
+                <code>:{e.name}:</code>
+              )}
               {manage && (
                 <button
                   className="btn btn--link btn--danger"

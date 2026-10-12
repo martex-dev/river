@@ -229,6 +229,19 @@ export function ChannelRow(props: {
               Edit channel
             </MenuItem>
           )}
+          {can(community.permissions, Permission.MANAGE_CHANNELS) && (
+            <MenuItem
+              icon={<span aria-hidden="true">⧉</span>}
+              onClick={() => {
+                setMenu(null);
+                void s.run({ a: 'duplicateChannel', channelId: ch.id, name: ch.name }).then((id) => {
+                  if (id) s.notify(`Made a copy of ${ch.kind === 'text' ? '#' : ''}${ch.name}.`);
+                });
+              }}
+            >
+              Duplicate channel
+            </MenuItem>
+          )}
           {ch.kind === 'text' && <NotifyMenuSection id={ch.id} kind="channel" onDone={() => setMenu(null)} />}
         </Popover>
       )}
@@ -312,8 +325,11 @@ export function ChannelRow(props: {
                   <MicOffIcon size={13} />
                 </span>
               )}
-              {state?.deafened && (
-                <span className="voice-icon" title="Deafened">
+              {(state?.deafened || state?.serverDeafened) && (
+                <span
+                  className={`voice-icon ${state.serverDeafened ? 'voice-icon--server' : ''}`}
+                  title={state.serverDeafened ? 'Server deafened' : 'Deafened'}
+                >
                   <HeadphonesOffIcon size={13} />
                 </span>
               )}

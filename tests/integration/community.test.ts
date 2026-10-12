@@ -305,6 +305,30 @@ describe('custom emoji', () => {
     });
     const [seen] = await alice.community.messages(general.id);
     expect(seen!.reactions.map((r) => r.emoji)).toEqual([`<:party_parrot:${id}>`]);
+    // Renaming keeps the picture and the ID, and names stay unique.
+    const other = await alice.community.action({
+      a: 'addEmoji',
+      communityId: created.id,
+      name: 'cat',
+      image,
+    });
+    await expect(
+      alice.community.action({
+        a: 'renameEmoji',
+        communityId: created.id,
+        emojiId: other,
+        name: 'PARTY_parrot',
+      }),
+    ).rejects.toThrow(/already/);
+    await alice.community.action({ a: 'renameEmoji', communityId: created.id, emojiId: id, name: 'parrot' });
+    expect((await bob.community.emojis(created.id)).find((e) => e.id === id)).toEqual({
+      id,
+      name: 'parrot',
+      image,
+    });
+    await expect(
+      bob.community.action({ a: 'renameEmoji', communityId: created.id, emojiId: id, name: 'mine' }),
+    ).rejects.toThrow();
   });
 });
 
@@ -915,6 +939,53 @@ describe('desktop ↔ server communities', () => {
     expect(lounge.userLimit).toBe(0);
     await alice.community.action({ a: 'updateChannel', channelId: lounge.id, userLimit: 4 });
     expect((await alice.community.refresh())[0]!.channels.find((c) => c.id === lounge.id)?.userLimit).toBe(4);
+  });
+
+  it('duplicates a channel with its settings and permissions, but no messages', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Copies');
+    const general = created.channels.find((c) => c.kind === 'text')!;
+    await alice.community.action({ a: 'updateChannel', channelId: general.id, topic: 'rules', slowmode: 30 });
+    await alice.community.action({
+      a: 'updateChannel',
+      channelId: general.id,
+      overwrites: [{ roleId: created.id, allow: 0, deny: Permission.SEND_MESSAGES }],
+    });
+    await alice.community.send(general.id, 'only in the original');
+    const id = await alice.community.action({
+      a: 'duplicateChannel',
+      channelId: general.id,
+      name: 'general-2',
+    });
+    const copy = (await alice.community.refresh())[0]!.channels.find((c) => c.id === id)!;
+    expect(copy).toMatchObject({ name: 'general-2', topic: 'rules', slowmode: 30, kind: 'text' });
+    expect(copy.overwrites).toEqual([{ roleId: created.id, allow: 0, deny: Permission.SEND_MESSAGES }]);
+    expect(await alice.community.messages(copy.id)).toEqual([]);
+  });
+
+  it('searches with filters on the device', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Filters');
+    const general = created.channels.find((c) => c.kind === 'text')!;
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    await alice.community.send(general.id, 'party at https://example.com');
+    await bob.community.send(general.id, 'party later');
+    await alice.community.refresh();
+    const from = await alice.community.action({
+      a: 'search',
+      communityId: created.id,
+      query: 'from:bob party',
+    });
+    expect(from.map((m) => m.text)).toEqual(['party later']);
+    const links = await alice.community.action({ a: 'search', communityId: created.id, query: 'has:link' });
+    expect(links.map((m) => m.text)).toEqual(['party at https://example.com']);
+    const none = await alice.community.action({
+      a: 'search',
+      communityId: created.id,
+      query: 'in:nowhere party',
+    });
+    expect(none).toEqual([]);
   });
 
   it('unsent messages are kept on this device across a restart', async () => {

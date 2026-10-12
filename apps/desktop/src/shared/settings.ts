@@ -85,6 +85,14 @@ export const settingsSchema = z.object({
         })
         .strict(),
     ),
+    /** Added in 1.0.20: no notifications or sounds between these local times (like Do Not Disturb). */
+    quietHours: z
+      .object({
+        enabled: z.boolean(),
+        start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+        end: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+      })
+      .strict(),
   }),
   /** Added in 0.0.2. */
   server: z.object({
@@ -103,6 +111,8 @@ export const settingsSchema = z.object({
     echoCancellation: z.boolean(),
     /** Per-member playback volume, 0–2 (1 = 100%). */
     userVolumes: z.record(z.string().max(64), z.number().min(0).max(2)),
+    /** Added in 1.0.20: voice activity sensitivity, 0–1 on the mic meter's scale; null = automatic. */
+    sensitivity: z.number().min(0).max(1).nullable(),
   }),
   /** Added in 1.0.7. */
   system: z.object({
@@ -170,6 +180,7 @@ export const DEFAULT_SETTINGS: Settings = {
     soundVolume: 0.8,
     soundGroups: { messages: true, voice: true, calls: true, social: true, interface: true },
     overrides: {},
+    quietHours: { enabled: false, start: '22:00', end: '08:00' },
   },
   server: { url: null, autoAccount: true },
   voice: {
@@ -180,6 +191,7 @@ export const DEFAULT_SETTINGS: Settings = {
     noiseSuppression: true,
     echoCancellation: true,
     userVolumes: {},
+    sensitivity: null,
   },
   system: { startAtLogin: false, closeToTray: true },
   hosting: { enabled: false, keepAwake: true },

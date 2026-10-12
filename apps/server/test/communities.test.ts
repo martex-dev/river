@@ -391,6 +391,9 @@ describe('communities', () => {
         await a.inject({ method: 'GET', url: `/v1/communities/${cid}/emojis`, headers: auth(member.token) })
       ).json();
       expect(emojisResponseSchema.parse(list).emojis.map((x) => x.id)).toEqual([e]);
+      expect(await status(a, 'PATCH', `/v1/emojis/${e}`, member.token, { data: sealed() })).toBe(403);
+      expect(await status(a, 'PATCH', `/v1/emojis/${e}`, owner.token, { data: sealed() })).toBe(200);
+      expect(await status(a, 'PATCH', `/v1/emojis/${id()}`, owner.token, { data: sealed() })).toBe(404);
       expect(await status(a, 'DELETE', `/v1/emojis/${e}`, member.token)).toBe(403);
       expect(await status(a, 'DELETE', `/v1/emojis/${e}`, owner.token)).toBe(200);
       const stranger = await user(a);
@@ -940,6 +943,54 @@ describe('communities', () => {
       );
       for (const c of [one, two, boss]) c.ws.close();
     });
+    it('server mute and deafen need Mute members, follow the hierarchy, and stick through a rejoin', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, voice } = await createCommunity(a, owner.token);
+      const guest = await join(a, owner.token, cid);
+      await a.listen({ host: '127.0.0.1', port: 0 });
+      const { port } = a.server.address() as { port: number };
+      type Ev = {
+        t: string;
+        code?: string;
+        states?: Record<string, { serverMuted?: boolean; serverDeafened?: boolean }>;
+      };
+      const connect = async (token: string) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/ws`);
+        const events: Ev[] = [];
+        ws.onmessage = (m) => events.push(JSON.parse(String(m.data)));
+        await new Promise((resolve, reject) => {
+          ws.onopen = resolve;
+          ws.onerror = reject;
+        });
+        ws.send(JSON.stringify({ t: 'auth', token }));
+        await vi.waitFor(() => expect(events.some((e) => e.t === 'ready')).toBe(true));
+        ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+        return { ws, events };
+      };
+      const boss = await connect(owner.token);
+      const other = await connect(guest.token);
+      const stateOf = (events: Ev[], id: string) =>
+        events.filter((e) => e.t === 'voice').at(-1)?.states?.[id];
+      await vi.waitFor(() => expect(stateOf(boss.events, guest.riverId)).toBeDefined());
+      // A member cannot deafen the owner.
+      other.ws.send(JSON.stringify({ t: 'voice.moderate', target: owner.riverId, serverDeafened: true }));
+      await vi.waitFor(() => expect(other.events).toContainEqual({ t: 'error', code: 'forbidden' }));
+      boss.ws.send(JSON.stringify({ t: 'voice.moderate', target: guest.riverId, serverDeafened: true }));
+      await vi.waitFor(() => expect(stateOf(other.events, guest.riverId)?.serverDeafened).toBe(true));
+      other.ws.send(JSON.stringify({ t: 'voice.leave' }));
+      other.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      await vi.waitFor(() =>
+        expect(stateOf(boss.events, guest.riverId)).toMatchObject({
+          serverDeafened: true,
+          serverMuted: false,
+        }),
+      );
+      boss.ws.send(JSON.stringify({ t: 'voice.moderate', target: guest.riverId, serverDeafened: false }));
+      await vi.waitFor(() => expect(stateOf(other.events, guest.riverId)?.serverDeafened).toBe(false));
+      for (const c of [boss, other]) c.ws.close();
+    });
+
     describe('voice survives dropped connections', () => {
       type Ev = {
         t: string;

@@ -111,7 +111,7 @@ export function VoiceChannel(props: {
                   id={me}
                   avatar={meMember?.avatar ?? null}
                   muted={!call.transmitting}
-                  deafened={call.deafened}
+                  deafened={call.hearingOff}
                   speaking={call.speaking.has(me)}
                   camera={call.localTrack('camera')}
                   screen={call.localTrack('screen')}
@@ -374,7 +374,7 @@ function RemoteTile(props: {
       <span className="tile__label">
         <LinkBars link={props.link} />
         {(peer.muted || state?.serverMuted) && <MicOffIcon size={14} />}
-        {state?.deafened && <HeadphonesOffIcon size={14} />}
+        {(state?.deafened || state?.serverDeafened) && <HeadphonesOffIcon size={14} />}
         {props.speaking && <SpeakingWaves />}
         {label}
         {peer.muted ? ' · muted' : ''}
@@ -399,7 +399,7 @@ export function CallAudio(): ReactElement | null {
   return (
     <div className="call-audio" hidden>
       {call.remotes().map((peer) => (
-        <PeerAudio key={peer.id} peer={peer} deafened={call.deafened} />
+        <PeerAudio key={peer.id} peer={peer} deafened={call.hearingOff} />
       ))}
     </div>
   );

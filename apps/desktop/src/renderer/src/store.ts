@@ -8,6 +8,7 @@ import type {
   UpdateStatus,
 } from '../../shared/ipc.ts';
 import { setSoundConfigSource } from './community/sound.ts';
+import { silenced } from '../../shared/notify-rules.ts';
 import type { Settings, SettingsPatch } from '../../shared/settings.ts';
 
 export const SECTIONS = [
@@ -117,5 +118,5 @@ export const useRiver = create<RiverState>((set) => ({
 // Interface sounds follow Settings → Notifications (master switch, volume, groups).
 setSoundConfigSource(() => {
   const s = useRiver.getState().settings;
-  return s ? { ...s.notifications, quiet: s.presence.status === 'dnd' } : undefined;
+  return s ? { ...s.notifications, quiet: silenced(s) } : undefined;
 });

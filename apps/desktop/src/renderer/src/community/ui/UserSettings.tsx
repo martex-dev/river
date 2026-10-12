@@ -1,3 +1,4 @@
+import { levelOf } from '../voice-gate.ts';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { useRiver } from '../../store.ts';
 import { SOUND_GROUPS, play, type SoundGroup, type SoundName } from '../sound.ts';
@@ -324,7 +325,7 @@ function VoiceSettings(): ReactElement {
           analyser.getFloatTimeDomainData(buf);
           let sum = 0;
           for (const v of buf) sum += v * v;
-          setLevel(Math.min(1, Math.sqrt(sum / buf.length) * 6));
+          setLevel(levelOf(Math.sqrt(sum / buf.length)));
           requestAnimationFrame(tick);
         };
         tick();
@@ -351,6 +352,7 @@ function VoiceSettings(): ReactElement {
         ...(patch.noiseSuppression !== undefined ? { noiseSuppression: patch.noiseSuppression } : {}),
         ...(patch.echoCancellation !== undefined ? { echoCancellation: patch.echoCancellation } : {}),
         ...(patch.inputMode !== undefined ? { pushToTalk: patch.inputMode === 'push-to-talk' } : {}),
+        ...(patch.sensitivity !== undefined ? { sensitivity: patch.sensitivity } : {}),
       });
     }
   };
@@ -393,7 +395,13 @@ function VoiceSettings(): ReactElement {
           {level === null ? "Let's check" : 'Stop testing'}
         </button>
         <div className="meter" aria-label="Microphone level">
-          <div className="meter__fill" style={{ width: `${Math.round((level ?? 0) * 100)}%` }} />
+          <div
+            className={`meter__fill ${voice.sensitivity !== null && (level ?? 0) >= voice.sensitivity ? 'is-open' : ''}`}
+            style={{ width: `${Math.round((level ?? 0) * 100)}%` }}
+          />
+          {voice.inputMode === 'voice' && voice.sensitivity !== null && (
+            <div className="meter__mark" style={{ left: `${Math.round(voice.sensitivity * 100)}%` }} />
+          )}
         </div>
       </div>
       <div className="field__label">Input mode</div>
@@ -415,6 +423,33 @@ function VoiceSettings(): ReactElement {
           Push to talk
         </label>
       </div>
+      {voice.inputMode === 'voice' && (
+        <div className="sensitivity">
+          <Toggle
+            label="Set input sensitivity automatically"
+            help="River sends your voice all the time and filters noise. Turn off to choose how loud you must be."
+            checked={voice.sensitivity === null}
+            onChange={(auto) => apply({ sensitivity: auto ? null : 0.15 })}
+          />
+          {voice.sensitivity !== null && (
+            <label className="sensitivity__slider">
+              <span className="field__label">Input sensitivity</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(voice.sensitivity * 100)}
+                aria-valuetext={`${Math.round(voice.sensitivity * 100)}%`}
+                onChange={(e) => apply({ sensitivity: Number(e.target.value) / 100 })}
+              />
+              <span className="muted small">
+                Your voice is sent while the meter is past the line (it turns green). Press Let&apos;s check
+                to see it.
+              </span>
+            </label>
+          )}
+        </div>
+      )}
       {voice.inputMode === 'push-to-talk' && (
         <div className="ptt">
           <span className="field__label">Shortcut</span>

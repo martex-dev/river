@@ -6,6 +6,29 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Back and forward**, like a browser: Alt+← / Alt+→ (⌘[ / ⌘] on a Mac)
+  or your mouse's back and forward buttons walk through the channels,
+  conversations and pages you opened.
+- **Search filters:** `from:`, `in:`, `has:image|video|audio|file|link|poll`,
+  `before:`, `after:`, `during:`, `pinned:true` and `mentions:me`, with
+  clickable hints under the search box. **Jump to a date** in the open
+  channel. Opening an older result now loads history until it is on screen.
+- **Quiet hours** (Settings → Notifications): no pop-ups or notification
+  sounds between two times every day.
+- **Each channel and conversation keeps its own unsent text** while River is
+  open, instead of carrying it into the next one.
+- **Duplicate a channel** (right-click it) with its category, topic,
+  permissions and settings, and **duplicate a role**.
+- **Rename custom emoji** (click the name) and **favourite emoji**:
+  right-click any emoji in the picker; favourites get their own ⭐ tab.
+- **Server deafen** for moderators with *Mute & deafen members*: the person
+  hears nothing and cannot speak until undeafened, and is told.
+- **Input sensitivity** for voice activity (Settings → Voice): turn off
+  automatic sensitivity and set how loud you must be to be heard, with a line
+  on the microphone meter.
+
 ## [1.0.19] - 2026-10-12
 
 **Make it yours: custom emoji, saved messages, and a clear view of every call.**
