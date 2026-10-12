@@ -89,6 +89,17 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
               Community settings
             </MenuItem>
           )}
+          {community.selfRoles.length > 0 && !community.myPending && (
+            <MenuItem
+              icon={<span aria-hidden="true">🏷️</span>}
+              onClick={() => {
+                setMenu(null);
+                s.setModal({ kind: 'pick-roles', communityId: community.id });
+              }}
+            >
+              Pick your roles
+            </MenuItem>
+          )}
           {manageChannels && (
             <MenuItem
               icon={<PlusIcon size={16} />}

@@ -119,6 +119,19 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('deleteCommunity'), communityId: id }).strict(),
+  // Onboarding (1.0.24): rules and welcome note sealed; screening and self-assignable roles enforced by the server.
+  z
+    .object({
+      a: z.literal('updateOnboarding'),
+      communityId: id,
+      rules: z.array(z.string().trim().min(1).max(300)).max(20),
+      welcome: z.string().max(1000),
+      screening: z.boolean(),
+      selfRoles: z.array(id).max(25),
+    })
+    .strict(),
+  z.object({ a: z.literal('acceptRules'), communityId: id }).strict(),
+  z.object({ a: z.literal('setSelfRoles'), communityId: id, roles: z.array(id).max(25) }).strict(),
   z.object({ a: z.literal('leave'), communityId: id }).strict(),
   z
     .object({

@@ -373,6 +373,48 @@ describe('reports', () => {
   });
 });
 
+describe('onboarding', () => {
+  it('sealed rules; newcomers accept them before talking, then pick their own roles', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Rules');
+    const gamer = await alice.community.action({
+      a: 'createRole',
+      communityId: created.id,
+      name: 'Gamer',
+      color: 0,
+      permissions: 0,
+    });
+    await alice.community.action({
+      a: 'updateOnboarding',
+      communityId: created.id,
+      rules: ['Be kind', 'No spam'],
+      welcome: 'Hello there',
+      screening: true,
+      selfRoles: [gamer],
+    });
+    const stored = JSON.stringify(await serverDb.db.selectFrom('communities').selectAll().execute());
+    expect(stored).not.toContain('Be kind');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    let mine = (await bob.community.refresh())[0]!;
+    expect(mine).toMatchObject({
+      rules: ['Be kind', 'No spam'],
+      welcomeNote: 'Hello there',
+      myPending: true,
+      screening: true,
+    });
+    const general = mine.channels.find((c) => c.name === 'general')!;
+    await expect(bob.community.send(general.id, 'hi before accepting')).rejects.toThrow();
+    await bob.community.action({ a: 'acceptRules', communityId: created.id });
+    mine = (await bob.community.refresh())[0]!;
+    expect(mine.myPending).toBe(false);
+    await bob.community.send(general.id, 'hi');
+    await bob.community.action({ a: 'setSelfRoles', communityId: created.id, roles: [gamer] });
+    mine = (await bob.community.refresh())[0]!;
+    expect(mine.members.find((m) => m.riverId === bob.riverId)?.roles).toEqual([gamer]);
+  });
+});
+
 describe('moderator notes', () => {
   it('are sealed, shown to moderators with their author, and hidden from others', async () => {
     const alice = await person('Alice');

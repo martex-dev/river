@@ -314,6 +314,13 @@ export interface CommunityView {
   /** voice channel ID → River IDs currently in it */
   voice: Record<string, string[]>;
   voiceStates: Record<string, VoiceStateView>;
+  /** Onboarding (1.0.24): the rules, a welcome note, whether newcomers must accept, roles to pick. */
+  rules: string[];
+  welcomeNote: string;
+  screening: boolean;
+  selfRoles: string[];
+  /** You have not accepted the rules yet, so you can only read. */
+  myPending: boolean;
 }
 
 export interface ReactionView {

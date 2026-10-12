@@ -1,3 +1,4 @@
+import { PickRolesDialog, RulesGate } from '../community/ui/Onboarding.tsx';
 import { ForumChannel } from '../community/ui/Forum.tsx';
 import { matches, withDefaults } from '../../../shared/keybinds.ts';
 import { ReportDialog } from '../community/ui/Reports.tsx';
@@ -96,6 +97,7 @@ export function CommunitiesPage(): ReactElement {
 
       <section className="community__main">
         <ConnectionBanner />
+        {community?.myPending && community.rules.length > 0 && <RulesGate community={community} />}
         {community && channel?.kind === 'text' && !channel.forum && (
           <TextChannel key={channel.id} community={community} channel={channel} me={me} />
         )}
@@ -154,6 +156,10 @@ function Modals({ me }: { me: string }): ReactElement | null {
     case 'events': {
       const c = communityById(modal.communityId);
       return c ? <EventsDialog community={c} me={me} /> : null;
+    }
+    case 'pick-roles': {
+      const c = communityById(modal.communityId);
+      return c ? <PickRolesDialog community={c} me={me} /> : null;
     }
     case 'report': {
       const c = communityById(modal.communityId);

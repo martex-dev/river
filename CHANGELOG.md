@@ -8,6 +8,12 @@ All notable changes to River are documented here. The format follows
 
 ### Added
 
+- **Rules and onboarding** (Community settings → Rules & roles): a welcome
+  note and rules new members see first; optionally they must accept the
+  rules before they can post, react or join voice (the server enforces it).
+- **Pick your roles:** offer roles members can give themselves (never ones
+  that moderate); new members are asked after accepting the rules, and
+  anyone can change them from the community menu.
 - **Link previews, made privately** (Settings → Appearance, off by
   default): when you send a link, your River fetches the page's title and
   description and seals them into your message, so people reading it never

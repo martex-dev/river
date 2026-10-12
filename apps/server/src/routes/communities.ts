@@ -31,6 +31,8 @@ import {
   createEventRequestSchema,
   transferOwnershipRequestSchema,
   createReportRequestSchema,
+  updateOnboardingRequestSchema,
+  selfRolesRequestSchema,
   createNoteRequestSchema,
   MAX_NOTES_PER_MEMBER,
   createSoundRequestSchema,
@@ -325,6 +327,95 @@ export async function registerCommunityRoutes(
     const req = parse(updateCommunityRequestSchema, request.body);
     await db.updateTable('communities').set({ meta: req.meta }).where('id', '=', model.id).execute();
     await audit(model.id, me(request), 'community.update', model.id);
+    changed(model);
+    return { ok: true };
+  });
+
+  // ---- onboarding (1.0.24) ----------------------------------------------------------------------
+  /** Permissions a self-assignable role may not carry: nothing that moderates or manages. */
+  const SELF_ROLE_FORBIDDEN =
+    Permission.ADMINISTRATOR |
+    Permission.MANAGE_COMMUNITY |
+    Permission.MANAGE_CHANNELS |
+    Permission.MANAGE_ROLES |
+    Permission.MANAGE_MESSAGES |
+    Permission.KICK_MEMBERS |
+    Permission.BAN_MEMBERS |
+    Permission.MUTE_MEMBERS |
+    Permission.MOVE_MEMBERS |
+    Permission.MODERATE_MEMBERS |
+    Permission.VIEW_AUDIT_LOG |
+    Permission.MENTION_EVERYONE |
+    Permission.MANAGE_EVENTS |
+    Permission.MANAGE_EXPRESSIONS;
+
+  app.put<{ Params: { id: string } }>(
+    `${API_PREFIX}/communities/:id/onboarding`,
+    { ...authed, bodyLimit: 64 * 1024 },
+    async (request) => {
+      const model = await community(request.params.id, me(request));
+      if (!model.can(me(request), Permission.MANAGE_COMMUNITY)) throw forbidden();
+      const req = parse(updateOnboardingRequestSchema, request.body);
+      const top = model.ownerId === me(request) ? Infinity : model.top(me(request));
+      for (const id of req.selfRoles) {
+        const role = model.role(id);
+        if (!role || id === model.everyoneRoleId) throw bad('Unknown role');
+        if (role.permissions & SELF_ROLE_FORBIDDEN)
+          throw bad('Roles members give themselves cannot moderate or manage anything');
+        if (role.position >= top) throw forbidden('You can only offer roles below your highest role');
+      }
+      await db
+        .updateTable('communities')
+        .set({
+          onboarding: req.onboarding,
+          screening: req.screening ? 1 : 0,
+          self_roles: JSON.stringify([...new Set(req.selfRoles)]),
+        })
+        .where('id', '=', model.id)
+        .execute();
+      await audit(model.id, me(request), 'community.onboarding', model.id, {
+        screening: req.screening,
+        selfRoles: req.selfRoles.length,
+      });
+      changed(model);
+      return { ok: true };
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/accept`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    await db
+      .updateTable('community_members')
+      .set({ accepted: 1 })
+      .where('community_id', '=', model.id)
+      .where('river_id', '=', me(request))
+      .execute();
+    changed(model);
+    return { ok: true };
+  });
+
+  app.put<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/self-roles`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    if (model.pending(me(request))) throw forbidden('Accept the rules first');
+    const req = parse(selfRolesRequestSchema, request.body);
+    if (req.roles.some((id) => !model.selfRoles.includes(id)))
+      throw forbidden('That role is not self-assignable');
+    const current = model.member(me(request))!.roles;
+    // Keep every role that is not self-assignable; set the self-assignable ones to the choice.
+    const next = [...new Set([...current.filter((id) => !model.selfRoles.includes(id)), ...req.roles])];
+    await db.transaction().execute(async (trx) => {
+      await trx
+        .deleteFrom('member_roles')
+        .where('community_id', '=', model.id)
+        .where('river_id', '=', me(request))
+        .execute();
+      for (const id of next)
+        await trx
+          .insertInto('member_roles')
+          .values({ community_id: model.id, river_id: me(request), role_id: id })
+          .execute();
+    });
+    await audit(model.id, me(request), 'member.selfRoles', me(request), { roles: req.roles });
     changed(model);
     return { ok: true };
   });
@@ -1566,6 +1657,7 @@ export async function registerCommunityRoutes(
               role: 'member',
               profile: req.profile,
               joined_on: day(now),
+              accepted: model.screening ? 0 : 1,
             })
             .execute();
           await trx

@@ -1,3 +1,4 @@
+import { OnboardingSettings } from './Onboarding.tsx';
 import { SoundSettings } from './Soundboard.tsx';
 import { ReportsPanel } from './Reports.tsx';
 import { useEffect, useState, type ReactElement } from 'react';
@@ -37,6 +38,7 @@ export function CommunitySettings(props: {
   const perms = community.permissions;
   const tabs: Array<[CommunityTab, string, boolean]> = [
     ['overview', 'Overview', can(perms, Permission.MANAGE_COMMUNITY)],
+    ['onboarding', 'Rules & roles', can(perms, Permission.MANAGE_COMMUNITY)],
     ['roles', 'Roles', can(perms, Permission.MANAGE_ROLES)],
     ['members', 'Members', true],
     ['emoji', 'Emoji', true],
@@ -92,6 +94,7 @@ export function CommunitySettings(props: {
             <XIcon />
           </button>
           {tab === 'overview' && <Overview community={community} />}
+          {tab === 'onboarding' && <OnboardingSettings community={community} />}
           {tab === 'roles' && <Roles community={community} me={me} />}
           {tab === 'members' && <Members community={community} me={me} />}
           {tab === 'emoji' && <EmojiSettings community={community} />}

@@ -420,6 +420,48 @@ describe('communities', () => {
       expect([after.status, after.resolvedBy]).toEqual(['resolved', mod.riverId]);
     });
 
+    it('onboarding: screened newcomers only read until they accept; self-assignable roles are safe', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const old = await join(a, owner.token, cid);
+      const { rid: gamer } = await role(a, owner.token, cid, 0);
+      const { rid: mod } = await role(a, owner.token, cid, Permission.KICK_MEMBERS);
+      const put = (token: string, body: object) =>
+        status(a, 'PUT', `/v1/communities/${cid}/onboarding`, token, body);
+      expect(await put(old.token, { onboarding: sealed(), screening: true, selfRoles: [] })).toBe(403);
+      expect(await put(owner.token, { onboarding: sealed(), screening: true, selfRoles: [mod] })).toBe(400);
+      expect(await put(owner.token, { onboarding: sealed(), screening: true, selfRoles: [gamer] })).toBe(200);
+      const fresh = await join(a, owner.token, cid);
+      const send = (token: string) =>
+        status(a, 'POST', `/v1/channels/${text}/messages`, token, { id: id(), body: sealed() });
+      expect(await send(old.token)).toBe(201); // members from before keep talking
+      expect(await send(fresh.token)).toBe(403);
+      const listed = await fetchCommunity(a, owner.token, cid);
+      expect(listed.screening).toBe(true);
+      expect(listed.members.find((m) => m.riverId === fresh.riverId)?.pending).toBe(true);
+      expect(
+        await status(a, 'PUT', `/v1/communities/${cid}/self-roles`, fresh.token, { roles: [gamer] }),
+      ).toBe(403);
+      expect(await status(a, 'POST', `/v1/communities/${cid}/accept`, fresh.token)).toBe(200);
+      expect(await send(fresh.token)).toBe(201);
+      expect(await status(a, 'PUT', `/v1/communities/${cid}/self-roles`, fresh.token, { roles: [mod] })).toBe(
+        403,
+      );
+      expect(
+        await status(a, 'PUT', `/v1/communities/${cid}/self-roles`, fresh.token, { roles: [gamer] }),
+      ).toBe(200);
+      expect(
+        (await fetchCommunity(a, owner.token, cid)).members.find((m) => m.riverId === fresh.riverId)?.roles,
+      ).toEqual([gamer]);
+      expect(await status(a, 'PUT', `/v1/communities/${cid}/self-roles`, fresh.token, { roles: [] })).toBe(
+        200,
+      );
+      expect(
+        (await fetchCommunity(a, owner.token, cid)).members.find((m) => m.riverId === fresh.riverId)?.roles,
+      ).toEqual([]);
+    });
+
     it('moderator notes are only for people who moderate members', async () => {
       const a = await start();
       const owner = await user(a);

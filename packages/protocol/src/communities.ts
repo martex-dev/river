@@ -116,6 +116,8 @@ export const memberSchema = z.object({
   status: presenceStatusSchema.optional(),
   /** Timed out until this moment (1.0.6); null when not timed out. */
   timeoutUntil: z.string().max(40).nullable().default(null),
+  /** Has not accepted the community's rules yet, so can only read (1.0.24). */
+  pending: z.boolean().optional(),
   /** The day they joined, YYYY-MM-DD (1.0.21). */
   joinedOn: z
     .string()
@@ -123,6 +125,10 @@ export const memberSchema = z.object({
     .optional(),
 });
 export type MemberWire = z.infer<typeof memberSchema>;
+
+/** Sealed rules and welcome note, and how many self-assignable roles (1.0.24). */
+export const SEALED_ONBOARDING = 16 * 1024;
+export const MAX_SELF_ROLES = 25;
 
 export const communitySchema = z.object({
   id: communityIdSchema,
@@ -136,6 +142,12 @@ export const communitySchema = z.object({
   keyEpoch: z.number().int().min(0).default(0),
   /** A member was removed and the key has not been replaced yet. */
   rotationNeeded: z.boolean().default(false),
+  /** Sealed { rules, welcome } (1.0.24). */
+  onboarding: sealedSchema(SEALED_ONBOARDING).nullable().optional(),
+  /** New members must accept the rules before taking part (1.0.24). */
+  screening: z.boolean().optional(),
+  /** Roles members may give themselves (1.0.24). */
+  selfRoles: z.array(roleIdSchema).max(MAX_SELF_ROLES).optional(),
 });
 export type CommunityWire = z.infer<typeof communitySchema>;
 export const joinResponseSchema = communitySchema.extend({
@@ -158,6 +170,16 @@ export const createCommunityRequestSchema = z
 export type CreateCommunityRequest = z.infer<typeof createCommunityRequestSchema>;
 
 export const updateCommunityRequestSchema = z.object({ meta: sealedSchema(SEALED_SMALL) }).strict();
+
+/** Rules, screening and self-assignable roles (1.0.24). */
+export const updateOnboardingRequestSchema = z
+  .object({
+    onboarding: sealedSchema(SEALED_ONBOARDING).nullable(),
+    screening: z.boolean(),
+    selfRoles: z.array(roleIdSchema).max(MAX_SELF_ROLES),
+  })
+  .strict();
+export const selfRolesRequestSchema = z.object({ roles: z.array(roleIdSchema).max(MAX_SELF_ROLES) }).strict();
 
 export const createChannelRequestSchema = z
   .object({

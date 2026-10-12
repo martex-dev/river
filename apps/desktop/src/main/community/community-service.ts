@@ -678,9 +678,12 @@ export class CommunityService {
     };
     const myRoles = c.members.find((m) => m.riverId === me)?.roles ?? [];
     const myTimeout = c.members.find((m) => m.riverId === me)?.timeoutUntil;
+    const myPending = !!c.screening && !!c.members.find((m) => m.riverId === me)?.pending && me !== ownerId;
     const timedOut = !!myTimeout && Date.parse(myTimeout) > Date.now() && me !== ownerId;
     const permsOfMe = (overwrites?: ChannelView['overwrites'], announcement = false): number => {
       let p = permsOf(me, myRoles, overwrites);
+      // Same rule as the server: until you accept the rules, you can only look around.
+      if (myPending && !(p & Permission.ADMINISTRATOR)) return p & Permission.VIEW_CHANNELS;
       if (timedOut && !(p & Permission.ADMINISTRATOR)) p &= ~TIMEOUT_DENIES;
       // Same rule as the server: announcement channels are for people who manage messages.
       if (announcement && !(p & Permission.MANAGE_MESSAGES)) p &= ~Permission.SEND_MESSAGES;
@@ -810,6 +813,24 @@ export class CommunityService {
       members,
       voice,
       voiceStates,
+      ...((): Pick<CommunityView, 'rules' | 'welcomeNote'> => {
+        if (!c.onboarding) return { rules: [], welcomeNote: '' };
+        try {
+          const o = ring.open<{ rules?: unknown; welcome?: unknown }>(c.id, 'onboarding', c.onboarding);
+          return {
+            rules: (Array.isArray(o.rules) ? o.rules : [])
+              .filter((r): r is string => typeof r === 'string')
+              .slice(0, 20)
+              .map((r) => r.slice(0, 300)),
+            welcomeNote: typeof o.welcome === 'string' ? o.welcome.slice(0, 1000) : '',
+          };
+        } catch {
+          return { rules: [], welcomeNote: '' };
+        }
+      })(),
+      screening: c.screening ?? false,
+      selfRoles: (c.selfRoles ?? []).filter((id) => roles.some((r) => r.id === id)),
+      myPending: myPending,
     };
   }
 
@@ -1314,6 +1335,36 @@ export class CommunityService {
         await this.call(`/communities/${act.communityId}`, 'PATCH', { meta }, z.unknown());
         break;
       }
+      case 'updateOnboarding': {
+        const has = act.rules.length > 0 || act.welcome.trim().length > 0;
+        const onboarding = has
+          ? seal(this.requireKey(act.communityId), act.communityId, 'onboarding', {
+              rules: act.rules,
+              welcome: act.welcome.trim(),
+            })
+          : null;
+        await this.call(
+          `/communities/${act.communityId}/onboarding`,
+          'PUT',
+          { onboarding, screening: act.screening && act.rules.length > 0, selfRoles: act.selfRoles },
+          z.unknown(),
+        ).catch(explain);
+        await this.refresh();
+        break;
+      }
+      case 'acceptRules':
+        await this.call(`/communities/${act.communityId}/accept`, 'POST', {}, z.unknown()).catch(explain);
+        await this.refresh();
+        break;
+      case 'setSelfRoles':
+        await this.call(
+          `/communities/${act.communityId}/self-roles`,
+          'PUT',
+          { roles: act.roles },
+          z.unknown(),
+        ).catch(explain);
+        await this.refresh();
+        break;
       case 'deleteCommunity':
         await this.call(`/communities/${act.communityId}`, 'DELETE', undefined, z.unknown());
         this.forget(act.communityId);

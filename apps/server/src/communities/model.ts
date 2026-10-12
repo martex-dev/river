@@ -43,6 +43,8 @@ export interface MemberModel {
   profile: string;
   timeoutUntil: string | null;
   joinedOn: string;
+  /** Still has to accept the rules (screened communities, 1.0.24). */
+  pending: boolean;
 }
 
 /** Everything needed to answer "may X do Y here?" for one community. */
@@ -56,6 +58,9 @@ export class CommunityModel {
   readonly channels: ChannelModel[];
   readonly categories: CategoryModel[];
   readonly members: MemberModel[];
+  readonly onboarding: string | null;
+  readonly screening: boolean;
+  readonly selfRoles: string[];
 
   constructor(init: {
     id: string;
@@ -67,6 +72,9 @@ export class CommunityModel {
     channels: ChannelModel[];
     categories?: CategoryModel[];
     members: MemberModel[];
+    onboarding?: string | null;
+    screening?: boolean;
+    selfRoles?: string[];
   }) {
     this.id = init.id;
     this.ownerId = init.ownerId;
@@ -77,6 +85,14 @@ export class CommunityModel {
     this.channels = init.channels;
     this.categories = init.categories ?? [];
     this.members = init.members;
+    this.onboarding = init.onboarding ?? null;
+    this.screening = init.screening ?? false;
+    this.selfRoles = init.selfRoles ?? [];
+  }
+
+  /** Must still accept the rules before taking part. */
+  pending(riverId: string): boolean {
+    return this.screening && !!this.member(riverId)?.pending && riverId !== this.ownerId;
   }
 
   /** The @everyone role has the community's ID. */
@@ -110,6 +126,8 @@ export class CommunityModel {
       member: { riverId, roles: m.roles },
       overwrites: channelId ? this.channel(channelId)?.overwrites : undefined,
     });
+    // Until a new member accepts the rules of a screened community, they can only look around.
+    if (this.pending(riverId) && !(perms & Permission.ADMINISTRATOR)) return perms & Permission.VIEW_CHANNELS;
     // A timeout takes away talking, not reading; owners and administrators are never timed out.
     if (this.timedOut(riverId) && riverId !== this.ownerId && !(perms & Permission.ADMINISTRATOR))
       return perms & ~TIMEOUT_DENIES;
@@ -163,6 +181,9 @@ export class CommunityModel {
       ownerId: this.ownerId,
       keyEpoch: this.keyEpoch,
       rotationNeeded: this.rotationNeeded,
+      onboarding: this.onboarding,
+      screening: this.screening,
+      selfRoles: this.selfRoles,
       roles: this.roles,
       channels: visible.map((c) => ({
         id: c.id,
@@ -198,6 +219,7 @@ export class CommunityModel {
         })(),
         timeoutUntil: this.timedOut(m.riverId) ? m.timeoutUntil : null,
         ...(/^\d{4}-\d{2}-\d{2}$/.test(m.joinedOn) ? { joinedOn: m.joinedOn } : {}),
+        ...(this.pending(m.riverId) ? { pending: true } : {}),
       })),
     };
   }
@@ -206,7 +228,7 @@ export class CommunityModel {
 export async function loadCommunity(db: Kysely<Database>, id: string): Promise<CommunityModel | null> {
   const c = await db
     .selectFrom('communities')
-    .select(['id', 'owner', 'meta', 'key_epoch', 'rotation_needed'])
+    .select(['id', 'owner', 'meta', 'key_epoch', 'rotation_needed', 'onboarding', 'screening', 'self_roles'])
     .where('id', '=', id)
     .executeTakeFirst();
   if (!c) return null;
@@ -254,6 +276,16 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
     meta: c.meta,
     keyEpoch: c.key_epoch,
     rotationNeeded: c.rotation_needed === 1,
+    onboarding: c.onboarding,
+    screening: c.screening === 1,
+    selfRoles: ((): string[] => {
+      try {
+        const list = JSON.parse(c.self_roles) as unknown;
+        return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : [];
+      } catch {
+        return [];
+      }
+    })(),
     roles: roles.map((r) => ({
       id: r.id,
       name: r.name,
@@ -291,6 +323,7 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
       profile: m.profile,
       timeoutUntil: m.timeout_until,
       joinedOn: m.joined_on,
+      pending: m.accepted === 0,
     })),
   });
 }

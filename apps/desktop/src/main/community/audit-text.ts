@@ -72,6 +72,12 @@ export function describeAudit(
         return `added a moderator note about ${person(t)}`;
       case 'note.delete':
         return `removed a moderator note about ${person(t)}`;
+      case 'community.onboarding':
+        return d.screening
+          ? 'changed the rules (new members must accept them)'
+          : 'changed the rules and onboarding';
+      case 'member.selfRoles':
+        return 'picked their roles';
       case 'member.kick':
         return `kicked ${person(t)}`;
       case 'member.ban':

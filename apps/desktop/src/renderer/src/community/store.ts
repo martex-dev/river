@@ -29,11 +29,12 @@ export type Modal =
   | { kind: 'user-settings'; tab?: UserTab }
   | { kind: 'events'; communityId: string }
   | { kind: 'report'; communityId: string; message: ChatMessage }
+  | { kind: 'pick-roles'; communityId: string }
   | { kind: 'ban'; communityId: string; riverId: string; name: string; then?: Modal }
   | { kind: 'confirm'; title: string; body: string; action: string; run: () => Promise<void> };
 
 export type CommunityTab =
-  'overview' | 'roles' | 'members' | 'emoji' | 'sounds' | 'bans' | 'reports' | 'audit';
+  'overview' | 'onboarding' | 'roles' | 'members' | 'emoji' | 'sounds' | 'bans' | 'reports' | 'audit';
 export type UserTab = 'profile' | 'voice' | 'notifications' | 'appearance';
 
 const TYPING_MS = 7000;
