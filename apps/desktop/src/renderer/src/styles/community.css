@@ -2983,6 +2983,38 @@ input.switch:disabled {
 .search-panel .search {
   width: 100%;
 }
+.search-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 2px 0 6px;
+}
+.search-hints .chip {
+  background: none;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: var(--font-mono, monospace);
+}
+.search-hints .chip:hover,
+.search-hints .chip:focus-visible {
+  background: var(--accent-soft, rgba(79, 227, 209, 0.12));
+}
+.search-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.search-date input {
+  font: inherit;
+  color: inherit;
+  background: var(--surface-2, transparent);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
 
 .channel__open {
   display: flex;

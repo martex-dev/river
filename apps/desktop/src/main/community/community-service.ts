@@ -49,6 +49,7 @@ import { describeAudit } from './audit-text.ts';
 import type { ServerLocator } from './server-locator.ts';
 import type { PresenceTracker } from '../presence.ts';
 import { readPoll, type Poll } from '../../shared/poll.ts';
+import { hasCriteria, matchesSearch, parseSearch } from '../../shared/search-query.ts';
 import type {
   CategoryView,
   ChannelView,
@@ -1614,23 +1615,23 @@ export class CommunityService {
       case 'history':
         return (await this.messages(act.channelId, act.before)) as CommunityActionResult<A>;
       case 'search': {
-        // The server cannot search ciphertext: fetch recent history per channel and search it here.
+        // The server cannot search ciphertext: fetch history per channel and search it here.
         const community = this.requireCommunity(act.communityId);
-        const needle = act.query.toLowerCase();
+        const q = parseSearch(act.query);
+        if (!hasCriteria(q)) return [] as ChatMessage[] as CommunityActionResult<A>;
         const found: ChatMessage[] = [];
-        for (const ch of community.channels.filter((c) => c.kind === 'text')) {
-          let before: string | undefined;
-          for (let page = 0; page < 5; page++) {
+        const channels = community.channels.filter(
+          (c) => c.kind === 'text' && (!q.in.length || q.in.includes(c.name.toLowerCase())),
+        );
+        for (const ch of channels) {
+          // A before: date starts the walk there; an after: date ends it.
+          let before: string | undefined = q.before ?? undefined;
+          for (let page = 0; page < (q.after || q.before ? 20 : 5); page++) {
             const batch = await this.messages(ch.id, before).catch(() => []);
-            found.push(
-              ...batch.filter(
-                (m) =>
-                  m.text.toLowerCase().includes(needle) ||
-                  m.attachments.some((a) => a.name.toLowerCase().includes(needle)),
-              ),
-            );
+            found.push(...batch.filter((m) => matchesSearch(m, q, ch.name)));
             if (batch.length < 100) break;
             before = batch[0]!.sentAt;
+            if (q.after && before < q.after) break;
           }
         }
         return found
