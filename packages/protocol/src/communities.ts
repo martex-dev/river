@@ -418,6 +418,22 @@ export const createEmojiRequestSchema = z
 /** Rename (1.0.20): the whole sealed { name, image } is replaced. */
 export const updateEmojiRequestSchema = z.object({ data: sealedSchema(SEALED_EMOJI) }).strict();
 
+/** Stickers (1.0.24): a sealed { name, image }, image up to 320 px. */
+export const SEALED_STICKER = 200 * 1024;
+export const MAX_COMMUNITY_STICKERS = 60;
+export const stickersResponseSchema = z.object({
+  stickers: z.array(
+    z.object({
+      id: z.string().regex(COMMUNITY_ID_RE),
+      createdBy: riverIdSchema,
+      data: sealedSchema(SEALED_STICKER),
+    }),
+  ),
+});
+export const createStickerRequestSchema = z
+  .object({ id: z.string().regex(COMMUNITY_ID_RE), data: sealedSchema(SEALED_STICKER) })
+  .strict();
+
 /** Moderator notes about a member (1.0.23): a sealed { text }. */
 export const SEALED_NOTE = 4 * 1024;
 export const MAX_NOTES_PER_MEMBER = 50;
@@ -600,6 +616,8 @@ export const serverEventSchema = z.discriminatedUnion('t', [
   }),
   /** A community's soundboard changed (1.0.22). */
   z.object({ t: z.literal('sounds'), communityId: communityIdSchema }),
+  /** A community's stickers changed (1.0.24). */
+  z.object({ t: z.literal('stickers'), communityId: communityIdSchema }),
   /** A community's scheduled events changed: fetch them again (1.0.18). */
   z.object({ t: z.literal('events'), communityId: communityIdSchema }),
   /** A community's custom emoji changed (1.0.19). */

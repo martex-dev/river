@@ -12,6 +12,8 @@ const id = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 const riverId = z.uuid();
 const name = z.string().trim().min(1).max(64);
 const soundName = z.string().trim().min(1).max(32);
+/** A sticker picture (1.0.24): PNG, WebP or GIF as a data URL. */
+export const STICKER_IMAGE = /^data:image\/(png|webp|gif);base64,[A-Za-z0-9+/]+=*$/;
 /** A link preview (1.0.23). */
 export const linkEmbedSchema = z
   .object({
@@ -292,6 +294,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       attachments: z.array(attachmentPointerSchema).max(10).optional(),
       /** Descriptions of attached pictures, by attachment ID (1.0.21). */
       alts: z.record(id, z.string().trim().max(1000)).optional(),
+      /** Send a community sticker (1.0.24); `text` may be empty. */
+      sticker: id.optional(),
       /** A link preview made on this device (1.0.23). */
       embed: linkEmbedSchema.optional(),
       /** Start a forum post with this title (1.0.22). */
@@ -320,7 +324,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
         .optional(),
     })
     .strict()
-    .refine((v) => v.text.trim().length > 0 || (v.attachments?.length ?? 0) > 0, 'empty'),
+    .refine((v) => v.text.trim().length > 0 || (v.attachments?.length ?? 0) > 0 || !!v.sticker, 'empty'),
   z
     .object({
       a: z.literal('upload'),
@@ -441,6 +445,17 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('reports'), communityId: id }).strict(),
+  // Stickers (1.0.24): name and picture sealed with the community key.
+  z.object({ a: z.literal('stickers'), communityId: id }).strict(),
+  z
+    .object({
+      a: z.literal('addSticker'),
+      communityId: id,
+      name: z.string().trim().min(1).max(30),
+      image: z.string().max(190_000).regex(STICKER_IMAGE),
+    })
+    .strict(),
+  z.object({ a: z.literal('deleteSticker'), stickerId: id }).strict(),
   // Moderator notes (1.0.23): sealed with the community key, listed only to moderators.
   z.object({ a: z.literal('notes'), communityId: id, riverId }).strict(),
   z
@@ -516,6 +531,12 @@ export const REPORT_REASONS = [
   'Something else',
 ];
 
+export interface StickerView {
+  id: string;
+  name: string;
+  image: string;
+}
+
 export interface NoteView {
   id: string;
   author: string;
@@ -566,6 +587,8 @@ export interface BanView {
 
 interface Results {
   createRole: string;
+  stickers: StickerView[];
+  addSticker: string;
   notes: NoteView[];
   addNote: string;
   sounds: SoundView[];

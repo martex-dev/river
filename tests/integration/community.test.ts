@@ -415,6 +415,36 @@ describe('onboarding', () => {
   });
 });
 
+describe('stickers', () => {
+  it('are sealed and can be sent as a message', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Stickers');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.name === 'general')!;
+    await bob.community.refresh();
+    const image =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    const id = await alice.community.action({
+      a: 'addSticker',
+      communityId: created.id,
+      name: 'Wave',
+      image,
+    });
+    expect(await bob.community.action({ a: 'stickers', communityId: created.id })).toEqual([
+      { id, name: 'Wave', image },
+    ]);
+    const stored = JSON.stringify(await serverDb.db.selectFrom('community_stickers').selectAll().execute());
+    expect(stored).not.toContain('Wave');
+    await alice.community.action({ a: 'send', channelId: general.id, text: '', sticker: id });
+    const [m] = (await bob.community.messages(general.id)).slice(-1);
+    expect(m!.sticker).toBe(id);
+    await expect(
+      bob.community.action({ a: 'addSticker', communityId: created.id, name: 'nope', image }),
+    ).rejects.toThrow();
+  });
+});
+
 describe('moderator notes', () => {
   it('are sealed, shown to moderators with their author, and hidden from others', async () => {
     const alice = await person('Alice');

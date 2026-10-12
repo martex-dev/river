@@ -1,3 +1,4 @@
+import { StickerButton, StickerImage } from './Stickers.tsx';
 import { SavedPanel } from './Saved.tsx';
 import { CreatePollDialog, PollView } from './Poll.tsx';
 import { isVote } from '../../../../shared/poll.ts';
@@ -558,6 +559,7 @@ function Message(props: {
           )}
           {m.poll && <PollView message={m} me={props.me} canVote={canReact} />}
           {m.embed && <LinkCard embed={m.embed} />}
+          {m.sticker && <StickerImage id={m.sticker} />}
           {m.attachments.length > 0 && <AttachmentList attachments={m.attachments} alts={m.alts} />}
           {m.thread && (
             <button className="thread-summary" onClick={() => void s.showThread(channel.id, m.id)}>
@@ -1237,6 +1239,7 @@ function Composer(props: {
         >
           📊
         </button>
+        <StickerButton community={community} channelId={channel.id} />
         {props.canAttach && (
           <>
             <button

@@ -8,6 +8,8 @@ All notable changes to River are documented here. The format follows
 
 ### Added
 
+- **Stickers:** communities add their own (Community settings → Stickers);
+  send one with the 🗒️ button next to the message box. End-to-end encrypted.
 - **Delete many messages at once:** moderators right-click → Select
   messages, click the ones to remove (up to 100) and delete them together.
 - **Audit log filters:** by kind of change, by person and by text, and copy

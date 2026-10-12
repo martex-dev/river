@@ -23,6 +23,7 @@ import {
   reportsResponseSchema,
   soundsResponseSchema,
   notesResponseSchema,
+  stickersResponseSchema,
 } from '@river/protocol';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
@@ -484,6 +485,25 @@ describe('communities', () => {
         await a.inject({ method: 'GET', url: `/v1/channels/${text}/messages`, headers: auth(owner.token) })
       ).json().messages as Array<{ id: string }>;
       expect(left.map((m) => m.id)).toEqual([ids[2]]);
+    });
+
+    it('stickers: managers add and remove, members list them, strangers cannot', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const url = `/v1/communities/${cid}/stickers`;
+      expect(await status(a, 'POST', url, member.token, { id: id(), data: sealed() })).toBe(403);
+      const sid = id();
+      expect(await status(a, 'POST', url, owner.token, { id: sid, data: sealed() })).toBe(201);
+      const list = stickersResponseSchema.parse(
+        (await a.inject({ method: 'GET', url, headers: auth(member.token) })).json(),
+      );
+      expect(list.stickers.map((x) => x.id)).toEqual([sid]);
+      expect(await status(a, 'DELETE', `/v1/stickers/${sid}`, member.token)).toBe(403);
+      expect(await status(a, 'DELETE', `/v1/stickers/${sid}`, owner.token)).toBe(200);
+      const stranger = await user(a);
+      expect(await status(a, 'GET', url, stranger.token)).not.toBe(200);
     });
 
     it('moderator notes are only for people who moderate members', async () => {

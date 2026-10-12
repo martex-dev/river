@@ -285,7 +285,16 @@ export interface MemberNotesTable {
   created_at: string;
 }
 
+export interface CommunityStickersTable {
+  id: string;
+  community_id: string;
+  created_by: string;
+  data: string;
+  created_at: string;
+}
+
 export interface Database {
+  community_stickers: CommunityStickersTable;
   member_notes: MemberNotesTable;
   community_sounds: CommunitySoundsTable;
   community_reports: CommunityReportsTable;

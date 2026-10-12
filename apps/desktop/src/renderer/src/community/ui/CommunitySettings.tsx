@@ -1,3 +1,4 @@
+import { StickerSettings } from './Stickers.tsx';
 import { AUDIT_GROUPS, auditText, filterAudit, type AuditFilter } from '../../../../shared/audit-filter.ts';
 import { OnboardingSettings } from './Onboarding.tsx';
 import { SoundSettings } from './Soundboard.tsx';
@@ -43,6 +44,7 @@ export function CommunitySettings(props: {
     ['roles', 'Roles', can(perms, Permission.MANAGE_ROLES)],
     ['members', 'Members', true],
     ['emoji', 'Emoji', true],
+    ['stickers', 'Stickers', true],
     ['sounds', 'Soundboard', true],
     ['bans', 'Bans', can(perms, Permission.BAN_MEMBERS)],
     ['reports', 'Reports', can(perms, Permission.MANAGE_MESSAGES)],
@@ -99,6 +101,7 @@ export function CommunitySettings(props: {
           {tab === 'roles' && <Roles community={community} me={me} />}
           {tab === 'members' && <Members community={community} me={me} />}
           {tab === 'emoji' && <EmojiSettings community={community} />}
+          {tab === 'stickers' && <StickerSettings community={community} />}
           {tab === 'sounds' && <SoundSettings community={community} />}
           {tab === 'bans' && <Bans community={community} />}
           {tab === 'reports' && <ReportsPanel community={community} />}

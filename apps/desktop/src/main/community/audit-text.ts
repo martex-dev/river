@@ -48,6 +48,10 @@ export function describeAudit(
         return `dismissed a report about ${person(t)}`;
       case 'report.open':
         return `reopened a report about ${person(t)}`;
+      case 'sticker.create':
+        return 'added a sticker';
+      case 'sticker.delete':
+        return 'removed a sticker';
       case 'sound.create':
         return 'added a soundboard sound';
       case 'sound.update':

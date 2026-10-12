@@ -31,6 +31,8 @@ import {
   createEventRequestSchema,
   transferOwnershipRequestSchema,
   createReportRequestSchema,
+  createStickerRequestSchema,
+  MAX_COMMUNITY_STICKERS,
   bulkDeleteRequestSchema,
   updateOnboardingRequestSchema,
   selfRolesRequestSchema,
@@ -846,6 +848,68 @@ export async function registerCommunityRoutes(
     await db.updateTable('community_emojis').set({ data: req.data }).where('id', '=', id).execute();
     await audit(model.id, me(request), 'emoji.update', id);
     emojisChanged(model);
+    return { ok: true };
+  });
+
+  // ---- stickers (1.0.24) -----------------------------------------------------------------------
+  app.get<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/stickers`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    const rows = await db
+      .selectFrom('community_stickers')
+      .select(['id', 'created_by', 'data'])
+      .where('community_id', '=', model.id)
+      .orderBy('created_at')
+      .execute();
+    return { stickers: rows.map((r) => ({ id: r.id, createdBy: r.created_by, data: r.data })) };
+  });
+
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/communities/:id/stickers`,
+    { ...authed, bodyLimit: 320 * 1024 },
+    async (request, reply) => {
+      const model = await community(request.params.id, me(request));
+      if (!model.can(me(request), Permission.MANAGE_EXPRESSIONS)) throw forbidden();
+      const req = parse(createStickerRequestSchema, request.body);
+      const count = await db
+        .selectFrom('community_stickers')
+        .select(db.fn.countAll<number>().as('n'))
+        .where('community_id', '=', model.id)
+        .executeTakeFirstOrThrow();
+      if (Number(count.n) >= MAX_COMMUNITY_STICKERS)
+        throw bad(`A community can have up to ${MAX_COMMUNITY_STICKERS} stickers`);
+      try {
+        await db
+          .insertInto('community_stickers')
+          .values({
+            id: req.id,
+            community_id: model.id,
+            created_by: me(request),
+            data: req.data,
+            created_at: deps.now().toISOString(),
+          })
+          .execute();
+      } catch {
+        throw new HttpError(409, 'conflict', 'Sticker ID already exists');
+      }
+      await audit(model.id, me(request), 'sticker.create', req.id);
+      toMembers(model, { t: 'stickers', communityId: model.id });
+      return reply.code(201).send({ id: req.id });
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(`${API_PREFIX}/stickers/:id`, authed, async (request) => {
+    const id = parse(channelIdSchema, request.params.id);
+    const row = await db
+      .selectFrom('community_stickers')
+      .select(['community_id'])
+      .where('id', '=', id)
+      .executeTakeFirst();
+    if (!row) throw notFound();
+    const model = await community(row.community_id, me(request));
+    if (!model.can(me(request), Permission.MANAGE_EXPRESSIONS)) throw forbidden();
+    await db.deleteFrom('community_stickers').where('id', '=', id).execute();
+    await audit(model.id, me(request), 'sticker.delete', id);
+    toMembers(model, { t: 'stickers', communityId: model.id });
     return { ok: true };
   });
 

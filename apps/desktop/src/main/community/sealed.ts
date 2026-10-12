@@ -23,6 +23,7 @@ export type SealPurpose =
   | `report:${string}`
   | `sound:${string}`
   | `note:${string}`
+  | `sticker:${string}`
   | 'invite';
 
 const aad = (communityId: string, purpose: SealPurpose): Buffer =>

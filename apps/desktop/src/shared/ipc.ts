@@ -368,6 +368,8 @@ export interface ChatMessage {
   tags?: string[];
   /** A link preview the sender added (1.0.23). */
   embed?: LinkEmbed | null;
+  /** A community sticker (1.0.24): its ID, shown from the community's stickers. */
+  sticker?: string | null;
 }
 
 export interface ThreadView {
@@ -395,6 +397,7 @@ export type CommunityEvent =
   | { t: 'emojis'; communityId: string }
   | { t: 'reports'; communityId: string }
   | { t: 'sounds'; communityId: string }
+  | { t: 'stickers'; communityId: string }
   | { t: 'voiceSound'; communityId: string; from: string; soundId: string }
   /** The server said no to something that is not a voice join (1.0.22). */
   | { t: 'refused'; reason: 'forbidden' | 'slow_down' }

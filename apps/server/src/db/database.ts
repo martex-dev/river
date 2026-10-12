@@ -25,6 +25,7 @@ import * as m0018 from './migrations/0018_forums.ts';
 import * as m0019 from './migrations/0019_ban_expiry.ts';
 import * as m0020 from './migrations/0020_member_notes.ts';
 import * as m0021 from './migrations/0021_onboarding.ts';
+import * as m0022 from './migrations/0022_stickers.ts';
 import type { Database } from './schema.ts';
 
 export type Dialect = 'sqlite' | 'postgres';
@@ -66,6 +67,7 @@ export const MIGRATIONS: Record<string, Migration> = {
   '0019_ban_expiry': m0019,
   '0020_member_notes': m0020,
   '0021_onboarding': m0021,
+  '0022_stickers': m0022,
 };
 
 /**
