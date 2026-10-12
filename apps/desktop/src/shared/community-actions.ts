@@ -383,6 +383,13 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     .strict(),
   z
     .object({
+      a: z.literal('setCommunityAvatar'),
+      communityId: id,
+      avatar: avatarSchema.nullable(),
+    })
+    .strict(),
+  z
+    .object({
       a: z.literal('setProfile'),
       name: name.optional(),
       avatar: avatarSchema.nullable().optional(),

@@ -475,6 +475,33 @@ describe('favourite GIFs', () => {
   });
 });
 
+describe('per-community pictures', () => {
+  it('show in that community only', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const one = await alice.community.create('One');
+    const two = await alice.community.create('Two');
+    for (const c of [one, two])
+      await bob.community.join(await alice.community.invite(c.id), async () => undefined);
+    const pic =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    await bob.community.action({ a: 'setCommunityAvatar', communityId: one.id, avatar: pic });
+    const seen = await alice.community.refresh();
+    const avatarIn = (id: string) =>
+      seen.find((c) => c.id === id)!.members.find((m) => m.riverId === bob.riverId)?.avatar ?? null;
+    expect(avatarIn(one.id)).toBe(pic);
+    expect(avatarIn(two.id)).toBeNull();
+    const mine = await bob.community.refresh();
+    expect(mine.find((c) => c.id === one.id)?.myCommunityAvatar).toBe(pic);
+    await bob.community.action({ a: 'setCommunityAvatar', communityId: one.id, avatar: null });
+    expect(
+      (await alice.community.refresh())
+        .find((c) => c.id === one.id)!
+        .members.find((m) => m.riverId === bob.riverId)?.avatar ?? null,
+    ).toBeNull();
+  });
+});
+
 describe('moderator notes', () => {
   it('are sealed, shown to moderators with their author, and hidden from others', async () => {
     const alice = await person('Alice');

@@ -596,12 +596,21 @@ export class CommunityService {
     return row?.nickname ?? null;
   }
 
+  /** Your picture in a community, if you set one there (1.0.25). */
+  private communityAvatar(communityId: string): string | null {
+    const row = this.deps
+      .db()
+      ?.prepare('SELECT avatar FROM community_avatars WHERE community_id = ?')
+      .get(communityId) as { avatar: string } | undefined;
+    return row?.avatar ?? null;
+  }
+
   private sealedProfile(communityId: string): string {
     const custom = this.deps.presence?.custom() ?? null;
     const extras = this.myProfileExtras();
     const profile: SealedProfile = {
       name: this.nickname(communityId) ?? this.myName(),
-      avatar: this.myAvatar(),
+      avatar: this.communityAvatar(communityId) ?? this.myAvatar(),
       identityKey: this.myIdentityKey(),
       ...(custom ? { status: custom } : {}),
       ...(extras.bio ? { bio: extras.bio } : {}),
@@ -809,6 +818,7 @@ export class CommunityService {
       description: String(meta.description ?? '').slice(0, 300),
       icon: communityIconSchema.safeParse(meta.icon).success ? (meta.icon as string) : null,
       myNickname: this.nickname(c.id),
+      myCommunityAvatar: this.communityAvatar(c.id),
       ownerId,
       permissions: permsOfMe(),
       myRank: topPosition(ownerId, wireRoles, { riverId: me, roles: myRoles }),
@@ -2247,6 +2257,20 @@ export class CommunityService {
                ON CONFLICT (community_id) DO UPDATE SET nickname = excluded.nickname`,
             )
             .run(act.communityId, act.nickname);
+        await this.publishProfile(act.communityId);
+        await this.refresh().catch(() => undefined);
+        break;
+      }
+      case 'setCommunityAvatar': {
+        if (act.avatar === null)
+          this.db().prepare('DELETE FROM community_avatars WHERE community_id = ?').run(act.communityId);
+        else
+          this.db()
+            .prepare(
+              `INSERT INTO community_avatars (community_id, avatar) VALUES (?, ?)
+               ON CONFLICT (community_id) DO UPDATE SET avatar = excluded.avatar`,
+            )
+            .run(act.communityId, act.avatar);
         await this.publishProfile(act.communityId);
         await this.refresh().catch(() => undefined);
         break;

@@ -67,7 +67,7 @@ export function UserSettings(props: { tab?: UserTab }): ReactElement {
 }
 
 /** Crops an image to a centred square and encodes it small enough for a sealed profile. */
-async function toAvatar(file: File): Promise<string> {
+export async function toAvatar(file: File): Promise<string> {
   const url = URL.createObjectURL(file);
   try {
     const img = new Image();

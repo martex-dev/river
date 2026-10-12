@@ -305,6 +305,8 @@ export interface CommunityView {
   icon: string | null;
   /** Your nickname here, or null if you use your River name. */
   myNickname: string | null;
+  /** Your picture here, or null if you use your usual avatar (1.0.25). */
+  myCommunityAvatar?: string | null;
   ownerId: string;
   /** My community-wide permissions. */
   permissions: number;

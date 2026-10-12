@@ -353,4 +353,17 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       db.exec(`ALTER TABLE dm_groups ADD COLUMN icon TEXT;`);
     },
   },
+  {
+    version: 21,
+    name: '0021_community_avatars',
+    up(db) {
+      // A picture used in one community instead of your usual avatar (1.0.25).
+      db.exec(`
+        CREATE TABLE community_avatars (
+          community_id TEXT PRIMARY KEY,
+          avatar       TEXT NOT NULL
+        ) STRICT;
+      `);
+    },
+  },
 ];

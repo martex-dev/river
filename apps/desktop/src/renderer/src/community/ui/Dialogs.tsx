@@ -1,5 +1,6 @@
+import { toAvatar } from './UserSettings.tsx';
 import { ForumSettings } from './Forum.tsx';
-import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, CommunityView } from '../../../../shared/ipc.ts';
 import { play } from '../sound.ts';
@@ -725,6 +726,49 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
 }
 
 /** Your name in this community only; everyone else sees it here instead of your River name. */
+/** A picture for this community only (1.0.25). */
+function CommunityAvatarField({ community }: { community: CommunityView }): ReactElement {
+  const s = useCommunity();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const set = (avatar: string | null): void =>
+    void s.run({ a: 'setCommunityAvatar', communityId: community.id, avatar }).then((r) => {
+      if (r !== null)
+        s.notify(avatar ? 'Picture set for this community.' : 'Back to your usual picture here.');
+    });
+  return (
+    <div className="community-avatar">
+      <span className="field__label">Picture in this community</span>
+      <div className="community-avatar__row">
+        {community.myCommunityAvatar ? (
+          <img className="community-avatar__img" src={community.myCommunityAvatar} alt="" />
+        ) : (
+          <span className="muted small">Your usual picture</span>
+        )}
+        <button type="button" className="btn btn--ghost btn--small" onClick={() => fileRef.current?.click()}>
+          Choose…
+        </button>
+        {community.myCommunityAvatar && (
+          <button type="button" className="btn btn--link btn--small" onClick={() => set(null)}>
+            Use my usual picture
+          </button>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (file)
+              void toAvatar(file).then(set, () => s.notify('River could not read that picture.', 'error'));
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function NicknameDialog({ community }: { community: CommunityView }): ReactElement {
   const s = useCommunity();
   const [nickname, setNickname] = useState(community.myNickname ?? '');
@@ -757,6 +801,7 @@ export function NicknameDialog({ community }: { community: CommunityView }): Rea
         <p className="muted small">
           Only members of this community see it. It is encrypted like the rest of your profile.
         </p>
+        <CommunityAvatarField community={community} />
         <div className="modal__foot">
           {community.myNickname && (
             <button type="button" className="btn btn--link" disabled={busy} onClick={() => void save(null)}>
