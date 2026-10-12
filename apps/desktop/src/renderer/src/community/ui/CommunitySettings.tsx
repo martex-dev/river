@@ -1,3 +1,4 @@
+import { InsightsPanel } from './Insights.tsx';
 import { StickerSettings } from './Stickers.tsx';
 import { AUDIT_GROUPS, auditText, filterAudit, type AuditFilter } from '../../../../shared/audit-filter.ts';
 import { OnboardingSettings } from './Onboarding.tsx';
@@ -48,6 +49,11 @@ export function CommunitySettings(props: {
     ['sounds', 'Soundboard', true],
     ['bans', 'Bans', can(perms, Permission.BAN_MEMBERS)],
     ['reports', 'Reports', can(perms, Permission.MANAGE_MESSAGES)],
+    [
+      'insights',
+      'Insights',
+      can(perms, Permission.MANAGE_COMMUNITY) || can(perms, Permission.VIEW_AUDIT_LOG),
+    ],
     ['audit', 'Audit log', can(perms, Permission.VIEW_AUDIT_LOG)],
   ];
   const visible = tabs.filter((t) => t[2]);
@@ -105,6 +111,7 @@ export function CommunitySettings(props: {
           {tab === 'sounds' && <SoundSettings community={community} />}
           {tab === 'bans' && <Bans community={community} />}
           {tab === 'reports' && <ReportsPanel community={community} />}
+          {tab === 'insights' && <InsightsPanel community={community} />}
           {tab === 'audit' && <AuditLog community={community} />}
         </section>
       </div>

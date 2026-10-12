@@ -125,6 +125,10 @@ export const settingsSchema = z.object({
     sensitivity: z.number().min(0).max(1).nullable(),
     /** Added in 1.0.22: how loud other people's soundboard sounds play, 0–1 (0 = off). */
     soundboardVolume: z.number().min(0).max(1),
+    /** Added in 1.0.26: leave a voice channel after this many minutes alone (0 = never). */
+    leaveAloneMinutes: z.number().int().min(0).max(240),
+    /** Added in 1.0.26: a soundboard sound played when you join voice, per community. */
+    entranceSounds: z.record(z.string().max(64), z.string().max(64)),
     /** Added in 1.0.22: shortcuts for voice actions ("" = none); see keybinds.ts. */
     keybinds: z
       .object({
@@ -217,6 +221,8 @@ export const DEFAULT_SETTINGS: Settings = {
     sensitivity: null,
     soundboardVolume: 0.6,
     keybinds: { ...DEFAULT_KEYBINDS },
+    leaveAloneMinutes: 0,
+    entranceSounds: {},
   },
   system: { startAtLogin: false, closeToTray: true },
   hosting: { enabled: false, keepAwake: true },

@@ -1,4 +1,4 @@
-import { effectiveNotify, shouldAlert, silenced } from '../shared/notify-rules.ts';
+import { effectiveNotify, isMuted, shouldAlert, silenced } from '../shared/notify-rules.ts';
 import { Notification, type BrowserWindow } from 'electron';
 import type { Settings } from '../shared/settings.ts';
 import type { CommunityService } from './community/community-service.ts';
@@ -37,6 +37,8 @@ export function startMessageNotifications(deps: {
     const prefs = deps.settings().notifications;
     if (!prefs.desktop) return;
     const m = event.message;
+    // A conversation you muted stays quiet (1.0.26).
+    if (isMuted(prefs, m.peer)) return;
     const title = prefs.preview === 'none' ? 'River' : event.senderName;
     const body =
       prefs.preview === 'full'

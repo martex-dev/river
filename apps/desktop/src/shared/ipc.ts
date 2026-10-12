@@ -227,6 +227,8 @@ export interface ChannelView {
   tags: string[];
   /** A stage: invited speakers talk, everyone else listens (1.0.22). */
   stage: boolean;
+  /** A media channel: shown as a gallery of pictures and videos (1.0.26). */
+  media?: boolean;
 }
 
 export interface CategoryView {

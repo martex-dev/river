@@ -1,3 +1,4 @@
+import { MediaGallery } from './MediaGallery.tsx';
 import { setFollowing } from '../thread-follow.ts';
 import { muteLength, parseSlash, slashText, suggestCommands, type ParsedSlash } from '../slash.ts';
 import { muteUntil, withOverride } from '../../../../shared/notify-rules.ts';
@@ -87,6 +88,8 @@ export function TextChannel(props: {
   );
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [dragging, setDragging] = useState(false);
+  // Media channels open as a gallery (1.0.26); the chat is one click away.
+  const [view, setView] = useState<'chat' | 'gallery'>(channel.media ? 'gallery' : 'chat');
   const canAttach = can(channel.permissions, Permission.ATTACH_FILES | Permission.SEND_MESSAGES);
   const addFiles = (files: Iterable<File>): void => {
     if (!canAttach) return s.notify('You cannot attach files in this channel.', 'error');
@@ -199,6 +202,16 @@ export function TextChannel(props: {
         <strong>{channel.name}</strong>
         {channel.topic && <span className="chat__topic">{channel.topic}</span>}
         <span className="chat__head-actions">
+          {channel.media && (
+            <button
+              className={`icon-btn ${view === 'gallery' ? 'is-on' : ''}`}
+              aria-label={view === 'gallery' ? 'Show as chat' : 'Show as gallery'}
+              title={view === 'gallery' ? 'Show as chat' : 'Show as gallery'}
+              onClick={() => setView(view === 'gallery' ? 'chat' : 'gallery')}
+            >
+              {view === 'gallery' ? '💬' : '🖼️'}
+            </button>
+          )}
           {can(community.permissions, Permission.CREATE_INVITE) && (
             <button
               className="icon-btn"
@@ -256,8 +269,16 @@ export function TextChannel(props: {
       {s.showSaved && <SavedPanel />}
       {s.showPins && <PinsPanel community={community} channel={channel} me={me} onJump={jumpTo} />}
       {s.showSearch && <SearchPanel community={community} onJump={jumpTo} />}
+      {view === 'gallery' && (
+        <MediaGallery
+          messages={messages}
+          more={messages.length >= 100 && !s.noMore[channel.id]}
+          onLoadOlder={() => void s.loadOlder(channel.id)}
+        />
+      )}
       <div
         className="chat__messages"
+        hidden={view === 'gallery'}
         ref={scrollRef}
         onMouseDown={() => {
           // On narrow windows the member list is an overlay: clicking the chat closes it.

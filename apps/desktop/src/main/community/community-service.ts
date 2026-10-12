@@ -62,6 +62,7 @@ import { describeAudit } from './audit-text.ts';
 import type { ServerLocator } from './server-locator.ts';
 import type { PresenceTracker } from '../presence.ts';
 import { readPoll, type Poll } from '../../shared/poll.ts';
+import { summarizeActivity } from '../../shared/insights.ts';
 import { hasCriteria, matchesSearch, parseSearch } from '../../shared/search-query.ts';
 import type {
   CategoryView,
@@ -709,8 +710,9 @@ export class CommunityService {
         let name = 'channel';
         let topic = '';
         let tags: string[] = [];
+        let media = false;
         try {
-          const opened = ring.open<{ name: string; topic?: string; tags?: unknown }>(
+          const opened = ring.open<{ name: string; topic?: string; tags?: unknown; media?: unknown }>(
             c.id,
             `channel:${ch.id}`,
             ch.name,
@@ -718,6 +720,7 @@ export class CommunityService {
           name = String(opened.name).slice(0, 64);
           topic = String(opened.topic ?? '').slice(0, 300);
           tags = readTags(opened.tags, 20);
+          media = opened.media === true;
         } catch {
           // keep placeholder for undecryptable names
         }
@@ -741,6 +744,7 @@ export class CommunityService {
           forum: ch.forum,
           tags,
           stage: ch.stage,
+          ...(media && ch.kind === 'text' ? { media: true } : {}),
         };
       })
       .sort((a, b) => a.position - b.position);
@@ -1415,7 +1419,11 @@ export class CommunityService {
           {
             id,
             kind: act.kind,
-            name: seal(key, act.communityId, `channel:${id}`, { name: act.name, topic: act.topic ?? '' }),
+            name: seal(key, act.communityId, `channel:${id}`, {
+              name: act.name,
+              topic: act.topic ?? '',
+              ...(act.media && act.kind === 'text' ? { media: true } : {}),
+            }),
             ...(overwrites ? { overwrites } : {}),
             ...(act.parentId ? { parentId: act.parentId } : {}),
             ...(act.forum && act.kind === 'text' ? { forum: true } : {}),
@@ -1429,12 +1437,19 @@ export class CommunityService {
         const communityId = this.communityOf(act.channelId);
         const current = this.requireCommunity(communityId).channels.find((c) => c.id === act.channelId);
         const body: Record<string, unknown> = {};
-        if (act.name !== undefined || act.topic !== undefined || act.tags !== undefined) {
+        if (
+          act.name !== undefined ||
+          act.topic !== undefined ||
+          act.tags !== undefined ||
+          act.media !== undefined
+        ) {
           const tags = act.tags ?? current?.tags ?? [];
+          const media = act.media ?? current?.media ?? false;
           body.name = seal(this.requireKey(communityId), communityId, `channel:${act.channelId}`, {
             name: act.name ?? current?.name ?? 'channel',
             topic: act.topic ?? current?.topic ?? '',
             ...(tags.length ? { tags } : {}),
+            ...(media ? { media: true } : {}),
           });
         }
         if (act.forum !== undefined) body.forum = act.forum;
@@ -1472,6 +1487,7 @@ export class CommunityService {
               name: act.name,
               topic: source.topic,
               ...(source.tags.length ? { tags: source.tags } : {}),
+              ...(source.media ? { media: true } : {}),
             }),
             ...(source.forum ? { forum: true } : {}),
             ...(source.stage ? { stage: true } : {}),
@@ -1995,6 +2011,28 @@ export class CommunityService {
       }
       case 'reports':
         return (await this.reports(act.communityId)) as CommunityActionResult<A>;
+      case 'activity': {
+        // Walk each text channel's history back to the start of the period (at most 10 pages each).
+        const community = this.requireCommunity(act.communityId);
+        const now = new Date();
+        const since = new Date(now.getTime() - act.days * 86_400_000).toISOString();
+        const seen: Array<{ channelId: string; sender: string; sentAt: string }> = [];
+        let partial = false;
+        for (const ch of community.channels.filter((c) => c.kind === 'text')) {
+          let before: string | undefined;
+          for (let page = 0; ; page++) {
+            const batch = await this.messages(ch.id, before).catch(() => []);
+            for (const m of batch) seen.push({ channelId: m.channelId, sender: m.sender, sentAt: m.sentAt });
+            if (batch.length < 100 || batch[0]!.sentAt < since) break;
+            if (page === 9) {
+              partial = true;
+              break;
+            }
+            before = batch[0]!.sentAt;
+          }
+        }
+        return summarizeActivity(seen, now, act.days, partial) as CommunityActionResult<A>;
+      }
       case 'sounds':
         return (await this.sounds(act.communityId)) as CommunityActionResult<A>;
       case 'stickers': {

@@ -1,3 +1,4 @@
+import { NotifyMenuSection } from '../community/ui/NotifyMenu.tsx';
 import { ForwardDialog } from '../community/ui/Forward.tsx';
 import { useDraft } from '../community/drafts.ts';
 import { clockTime } from '../time.ts';
@@ -489,6 +490,7 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           >
             Delete conversation
           </MenuItem>
+          <NotifyMenuSection id={c.riverId} kind="conversation" onDone={() => setMenu(null)} />
         </Popover>
       )}
       <DmCallPanel conversation={c} />

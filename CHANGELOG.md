@@ -6,6 +6,24 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Media channels:** turn a text channel into a gallery of the pictures
+  and videos shared there (channel settings → Media channel); the chat is
+  one click away.
+- **Entrance sounds:** pick a soundboard sound that plays when you join a
+  voice channel in that community (Community settings → Soundboard).
+- **Leave voice when you're alone** after 5, 15, 30 or 60 minutes
+  (Settings → Voice; off by default).
+- **Mute a conversation** for 15 minutes up to for good (⋯ in a direct
+  message or group): no sound and no desktop notification.
+- **Insights** (Community settings): members, who's online, new members per
+  week, roles, messages per day, busiest channels and most active people —
+  counted on your device, since the server cannot read messages.
+- **Check someone's access:** in a channel's permissions, pick a member to
+  see what they can and can't do there and exactly why — including changes
+  you have not saved yet.
+
 ## [1.0.25] - 2026-10-12
 
 **Little comforts: your GIFs, your picture, your shortcuts — and slash commands.**
