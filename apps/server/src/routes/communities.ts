@@ -1705,6 +1705,11 @@ export async function registerCommunityRoutes(
               return send({ t: 'error', code: 'forbidden' });
             hub.setState(event.target, { serverMuted: event.serverMuted });
           }
+          if (event.serverDeafened !== undefined) {
+            if (!model.can(self, Permission.MUTE_MEMBERS, channelId))
+              return send({ t: 'error', code: 'forbidden' });
+            hub.setState(event.target, { serverDeafened: event.serverDeafened });
+          }
           if (event.disconnect) {
             if (!model.can(self, Permission.MOVE_MEMBERS, channelId))
               return send({ t: 'error', code: 'forbidden' });

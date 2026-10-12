@@ -204,9 +204,13 @@ export class Hub {
     const room = this.voice.get(channelId);
     room?.members.delete(riverId);
     if (room && room.members.size === 0) this.voice.delete(channelId);
-    const serverMuted = this.states.get(riverId)?.serverMuted ?? false;
-    // Server mute sticks across reconnects within the server's lifetime; the rest resets.
-    this.states.set(riverId, { ...DEFAULT_STATE, serverMuted });
+    const { serverMuted = false, serverDeafened = false } = this.states.get(riverId) ?? {};
+    // Server mute and deafen stick across reconnects within the server's lifetime; the rest resets.
+    this.states.set(riverId, {
+      ...DEFAULT_STATE,
+      serverMuted,
+      ...(serverDeafened ? { serverDeafened } : {}),
+    });
     return room ? { channelId, communityId: room.communityId } : null;
   }
 

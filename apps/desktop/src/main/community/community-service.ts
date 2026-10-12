@@ -1705,6 +1705,7 @@ export class CommunityService {
           t: 'voice.moderate',
           target: act.riverId,
           ...(act.serverMuted !== undefined ? { serverMuted: act.serverMuted } : {}),
+          ...(act.serverDeafened !== undefined ? { serverDeafened: act.serverDeafened } : {}),
           ...(act.disconnect ? { disconnect: true } : {}),
         });
         break;

@@ -273,6 +273,7 @@ export interface VoiceStateView {
   muted: boolean;
   deafened: boolean;
   serverMuted: boolean;
+  serverDeafened?: boolean;
   streaming: boolean;
   /** Their connection dropped; River is holding their seat while they reconnect. */
   reconnecting?: boolean;

@@ -271,6 +271,20 @@ export function ProfileCard(props: {
                 {voiceState?.serverMuted ? 'Server unmute' : 'Server mute'}
               </button>
             )}
+            {voiceChannel && outranks && can(perms, Permission.MUTE_MEMBERS) && (
+              <button
+                className="btn btn--ghost btn--small"
+                onClick={() =>
+                  void s.run({
+                    a: 'moderateVoice',
+                    riverId: member.riverId,
+                    serverDeafened: !voiceState?.serverDeafened,
+                  })
+                }
+              >
+                {voiceState?.serverDeafened ? 'Server undeafen' : 'Server deafen'}
+              </button>
+            )}
             {voiceChannel && outranks && can(perms, Permission.MOVE_MEMBERS) && (
               <button
                 className="btn btn--ghost btn--small"

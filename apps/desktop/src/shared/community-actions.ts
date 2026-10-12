@@ -285,6 +285,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       a: z.literal('moderateVoice'),
       riverId,
       serverMuted: z.boolean().optional(),
+      serverDeafened: z.boolean().optional(),
       disconnect: z.boolean().optional(),
     })
     .strict(),

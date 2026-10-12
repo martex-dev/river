@@ -325,8 +325,11 @@ export function ChannelRow(props: {
                   <MicOffIcon size={13} />
                 </span>
               )}
-              {state?.deafened && (
-                <span className="voice-icon" title="Deafened">
+              {(state?.deafened || state?.serverDeafened) && (
+                <span
+                  className={`voice-icon ${state.serverDeafened ? 'voice-icon--server' : ''}`}
+                  title={state.serverDeafened ? 'Server deafened' : 'Deafened'}
+                >
                   <HeadphonesOffIcon size={13} />
                 </span>
               )}

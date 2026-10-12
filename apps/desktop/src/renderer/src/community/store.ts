@@ -337,6 +337,10 @@ export const useCommunity = create<CommunityState>((set, get) => ({
           if (joined.length) play('join');
           else if (left.length) play('leave');
           call.setServerMuted(event.states[me]?.serverMuted ?? false);
+          const deafenedNow = event.states[me]?.serverDeafened ?? false;
+          if (deafenedNow !== call.serverDeafened)
+            get().notify(deafenedNow ? 'A moderator deafened you.' : 'A moderator undeafened you.');
+          call.setServerDeafened(deafenedNow);
           call.updateParticipants(event.participants);
         }
         return;

@@ -103,7 +103,11 @@ export const PERMISSION_INFO: Array<{ key: PermissionName; label: string; help: 
   { key: 'CONNECT', label: 'Connect to voice', help: 'Join voice channels.' },
   { key: 'SPEAK', label: 'Speak', help: 'Talk in voice channels.' },
   { key: 'STREAM', label: 'Video & screen share', help: 'Turn on camera or share a screen in voice.' },
-  { key: 'MUTE_MEMBERS', label: 'Mute members', help: 'Server-mute others in voice.' },
+  {
+    key: 'MUTE_MEMBERS',
+    label: 'Mute & deafen members',
+    help: 'Server-mute or server-deafen others in voice.',
+  },
   {
     key: 'MOVE_MEMBERS',
     label: 'Move & disconnect members',

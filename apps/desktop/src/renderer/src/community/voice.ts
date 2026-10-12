@@ -149,6 +149,8 @@ export class VoiceCall {
   speaking = new Set<string>();
   deafened = false;
   serverMuted = false;
+  /** A moderator deafened us: we hear nothing and send nothing (1.0.20). */
+  serverDeafened = false;
   /** Push-to-talk key is held. */
   pttActive = false;
   private readonly peers = new Map<string, Peer>();
@@ -286,7 +288,13 @@ export class VoiceCall {
 
   /** Whether our microphone is actually transmitting right now. */
   get transmitting(): boolean {
-    return !this.muted && !this.deafened && !this.serverMuted && (!this.options.pushToTalk || this.pttActive);
+    return (
+      !this.muted &&
+      !this.deafened &&
+      !this.serverMuted &&
+      !this.serverDeafened &&
+      (!this.options.pushToTalk || this.pttActive)
+    );
   }
 
   get pushToTalk(): boolean {
@@ -376,6 +384,18 @@ export class VoiceCall {
     this.applyMic();
     this.broadcastState();
     this.onChange();
+  }
+
+  setServerDeafened(serverDeafened: boolean): void {
+    if (this.serverDeafened === serverDeafened) return;
+    this.serverDeafened = serverDeafened;
+    this.applyMic();
+    this.onChange();
+  }
+
+  /** Incoming sound is off: deafened by us or by a moderator. */
+  get hearingOff(): boolean {
+    return this.deafened || this.serverDeafened;
   }
 
   setServerMuted(serverMuted: boolean): void {
