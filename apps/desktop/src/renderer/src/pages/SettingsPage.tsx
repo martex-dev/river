@@ -363,7 +363,36 @@ function AccountPanel({
           your name.
         </p>
       </details>
+      <ExportData />
       <DeleteAccount />
+    </div>
+  );
+}
+
+/** Settings → Account → Export my data (1.0.23). */
+function ExportData(): ReactElement {
+  const [state, setState] = useState<'idle' | 'busy' | 'done' | string>('idle');
+  const run = async (): Promise<void> => {
+    setState('busy');
+    const res = await window.river.account.exportData();
+    if (!res.ok) setState(res.message);
+    else setState(res.value ? 'done' : 'idle');
+  };
+  return (
+    <div className="field export-data">
+      <div className="field__label">Your data</div>
+      <p className="muted small">
+        Save a readable copy (JSON) of what this device keeps: your profile, settings, contacts, direct
+        messages, groups, calls, your posts and saved messages. It never contains your keys. Keep it somewhere
+        safe — it is not encrypted.
+      </p>
+      <button className="btn btn--ghost btn--small" disabled={state === 'busy'} onClick={() => void run()}>
+        {state === 'busy' ? 'Preparing…' : 'Export my data'}
+      </button>
+      {state === 'done' && <span className="muted small"> Saved.</span>}
+      {state !== 'idle' && state !== 'busy' && state !== 'done' && (
+        <span className="field__error">{state}</span>
+      )}
     </div>
   );
 }
@@ -678,6 +707,12 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
           ))}
         </div>
       </fieldset>
+      <Toggle
+        label="Add previews to links I send"
+        hint="River fetches the page from your computer (the site sees your address) and adds its title and description to your encrypted message. People reading it never contact the site."
+        checked={settings.appearance.linkPreviews}
+        onChange={(linkPreviews) => void updateSettings({ appearance: { linkPreviews } })}
+      />
       <fieldset className="field">
         <legend className="field__label">Message density</legend>
         <div className="choice-grid">

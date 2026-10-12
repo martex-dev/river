@@ -6,6 +6,21 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Link previews, made privately** (Settings → Appearance, off by
+  default): when you send a link, your River fetches the page's title and
+  description and seals them into your message, so people reading it never
+  contact the site. River never fetches local or private network addresses.
+- **Moderator notes:** people who moderate members can keep private notes
+  on someone's profile card (encrypted; only moderators see them).
+- **Hear about reactions** to your messages (Settings → Notifications,
+  off by default).
+- **Forward direct messages** to a channel or another conversation.
+- **Export my data** (Settings → Account): save a readable copy of your
+  profile, settings, contacts, direct messages, groups, calls, posts and
+  saved messages. It never contains your keys.
+
 ## [1.0.22] - 2026-10-12
 
 **Bring the room to life: soundboard, forums, stages and your own shortcuts.**

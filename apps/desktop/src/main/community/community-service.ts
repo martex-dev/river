@@ -27,6 +27,7 @@ import {
   emojisResponseSchema,
   reportsResponseSchema,
   soundsResponseSchema,
+  notesResponseSchema,
   eventsResponseSchema,
   decodeRelayIn,
   encodeRelayOut,
@@ -42,7 +43,9 @@ import {
   type EventView,
   type EmojiView,
   type ReportView,
+  linkEmbedSchema,
   type SoundView,
+  type NoteView,
   SOUND_DATA_URL,
   type SavedMessageView,
   EMOJI_NAME,
@@ -59,6 +62,7 @@ import type {
   CategoryView,
   ChannelView,
   ChatMessage,
+  LinkEmbed,
   CommunityEvent,
   CommunityView,
   MemberView,
@@ -887,6 +891,7 @@ export class CommunityService {
         attachments?: unknown[];
         alts?: unknown;
         tags?: unknown;
+        embed?: unknown;
       }>(communityId, `message:${m.channelId}`, m.body);
       const body = opened.value;
       const key = opened.key;
@@ -943,6 +948,11 @@ export class CommunityService {
         ...((): { tags?: string[] } => {
           const tags = readTags(body.tags, 5);
           return tags.length ? { tags } : {};
+        })(),
+        ...((): { embed?: LinkEmbed } => {
+          const e = linkEmbedSchema.safeParse(body.embed);
+          // Only a preview of a link that is really in the message.
+          return e.success && text.includes(e.data.url) ? { embed: e.data } : {};
         })(),
         // A reply pings the person replied to, unless the sender turned that off.
         mentionsMe:
@@ -1243,6 +1253,7 @@ export class CommunityService {
     poll?: Poll,
     alts: Record<string, string> = {},
     post?: { title?: string; tags?: string[] },
+    embed?: LinkEmbed,
   ): Promise<ChatMessage> {
     const text = attachments.length ? z.string().max(4000).parse(rawText) : textSchema.parse(rawText);
     const communityId = this.communityOf(channelId);
@@ -1255,6 +1266,7 @@ export class CommunityService {
       ...(replyTo && noPing ? { noPing: true } : {}),
       ...(poll ? { poll } : {}),
       ...(post?.tags?.length ? { tags: post.tags } : {}),
+      ...(embed ? { embed } : {}),
       ...(attachments.length ? { attachments } : {}),
       // Kept beside the pointers (not in them) so older Rivers, which reject unknown pointer fields, still
       // show the attachments.
@@ -1660,6 +1672,7 @@ export class CommunityService {
           act.poll,
           act.alts,
           act.title || act.tags ? { title: act.title, tags: act.tags } : undefined,
+          act.embed,
         )) as CommunityActionResult<A>;
       case 'createThread': {
         const communityId = this.communityOf(act.channelId);
@@ -1833,6 +1846,53 @@ export class CommunityService {
         return (await this.reports(act.communityId)) as CommunityActionResult<A>;
       case 'sounds':
         return (await this.sounds(act.communityId)) as CommunityActionResult<A>;
+      case 'notes': {
+        const ring = this.keys.get(act.communityId);
+        if (!ring) throw new CommunityError('Waiting for the community key…');
+        const community = this.requireCommunity(act.communityId);
+        const res = await this.call(
+          `/communities/${act.communityId}/members/${act.riverId}/notes`,
+          'GET',
+          undefined,
+          notesResponseSchema,
+        ).catch(explain);
+        return res.notes.map((n): NoteView => {
+          let text: string;
+          try {
+            text = String(
+              ring.open<{ text?: unknown }>(act.communityId, `note:${n.id}`, n.data).text ?? '',
+            ).slice(0, 1000);
+          } catch {
+            text = '(cannot be read on this device)';
+          }
+          return {
+            id: n.id,
+            author: n.author,
+            authorName:
+              community.members.find((m) => m.riverId === n.author)?.name ??
+              this.knownNames.get(n.author) ??
+              'A former moderator',
+            text,
+            createdAt: n.createdAt,
+          };
+        }) as CommunityActionResult<A>;
+      }
+      case 'addNote': {
+        const noteId = randomId();
+        const data = seal(this.requireKey(act.communityId), act.communityId, `note:${noteId}`, {
+          text: act.text,
+        });
+        await this.call(
+          `/communities/${act.communityId}/members/${act.riverId}/notes`,
+          'POST',
+          { id: noteId, data },
+          z.unknown(),
+        ).catch(explain);
+        return noteId as CommunityActionResult<A>;
+      }
+      case 'deleteNote':
+        await this.call(`/notes/${act.noteId}`, 'DELETE', undefined, z.unknown()).catch(explain);
+        break;
       case 'addSound': {
         const soundId = randomId();
         const data = seal(this.requireKey(act.communityId), act.communityId, `sound:${soundId}`, {

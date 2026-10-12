@@ -1,6 +1,7 @@
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { CommunityView, MemberView } from '../../../../shared/ipc.ts';
+import type { NoteView } from '../../../../shared/community-actions.ts';
 import { useRiver } from '../../store.ts';
 import { friendState, sendFriendRequest } from '../../dm/friends.ts';
 import { useDm } from '../../dm/store.ts';
@@ -184,6 +185,12 @@ export function ProfileCard(props: {
             <p className="profile-card__bio">{member.bio}</p>
           </>
         )}
+        {member.riverId !== me &&
+          (can(perms, Permission.MODERATE_MEMBERS) ||
+            can(perms, Permission.KICK_MEMBERS) ||
+            can(perms, Permission.BAN_MEMBERS)) && (
+            <ModNotes community={community} riverId={member.riverId} />
+          )}
         <div className="profile-card__section">Roles</div>
         <div className="role-chips">
           {roles.map((r) => (
@@ -436,5 +443,61 @@ function TimeoutButton(props: {
         </span>
       )}
     </span>
+  );
+}
+
+/** Moderator notes on a profile card (1.0.23): only people who moderate members see them. */
+function ModNotes({ community, riverId }: { community: CommunityView; riverId: string }): ReactElement {
+  const s = useCommunity();
+  const [notes, setNotes] = useState<NoteView[] | null>(null);
+  const [text, setText] = useState('');
+  const load = (): void =>
+    void window.river.community
+      .action({ a: 'notes', communityId: community.id, riverId })
+      .then((r) => setNotes(r.ok ? r.value : []));
+  useEffect(load, [community.id, riverId]);
+  const add = async (): Promise<void> => {
+    if (!text.trim()) return;
+    const res = await s.run({ a: 'addNote', communityId: community.id, riverId, text: text.trim() });
+    if (res) {
+      setText('');
+      load();
+    }
+  };
+  return (
+    <div className="mod-notes">
+      <div className="profile-card__section">Moderator notes · only moderators see these</div>
+      {notes === null && <p className="muted small">Loading…</p>}
+      {notes?.map((n) => (
+        <div key={n.id} className="mod-notes__note">
+          <span className="mod-notes__text">{n.text}</span>
+          <span className="muted small">
+            {n.authorName} · {new Date(n.createdAt).toLocaleDateString()}
+            <button
+              className="btn btn--link btn--small"
+              aria-label="Remove note"
+              onClick={() => void s.run({ a: 'deleteNote', noteId: n.id }).then(load)}
+            >
+              Remove
+            </button>
+          </span>
+        </div>
+      ))}
+      <form
+        className="mod-notes__add"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void add();
+        }}
+      >
+        <input
+          value={text}
+          maxLength={1000}
+          placeholder="Add a note"
+          aria-label="Add a moderator note"
+          onChange={(e) => setText(e.target.value)}
+        />
+      </form>
+    </div>
   );
 }

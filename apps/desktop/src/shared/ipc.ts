@@ -45,6 +45,7 @@ export const IPC = {
   accountConnect: 'river:account:connect',
   accountSetUsername: 'river:account:set-username',
   accountDelete: 'river:account:delete',
+  accountExport: 'river:account:export',
   accountRedeemSignup: 'river:account:redeem-signup',
   usersLookup: 'river:users:lookup',
   accountStatusChanged: 'river:account:status-changed',
@@ -80,6 +81,7 @@ export const IPC = {
   attachmentSave: 'river:attachment:save',
   openLink: 'river:link:open',
   openUrl: 'river:link:open-url',
+  linkPreview: 'river:link:preview',
 } as const;
 
 /**
@@ -322,6 +324,14 @@ export interface ReactionView {
   users: string[];
 }
 
+/** A link preview made by the sender's app (1.0.23); readers never fetch anything. */
+export interface LinkEmbed {
+  url: string;
+  title: string;
+  description: string;
+  site: string;
+}
+
 export interface ChatMessage {
   id: string;
   communityId: string;
@@ -347,6 +357,8 @@ export interface ChatMessage {
   poll?: Poll | null;
   /** Forum post tags (1.0.22). */
   tags?: string[];
+  /** A link preview the sender added (1.0.23). */
+  embed?: LinkEmbed | null;
 }
 
 export interface ThreadView {
@@ -461,6 +473,8 @@ export interface RiverApi {
     redeemSignup(link: string): Promise<Result<AccountStatus>>;
     /** Delete your account from its server for good (1.0.18). */
     deleteAccount(): Promise<Result<null>>;
+    /** Save a readable copy of your data (1.0.23); false when the save dialog was cancelled. */
+    exportData(): Promise<Result<boolean>>;
     onStatus(listener: (status: AccountStatus) => void): () => void;
   };
   /** Find people by @username to add them. */
@@ -530,6 +544,8 @@ export interface RiverApi {
     open(id: ExternalLinkId): Promise<void>;
     /** A link from a message: main shows the real address and asks before opening it. */
     openUrl(url: string): Promise<boolean>;
+    /** A preview for a link you are about to send, if you turned link previews on (1.0.23). */
+    preview(url: string): Promise<LinkEmbed | null>;
   };
   diagnostics: {
     /** Server, relay and connection checks (the renderer adds network and microphone checks). */

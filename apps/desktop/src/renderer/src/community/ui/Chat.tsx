@@ -10,7 +10,7 @@ import { useRiver } from '../../store.ts';
 import { replaceCustomShortcodes, replaceShortcodes, searchEmoji, useEmojiIndex } from '../emoji-data.ts';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
-import type { ChannelView, ChatMessage, CommunityView } from '../../../../shared/ipc.ts';
+import type { ChannelView, ChatMessage, CommunityView, LinkEmbed } from '../../../../shared/ipc.ts';
 import { useShallow } from 'zustand/react/shallow';
 import { useOutbox, type Outgoing } from '../outbox.ts';
 import { useDraft } from '../drafts.ts';
@@ -533,6 +533,7 @@ function Message(props: {
             </div>
           )}
           {m.poll && <PollView message={m} me={props.me} canVote={canReact} />}
+          {m.embed && <LinkCard embed={m.embed} />}
           {m.attachments.length > 0 && <AttachmentList attachments={m.attachments} alts={m.alts} />}
           {m.thread && (
             <button className="thread-summary" onClick={() => void s.showThread(channel.id, m.id)}>
@@ -1034,6 +1035,14 @@ function Composer(props: {
     setText('');
     setUploading(null);
     useCommunity.setState({ replyTo: null });
+    // A link preview, only if you turned them on (made here, sealed in the message), within a moment.
+    const link = useRiver.getState().settings?.appearance.linkPreviews ? firstLink(value) : null;
+    const embed = link
+      ? await Promise.race([
+          window.river.links.preview(link).catch(() => null),
+          new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 3000)),
+        ])
+      : null;
     // Answering means you have caught up.
     if (useCommunity.getState().divider?.channelId === channel.id) useCommunity.setState({ divider: null });
     for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
@@ -1046,6 +1055,7 @@ function Composer(props: {
       ...(replyTo && !replyPing ? { noPing: true } : {}),
       ...(attachments ? { attachments } : {}),
       ...(alts ? { alts } : {}),
+      ...(embed ? { embed } : {}),
     });
   };
 
@@ -1486,6 +1496,26 @@ function SearchPanel(props: { community: CommunityView; onJump(id: string): void
           </span>
         </button>
       ))}
+    </div>
+  );
+}
+
+/** The first web link in a message, outside `code` (for a link preview). */
+export function firstLink(text: string): string | null {
+  const plain = text.replace(/```[\s\S]*?```/g, ' ').replace(/`[^`]*`/g, ' ');
+  const m = /https?:\/\/[^\s<>()]+[^\s<>().,!?:;'"]/.exec(plain);
+  return m ? m[0] : null;
+}
+
+/** A sender-made link preview (1.0.23): opening it asks first, like any link. */
+function LinkCard({ embed }: { embed: LinkEmbed }): ReactElement {
+  return (
+    <div className="link-card">
+      <span className="link-card__site muted small">{embed.site}</span>
+      <button className="link-card__title" onClick={() => void window.river.links.openUrl(embed.url)}>
+        {embed.title}
+      </button>
+      {embed.description && <span className="link-card__text small">{embed.description}</span>}
     </div>
   );
 }

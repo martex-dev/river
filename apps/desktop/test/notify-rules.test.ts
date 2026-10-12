@@ -4,6 +4,7 @@ import {
   effectiveNotify,
   inQuietHours,
   isMuted,
+  newReactions,
   muteUntil,
   shouldAlert,
   silenced,
@@ -80,5 +81,20 @@ describe('quiet hours', () => {
         at(12),
       ),
     ).toBe(true);
+  });
+});
+
+describe('new reactions', () => {
+  it('finds reactions others added, never your own', () => {
+    const prev = [{ emoji: '👍', users: ['a'] }];
+    const next = [
+      { emoji: '👍', users: ['a', 'b', 'me'] },
+      { emoji: '🔥', users: ['c'] },
+    ];
+    expect(newReactions(prev, next, 'me')).toEqual([
+      { emoji: '👍', user: 'b' },
+      { emoji: '🔥', user: 'c' },
+    ]);
+    expect(newReactions(next, prev, 'me')).toEqual([]);
   });
 });

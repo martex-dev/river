@@ -12,6 +12,18 @@ const id = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 const riverId = z.uuid();
 const name = z.string().trim().min(1).max(64);
 const soundName = z.string().trim().min(1).max(32);
+/** A link preview (1.0.23). */
+export const linkEmbedSchema = z
+  .object({
+    url: z
+      .string()
+      .max(2048)
+      .regex(/^https?:\/\//),
+    title: z.string().min(1).max(200),
+    description: z.string().max(300),
+    site: z.string().max(80),
+  })
+  .strict();
 /** A forum tag (1.0.22). */
 const forumTag = z.string().trim().min(1).max(24);
 export const MAX_FORUM_TAGS = 20;
@@ -266,6 +278,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       attachments: z.array(attachmentPointerSchema).max(10).optional(),
       /** Descriptions of attached pictures, by attachment ID (1.0.21). */
       alts: z.record(id, z.string().trim().max(1000)).optional(),
+      /** A link preview made on this device (1.0.23). */
+      embed: linkEmbedSchema.optional(),
       /** Start a forum post with this title (1.0.22). */
       title: z.string().trim().min(1).max(100).optional(),
       /** Forum post tags (1.0.22). */
@@ -413,6 +427,12 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('reports'), communityId: id }).strict(),
+  // Moderator notes (1.0.23): sealed with the community key, listed only to moderators.
+  z.object({ a: z.literal('notes'), communityId: id, riverId }).strict(),
+  z
+    .object({ a: z.literal('addNote'), communityId: id, riverId, text: z.string().trim().min(1).max(1000) })
+    .strict(),
+  z.object({ a: z.literal('deleteNote'), noteId: id }).strict(),
   // Soundboard (1.0.22): name, emoji and clip sealed with the community key.
   z.object({ a: z.literal('sounds'), communityId: id }).strict(),
   z
@@ -482,6 +502,14 @@ export const REPORT_REASONS = [
   'Something else',
 ];
 
+export interface NoteView {
+  id: string;
+  author: string;
+  authorName: string;
+  text: string;
+  createdAt: string;
+}
+
 export interface SoundView {
   id: string;
   name: string;
@@ -524,6 +552,8 @@ export interface BanView {
 
 interface Results {
   createRole: string;
+  notes: NoteView[];
+  addNote: string;
   sounds: SoundView[];
   addSound: string;
   report: string;

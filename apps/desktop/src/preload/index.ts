@@ -69,6 +69,7 @@ const api: RiverApi = {
     setUsername: (username) => ipcRenderer.invoke(IPC.accountSetUsername, username),
     redeemSignup: (link) => ipcRenderer.invoke(IPC.accountRedeemSignup, link),
     deleteAccount: () => ipcRenderer.invoke(IPC.accountDelete),
+    exportData: () => ipcRenderer.invoke(IPC.accountExport),
     onStatus: (listener) => {
       const handler = (_event: unknown, status: AccountStatus): void => listener(status);
       ipcRenderer.on(IPC.accountStatusChanged, handler);
@@ -156,6 +157,7 @@ const api: RiverApi = {
   links: {
     open: (id) => ipcRenderer.invoke(IPC.openLink, id),
     openUrl: (url) => ipcRenderer.invoke(IPC.openUrl, url),
+    preview: (url) => ipcRenderer.invoke(IPC.linkPreview, url),
   },
   diagnostics: {
     run: () => ipcRenderer.invoke(IPC.diagnosticsRun),

@@ -39,6 +39,7 @@ describe('message links', () => {
 
 describe('forwarding', () => {
   it('marks where a forwarded message came from', () => {
+    expect(forwardedText('psst', { name: 'Bo', channel: '' })).toBe('-# ↪ Forwarded from Bo\npsst');
     expect(forwardedText('hi there', { name: 'Ana', channel: 'general' })).toBe(
       '-# ↪ Forwarded from Ana in #general\nhi there',
     );

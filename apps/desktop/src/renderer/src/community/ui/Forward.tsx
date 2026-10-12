@@ -15,7 +15,9 @@ interface Destination {
 
 /** The forwarded text: a small "forwarded" line, then the original (1.0.17). */
 export function forwardedText(text: string, from: { name: string; channel: string }): string {
-  return `-# ↪ Forwarded from ${from.name} in #${from.channel}\n${text}`;
+  // From a direct message there is no channel to name.
+  const where = from.channel ? ` in #${from.channel}` : '';
+  return `-# ↪ Forwarded from ${from.name}${where}\n${text}`;
 }
 
 /**

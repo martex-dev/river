@@ -269,7 +269,17 @@ export interface CommunitySoundsTable {
   created_at: string;
 }
 
+export interface MemberNotesTable {
+  id: string;
+  community_id: string;
+  target: string;
+  author: string;
+  data: string;
+  created_at: string;
+}
+
 export interface Database {
+  member_notes: MemberNotesTable;
   community_sounds: CommunitySoundsTable;
   community_reports: CommunityReportsTable;
   community_emojis: CommunityEmojisTable;

@@ -31,6 +31,8 @@ import {
   createEventRequestSchema,
   transferOwnershipRequestSchema,
   createReportRequestSchema,
+  createNoteRequestSchema,
+  MAX_NOTES_PER_MEMBER,
   createSoundRequestSchema,
   updateSoundRequestSchema,
   MAX_COMMUNITY_SOUNDS,
@@ -752,6 +754,79 @@ export async function registerCommunityRoutes(
     await db.updateTable('community_emojis').set({ data: req.data }).where('id', '=', id).execute();
     await audit(model.id, me(request), 'emoji.update', id);
     emojisChanged(model);
+    return { ok: true };
+  });
+
+  // ---- moderator notes (1.0.23) ----------------------------------------------------------------
+  /** Notes are for people who may moderate members (time out, kick or ban). */
+  const mayNote = (model: CommunityModel, riverId: string): boolean =>
+    model.can(riverId, Permission.MODERATE_MEMBERS) ||
+    model.can(riverId, Permission.KICK_MEMBERS) ||
+    model.can(riverId, Permission.BAN_MEMBERS);
+
+  app.get<{ Params: { id: string; member: string } }>(
+    `${API_PREFIX}/communities/:id/members/:member/notes`,
+    authed,
+    async (request) => {
+      const model = await community(request.params.id, me(request));
+      if (!mayNote(model, me(request))) throw forbidden();
+      const target = parse(riverIdSchema, request.params.member);
+      const rows = await db
+        .selectFrom('member_notes')
+        .selectAll()
+        .where('community_id', '=', model.id)
+        .where('target', '=', target)
+        .orderBy('created_at')
+        .execute();
+      return {
+        notes: rows.map((r) => ({ id: r.id, author: r.author, data: r.data, createdAt: r.created_at })),
+      };
+    },
+  );
+
+  app.post<{ Params: { id: string; member: string } }>(
+    `${API_PREFIX}/communities/:id/members/:member/notes`,
+    authed,
+    async (request, reply) => {
+      const model = await community(request.params.id, me(request));
+      if (!mayNote(model, me(request))) throw forbidden();
+      const target = parse(riverIdSchema, request.params.member);
+      const req = parse(createNoteRequestSchema, request.body);
+      const count = await db
+        .selectFrom('member_notes')
+        .select(db.fn.countAll<number>().as('n'))
+        .where('community_id', '=', model.id)
+        .where('target', '=', target)
+        .executeTakeFirstOrThrow();
+      if (Number(count.n) >= MAX_NOTES_PER_MEMBER) throw bad('That member has too many notes');
+      try {
+        await db
+          .insertInto('member_notes')
+          .values({
+            id: req.id,
+            community_id: model.id,
+            target,
+            author: me(request),
+            data: req.data,
+            created_at: deps.now().toISOString(),
+          })
+          .execute();
+      } catch {
+        throw new HttpError(409, 'conflict', 'Note ID already exists');
+      }
+      await audit(model.id, me(request), 'note.create', target);
+      return reply.code(201).send({ id: req.id });
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(`${API_PREFIX}/notes/:id`, authed, async (request) => {
+    const id = parse(channelIdSchema, request.params.id);
+    const row = await db.selectFrom('member_notes').selectAll().where('id', '=', id).executeTakeFirst();
+    if (!row) throw notFound();
+    const model = await community(row.community_id, me(request));
+    if (!mayNote(model, me(request))) throw forbidden();
+    await db.deleteFrom('member_notes').where('id', '=', id).execute();
+    await audit(model.id, me(request), 'note.delete', row.target);
     return { ok: true };
   });
 

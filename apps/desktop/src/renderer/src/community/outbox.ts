@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { AttachmentPointer, SavedOutgoing } from '../../../shared/community-actions.ts';
-import type { ChatMessage, Result } from '../../../shared/ipc.ts';
+import type { ChatMessage, LinkEmbed, Result } from '../../../shared/ipc.ts';
 import { play } from './sound.ts';
 import { useCommunity } from './store.ts';
 
@@ -19,6 +19,8 @@ export interface Outgoing {
   attachments?: AttachmentPointer[];
   /** Picture descriptions by attachment ID (not kept if River closes before the message is sent). */
   alts?: Record<string, string>;
+  /** A link preview (not kept if River closes before the message is sent). */
+  embed?: LinkEmbed;
   /** A reply inside this thread. */
   threadId?: string;
   status: 'waiting' | 'sending' | 'failed';
@@ -76,6 +78,7 @@ export const useOutbox = create<OutboxState>((set, get) => {
       ...(item.replyTo && item.noPing ? { noPing: true } : {}),
       ...(item.attachments ? { attachments: item.attachments } : {}),
       ...(item.alts && Object.keys(item.alts).length ? { alts: item.alts } : {}),
+      ...(item.embed ? { embed: item.embed } : {}),
       ...(item.threadId ? { threadId: item.threadId } : {}),
     })) as Result<ChatMessage>;
     if (res.ok) {

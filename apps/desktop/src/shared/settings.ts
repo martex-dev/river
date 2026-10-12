@@ -62,6 +62,8 @@ export const settingsSchema = z.object({
     clock: z.enum(['system', '12h', '24h']),
     /** Stronger text and borders; 'system' follows the OS high-contrast preference. */
     contrast: z.enum(['system', 'normal', 'high']),
+    /** Added in 1.0.23: add previews to links you send (River fetches the page from your computer). */
+    linkPreviews: z.boolean(),
   }),
   notifications: z.object({
     /** Default 'none': notifications say "New River message" with no sender or content. */
@@ -91,6 +93,8 @@ export const settingsSchema = z.object({
         })
         .strict(),
     ),
+    /** Added in 1.0.23: tell me when someone reacts to my message (sound and a small notice). */
+    reactions: z.boolean(),
     /** Added in 1.0.20: no notifications or sounds between these local times (like Do Not Disturb). */
     quietHours: z
       .object({
@@ -188,6 +192,7 @@ export const DEFAULT_SETTINGS: Settings = {
     fontSize: 14,
     clock: 'system',
     contrast: 'system',
+    linkPreviews: false,
   },
   notifications: {
     preview: 'none',
@@ -198,6 +203,7 @@ export const DEFAULT_SETTINGS: Settings = {
     soundGroups: { messages: true, voice: true, calls: true, social: true, interface: true },
     overrides: {},
     quietHours: { enabled: false, start: '22:00', end: '08:00' },
+    reactions: false,
   },
   server: { url: null, autoAccount: true },
   voice: {
