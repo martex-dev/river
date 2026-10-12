@@ -106,9 +106,37 @@ Each line is one PR; each version ships when its section is done.
 
 ### 1.0.17 — Calls everywhere
 
-- [ ] Relay for 1:1 direct-message calls (today: direct only)
-- [ ] Connection details per person (direct / relayed, ping, packet loss) in the voice panel
+- [x] Relay for 1:1 direct-message calls (private call rooms, 1.0.16)
+- [x] Connection details per person (direct / relayed, ping, packet loss) in the voice panel (1.0.19)
 - [ ] Fresh-install walkthrough on a clean Windows VM (needs a VM or a second PC)
+
+### 1.0.17 – 1.0.21 — Parity, shipped
+
+- [x] Presence and custom status, Markdown, every emoji, message links, quote/forward (1.0.17)
+- [x] Events, polls, mutes, folders, richer profiles, account deletion, appearance (1.0.18)
+- [x] Custom emoji, saved messages, ownership transfer, connection bars (1.0.19)
+- [x] Back/forward, search filters, jump to date, quiet hours, drafts, duplicates, emoji rename/favourites, server deafen, input sensitivity (1.0.20)
+- [x] Reports, ban cleanup, role icons, alt text, cancel upload, member since (1.0.21)
+
+### 1.0.22 — Voice and community spaces (PR open)
+
+- [x] Soundboard, forum channels, stage channels, temporary bans, keybind editor; e2e for forums/stages/soundboard
+
+### 1.0.23 — Your data and safer links (in progress)
+
+- [x] Export my data (local, readable JSON, never keys)
+- [x] Sender-made link previews (opt-in, public addresses only)
+- [x] Moderator notes
+- [ ] Reaction notifications (opt-in), DM pins and forward from DMs
+
+### 1.0.24 – 1.0.40 — Remaining parity (see docs/product/parity-status.md)
+
+- [ ] Onboarding questions and rules screening; self-assignable roles
+- [ ] Bots, slash commands and webhooks with an end-to-end-encrypted model (design first)
+- [ ] Localization framework and a first translation
+- [ ] Group DM icon, mutual friends, per-community avatar, animated avatars
+- [ ] Audit log filters and export; bulk message delete
+- [ ] Image crop for avatars; PDF preview; stream quality settings
 
 ### Later
 
