@@ -232,7 +232,12 @@ export class CommunityService {
   private activeVoice: string | null = null;
   /** The private call room of a 1:1 call in progress (lets the server relay its voice). */
   private activeRoom: string | null = null;
-  private lastVoiceState: { muted: boolean; deafened: boolean; streaming: boolean } | null = null;
+  private lastVoiceState: {
+    muted: boolean;
+    deafened: boolean;
+    streaming: boolean;
+    handRaised?: boolean;
+  } | null = null;
   /** Call setup produced while the connection was down; sent once it is back. */
   private pendingSignals: Array<{ event: unknown; at: number }> = [];
   private heartbeat: NodeJS.Timeout | null = null;
@@ -714,6 +719,7 @@ export class CommunityService {
           userLimit: ch.userLimit,
           forum: ch.forum,
           tags,
+          stage: ch.stage,
         };
       })
       .sort((a, b) => a.position - b.position);
@@ -1328,6 +1334,7 @@ export class CommunityService {
             ...(overwrites ? { overwrites } : {}),
             ...(act.parentId ? { parentId: act.parentId } : {}),
             ...(act.forum && act.kind === 'text' ? { forum: true } : {}),
+            ...(act.stage && act.kind === 'voice' ? { stage: true } : {}),
           },
           z.unknown(),
         );
@@ -1346,6 +1353,7 @@ export class CommunityService {
           });
         }
         if (act.forum !== undefined) body.forum = act.forum;
+        if (act.stage !== undefined) body.stage = act.stage;
         if (act.overwrites) body.overwrites = act.overwrites;
         if (act.synced !== undefined) body.synced = act.synced;
         if (act.announcement !== undefined) body.announcement = act.announcement;
@@ -1373,6 +1381,7 @@ export class CommunityService {
               ...(source.tags.length ? { tags: source.tags } : {}),
             }),
             ...(source.forum ? { forum: true } : {}),
+            ...(source.stage ? { stage: true } : {}),
             ...(source.synced ? {} : { overwrites: source.overwrites }),
             ...(source.parentId ? { parentId: source.parentId } : {}),
           },
@@ -1779,7 +1788,12 @@ export class CommunityService {
         this.trySend({ t: 'typing', channelId: act.channelId });
         break;
       case 'voiceState':
-        this.lastVoiceState = { muted: act.muted, deafened: act.deafened, streaming: act.streaming };
+        this.lastVoiceState = {
+          muted: act.muted,
+          deafened: act.deafened,
+          streaming: act.streaming,
+          ...(act.handRaised !== undefined ? { handRaised: act.handRaised } : {}),
+        };
         this.trySend({ t: 'voice.state', ...this.lastVoiceState });
         break;
       case 'moderateVoice':
@@ -1788,6 +1802,7 @@ export class CommunityService {
           target: act.riverId,
           ...(act.serverMuted !== undefined ? { serverMuted: act.serverMuted } : {}),
           ...(act.serverDeafened !== undefined ? { serverDeafened: act.serverDeafened } : {}),
+          ...(act.speaker !== undefined ? { speaker: act.speaker } : {}),
           ...(act.disconnect ? { disconnect: true } : {}),
         });
         break;

@@ -41,6 +41,8 @@ export class Hub {
   private readonly voiceOf = new Map<string, string>();
   private readonly states = new Map<string, VoiceState>();
   private readonly lastSound = new Map<string, number>();
+  /** Muted because they are in a stage's audience (not by a moderator), 1.0.22. */
+  readonly stageMuted = new Set<string>();
   /** Chosen presence per account (in memory; apps send it again when they connect). */
   private readonly chosen = new Map<string, ChosenStatus>();
 

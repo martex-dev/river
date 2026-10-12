@@ -63,6 +63,8 @@ interface CommunityState {
   callError: string | null;
   selfMuted: boolean;
   selfDeafened: boolean;
+  /** On a stage: asking to speak (1.0.22). */
+  handRaised: boolean;
   modal: Modal | null;
   toast: { text: string; tone: 'info' | 'error' } | null;
   replyTo: ChatMessage | null;
@@ -163,6 +165,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   callError: null,
   selfMuted: false,
   selfDeafened: false,
+  handRaised: false,
   modal: null,
   toast: null,
   replyTo: null,
@@ -364,7 +367,16 @@ export const useCommunity = create<CommunityState>((set, get) => ({
           const left = before.filter((id) => !event.participants.includes(id) && id !== me);
           if (joined.length) play('join');
           else if (left.length) play('leave');
+          const wasMuted = call.serverMuted;
           call.setServerMuted(event.states[me]?.serverMuted ?? false);
+          // Invited onto a stage (or moved back): the raised hand is done.
+          if (wasMuted !== call.serverMuted && get().handRaised) set({ handRaised: false });
+          if (
+            wasMuted &&
+            !call.serverMuted &&
+            get().communities.some((c) => c.channels.some((ch) => ch.id === event.channelId && ch.stage))
+          )
+            get().notify('You can speak now.');
           const deafenedNow = event.states[me]?.serverDeafened ?? false;
           if (deafenedNow !== call.serverDeafened)
             get().notify(deafenedNow ? 'A moderator deafened you.' : 'A moderator undeafened you.');
@@ -612,7 +624,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
 
   leaveVoice: async () => {
     const call = get().call;
-    set({ call: null });
+    set({ call: null, handRaised: false });
     if (call) play('selfLeave');
     await call?.leave();
   },
@@ -659,13 +671,14 @@ export const useCommunity = create<CommunityState>((set, get) => ({
 
 /** Tells the server our mute/deafen/streaming state so others see it. */
 export function sendVoiceState(): void {
-  const { call, selfMuted, selfDeafened } = useCommunity.getState();
+  const { call, selfMuted, selfDeafened, handRaised } = useCommunity.getState();
   if (!call) return;
   void window.river.community.action({
     a: 'voiceState',
     muted: selfMuted || (call.pushToTalk && !call.pttActive),
     deafened: selfDeafened,
     streaming: !!call.localTrack('screen'),
+    handRaised,
   });
 }
 

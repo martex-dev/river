@@ -4785,3 +4785,70 @@ input.switch:disabled {
   border-radius: 6px;
   padding: 4px 8px;
 }
+
+/* Stages (1.0.22) */
+.stage {
+  margin: 10px 16px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stage__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.stage__live {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #da373c;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+.stage__hands,
+.stage__audience,
+.stage__speakers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.stage__hand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(240, 178, 50, 0.12);
+}
+.stage__listener {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+.stage__listener-name {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stage__raised {
+  position: absolute;
+  left: 18px;
+  top: -6px;
+  font-size: 12px;
+}
+.stage__speaker {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}

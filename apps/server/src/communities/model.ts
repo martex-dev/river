@@ -26,6 +26,7 @@ export interface ChannelModel {
   slowmode: number;
   userLimit: number;
   forum: boolean;
+  stage: boolean;
 }
 
 export interface CategoryModel {
@@ -176,6 +177,7 @@ export class CommunityModel {
         slowmode: c.slowmode,
         userLimit: c.userLimit,
         forum: c.forum,
+        stage: c.stage,
       })),
       // A category whose channels are all hidden from you stays hidden too.
       categories: this.categories.filter(
@@ -278,6 +280,7 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
         slowmode: ch.slowmode,
         userLimit: ch.user_limit,
         forum: ch.forum === 1,
+        stage: ch.stage === 1,
       };
     }),
     categories: categoryModels,

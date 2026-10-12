@@ -1123,6 +1123,81 @@ describe('communities', () => {
       for (const c of [boss, other]) c.ws.close();
     }, 15_000);
 
+    it('stages: the audience joins muted, raises hands, and moderators invite them to speak', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, voice } = await createCommunity(a, owner.token);
+      const guest = await join(a, owner.token, cid);
+      expect(await status(a, 'PATCH', `/v1/channels/${voice}`, owner.token, { stage: true })).toBe(200);
+      await a.listen({ host: '127.0.0.1', port: 0 });
+      const { port } = a.server.address() as { port: number };
+      type St = { serverMuted?: boolean; handRaised?: boolean };
+      type Ev = { t: string; code?: string; channelId?: string; states?: Record<string, St> };
+      const connect = async (token: string) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/ws`);
+        const events: Ev[] = [];
+        ws.onmessage = (m) => events.push(JSON.parse(String(m.data)));
+        await new Promise((resolve, reject) => {
+          ws.onopen = resolve;
+          ws.onerror = reject;
+        });
+        ws.send(JSON.stringify({ t: 'auth', token }));
+        await vi.waitFor(() => expect(events.some((e) => e.t === 'ready')).toBe(true));
+        return { ws, events };
+      };
+      const stateOf = (events: Ev[], id: string) =>
+        events.filter((e) => e.t === 'voice' && e.channelId === voice).at(-1)?.states?.[id];
+      const boss = await connect(owner.token);
+      const other = await connect(guest.token);
+      boss.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      other.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      await vi.waitFor(() => expect(stateOf(boss.events, guest.riverId)?.serverMuted).toBe(true));
+      expect(stateOf(boss.events, owner.riverId)?.serverMuted).toBe(false);
+      const hand = (up: boolean) =>
+        other.ws.send(
+          JSON.stringify({
+            t: 'voice.state',
+            muted: false,
+            deafened: false,
+            streaming: false,
+            handRaised: up,
+          }),
+        );
+      hand(true);
+      await vi.waitFor(() => expect(stateOf(boss.events, guest.riverId)?.handRaised).toBe(true));
+      // Members cannot invite themselves.
+      other.ws.send(JSON.stringify({ t: 'voice.moderate', target: guest.riverId, speaker: true }));
+      await vi.waitFor(() => expect(other.events).toContainEqual({ t: 'error', code: 'forbidden' }));
+      boss.ws.send(JSON.stringify({ t: 'voice.moderate', target: guest.riverId, speaker: true }));
+      await vi.waitFor(() =>
+        expect(stateOf(other.events, guest.riverId)).toMatchObject({ serverMuted: false, handRaised: false }),
+      );
+      // Speakers cannot raise a hand; back to the audience.
+      hand(true);
+      boss.ws.send(JSON.stringify({ t: 'voice.moderate', target: guest.riverId, speaker: false }));
+      await vi.waitFor(() =>
+        expect(stateOf(boss.events, guest.riverId)).toMatchObject({ serverMuted: true, handRaised: false }),
+      );
+      // Leaving the stage for a normal voice channel lifts the audience mute.
+      const lounge = id();
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/channels`, owner.token, {
+          id: lounge,
+          kind: 'voice',
+          name: sealed(),
+        }),
+      ).toBe(201);
+      other.ws.send(JSON.stringify({ t: 'voice.join', channelId: lounge }));
+      await vi.waitFor(() =>
+        expect(
+          other.events.filter((e) => e.t === 'voice' && e.channelId === lounge).at(-1)?.states?.[
+            guest.riverId
+          ]?.serverMuted,
+        ).toBe(false),
+      );
+      for (const c of [boss, other]) c.ws.close();
+    });
+
     it('server mute and deafen need Mute members, follow the hierarchy, and stick through a rejoin', async () => {
       const a = await start();
       const owner = await user(a);

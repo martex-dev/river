@@ -17,6 +17,10 @@ All notable changes to River are documented here. The format follows
 - **Forum channels:** posts with a title, tags and their own replies, shown
   as a list you can search, filter by tag and sort. Create one from Create
   channel, or turn a text channel into a forum in its settings.
+- **Stage channels** for talks and events: people join as listeners, raise
+  a hand to ask to speak, and moderators invite speakers up or move them
+  back to the audience. Create one from Create channel, or turn a voice
+  channel into a stage in its settings.
 - **Change your voice shortcuts** (Settings → Voice → Keyboard shortcuts):
   mute, deafen, camera and leave voice, with clash warnings.
 

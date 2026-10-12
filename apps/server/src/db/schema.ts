@@ -76,6 +76,7 @@ export interface ChannelsTable {
   synced: Generated<number>;
   announcement: Generated<number>;
   forum: Generated<number>;
+  stage: Generated<number>;
   slowmode: Generated<number>;
   user_limit: Generated<number>;
 }

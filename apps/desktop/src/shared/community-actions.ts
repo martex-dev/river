@@ -117,6 +117,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       parentId: id.nullable().optional(),
       /** A forum channel (1.0.22). */
       forum: z.boolean().optional(),
+      /** A stage channel (1.0.22). */
+      stage: z.boolean().optional(),
     })
     .strict(),
   z
@@ -132,6 +134,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       slowmode: z.number().int().min(0).max(21_600).optional(),
       userLimit: z.number().int().min(0).max(99).optional(),
       forum: z.boolean().optional(),
+      stage: z.boolean().optional(),
       tags: z.array(forumTag).max(MAX_FORUM_TAGS).optional(),
     })
     .strict(),
@@ -314,7 +317,13 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     .strict(),
   z.object({ a: z.literal('typing'), channelId: id }).strict(),
   z
-    .object({ a: z.literal('voiceState'), muted: z.boolean(), deafened: z.boolean(), streaming: z.boolean() })
+    .object({
+      a: z.literal('voiceState'),
+      muted: z.boolean(),
+      deafened: z.boolean(),
+      streaming: z.boolean(),
+      handRaised: z.boolean().optional(),
+    })
     .strict(),
   z
     .object({
@@ -322,6 +331,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       riverId,
       serverMuted: z.boolean().optional(),
       serverDeafened: z.boolean().optional(),
+      speaker: z.boolean().optional(),
       disconnect: z.boolean().optional(),
     })
     .strict(),

@@ -398,6 +398,7 @@ export async function registerCommunityRoutes(
               parent_id: parentId,
               synced: parentId && !req.overwrites?.length ? 1 : 0,
               forum: req.forum && req.kind === 'text' ? 1 : 0,
+              stage: req.stage && req.kind === 'voice' ? 1 : 0,
             })
             .execute();
           for (const o of req.overwrites ?? []) {
@@ -447,7 +448,8 @@ export async function registerCommunityRoutes(
         req.announcement !== undefined ||
         req.slowmode !== undefined ||
         req.userLimit !== undefined ||
-        req.forum !== undefined
+        req.forum !== undefined ||
+        req.stage !== undefined
       ) {
         await trx
           .updateTable('channels')
@@ -459,6 +461,7 @@ export async function registerCommunityRoutes(
             ...(req.slowmode !== undefined ? { slowmode: req.slowmode } : {}),
             ...(req.userLimit !== undefined ? { user_limit: req.userLimit } : {}),
             ...(req.forum !== undefined ? { forum: req.forum ? 1 : 0 } : {}),
+            ...(req.stage !== undefined ? { stage: req.stage ? 1 : 0 } : {}),
           })
           .where('id', '=', channelId)
           .execute();
@@ -484,6 +487,7 @@ export async function registerCommunityRoutes(
       ...(req.slowmode !== undefined ? { slowmode: req.slowmode } : {}),
       ...(req.userLimit !== undefined ? { userLimit: req.userLimit } : {}),
       ...(req.forum !== undefined ? { forum: req.forum } : {}),
+      ...(req.stage !== undefined ? { stage: req.stage } : {}),
     });
     changed(model);
     return { ok: true };
@@ -1966,7 +1970,18 @@ export async function registerCommunityRoutes(
           ) {
             return send({ t: 'error', code: 'voice_full' });
           }
+          const rejoin = hub.voiceChannelOf(self) === ch.id;
           const { left } = hub.joinVoice(self, model.id, ch.id);
+          // Stages: the audience listens. Moderators (who may mute members) speak; others raise a hand.
+          if (!rejoin) {
+            const moderator = model.can(self, Permission.MUTE_MEMBERS, ch.id);
+            if (ch.stage && !moderator) {
+              if (!hub.stateOf(self).serverMuted) hub.stageMuted.add(self);
+              hub.setState(self, { serverMuted: true, handRaised: false });
+            } else if (hub.stageMuted.delete(self)) {
+              hub.setState(self, { serverMuted: false, handRaised: false });
+            }
+          }
           if (left) await voiceUpdate(left.communityId, left.channelId);
           await voiceUpdate(model.id, ch.id);
           return;
@@ -1981,6 +1996,12 @@ export async function registerCommunityRoutes(
           if (!channelId) return;
           hub.setState(self, { muted: event.muted, deafened: event.deafened, streaming: event.streaming });
           const cid = await communityOfChannel(db, channelId);
+          if (event.handRaised !== undefined && cid) {
+            // Hands are only for the audience of a stage.
+            const model = await loadCommunity(db, cid);
+            const onStage = !!model?.channel(channelId)?.stage;
+            hub.setState(self, { handRaised: onStage && hub.stateOf(self).serverMuted && event.handRaised });
+          }
           if (cid) await voiceUpdate(cid, channelId);
           return;
         }
@@ -1999,6 +2020,13 @@ export async function registerCommunityRoutes(
             if (!model.can(self, Permission.MUTE_MEMBERS, channelId))
               return send({ t: 'error', code: 'forbidden' });
             hub.setState(event.target, { serverDeafened: event.serverDeafened });
+          }
+          if (event.speaker !== undefined) {
+            if (!model.channel(channelId)?.stage || !model.can(self, Permission.MUTE_MEMBERS, channelId))
+              return send({ t: 'error', code: 'forbidden' });
+            hub.setState(event.target, { serverMuted: !event.speaker, handRaised: false });
+            if (event.speaker) hub.stageMuted.delete(event.target);
+            else hub.stageMuted.add(event.target);
           }
           if (event.disconnect) {
             if (!model.can(self, Permission.MOVE_MEMBERS, channelId))

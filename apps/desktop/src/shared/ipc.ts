@@ -223,6 +223,8 @@ export interface ChannelView {
   forum: boolean;
   /** Tags posts in this forum can have (encrypted with the channel name). */
   tags: string[];
+  /** A stage: invited speakers talk, everyone else listens (1.0.22). */
+  stage: boolean;
 }
 
 export interface CategoryView {
@@ -284,6 +286,8 @@ export interface VoiceStateView {
   deafened: boolean;
   serverMuted: boolean;
   serverDeafened?: boolean;
+  /** On a stage: asking to speak (1.0.22). */
+  handRaised?: boolean;
   streaming: boolean;
   /** Their connection dropped; River is holding their seat while they reconnect. */
   reconnecting?: boolean;

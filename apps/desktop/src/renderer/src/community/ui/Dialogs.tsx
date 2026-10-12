@@ -142,11 +142,11 @@ export function CreateChannelDialog(props: {
   parentId?: string;
 }): ReactElement {
   const s = useCommunity();
-  const [kind, setKind] = useState<'text' | 'voice' | 'forum'>(props.kind);
+  const [kind, setKind] = useState<'text' | 'voice' | 'forum' | 'stage'>(props.kind);
   const [name, setName] = useState('');
   const [isPrivate, setPrivate] = useState(false);
   const [busy, setBusy] = useState(false);
-  const cleaned = kind !== 'voice' ? name.toLowerCase().replace(/\s+/g, '-') : name;
+  const cleaned = kind === 'text' || kind === 'forum' ? name.toLowerCase().replace(/\s+/g, '-') : name;
   const submit = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
     if (!cleaned.trim()) return;
@@ -154,8 +154,9 @@ export function CreateChannelDialog(props: {
     await s.run({
       a: 'createChannel',
       communityId: props.community.id,
-      kind: kind === 'voice' ? 'voice' : 'text',
+      kind: kind === 'voice' || kind === 'stage' ? 'voice' : 'text',
       ...(kind === 'forum' ? { forum: true } : {}),
+      ...(kind === 'stage' ? { stage: true } : {}),
       name: cleaned.trim(),
       private: isPrivate,
       ...(props.parentId ? { parentId: props.parentId } : {}),
@@ -167,7 +168,7 @@ export function CreateChannelDialog(props: {
     <Modal title="Create channel" onClose={() => s.setModal(null)}>
       <form onSubmit={(e) => void submit(e)} className="create-channel">
         <div className="field__label">Channel type</div>
-        {(['text', 'voice', 'forum'] as const).map((k) => (
+        {(['text', 'voice', 'forum', 'stage'] as const).map((k) => (
           <label key={k} className={`kind-option ${kind === k ? 'is-active' : ''}`}>
             <input type="radio" name="kind" checked={kind === k} onChange={() => setKind(k)} />
             {k === 'text' ? (
@@ -176,17 +177,21 @@ export function CreateChannelDialog(props: {
               <SpeakerIcon />
             ) : (
               <span aria-hidden="true" style={{ fontSize: 20 }}>
-                🗂️
+                {k === 'forum' ? '🗂️' : '🎙️'}
               </span>
             )}
             <span>
-              <strong>{k === 'text' ? 'Text' : k === 'voice' ? 'Voice' : 'Forum'}</strong>
+              <strong>
+                {k === 'text' ? 'Text' : k === 'voice' ? 'Voice' : k === 'forum' ? 'Forum' : 'Stage'}
+              </strong>
               <span className="muted small">
                 {k === 'text'
                   ? 'Messages, emoji, opinions and puns'
                   : k === 'voice'
                     ? 'Hang out with voice, video and screen share'
-                    : 'Organised posts with titles and tags, each with its own replies'}
+                    : k === 'forum'
+                      ? 'Organised posts with titles and tags, each with its own replies'
+                      : 'Talks and events: speakers on stage, everyone else listens'}
               </span>
             </span>
           </label>
@@ -553,6 +558,14 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
                     </span>
                   </label>
                 </>
+              )}
+              {channel.kind === 'voice' && (
+                <Toggle
+                  label="Stage"
+                  help="For talks and events: people join as listeners, raise a hand to ask to speak, and moderators invite speakers."
+                  checked={channel.stage}
+                  onChange={(on) => void s.run({ a: 'updateChannel', channelId: channel.id, stage: on })}
+                />
               )}
               {channel.kind === 'voice' && (
                 <label className="textfield">

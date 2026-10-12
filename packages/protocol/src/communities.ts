@@ -74,6 +74,8 @@ export const channelSchema = z.object({
   userLimit: z.number().int().min(0).max(99).default(0),
   /** Every top-level message starts a titled thread: a post (1.0.22). */
   forum: z.boolean().default(false),
+  /** A voice channel where only invited speakers talk; everyone else listens (1.0.22). */
+  stage: z.boolean().default(false),
 });
 export type ChannelWire = z.infer<typeof channelSchema>;
 
@@ -165,6 +167,7 @@ export const createChannelRequestSchema = z
     overwrites: z.array(overwriteSchema).max(50).optional(),
     parentId: channelIdSchema.nullable().optional(),
     forum: z.boolean().optional(),
+    stage: z.boolean().optional(),
   })
   .strict();
 
@@ -180,6 +183,7 @@ export const updateChannelRequestSchema = z
     slowmode: z.number().int().min(0).max(21_600).optional(),
     userLimit: z.number().int().min(0).max(99).optional(),
     forum: z.boolean().optional(),
+    stage: z.boolean().optional(),
   })
   .strict();
 
@@ -453,6 +457,8 @@ export const voiceStateSchema = z.object({
   serverMuted: z.boolean(),
   /** A moderator turned their sound off for everyone (1.0.20); they hear nothing and cannot speak. */
   serverDeafened: z.boolean().optional(),
+  /** On a stage: asking to speak (1.0.22). */
+  handRaised: z.boolean().optional(),
   streaming: z.boolean(),
   /**
    * The member's connection to the server dropped; their seat is kept for a
@@ -474,12 +480,16 @@ export const clientEventSchema = z.discriminatedUnion('t', [
     muted: z.boolean(),
     deafened: z.boolean(),
     streaming: z.boolean(),
+    /** On a stage: raise or lower your hand (1.0.22). */
+    handRaised: z.boolean().optional(),
   }),
   z.object({
     t: z.literal('voice.moderate'),
     target: riverIdSchema,
     serverMuted: z.boolean().optional(),
     serverDeafened: z.boolean().optional(),
+    /** On a stage: invite to speak (true) or move back to the audience (false) (1.0.22). */
+    speaker: z.boolean().optional(),
     disconnect: z.boolean().optional(),
   }),
   z.object({ t: z.literal('signal'), to: riverIdSchema, data: sealedSchema(SEALED_SIGNAL) }),
