@@ -8,6 +8,9 @@ All notable changes to River are documented here. The format follows
 
 ### Added (1.0.28)
 
+- **Suspicious link warnings:** before opening a link, River warns about
+  look-alike characters, raw IP addresses, short links that hide where they
+  go, and unencrypted http.
 - **Word filter** (Community settings → Rules & roles): words and phrases
   that River hides (with Show anyway) or stops people from sending. It
   ignores case, accents and look-alikes; moderators still see everything.
