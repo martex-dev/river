@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.ts';
 import { MediaGallery } from './MediaGallery.tsx';
 import { setFollowing } from '../thread-follow.ts';
 import { muteLength, parseSlash, slashText, suggestCommands, type ParsedSlash } from '../slash.ts';
@@ -699,7 +700,7 @@ function Message(props: {
             <button
               className="msg__action"
               aria-label={m.pinned ? 'Unpin' : 'Pin'}
-              title={m.pinned ? 'Unpin message' : 'Pin message'}
+              title={m.pinned ? tr('Unpin message') : tr('Pin message')}
               onClick={() => void s.run({ a: 'pin', messageId: m.id, pinned: !m.pinned })}
             >
               <PinIcon size={17} />
@@ -739,7 +740,7 @@ function Message(props: {
                 document.querySelector<HTMLTextAreaElement>('.chat__composer textarea')?.focus();
               }}
             >
-              Reply
+              {tr('Reply')}
             </MenuItem>
           )}
           {can(channel.permissions, Permission.SEND_MESSAGES) && !m.threadId && (
@@ -809,7 +810,7 @@ function Message(props: {
               void s.toggleSaved(channel.id, m.id, !isSaved);
             }}
           >
-            {isSaved ? 'Remove from saved' : 'Save message'}
+            {isSaved ? tr('Remove from saved') : tr('Save message')}
           </MenuItem>
           <MenuItem
             icon={<span aria-hidden="true">🔗</span>}
@@ -818,7 +819,7 @@ function Message(props: {
               copyLink();
             }}
           >
-            Copy message link
+            {tr('Copy message link')}
           </MenuItem>
           {m.mine && !m.poll && (
             <MenuItem
@@ -828,7 +829,7 @@ function Message(props: {
                 useCommunity.setState({ editing: m.id });
               }}
             >
-              Edit message
+              {tr('Edit message')}
             </MenuItem>
           )}
           {canPin && (
@@ -839,7 +840,7 @@ function Message(props: {
                 void s.run({ a: 'pin', messageId: m.id, pinned: !m.pinned });
               }}
             >
-              {m.pinned ? 'Unpin message' : 'Pin message'}
+              {m.pinned ? tr('Unpin message') : tr('Pin message')}
             </MenuItem>
           )}
           <MenuItem
@@ -849,7 +850,7 @@ function Message(props: {
               s.markUnreadFrom(m);
             }}
           >
-            Mark unread
+            {tr('Mark unread')}
           </MenuItem>
           {canManage && (
             <MenuItem
@@ -871,7 +872,7 @@ function Message(props: {
                 s.setModal({ kind: 'report', communityId: community.id, message: m });
               }}
             >
-              Report message
+              {tr('Report message')}
             </MenuItem>
           )}
           {(m.mine || canManage) && (
@@ -883,7 +884,7 @@ function Message(props: {
                 remove(false);
               }}
             >
-              Delete message
+              {tr('Delete message')}
             </MenuItem>
           )}
         </Popover>
@@ -1846,7 +1847,13 @@ function useMentionRefs(community: CommunityView, me: string): MentionRefs {
     return {
       roles: community.roles
         .filter((r) => !r.everyone)
-        .map((r) => ({ name: r.name, color: r.color, mine: mine.includes(r.id) })),
+        .map((r) => ({
+          name: r.name,
+          color: r.color,
+          mine: mine.includes(r.id),
+          icon: r.icon,
+          members: community.members.filter((m) => m.roles.includes(r.id)).length,
+        })),
       channels: community.channels.filter((c) => c.kind === 'text').map((c) => ({ id: c.id, name: c.name })),
       onChannel: select,
     };

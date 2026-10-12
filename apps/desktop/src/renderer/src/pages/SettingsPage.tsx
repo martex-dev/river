@@ -1,3 +1,4 @@
+import { LANGUAGES, useT } from '../i18n.ts';
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { BackupPanel } from '../components/BackupPanel.tsx';
 import { ConnectionCheck } from '../components/ConnectionCheck.tsx';
@@ -66,6 +67,7 @@ export function describeUpdate(status: UpdateStatus): string {
 }
 
 export function SettingsPage(): ReactElement {
+  const tr = useT();
   const [tab, setTab] = useState<Tab>('updates');
   const settings = useRiver((s) => s.settings);
   const host = useHostStatus();
@@ -83,14 +85,14 @@ export function SettingsPage(): ReactElement {
       </header>
       <div className="settings__layout">
         <nav className="settings__tabs glass" aria-label="Settings sections">
-          {tabs.map((t) => (
+          {tabs.map((id) => (
             <button
-              key={t}
-              className={`settings__tab ${tab === t ? 'is-active' : ''}`}
-              aria-current={tab === t ? 'page' : undefined}
-              onClick={() => setTab(t)}
+              key={id}
+              className={`settings__tab ${tab === id ? 'is-active' : ''}`}
+              aria-current={tab === id ? 'page' : undefined}
+              onClick={() => setTab(id)}
             >
-              {TAB_LABEL[t]}
+              {tr(TAB_LABEL[id])}
             </button>
           ))}
         </nav>
@@ -598,6 +600,7 @@ function ServerSetup({ settings }: { settings: Settings }): ReactElement {
 
 function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
   const updateSettings = useRiver((s) => s.updateSettings);
+  const tr = useT();
   const options: Array<{ id: Settings['appearance']['motion']; name: string; text: string }> = [
     { id: 'system', name: 'Follow system', text: 'Use your operating system’s reduced-motion setting.' },
     { id: 'reduced', name: 'Reduced', text: 'Minimal animation everywhere.' },
@@ -605,7 +608,26 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
   ];
   return (
     <div className="panel">
-      <h2 className="panel__title">Appearance</h2>
+      <h2 className="panel__title">{tr('Appearance')}</h2>
+      <label className="textfield language-field">
+        <span className="field__label">{tr('Language')}</span>
+        <select
+          value={settings.appearance.language}
+          onChange={(e) =>
+            void updateSettings({
+              appearance: { language: e.target.value as Settings['appearance']['language'] },
+            })
+          }
+        >
+          <option value="system">{tr('Follow my system')}</option>
+          {LANGUAGES.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+              {l.beta ? ' (beta — partly translated)' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
       <fieldset className="field">
         <legend className="field__label">Motion</legend>
         <div className="choice-grid">

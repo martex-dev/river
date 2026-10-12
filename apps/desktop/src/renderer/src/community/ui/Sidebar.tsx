@@ -1,6 +1,8 @@
+import { tr } from '../../i18n.ts';
 import { useState, type DragEvent, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
-import type { ChannelView, CommunityView } from '../../../../shared/ipc.ts';
+import type { ChannelView, CommunityView, MemberView } from '../../../../shared/ipc.ts';
+import { ProfileCard } from './Members.tsx';
 import { useRiver } from '../../store.ts';
 import { useCommunity } from '../store.ts';
 import { ChannelList } from './ChannelList.tsx';
@@ -75,7 +77,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
                 s.setModal({ kind: 'invite', communityId: community.id });
               }}
             >
-              Invite people
+              {tr('Invite people')}
             </MenuItem>
           )}
           {canSettings && (
@@ -86,7 +88,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
                 s.setModal({ kind: 'community-settings', communityId: community.id });
               }}
             >
-              Community settings
+              {tr('Community settings')}
             </MenuItem>
           )}
           {community.selfRoles.length > 0 && !community.myPending && (
@@ -97,7 +99,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
                 s.setModal({ kind: 'pick-roles', communityId: community.id });
               }}
             >
-              Pick your roles
+              {tr('Pick your roles')}
             </MenuItem>
           )}
           {manageChannels && (
@@ -108,7 +110,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
                 s.setModal({ kind: 'create-channel', communityId: community.id, channelKind: 'text' });
               }}
             >
-              Create channel
+              {tr('Create channel')}
             </MenuItem>
           )}
           {manageChannels && (
@@ -119,7 +121,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
                 s.setModal({ kind: 'category', communityId: community.id });
               }}
             >
-              Create category
+              {tr('Create category')}
             </MenuItem>
           )}
           <MenuItem
@@ -140,7 +142,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
                 confirmLeave();
               }}
             >
-              Leave community
+              {tr('Leave community')}
             </MenuItem>
           )}
         </Popover>
@@ -181,6 +183,7 @@ export function ChannelRow(props: {
 }): ReactElement {
   const { community, channel: ch, me } = props;
   const s = useCommunity();
+  const [card, setCard] = useState<{ member: MemberView; x: number; y: number } | null>(null);
   useCommunity((x) => x.callVersion);
   const mentions = s.mentions[ch.id] ?? 0;
   const active = ch.id === s.selectedChannel;
@@ -216,7 +219,7 @@ export function ChannelRow(props: {
               s.markChannelsRead([ch.id]);
             }}
           >
-            Mark as read
+            {tr('Mark as read')}
           </MenuItem>
           {can(community.permissions, Permission.CREATE_INVITE) && (
             <MenuItem
@@ -226,7 +229,7 @@ export function ChannelRow(props: {
                 s.setModal({ kind: 'invite', communityId: community.id });
               }}
             >
-              Invite people
+              {tr('Invite people')}
             </MenuItem>
           )}
           {canManage && (
@@ -237,7 +240,7 @@ export function ChannelRow(props: {
                 s.setModal({ kind: 'channel-settings', channelId: ch.id });
               }}
             >
-              Edit channel
+              {tr('Edit channel')}
             </MenuItem>
           )}
           {can(community.permissions, Permission.MANAGE_CHANNELS) && (
@@ -250,7 +253,7 @@ export function ChannelRow(props: {
                 });
               }}
             >
-              Duplicate channel
+              {tr('Duplicate channel')}
             </MenuItem>
           )}
           {ch.kind === 'text' && <NotifyMenuSection id={ch.id} kind="channel" onDone={() => setMenu(null)} />}
@@ -289,6 +292,11 @@ export function ChannelRow(props: {
             )}
           </span>
           <span className="channel__name">{ch.name}</span>
+          {ch.nsfw && (
+            <span className="channel__nsfw" title="Age-restricted (18+)">
+              18+
+            </span>
+          )}
           {ch.private && (
             <span className="channel__lock" title="Private channel">
               <LockSmallIcon size={12} />
@@ -329,6 +337,21 @@ export function ChannelRow(props: {
               key={id}
               className={`channel__participant ${state?.reconnecting ? 'is-reconnecting' : ''}`}
               title={state?.reconnecting ? 'Reconnecting…' : undefined}
+              role="button"
+              tabIndex={0}
+              aria-label={`${m?.name ?? 'Someone'} in voice — open profile`}
+              onClick={(e) => m && setCard({ member: m, x: e.clientX + 12, y: e.clientY - 40 })}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (m) setCard({ member: m, x: e.clientX + 12, y: e.clientY - 40 });
+              }}
+              onKeyDown={(e) => {
+                if ((e.key === 'Enter' || e.key === ' ') && m) {
+                  e.preventDefault();
+                  const r = e.currentTarget.getBoundingClientRect();
+                  setCard({ member: m, x: r.right + 8, y: r.top - 40 });
+                }
+              }}
             >
               <Avatar id={id} name={m?.name ?? '?'} avatar={m?.avatar} size={22} speaking={speaking} />
               <span
@@ -359,6 +382,16 @@ export function ChannelRow(props: {
             </div>
           );
         })}
+      {card && (
+        <Popover x={card.x} y={card.y} onClose={() => setCard(null)} className="profile-pop">
+          <ProfileCard
+            community={community}
+            member={community.members.find((x) => x.riverId === card.member.riverId) ?? card.member}
+            me={me}
+            onDone={() => setCard(null)}
+          />
+        </Popover>
+      )}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { AgeGate, ageConfirmed } from '../community/ui/AgeGate.tsx';
 import { PickRolesDialog, RulesGate } from '../community/ui/Onboarding.tsx';
 import { ForumChannel } from '../community/ui/Forum.tsx';
 import { matches, withDefaults } from '../../../shared/keybinds.ts';
@@ -39,6 +40,8 @@ export function CommunitiesPage(): ReactElement {
   const account = useRiver((r) => r.account);
   const [adding, setAdding] = useState(false);
   const [serverMenu, setServerMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  /** Age-restricted channels confirmed in this session (1.0.27). */
+  const [ageOk, setAgeOk] = useState<string[]>([]);
   const me = identity?.riverId ?? '';
 
   useEffect(() => {
@@ -98,14 +101,20 @@ export function CommunitiesPage(): ReactElement {
       <section className="community__main">
         <ConnectionBanner />
         {community?.myPending && community.rules.length > 0 && <RulesGate community={community} />}
-        {community && channel?.kind === 'text' && !channel.forum && (
-          <TextChannel key={channel.id} community={community} channel={channel} me={me} />
-        )}
-        {community && channel?.kind === 'text' && channel.forum && (
-          <ForumChannel key={channel.id} community={community} channel={channel} />
-        )}
-        {community && channel?.kind === 'voice' && (
-          <VoiceChannel community={community} channel={channel} me={me} />
+        {community && channel?.nsfw && !ageOk.includes(channel.id) && !ageConfirmed(channel.id) ? (
+          <AgeGate channel={channel} onOk={() => setAgeOk([...ageOk, channel.id])} />
+        ) : (
+          <>
+            {community && channel?.kind === 'text' && !channel.forum && (
+              <TextChannel key={channel.id} community={community} channel={channel} me={me} />
+            )}
+            {community && channel?.kind === 'text' && channel.forum && (
+              <ForumChannel key={channel.id} community={community} channel={channel} />
+            )}
+            {community && channel?.kind === 'voice' && (
+              <VoiceChannel community={community} channel={channel} me={me} />
+            )}
+          </>
         )}
       </section>
 

@@ -437,7 +437,7 @@ export function EmojiGlyph({ emoji }: { emoji: string }): ReactElement {
  */
 /** Roles and channels a message can mention, for highlighting and navigation. */
 export interface MentionRefs {
-  roles: Array<{ name: string; color: number; mine: boolean }>;
+  roles: Array<{ name: string; color: number; mine: boolean; members?: number; icon?: string | null }>;
   channels: Array<{ id: string; name: string }>;
   onChannel?(id: string): void;
 }
@@ -742,8 +742,12 @@ function inline(text: string, ctx: InlineCtx, key: string): ReactNode[] {
       out.push(
         <span
           key={k}
+          tabIndex={0}
           className={`mention mention--role ${role.mine ? 'mention--me' : ''}`}
           style={role.color ? ({ '--role': hex(role.color) } as CSSProperties) : undefined}
+          title={`${role.icon ? `${role.icon} ` : ''}${role.name} — a role${
+            role.members !== undefined ? ` · ${role.members} member${role.members === 1 ? '' : 's'}` : ''
+          }${role.mine ? ' · you have it' : ''}`}
         >
           @{role.name}
         </span>,
