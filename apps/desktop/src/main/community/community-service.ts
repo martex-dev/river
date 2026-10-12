@@ -42,6 +42,7 @@ import {
   type EventView,
   type EmojiView,
   type ReportView,
+  linkEmbedSchema,
   type SoundView,
   SOUND_DATA_URL,
   type SavedMessageView,
@@ -59,6 +60,7 @@ import type {
   CategoryView,
   ChannelView,
   ChatMessage,
+  LinkEmbed,
   CommunityEvent,
   CommunityView,
   MemberView,
@@ -887,6 +889,7 @@ export class CommunityService {
         attachments?: unknown[];
         alts?: unknown;
         tags?: unknown;
+        embed?: unknown;
       }>(communityId, `message:${m.channelId}`, m.body);
       const body = opened.value;
       const key = opened.key;
@@ -943,6 +946,11 @@ export class CommunityService {
         ...((): { tags?: string[] } => {
           const tags = readTags(body.tags, 5);
           return tags.length ? { tags } : {};
+        })(),
+        ...((): { embed?: LinkEmbed } => {
+          const e = linkEmbedSchema.safeParse(body.embed);
+          // Only a preview of a link that is really in the message.
+          return e.success && text.includes(e.data.url) ? { embed: e.data } : {};
         })(),
         // A reply pings the person replied to, unless the sender turned that off.
         mentionsMe:
@@ -1243,6 +1251,7 @@ export class CommunityService {
     poll?: Poll,
     alts: Record<string, string> = {},
     post?: { title?: string; tags?: string[] },
+    embed?: LinkEmbed,
   ): Promise<ChatMessage> {
     const text = attachments.length ? z.string().max(4000).parse(rawText) : textSchema.parse(rawText);
     const communityId = this.communityOf(channelId);
@@ -1255,6 +1264,7 @@ export class CommunityService {
       ...(replyTo && noPing ? { noPing: true } : {}),
       ...(poll ? { poll } : {}),
       ...(post?.tags?.length ? { tags: post.tags } : {}),
+      ...(embed ? { embed } : {}),
       ...(attachments.length ? { attachments } : {}),
       // Kept beside the pointers (not in them) so older Rivers, which reject unknown pointer fields, still
       // show the attachments.
@@ -1660,6 +1670,7 @@ export class CommunityService {
           act.poll,
           act.alts,
           act.title || act.tags ? { title: act.title, tags: act.tags } : undefined,
+          act.embed,
         )) as CommunityActionResult<A>;
       case 'createThread': {
         const communityId = this.communityOf(act.channelId);

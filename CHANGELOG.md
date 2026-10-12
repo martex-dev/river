@@ -8,6 +8,10 @@ All notable changes to River are documented here. The format follows
 
 ### Added
 
+- **Link previews, made privately** (Settings → Appearance, off by
+  default): when you send a link, your River fetches the page's title and
+  description and seals them into your message, so people reading it never
+  contact the site. River never fetches local or private network addresses.
 - **Export my data** (Settings → Account): save a readable copy of your
   profile, settings, contacts, direct messages, groups, calls, posts and
   saved messages. It never contains your keys.

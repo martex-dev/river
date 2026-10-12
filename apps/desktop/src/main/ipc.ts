@@ -1,3 +1,4 @@
+import { fetchPreview } from './link-preview.ts';
 import { buildExport } from './data-export.ts';
 import { writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
@@ -393,6 +394,13 @@ export function registerIpc(deps: IpcDeps): void {
       return true;
     }),
   );
+  handle(IPC.linkPreview, async (_e, raw) => {
+    // Only for people who turned previews on, and only for links they are sending.
+    if (!deps.settings.get().appearance.linkPreviews) return null;
+    const url = safeExternalUrl(raw);
+    if (!url) return null;
+    return fetchPreview(url.toString()).catch(() => null);
+  });
   handle(IPC.usersLookup, (_e, username) =>
     result(() => deps.account.lookupUser(z.string().max(64).parse(username))),
   );

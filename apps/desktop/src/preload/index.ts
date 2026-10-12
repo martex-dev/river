@@ -157,6 +157,7 @@ const api: RiverApi = {
   links: {
     open: (id) => ipcRenderer.invoke(IPC.openLink, id),
     openUrl: (url) => ipcRenderer.invoke(IPC.openUrl, url),
+    preview: (url) => ipcRenderer.invoke(IPC.linkPreview, url),
   },
   diagnostics: {
     run: () => ipcRenderer.invoke(IPC.diagnosticsRun),

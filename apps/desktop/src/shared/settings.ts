@@ -62,6 +62,8 @@ export const settingsSchema = z.object({
     clock: z.enum(['system', '12h', '24h']),
     /** Stronger text and borders; 'system' follows the OS high-contrast preference. */
     contrast: z.enum(['system', 'normal', 'high']),
+    /** Added in 1.0.23: add previews to links you send (River fetches the page from your computer). */
+    linkPreviews: z.boolean(),
   }),
   notifications: z.object({
     /** Default 'none': notifications say "New River message" with no sender or content. */
@@ -188,6 +190,7 @@ export const DEFAULT_SETTINGS: Settings = {
     fontSize: 14,
     clock: 'system',
     contrast: 'system',
+    linkPreviews: false,
   },
   notifications: {
     preview: 'none',

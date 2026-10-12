@@ -657,6 +657,29 @@ describe('desktop ↔ server communities', () => {
     expect(described!.alts).toEqual({ [chart.id]: 'A bar chart of quarterly numbers' });
     const stored = JSON.stringify(await serverDb.db.selectFrom('messages').selectAll().execute());
     expect(stored).not.toContain('bar chart');
+
+    // Link previews ride in the sealed body, and only for a link that is in the message.
+    const embed = {
+      url: 'https://example.com/a',
+      title: 'Example',
+      description: 'An example page',
+      site: 'example.com',
+    };
+    await alice.community.action({
+      a: 'send',
+      channelId: general.id,
+      text: 'look https://example.com/a',
+      embed,
+    });
+    await alice.community.action({
+      a: 'send',
+      channelId: general.id,
+      text: 'no link here',
+      embed: { ...embed, url: 'https://evil.example/' },
+    });
+    const latest = (await bob.community.messages(general.id)).slice(-2);
+    expect(latest[0]!.embed).toEqual(embed);
+    expect(latest[1]!.embed).toBeUndefined();
   });
 
   it('pages through older history and searches it on the device', async () => {

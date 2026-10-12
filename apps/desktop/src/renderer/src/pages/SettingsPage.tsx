@@ -707,6 +707,12 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
           ))}
         </div>
       </fieldset>
+      <Toggle
+        label="Add previews to links I send"
+        hint="River fetches the page from your computer (the site sees your address) and adds its title and description to your encrypted message. People reading it never contact the site."
+        checked={settings.appearance.linkPreviews}
+        onChange={(linkPreviews) => void updateSettings({ appearance: { linkPreviews } })}
+      />
       <fieldset className="field">
         <legend className="field__label">Message density</legend>
         <div className="choice-grid">

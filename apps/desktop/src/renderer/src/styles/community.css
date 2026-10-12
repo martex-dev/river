@@ -4852,3 +4852,37 @@ input.switch:disabled {
   align-items: center;
   gap: 2px;
 }
+
+/* Link previews (1.0.23) */
+.link-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 440px;
+  margin-top: 6px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.link-card__title {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.link-card__title:hover,
+.link-card__title:focus-visible {
+  text-decoration: underline;
+}
+.link-card__text {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}

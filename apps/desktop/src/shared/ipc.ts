@@ -81,6 +81,7 @@ export const IPC = {
   attachmentSave: 'river:attachment:save',
   openLink: 'river:link:open',
   openUrl: 'river:link:open-url',
+  linkPreview: 'river:link:preview',
 } as const;
 
 /**
@@ -323,6 +324,14 @@ export interface ReactionView {
   users: string[];
 }
 
+/** A link preview made by the sender's app (1.0.23); readers never fetch anything. */
+export interface LinkEmbed {
+  url: string;
+  title: string;
+  description: string;
+  site: string;
+}
+
 export interface ChatMessage {
   id: string;
   communityId: string;
@@ -348,6 +357,8 @@ export interface ChatMessage {
   poll?: Poll | null;
   /** Forum post tags (1.0.22). */
   tags?: string[];
+  /** A link preview the sender added (1.0.23). */
+  embed?: LinkEmbed | null;
 }
 
 export interface ThreadView {
@@ -533,6 +544,8 @@ export interface RiverApi {
     open(id: ExternalLinkId): Promise<void>;
     /** A link from a message: main shows the real address and asks before opening it. */
     openUrl(url: string): Promise<boolean>;
+    /** A preview for a link you are about to send, if you turned link previews on (1.0.23). */
+    preview(url: string): Promise<LinkEmbed | null>;
   };
   diagnostics: {
     /** Server, relay and connection checks (the renderer adds network and microphone checks). */
