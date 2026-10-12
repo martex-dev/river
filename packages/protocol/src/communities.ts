@@ -118,6 +118,8 @@ export const memberSchema = z.object({
   timeoutUntil: z.string().max(40).nullable().default(null),
   /** Has not accepted the community's rules yet, so can only read (1.0.24). */
   pending: z.boolean().optional(),
+  /** When temporary roles end, by role ID (1.0.30). */
+  roleExpiry: z.record(roleIdSchema, z.string().max(40)).optional(),
   /** The day they joined, YYYY-MM-DD (1.0.21). */
   joinedOn: z
     .string()
@@ -184,6 +186,17 @@ export const updateOnboardingRequestSchema = z
   })
   .strict();
 export const updateArtRequestSchema = z.object({ art: sealedSchema(SEALED_ART).nullable() }).strict();
+/** Give a member a role for a while (1.0.30). */
+export const TEMP_ROLE_DURATIONS = [3600, 24 * 3600, 7 * 24 * 3600, 30 * 24 * 3600] as const;
+export const tempRoleRequestSchema = z
+  .object({
+    roleId: roleIdSchema,
+    seconds: z
+      .number()
+      .int()
+      .refine((n) => (TEMP_ROLE_DURATIONS as readonly number[]).includes(n)),
+  })
+  .strict();
 export const selfRolesRequestSchema = z.object({ roles: z.array(roleIdSchema).max(MAX_SELF_ROLES) }).strict();
 
 export const createChannelRequestSchema = z

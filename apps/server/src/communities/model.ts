@@ -45,6 +45,8 @@ export interface MemberModel {
   joinedOn: string;
   /** Still has to accept the rules (screened communities, 1.0.24). */
   pending: boolean;
+  /** When temporary roles end, by role ID (1.0.30). */
+  roleExpiry?: Record<string, string>;
 }
 
 /** Everything needed to answer "may X do Y here?" for one community. */
@@ -224,6 +226,7 @@ export class CommunityModel {
         timeoutUntil: this.timedOut(m.riverId) ? m.timeoutUntil : null,
         ...(/^\d{4}-\d{2}-\d{2}$/.test(m.joinedOn) ? { joinedOn: m.joinedOn } : {}),
         ...(this.pending(m.riverId) ? { pending: true } : {}),
+        ...(m.roleExpiry && Object.keys(m.roleExpiry).length ? { roleExpiry: m.roleExpiry } : {}),
       })),
     };
   }
@@ -262,7 +265,13 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
         .where('channels.community_id', '=', id)
         .execute(),
       db.selectFrom('community_members').selectAll().where('community_id', '=', id).execute(),
-      db.selectFrom('member_roles').selectAll().where('community_id', '=', id).execute(),
+      db
+        .selectFrom('member_roles')
+        .selectAll()
+        .where('community_id', '=', id)
+        // A temporary role that has run out no longer counts (1.0.30).
+        .where((eb) => eb.or([eb('expires_at', 'is', null), eb('expires_at', '>', new Date().toISOString())]))
+        .execute(),
       db.selectFrom('categories').selectAll().where('community_id', '=', id).orderBy('position').execute(),
       db
         .selectFrom('category_overwrites')
@@ -335,6 +344,11 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
       riverId: m.river_id,
       legacyRole: m.role as 'owner' | 'admin' | 'member',
       roles: memberRoles.filter((r) => r.river_id === m.river_id).map((r) => r.role_id),
+      roleExpiry: Object.fromEntries(
+        memberRoles
+          .filter((r) => r.river_id === m.river_id && r.expires_at)
+          .map((r) => [r.role_id, r.expires_at!]),
+      ),
       profile: m.profile,
       timeoutUntil: m.timeout_until,
       joinedOn: m.joined_on,

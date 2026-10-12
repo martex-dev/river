@@ -1296,6 +1296,29 @@ describe('desktop ↔ server communities', () => {
     expect(channels).not.toContain('Question');
   });
 
+  it('roles can be placed anywhere in the order by dragging', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Order');
+    const mk = (name: string) =>
+      alice.community.action({ a: 'createRole', communityId: created.id, name, color: 0, permissions: 0 });
+    const a = await mk('A');
+    const b = await mk('B');
+    const c = await mk('C');
+    const order = async () =>
+      (await alice.community.refresh())[0]!.roles.filter((r) => !r.everyone).map((r) => r.name);
+    const before = await order();
+    expect(before).toHaveLength(3);
+    await alice.community.action({
+      a: 'placeRole',
+      communityId: created.id,
+      roleId: c,
+      aboveId: before[0] === 'A' ? a : b,
+    });
+    expect((await order())[0]).toBe('C');
+    await alice.community.action({ a: 'placeRole', communityId: created.id, roleId: c, aboveId: null });
+    expect((await order()).at(-1)).toBe('C');
+  });
+
   it('role icons are sealed and shown next to members with the role', async () => {
     const alice = await person('Alice');
     const created = await alice.community.create('Icons');

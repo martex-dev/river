@@ -6,6 +6,13 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (1.0.30)
+
+- **Drag roles to reorder them** in Community settings → Roles.
+- **Temporary roles:** give someone a role for an hour, a day, a week or
+  30 days from their profile card (⏳ shows until when); it goes away on its
+  own.
+
 ### Added (1.0.29)
 
 - **Calls show up in the conversation:** "📞 Call · 5 min", "Missed call"
