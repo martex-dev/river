@@ -16,7 +16,14 @@ import { useOutbox, type Outgoing } from '../outbox.ts';
 import { useDraft } from '../drafts.ts';
 import { play } from '../sound.ts';
 import { typingNames, useCommunity } from '../store.ts';
-import { AttachmentList, PendingFiles, pendingFrom, uploadAll, type PendingFile } from './Attachments.tsx';
+import {
+  AttachmentList,
+  PendingFiles,
+  UploadCancelled,
+  pendingFrom,
+  uploadAll,
+  type PendingFile,
+} from './Attachments.tsx';
 import {
   Avatar,
   EditIcon,
@@ -526,7 +533,7 @@ function Message(props: {
             </div>
           )}
           {m.poll && <PollView message={m} me={props.me} canVote={canReact} />}
-          {m.attachments.length > 0 && <AttachmentList attachments={m.attachments} />}
+          {m.attachments.length > 0 && <AttachmentList attachments={m.attachments} alts={m.alts} />}
           {m.thread && (
             <button className="thread-summary" onClick={() => void s.showThread(channel.id, m.id)}>
               <span aria-hidden="true">🧵</span>
@@ -942,6 +949,7 @@ function Composer(props: {
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null);
+  const uploadAbort = useRef<AbortController | null>(null);
   useCommunity((x) => x.typing[channel.id]);
   const typers = typingNames(channel.id, community, me);
   const canSend = can(channel.permissions, Permission.SEND_MESSAGES);
@@ -996,15 +1004,32 @@ function Composer(props: {
     const files = props.pending;
     if ((!value && files.length === 0) || uploading) return;
     let attachments;
+    let alts: Record<string, string> | undefined;
     if (files.length) {
       setUploading({ done: 0, total: files.length });
+      const abort = new AbortController();
+      uploadAbort.current = abort;
       try {
-        attachments = await uploadAll(files, (done) => setUploading({ done, total: files.length }));
+        attachments = await uploadAll(
+          files,
+          (done) => setUploading({ done, total: files.length }),
+          'community',
+          abort.signal,
+        );
       } catch (err) {
         setUploading(null);
-        s.notify((err as Error).message || 'Upload failed.', 'error');
+        // Cancelled: everything stays in the box to send later.
+        if (err instanceof UploadCancelled)
+          s.notify('Upload cancelled. Your message and files are still here.');
+        else s.notify((err as Error).message || 'Upload failed.', 'error');
         return;
+      } finally {
+        uploadAbort.current = null;
       }
+      const described = files.flatMap((f, i) =>
+        f.alt && attachments![i] ? [[attachments![i]!.id, f.alt]] : [],
+      );
+      if (described.length) alts = Object.fromEntries(described);
     }
     setText('');
     setUploading(null);
@@ -1020,6 +1045,7 @@ function Composer(props: {
       ...(replyTo ? { replyTo: replyTo.id } : {}),
       ...(replyTo && !replyPing ? { noPing: true } : {}),
       ...(attachments ? { attachments } : {}),
+      ...(alts ? { alts } : {}),
     });
   };
 
@@ -1127,6 +1153,9 @@ function Composer(props: {
         <PendingFiles
           files={props.pending}
           onRemove={(key) => props.onPendingChange(props.pending.filter((p) => p.key !== key))}
+          onAlt={(key, alt) =>
+            props.onPendingChange(props.pending.map((p) => (p.key === key ? { ...p, alt } : p)))
+          }
         />
       )}
       {uploading && (
@@ -1137,6 +1166,13 @@ function Composer(props: {
             className="upload-progress__bar"
             style={{ width: `${(uploading.done / uploading.total) * 100}%` }}
           />
+          <button
+            type="button"
+            className="btn btn--link btn--small"
+            onClick={() => uploadAbort.current?.abort()}
+          >
+            Cancel
+          </button>
         </div>
       )}
       {polling && <CreatePollDialog channelId={channel.id} onClose={() => setPolling(false)} />}

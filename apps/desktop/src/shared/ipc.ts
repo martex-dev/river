@@ -325,6 +325,8 @@ export interface ChatMessage {
   reactions: ReactionView[];
   replyTo: string | null;
   attachments: AttachmentPointer[];
+  /** Descriptions of attached pictures, by attachment ID (1.0.21). */
+  alts?: Record<string, string>;
   mentionsMe: boolean;
   mine: boolean;
   /** Set on replies inside a thread: the thread's starting message. */

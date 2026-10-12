@@ -17,6 +17,8 @@ export interface Outgoing {
   /** Reply without notifying the person replied to. */
   noPing?: boolean;
   attachments?: AttachmentPointer[];
+  /** Picture descriptions by attachment ID (not kept if River closes before the message is sent). */
+  alts?: Record<string, string>;
   /** A reply inside this thread. */
   threadId?: string;
   status: 'waiting' | 'sending' | 'failed';
@@ -73,6 +75,7 @@ export const useOutbox = create<OutboxState>((set, get) => {
       ...(item.replyTo ? { replyTo: item.replyTo } : {}),
       ...(item.replyTo && item.noPing ? { noPing: true } : {}),
       ...(item.attachments ? { attachments: item.attachments } : {}),
+      ...(item.alts && Object.keys(item.alts).length ? { alts: item.alts } : {}),
       ...(item.threadId ? { threadId: item.threadId } : {}),
     })) as Result<ChatMessage>;
     if (res.ok) {

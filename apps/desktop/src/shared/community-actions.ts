@@ -241,6 +241,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       text: z.string().max(4000),
       replyTo: id.optional(),
       attachments: z.array(attachmentPointerSchema).max(10).optional(),
+      /** Descriptions of attached pictures, by attachment ID (1.0.21). */
+      alts: z.record(id, z.string().trim().max(1000)).optional(),
       /** Reply inside the thread started from this message. */
       threadId: id.optional(),
       /** A reply that should not notify the person replied to (1.0.18). */

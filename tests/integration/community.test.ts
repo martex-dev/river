@@ -597,6 +597,26 @@ describe('desktop ↔ server communities', () => {
 
     // Empty messages without files are still refused.
     await expect(alice.community.action({ a: 'send', channelId: general.id, text: '  ' })).rejects.toThrow();
+
+    // Picture descriptions travel inside the sealed body, beside (not inside) the pointers.
+    const chart = await alice.community.action({
+      a: 'upload',
+      name: 'chart.png',
+      mime: 'image/png',
+      bytes: new Uint8Array(secret),
+    });
+    await alice.community.action({
+      a: 'send',
+      channelId: general.id,
+      text: 'with a description',
+      attachments: [chart],
+      alts: { [chart.id]: 'A bar chart of quarterly numbers', [created.id]: 'not an attachment here' },
+    });
+    const [described] = (await bob.community.messages(general.id)).slice(-1);
+    expect(described!.attachments).toEqual([chart]);
+    expect(described!.alts).toEqual({ [chart.id]: 'A bar chart of quarterly numbers' });
+    const stored = JSON.stringify(await serverDb.db.selectFrom('messages').selectAll().execute());
+    expect(stored).not.toContain('bar chart');
   });
 
   it('pages through older history and searches it on the device', async () => {

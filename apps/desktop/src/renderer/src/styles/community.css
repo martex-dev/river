@@ -4558,3 +4558,49 @@ input.switch:disabled {
   cursor: default;
   opacity: 0.6;
 }
+
+/* Alt text (1.0.21) */
+.pending-file__alt,
+.attachment-image__alt {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  z-index: 1;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 0;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.pending-file__alt {
+  top: 6px;
+  bottom: auto;
+  cursor: pointer;
+  opacity: 0.75;
+}
+.pending-file__alt.is-set,
+.pending-file__alt:hover,
+.pending-file__alt:focus-visible {
+  opacity: 1;
+  background: var(--accent);
+  color: #000;
+}
+.pending-file__alt-input {
+  position: absolute;
+  inset: 4px;
+  z-index: 2;
+  resize: none;
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+  background: var(--surface, #111);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 4px;
+}
+.attachment-image__alt {
+  cursor: help;
+}

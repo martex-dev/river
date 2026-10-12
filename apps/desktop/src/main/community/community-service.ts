@@ -854,6 +854,7 @@ export class CommunityService {
         noPing?: unknown;
         poll?: unknown;
         attachments?: unknown[];
+        alts?: unknown;
       }>(communityId, `message:${m.channelId}`, m.body);
       const body = opened.value;
       const key = opened.key;
@@ -885,6 +886,13 @@ export class CommunityService {
       });
       const replyTo =
         typeof body.replyTo === 'string' && /^[A-Za-z0-9_-]{22}$/.test(body.replyTo) ? body.replyTo : null;
+      const alts: Record<string, string> = {};
+      if (body.alts && typeof body.alts === 'object') {
+        for (const a of attachments) {
+          const alt = (body.alts as Record<string, unknown>)[a.id];
+          if (typeof alt === 'string' && alt.trim()) alts[a.id] = alt.slice(0, 1000);
+        }
+      }
       return {
         id: m.id,
         communityId,
@@ -899,6 +907,7 @@ export class CommunityService {
         reactions,
         replyTo,
         attachments,
+        ...(Object.keys(alts).length ? { alts } : {}),
         // A reply pings the person replied to, unless the sender turned that off.
         mentionsMe:
           m.sender !== me &&
@@ -1196,6 +1205,7 @@ export class CommunityService {
     threadId?: string,
     noPing = false,
     poll?: Poll,
+    alts: Record<string, string> = {},
   ): Promise<ChatMessage> {
     const text = attachments.length ? z.string().max(4000).parse(rawText) : textSchema.parse(rawText);
     const communityId = this.communityOf(channelId);
@@ -1208,6 +1218,14 @@ export class CommunityService {
       ...(replyTo && noPing ? { noPing: true } : {}),
       ...(poll ? { poll } : {}),
       ...(attachments.length ? { attachments } : {}),
+      // Kept beside the pointers (not in them) so older Rivers, which reject unknown pointer fields, still
+      // show the attachments.
+      ...((): { alts?: Record<string, string> } => {
+        const kept = Object.fromEntries(
+          Object.entries(alts).filter(([id, alt]) => alt && attachments.some((a) => a.id === id)),
+        );
+        return Object.keys(kept).length ? { alts: kept } : {};
+      })(),
     };
     const sent = await this.call(
       `/channels/${channelId}/messages`,
@@ -1586,6 +1604,7 @@ export class CommunityService {
           act.threadId,
           act.noPing,
           act.poll,
+          act.alts,
         )) as CommunityActionResult<A>;
       case 'createThread': {
         const communityId = this.communityOf(act.channelId);

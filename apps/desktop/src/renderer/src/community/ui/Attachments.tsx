@@ -83,13 +83,19 @@ export async function saveAttachment(pointer: AttachmentPointer): Promise<void> 
   else if (res.value) useCommunity.getState().notify(`Saved ${pointer.name}`);
 }
 
-export function AttachmentList({ attachments }: { attachments: AttachmentPointer[] }): ReactElement {
+export function AttachmentList({
+  attachments,
+  alts,
+}: {
+  attachments: AttachmentPointer[];
+  alts?: Record<string, string>;
+}): ReactElement {
   const [open, setOpen] = useState<AttachmentPointer | null>(null);
   return (
     <div className="attachments">
       {attachments.map((a) =>
         INLINE_IMAGE.has(a.mime) ? (
-          <ImageAttachment key={a.id} pointer={a} onOpen={() => setOpen(a)} />
+          <ImageAttachment key={a.id} pointer={a} alt={alts?.[a.id]} onOpen={() => setOpen(a)} />
         ) : INLINE_VIDEO.has(a.mime) || INLINE_AUDIO.has(a.mime) ? (
           <MediaAttachment key={a.id} pointer={a} />
         ) : (
@@ -101,7 +107,15 @@ export function AttachmentList({ attachments }: { attachments: AttachmentPointer
   );
 }
 
-function ImageAttachment({ pointer, onOpen }: { pointer: AttachmentPointer; onOpen(): void }): ReactElement {
+function ImageAttachment({
+  pointer,
+  alt,
+  onOpen,
+}: {
+  pointer: AttachmentPointer;
+  alt?: string;
+  onOpen(): void;
+}): ReactElement {
   const [ref, visible] = useVisible();
   const [manual, setManual] = useState(false);
   const { url, error } = useDecrypted(pointer, (visible && pointer.size <= AUTO_LOAD_BYTES) || manual);
@@ -114,7 +128,7 @@ function ImageAttachment({ pointer, onOpen }: { pointer: AttachmentPointer; onOp
       style={{ width, aspectRatio: String(ratio) }}
       role="button"
       tabIndex={0}
-      aria-label={`Image ${pointer.name}`}
+      aria-label={alt ? `Image: ${alt}` : `Image ${pointer.name}`}
       onClick={() => (url ? onOpen() : setManual(true))}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
@@ -124,7 +138,14 @@ function ImageAttachment({ pointer, onOpen }: { pointer: AttachmentPointer; onOp
       }}
     >
       {pointer.thumb && !url && <img className="attachment-image__thumb" src={pointer.thumb} alt="" />}
-      {url && <img className="attachment-image__full" src={url} alt={pointer.name} draggable={false} />}
+      {url && (
+        <img className="attachment-image__full" src={url} alt={alt || pointer.name} draggable={false} />
+      )}
+      {alt && (
+        <span className="attachment-image__alt" title={alt}>
+          ALT
+        </span>
+      )}
       {!url && !error && (visible || manual) && <span className="attachment-image__spinner" />}
       {!url && !error && !manual && pointer.size > AUTO_LOAD_BYTES && (
         <span className="attachment-image__hint">Click to load · {formatBytes(pointer.size)}</span>
@@ -326,6 +347,8 @@ export interface PendingFile {
   key: string;
   file: File;
   preview: string | null;
+  /** A description of the picture for people who cannot see it (1.0.21). */
+  alt?: string;
 }
 
 export function pendingFrom(files: Iterable<File>): PendingFile[] {
@@ -372,13 +395,23 @@ async function prepare(file: File): Promise<{
 }
 
 /** Encrypts and uploads files one by one; returns their pointers. */
+/** Thrown when the person cancels an upload. */
+export class UploadCancelled extends Error {
+  constructor() {
+    super('Upload cancelled.');
+  }
+}
+
 export async function uploadAll(
   files: PendingFile[],
   onProgress: (done: number) => void,
   via: 'community' | 'dm' = 'community',
+  signal?: AbortSignal,
 ): Promise<AttachmentPointer[]> {
   const pointers: AttachmentPointer[] = [];
   for (const [i, p] of files.entries()) {
+    // A file already on its way finishes (the server forgets unused uploads); nothing after it starts.
+    if (signal?.aborted) throw new UploadCancelled();
     const prepared = await prepare(p.file);
     const res =
       via === 'dm'
@@ -388,14 +421,56 @@ export async function uploadAll(
     pointers.push(res.value as AttachmentPointer);
     onProgress(i + 1);
   }
+  if (signal?.aborted) throw new UploadCancelled();
   return pointers;
 }
 
-export function PendingFiles(props: { files: PendingFile[]; onRemove(key: string): void }): ReactElement {
+export function PendingFiles(props: {
+  files: PendingFile[];
+  onRemove(key: string): void;
+  /** Lets pictures get a description (alt text). */
+  onAlt?(key: string, alt: string): void;
+}): ReactElement {
+  const [editing, setEditing] = useState<string | null>(null);
   return (
     <div className="pending-files">
       {props.files.map((p) => (
         <div key={p.key} className="pending-file">
+          {p.preview && props.onAlt && (
+            <button
+              type="button"
+              className={`pending-file__alt ${p.alt ? 'is-set' : ''}`}
+              title={p.alt ? `Description: ${p.alt}` : 'Describe this picture for people who cannot see it'}
+              aria-label={p.alt ? `Edit description of ${p.file.name}` : `Describe ${p.file.name}`}
+              onClick={() => setEditing(editing === p.key ? null : p.key)}
+            >
+              ALT
+            </button>
+          )}
+          {editing === p.key && props.onAlt && (
+            <textarea
+              className="pending-file__alt-input"
+              autoFocus
+              rows={3}
+              maxLength={1000}
+              placeholder="Describe this picture"
+              aria-label={`Description of ${p.file.name}`}
+              defaultValue={p.alt ?? ''}
+              onBlur={(e) => {
+                props.onAlt!(p.key, e.target.value.trim());
+                setEditing(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  e.currentTarget.blur();
+                } else if (e.key === 'Escape') {
+                  e.stopPropagation();
+                  setEditing(null);
+                }
+              }}
+            />
+          )}
           {p.preview ? (
             <img src={p.preview} alt="" />
           ) : (

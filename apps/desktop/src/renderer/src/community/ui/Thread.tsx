@@ -203,7 +203,7 @@ function Reply(props: {
             <RichText text={m.text} names={props.names} me={props.myName} />
           </div>
         )}
-        {m.attachments.length > 0 && <AttachmentList attachments={m.attachments} />}
+        {m.attachments.length > 0 && <AttachmentList attachments={m.attachments} alts={m.alts} />}
       </div>
     </div>
   );
