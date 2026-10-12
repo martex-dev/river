@@ -1,3 +1,4 @@
+import { ForwardDialog } from '../community/ui/Forward.tsx';
 import { useDraft } from '../community/drafts.ts';
 import { clockTime } from '../time.ts';
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
@@ -656,6 +657,7 @@ function DmMessage(props: {
   const dm = useDm();
   const editing = useDm((x) => x.editing === m.id);
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
+  const [forwarding, setForwarding] = useState(false);
   const name = m.mine ? props.myName : c.kind === 'group' ? m.senderName : c.name;
   const senderAvatar = m.mine
     ? null
@@ -777,6 +779,16 @@ function DmMessage(props: {
           <button className="msg__action" aria-label="Reply" onClick={() => useDm.setState({ replyTo: m })}>
             <ReplyIcon size={17} />
           </button>
+          {m.text && (
+            <button
+              className="msg__action"
+              aria-label="Forward"
+              title="Forward"
+              onClick={() => setForwarding(true)}
+            >
+              <span aria-hidden="true">↪</span>
+            </button>
+          )}
           {m.mine && (
             <button
               className="msg__action"
@@ -805,6 +817,9 @@ function DmMessage(props: {
             }}
           />
         </Popover>
+      )}
+      {forwarding && (
+        <ForwardDialog text={m.text} from={{ name, channel: '' }} onClose={() => setForwarding(false)} />
       )}
     </div>
   );

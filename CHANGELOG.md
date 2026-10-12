@@ -16,6 +16,7 @@ All notable changes to River are documented here. The format follows
   on someone's profile card (encrypted; only moderators see them).
 - **Hear about reactions** to your messages (Settings → Notifications,
   off by default).
+- **Forward direct messages** to a channel or another conversation.
 - **Export my data** (Settings → Account): save a readable copy of your
   profile, settings, contacts, direct messages, groups, calls, posts and
   saved messages. It never contains your keys.
