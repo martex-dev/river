@@ -92,3 +92,17 @@ export function inQuietHours(q: Settings['notifications']['quietHours'], now = n
 export function silenced(s: Pick<Settings, 'notifications' | 'presence'>, now = new Date()): boolean {
   return s.presence.status === 'dnd' || inQuietHours(s.notifications.quietHours, now);
 }
+
+/** People (not you) whose reactions are on `next` but were not on `prev` (1.0.23). */
+export function newReactions(
+  prev: Array<{ emoji: string; users: string[] }>,
+  next: Array<{ emoji: string; users: string[] }>,
+  me: string,
+): Array<{ emoji: string; user: string }> {
+  const out: Array<{ emoji: string; user: string }> = [];
+  for (const r of next) {
+    const before = new Set(prev.find((p) => p.emoji === r.emoji)?.users ?? []);
+    for (const user of r.users) if (user !== me && !before.has(user)) out.push({ emoji: r.emoji, user });
+  }
+  return out;
+}

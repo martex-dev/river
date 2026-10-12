@@ -12,7 +12,7 @@ import type {
   SoundView,
 } from '../../../shared/community-actions.ts';
 import { playLocally } from './soundboard-player.ts';
-import { effectiveNotify, shouldAlert } from '../../../shared/notify-rules.ts';
+import { effectiveNotify, newReactions, shouldAlert, silenced } from '../../../shared/notify-rules.ts';
 import { play } from './sound.ts';
 import { VoiceCall } from './voice.ts';
 import { WebCodecsRelay } from './relay-audio.ts';
@@ -294,6 +294,22 @@ export const useCommunity = create<CommunityState>((set, get) => ({
           return;
         }
         const list = get().messages[m.channelId];
+        // Someone reacted to your message (if you asked to be told).
+        const before = list?.find((x) => x.id === m.id);
+        if (before && m.mine && !event.isNew && settings?.notifications.reactions && !silenced(settings)) {
+          const added = newReactions(
+            before.reactions,
+            m.reactions,
+            useRiver.getState().identity?.riverId ?? '',
+          );
+          if (added.length) {
+            const community = get().communities.find((c) => c.id === m.communityId);
+            const who = community?.members.find((x) => x.riverId === added[0]!.user)?.name ?? 'Someone';
+            const emoji = added[0]!.emoji.startsWith('<') ? 'an emoji' : added[0]!.emoji;
+            play('reaction');
+            get().notify(`${who} reacted ${emoji} to your message.`);
+          }
+        }
         if (list) {
           const i = list.findIndex((x) => x.id === m.id);
           const next = i >= 0 ? list.map((x) => (x.id === m.id ? m : x)) : [...list, m];

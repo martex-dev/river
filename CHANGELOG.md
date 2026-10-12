@@ -14,6 +14,8 @@ All notable changes to River are documented here. The format follows
   contact the site. River never fetches local or private network addresses.
 - **Moderator notes:** people who moderate members can keep private notes
   on someone's profile card (encrypted; only moderators see them).
+- **Hear about reactions** to your messages (Settings → Notifications,
+  off by default).
 - **Export my data** (Settings → Account): save a readable copy of your
   profile, settings, contacts, direct messages, groups, calls, posts and
   saved messages. It never contains your keys.

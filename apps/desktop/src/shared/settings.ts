@@ -93,6 +93,8 @@ export const settingsSchema = z.object({
         })
         .strict(),
     ),
+    /** Added in 1.0.23: tell me when someone reacts to my message (sound and a small notice). */
+    reactions: z.boolean(),
     /** Added in 1.0.20: no notifications or sounds between these local times (like Do Not Disturb). */
     quietHours: z
       .object({
@@ -201,6 +203,7 @@ export const DEFAULT_SETTINGS: Settings = {
     soundGroups: { messages: true, voice: true, calls: true, social: true, interface: true },
     overrides: {},
     quietHours: { enabled: false, start: '22:00', end: '08:00' },
+    reactions: false,
   },
   server: { url: null, autoAccount: true },
   voice: {

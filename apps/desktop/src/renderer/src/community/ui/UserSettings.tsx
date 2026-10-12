@@ -519,6 +519,12 @@ function NotificationSettings(): ReactElement {
         checked={n.desktop}
         onChange={(v) => void update({ notifications: { desktop: v } })}
       />
+      <Toggle
+        label="Reactions to my messages"
+        help="A sound and a small notice when someone reacts to something you wrote (while that channel is loaded)."
+        checked={n.reactions}
+        onChange={(v) => void update({ notifications: { reactions: v } })}
+      />
       <div className="field__label">Notify me about</div>
       <div className="radio-cards">
         <label className={`radio-card ${n.mode === 'all' ? 'is-active' : ''}`}>
