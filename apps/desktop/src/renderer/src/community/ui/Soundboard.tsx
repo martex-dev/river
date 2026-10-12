@@ -137,6 +137,14 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
   const sounds = useCommunity((x) => x.sounds[community.id]);
   const volume = useRiver((r) => r.settings?.voice.soundboardVolume ?? 0.6);
   const manage = can(community.permissions, Permission.MANAGE_EXPRESSIONS);
+  const entranceSounds = useRiver((r) => r.settings?.voice.entranceSounds);
+  const entrance = entranceSounds?.[community.id] ?? null;
+  const setEntrance = (soundId: string | null): void => {
+    const { [community.id]: _old, ...rest } = entranceSounds ?? {};
+    void useRiver
+      .getState()
+      .updateSettings({ voice: { entranceSounds: soundId ? { ...rest, [community.id]: soundId } : rest } });
+  };
   const fileRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<{ name: string; emoji: string | null; audio: string } | null>(null);
   const [picker, setPicker] = useState<{ x: number; y: number; for: 'pending' | string } | null>(null);
@@ -182,8 +190,8 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
     <div className="settings-page">
       <h2>Soundboard</h2>
       <p className="muted small">
-        Short sounds anyone who may speak can play in voice channels. Sounds are end-to-end encrypted. Up to
-        48, each up to {SOUND_MAX_SECONDS} seconds.
+        Short sounds anyone who may speak can play in voice channels; pick one as your entrance sound. Sounds
+        are end-to-end encrypted. Up to 48, each up to {SOUND_MAX_SECONDS} seconds.
       </p>
       {manage && (
         <div className="emoji-upload">
@@ -325,6 +333,14 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
               onClick={() => playLocally(sound, Math.max(volume, 0.3))}
             >
               ▶
+            </button>
+            <button
+              className={`btn btn--small ${entrance === sound.id ? 'btn--primary' : 'btn--ghost'}`}
+              aria-pressed={entrance === sound.id}
+              title="Plays for everyone when you join a voice channel here"
+              onClick={() => setEntrance(entrance === sound.id ? null : sound.id)}
+            >
+              {entrance === sound.id ? 'Your entrance sound' : 'Use as entrance'}
             </button>
             {manage && (
               <button

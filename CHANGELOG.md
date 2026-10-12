@@ -8,6 +8,10 @@ All notable changes to River are documented here. The format follows
 
 ### Added (1.0.26)
 
+- **Entrance sounds:** pick a soundboard sound that plays when you join a
+  voice channel in that community (Community settings → Soundboard).
+- **Leave voice when you're alone** after 5, 15, 30 or 60 minutes
+  (Settings → Voice; off by default).
 - **Mute a conversation** for 15 minutes up to for good (⋯ in a direct
   message or group): no sound and no desktop notification.
 - **Insights** (Community settings): members, who's online, new members per

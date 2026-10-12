@@ -672,6 +672,14 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       await call.start();
       play('selfJoin');
       sendVoiceState();
+      // Your entrance sound for this community, if you picked one (1.0.26).
+      const community = get().communities.find((c) => c.channels.some((ch) => ch.id === channelId));
+      const entrance = community ? voice?.entranceSounds[community.id] : undefined;
+      if (entrance)
+        window.setTimeout(
+          () => void window.river.community.action({ a: 'playSound', soundId: entrance }),
+          1200,
+        );
     } catch (err) {
       set({
         call: null,
@@ -767,3 +775,32 @@ export function typingNames(channelId: string, community: CommunityView | undefi
 
 // Message links (in any message, DM or post) open the message here.
 setMessageLinkOpener((l) => useCommunity.getState().openMessage(l.communityId, l.channelId, l.messageId));
+
+/**
+ * Leave a voice channel after being alone in it for a while (1.0.26), if the
+ * person chose a time in Settings → Voice.
+ */
+let aloneSince: number | null = null;
+setInterval(() => {
+  const s = useCommunity.getState();
+  const call = s.call;
+  const minutes = useRiver.getState().settings?.voice.leaveAloneMinutes ?? 0;
+  if (!call || call.channelId.startsWith('dm:') || minutes <= 0) {
+    aloneSince = null;
+    return;
+  }
+  const community = s.communities.find((c) => c.channels.some((ch) => ch.id === call.channelId));
+  const others = (community?.voice[call.channelId] ?? []).filter(
+    (id) => id !== useRiver.getState().identity?.riverId,
+  );
+  if (others.length > 0) {
+    aloneSince = null;
+    return;
+  }
+  aloneSince ??= Date.now();
+  if (Date.now() - aloneSince >= minutes * 60_000) {
+    aloneSince = null;
+    void s.leaveVoice();
+    s.notify(`You left voice after ${minutes} minutes alone.`);
+  }
+}, 15_000);

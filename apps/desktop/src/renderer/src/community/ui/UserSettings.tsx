@@ -465,6 +465,19 @@ function VoiceSettings(): ReactElement {
           How loud other people&apos;s soundboard sounds play for you (0 turns them off).
         </span>
       </label>
+      <label className="textfield">
+        <span className="field__label">Leave voice when you're alone</span>
+        <select
+          value={voice.leaveAloneMinutes}
+          onChange={(e) => apply({ leaveAloneMinutes: Number(e.target.value) })}
+        >
+          <option value={0}>Never</option>
+          <option value={5}>After 5 minutes</option>
+          <option value={15}>After 15 minutes</option>
+          <option value={30}>After 30 minutes</option>
+          <option value={60}>After an hour</option>
+        </select>
+      </label>
       <div className="perm-group__title">Voice processing</div>
       <Toggle
         label="Noise suppression"
