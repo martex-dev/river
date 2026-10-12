@@ -73,6 +73,8 @@ export interface CommunityMembersTable {
   timeout_until: string | null;
   /** 0 while a new member has not accepted the rules of a screened community (1.0.24). */
   accepted: Generated<number>;
+  /** The invite they joined with (1.0.31). */
+  invite_id?: string | null;
 }
 
 export interface ChannelsTable {
@@ -115,6 +117,10 @@ export interface InvitesTable {
   uses: number;
   max_uses: number;
   check: string | null;
+  /** Public ID, creator and creation time (1.0.31); null for older invites. */
+  id?: string | null;
+  created_by?: string | null;
+  created_at?: string | null;
 }
 
 export interface MessagesTable {

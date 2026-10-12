@@ -322,6 +322,9 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     .strict(),
   z.object({ a: z.literal('unban'), communityId: id, riverId }).strict(),
   z.object({ a: z.literal('bans'), communityId: id }).strict(),
+  /** Invites with who made them and who joined with them (1.0.31). */
+  z.object({ a: z.literal('invites'), communityId: id }).strict(),
+  z.object({ a: z.literal('revokeInvite'), communityId: id, inviteId: z.string().max(64) }).strict(),
   z
     .object({
       a: z.literal('send'),
@@ -643,6 +646,17 @@ export interface EventView {
 
 export type CommunityAction = z.input<typeof communityActionSchema>;
 
+export interface InviteView {
+  id: string;
+  createdBy: string | null;
+  createdByName: string;
+  createdAt: string | null;
+  expiresAt: string;
+  uses: number;
+  maxUses: number;
+  joined: string[];
+}
+
 export interface BanView {
   riverId: string;
   name: string;
@@ -653,6 +667,7 @@ export interface BanView {
 
 interface Results {
   createRole: string;
+  invites: InviteView[];
   activity: ActivitySummary;
   favoriteMediaList: FavoriteMediaView[];
   favoriteMediaBytes: Uint8Array;

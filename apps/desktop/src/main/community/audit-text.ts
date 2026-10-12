@@ -88,6 +88,8 @@ export function describeAudit(
       }
       case 'member.tempRole':
         return `gave ${person(t)} ${role(typeof d.role === 'string' ? d.role : null)} for a while`;
+      case 'invite.revoke':
+        return 'revoked an invite';
       case 'member.kick':
         return `kicked ${person(t)}`;
       case 'member.ban':

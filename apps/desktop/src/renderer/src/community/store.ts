@@ -38,6 +38,7 @@ export type Modal =
 export type CommunityTab =
   | 'overview'
   | 'onboarding'
+  | 'invites'
   | 'roles'
   | 'members'
   | 'emoji'

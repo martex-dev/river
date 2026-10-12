@@ -5,6 +5,7 @@ import { AUDIT_GROUPS, auditText, filterAudit, type AuditFilter } from '../../..
 import { OnboardingSettings, WordFilterSettings } from './Onboarding.tsx';
 import { SoundSettings } from './Soundboard.tsx';
 import { ReportsPanel } from './Reports.tsx';
+import { InvitesPanel } from './Invites.tsx';
 import { useEffect, useState, type ReactElement } from 'react';
 import { PERMISSION_INFO, Permission } from '@river/protocol/permissions';
 import type { BanView } from '../../../../shared/community-actions.ts';
@@ -49,6 +50,7 @@ export function CommunitySettings(props: {
     ['stickers', 'Stickers', true],
     ['sounds', 'Soundboard', true],
     ['bans', 'Bans', can(perms, Permission.BAN_MEMBERS)],
+    ['invites', 'Invites', can(perms, Permission.MANAGE_COMMUNITY)],
     ['reports', 'Reports', can(perms, Permission.MANAGE_MESSAGES)],
     [
       'insights',
@@ -116,6 +118,7 @@ export function CommunitySettings(props: {
           {tab === 'stickers' && <StickerSettings community={community} />}
           {tab === 'sounds' && <SoundSettings community={community} />}
           {tab === 'bans' && <Bans community={community} />}
+          {tab === 'invites' && <InvitesPanel community={community} />}
           {tab === 'reports' && <ReportsPanel community={community} />}
           {tab === 'insights' && <InsightsPanel community={community} />}
           {tab === 'audit' && <AuditLog community={community} />}

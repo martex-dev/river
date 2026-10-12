@@ -298,6 +298,21 @@ export const memberRolesRequestSchema = z.object({ roles: z.array(roleIdSchema).
 export const inviteResponseSchema = z.object({ code: inviteCodeSchema, expiresAt: z.iso.datetime() });
 /** Optional check value sealed with the key in the invite link, so joiners can verify the key. */
 export const createInviteRequestSchema = z.object({ check: sealedSchema(SEALED_SMALL).optional() }).strict();
+/** Invites of a community, for people who manage it (1.0.31). */
+export const invitesResponseSchema = z.object({
+  invites: z.array(
+    z.object({
+      id: z.string().max(64),
+      createdBy: riverIdSchema.nullable(),
+      createdAt: z.string().nullable(),
+      expiresAt: z.string(),
+      uses: z.number().int(),
+      maxUses: z.number().int(),
+      /** Members who joined with it and are still here. */
+      joined: z.array(riverIdSchema),
+    }),
+  ),
+});
 export const rotateKeyRequestSchema = z.object({ from: z.number().int().min(0) }).strict();
 export const rotateKeyResponseSchema = z.object({ epoch: z.number().int().min(0) });
 export const joinRequestSchema = z

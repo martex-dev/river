@@ -28,6 +28,7 @@ import {
   reportsResponseSchema,
   soundsResponseSchema,
   stickersResponseSchema,
+  invitesResponseSchema,
   notesResponseSchema,
   eventsResponseSchema,
   decodeRelayIn,
@@ -48,6 +49,7 @@ import {
   type SoundView,
   type NoteView,
   type StickerView,
+  type InviteView,
   ART_IMAGE,
   MAX_FAVORITE_BYTES,
   MAX_FAVORITE_MEDIA,
@@ -1815,6 +1817,31 @@ export class CommunityService {
           undefined,
           z.unknown(),
         );
+        break;
+      case 'invites': {
+        const community = this.requireCommunity(act.communityId);
+        const res = await this.call(
+          `/communities/${act.communityId}/invites`,
+          'GET',
+          undefined,
+          invitesResponseSchema,
+        ).catch(explain);
+        return res.invites.map((i): InviteView => ({
+          ...i,
+          createdByName: i.createdBy
+            ? (community.members.find((m) => m.riverId === i.createdBy)?.name ??
+              this.knownNames.get(i.createdBy) ??
+              'Someone who left')
+            : 'Unknown',
+        })) as CommunityActionResult<A>;
+      }
+      case 'revokeInvite':
+        await this.call(
+          `/communities/${act.communityId}/invites/${encodeURIComponent(act.inviteId)}`,
+          'DELETE',
+          undefined,
+          z.unknown(),
+        ).catch(explain);
         break;
       case 'bans': {
         const res = await this.call(

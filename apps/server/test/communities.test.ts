@@ -24,6 +24,7 @@ import {
   soundsResponseSchema,
   notesResponseSchema,
   stickersResponseSchema,
+  invitesResponseSchema,
 } from '@river/protocol';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
@@ -541,6 +542,29 @@ describe('communities', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+
+    it('invites are tracked for managers and can be revoked', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      expect(await status(a, 'GET', `/v1/communities/${cid}/invites`, member.token)).toBe(403);
+      const list = invitesResponseSchema.parse(
+        (
+          await a.inject({ method: 'GET', url: `/v1/communities/${cid}/invites`, headers: auth(owner.token) })
+        ).json(),
+      ).invites;
+      const used = list.find((i) => i.joined.includes(member.riverId))!;
+      expect(used).toMatchObject({ createdBy: owner.riverId, uses: 1 });
+      expect(await status(a, 'DELETE', `/v1/communities/${cid}/invites/${used.id}`, member.token)).toBe(403);
+      expect(await status(a, 'DELETE', `/v1/communities/${cid}/invites/${used.id}`, owner.token)).toBe(200);
+      const after = invitesResponseSchema.parse(
+        (
+          await a.inject({ method: 'GET', url: `/v1/communities/${cid}/invites`, headers: auth(owner.token) })
+        ).json(),
+      ).invites;
+      expect(after.some((i) => i.id === used.id)).toBe(false);
     });
 
     it('moderator notes are only for people who moderate members', async () => {
