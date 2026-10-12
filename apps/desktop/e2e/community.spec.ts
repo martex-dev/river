@@ -672,3 +672,47 @@ test('status menu: do not disturb and a custom status show to others; formatting
   await folder.click();
   await expect(erin.getByRole('button', { name: /^Folder New folder, 2 communities, closed/ })).toBeVisible();
 });
+
+test('forums, stages and the soundboard work in the app', async () => {
+  test.setTimeout(120_000);
+  const gus = await open('Gus');
+  await gus.getByRole('button', { name: 'Settings', exact: true }).click();
+  await gus.getByRole('button', { name: 'Account', exact: true }).click();
+  await gus.getByPlaceholder('https://river.example.org').fill(url);
+  await gus.getByRole('button', { name: 'Save', exact: true }).click();
+  await gus.getByRole('button', { name: 'Create account' }).click();
+  await expect(gus.locator('.account-card .chip')).toHaveText('Connected');
+  await gus.getByRole('button', { name: 'Communities', exact: true }).click();
+  await gus.getByPlaceholder('e.g. The Crew').fill('Club House');
+  await gus.getByRole('button', { name: 'Create community' }).click();
+  await expect(gus.locator('.community__title strong')).toHaveText('Club House', { timeout: 20_000 });
+
+  // A forum: create it, post with a title, open the post.
+  await gus.getByRole('button', { name: 'Create channel in Text channels' }).click();
+  await gus.getByRole('dialog').locator('label', { hasText: 'Forum' }).first().click();
+  await gus.getByRole('dialog').getByPlaceholder('new-channel').fill('help desk');
+  await gus.getByRole('dialog').getByRole('button', { name: 'Create channel' }).click();
+  await gus.locator('.channel', { hasText: 'help-desk' }).getByRole('button').first().click();
+  await expect(gus.locator('.forum__empty')).toContainText('No posts yet');
+  await gus.locator('.forum__empty').getByRole('button', { name: 'New post' }).click();
+  const post = gus.getByRole('dialog', { name: /New post/ });
+  await post.getByLabel('Title').fill('How do I share my screen?');
+  await post.getByLabel('Message').fill('It says no sources on Linux.');
+  await post.getByRole('button', { name: 'Post', exact: true }).click();
+  await expect(gus.locator('.thread-panel')).toBeVisible({ timeout: 15_000 });
+  await expect(gus.locator('.forum-post')).toContainText('How do I share my screen?');
+  await auditA11y(gus, 'Forum channel');
+
+  // A stage: the owner speaks; the stage panel shows it.
+  await gus.getByRole('button', { name: 'Create channel in Voice channels' }).click();
+  await gus.getByRole('dialog').locator('label', { hasText: 'Stage' }).first().click();
+  await gus.getByRole('dialog').getByPlaceholder('new-channel').fill('Town Hall');
+  await gus.getByRole('dialog').getByRole('button', { name: 'Create channel' }).click();
+  await gus.locator('.channel', { hasText: 'Town Hall' }).getByRole('button').first().click();
+  await expect(gus.locator('.stage')).toContainText('1 speaking', { timeout: 20_000 });
+  // The soundboard opens from the call bar (no sounds yet).
+  await gus.getByRole('button', { name: 'Soundboard' }).click();
+  await expect(gus.locator('.soundboard')).toContainText('No sounds yet');
+  await gus.keyboard.press('Escape');
+  await gus.getByRole('button', { name: 'Leave' }).click();
+});
