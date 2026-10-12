@@ -1,3 +1,4 @@
+import { isMuted } from '../../../shared/notify-rules.ts';
 import { create } from 'zustand';
 import type {
   ConversationView,
@@ -100,7 +101,9 @@ export const useDm = create<DmState>((set, get) => ({
           const viewing =
             get().selected === m.peer && useRiver.getState().section === 'messages' && document.hasFocus();
           if (viewing) void window.river.dm.action({ a: 'read', peer: m.peer });
-          play(viewing ? 'message' : 'dm');
+          // A muted conversation stays quiet (1.0.26).
+          const prefs = useRiver.getState().settings?.notifications;
+          if (!prefs || !isMuted(prefs, m.peer)) play(viewing ? 'message' : 'dm');
         }
         return;
       }

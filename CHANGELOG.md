@@ -8,6 +8,8 @@ All notable changes to River are documented here. The format follows
 
 ### Added (1.0.26)
 
+- **Mute a conversation** for 15 minutes up to for good (⋯ in a direct
+  message or group): no sound and no desktop notification.
 - **Insights** (Community settings): members, who's online, new members per
   week, roles, messages per day, busiest channels and most active people —
   counted on your device, since the server cannot read messages.

@@ -32,7 +32,7 @@ export function mutedLabel(until: string | null | undefined, now = Date.now()): 
  */
 export function NotifyMenuSection(props: {
   id: string;
-  kind: 'channel' | 'community';
+  kind: 'channel' | 'community' | 'conversation';
   onDone(): void;
 }): ReactElement | null {
   const settings = useRiver((r) => r.settings);
@@ -46,7 +46,7 @@ export function NotifyMenuSection(props: {
     void update({ notifications: { overrides: withOverride(overrides, props.id, patch) } });
     props.onDone();
   };
-  const noun = props.kind === 'channel' ? 'channel' : 'community';
+  const noun = props.kind;
   return (
     <>
       <div className="menu__sep" role="separator" />
@@ -69,15 +69,17 @@ export function NotifyMenuSection(props: {
             <span className="menu__indent">{c.label}</span>
           </MenuItem>
         ))}
-      <MenuItem
-        icon={<span aria-hidden="true">⚙</span>}
-        onClick={() => setChoosing(choosing === 'level' ? null : 'level')}
-      >
-        Notifications {choosing === 'level' ? '▾' : '▸'}
-        <span className="menu__hint">
-          {LEVELS.find((l) => l.id === (current?.level ?? 'default'))!.label}
-        </span>
-      </MenuItem>
+      {props.kind !== 'conversation' && (
+        <MenuItem
+          icon={<span aria-hidden="true">⚙</span>}
+          onClick={() => setChoosing(choosing === 'level' ? null : 'level')}
+        >
+          Notifications {choosing === 'level' ? '▾' : '▸'}
+          <span className="menu__hint">
+            {LEVELS.find((l) => l.id === (current?.level ?? 'default'))!.label}
+          </span>
+        </MenuItem>
+      )}
       {choosing === 'level' &&
         LEVELS.map((l) => (
           <MenuItem key={l.id} onClick={() => save({ level: l.id })}>
