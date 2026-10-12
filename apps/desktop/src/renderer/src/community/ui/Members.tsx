@@ -101,6 +101,10 @@ export function ProfileCard(props: {
   };
   const confirm = (kind: 'kick' | 'ban'): void => {
     props.onDone();
+    if (kind === 'ban') {
+      s.setModal({ kind: 'ban', communityId: community.id, riverId: member.riverId, name: member.name });
+      return;
+    }
     s.setModal({
       kind: 'confirm',
       title: `${kind === 'kick' ? 'Kick' : 'Ban'} ${member.name}`,

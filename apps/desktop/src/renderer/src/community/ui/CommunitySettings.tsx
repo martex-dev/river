@@ -604,18 +604,11 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
                     className="btn btn--ghost btn--small btn--danger-text"
                     onClick={() =>
                       s.setModal({
-                        kind: 'confirm',
-                        title: `Ban ${m.name}`,
-                        body: `${m.name} will be removed and cannot rejoin until unbanned.`,
-                        action: 'Ban',
-                        run: async () => {
-                          await s.run({ a: 'ban', communityId: community.id, riverId: m.riverId });
-                          s.setModal({
-                            kind: 'community-settings',
-                            communityId: community.id,
-                            tab: 'members',
-                          });
-                        },
+                        kind: 'ban',
+                        communityId: community.id,
+                        riverId: m.riverId,
+                        name: m.name,
+                        then: { kind: 'community-settings', communityId: community.id, tab: 'members' },
                       })
                     }
                   >

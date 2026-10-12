@@ -396,6 +396,20 @@ export const updateReportRequestSchema = z.object({ status: reportStatusSchema }
 /** Open reports one person may have in one community at a time. */
 export const MAX_OPEN_REPORTS = 20;
 
+/** Ban, optionally deleting the person's recent messages in the community (1.0.21). */
+export const BAN_DELETE_CHOICES = [0, 3600, 6 * 3600, 24 * 3600, 3 * 24 * 3600, 7 * 24 * 3600] as const;
+export const banRequestSchema = z
+  .object({
+    deleteMessagesSeconds: z
+      .number()
+      .int()
+      .refine((n) => (BAN_DELETE_CHOICES as readonly number[]).includes(n))
+      .optional(),
+  })
+  .strict();
+/** Most messages one ban deletes. */
+export const MAX_BAN_DELETES = 1000;
+
 /** Make another member the owner (1.0.19); only the owner may. */
 export const transferOwnershipRequestSchema = z.object({ riverId: riverIdSchema }).strict();
 

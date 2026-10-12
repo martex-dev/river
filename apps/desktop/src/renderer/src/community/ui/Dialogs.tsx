@@ -37,6 +37,61 @@ export function ConfirmDialog({ modal }: { modal: Extract<ModalState, { kind: 'c
   );
 }
 
+const BAN_DELETE_LABELS: Array<[number, string]> = [
+  [0, "Don't delete any"],
+  [3600, 'From the last hour'],
+  [6 * 3600, 'From the last 6 hours'],
+  [24 * 3600, 'From the last 24 hours'],
+  [3 * 24 * 3600, 'From the last 3 days'],
+  [7 * 24 * 3600, 'From the last 7 days'],
+];
+
+/** Ban someone, optionally deleting their recent messages (1.0.21). */
+export function BanDialog({ modal }: { modal: Extract<ModalState, { kind: 'ban' }> }): ReactElement {
+  const s = useCommunity();
+  const [busy, setBusy] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const community = s.communities.find((c) => c.id === modal.communityId);
+  const ban = async (): Promise<void> => {
+    setBusy(true);
+    const res = await s.run({
+      a: 'ban',
+      communityId: modal.communityId,
+      riverId: modal.riverId,
+      ...(seconds ? { deleteMessagesSeconds: seconds } : {}),
+    });
+    setBusy(false);
+    s.setModal(modal.then ?? null);
+    if (res !== null) s.notify(`${modal.name} was banned.`);
+  };
+  return (
+    <Modal title={`Ban ${modal.name}`} onClose={() => s.setModal(modal.then ?? null)}>
+      <p className="modal__text">
+        {modal.name} will be removed from {community?.name ?? 'the community'} and cannot rejoin until
+        unbanned.
+      </p>
+      <label className="textfield">
+        <span className="field__label">Delete their messages</span>
+        <select value={seconds} onChange={(e) => setSeconds(Number(e.target.value))}>
+          {BAN_DELETE_LABELS.map(([v, label]) => (
+            <option key={v} value={v}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="modal__foot">
+        <button className="btn btn--link" onClick={() => s.setModal(modal.then ?? null)}>
+          Cancel
+        </button>
+        <button className="btn btn--danger" disabled={busy} autoFocus onClick={() => void ban()}>
+          Ban
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 export function InviteDialog({ community }: { community: CommunityView }): ReactElement {
   const s = useCommunity();
   const [invite, setInvite] = useState<string | null>(null);

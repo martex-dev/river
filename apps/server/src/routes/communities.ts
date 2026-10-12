@@ -31,6 +31,8 @@ import {
   createEventRequestSchema,
   transferOwnershipRequestSchema,
   createReportRequestSchema,
+  banRequestSchema,
+  MAX_BAN_DELETES,
   updateReportRequestSchema,
   MAX_OPEN_REPORTS,
   updateEmojiRequestSchema,
@@ -1137,6 +1139,49 @@ export async function registerCommunityRoutes(
   );
 
   // ---- moderation ------------------------------------------------------------------------------
+  /** Deletes someone's messages in a community from the last `seconds` (a ban option, 1.0.21). */
+  const purgeMessages = async (model: CommunityModel, sender: string, seconds: number): Promise<number> => {
+    const since = new Date(deps.now().getTime() - seconds * 1000).toISOString();
+    const channelIds = model.channels.map((c) => c.id);
+    if (!channelIds.length) return 0;
+    const rows = await db
+      .selectFrom('messages')
+      .select(['id', 'channel_id', 'thread_id'])
+      .where('sender', '=', sender)
+      .where('channel_id', 'in', channelIds)
+      .where('sent_at', '>=', since)
+      .orderBy('sent_at', 'desc')
+      .limit(MAX_BAN_DELETES)
+      .execute();
+    if (!rows.length) return 0;
+    const ids = rows.map((r) => r.id);
+    const touchedThreads = new Set<string>();
+    await db.transaction().execute(async (trx) => {
+      for (const r of rows) {
+        await trx.deleteFrom('messages').where('thread_id', '=', r.id).execute();
+        await trx.deleteFrom('threads').where('id', '=', r.id).execute();
+        if (r.thread_id && !ids.includes(r.thread_id)) {
+          touchedThreads.add(r.thread_id);
+          await trx
+            .updateTable('threads')
+            .set((eb) => ({ count: eb('count', '-', 1) }))
+            .where('id', '=', r.thread_id)
+            .execute();
+        }
+      }
+      await trx.deleteFrom('messages').where('id', 'in', ids).execute();
+    });
+    for (const t of touchedThreads) await pushMessage(model, t);
+    for (const r of rows)
+      hub.sendTo(model.viewers(r.channel_id), {
+        t: 'message.delete',
+        communityId: model.id,
+        channelId: r.channel_id,
+        messageId: r.id,
+      });
+    return rows.length;
+  };
+
   app.delete<{ Params: { id: string; member: string } }>(
     `${API_PREFIX}/communities/:id/members/:member`,
     authed,
@@ -1160,14 +1205,19 @@ export async function registerCommunityRoutes(
       if (!model.can(me(request), Permission.BAN_MEMBERS)) throw forbidden();
       if (model.member(target) && !model.outranks(me(request), target)) throw forbidden();
       if (target === model.ownerId) throw forbidden();
+      const req = parse(banRequestSchema, request.body ?? {});
       await db
         .insertInto('bans')
         .values({ community_id: model.id, river_id: target, banned_on: day(deps.now()) })
         .onConflict((oc) => oc.columns(['community_id', 'river_id']).doNothing())
         .execute();
+      const deleted = req.deleteMessagesSeconds
+        ? await purgeMessages(model, target, req.deleteMessagesSeconds)
+        : 0;
       if (model.member(target)) await removeMember(model, target, 'banned', me(request));
       else await audit(model.id, me(request), 'member.ban', target);
-      return { ok: true };
+      if (deleted) await audit(model.id, me(request), 'message.purge', target, { count: deleted });
+      return { ok: true, deleted };
     },
   );
 

@@ -1534,7 +1534,12 @@ export class CommunityService {
         );
         break;
       case 'ban':
-        await this.call(`/communities/${act.communityId}/bans/${act.riverId}`, 'PUT', {}, z.unknown());
+        await this.call(
+          `/communities/${act.communityId}/bans/${act.riverId}`,
+          'PUT',
+          act.deleteMessagesSeconds ? { deleteMessagesSeconds: act.deleteMessagesSeconds } : {},
+          z.unknown(),
+        );
         break;
       case 'unban':
         await this.call(

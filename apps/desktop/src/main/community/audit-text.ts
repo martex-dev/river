@@ -56,6 +56,10 @@ export function describeAudit(
         return 'joined the community';
       case 'member.leave':
         return 'left the community';
+      case 'message.purge': {
+        const n = Number(d.count ?? 0);
+        return `deleted ${n} message${n === 1 ? '' : 's'} by ${person(t)}`;
+      }
       case 'member.kick':
         return `kicked ${person(t)}`;
       case 'member.ban':

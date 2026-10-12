@@ -515,6 +515,34 @@ describe('communities', () => {
       expect((await fetchCommunity(a, member.token, cid)).channels.map((ch) => ch.id)).toContain(secret);
     });
 
+    it('a ban can delete the person’s recent messages, and only those', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const theirs = [id(), id()];
+      for (const mid of theirs)
+        await status(a, 'POST', `/v1/channels/${text}/messages`, member.token, { id: mid, body: sealed() });
+      const mine = id();
+      await status(a, 'POST', `/v1/channels/${text}/messages`, owner.token, { id: mine, body: sealed() });
+      expect(
+        await status(a, 'PUT', `/v1/communities/${cid}/bans/${member.riverId}`, owner.token, {
+          deleteMessagesSeconds: 12345,
+        }),
+      ).toBe(400);
+      const res = await a.inject({
+        method: 'PUT',
+        url: `/v1/communities/${cid}/bans/${member.riverId}`,
+        headers: auth(owner.token),
+        payload: { deleteMessagesSeconds: 3600 },
+      });
+      expect(res.json()).toEqual({ ok: true, deleted: 2 });
+      const left = (
+        await a.inject({ method: 'GET', url: `/v1/channels/${text}/messages`, headers: auth(owner.token) })
+      ).json().messages as Array<{ id: string }>;
+      expect(left.map((m) => m.id)).toEqual([mine]);
+    });
+
     it('banned users are removed and cannot rejoin until unbanned', async () => {
       const a = await start();
       const owner = await user(a);

@@ -11,6 +11,8 @@ import { communityIconSchema } from './templates.ts';
 const id = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 const riverId = z.uuid();
 const name = z.string().trim().min(1).max(64);
+/** How far back a ban may delete someone's messages (matches the server's list, 1.0.21). */
+export const BAN_DELETE_CHOICES = [0, 3600, 6 * 3600, 24 * 3600, 3 * 24 * 3600, 7 * 24 * 3600] as const;
 const text = z
   .string()
   .max(4000)
@@ -213,7 +215,19 @@ export const communityActionSchema = z.discriminatedUnion('a', [
   z.object({ a: z.literal('deleteRole'), communityId: id, roleId: id }).strict(),
   z.object({ a: z.literal('setMemberRoles'), communityId: id, riverId, roles: z.array(id).max(50) }).strict(),
   z.object({ a: z.literal('kick'), communityId: id, riverId }).strict(),
-  z.object({ a: z.literal('ban'), communityId: id, riverId }).strict(),
+  z
+    .object({
+      a: z.literal('ban'),
+      communityId: id,
+      riverId,
+      /** Also delete their messages from this many seconds back (1.0.21). */
+      deleteMessagesSeconds: z
+        .number()
+        .int()
+        .refine((n) => (BAN_DELETE_CHOICES as readonly number[]).includes(n))
+        .optional(),
+    })
+    .strict(),
   z.object({ a: z.literal('unban'), communityId: id, riverId }).strict(),
   z.object({ a: z.literal('bans'), communityId: id }).strict(),
   z

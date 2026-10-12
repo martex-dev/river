@@ -11,6 +11,7 @@ import { TextChannel } from '../community/ui/Chat.tsx';
 import { CommunitySettings } from '../community/ui/CommunitySettings.tsx';
 import {
   ChannelSettings,
+  BanDialog,
   ConfirmDialog,
   CategoryDialog,
   NicknameDialog,
@@ -141,6 +142,8 @@ function Modals({ me }: { me: string }): ReactElement | null {
   switch (modal.kind) {
     case 'confirm':
       return <ConfirmDialog modal={modal} />;
+    case 'ban':
+      return <BanDialog modal={modal} />;
     case 'user-settings':
       return <UserSettings tab={modal.tab} />;
     case 'events': {
