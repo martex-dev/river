@@ -6,7 +6,7 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-### Added (1.0.26)
+### Added
 
 - **Media channels:** turn a text channel into a gallery of the pictures
   and videos shared there (channel settings → Media channel); the chat is
@@ -23,6 +23,10 @@ All notable changes to River are documented here. The format follows
 - **Check someone's access:** in a channel's permissions, pick a member to
   see what they can and can't do there and exactly why — including changes
   you have not saved yet.
+
+## [1.0.25] - 2026-10-12
+
+**Little comforts: your GIFs, your picture, your shortcuts — and slash commands.**
 
 ### Added
 
