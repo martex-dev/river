@@ -62,6 +62,7 @@ import { describeAudit } from './audit-text.ts';
 import type { ServerLocator } from './server-locator.ts';
 import type { PresenceTracker } from '../presence.ts';
 import { readPoll, type Poll } from '../../shared/poll.ts';
+import { summarizeActivity } from '../../shared/insights.ts';
 import { hasCriteria, matchesSearch, parseSearch } from '../../shared/search-query.ts';
 import type {
   CategoryView,
@@ -1995,6 +1996,28 @@ export class CommunityService {
       }
       case 'reports':
         return (await this.reports(act.communityId)) as CommunityActionResult<A>;
+      case 'activity': {
+        // Walk each text channel's history back to the start of the period (at most 10 pages each).
+        const community = this.requireCommunity(act.communityId);
+        const now = new Date();
+        const since = new Date(now.getTime() - act.days * 86_400_000).toISOString();
+        const seen: Array<{ channelId: string; sender: string; sentAt: string }> = [];
+        let partial = false;
+        for (const ch of community.channels.filter((c) => c.kind === 'text')) {
+          let before: string | undefined;
+          for (let page = 0; ; page++) {
+            const batch = await this.messages(ch.id, before).catch(() => []);
+            for (const m of batch) seen.push({ channelId: m.channelId, sender: m.sender, sentAt: m.sentAt });
+            if (batch.length < 100 || batch[0]!.sentAt < since) break;
+            if (page === 9) {
+              partial = true;
+              break;
+            }
+            before = batch[0]!.sentAt;
+          }
+        }
+        return summarizeActivity(seen, now, act.days, partial) as CommunityActionResult<A>;
+      }
       case 'sounds':
         return (await this.sounds(act.communityId)) as CommunityActionResult<A>;
       case 'stickers': {

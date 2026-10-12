@@ -8,6 +8,9 @@ All notable changes to River are documented here. The format follows
 
 ### Added (1.0.26)
 
+- **Insights** (Community settings): members, who's online, new members per
+  week, roles, messages per day, busiest channels and most active people —
+  counted on your device, since the server cannot read messages.
 - **Check someone's access:** in a channel's permissions, pick a member to
   see what they can and can't do there and exactly why — including changes
   you have not saved yet.

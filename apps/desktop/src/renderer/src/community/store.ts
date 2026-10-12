@@ -45,6 +45,7 @@ export type CommunityTab =
   | 'sounds'
   | 'bans'
   | 'reports'
+  | 'insights'
   | 'audit';
 export type UserTab = 'profile' | 'voice' | 'notifications' | 'appearance';
 

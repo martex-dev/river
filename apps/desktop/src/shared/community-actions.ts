@@ -1,3 +1,4 @@
+import type { ActivitySummary } from './insights.ts';
 import { POLL_LIMITS } from './poll.ts';
 import { z } from 'zod';
 import type { AuditView, ChatMessage } from './ipc.ts';
@@ -458,6 +459,10 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('reports'), communityId: id }).strict(),
+  /** Message activity for Insights (1.0.26), counted on this device. */
+  z
+    .object({ a: z.literal('activity'), communityId: id, days: z.union([z.literal(7), z.literal(30)]) })
+    .strict(),
   // Stickers (1.0.24): name and picture sealed with the community key.
   z.object({ a: z.literal('stickers'), communityId: id }).strict(),
   z
@@ -612,6 +617,7 @@ export interface BanView {
 
 interface Results {
   createRole: string;
+  activity: ActivitySummary;
   favoriteMediaList: FavoriteMediaView[];
   favoriteMediaBytes: Uint8Array;
   stickers: StickerView[];
