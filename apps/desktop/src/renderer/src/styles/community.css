@@ -5167,12 +5167,8 @@ input.switch:disabled {
 .avatar-crop:active {
   cursor: grabbing;
 }
-.avatar-crop img {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  max-width: none;
-  user-select: none;
+.avatar-crop canvas {
+  display: block;
   pointer-events: none;
 }
 .avatar-crop__zoom {
