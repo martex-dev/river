@@ -6,6 +6,12 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (1.0.27)
+
+- **Language** (Settings → Appearance): English, or Bulgarian (beta,
+  partly translated: navigation, settings, menus and voice controls so
+  far), or follow your system. Changes apply at once.
+
 ### Added (1.0.26)
 
 - **Media channels:** turn a text channel into a gallery of the pictures

@@ -62,6 +62,8 @@ export const settingsSchema = z.object({
     clock: z.enum(['system', '12h', '24h']),
     /** Stronger text and borders; 'system' follows the OS high-contrast preference. */
     contrast: z.enum(['system', 'normal', 'high']),
+    /** Added in 1.0.27: interface language ('system' follows the computer). */
+    language: z.enum(['system', 'en', 'bg']),
     /** Added in 1.0.23: add previews to links you send (River fetches the page from your computer). */
     linkPreviews: z.boolean(),
   }),
@@ -197,6 +199,7 @@ export const DEFAULT_SETTINGS: Settings = {
     clock: 'system',
     contrast: 'system',
     linkPreviews: false,
+    language: 'en',
   },
   notifications: {
     preview: 'none',

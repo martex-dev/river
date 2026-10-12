@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.ts';
 import { SCREEN_QUALITIES, saveQuality, savedQuality, type ScreenQuality } from '../screen-quality.ts';
 import { StagePanel } from './Stage.tsx';
 import { SoundboardButton } from './Soundboard.tsx';
@@ -145,23 +146,23 @@ export function VoiceChannel(props: {
           <div className="voice__controls">
             <button
               className={`round-btn ${s.selfMuted ? 'round-btn--off' : ''}`}
-              aria-label={s.selfMuted ? 'Unmute' : 'Mute'}
-              title={s.selfMuted ? 'Unmute' : 'Mute'}
+              aria-label={s.selfMuted ? tr('Unmute') : tr('Mute')}
+              title={s.selfMuted ? tr('Unmute') : tr('Mute')}
               onClick={s.toggleMute}
             >
               {s.selfMuted ? <MicOffIcon /> : <MicIcon />}
             </button>
             <button
               className={`round-btn ${s.selfDeafened ? 'round-btn--off' : ''}`}
-              aria-label={s.selfDeafened ? 'Undeafen' : 'Deafen'}
-              title={s.selfDeafened ? 'Undeafen' : 'Deafen'}
+              aria-label={s.selfDeafened ? tr('Undeafen') : tr('Deafen')}
+              title={s.selfDeafened ? tr('Undeafen') : tr('Deafen')}
               onClick={s.toggleDeafen}
             >
               {s.selfDeafened ? <HeadphonesOffIcon /> : <HeadphonesIcon />}
             </button>
             <button
               className={`round-btn ${call.localTrack('camera') ? 'round-btn--on' : ''}`}
-              aria-label={call.localTrack('camera') ? 'Camera off' : 'Camera on'}
+              aria-label={call.localTrack('camera') ? tr('Camera off') : tr('Camera on')}
               title={call.localTrack('camera') ? 'Turn camera off' : 'Turn camera on'}
               disabled={!canStream}
               onClick={() =>
@@ -174,7 +175,7 @@ export function VoiceChannel(props: {
             </button>
             <button
               className={`round-btn ${call.localTrack('screen') ? 'round-btn--on' : ''}`}
-              aria-label={call.localTrack('screen') ? 'Stop sharing' : 'Share screen'}
+              aria-label={call.localTrack('screen') ? tr('Stop sharing') : tr('Share screen')}
               title={call.localTrack('screen') ? 'Stop sharing' : 'Share your screen'}
               disabled={!canStream}
               onClick={() => {
@@ -191,7 +192,7 @@ export function VoiceChannel(props: {
             <SoundboardButton community={community} channelId={call.channelId} />
             <button
               className="round-btn round-btn--danger"
-              aria-label="Leave"
+              aria-label={tr('Leave')}
               title="Disconnect"
               onClick={() => void s.leaveVoice()}
             >

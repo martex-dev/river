@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { QuickSwitcher } from './components/QuickSwitcher.tsx';
 import { startNavHistory } from './nav-history.ts';
+import { resolveLanguage, useT } from './i18n.ts';
 import { RiverMark } from './components/RiverMark.tsx';
 import { SECTION_ICONS, LockIcon } from './components/Icons.tsx';
 import { LockScreen } from './components/LockScreen.tsx';
@@ -55,6 +56,7 @@ function useSystemReducedMotion(): boolean {
 }
 
 export function App(): ReactElement {
+  const t = useT();
   const {
     section,
     navigate,
@@ -103,6 +105,11 @@ export function App(): ReactElement {
   }, [load, setUpdate, setStorage, setAccount]);
 
   useEffect(() => startNavHistory(), []);
+
+  const languageSetting = useRiver((r) => r.settings?.appearance.language);
+  useEffect(() => {
+    document.documentElement.lang = resolveLanguage(languageSetting);
+  }, [languageSetting]);
 
   useEffect(() => {
     document.documentElement.dataset.motion = reducedMotion ? 'reduced' : 'full';
@@ -183,7 +190,7 @@ export function App(): ReactElement {
 
       <div className="main">
         <header className="topbar">
-          <span className="topbar__title">{LABELS[section]}</span>
+          <span className="topbar__title">{t(LABELS[section])}</span>
           {account.state === 'registered' ? (
             <span className={`topbar__pill is-${account.connection}`} title="Your River connection">
               <span
@@ -241,6 +248,7 @@ export function App(): ReactElement {
 }
 
 function RailItem(props: { section: Section; active: boolean; onSelect(s: Section): void }): ReactElement {
+  const t = useT();
   const Icon = SECTION_ICONS[props.section];
   const dmUnread = useDm((d) => totalUnread(d.conversations));
   const communityMentions = useCommunity((c) => Object.values(c.mentions).reduce((n, v) => n + v, 0));
@@ -254,7 +262,7 @@ function RailItem(props: { section: Section; active: boolean; onSelect(s: Sectio
         onClick={() => props.onSelect(props.section)}
       >
         <Icon size={22} />
-        <span className="rail__label">{LABELS[props.section]}</span>
+        <span className="rail__label">{t(LABELS[props.section])}</span>
         {badge > 0 && (
           <span key={badge} className="badge badge--mention rail__badge">
             {badge > 99 ? '99+' : badge}

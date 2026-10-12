@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.ts';
 import { useState, type DragEvent, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, CommunityView } from '../../../../shared/ipc.ts';
@@ -75,7 +76,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
                 s.setModal({ kind: 'invite', communityId: community.id });
               }}
             >
-              Invite people
+              {tr('Invite people')}
             </MenuItem>
           )}
           {canSettings && (
@@ -86,7 +87,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
                 s.setModal({ kind: 'community-settings', communityId: community.id });
               }}
             >
-              Community settings
+              {tr('Community settings')}
             </MenuItem>
           )}
           {community.selfRoles.length > 0 && !community.myPending && (
@@ -97,7 +98,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
                 s.setModal({ kind: 'pick-roles', communityId: community.id });
               }}
             >
-              Pick your roles
+              {tr('Pick your roles')}
             </MenuItem>
           )}
           {manageChannels && (
@@ -108,7 +109,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
                 s.setModal({ kind: 'create-channel', communityId: community.id, channelKind: 'text' });
               }}
             >
-              Create channel
+              {tr('Create channel')}
             </MenuItem>
           )}
           {manageChannels && (
@@ -119,7 +120,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
                 s.setModal({ kind: 'category', communityId: community.id });
               }}
             >
-              Create category
+              {tr('Create category')}
             </MenuItem>
           )}
           <MenuItem
@@ -140,7 +141,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
                 confirmLeave();
               }}
             >
-              Leave community
+              {tr('Leave community')}
             </MenuItem>
           )}
         </Popover>
@@ -216,7 +217,7 @@ export function ChannelRow(props: {
               s.markChannelsRead([ch.id]);
             }}
           >
-            Mark as read
+            {tr('Mark as read')}
           </MenuItem>
           {can(community.permissions, Permission.CREATE_INVITE) && (
             <MenuItem
@@ -226,7 +227,7 @@ export function ChannelRow(props: {
                 s.setModal({ kind: 'invite', communityId: community.id });
               }}
             >
-              Invite people
+              {tr('Invite people')}
             </MenuItem>
           )}
           {canManage && (
@@ -237,7 +238,7 @@ export function ChannelRow(props: {
                 s.setModal({ kind: 'channel-settings', channelId: ch.id });
               }}
             >
-              Edit channel
+              {tr('Edit channel')}
             </MenuItem>
           )}
           {can(community.permissions, Permission.MANAGE_CHANNELS) && (
@@ -250,7 +251,7 @@ export function ChannelRow(props: {
                 });
               }}
             >
-              Duplicate channel
+              {tr('Duplicate channel')}
             </MenuItem>
           )}
           {ch.kind === 'text' && <NotifyMenuSection id={ch.id} kind="channel" onDone={() => setMenu(null)} />}
