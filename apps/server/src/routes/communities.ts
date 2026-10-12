@@ -31,6 +31,7 @@ import {
   createEventRequestSchema,
   transferOwnershipRequestSchema,
   createReportRequestSchema,
+  bulkDeleteRequestSchema,
   updateOnboardingRequestSchema,
   selfRolesRequestSchema,
   createNoteRequestSchema,
@@ -1938,6 +1939,50 @@ export async function registerCommunityRoutes(
     });
     return { ok: true };
   });
+
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/channels/:id/messages/bulk-delete`,
+    authed,
+    async (request) => {
+      const { model, channelId } = await channelCommunity(request.params.id, me(request));
+      if (!model.can(me(request), Permission.MANAGE_MESSAGES, channelId)) throw forbidden();
+      const req = parse(bulkDeleteRequestSchema, request.body);
+      const rows = await db
+        .selectFrom('messages')
+        .select(['id', 'thread_id'])
+        .where('channel_id', '=', channelId)
+        .where('id', 'in', [...new Set(req.ids)])
+        .execute();
+      if (!rows.length) return { ok: true, deleted: 0 };
+      const ids = rows.map((r) => r.id);
+      const touched = new Set<string>();
+      await db.transaction().execute(async (trx) => {
+        for (const r of rows) {
+          await trx.deleteFrom('messages').where('thread_id', '=', r.id).execute();
+          await trx.deleteFrom('threads').where('id', '=', r.id).execute();
+          if (r.thread_id && !ids.includes(r.thread_id)) {
+            touched.add(r.thread_id);
+            await trx
+              .updateTable('threads')
+              .set((eb) => ({ count: eb('count', '-', 1) }))
+              .where('id', '=', r.thread_id)
+              .execute();
+          }
+        }
+        await trx.deleteFrom('messages').where('id', 'in', ids).execute();
+      });
+      for (const t of touched) await pushMessage(model, t);
+      for (const id of ids)
+        hub.sendTo(model.viewers(channelId), {
+          t: 'message.delete',
+          communityId: model.id,
+          channelId,
+          messageId: id,
+        });
+      await audit(model.id, me(request), 'message.bulkDelete', null, { channelId, count: ids.length });
+      return { ok: true, deleted: ids.length };
+    },
+  );
 
   const setPinned = (pinned: 0 | 1) => async (request: FastifyRequest<{ Params: { id: string } }>) => {
     const { model, msg } = await messageContext(request.params.id, me(request));

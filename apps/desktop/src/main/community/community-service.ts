@@ -1425,6 +1425,14 @@ export class CommunityService {
         await this.call(`/channels/${act.channelId}`, 'PATCH', body, z.unknown());
         break;
       }
+      case 'bulkDelete':
+        await this.call(
+          `/channels/${act.channelId}/messages/bulk-delete`,
+          'POST',
+          { ids: act.messageIds },
+          z.unknown(),
+        ).catch(explain);
+        break;
       case 'duplicateChannel': {
         const communityId = this.communityOf(act.channelId);
         // Copy what the server has now, not what this device last saw.

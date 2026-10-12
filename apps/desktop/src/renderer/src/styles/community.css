@@ -4987,3 +4987,50 @@ input.switch:disabled {
   align-items: center;
   gap: 8px;
 }
+
+/* Audit log filter (1.0.24) */
+.audit-filter {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 6px 0 10px;
+}
+.audit-filter select {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+.audit-filter .search {
+  flex: 1;
+  min-width: 120px;
+}
+
+/* Bulk delete (1.0.24) */
+.msg.is-selecting {
+  cursor: pointer;
+}
+.msg.is-selected {
+  background: rgba(218, 55, 60, 0.12);
+}
+.msg__select {
+  align-self: flex-start;
+  margin: 10px 6px 0 0;
+  accent-color: #da373c;
+}
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 16px 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(218, 55, 60, 0.12);
+  border: 1px solid rgba(218, 55, 60, 0.4);
+  font-size: 13px;
+}
+.selection-bar span {
+  flex: 1;
+}

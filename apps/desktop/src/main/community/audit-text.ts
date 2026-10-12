@@ -78,6 +78,10 @@ export function describeAudit(
           : 'changed the rules and onboarding';
       case 'member.selfRoles':
         return 'picked their roles';
+      case 'message.bulkDelete': {
+        const n = Number(d.count ?? 0);
+        return `deleted ${n} message${n === 1 ? '' : 's'} in ${channel(typeof d.channelId === 'string' ? d.channelId : null)}`;
+      }
       case 'member.kick':
         return `kicked ${person(t)}`;
       case 'member.ban':
@@ -126,5 +130,5 @@ export function describeAudit(
         return e.action;
     }
   })();
-  return { id: e.id, actor: e.actor, actorName: person(e.actor), summary, at: e.at };
+  return { id: e.id, actor: e.actor, actorName: person(e.actor), action: e.action, summary, at: e.at };
 }

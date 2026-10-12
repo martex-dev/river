@@ -350,6 +350,7 @@ export function TextChannel(props: {
           Jump to present
         </button>
       )}
+      <SelectionBar channelId={channel.id} />
       <Composer
         community={community}
         channel={channel}
@@ -441,10 +442,24 @@ function Message(props: {
       });
   };
 
+  const selecting = useCommunity((x) => (x.selecting?.channelId === channel.id ? x.selecting : null));
+  const selected = !!selecting?.ids.includes(m.id);
+  const toggleSelected = (): void => {
+    const cur = useCommunity.getState().selecting;
+    if (!cur) return;
+    const ids = cur.ids.includes(m.id) ? cur.ids.filter((x) => x !== m.id) : [...cur.ids, m.id].slice(0, 100);
+    useCommunity.setState({ selecting: { ...cur, ids } });
+  };
   return (
     <div
       id={`msg-${m.id}`}
-      className={`msg ${props.grouped ? 'msg--grouped' : ''} ${m.mine ? 'msg--mine' : ''} ${m.mentionsMe ? 'msg--mention' : ''} ${editing ? 'is-editing' : ''}`}
+      className={`msg ${props.grouped ? 'msg--grouped' : ''} ${m.mine ? 'msg--mine' : ''} ${m.mentionsMe ? 'msg--mention' : ''} ${editing ? 'is-editing' : ''} ${selecting ? 'is-selecting' : ''} ${selected ? 'is-selected' : ''}`}
+      onClickCapture={(e) => {
+        if (!selecting) return;
+        e.preventDefault();
+        e.stopPropagation();
+        toggleSelected();
+      }}
       onContextMenu={(e) => {
         // Keep the browser's own menu for selected text (copy).
         if (window.getSelection()?.toString()) return;
@@ -466,6 +481,15 @@ function Message(props: {
         </button>
       ) : null}
       <div className="msg__row">
+        {selecting && (
+          <input
+            type="checkbox"
+            className="msg__select"
+            aria-label={`Select message from ${m.senderName}`}
+            checked={selected}
+            readOnly
+          />
+        )}
         <div className="msg__gutter">
           {props.grouped ? (
             <time className="msg__hover-time">{timeOf(m.sentAt)}</time>
@@ -798,6 +822,17 @@ function Message(props: {
           >
             Mark unread
           </MenuItem>
+          {canManage && (
+            <MenuItem
+              icon={<span aria-hidden="true">☑</span>}
+              onClick={() => {
+                setMenu(null);
+                useCommunity.setState({ selecting: { channelId: channel.id, ids: [m.id] } });
+              }}
+            >
+              Select messages
+            </MenuItem>
+          )}
           {!m.mine && (
             <MenuItem
               danger
@@ -1516,6 +1551,53 @@ function LinkCard({ embed }: { embed: LinkEmbed }): ReactElement {
         {embed.title}
       </button>
       {embed.description && <span className="link-card__text small">{embed.description}</span>}
+    </div>
+  );
+}
+
+/** Moderators: delete several selected messages at once (1.0.24). */
+function SelectionBar({ channelId }: { channelId: string }): ReactElement | null {
+  const s = useCommunity();
+  const selecting = useCommunity((x) => (x.selecting?.channelId === channelId ? x.selecting : null));
+  useEffect(() => {
+    if (!selecting) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') useCommunity.setState({ selecting: null });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selecting]);
+  if (!selecting) return null;
+  const n = selecting.ids.length;
+  return (
+    <div className="selection-bar" role="toolbar" aria-label="Selected messages">
+      <span>
+        <strong>{n}</strong> selected · click messages to add or remove (up to 100)
+      </span>
+      <button className="btn btn--link btn--small" onClick={() => useCommunity.setState({ selecting: null })}>
+        Cancel
+      </button>
+      <button
+        className="btn btn--danger btn--small"
+        disabled={n === 0}
+        onClick={() =>
+          s.setModal({
+            kind: 'confirm',
+            title: `Delete ${n} message${n === 1 ? '' : 's'}?`,
+            body: 'They are removed for everyone, with their threads. This cannot be undone.',
+            action: 'Delete',
+            run: async () => {
+              const res = await s.run({ a: 'bulkDelete', channelId, messageIds: selecting.ids });
+              if (res !== null) {
+                useCommunity.setState({ selecting: null });
+                s.notify(`Deleted ${n} message${n === 1 ? '' : 's'}.`);
+              }
+            },
+          })
+        }
+      >
+        Delete {n}
+      </button>
     </div>
   );
 }

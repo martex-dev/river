@@ -169,6 +169,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
   /** A copy with the same kind, category, permissions and settings (1.0.20); no messages. */
   z.object({ a: z.literal('duplicateChannel'), channelId: id, name }).strict(),
   z.object({ a: z.literal('deleteChannel'), channelId: id }).strict(),
+  z.object({ a: z.literal('bulkDelete'), channelId: id, messageIds: z.array(id).min(1).max(100) }).strict(),
   z.object({ a: z.literal('createThread'), channelId: id, messageId: id, name }).strict(),
   z
     .object({

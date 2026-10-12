@@ -241,6 +241,8 @@ export interface AuditView {
   id: string;
   actor: string;
   actorName: string;
+  /** The raw action, e.g. "member.ban" (1.0.24), for filtering. */
+  action?: string;
   summary: string;
   at: string;
 }

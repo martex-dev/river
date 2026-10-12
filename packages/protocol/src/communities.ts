@@ -351,6 +351,8 @@ export const updateThreadRequestSchema = z
   .object({ name: sealedSchema(SEALED_SMALL).optional(), archived: z.boolean().optional() })
   .strict();
 export const editMessageRequestSchema = z.object({ body: sealedSchema(SEALED_MESSAGE) }).strict();
+/** Delete up to 100 messages of one channel at once (moderators, 1.0.24). */
+export const bulkDeleteRequestSchema = z.object({ ids: z.array(messageIdSchema).min(1).max(100) }).strict();
 export const reactRequestSchema = z.object({ emoji: sealedSchema(SEALED_SMALL) }).strict();
 export const messagesResponseSchema = z.object({ messages: z.array(messageSchema) });
 

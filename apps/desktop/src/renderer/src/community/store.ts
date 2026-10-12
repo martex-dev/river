@@ -102,6 +102,8 @@ interface CommunityState {
   loadSaved(): Promise<void>;
   toggleSaved(channelId: string, messageId: string, on: boolean): Promise<void>;
   loadOlder(channelId: string): Promise<number>;
+  /** Moderators picking messages to delete together (1.0.24). */
+  selecting: { channelId: string; ids: string[] } | null;
   /** Reports per community (1.0.21), loaded when a moderator opens them. */
   reports: Record<string, ReportView[]>;
   loadReports(communityId: string): Promise<void>;
@@ -205,6 +207,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   },
   noMore: {},
 
+  selecting: null,
   sounds: {},
   loadSounds: async (communityId) => {
     const res = await window.river.community.action({ a: 'sounds', communityId });
@@ -560,7 +563,15 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     void markRead(channelId);
     const { [channelId]: _u, ...unread } = get().unread;
     const { [channelId]: _m, ...mentions } = get().mentions;
-    set({ selectedChannel: channelId, unread, mentions, replyTo: null, editing: null, showPins: false });
+    set({
+      selectedChannel: channelId,
+      unread,
+      mentions,
+      replyTo: null,
+      editing: null,
+      showPins: false,
+      selecting: null,
+    });
     if (channel?.kind === 'text') {
       const owner = get().communities.find((c) => c.channels.some((ch) => ch.id === channelId));
       if (owner) rememberChannel(owner.id, channelId);

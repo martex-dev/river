@@ -8,6 +8,10 @@ All notable changes to River are documented here. The format follows
 
 ### Added
 
+- **Delete many messages at once:** moderators right-click → Select
+  messages, click the ones to remove (up to 100) and delete them together.
+- **Audit log filters:** by kind of change, by person and by text, and copy
+  what you see.
 - **Rules and onboarding** (Community settings → Rules & roles): a welcome
   note and rules new members see first; optionally they must accept the
   rules before they can post, react or join voice (the server enforces it).

@@ -462,6 +462,30 @@ describe('communities', () => {
       ).toEqual([]);
     });
 
+    it('bulk delete: message managers remove up to 100 messages of one channel', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const ids = [id(), id(), id()];
+      for (const mid of ids)
+        await status(a, 'POST', `/v1/channels/${text}/messages`, member.token, { id: mid, body: sealed() });
+      const url = `/v1/channels/${text}/messages/bulk-delete`;
+      expect(await status(a, 'POST', url, member.token, { ids })).toBe(403);
+      expect(await status(a, 'POST', url, owner.token, { ids: [] })).toBe(400);
+      const res = await a.inject({
+        method: 'POST',
+        url,
+        headers: auth(owner.token),
+        payload: { ids: [ids[0], ids[1], id()] },
+      });
+      expect(res.json()).toEqual({ ok: true, deleted: 2 });
+      const left = (
+        await a.inject({ method: 'GET', url: `/v1/channels/${text}/messages`, headers: auth(owner.token) })
+      ).json().messages as Array<{ id: string }>;
+      expect(left.map((m) => m.id)).toEqual([ids[2]]);
+    });
+
     it('moderator notes are only for people who moderate members', async () => {
       const a = await start();
       const owner = await user(a);
