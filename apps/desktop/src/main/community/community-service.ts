@@ -1289,6 +1289,36 @@ export class CommunityService {
         await this.call(`/channels/${act.channelId}`, 'PATCH', body, z.unknown());
         break;
       }
+      case 'duplicateChannel': {
+        const communityId = this.communityOf(act.channelId);
+        // Copy what the server has now, not what this device last saw.
+        await this.refresh();
+        const source = this.requireCommunity(communityId).channels.find((c) => c.id === act.channelId);
+        if (!source) throw new Error('That channel no longer exists.');
+        const id = randomId();
+        await this.call(
+          `/communities/${communityId}/channels`,
+          'POST',
+          {
+            id,
+            kind: source.kind,
+            name: seal(this.requireKey(communityId), communityId, `channel:${id}`, {
+              name: act.name,
+              topic: source.topic,
+            }),
+            ...(source.synced ? {} : { overwrites: source.overwrites }),
+            ...(source.parentId ? { parentId: source.parentId } : {}),
+          },
+          z.unknown(),
+        );
+        const settings: Record<string, unknown> = {};
+        if (source.announcement) settings.announcement = true;
+        if (source.slowmode) settings.slowmode = source.slowmode;
+        if (source.userLimit) settings.userLimit = source.userLimit;
+        if (Object.keys(settings).length) await this.call(`/channels/${id}`, 'PATCH', settings, z.unknown());
+        await this.refresh();
+        return id as CommunityActionResult<A>;
+      }
       case 'moveChannel': {
         // One step up or down among its neighbours in the sidebar (same kind when there are no categories).
         const community = this.requireCommunity(this.communityOf(act.channelId));

@@ -426,6 +426,26 @@ function RoleEditor(props: {
       ))}
       {!role.everyone && editable && (
         <button
+          className="btn btn--ghost"
+          onClick={() =>
+            void s
+              .run({
+                a: 'createRole',
+                communityId: community.id,
+                name: `${role.name} (copy)`.slice(0, 64),
+                color: role.color,
+                permissions: role.permissions,
+                mentionable: role.mentionable,
+                hoist: role.hoist,
+              })
+              .then((id) => id && s.notify(`Made a copy of ${role.name}.`))
+          }
+        >
+          Duplicate role
+        </button>
+      )}
+      {!role.everyone && editable && (
+        <button
           className="btn btn--ghost btn--danger-text"
           onClick={() =>
             s.setModal({

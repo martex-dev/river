@@ -120,6 +120,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('moveChannel'), channelId: id, direction }).strict(),
+  /** A copy with the same kind, category, permissions and settings (1.0.20); no messages. */
+  z.object({ a: z.literal('duplicateChannel'), channelId: id, name }).strict(),
   z.object({ a: z.literal('deleteChannel'), channelId: id }).strict(),
   z.object({ a: z.literal('createThread'), channelId: id, messageId: id, name }).strict(),
   z
@@ -390,6 +392,7 @@ export interface BanView {
 
 interface Results {
   createRole: string;
+  duplicateChannel: string;
   createCategory: string;
   outboxList: SavedOutgoing[];
   audit: AuditView[];
