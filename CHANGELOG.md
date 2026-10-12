@@ -8,6 +8,8 @@ All notable changes to River are documented here. The format follows
 
 ### Added (1.0.25)
 
+- **Follow threads:** threads you start or reply in are followed, so you
+  hear about new replies; Follow / Following in the thread header.
 - **Crop your picture:** drag and zoom to choose exactly what shows.
 - **A different picture per community:** right-click a community →
   Nickname & picture here.

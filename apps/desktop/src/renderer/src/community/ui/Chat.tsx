@@ -1,3 +1,4 @@
+import { setFollowing } from '../thread-follow.ts';
 import { GifButton } from './Favorites.tsx';
 import { StickerButton, StickerImage } from './Stickers.tsx';
 import { SavedPanel } from './Saved.tsx';
@@ -652,9 +653,10 @@ function Message(props: {
               onClick={() => {
                 if (m.thread) return void s.showThread(channel.id, m.id);
                 const name = (m.text.split('\n')[0] ?? '').slice(0, 40).trim() || 'Thread';
-                void s
-                  .run({ a: 'createThread', channelId: channel.id, messageId: m.id, name })
-                  .then(() => s.showThread(channel.id, m.id));
+                void s.run({ a: 'createThread', channelId: channel.id, messageId: m.id, name }).then(() => {
+                  setFollowing(m.id, true);
+                  s.showThread(channel.id, m.id);
+                });
               }}
             >
               🧵
@@ -724,9 +726,10 @@ function Message(props: {
                 setMenu(null);
                 if (m.thread) return void s.showThread(channel.id, m.id);
                 const name = (m.text.split('\n')[0] ?? '').slice(0, 40).trim() || 'Thread';
-                void s
-                  .run({ a: 'createThread', channelId: channel.id, messageId: m.id, name })
-                  .then(() => s.showThread(channel.id, m.id));
+                void s.run({ a: 'createThread', channelId: channel.id, messageId: m.id, name }).then(() => {
+                  setFollowing(m.id, true);
+                  s.showThread(channel.id, m.id);
+                });
               }}
             >
               {m.thread ? 'Open thread' : 'Create thread'}

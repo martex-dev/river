@@ -13,6 +13,7 @@ import type {
   StickerView,
 } from '../../../shared/community-actions.ts';
 import { playLocally } from './soundboard-player.ts';
+import { alertForReply, setFollowing } from './thread-follow.ts';
 import { effectiveNotify, newReactions, shouldAlert, silenced } from '../../../shared/notify-rules.ts';
 import { play } from './sound.ts';
 import { VoiceCall } from './voice.ts';
@@ -312,7 +313,16 @@ export const useCommunity = create<CommunityState>((set, get) => ({
             const next = i >= 0 ? replies.map((x) => (x.id === m.id ? m : x)) : [...replies, m];
             set({ threads: { ...get().threads, [m.threadId]: next } });
           }
+          if (event.isNew && m.mine) setFollowing(m.threadId, true);
           if (event.isNew && !m.mine && m.mentionsMe) play('mention');
+          else if (event.isNew) {
+            const viewing = get().openThread?.rootId === m.threadId && document.hasFocus();
+            const quiet = settings ? silenced(settings) : false;
+            if (!quiet && alertForReply(m.threadId, m.mine, viewing)) {
+              play('message');
+              get().notify(`${m.senderName} replied in a thread you follow.`);
+            }
+          }
           return;
         }
         const list = get().messages[m.channelId];
