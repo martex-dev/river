@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.20] - 2026-10-12
+
+**Get around faster: back and forward, search filters, quiet hours — and better voice control.**
+
 ### Added
 
 - **Back and forward**, like a browser: Alt+← / Alt+→ (⌘[ / ⌘] on a Mac)
