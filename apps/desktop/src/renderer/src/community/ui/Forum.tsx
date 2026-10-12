@@ -3,7 +3,7 @@ import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, ChatMessage, CommunityView } from '../../../../shared/ipc.ts';
 import { relativeTime } from '../../time.ts';
 import { useCommunity } from '../store.ts';
-import { Avatar, Modal, can, hex } from './common.tsx';
+import { Avatar, MenuItem, Modal, Popover, can, hex } from './common.tsx';
 
 type Sort = 'activity' | 'newest';
 
@@ -23,10 +23,13 @@ export function forumPosts(
         m.text.toLowerCase().includes(q) ||
         m.senderName.toLowerCase().includes(q),
     )
-    .sort((a, b) =>
-      opts.sort === 'newest'
-        ? b.sentAt.localeCompare(a.sentAt)
-        : (b.thread?.lastAt ?? b.sentAt).localeCompare(a.thread?.lastAt ?? a.sentAt),
+    .sort(
+      (a, b) =>
+        // Pinned posts stay on top.
+        Number(b.pinned) - Number(a.pinned) ||
+        (opts.sort === 'newest'
+          ? b.sentAt.localeCompare(a.sentAt)
+          : (b.thread?.lastAt ?? b.sentAt).localeCompare(a.thread?.lastAt ?? a.sentAt)),
     );
 }
 
@@ -41,6 +44,8 @@ export function ForumChannel(props: { community: CommunityView; channel: Channel
   const [writing, setWriting] = useState(false);
   const posts = useMemo(() => forumPosts(messages, { query, tag, sort }), [messages, query, tag, sort]);
   const canPost = can(channel.permissions, Permission.SEND_MESSAGES);
+  const canModerate = can(channel.permissions, Permission.MANAGE_MESSAGES);
+  const [menu, setMenu] = useState<{ x: number; y: number; m: ChatMessage } | null>(null);
   const open = (m: ChatMessage): void =>
     useCommunity.setState({ openThread: { channelId: channel.id, rootId: m.id } });
   return (
@@ -102,8 +107,22 @@ export function ForumChannel(props: { community: CommunityView; channel: Channel
         {posts.map((m) => {
           const member = community.members.find((x) => x.riverId === m.sender);
           return (
-            <button key={m.id} className="forum-post" onClick={() => open(m)}>
+            <button
+              key={m.id}
+              className={`forum-post ${m.pinned ? 'is-pinned' : ''}`}
+              onClick={() => open(m)}
+              onContextMenu={(e) => {
+                if (!canModerate) return;
+                e.preventDefault();
+                setMenu({ x: e.clientX, y: e.clientY, m });
+              }}
+            >
               <span className="forum-post__title">
+                {m.pinned && (
+                  <span aria-label="Pinned" title="Pinned">
+                    📌{' '}
+                  </span>
+                )}
                 {m.thread?.name ?? m.text.split('\n')[0]?.slice(0, 100) ?? 'Post'}
               </span>
               {(m.tags ?? []).length > 0 && (
@@ -128,6 +147,33 @@ export function ForumChannel(props: { community: CommunityView; channel: Channel
           );
         })}
       </div>
+      {menu && (
+        <Popover x={menu.x} y={menu.y} onClose={() => setMenu(null)} className="menu">
+          <MenuItem
+            onClick={() => {
+              setMenu(null);
+              void useCommunity.getState().run({ a: 'pin', messageId: menu.m.id, pinned: !menu.m.pinned });
+            }}
+          >
+            {menu.m.pinned ? 'Unpin post' : 'Pin post'}
+          </MenuItem>
+          {menu.m.thread && (
+            <MenuItem
+              onClick={() => {
+                setMenu(null);
+                void useCommunity.getState().run({
+                  a: 'updateThread',
+                  channelId: channel.id,
+                  messageId: menu.m.id,
+                  archived: !menu.m.thread?.archived,
+                });
+              }}
+            >
+              {menu.m.thread.archived ? 'Reopen post' : 'Close post'}
+            </MenuItem>
+          )}
+        </Popover>
+      )}
       {writing && <NewPostDialog channel={channel} onClose={() => setWriting(false)} onPosted={open} />}
     </div>
   );

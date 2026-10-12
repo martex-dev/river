@@ -5179,3 +5179,6 @@ input.switch:disabled {
 .avatar-crop__zoom input {
   accent-color: var(--accent);
 }
+.forum-post.is-pinned {
+  border-color: rgba(240, 178, 50, 0.5);
+}

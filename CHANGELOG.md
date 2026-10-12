@@ -8,6 +8,8 @@ All notable changes to River are documented here. The format follows
 
 ### Added (1.0.25)
 
+- **Pin and close forum posts** (moderators: right-click a post); pinned
+  posts stay on top.
 - **Follow threads:** threads you start or reply in are followed, so you
   hear about new replies; Follow / Following in the thread header.
 - **Crop your picture:** drag and zoom to choose exactly what shows.
