@@ -25,6 +25,7 @@ import {
   type VoiceState,
   callRoomSchema,
   emojisResponseSchema,
+  reportsResponseSchema,
   eventsResponseSchema,
   decodeRelayIn,
   encodeRelayOut,
@@ -39,6 +40,7 @@ import {
   type CommunityActionResult,
   type EventView,
   type EmojiView,
+  type ReportView,
   type SavedMessageView,
   EMOJI_NAME,
   type SavedOutgoing,
@@ -603,17 +605,20 @@ export class CommunityService {
         let name = everyone ? '@everyone' : 'role';
         let mentionable = false;
         let hoist = false;
+        let icon: string | null = null;
         if (!everyone) {
           try {
-            const opened = ring.open<{ name: string; mentionable?: unknown; hoist?: unknown }>(
-              c.id,
-              `role:${r.id}`,
-              r.name,
-            );
+            const opened = ring.open<{
+              name: string;
+              mentionable?: unknown;
+              hoist?: unknown;
+              icon?: unknown;
+            }>(c.id, `role:${r.id}`, r.name);
             name = String(opened.name).slice(0, 64);
             mentionable = opened.mentionable === true;
             // Roles from before 1.0.6 have no flag: keep showing them separately, as they were.
             hoist = opened.hoist !== false;
+            icon = typeof opened.icon === 'string' && opened.icon.length <= 16 ? opened.icon : null;
           } catch {
             // keep placeholder
           }
@@ -627,6 +632,7 @@ export class CommunityService {
           everyone,
           mentionable,
           hoist,
+          icon,
         };
       })
       .sort((a, b) => b.position - a.position);
@@ -717,12 +723,14 @@ export class CommunityService {
       const avatar =
         typeof profile.avatar === 'string' && AVATAR_RE.test(profile.avatar) ? profile.avatar : null;
       const colored = roles.find((r) => !r.everyone && r.color !== 0 && m.roles.includes(r.id));
+      const withIcon = roles.find((r) => !r.everyone && r.icon && m.roles.includes(r.id));
       return {
         riverId: m.riverId,
         name,
         avatar,
         roles: m.roles,
         color: colored?.color ?? null,
+        roleIcon: withIcon?.icon ?? null,
         online: this.online.get(m.riverId) ?? m.online,
         ...((): { status?: 'idle' | 'dnd' } => {
           const live = this.statuses.has(m.riverId) ? this.statuses.get(m.riverId) : m.status;
@@ -741,6 +749,7 @@ export class CommunityService {
         owner: m.riverId === ownerId,
         rank: topPosition(ownerId, wireRoles, { riverId: m.riverId, roles: m.roles }),
         timeoutUntil: m.timeoutUntil && Date.parse(m.timeoutUntil) > Date.now() ? m.timeoutUntil : null,
+        ...(m.joinedOn ? { joinedOn: m.joinedOn } : {}),
       };
     });
 
@@ -846,6 +855,7 @@ export class CommunityService {
         noPing?: unknown;
         poll?: unknown;
         attachments?: unknown[];
+        alts?: unknown;
       }>(communityId, `message:${m.channelId}`, m.body);
       const body = opened.value;
       const key = opened.key;
@@ -877,6 +887,13 @@ export class CommunityService {
       });
       const replyTo =
         typeof body.replyTo === 'string' && /^[A-Za-z0-9_-]{22}$/.test(body.replyTo) ? body.replyTo : null;
+      const alts: Record<string, string> = {};
+      if (body.alts && typeof body.alts === 'object') {
+        for (const a of attachments) {
+          const alt = (body.alts as Record<string, unknown>)[a.id];
+          if (typeof alt === 'string' && alt.trim()) alts[a.id] = alt.slice(0, 1000);
+        }
+      }
       return {
         id: m.id,
         communityId,
@@ -891,6 +908,7 @@ export class CommunityService {
         reactions,
         replyTo,
         attachments,
+        ...(Object.keys(alts).length ? { alts } : {}),
         // A reply pings the person replied to, unless the sender turned that off.
         mentionsMe:
           m.sender !== me &&
@@ -1188,6 +1206,7 @@ export class CommunityService {
     threadId?: string,
     noPing = false,
     poll?: Poll,
+    alts: Record<string, string> = {},
   ): Promise<ChatMessage> {
     const text = attachments.length ? z.string().max(4000).parse(rawText) : textSchema.parse(rawText);
     const communityId = this.communityOf(channelId);
@@ -1200,6 +1219,14 @@ export class CommunityService {
       ...(replyTo && noPing ? { noPing: true } : {}),
       ...(poll ? { poll } : {}),
       ...(attachments.length ? { attachments } : {}),
+      // Kept beside the pointers (not in them) so older Rivers, which reject unknown pointer fields, still
+      // show the attachments.
+      ...((): { alts?: Record<string, string> } => {
+        const kept = Object.fromEntries(
+          Object.entries(alts).filter(([id, alt]) => alt && attachments.some((a) => a.id === id)),
+        );
+        return Object.keys(kept).length ? { alts: kept } : {};
+      })(),
     };
     const sent = await this.call(
       `/channels/${channelId}/messages`,
@@ -1470,6 +1497,7 @@ export class CommunityService {
               name: act.name,
               mentionable: act.mentionable ?? false,
               hoist: act.hoist ?? false,
+              ...(act.icon ? { icon: act.icon } : {}),
             }),
             color: act.color,
             permissions: act.permissions,
@@ -1481,13 +1509,20 @@ export class CommunityService {
       }
       case 'updateRole': {
         const body: Record<string, unknown> = {};
-        if (act.name !== undefined || act.mentionable !== undefined || act.hoist !== undefined) {
+        if (
+          act.name !== undefined ||
+          act.mentionable !== undefined ||
+          act.hoist !== undefined ||
+          act.icon !== undefined
+        ) {
           // Name and settings are sealed together, so keep whichever was not changed.
           const current = this.requireCommunity(act.communityId).roles.find((r) => r.id === act.roleId);
+          const icon = act.icon !== undefined ? act.icon : (current?.icon ?? null);
           body.name = seal(this.requireKey(act.communityId), act.communityId, `role:${act.roleId}`, {
             name: act.name ?? current?.name ?? 'role',
             mentionable: act.mentionable ?? current?.mentionable ?? false,
             hoist: act.hoist ?? current?.hoist ?? false,
+            ...(icon ? { icon } : {}),
           });
         }
         if (act.color !== undefined) body.color = act.color;
@@ -1532,7 +1567,12 @@ export class CommunityService {
         );
         break;
       case 'ban':
-        await this.call(`/communities/${act.communityId}/bans/${act.riverId}`, 'PUT', {}, z.unknown());
+        await this.call(
+          `/communities/${act.communityId}/bans/${act.riverId}`,
+          'PUT',
+          act.deleteMessagesSeconds ? { deleteMessagesSeconds: act.deleteMessagesSeconds } : {},
+          z.unknown(),
+        );
         break;
       case 'unban':
         await this.call(
@@ -1565,6 +1605,7 @@ export class CommunityService {
           act.threadId,
           act.noPing,
           act.poll,
+          act.alts,
         )) as CommunityActionResult<A>;
       case 'createThread': {
         const communityId = this.communityOf(act.channelId);
@@ -1713,6 +1754,28 @@ export class CommunityService {
         return (await this.events(act.communityId)) as CommunityActionResult<A>;
       case 'emojis':
         return (await this.emojis(act.communityId)) as CommunityActionResult<A>;
+      case 'report': {
+        const reportId = randomId();
+        const data = seal(this.requireKey(act.communityId), act.communityId, `report:${reportId}`, {
+          reason: act.reason,
+          text: act.text,
+          senderName: act.senderName,
+        });
+        await this.call(
+          `/communities/${act.communityId}/reports`,
+          'POST',
+          { id: reportId, messageId: act.messageId, data },
+          z.unknown(),
+        ).catch(explain);
+        return reportId as CommunityActionResult<A>;
+      }
+      case 'reports':
+        return (await this.reports(act.communityId)) as CommunityActionResult<A>;
+      case 'updateReport':
+        await this.call(`/reports/${act.reportId}`, 'PATCH', { status: act.status }, z.unknown()).catch(
+          explain,
+        );
+        break;
       case 'transferOwnership':
         await this.call(
           `/communities/${act.communityId}/transfer`,
@@ -2133,6 +2196,46 @@ export class CommunityService {
     });
   }
 
+  // ---- Reports (1.0.21) ----------------------------------------------------------------------
+
+  async reports(communityId: string): Promise<ReportView[]> {
+    const ring = this.keys.get(communityId);
+    if (!ring) throw new CommunityError('Waiting for the community key…');
+    const community = this.requireCommunity(communityId);
+    const name = (id: string | null): string =>
+      id ? (community.members.find((m) => m.riverId === id)?.name ?? 'Someone who left') : '';
+    const res = await this.call(
+      `/communities/${communityId}/reports`,
+      'GET',
+      undefined,
+      reportsResponseSchema,
+    );
+    return res.reports.map((r) => {
+      let data: { reason?: unknown; text?: unknown; senderName?: unknown } = {};
+      try {
+        data = ring.open(communityId, `report:${r.id}`, r.data);
+      } catch {
+        // Sealed with a key this device does not have: show the report without its details.
+      }
+      return {
+        id: r.id,
+        channelId: r.channelId,
+        messageId: r.messageId,
+        reporter: r.reporter,
+        reporterName: name(r.reporter),
+        target: r.target,
+        targetName: name(r.target) || String(data.senderName ?? '').slice(0, 64),
+        reason: String(data.reason ?? 'Unreadable').slice(0, 500),
+        text: String(data.text ?? '').slice(0, 2000),
+        status: r.status,
+        resolvedBy: r.resolvedBy,
+        resolvedByName: r.resolvedBy ? name(r.resolvedBy) : null,
+        createdAt: r.createdAt,
+        resolvedAt: r.resolvedAt,
+      };
+    });
+  }
+
   // ---- Scheduled events (1.0.18) ------------------------------------------------------------
 
   /** Events seen so far, per community, for start reminders. */
@@ -2423,6 +2526,9 @@ export class CommunityService {
         return;
       case 'emojis':
         this.emit({ t: 'emojis', communityId: e.communityId });
+        break;
+      case 'reports':
+        this.emit({ t: 'reports', communityId: e.communityId });
         return;
       case 'voice.disconnect':
         this.emit({ t: 'voiceDisconnect' });

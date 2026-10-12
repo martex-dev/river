@@ -171,6 +171,17 @@ Each emoji's name and picture are sealed with the community key. The server
 stores the sealed blob (it learns its size), who added it and when. Using an
 emoji in a message or a reaction is inside the sealed message or reaction.
 
+### 5i. Reports (1.0.21)
+
+A report's reason and its copy of the message (as the reporter saw it) are
+sealed with the community key, so only members can read them; the River
+client shows them only to people with _Manage messages_ in that channel, and
+the server only lists them to those people. The server learns which message
+was reported, by whom, about whom, when, and its status. Because the copy is
+the reporter's, moderators are told to check the original message when it
+still exists. Each person can report a message once and have at most 20 open
+reports per community.
+
 ## 6. Key threats and mitigations (STRIDE summary)
 
 | Threat          | Example                                | Mitigation                                                                                                                              | Status                                                 |

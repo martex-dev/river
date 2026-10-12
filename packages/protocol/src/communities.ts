@@ -112,6 +112,11 @@ export const memberSchema = z.object({
   status: presenceStatusSchema.optional(),
   /** Timed out until this moment (1.0.6); null when not timed out. */
   timeoutUntil: z.string().max(40).nullable().default(null),
+  /** The day they joined, YYYY-MM-DD (1.0.21). */
+  joinedOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 export type MemberWire = z.infer<typeof memberSchema>;
 
@@ -369,6 +374,47 @@ export const createEmojiRequestSchema = z
 /** Rename (1.0.20): the whole sealed { name, image } is replaced. */
 export const updateEmojiRequestSchema = z.object({ data: sealedSchema(SEALED_EMOJI) }).strict();
 
+/** A sealed { reason, text, senderName } — what the reporter saw (1.0.21). */
+export const SEALED_REPORT = 8 * 1024;
+export const reportStatusSchema = z.enum(['open', 'resolved', 'dismissed']);
+export const createReportRequestSchema = z
+  .object({
+    id: z.string().regex(COMMUNITY_ID_RE),
+    messageId: messageIdSchema,
+    data: sealedSchema(SEALED_REPORT),
+  })
+  .strict();
+export const reportSchema = z.object({
+  id: z.string().regex(COMMUNITY_ID_RE),
+  channelId: channelIdSchema,
+  messageId: messageIdSchema,
+  reporter: riverIdSchema,
+  target: riverIdSchema,
+  data: sealedSchema(SEALED_REPORT),
+  status: reportStatusSchema,
+  resolvedBy: riverIdSchema.nullable(),
+  createdAt: z.string(),
+  resolvedAt: z.string().nullable(),
+});
+export const reportsResponseSchema = z.object({ reports: z.array(reportSchema) });
+export const updateReportRequestSchema = z.object({ status: reportStatusSchema }).strict();
+/** Open reports one person may have in one community at a time. */
+export const MAX_OPEN_REPORTS = 20;
+
+/** Ban, optionally deleting the person's recent messages in the community (1.0.21). */
+export const BAN_DELETE_CHOICES = [0, 3600, 6 * 3600, 24 * 3600, 3 * 24 * 3600, 7 * 24 * 3600] as const;
+export const banRequestSchema = z
+  .object({
+    deleteMessagesSeconds: z
+      .number()
+      .int()
+      .refine((n) => (BAN_DELETE_CHOICES as readonly number[]).includes(n))
+      .optional(),
+  })
+  .strict();
+/** Most messages one ban deletes. */
+export const MAX_BAN_DELETES = 1000;
+
 /** Make another member the owner (1.0.19); only the owner may. */
 export const transferOwnershipRequestSchema = z.object({ riverId: riverIdSchema }).strict();
 
@@ -455,6 +501,8 @@ export const serverEventSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('events'), communityId: communityIdSchema }),
   /** A community's custom emoji changed (1.0.19). */
   z.object({ t: z.literal('emojis'), communityId: communityIdSchema }),
+  /** A report was made or handled; sent to people who may review reports (1.0.21). */
+  z.object({ t: z.literal('reports'), communityId: communityIdSchema }),
   z.object({
     t: z.literal('signal'),
     from: riverIdSchema,

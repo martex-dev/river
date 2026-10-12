@@ -243,7 +243,22 @@ export interface CommunityEmojisTable {
   created_at: string;
 }
 
+export interface CommunityReportsTable {
+  id: string;
+  community_id: string;
+  channel_id: string;
+  message_id: string;
+  reporter: string;
+  target: string;
+  data: string;
+  status: string;
+  resolved_by: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
 export interface Database {
+  community_reports: CommunityReportsTable;
   community_emojis: CommunityEmojisTable;
   community_events: CommunityEventsTable;
   community_event_rsvps: CommunityEventRsvpsTable;

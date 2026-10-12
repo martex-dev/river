@@ -42,6 +42,12 @@ export function describeAudit(
         return 'deleted an event';
       case 'emoji.create':
         return 'added a custom emoji';
+      case 'report.resolved':
+        return `resolved a report about ${person(t)}`;
+      case 'report.dismissed':
+        return `dismissed a report about ${person(t)}`;
+      case 'report.open':
+        return `reopened a report about ${person(t)}`;
       case 'emoji.update':
         return 'renamed a custom emoji';
       case 'emoji.delete':
@@ -50,6 +56,10 @@ export function describeAudit(
         return 'joined the community';
       case 'member.leave':
         return 'left the community';
+      case 'message.purge': {
+        const n = Number(d.count ?? 0);
+        return `deleted ${n} message${n === 1 ? '' : 's'} by ${person(t)}`;
+      }
       case 'member.kick':
         return `kicked ${person(t)}`;
       case 'member.ban':

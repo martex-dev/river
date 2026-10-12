@@ -47,6 +47,11 @@ export function MemberList({ community, me }: { community: CommunityView; me: st
               <span className="member__text">
                 <span className="member__name" style={m.color ? { color: hex(m.color) } : undefined}>
                   {m.name}
+                  {m.roleIcon && (
+                    <span className="role-icon" aria-hidden="true">
+                      {m.roleIcon}
+                    </span>
+                  )}
                 </span>
                 <CustomStatus member={m} />
               </span>
@@ -101,6 +106,10 @@ export function ProfileCard(props: {
   };
   const confirm = (kind: 'kick' | 'ban'): void => {
     props.onDone();
+    if (kind === 'ban') {
+      s.setModal({ kind: 'ban', communityId: community.id, riverId: member.riverId, name: member.name });
+      return;
+    }
     s.setModal({
       kind: 'confirm',
       title: `${kind === 'kick' ? 'Kick' : 'Ban'} ${member.name}`,
@@ -163,6 +172,12 @@ export function ProfileCard(props: {
         >
           {member.riverId.slice(0, 8)}… · Copy ID
         </button>
+        {member.joinedOn && (
+          <div className="muted small profile-card__since">
+            Member of {community.name} since{' '}
+            {new Date(`${member.joinedOn}T12:00:00`).toLocaleDateString([], { dateStyle: 'medium' })}
+          </div>
+        )}
         {member.bio && (
           <>
             <div className="profile-card__section">About me</div>

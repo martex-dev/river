@@ -26,6 +26,7 @@ export async function purgeAccount(
     await trx.deleteFrom('kyber_prekeys').where('river_id', '=', id).execute();
     await trx.deleteFrom('message_reactions').where('river_id', '=', id).execute();
     await trx.deleteFrom('community_event_rsvps').where('river_id', '=', id).execute();
+    await trx.deleteFrom('community_reports').where('reporter', '=', id).execute();
     await trx.deleteFrom('bans').where('river_id', '=', id).execute();
     await trx
       .deleteFrom('blocks')

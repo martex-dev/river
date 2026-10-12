@@ -190,6 +190,8 @@ export interface RoleView {
   mentionable: boolean;
   /** Members with this role are listed in their own group. */
   hoist: boolean;
+  /** An emoji shown next to members' names (1.0.21), or null. */
+  icon: string | null;
 }
 
 export interface ChannelView {
@@ -243,6 +245,8 @@ export interface MemberView {
   roles: string[];
   /** Colour of the highest coloured role, or null. */
   color: number | null;
+  /** Icon of the highest role that has one (1.0.21), or null. */
+  roleIcon?: string | null;
   online: boolean;
   /** Idle or Do Not Disturb while online (1.0.17). */
   status?: 'idle' | 'dnd';
@@ -257,6 +261,8 @@ export interface MemberView {
   rank: number;
   /** Timed out until then (cannot talk, react or join voice), or null. */
   timeoutUntil: string | null;
+  /** The day they joined this community, YYYY-MM-DD (1.0.21). */
+  joinedOn?: string;
 }
 
 /** One line of Settings → System → Connection check. Never contains content, keys or tokens. */
@@ -321,6 +327,8 @@ export interface ChatMessage {
   reactions: ReactionView[];
   replyTo: string | null;
   attachments: AttachmentPointer[];
+  /** Descriptions of attached pictures, by attachment ID (1.0.21). */
+  alts?: Record<string, string>;
   mentionsMe: boolean;
   mine: boolean;
   /** Set on replies inside a thread: the thread's starting message. */
@@ -354,6 +362,7 @@ export type CommunityEvent =
   /** A community's events changed (fetch them again), or one you are interested in starts now. */
   | { t: 'events'; communityId: string }
   | { t: 'emojis'; communityId: string }
+  | { t: 'reports'; communityId: string }
   | { t: 'eventStarting'; communityId: string; eventId: string; name: string; channelId: string | null }
   /** Your server moved to a new address and River followed it. */
   | { t: 'serverMoved'; url: string }

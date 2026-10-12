@@ -4,7 +4,12 @@ import type { CommunityAction, CommunityActionResult } from '../../../shared/com
 import type { ChatMessage, CommunityEvent, CommunityView, Result } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
 import { setMessageLinkOpener } from './message-link.ts';
-import type { EmojiView, EventView, SavedMessageView } from '../../../shared/community-actions.ts';
+import type {
+  EmojiView,
+  EventView,
+  ReportView,
+  SavedMessageView,
+} from '../../../shared/community-actions.ts';
 import { effectiveNotify, shouldAlert } from '../../../shared/notify-rules.ts';
 import { play } from './sound.ts';
 import { VoiceCall } from './voice.ts';
@@ -21,9 +26,11 @@ export type Modal =
   | { kind: 'add-friend'; riverId: string; serverUrl: string }
   | { kind: 'user-settings'; tab?: UserTab }
   | { kind: 'events'; communityId: string }
+  | { kind: 'report'; communityId: string; message: ChatMessage }
+  | { kind: 'ban'; communityId: string; riverId: string; name: string; then?: Modal }
   | { kind: 'confirm'; title: string; body: string; action: string; run: () => Promise<void> };
 
-export type CommunityTab = 'overview' | 'roles' | 'members' | 'emoji' | 'bans' | 'audit';
+export type CommunityTab = 'overview' | 'roles' | 'members' | 'emoji' | 'bans' | 'reports' | 'audit';
 export type UserTab = 'profile' | 'voice' | 'notifications' | 'appearance';
 
 const TYPING_MS = 7000;
@@ -89,6 +96,9 @@ interface CommunityState {
   loadSaved(): Promise<void>;
   toggleSaved(channelId: string, messageId: string, on: boolean): Promise<void>;
   loadOlder(channelId: string): Promise<number>;
+  /** Reports per community (1.0.21), loaded when a moderator opens them. */
+  reports: Record<string, ReportView[]>;
+  loadReports(communityId: string): Promise<void>;
 
   load(): Promise<void>;
   handle(event: CommunityEvent): void;
@@ -185,6 +195,11 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   },
   noMore: {},
 
+  reports: {},
+  loadReports: async (communityId) => {
+    const res = await window.river.community.action({ a: 'reports', communityId });
+    if (res.ok) set({ reports: { ...get().reports, [communityId]: res.value } });
+  },
   loadOlder: async (channelId) => {
     const list = get().messages[channelId];
     if (!list?.length || get().noMore[channelId]) return 0;
@@ -390,6 +405,9 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         return;
       case 'emojis':
         if (get().emojis[event.communityId]) void get().loadEmojis(event.communityId);
+        return;
+      case 'reports':
+        if (get().reports[event.communityId]) void get().loadReports(event.communityId);
         return;
       case 'eventStarting':
         play('success');

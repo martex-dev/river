@@ -1,3 +1,4 @@
+import { ReportDialog } from '../community/ui/Reports.tsx';
 import { useEffect, useState, type ReactElement } from 'react';
 import { Celebrations } from '../community/fx.tsx';
 import { ConnectionBanner, NetworkWatcher } from '../community/ui/ConnectionBanner.tsx';
@@ -10,6 +11,7 @@ import { TextChannel } from '../community/ui/Chat.tsx';
 import { CommunitySettings } from '../community/ui/CommunitySettings.tsx';
 import {
   ChannelSettings,
+  BanDialog,
   ConfirmDialog,
   CategoryDialog,
   NicknameDialog,
@@ -140,11 +142,17 @@ function Modals({ me }: { me: string }): ReactElement | null {
   switch (modal.kind) {
     case 'confirm':
       return <ConfirmDialog modal={modal} />;
+    case 'ban':
+      return <BanDialog modal={modal} />;
     case 'user-settings':
       return <UserSettings tab={modal.tab} />;
     case 'events': {
       const c = communityById(modal.communityId);
       return c ? <EventsDialog community={c} me={me} /> : null;
+    }
+    case 'report': {
+      const c = communityById(modal.communityId);
+      return c ? <ReportDialog community={c} message={modal.message} /> : null;
     }
     case 'nickname': {
       const c = communityById(modal.communityId);

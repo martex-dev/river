@@ -30,6 +30,11 @@ import {
   updateCategoryRequestSchema,
   createEventRequestSchema,
   transferOwnershipRequestSchema,
+  createReportRequestSchema,
+  banRequestSchema,
+  MAX_BAN_DELETES,
+  updateReportRequestSchema,
+  MAX_OPEN_REPORTS,
   updateEmojiRequestSchema,
   createEmojiRequestSchema,
   MAX_COMMUNITY_EMOJI,
@@ -358,6 +363,7 @@ export async function registerCommunityRoutes(
         profile: req.profile,
         online: true,
         timeoutUntil: model.timedOut(m.riverId) ? m.timeoutUntil : null,
+        ...(/^\d{4}-\d{2}-\d{2}$/.test(m.joinedOn) ? { joinedOn: m.joinedOn } : {}),
       },
     });
     return { ok: true };
@@ -737,6 +743,102 @@ export async function registerCommunityRoutes(
     return { ok: true };
   });
 
+  // ---- reports (1.0.21) ------------------------------------------------------------------------
+  /** People who review reports for a channel: they may manage messages there. */
+  const reviewers = (model: CommunityModel, channelId: string): string[] =>
+    model.members.map((m) => m.riverId).filter((id) => model.can(id, Permission.MANAGE_MESSAGES, channelId));
+
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/communities/:id/reports`,
+    authed,
+    async (request, reply) => {
+      const req = parse(createReportRequestSchema, request.body);
+      const { model, msg } = await messageContext(req.messageId, me(request));
+      if (model.id !== request.params.id) throw notFound();
+      if (msg.sender === me(request)) throw bad('You cannot report your own message');
+      const open = await db
+        .selectFrom('community_reports')
+        .select(db.fn.countAll<number>().as('n'))
+        .where('community_id', '=', model.id)
+        .where('reporter', '=', me(request))
+        .where('status', '=', 'open')
+        .executeTakeFirstOrThrow();
+      if (Number(open.n) >= MAX_OPEN_REPORTS) throw bad('You have too many open reports here');
+      try {
+        await db
+          .insertInto('community_reports')
+          .values({
+            id: req.id,
+            community_id: model.id,
+            channel_id: msg.channel_id,
+            message_id: msg.id,
+            reporter: me(request),
+            target: msg.sender,
+            data: req.data,
+            status: 'open',
+            resolved_by: null,
+            created_at: deps.now().toISOString(),
+            resolved_at: null,
+          })
+          .execute();
+      } catch {
+        throw new HttpError(409, 'conflict', 'You already reported this message');
+      }
+      hub.sendTo(reviewers(model, msg.channel_id), { t: 'reports', communityId: model.id });
+      return reply.code(201).send({ id: req.id });
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/reports`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    const rows = await db
+      .selectFrom('community_reports')
+      .selectAll()
+      .where('community_id', '=', model.id)
+      .orderBy('created_at', 'desc')
+      .limit(200)
+      .execute();
+    // Only reports from channels where you may manage messages.
+    const mine = rows.filter((r) => model.can(me(request), Permission.MANAGE_MESSAGES, r.channel_id));
+    if (!mine.length && !model.can(me(request), Permission.MANAGE_MESSAGES)) throw forbidden();
+    return {
+      reports: mine.map((r) => ({
+        id: r.id,
+        channelId: r.channel_id,
+        messageId: r.message_id,
+        reporter: r.reporter,
+        target: r.target,
+        data: r.data,
+        status: r.status,
+        resolvedBy: r.resolved_by,
+        createdAt: r.created_at,
+        resolvedAt: r.resolved_at,
+      })),
+    };
+  });
+
+  app.patch<{ Params: { id: string } }>(`${API_PREFIX}/reports/:id`, authed, async (request) => {
+    const id = parse(channelIdSchema, request.params.id);
+    const req = parse(updateReportRequestSchema, request.body);
+    const row = await db.selectFrom('community_reports').selectAll().where('id', '=', id).executeTakeFirst();
+    if (!row) throw notFound();
+    const model = await community(row.community_id, me(request));
+    if (!model.can(me(request), Permission.MANAGE_MESSAGES, row.channel_id)) throw forbidden();
+    const done = req.status !== 'open';
+    await db
+      .updateTable('community_reports')
+      .set({
+        status: req.status,
+        resolved_by: done ? me(request) : null,
+        resolved_at: done ? deps.now().toISOString() : null,
+      })
+      .where('id', '=', id)
+      .execute();
+    await audit(model.id, me(request), `report.${req.status}`, row.target, { report: id });
+    hub.sendTo(reviewers(model, row.channel_id), { t: 'reports', communityId: model.id });
+    return { ok: true };
+  });
+
   // ---- ownership (1.0.19) ----------------------------------------------------------------------
   app.post<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/transfer`, authed, async (request) => {
     const model = await community(request.params.id, me(request));
@@ -1038,6 +1140,49 @@ export async function registerCommunityRoutes(
   );
 
   // ---- moderation ------------------------------------------------------------------------------
+  /** Deletes someone's messages in a community from the last `seconds` (a ban option, 1.0.21). */
+  const purgeMessages = async (model: CommunityModel, sender: string, seconds: number): Promise<number> => {
+    const since = new Date(deps.now().getTime() - seconds * 1000).toISOString();
+    const channelIds = model.channels.map((c) => c.id);
+    if (!channelIds.length) return 0;
+    const rows = await db
+      .selectFrom('messages')
+      .select(['id', 'channel_id', 'thread_id'])
+      .where('sender', '=', sender)
+      .where('channel_id', 'in', channelIds)
+      .where('sent_at', '>=', since)
+      .orderBy('sent_at', 'desc')
+      .limit(MAX_BAN_DELETES)
+      .execute();
+    if (!rows.length) return 0;
+    const ids = rows.map((r) => r.id);
+    const touchedThreads = new Set<string>();
+    await db.transaction().execute(async (trx) => {
+      for (const r of rows) {
+        await trx.deleteFrom('messages').where('thread_id', '=', r.id).execute();
+        await trx.deleteFrom('threads').where('id', '=', r.id).execute();
+        if (r.thread_id && !ids.includes(r.thread_id)) {
+          touchedThreads.add(r.thread_id);
+          await trx
+            .updateTable('threads')
+            .set((eb) => ({ count: eb('count', '-', 1) }))
+            .where('id', '=', r.thread_id)
+            .execute();
+        }
+      }
+      await trx.deleteFrom('messages').where('id', 'in', ids).execute();
+    });
+    for (const t of touchedThreads) await pushMessage(model, t);
+    for (const r of rows)
+      hub.sendTo(model.viewers(r.channel_id), {
+        t: 'message.delete',
+        communityId: model.id,
+        channelId: r.channel_id,
+        messageId: r.id,
+      });
+    return rows.length;
+  };
+
   app.delete<{ Params: { id: string; member: string } }>(
     `${API_PREFIX}/communities/:id/members/:member`,
     authed,
@@ -1061,14 +1206,19 @@ export async function registerCommunityRoutes(
       if (!model.can(me(request), Permission.BAN_MEMBERS)) throw forbidden();
       if (model.member(target) && !model.outranks(me(request), target)) throw forbidden();
       if (target === model.ownerId) throw forbidden();
+      const req = parse(banRequestSchema, request.body ?? {});
       await db
         .insertInto('bans')
         .values({ community_id: model.id, river_id: target, banned_on: day(deps.now()) })
         .onConflict((oc) => oc.columns(['community_id', 'river_id']).doNothing())
         .execute();
+      const deleted = req.deleteMessagesSeconds
+        ? await purgeMessages(model, target, req.deleteMessagesSeconds)
+        : 0;
       if (model.member(target)) await removeMember(model, target, 'banned', me(request));
       else await audit(model.id, me(request), 'member.ban', target);
-      return { ok: true };
+      if (deleted) await audit(model.id, me(request), 'message.purge', target, { count: deleted });
+      return { ok: true, deleted };
     },
   );
 
@@ -1242,6 +1392,7 @@ export async function registerCommunityRoutes(
             profile: req.profile,
             online: true,
             timeoutUntil: null,
+            joinedOn: day(now),
           },
         });
         await audit(model.id, me(request), 'member.join', me(request));

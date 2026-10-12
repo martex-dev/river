@@ -332,6 +332,47 @@ describe('custom emoji', () => {
   });
 });
 
+describe('reports', () => {
+  it('reach moderators sealed, with the message as the reporter saw it, and can be resolved', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    const created = await alice.community.create('Reports');
+    for (const p of [bob, carol])
+      await p.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.name === 'general')!;
+    await bob.community.refresh();
+    await carol.community.refresh();
+    const bad = await bob.community.send(general.id, 'buy cheap coins at scam.example');
+    await carol.community.messages(general.id);
+    await carol.community.action({
+      a: 'report',
+      communityId: created.id,
+      messageId: bad.id,
+      reason: 'Scam or phishing',
+      text: bad.text,
+      senderName: 'Bob',
+    });
+    const stored = JSON.stringify(await serverDb.db.selectFrom('community_reports').selectAll().execute());
+    expect(stored).not.toContain('scam.example');
+    expect(stored).not.toContain('phishing');
+    // Members without Manage messages cannot list reports.
+    await expect(bob.community.action({ a: 'reports', communityId: created.id })).rejects.toThrow();
+    await alice.community.refresh();
+    const [r] = await alice.community.action({ a: 'reports', communityId: created.id });
+    expect(r).toMatchObject({
+      reporterName: 'Carol',
+      targetName: 'Bob',
+      reason: 'Scam or phishing',
+      text: 'buy cheap coins at scam.example',
+      status: 'open',
+    });
+    await alice.community.action({ a: 'updateReport', reportId: r!.id, status: 'resolved' });
+    const [after] = await alice.community.action({ a: 'reports', communityId: created.id });
+    expect(after).toMatchObject({ status: 'resolved', resolvedByName: 'Alice' });
+  });
+});
+
 describe('saved messages', () => {
   it('are kept on this device, newest first, and can be removed', async () => {
     const alice = await person('Alice');
@@ -556,6 +597,26 @@ describe('desktop ↔ server communities', () => {
 
     // Empty messages without files are still refused.
     await expect(alice.community.action({ a: 'send', channelId: general.id, text: '  ' })).rejects.toThrow();
+
+    // Picture descriptions travel inside the sealed body, beside (not inside) the pointers.
+    const chart = await alice.community.action({
+      a: 'upload',
+      name: 'chart.png',
+      mime: 'image/png',
+      bytes: new Uint8Array(secret),
+    });
+    await alice.community.action({
+      a: 'send',
+      channelId: general.id,
+      text: 'with a description',
+      attachments: [chart],
+      alts: { [chart.id]: 'A bar chart of quarterly numbers', [created.id]: 'not an attachment here' },
+    });
+    const [described] = (await bob.community.messages(general.id)).slice(-1);
+    expect(described!.attachments).toEqual([chart]);
+    expect(described!.alts).toEqual({ [chart.id]: 'A bar chart of quarterly numbers' });
+    const stored = JSON.stringify(await serverDb.db.selectFrom('messages').selectAll().execute());
+    expect(stored).not.toContain('bar chart');
   });
 
   it('pages through older history and searches it on the device', async () => {
@@ -939,6 +1000,37 @@ describe('desktop ↔ server communities', () => {
     expect(lounge.userLimit).toBe(0);
     await alice.community.action({ a: 'updateChannel', channelId: lounge.id, userLimit: 4 });
     expect((await alice.community.refresh())[0]!.channels.find((c) => c.id === lounge.id)?.userLimit).toBe(4);
+  });
+
+  it('role icons are sealed and shown next to members with the role', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Icons');
+    const roleId = await alice.community.action({
+      a: 'createRole',
+      communityId: created.id,
+      name: 'Gardener',
+      color: 0x23a55a,
+      permissions: 0,
+      icon: '🌱',
+    });
+    await alice.community.action({
+      a: 'setMemberRoles',
+      communityId: created.id,
+      riverId: alice.riverId,
+      roles: [roleId],
+    });
+    let c = (await alice.community.refresh())[0]!;
+    expect(c.roles.find((r) => r.id === roleId)?.icon).toBe('🌱');
+    expect(c.members.find((m) => m.riverId === alice.riverId)?.roleIcon).toBe('🌱');
+    const stored = JSON.stringify(await serverDb.db.selectFrom('roles').selectAll().execute());
+    expect(stored).not.toContain('🌱');
+    // Changing something else keeps the icon; null removes it.
+    await alice.community.action({ a: 'updateRole', communityId: created.id, roleId, name: 'Gardeners' });
+    c = (await alice.community.refresh())[0]!;
+    expect(c.roles.find((r) => r.id === roleId)).toMatchObject({ name: 'Gardeners', icon: '🌱' });
+    await alice.community.action({ a: 'updateRole', communityId: created.id, roleId, icon: null });
+    c = (await alice.community.refresh())[0]!;
+    expect(c.roles.find((r) => r.id === roleId)?.icon).toBeNull();
   });
 
   it('duplicates a channel with its settings and permissions, but no messages', async () => {

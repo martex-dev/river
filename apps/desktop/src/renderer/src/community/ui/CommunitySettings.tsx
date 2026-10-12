@@ -1,3 +1,4 @@
+import { ReportsPanel } from './Reports.tsx';
 import { useEffect, useState, type ReactElement } from 'react';
 import { PERMISSION_INFO, Permission } from '@river/protocol/permissions';
 import type { BanView } from '../../../../shared/community-actions.ts';
@@ -9,7 +10,9 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   Avatar,
+  EmojiPicker,
   Modal,
+  Popover,
   Toggle,
   XIcon,
   can,
@@ -37,6 +40,7 @@ export function CommunitySettings(props: {
     ['members', 'Members', true],
     ['emoji', 'Emoji', true],
     ['bans', 'Bans', can(perms, Permission.BAN_MEMBERS)],
+    ['reports', 'Reports', can(perms, Permission.MANAGE_MESSAGES)],
     ['audit', 'Audit log', can(perms, Permission.VIEW_AUDIT_LOG)],
   ];
   const visible = tabs.filter((t) => t[2]);
@@ -90,6 +94,7 @@ export function CommunitySettings(props: {
           {tab === 'members' && <Members community={community} me={me} />}
           {tab === 'emoji' && <EmojiSettings community={community} />}
           {tab === 'bans' && <Bans community={community} />}
+          {tab === 'reports' && <ReportsPanel community={community} />}
           {tab === 'audit' && <AuditLog community={community} />}
         </section>
       </div>
@@ -324,12 +329,15 @@ function RoleEditor(props: {
   const [permissions, setPermissions] = useState(role.permissions);
   const [mentionable, setMentionable] = useState(role.mentionable);
   const [hoist, setHoist] = useState(role.hoist);
+  const [icon, setIcon] = useState(role.icon);
+  const [iconPicker, setIconPicker] = useState<{ x: number; y: number } | null>(null);
   const dirty =
     name !== role.name ||
     color !== role.color ||
     permissions !== role.permissions ||
     mentionable !== role.mentionable ||
-    hoist !== role.hoist;
+    hoist !== role.hoist ||
+    icon !== role.icon;
   const mine = community.permissions;
 
   const save = (): void => {
@@ -337,7 +345,7 @@ function RoleEditor(props: {
       a: 'updateRole',
       communityId: community.id,
       roleId: role.id,
-      ...(role.everyone ? {} : { name: name.trim() || role.name, color, mentionable, hoist }),
+      ...(role.everyone ? {} : { name: name.trim() || role.name, color, mentionable, hoist, icon }),
       permissions,
     });
   };
@@ -384,6 +392,37 @@ function RoleEditor(props: {
               onChange={(e) => setColor(parseInt(e.target.value.slice(1), 16))}
             />
           </div>
+          <div className="field__label">Role icon</div>
+          <div className="role-icon-field">
+            <button
+              className="role-icon-field__pick"
+              disabled={!editable}
+              aria-label={icon ? `Role icon ${icon}, change` : 'Choose a role icon'}
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setIconPicker({ x: r.left, y: r.bottom + 6 });
+              }}
+            >
+              {icon ?? '＋'}
+            </button>
+            {icon && editable && (
+              <button className="btn btn--link btn--small" onClick={() => setIcon(null)}>
+                Remove
+              </button>
+            )}
+            <span className="muted small">Shown next to the names of people with this role.</span>
+          </div>
+          {iconPicker && (
+            <Popover x={iconPicker.x} y={iconPicker.y} onClose={() => setIconPicker(null)}>
+              <EmojiPicker
+                onPick={(e) => {
+                  // Community emoji are pictures; role icons are plain emoji.
+                  if (!e.startsWith('<')) setIcon(e);
+                  setIconPicker(null);
+                }}
+              />
+            </Popover>
+          )}
           <Toggle
             label="Allow anyone to @mention this role"
             help="Members can ping everyone with this role. People who may mention @everyone can always mention every role."
@@ -437,6 +476,7 @@ function RoleEditor(props: {
                 permissions: role.permissions,
                 mentionable: role.mentionable,
                 hoist: role.hoist,
+                icon: role.icon,
               })
               .then((id) => id && s.notify(`Made a copy of ${role.name}.`))
           }
@@ -474,6 +514,7 @@ function RoleEditor(props: {
               setPermissions(role.permissions);
               setMentionable(role.mentionable);
               setHoist(role.hoist);
+              setIcon(role.icon);
             }}
           >
             Reset
@@ -601,18 +642,11 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
                     className="btn btn--ghost btn--small btn--danger-text"
                     onClick={() =>
                       s.setModal({
-                        kind: 'confirm',
-                        title: `Ban ${m.name}`,
-                        body: `${m.name} will be removed and cannot rejoin until unbanned.`,
-                        action: 'Ban',
-                        run: async () => {
-                          await s.run({ a: 'ban', communityId: community.id, riverId: m.riverId });
-                          s.setModal({
-                            kind: 'community-settings',
-                            communityId: community.id,
-                            tab: 'members',
-                          });
-                        },
+                        kind: 'ban',
+                        communityId: community.id,
+                        riverId: m.riverId,
+                        name: m.name,
+                        then: { kind: 'community-settings', communityId: community.id, tab: 'members' },
                       })
                     }
                   >

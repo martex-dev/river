@@ -40,6 +40,7 @@ export interface MemberModel {
   roles: string[];
   profile: string;
   timeoutUntil: string | null;
+  joinedOn: string;
 }
 
 /** Everything needed to answer "may X do Y here?" for one community. */
@@ -192,6 +193,7 @@ export class CommunityModel {
           return p && p !== 'online' ? { status: p } : {};
         })(),
         timeoutUntil: this.timedOut(m.riverId) ? m.timeoutUntil : null,
+        ...(/^\d{4}-\d{2}-\d{2}$/.test(m.joinedOn) ? { joinedOn: m.joinedOn } : {}),
       })),
     };
   }
@@ -282,6 +284,7 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
       roles: memberRoles.filter((r) => r.river_id === m.river_id).map((r) => r.role_id),
       profile: m.profile,
       timeoutUntil: m.timeout_until,
+      joinedOn: m.joined_on,
     })),
   });
 }
