@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.25] - 2026-10-12
+
+**Little comforts: your GIFs, your picture, your shortcuts — and slash commands.**
+
 ### Added
 
 - **Slash commands:** type `/` for /shrug, /tableflip, /me, /spoiler,
