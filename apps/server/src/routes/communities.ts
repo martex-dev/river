@@ -1302,16 +1302,20 @@ export async function registerCommunityRoutes(
       if (model.member(target) && !model.outranks(me(request), target)) throw forbidden();
       if (target === model.ownerId) throw forbidden();
       const req = parse(banRequestSchema, request.body ?? {});
+      const until = req.durationSeconds
+        ? new Date(deps.now().getTime() + req.durationSeconds * 1000).toISOString()
+        : null;
       await db
         .insertInto('bans')
-        .values({ community_id: model.id, river_id: target, banned_on: day(deps.now()) })
-        .onConflict((oc) => oc.columns(['community_id', 'river_id']).doNothing())
+        .values({ community_id: model.id, river_id: target, banned_on: day(deps.now()), until })
+        .onConflict((oc) => oc.columns(['community_id', 'river_id']).doUpdateSet({ until }))
         .execute();
       const deleted = req.deleteMessagesSeconds
         ? await purgeMessages(model, target, req.deleteMessagesSeconds)
         : 0;
       if (model.member(target)) await removeMember(model, target, 'banned', me(request));
       else await audit(model.id, me(request), 'member.ban', target);
+      if (until) await audit(model.id, me(request), 'member.tempban', target, { until });
       if (deleted) await audit(model.id, me(request), 'message.purge', target, { count: deleted });
       return { ok: true, deleted };
     },
@@ -1404,10 +1408,15 @@ export async function registerCommunityRoutes(
     if (!model.can(me(request), Permission.BAN_MEMBERS)) throw forbidden();
     const rows = await db
       .selectFrom('bans')
-      .select(['river_id', 'banned_on'])
+      .select(['river_id', 'banned_on', 'until'])
       .where('community_id', '=', model.id)
       .execute();
-    return { bans: rows.map((r) => ({ riverId: r.river_id, bannedOn: r.banned_on })) };
+    const now = deps.now().toISOString();
+    return {
+      bans: rows
+        .filter((r) => !r.until || r.until > now)
+        .map((r) => ({ riverId: r.river_id, bannedOn: r.banned_on, until: r.until })),
+    };
   });
 
   // ---- invites ---------------------------------------------------------------------------------
@@ -1452,11 +1461,25 @@ export async function registerCommunityRoutes(
         throw new HttpError(404, 'invalid_invite', 'This invite is invalid or expired');
       const banned = await db
         .selectFrom('bans')
-        .select('river_id')
+        .select(['river_id', 'until'])
         .where('community_id', '=', invite.community_id)
         .where('river_id', '=', me(request))
         .executeTakeFirst();
-      if (banned) throw new HttpError(403, 'banned', 'You are banned from this community');
+      if (banned && (!banned.until || banned.until > deps.now().toISOString()))
+        throw new HttpError(
+          403,
+          'banned',
+          banned.until
+            ? `You are banned from this community until ${banned.until.slice(0, 16).replace('T', ' ')} UTC`
+            : 'You are banned from this community',
+        );
+      // A temporary ban that is over is forgotten.
+      if (banned)
+        await db
+          .deleteFrom('bans')
+          .where('community_id', '=', invite.community_id)
+          .where('river_id', '=', me(request))
+          .execute();
       let model = (await loadCommunity(db, invite.community_id))!;
       if (!model.member(me(request))) {
         await db.transaction().execute(async (trx) => {

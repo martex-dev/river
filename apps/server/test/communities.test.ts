@@ -591,6 +591,49 @@ describe('communities', () => {
       expect(left.map((m) => m.id)).toEqual([mine]);
     });
 
+    it('temporary bans end on their own', async () => {
+      let now = Date.parse('2026-10-12T10:00:00Z');
+      database = openDatabase('sqlite::memory:');
+      await migrateToLatest(database.db);
+      const a = await buildApp({
+        config: loadConfig({
+          RIVER_ATTACHMENT_DIR: testBlobDir(),
+          RIVER_LOG_LEVEL: 'silent',
+          RIVER_RATE_LIMIT_PER_MINUTE: '10000',
+        }),
+        database,
+        now: () => new Date(now),
+      });
+      app = a;
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      expect(
+        await status(a, 'PUT', `/v1/communities/${cid}/bans/${member.riverId}`, owner.token, {
+          durationSeconds: 999,
+        }),
+      ).toBe(400);
+      expect(
+        await status(a, 'PUT', `/v1/communities/${cid}/bans/${member.riverId}`, owner.token, {
+          durationSeconds: 3600,
+        }),
+      ).toBe(200);
+      const code = (
+        await a.inject({ method: 'POST', url: `/v1/communities/${cid}/invites`, headers: auth(owner.token) })
+      ).json().code;
+      expect(await status(a, 'POST', '/v1/invites/join', member.token, { code, profile: sealed() })).toBe(
+        403,
+      );
+      const bans = (
+        await a.inject({ method: 'GET', url: `/v1/communities/${cid}/bans`, headers: auth(owner.token) })
+      ).json().bans;
+      expect(bans[0].until).toBe('2026-10-12T11:00:00.000Z');
+      now += 3601_000;
+      expect(await status(a, 'POST', '/v1/invites/join', member.token, { code, profile: sealed() })).toBe(
+        200,
+      );
+    });
+
     it('banned users are removed and cannot rejoin until unbanned', async () => {
       const a = await start();
       const owner = await user(a);

@@ -684,7 +684,12 @@ function Bans({ community }: { community: CommunityView }): ReactElement {
             <Avatar id={b.riverId} name={b.name} size={32} />
             <div className="member-table__who">
               <strong>{b.name}</strong>
-              <span className="muted small">Banned on {b.bannedOn}</span>
+              <span className="muted small">
+                Banned on {b.bannedOn}
+                {b.until
+                  ? ` · until ${new Date(b.until).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`
+                  : ''}
+              </span>
             </div>
             <button
               className="btn btn--ghost btn--small"

@@ -66,6 +66,8 @@ export function describeAudit(
         const n = Number(d.count ?? 0);
         return `deleted ${n} message${n === 1 ? '' : 's'} by ${person(t)}`;
       }
+      case 'member.tempban':
+        return `made ${person(t)}'s ban end ${typeof d.until === 'string' ? new Date(d.until).toLocaleString() : 'later'}`;
       case 'member.kick':
         return `kicked ${person(t)}`;
       case 'member.ban':

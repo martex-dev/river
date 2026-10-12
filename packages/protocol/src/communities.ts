@@ -266,7 +266,14 @@ export const joinRequestSchema = z
 export const profileRequestSchema = z.object({ profile: sealedSchema(SEALED_PROFILE) }).strict();
 export const communitiesResponseSchema = z.object({ communities: z.array(communitySchema) });
 export const bansResponseSchema = z.object({
-  bans: z.array(z.object({ riverId: riverIdSchema, bannedOn: z.string() })),
+  bans: z.array(
+    z.object({
+      riverId: riverIdSchema,
+      bannedOn: z.string(),
+      /** When a temporary ban ends (1.0.22); absent or null = for good. */
+      until: z.string().max(40).nullable().optional(),
+    }),
+  ),
 });
 
 export const reactionSchema = z.object({
@@ -432,12 +439,20 @@ export const MAX_OPEN_REPORTS = 20;
 
 /** Ban, optionally deleting the person's recent messages in the community (1.0.21). */
 export const BAN_DELETE_CHOICES = [0, 3600, 6 * 3600, 24 * 3600, 3 * 24 * 3600, 7 * 24 * 3600] as const;
+/** How long a temporary ban can last (1.0.22). */
+export const BAN_DURATIONS = [3600, 24 * 3600, 7 * 24 * 3600, 30 * 24 * 3600] as const;
 export const banRequestSchema = z
   .object({
     deleteMessagesSeconds: z
       .number()
       .int()
       .refine((n) => (BAN_DELETE_CHOICES as readonly number[]).includes(n))
+      .optional(),
+    /** Ban only for this long (1.0.22); absent = for good. */
+    durationSeconds: z
+      .number()
+      .int()
+      .refine((n) => (BAN_DURATIONS as readonly number[]).includes(n))
       .optional(),
   })
   .strict();

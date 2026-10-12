@@ -162,6 +162,8 @@ export interface BansTable {
   community_id: string;
   river_id: string;
   banned_on: string;
+  /** When a temporary ban ends (1.0.22), or null. */
+  until: string | null;
 }
 
 export interface MessageReactionsTable {

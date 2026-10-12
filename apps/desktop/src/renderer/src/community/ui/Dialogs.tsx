@@ -38,6 +38,14 @@ export function ConfirmDialog({ modal }: { modal: Extract<ModalState, { kind: 'c
   );
 }
 
+const BAN_LENGTHS: Array<[number, string]> = [
+  [0, 'For good'],
+  [3600, 'For 1 hour'],
+  [24 * 3600, 'For 1 day'],
+  [7 * 24 * 3600, 'For 1 week'],
+  [30 * 24 * 3600, 'For 30 days'],
+];
+
 const BAN_DELETE_LABELS: Array<[number, string]> = [
   [0, "Don't delete any"],
   [3600, 'From the last hour'],
@@ -52,6 +60,7 @@ export function BanDialog({ modal }: { modal: Extract<ModalState, { kind: 'ban' 
   const s = useCommunity();
   const [busy, setBusy] = useState(false);
   const [seconds, setSeconds] = useState(0);
+  const [duration, setDuration] = useState(0);
   const community = s.communities.find((c) => c.id === modal.communityId);
   const ban = async (): Promise<void> => {
     setBusy(true);
@@ -60,6 +69,7 @@ export function BanDialog({ modal }: { modal: Extract<ModalState, { kind: 'ban' 
       communityId: modal.communityId,
       riverId: modal.riverId,
       ...(seconds ? { deleteMessagesSeconds: seconds } : {}),
+      ...(duration ? { durationSeconds: duration } : {}),
     });
     setBusy(false);
     s.setModal(modal.then ?? null);
@@ -68,9 +78,19 @@ export function BanDialog({ modal }: { modal: Extract<ModalState, { kind: 'ban' 
   return (
     <Modal title={`Ban ${modal.name}`} onClose={() => s.setModal(modal.then ?? null)}>
       <p className="modal__text">
-        {modal.name} will be removed from {community?.name ?? 'the community'} and cannot rejoin until
-        unbanned.
+        {modal.name} will be removed from {community?.name ?? 'the community'} and cannot rejoin until the ban
+        ends or someone unbans them.
       </p>
+      <label className="textfield">
+        <span className="field__label">How long</span>
+        <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
+          {BAN_LENGTHS.map(([v, label]) => (
+            <option key={v} value={v}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
       <label className="textfield">
         <span className="field__label">Delete their messages</span>
         <select value={seconds} onChange={(e) => setSeconds(Number(e.target.value))}>

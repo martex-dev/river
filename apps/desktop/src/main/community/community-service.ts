@@ -1619,7 +1619,10 @@ export class CommunityService {
         await this.call(
           `/communities/${act.communityId}/bans/${act.riverId}`,
           'PUT',
-          act.deleteMessagesSeconds ? { deleteMessagesSeconds: act.deleteMessagesSeconds } : {},
+          {
+            ...(act.deleteMessagesSeconds ? { deleteMessagesSeconds: act.deleteMessagesSeconds } : {}),
+            ...(act.durationSeconds ? { durationSeconds: act.durationSeconds } : {}),
+          },
           z.unknown(),
         );
         break;
@@ -1641,6 +1644,7 @@ export class CommunityService {
         const bans: BanView[] = res.bans.map((b) => ({
           riverId: b.riverId,
           bannedOn: b.bannedOn,
+          until: b.until ?? null,
           name: this.knownNames.get(b.riverId) ?? `Member ${b.riverId.slice(0, 4)}`,
         }));
         return bans as CommunityActionResult<A>;

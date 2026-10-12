@@ -21,6 +21,8 @@ All notable changes to River are documented here. The format follows
   a hand to ask to speak, and moderators invite speakers up or move them
   back to the audience. Create one from Create channel, or turn a voice
   channel into a stage in its settings.
+- **Temporary bans:** ban someone for an hour, a day, a week or 30 days;
+  they can rejoin once it ends.
 - **Change your voice shortcuts** (Settings → Voice → Keyboard shortcuts):
   mute, deafen, camera and leave voice, with clash warnings.
 

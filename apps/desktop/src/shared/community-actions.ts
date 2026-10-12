@@ -23,6 +23,8 @@ export const SOUND_AUDIO_CHARS = Math.ceil((SOUND_MAX_BYTES * 4) / 3) + 64;
 const roleIcon = z.string().min(1).max(16);
 /** How far back a ban may delete someone's messages (matches the server's list, 1.0.21). */
 export const BAN_DELETE_CHOICES = [0, 3600, 6 * 3600, 24 * 3600, 3 * 24 * 3600, 7 * 24 * 3600] as const;
+/** Temporary ban lengths (matches the server, 1.0.22). */
+export const BAN_DURATIONS = [3600, 24 * 3600, 7 * 24 * 3600, 30 * 24 * 3600] as const;
 const text = z
   .string()
   .max(4000)
@@ -239,6 +241,12 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       a: z.literal('ban'),
       communityId: id,
       riverId,
+      /** Ban only for this long (1.0.22); absent = for good. */
+      durationSeconds: z
+        .number()
+        .int()
+        .refine((n) => (BAN_DURATIONS as readonly number[]).includes(n))
+        .optional(),
       /** Also delete their messages from this many seconds back (1.0.21). */
       deleteMessagesSeconds: z
         .number()
@@ -510,6 +518,8 @@ export interface BanView {
   riverId: string;
   name: string;
   bannedOn: string;
+  /** When a temporary ban ends, or null. */
+  until: string | null;
 }
 
 interface Results {
