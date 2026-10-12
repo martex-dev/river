@@ -369,6 +369,33 @@ export const createEmojiRequestSchema = z
 /** Rename (1.0.20): the whole sealed { name, image } is replaced. */
 export const updateEmojiRequestSchema = z.object({ data: sealedSchema(SEALED_EMOJI) }).strict();
 
+/** A sealed { reason, text, senderName } — what the reporter saw (1.0.21). */
+export const SEALED_REPORT = 8 * 1024;
+export const reportStatusSchema = z.enum(['open', 'resolved', 'dismissed']);
+export const createReportRequestSchema = z
+  .object({
+    id: z.string().regex(COMMUNITY_ID_RE),
+    messageId: messageIdSchema,
+    data: sealedSchema(SEALED_REPORT),
+  })
+  .strict();
+export const reportSchema = z.object({
+  id: z.string().regex(COMMUNITY_ID_RE),
+  channelId: channelIdSchema,
+  messageId: messageIdSchema,
+  reporter: riverIdSchema,
+  target: riverIdSchema,
+  data: sealedSchema(SEALED_REPORT),
+  status: reportStatusSchema,
+  resolvedBy: riverIdSchema.nullable(),
+  createdAt: z.string(),
+  resolvedAt: z.string().nullable(),
+});
+export const reportsResponseSchema = z.object({ reports: z.array(reportSchema) });
+export const updateReportRequestSchema = z.object({ status: reportStatusSchema }).strict();
+/** Open reports one person may have in one community at a time. */
+export const MAX_OPEN_REPORTS = 20;
+
 /** Make another member the owner (1.0.19); only the owner may. */
 export const transferOwnershipRequestSchema = z.object({ riverId: riverIdSchema }).strict();
 
@@ -455,6 +482,8 @@ export const serverEventSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('events'), communityId: communityIdSchema }),
   /** A community's custom emoji changed (1.0.19). */
   z.object({ t: z.literal('emojis'), communityId: communityIdSchema }),
+  /** A report was made or handled; sent to people who may review reports (1.0.21). */
+  z.object({ t: z.literal('reports'), communityId: communityIdSchema }),
   z.object({
     t: z.literal('signal'),
     from: riverIdSchema,

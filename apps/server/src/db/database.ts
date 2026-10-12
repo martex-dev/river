@@ -19,6 +19,7 @@ import * as m0012 from './migrations/0012_account_suspension.ts';
 import * as m0013 from './migrations/0013_usernames.ts';
 import * as m0014 from './migrations/0014_events.ts';
 import * as m0015 from './migrations/0015_emojis.ts';
+import * as m0016 from './migrations/0016_reports.ts';
 import type { Database } from './schema.ts';
 
 export type Dialect = 'sqlite' | 'postgres';
@@ -54,6 +55,7 @@ export const MIGRATIONS: Record<string, Migration> = {
   '0013_usernames': m0013,
   '0014_events': m0014,
   '0015_emojis': m0015,
+  '0016_reports': m0016,
 };
 
 /**

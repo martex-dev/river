@@ -4458,3 +4458,76 @@ input.switch:disabled {
 .link-bars--poor {
   color: var(--danger);
 }
+
+/* Reports (1.0.21) */
+.report-form__quote {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--border-strong);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.report-form__reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  margin: 0 0 10px;
+}
+.report-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.report {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.report--resolved,
+.report--dismissed {
+  opacity: 0.75;
+}
+.report__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.report__status {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid currentColor;
+}
+.report__status--open {
+  color: #f0b232;
+}
+.report__status--resolved {
+  color: #23a55a;
+}
+.report__status--dismissed {
+  color: var(--text-dim);
+}
+.report__reason {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.report__actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}

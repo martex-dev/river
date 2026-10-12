@@ -30,6 +30,9 @@ import {
   updateCategoryRequestSchema,
   createEventRequestSchema,
   transferOwnershipRequestSchema,
+  createReportRequestSchema,
+  updateReportRequestSchema,
+  MAX_OPEN_REPORTS,
   updateEmojiRequestSchema,
   createEmojiRequestSchema,
   MAX_COMMUNITY_EMOJI,
@@ -734,6 +737,102 @@ export async function registerCommunityRoutes(
     await db.updateTable('community_emojis').set({ data: req.data }).where('id', '=', id).execute();
     await audit(model.id, me(request), 'emoji.update', id);
     emojisChanged(model);
+    return { ok: true };
+  });
+
+  // ---- reports (1.0.21) ------------------------------------------------------------------------
+  /** People who review reports for a channel: they may manage messages there. */
+  const reviewers = (model: CommunityModel, channelId: string): string[] =>
+    model.members.map((m) => m.riverId).filter((id) => model.can(id, Permission.MANAGE_MESSAGES, channelId));
+
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/communities/:id/reports`,
+    authed,
+    async (request, reply) => {
+      const req = parse(createReportRequestSchema, request.body);
+      const { model, msg } = await messageContext(req.messageId, me(request));
+      if (model.id !== request.params.id) throw notFound();
+      if (msg.sender === me(request)) throw bad('You cannot report your own message');
+      const open = await db
+        .selectFrom('community_reports')
+        .select(db.fn.countAll<number>().as('n'))
+        .where('community_id', '=', model.id)
+        .where('reporter', '=', me(request))
+        .where('status', '=', 'open')
+        .executeTakeFirstOrThrow();
+      if (Number(open.n) >= MAX_OPEN_REPORTS) throw bad('You have too many open reports here');
+      try {
+        await db
+          .insertInto('community_reports')
+          .values({
+            id: req.id,
+            community_id: model.id,
+            channel_id: msg.channel_id,
+            message_id: msg.id,
+            reporter: me(request),
+            target: msg.sender,
+            data: req.data,
+            status: 'open',
+            resolved_by: null,
+            created_at: deps.now().toISOString(),
+            resolved_at: null,
+          })
+          .execute();
+      } catch {
+        throw new HttpError(409, 'conflict', 'You already reported this message');
+      }
+      hub.sendTo(reviewers(model, msg.channel_id), { t: 'reports', communityId: model.id });
+      return reply.code(201).send({ id: req.id });
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/reports`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    const rows = await db
+      .selectFrom('community_reports')
+      .selectAll()
+      .where('community_id', '=', model.id)
+      .orderBy('created_at', 'desc')
+      .limit(200)
+      .execute();
+    // Only reports from channels where you may manage messages.
+    const mine = rows.filter((r) => model.can(me(request), Permission.MANAGE_MESSAGES, r.channel_id));
+    if (!mine.length && !model.can(me(request), Permission.MANAGE_MESSAGES)) throw forbidden();
+    return {
+      reports: mine.map((r) => ({
+        id: r.id,
+        channelId: r.channel_id,
+        messageId: r.message_id,
+        reporter: r.reporter,
+        target: r.target,
+        data: r.data,
+        status: r.status,
+        resolvedBy: r.resolved_by,
+        createdAt: r.created_at,
+        resolvedAt: r.resolved_at,
+      })),
+    };
+  });
+
+  app.patch<{ Params: { id: string } }>(`${API_PREFIX}/reports/:id`, authed, async (request) => {
+    const id = parse(channelIdSchema, request.params.id);
+    const req = parse(updateReportRequestSchema, request.body);
+    const row = await db.selectFrom('community_reports').selectAll().where('id', '=', id).executeTakeFirst();
+    if (!row) throw notFound();
+    const model = await community(row.community_id, me(request));
+    if (!model.can(me(request), Permission.MANAGE_MESSAGES, row.channel_id)) throw forbidden();
+    const done = req.status !== 'open';
+    await db
+      .updateTable('community_reports')
+      .set({
+        status: req.status,
+        resolved_by: done ? me(request) : null,
+        resolved_at: done ? deps.now().toISOString() : null,
+      })
+      .where('id', '=', id)
+      .execute();
+    await audit(model.id, me(request), `report.${req.status}`, row.target, { report: id });
+    hub.sendTo(reviewers(model, row.channel_id), { t: 'reports', communityId: model.id });
     return { ok: true };
   });
 

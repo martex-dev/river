@@ -25,6 +25,7 @@ import {
   type VoiceState,
   callRoomSchema,
   emojisResponseSchema,
+  reportsResponseSchema,
   eventsResponseSchema,
   decodeRelayIn,
   encodeRelayOut,
@@ -39,6 +40,7 @@ import {
   type CommunityActionResult,
   type EventView,
   type EmojiView,
+  type ReportView,
   type SavedMessageView,
   EMOJI_NAME,
   type SavedOutgoing,
@@ -1713,6 +1715,28 @@ export class CommunityService {
         return (await this.events(act.communityId)) as CommunityActionResult<A>;
       case 'emojis':
         return (await this.emojis(act.communityId)) as CommunityActionResult<A>;
+      case 'report': {
+        const reportId = randomId();
+        const data = seal(this.requireKey(act.communityId), act.communityId, `report:${reportId}`, {
+          reason: act.reason,
+          text: act.text,
+          senderName: act.senderName,
+        });
+        await this.call(
+          `/communities/${act.communityId}/reports`,
+          'POST',
+          { id: reportId, messageId: act.messageId, data },
+          z.unknown(),
+        ).catch(explain);
+        return reportId as CommunityActionResult<A>;
+      }
+      case 'reports':
+        return (await this.reports(act.communityId)) as CommunityActionResult<A>;
+      case 'updateReport':
+        await this.call(`/reports/${act.reportId}`, 'PATCH', { status: act.status }, z.unknown()).catch(
+          explain,
+        );
+        break;
       case 'transferOwnership':
         await this.call(
           `/communities/${act.communityId}/transfer`,
@@ -2133,6 +2157,46 @@ export class CommunityService {
     });
   }
 
+  // ---- Reports (1.0.21) ----------------------------------------------------------------------
+
+  async reports(communityId: string): Promise<ReportView[]> {
+    const ring = this.keys.get(communityId);
+    if (!ring) throw new CommunityError('Waiting for the community key…');
+    const community = this.requireCommunity(communityId);
+    const name = (id: string | null): string =>
+      id ? (community.members.find((m) => m.riverId === id)?.name ?? 'Someone who left') : '';
+    const res = await this.call(
+      `/communities/${communityId}/reports`,
+      'GET',
+      undefined,
+      reportsResponseSchema,
+    );
+    return res.reports.map((r) => {
+      let data: { reason?: unknown; text?: unknown; senderName?: unknown } = {};
+      try {
+        data = ring.open(communityId, `report:${r.id}`, r.data);
+      } catch {
+        // Sealed with a key this device does not have: show the report without its details.
+      }
+      return {
+        id: r.id,
+        channelId: r.channelId,
+        messageId: r.messageId,
+        reporter: r.reporter,
+        reporterName: name(r.reporter),
+        target: r.target,
+        targetName: name(r.target) || String(data.senderName ?? '').slice(0, 64),
+        reason: String(data.reason ?? 'Unreadable').slice(0, 500),
+        text: String(data.text ?? '').slice(0, 2000),
+        status: r.status,
+        resolvedBy: r.resolvedBy,
+        resolvedByName: r.resolvedBy ? name(r.resolvedBy) : null,
+        createdAt: r.createdAt,
+        resolvedAt: r.resolvedAt,
+      };
+    });
+  }
+
   // ---- Scheduled events (1.0.18) ------------------------------------------------------------
 
   /** Events seen so far, per community, for start reminders. */
@@ -2423,6 +2487,9 @@ export class CommunityService {
         return;
       case 'emojis':
         this.emit({ t: 'emojis', communityId: e.communityId });
+        break;
+      case 'reports':
+        this.emit({ t: 'reports', communityId: e.communityId });
         return;
       case 'voice.disconnect':
         this.emit({ t: 'voiceDisconnect' });

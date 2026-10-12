@@ -42,6 +42,12 @@ export function describeAudit(
         return 'deleted an event';
       case 'emoji.create':
         return 'added a custom emoji';
+      case 'report.resolved':
+        return `resolved a report about ${person(t)}`;
+      case 'report.dismissed':
+        return `dismissed a report about ${person(t)}`;
+      case 'report.open':
+        return `reopened a report about ${person(t)}`;
       case 'emoji.update':
         return 'renamed a custom emoji';
       case 'emoji.delete':

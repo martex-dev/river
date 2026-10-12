@@ -346,6 +346,22 @@ export const communityActionSchema = z.discriminatedUnion('a', [
   z
     .object({ a: z.literal('renameEmoji'), communityId: id, emojiId: id, name: z.string().regex(EMOJI_NAME) })
     .strict(),
+  // Reports (1.0.21): sent to the community's moderators, sealed with the community key.
+  z
+    .object({
+      a: z.literal('report'),
+      communityId: id,
+      messageId: id,
+      reason: z.string().trim().min(1).max(500),
+      /** The message as the reporter sees it, kept with the report in case it is deleted. */
+      text: z.string().max(2000),
+      senderName: z.string().max(64),
+    })
+    .strict(),
+  z.object({ a: z.literal('reports'), communityId: id }).strict(),
+  z
+    .object({ a: z.literal('updateReport'), reportId: id, status: z.enum(['open', 'resolved', 'dismissed']) })
+    .strict(),
   // Saved messages (1.0.19): kept only on this device.
   z.object({ a: z.literal('savedMessages') }).strict(),
   z.object({ a: z.literal('transferOwnership'), communityId: id, riverId }).strict(),
@@ -364,6 +380,32 @@ export interface SavedMessageView {
 }
 
 /** A community's custom emoji, decrypted (1.0.19). Used in text as `<:name:id>`. */
+export interface ReportView {
+  id: string;
+  channelId: string;
+  messageId: string;
+  reporter: string;
+  reporterName: string;
+  target: string;
+  targetName: string;
+  reason: string;
+  /** The reported message as the reporter saw it (they could have changed it; check the original if it still exists). */
+  text: string;
+  status: 'open' | 'resolved' | 'dismissed';
+  resolvedBy: string | null;
+  resolvedByName: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+export const REPORT_REASONS = [
+  'Spam',
+  'Harassment or hate',
+  'Inappropriate content',
+  'Scam or phishing',
+  'Something else',
+];
+
 export interface EmojiView {
   id: string;
   name: string;
@@ -396,6 +438,8 @@ export interface BanView {
 
 interface Results {
   createRole: string;
+  report: string;
+  reports: ReportView[];
   duplicateChannel: string;
   createCategory: string;
   outboxList: SavedOutgoing[];

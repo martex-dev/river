@@ -332,6 +332,47 @@ describe('custom emoji', () => {
   });
 });
 
+describe('reports', () => {
+  it('reach moderators sealed, with the message as the reporter saw it, and can be resolved', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    const created = await alice.community.create('Reports');
+    for (const p of [bob, carol])
+      await p.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.name === 'general')!;
+    await bob.community.refresh();
+    await carol.community.refresh();
+    const bad = await bob.community.send(general.id, 'buy cheap coins at scam.example');
+    await carol.community.messages(general.id);
+    await carol.community.action({
+      a: 'report',
+      communityId: created.id,
+      messageId: bad.id,
+      reason: 'Scam or phishing',
+      text: bad.text,
+      senderName: 'Bob',
+    });
+    const stored = JSON.stringify(await serverDb.db.selectFrom('community_reports').selectAll().execute());
+    expect(stored).not.toContain('scam.example');
+    expect(stored).not.toContain('phishing');
+    // Members without Manage messages cannot list reports.
+    await expect(bob.community.action({ a: 'reports', communityId: created.id })).rejects.toThrow();
+    await alice.community.refresh();
+    const [r] = await alice.community.action({ a: 'reports', communityId: created.id });
+    expect(r).toMatchObject({
+      reporterName: 'Carol',
+      targetName: 'Bob',
+      reason: 'Scam or phishing',
+      text: 'buy cheap coins at scam.example',
+      status: 'open',
+    });
+    await alice.community.action({ a: 'updateReport', reportId: r!.id, status: 'resolved' });
+    const [after] = await alice.community.action({ a: 'reports', communityId: created.id });
+    expect(after).toMatchObject({ status: 'resolved', resolvedByName: 'Alice' });
+  });
+});
+
 describe('saved messages', () => {
   it('are kept on this device, newest first, and can be removed', async () => {
     const alice = await person('Alice');

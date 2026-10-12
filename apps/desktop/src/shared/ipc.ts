@@ -354,6 +354,7 @@ export type CommunityEvent =
   /** A community's events changed (fetch them again), or one you are interested in starts now. */
   | { t: 'events'; communityId: string }
   | { t: 'emojis'; communityId: string }
+  | { t: 'reports'; communityId: string }
   | { t: 'eventStarting'; communityId: string; eventId: string; name: string; channelId: string | null }
   /** Your server moved to a new address and River followed it. */
   | { t: 'serverMoved'; url: string }

@@ -785,6 +785,18 @@ function Message(props: {
           >
             Mark unread
           </MenuItem>
+          {!m.mine && (
+            <MenuItem
+              danger
+              icon={<span aria-hidden="true">⚑</span>}
+              onClick={() => {
+                setMenu(null);
+                s.setModal({ kind: 'report', communityId: community.id, message: m });
+              }}
+            >
+              Report message
+            </MenuItem>
+          )}
           {(m.mine || canManage) && (
             <MenuItem
               danger

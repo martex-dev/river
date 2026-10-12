@@ -1,3 +1,4 @@
+import { ReportsPanel } from './Reports.tsx';
 import { useEffect, useState, type ReactElement } from 'react';
 import { PERMISSION_INFO, Permission } from '@river/protocol/permissions';
 import type { BanView } from '../../../../shared/community-actions.ts';
@@ -37,6 +38,7 @@ export function CommunitySettings(props: {
     ['members', 'Members', true],
     ['emoji', 'Emoji', true],
     ['bans', 'Bans', can(perms, Permission.BAN_MEMBERS)],
+    ['reports', 'Reports', can(perms, Permission.MANAGE_MESSAGES)],
     ['audit', 'Audit log', can(perms, Permission.VIEW_AUDIT_LOG)],
   ];
   const visible = tabs.filter((t) => t[2]);
@@ -90,6 +92,7 @@ export function CommunitySettings(props: {
           {tab === 'members' && <Members community={community} me={me} />}
           {tab === 'emoji' && <EmojiSettings community={community} />}
           {tab === 'bans' && <Bans community={community} />}
+          {tab === 'reports' && <ReportsPanel community={community} />}
           {tab === 'audit' && <AuditLog community={community} />}
         </section>
       </div>

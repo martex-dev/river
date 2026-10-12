@@ -20,6 +20,7 @@ import {
   encodeRelayOut,
   eventsResponseSchema,
   emojisResponseSchema,
+  reportsResponseSchema,
 } from '@river/protocol';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
@@ -374,6 +375,47 @@ describe('communities', () => {
       expect((await fetchCommunity(a, member.token, cid)).ownerId).toBe(member.riverId);
       // The old owner is no longer the owner.
       expect(await transfer(owner.token, owner.riverId)).toBe(403);
+    });
+
+    it('reports: members report others, only message managers see and handle them', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const other = await join(a, owner.token, cid);
+      const mod = await join(a, owner.token, cid);
+      const { rid } = await role(a, owner.token, cid, Permission.MANAGE_MESSAGES);
+      await assign(a, owner.token, cid, mod.riverId, [rid]);
+      const mid = id();
+      await status(a, 'POST', `/v1/channels/${text}/messages`, other.token, { id: mid, body: sealed() });
+      const report = (token: string, messageId = mid, rid2 = id()) =>
+        status(a, 'POST', `/v1/communities/${cid}/reports`, token, { id: rid2, messageId, data: sealed() });
+      expect(await report(other.token)).toBe(400); // your own message
+      const r1 = id();
+      expect(await report(member.token, mid, r1)).toBe(201);
+      expect(await report(member.token)).toBe(409); // once per message
+      expect(await report(member.token, id())).toBe(404); // no such message
+      const stranger = await user(a);
+      expect(await report(stranger.token)).not.toBe(201);
+      // Reviewers only.
+      expect(await status(a, 'GET', `/v1/communities/${cid}/reports`, member.token)).toBe(403);
+      const listed = await a.inject({
+        method: 'GET',
+        url: `/v1/communities/${cid}/reports`,
+        headers: auth(mod.token),
+      });
+      const reports = reportsResponseSchema.parse(listed.json()).reports;
+      expect(reports.map((r) => [r.id, r.reporter, r.target, r.status])).toEqual([
+        [r1, member.riverId, other.riverId, 'open'],
+      ]);
+      expect(await status(a, 'PATCH', `/v1/reports/${r1}`, member.token, { status: 'resolved' })).toBe(403);
+      expect(await status(a, 'PATCH', `/v1/reports/${r1}`, mod.token, { status: 'resolved' })).toBe(200);
+      const after = reportsResponseSchema.parse(
+        (
+          await a.inject({ method: 'GET', url: `/v1/communities/${cid}/reports`, headers: auth(owner.token) })
+        ).json(),
+      ).reports[0]!;
+      expect([after.status, after.resolvedBy]).toEqual(['resolved', mod.riverId]);
     });
 
     it('custom emoji: managers add and remove, every member can list, strangers cannot', async () => {
