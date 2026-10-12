@@ -6,6 +6,12 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (1.0.26)
+
+- **Check someone's access:** in a channel's permissions, pick a member to
+  see what they can and can't do there and exactly why — including changes
+  you have not saved yet.
+
 ### Added
 
 - **Slash commands:** type `/` for /shrug, /tableflip, /me, /spoiler,

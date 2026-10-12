@@ -1,3 +1,4 @@
+import { AccessCheck } from './AccessCheck.tsx';
 import { AvatarCropDialog } from './AvatarCrop.tsx';
 import { ForumSettings } from './Forum.tsx';
 import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
@@ -703,6 +704,7 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
                 bits={bits}
                 onChange={setOverwrites}
               />
+              <AccessCheck community={community} channel={channel} overwrites={overwrites} bits={bits} />
               {dirtyPerms && (
                 <div className="save-bar">
                   <span>Careful — you have unsaved changes!</span>
@@ -725,7 +727,6 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
   );
 }
 
-/** Your name in this community only; everyone else sees it here instead of your River name. */
 /** A picture for this community only (1.0.25). */
 function CommunityAvatarField({ community }: { community: CommunityView }): ReactElement {
   const s = useCommunity();
@@ -779,6 +780,7 @@ function CommunityAvatarField({ community }: { community: CommunityView }): Reac
   );
 }
 
+/** Your name in this community only; everyone else sees it here instead of your River name. */
 export function NicknameDialog({ community }: { community: CommunityView }): ReactElement {
   const s = useCommunity();
   const [nickname, setNickname] = useState(community.myNickname ?? '');

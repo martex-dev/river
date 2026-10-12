@@ -5182,3 +5182,50 @@ input.switch:disabled {
 .forum-post.is-pinned {
   border-color: rgba(240, 178, 50, 0.5);
 }
+
+/* Access check (1.0.26) */
+.access-check {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.access-check select {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+.access-check__list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+}
+.access-check__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.access-check__row:hover,
+.access-check__row:focus-visible {
+  background: var(--surface-hover);
+}
+.access-check__item.is-yes .access-check__row > span:first-child {
+  color: #23a55a;
+}
+.access-check__item.is-no .access-check__row > span:first-child {
+  color: #da373c;
+}
+.access-check__why {
+  margin: 0 0 6px 30px;
+}
