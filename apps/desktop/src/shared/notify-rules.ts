@@ -75,3 +75,20 @@ export const MUTE_CHOICES: Array<{ label: string; ms: number | null }> = [
 export function muteUntil(ms: number | null, now = Date.now()): string {
   return ms === null ? FOREVER : new Date(now + ms).toISOString();
 }
+
+const minutes = (hhmm: string): number => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+
+/** Inside the quiet hours right now (local time)? A range may cross midnight (22:00–08:00). */
+export function inQuietHours(q: Settings['notifications']['quietHours'], now = new Date()): boolean {
+  if (!q.enabled) return false;
+  const start = minutes(q.start);
+  const end = minutes(q.end);
+  if (start === end) return false;
+  const t = now.getHours() * 60 + now.getMinutes();
+  return start < end ? t >= start && t < end : t >= start || t < end;
+}
+
+/** Do Not Disturb or quiet hours: no pop-ups and no notification sounds. */
+export function silenced(s: Pick<Settings, 'notifications' | 'presence'>, now = new Date()): boolean {
+  return s.presence.status === 'dnd' || inQuietHours(s.notifications.quietHours, now);
+}

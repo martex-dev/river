@@ -1,4 +1,4 @@
-import { effectiveNotify, shouldAlert } from '../shared/notify-rules.ts';
+import { effectiveNotify, shouldAlert, silenced } from '../shared/notify-rules.ts';
 import { Notification, type BrowserWindow } from 'electron';
 import type { Settings } from '../shared/settings.ts';
 import type { CommunityService } from './community/community-service.ts';
@@ -18,8 +18,8 @@ export function startMessageNotifications(deps: {
   const { community, window } = deps;
   const show = (title: string, body: string, mention: boolean, onClick: () => void): void => {
     if (window.isDestroyed() || window.isFocused() || !Notification.isSupported()) return;
-    // Do Not Disturb: nothing pops up.
-    if (deps.settings().presence.status === 'dnd') return;
+    // Do Not Disturb or quiet hours: nothing pops up.
+    if (silenced(deps.settings())) return;
     const notification = new Notification({ title, body, silent: true });
     notification.on('click', () => {
       if (window.isDestroyed()) return;
@@ -50,7 +50,7 @@ export function startMessageNotifications(deps: {
   });
   const offEvents = community.onEvent((event) => {
     if (event.t !== 'eventStarting') return;
-    if (!deps.settings().notifications.desktop || deps.settings().presence.status === 'dnd') return;
+    if (!deps.settings().notifications.desktop || silenced(deps.settings())) return;
     const preview = deps.settings().notifications.preview;
     show(
       preview === 'none' ? 'River' : event.name,
@@ -63,7 +63,7 @@ export function startMessageNotifications(deps: {
     if (event.t !== 'message' || !event.isNew || event.message.mine) return;
     const prefs = deps.settings().notifications;
     if (!prefs.desktop) return;
-    if (deps.settings().presence.status === 'dnd') return;
+    if (silenced(deps.settings())) return;
     const m0 = event.message;
     if (!shouldAlert(effectiveNotify(prefs, m0.communityId, m0.channelId), m0.mentionsMe)) return;
     if (window.isDestroyed() || window.isFocused()) return;

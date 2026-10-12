@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   FOREVER,
   effectiveNotify,
+  inQuietHours,
   isMuted,
   muteUntil,
   shouldAlert,
+  silenced,
   withOverride,
 } from '../src/shared/notify-rules.ts';
 import { DEFAULT_SETTINGS, type Settings } from '../src/shared/settings.ts';
@@ -47,5 +49,36 @@ describe('notification rules', () => {
     expect(o).toEqual({});
     o = withOverride(o, 'ch', { level: 'nothing' }, now);
     expect(o.ch!.level).toBe('nothing');
+  });
+});
+
+describe('quiet hours', () => {
+  const at = (h: number, m = 0): Date => new Date(2026, 9, 12, h, m);
+  const q = (start: string, end: string, enabled = true) => ({ enabled, start, end });
+
+  it('covers a range that crosses midnight', () => {
+    expect(inQuietHours(q('22:00', '08:00'), at(23))).toBe(true);
+    expect(inQuietHours(q('22:00', '08:00'), at(7, 59))).toBe(true);
+    expect(inQuietHours(q('22:00', '08:00'), at(8))).toBe(false);
+    expect(inQuietHours(q('22:00', '08:00'), at(12))).toBe(false);
+  });
+
+  it('covers a daytime range and ignores disabled or empty ones', () => {
+    expect(inQuietHours(q('09:00', '17:30'), at(17, 29))).toBe(true);
+    expect(inQuietHours(q('09:00', '17:30'), at(17, 30))).toBe(false);
+    expect(inQuietHours(q('09:00', '17:30', false), at(10))).toBe(false);
+    expect(inQuietHours(q('09:00', '09:00'), at(9))).toBe(false);
+  });
+
+  it('silences for Do Not Disturb or quiet hours', () => {
+    const base = { ...DEFAULT_SETTINGS };
+    expect(silenced(base, at(12))).toBe(false);
+    expect(silenced({ ...base, presence: { ...base.presence, status: 'dnd' } }, at(12))).toBe(true);
+    expect(
+      silenced(
+        { ...base, notifications: { ...base.notifications, quietHours: q('11:00', '13:00') } },
+        at(12),
+      ),
+    ).toBe(true);
   });
 });

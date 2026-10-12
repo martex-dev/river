@@ -85,6 +85,14 @@ export const settingsSchema = z.object({
         })
         .strict(),
     ),
+    /** Added in 1.0.20: no notifications or sounds between these local times (like Do Not Disturb). */
+    quietHours: z
+      .object({
+        enabled: z.boolean(),
+        start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+        end: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+      })
+      .strict(),
   }),
   /** Added in 0.0.2. */
   server: z.object({
@@ -170,6 +178,7 @@ export const DEFAULT_SETTINGS: Settings = {
     soundVolume: 0.8,
     soundGroups: { messages: true, voice: true, calls: true, social: true, interface: true },
     overrides: {},
+    quietHours: { enabled: false, start: '22:00', end: '08:00' },
   },
   server: { url: null, autoAccount: true },
   voice: {
