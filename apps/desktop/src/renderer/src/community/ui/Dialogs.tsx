@@ -543,6 +543,12 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
               {channel.kind === 'text' && (
                 <>
                   <Toggle
+                    label="Media channel"
+                    help="Opens as a gallery of the pictures and videos shared here; the chat is one click away."
+                    checked={!!channel.media}
+                    onChange={(on) => void s.run({ a: 'updateChannel', channelId: channel.id, media: on })}
+                  />
+                  <Toggle
                     label="Forum"
                     help="Every message starts a post with a title and its own replies, shown as a list of posts."
                     checked={channel.forum}

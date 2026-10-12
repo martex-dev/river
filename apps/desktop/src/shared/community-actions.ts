@@ -149,6 +149,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       forum: z.boolean().optional(),
       /** A stage channel (1.0.22). */
       stage: z.boolean().optional(),
+      /** A media channel (1.0.26). */
+      media: z.boolean().optional(),
     })
     .strict(),
   z
@@ -165,6 +167,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       userLimit: z.number().int().min(0).max(99).optional(),
       forum: z.boolean().optional(),
       stage: z.boolean().optional(),
+      media: z.boolean().optional(),
       tags: z.array(forumTag).max(MAX_FORUM_TAGS).optional(),
     })
     .strict(),
