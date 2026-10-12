@@ -1,4 +1,4 @@
-import { toAvatar } from './UserSettings.tsx';
+import { AvatarCropDialog } from './AvatarCrop.tsx';
 import { ForumSettings } from './Forum.tsx';
 import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
@@ -730,6 +730,7 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
 function CommunityAvatarField({ community }: { community: CommunityView }): ReactElement {
   const s = useCommunity();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [cropping, setCropping] = useState<File | null>(null);
   const set = (avatar: string | null): void =>
     void s.run({ a: 'setCommunityAvatar', communityId: community.id, avatar }).then((r) => {
       if (r !== null)
@@ -760,10 +761,19 @@ function CommunityAvatarField({ community }: { community: CommunityView }): Reac
           onChange={(e) => {
             const file = e.target.files?.[0];
             e.target.value = '';
-            if (file)
-              void toAvatar(file).then(set, () => s.notify('River could not read that picture.', 'error'));
+            if (file) setCropping(file);
           }}
         />
+        {cropping && (
+          <AvatarCropDialog
+            file={cropping}
+            onClose={() => setCropping(null)}
+            onDone={(avatar) => {
+              setCropping(null);
+              set(avatar);
+            }}
+          />
+        )}
       </div>
     </div>
   );

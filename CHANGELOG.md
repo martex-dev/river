@@ -8,6 +8,7 @@ All notable changes to River are documented here. The format follows
 
 ### Added (1.0.25)
 
+- **Crop your picture:** drag and zoom to choose exactly what shows.
 - **A different picture per community:** right-click a community →
   Nickname & picture here.
 - **Screen share quality:** choose Sharp text (1080p, 15 fps), Balanced

@@ -5148,3 +5148,34 @@ input.switch:disabled {
   border-radius: 50%;
   object-fit: cover;
 }
+
+/* Avatar crop (1.0.25) */
+.avatar-crop {
+  position: relative;
+  margin: 0 auto 10px;
+  overflow: hidden;
+  border-radius: 50%;
+  cursor: grab;
+  touch-action: none;
+  background: #000;
+  box-shadow: 0 0 0 2px var(--border-strong);
+}
+.avatar-crop:active {
+  cursor: grabbing;
+}
+.avatar-crop img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  max-width: none;
+  user-select: none;
+  pointer-events: none;
+}
+.avatar-crop__zoom {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.avatar-crop__zoom input {
+  accent-color: var(--accent);
+}
