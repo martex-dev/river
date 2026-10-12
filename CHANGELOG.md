@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.23] - 2026-10-12
+
+**Yours to keep: export your data, private link previews and moderator notes.**
+
 ### Added
 
 - **Stickers:** communities add their own (Community settings → Stickers);
