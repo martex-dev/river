@@ -711,16 +711,20 @@ export class CommunityService {
         let topic = '';
         let tags: string[] = [];
         let media = false;
+        let nsfw = false;
         try {
-          const opened = ring.open<{ name: string; topic?: string; tags?: unknown; media?: unknown }>(
-            c.id,
-            `channel:${ch.id}`,
-            ch.name,
-          );
+          const opened = ring.open<{
+            name: string;
+            topic?: string;
+            tags?: unknown;
+            media?: unknown;
+            nsfw?: unknown;
+          }>(c.id, `channel:${ch.id}`, ch.name);
           name = String(opened.name).slice(0, 64);
           topic = String(opened.topic ?? '').slice(0, 300);
           tags = readTags(opened.tags, 20);
           media = opened.media === true;
+          nsfw = opened.nsfw === true;
         } catch {
           // keep placeholder for undecryptable names
         }
@@ -745,6 +749,7 @@ export class CommunityService {
           tags,
           stage: ch.stage,
           ...(media && ch.kind === 'text' ? { media: true } : {}),
+          ...(nsfw ? { nsfw: true } : {}),
         };
       })
       .sort((a, b) => a.position - b.position);
@@ -1441,15 +1446,18 @@ export class CommunityService {
           act.name !== undefined ||
           act.topic !== undefined ||
           act.tags !== undefined ||
-          act.media !== undefined
+          act.media !== undefined ||
+          act.nsfw !== undefined
         ) {
           const tags = act.tags ?? current?.tags ?? [];
           const media = act.media ?? current?.media ?? false;
+          const nsfw = act.nsfw ?? current?.nsfw ?? false;
           body.name = seal(this.requireKey(communityId), communityId, `channel:${act.channelId}`, {
             name: act.name ?? current?.name ?? 'channel',
             topic: act.topic ?? current?.topic ?? '',
             ...(tags.length ? { tags } : {}),
             ...(media ? { media: true } : {}),
+            ...(nsfw ? { nsfw: true } : {}),
           });
         }
         if (act.forum !== undefined) body.forum = act.forum;
@@ -1488,6 +1496,7 @@ export class CommunityService {
               topic: source.topic,
               ...(source.tags.length ? { tags: source.tags } : {}),
               ...(source.media ? { media: true } : {}),
+              ...(source.nsfw ? { nsfw: true } : {}),
             }),
             ...(source.forum ? { forum: true } : {}),
             ...(source.stage ? { stage: true } : {}),

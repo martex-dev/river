@@ -543,6 +543,12 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
               {channel.kind === 'text' && (
                 <>
                   <Toggle
+                    label="Age-restricted (18+)"
+                    help="People confirm they are 18 or older before opening this channel."
+                    checked={!!channel.nsfw}
+                    onChange={(on) => void s.run({ a: 'updateChannel', channelId: channel.id, nsfw: on })}
+                  />
+                  <Toggle
                     label="Media channel"
                     help="Opens as a gallery of the pictures and videos shared here; the chat is one click away."
                     checked={!!channel.media}

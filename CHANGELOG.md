@@ -8,6 +8,8 @@ All notable changes to River are documented here. The format follows
 
 ### Added (1.0.27)
 
+- **Age-restricted channels (18+):** people confirm their age once per
+  channel before opening it (channel settings).
 - **Language** (Settings → Appearance): English, or Bulgarian (beta,
   partly translated: navigation, settings, menus and voice controls so
   far), or follow your system. Changes apply at once.

@@ -5334,3 +5334,31 @@ input.switch:disabled {
   text-align: center;
   padding: 40px 0;
 }
+
+/* Age-restricted channels (1.0.27) */
+.age-gate {
+  margin: auto;
+  max-width: 420px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px;
+}
+.age-gate__icon {
+  font-size: 44px;
+}
+.age-gate__actions {
+  display: flex;
+  gap: 8px;
+}
+.channel__nsfw {
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  color: #da373c;
+  border: 1px solid currentColor;
+}

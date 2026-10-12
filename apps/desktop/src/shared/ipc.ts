@@ -229,6 +229,8 @@ export interface ChannelView {
   stage: boolean;
   /** A media channel: shown as a gallery of pictures and videos (1.0.26). */
   media?: boolean;
+  /** Age-restricted: people confirm they are 18 or older before opening it (1.0.27). */
+  nsfw?: boolean;
 }
 
 export interface CategoryView {

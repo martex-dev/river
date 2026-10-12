@@ -168,6 +168,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       forum: z.boolean().optional(),
       stage: z.boolean().optional(),
       media: z.boolean().optional(),
+      nsfw: z.boolean().optional(),
       tags: z.array(forumTag).max(MAX_FORUM_TAGS).optional(),
     })
     .strict(),

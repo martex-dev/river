@@ -290,6 +290,11 @@ export function ChannelRow(props: {
             )}
           </span>
           <span className="channel__name">{ch.name}</span>
+          {ch.nsfw && (
+            <span className="channel__nsfw" title="Age-restricted (18+)">
+              18+
+            </span>
+          )}
           {ch.private && (
             <span className="channel__lock" title="Private channel">
               <LockSmallIcon size={12} />
