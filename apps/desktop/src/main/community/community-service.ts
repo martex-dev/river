@@ -605,17 +605,20 @@ export class CommunityService {
         let name = everyone ? '@everyone' : 'role';
         let mentionable = false;
         let hoist = false;
+        let icon: string | null = null;
         if (!everyone) {
           try {
-            const opened = ring.open<{ name: string; mentionable?: unknown; hoist?: unknown }>(
-              c.id,
-              `role:${r.id}`,
-              r.name,
-            );
+            const opened = ring.open<{
+              name: string;
+              mentionable?: unknown;
+              hoist?: unknown;
+              icon?: unknown;
+            }>(c.id, `role:${r.id}`, r.name);
             name = String(opened.name).slice(0, 64);
             mentionable = opened.mentionable === true;
             // Roles from before 1.0.6 have no flag: keep showing them separately, as they were.
             hoist = opened.hoist !== false;
+            icon = typeof opened.icon === 'string' && opened.icon.length <= 16 ? opened.icon : null;
           } catch {
             // keep placeholder
           }
@@ -629,6 +632,7 @@ export class CommunityService {
           everyone,
           mentionable,
           hoist,
+          icon,
         };
       })
       .sort((a, b) => b.position - a.position);
@@ -719,12 +723,14 @@ export class CommunityService {
       const avatar =
         typeof profile.avatar === 'string' && AVATAR_RE.test(profile.avatar) ? profile.avatar : null;
       const colored = roles.find((r) => !r.everyone && r.color !== 0 && m.roles.includes(r.id));
+      const withIcon = roles.find((r) => !r.everyone && r.icon && m.roles.includes(r.id));
       return {
         riverId: m.riverId,
         name,
         avatar,
         roles: m.roles,
         color: colored?.color ?? null,
+        roleIcon: withIcon?.icon ?? null,
         online: this.online.get(m.riverId) ?? m.online,
         ...((): { status?: 'idle' | 'dnd' } => {
           const live = this.statuses.has(m.riverId) ? this.statuses.get(m.riverId) : m.status;
@@ -1472,6 +1478,7 @@ export class CommunityService {
               name: act.name,
               mentionable: act.mentionable ?? false,
               hoist: act.hoist ?? false,
+              ...(act.icon ? { icon: act.icon } : {}),
             }),
             color: act.color,
             permissions: act.permissions,
@@ -1483,13 +1490,20 @@ export class CommunityService {
       }
       case 'updateRole': {
         const body: Record<string, unknown> = {};
-        if (act.name !== undefined || act.mentionable !== undefined || act.hoist !== undefined) {
+        if (
+          act.name !== undefined ||
+          act.mentionable !== undefined ||
+          act.hoist !== undefined ||
+          act.icon !== undefined
+        ) {
           // Name and settings are sealed together, so keep whichever was not changed.
           const current = this.requireCommunity(act.communityId).roles.find((r) => r.id === act.roleId);
+          const icon = act.icon !== undefined ? act.icon : (current?.icon ?? null);
           body.name = seal(this.requireKey(act.communityId), act.communityId, `role:${act.roleId}`, {
             name: act.name ?? current?.name ?? 'role',
             mentionable: act.mentionable ?? current?.mentionable ?? false,
             hoist: act.hoist ?? current?.hoist ?? false,
+            ...(icon ? { icon } : {}),
           });
         }
         if (act.color !== undefined) body.color = act.color;

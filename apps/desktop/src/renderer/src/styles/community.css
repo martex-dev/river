@@ -4531,3 +4531,30 @@ input.switch:disabled {
   flex-wrap: wrap;
   margin-top: 6px;
 }
+
+/* Role icons (1.0.21) */
+.role-icon {
+  margin-left: 4px;
+  font-size: 0.95em;
+  line-height: 1;
+}
+.role-icon-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.role-icon-field__pick {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px dashed var(--border-strong);
+  background: none;
+  color: inherit;
+  font-size: 20px;
+  cursor: pointer;
+}
+.role-icon-field__pick:disabled {
+  cursor: default;
+  opacity: 0.6;
+}

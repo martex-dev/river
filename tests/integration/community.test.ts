@@ -982,6 +982,37 @@ describe('desktop ↔ server communities', () => {
     expect((await alice.community.refresh())[0]!.channels.find((c) => c.id === lounge.id)?.userLimit).toBe(4);
   });
 
+  it('role icons are sealed and shown next to members with the role', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Icons');
+    const roleId = await alice.community.action({
+      a: 'createRole',
+      communityId: created.id,
+      name: 'Gardener',
+      color: 0x23a55a,
+      permissions: 0,
+      icon: '🌱',
+    });
+    await alice.community.action({
+      a: 'setMemberRoles',
+      communityId: created.id,
+      riverId: alice.riverId,
+      roles: [roleId],
+    });
+    let c = (await alice.community.refresh())[0]!;
+    expect(c.roles.find((r) => r.id === roleId)?.icon).toBe('🌱');
+    expect(c.members.find((m) => m.riverId === alice.riverId)?.roleIcon).toBe('🌱');
+    const stored = JSON.stringify(await serverDb.db.selectFrom('roles').selectAll().execute());
+    expect(stored).not.toContain('🌱');
+    // Changing something else keeps the icon; null removes it.
+    await alice.community.action({ a: 'updateRole', communityId: created.id, roleId, name: 'Gardeners' });
+    c = (await alice.community.refresh())[0]!;
+    expect(c.roles.find((r) => r.id === roleId)).toMatchObject({ name: 'Gardeners', icon: '🌱' });
+    await alice.community.action({ a: 'updateRole', communityId: created.id, roleId, icon: null });
+    c = (await alice.community.refresh())[0]!;
+    expect(c.roles.find((r) => r.id === roleId)?.icon).toBeNull();
+  });
+
   it('duplicates a channel with its settings and permissions, but no messages', async () => {
     const alice = await person('Alice');
     const created = await alice.community.create('Copies');

@@ -11,6 +11,8 @@ import { communityIconSchema } from './templates.ts';
 const id = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 const riverId = z.uuid();
 const name = z.string().trim().min(1).max(64);
+/** A role icon: one emoji (a few code points), 1.0.21. */
+const roleIcon = z.string().min(1).max(16);
 /** How far back a ban may delete someone's messages (matches the server's list, 1.0.21). */
 export const BAN_DELETE_CHOICES = [0, 3600, 6 * 3600, 24 * 3600, 3 * 24 * 3600, 7 * 24 * 3600] as const;
 const text = z
@@ -197,6 +199,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       permissions,
       mentionable: z.boolean().optional(),
       hoist: z.boolean().optional(),
+      icon: roleIcon.nullable().optional(),
     })
     .strict(),
   z
@@ -209,6 +212,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       permissions: permissions.optional(),
       mentionable: z.boolean().optional(),
       hoist: z.boolean().optional(),
+      icon: roleIcon.nullable().optional(),
     })
     .strict(),
   z.object({ a: z.literal('moveRole'), communityId: id, roleId: id, direction }).strict(),

@@ -47,6 +47,11 @@ export function MemberList({ community, me }: { community: CommunityView; me: st
               <span className="member__text">
                 <span className="member__name" style={m.color ? { color: hex(m.color) } : undefined}>
                   {m.name}
+                  {m.roleIcon && (
+                    <span className="role-icon" aria-hidden="true">
+                      {m.roleIcon}
+                    </span>
+                  )}
                 </span>
                 <CustomStatus member={m} />
               </span>

@@ -10,7 +10,9 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   Avatar,
+  EmojiPicker,
   Modal,
+  Popover,
   Toggle,
   XIcon,
   can,
@@ -327,12 +329,15 @@ function RoleEditor(props: {
   const [permissions, setPermissions] = useState(role.permissions);
   const [mentionable, setMentionable] = useState(role.mentionable);
   const [hoist, setHoist] = useState(role.hoist);
+  const [icon, setIcon] = useState(role.icon);
+  const [iconPicker, setIconPicker] = useState<{ x: number; y: number } | null>(null);
   const dirty =
     name !== role.name ||
     color !== role.color ||
     permissions !== role.permissions ||
     mentionable !== role.mentionable ||
-    hoist !== role.hoist;
+    hoist !== role.hoist ||
+    icon !== role.icon;
   const mine = community.permissions;
 
   const save = (): void => {
@@ -340,7 +345,7 @@ function RoleEditor(props: {
       a: 'updateRole',
       communityId: community.id,
       roleId: role.id,
-      ...(role.everyone ? {} : { name: name.trim() || role.name, color, mentionable, hoist }),
+      ...(role.everyone ? {} : { name: name.trim() || role.name, color, mentionable, hoist, icon }),
       permissions,
     });
   };
@@ -387,6 +392,37 @@ function RoleEditor(props: {
               onChange={(e) => setColor(parseInt(e.target.value.slice(1), 16))}
             />
           </div>
+          <div className="field__label">Role icon</div>
+          <div className="role-icon-field">
+            <button
+              className="role-icon-field__pick"
+              disabled={!editable}
+              aria-label={icon ? `Role icon ${icon}, change` : 'Choose a role icon'}
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setIconPicker({ x: r.left, y: r.bottom + 6 });
+              }}
+            >
+              {icon ?? '＋'}
+            </button>
+            {icon && editable && (
+              <button className="btn btn--link btn--small" onClick={() => setIcon(null)}>
+                Remove
+              </button>
+            )}
+            <span className="muted small">Shown next to the names of people with this role.</span>
+          </div>
+          {iconPicker && (
+            <Popover x={iconPicker.x} y={iconPicker.y} onClose={() => setIconPicker(null)}>
+              <EmojiPicker
+                onPick={(e) => {
+                  // Community emoji are pictures; role icons are plain emoji.
+                  if (!e.startsWith('<')) setIcon(e);
+                  setIconPicker(null);
+                }}
+              />
+            </Popover>
+          )}
           <Toggle
             label="Allow anyone to @mention this role"
             help="Members can ping everyone with this role. People who may mention @everyone can always mention every role."
@@ -440,6 +476,7 @@ function RoleEditor(props: {
                 permissions: role.permissions,
                 mentionable: role.mentionable,
                 hoist: role.hoist,
+                icon: role.icon,
               })
               .then((id) => id && s.notify(`Made a copy of ${role.name}.`))
           }
@@ -477,6 +514,7 @@ function RoleEditor(props: {
               setPermissions(role.permissions);
               setMentionable(role.mentionable);
               setHoist(role.hoist);
+              setIcon(role.icon);
             }}
           >
             Reset

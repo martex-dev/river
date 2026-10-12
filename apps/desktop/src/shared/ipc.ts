@@ -190,6 +190,8 @@ export interface RoleView {
   mentionable: boolean;
   /** Members with this role are listed in their own group. */
   hoist: boolean;
+  /** An emoji shown next to members' names (1.0.21), or null. */
+  icon: string | null;
 }
 
 export interface ChannelView {
@@ -243,6 +245,8 @@ export interface MemberView {
   roles: string[];
   /** Colour of the highest coloured role, or null. */
   color: number | null;
+  /** Icon of the highest role that has one (1.0.21), or null. */
+  roleIcon?: string | null;
   online: boolean;
   /** Idle or Do Not Disturb while online (1.0.17). */
   status?: 'idle' | 'dnd';

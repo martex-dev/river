@@ -484,6 +484,11 @@ function Message(props: {
               >
                 {m.senderName}
               </button>
+              {member?.roleIcon && (
+                <span className="role-icon" title="Role icon" aria-hidden="true">
+                  {member.roleIcon}
+                </span>
+              )}
               <time
                 className="muted small msg__time"
                 title={`${new Date(m.sentAt).toLocaleString()} · click to copy a link to this message`}
