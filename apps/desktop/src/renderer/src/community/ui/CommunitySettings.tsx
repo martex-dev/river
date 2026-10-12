@@ -1,3 +1,4 @@
+import { CommunityArtFields } from './CommunityArt.tsx';
 import { InsightsPanel } from './Insights.tsx';
 import { StickerSettings } from './Stickers.tsx';
 import { AUDIT_GROUPS, auditText, filterAudit, type AuditFilter } from '../../../../shared/audit-filter.ts';
@@ -133,6 +134,7 @@ function Overview({ community }: { community: CommunityView }): ReactElement {
   return (
     <div className="settings-page">
       <h2>Overview</h2>
+      <CommunityArtFields community={community} />
       <div className="field__label">Icon</div>
       <div className="icon-picker" role="radiogroup" aria-label="Community icon">
         <button

@@ -10,6 +10,7 @@ import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } f
 export type SealPurpose =
   | 'meta'
   | 'onboarding'
+  | 'art'
   | 'profile'
   | `channel:${string}`
   | `category:${string}`

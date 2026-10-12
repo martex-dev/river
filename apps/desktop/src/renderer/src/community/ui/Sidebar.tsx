@@ -57,6 +57,9 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
 
   return (
     <aside className="community__channels" aria-label="Channels">
+      {community.art?.banner && (
+        <img className="community__banner" src={community.art.banner} alt="" draggable={false} />
+      )}
       <button
         className="community__title"
         onClick={(e) => {

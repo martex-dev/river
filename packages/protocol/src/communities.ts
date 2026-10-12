@@ -129,6 +129,8 @@ export type MemberWire = z.infer<typeof memberSchema>;
 /** Sealed rules and welcome note, and how many self-assignable roles (1.0.24). */
 export const SEALED_ONBOARDING = 16 * 1024;
 export const MAX_SELF_ROLES = 25;
+/** A community's sealed picture and banner (1.0.29). */
+export const SEALED_ART = 160 * 1024;
 
 export const communitySchema = z.object({
   id: communityIdSchema,
@@ -148,6 +150,8 @@ export const communitySchema = z.object({
   screening: z.boolean().optional(),
   /** Roles members may give themselves (1.0.24). */
   selfRoles: z.array(roleIdSchema).max(MAX_SELF_ROLES).optional(),
+  /** Sealed { icon, banner } pictures (1.0.29). */
+  art: sealedSchema(SEALED_ART).nullable().optional(),
 });
 export type CommunityWire = z.infer<typeof communitySchema>;
 export const joinResponseSchema = communitySchema.extend({
@@ -179,6 +183,7 @@ export const updateOnboardingRequestSchema = z
     selfRoles: z.array(roleIdSchema).max(MAX_SELF_ROLES),
   })
   .strict();
+export const updateArtRequestSchema = z.object({ art: sealedSchema(SEALED_ART).nullable() }).strict();
 export const selfRolesRequestSchema = z.object({ roles: z.array(roleIdSchema).max(MAX_SELF_ROLES) }).strict();
 
 export const createChannelRequestSchema = z

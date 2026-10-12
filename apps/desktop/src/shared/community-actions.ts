@@ -13,6 +13,8 @@ const id = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 const riverId = z.uuid();
 const name = z.string().trim().min(1).max(64);
 const soundName = z.string().trim().min(1).max(32);
+/** A community picture or banner (1.0.29). */
+export const ART_IMAGE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/;
 /** A sticker picture (1.0.24): PNG, WebP or GIF as a data URL. */
 export const STICKER_IMAGE = /^data:image\/(png|webp|gif);base64,[A-Za-z0-9+/]+=*$/;
 /** A link preview (1.0.23). */
@@ -134,6 +136,15 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('acceptRules'), communityId: id }).strict(),
+  /** The community's picture and banner (1.0.29); omitted: keep, null: remove. */
+  z
+    .object({
+      a: z.literal('updateArt'),
+      communityId: id,
+      icon: z.string().max(60_000).regex(ART_IMAGE).nullable().optional(),
+      banner: z.string().max(110_000).regex(ART_IMAGE).nullable().optional(),
+    })
+    .strict(),
   /** The word filter (1.0.28), sealed with the rules. */
   z
     .object({

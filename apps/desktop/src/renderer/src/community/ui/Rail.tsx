@@ -122,7 +122,9 @@ export function CommunityRail(props: {
             props.onMenu(c.id, e.clientX, e.clientY);
           }}
         >
-          {c.icon ? (
+          {c.art?.icon ? (
+            <img className="community__server-img" src={c.art.icon} alt="" draggable={false} />
+          ) : c.icon ? (
             <span className="community__server-icon" aria-hidden="true">
               {c.icon}
             </span>

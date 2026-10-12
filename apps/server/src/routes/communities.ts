@@ -35,6 +35,7 @@ import {
   MAX_COMMUNITY_STICKERS,
   bulkDeleteRequestSchema,
   updateOnboardingRequestSchema,
+  updateArtRequestSchema,
   selfRolesRequestSchema,
   createNoteRequestSchema,
   MAX_NOTES_PER_MEMBER,
@@ -380,6 +381,20 @@ export async function registerCommunityRoutes(
         screening: req.screening,
         selfRoles: req.selfRoles.length,
       });
+      changed(model);
+      return { ok: true };
+    },
+  );
+
+  app.put<{ Params: { id: string } }>(
+    `${API_PREFIX}/communities/:id/art`,
+    { ...authed, bodyLimit: 256 * 1024 },
+    async (request) => {
+      const model = await community(request.params.id, me(request));
+      if (!model.can(me(request), Permission.MANAGE_COMMUNITY)) throw forbidden();
+      const req = parse(updateArtRequestSchema, request.body);
+      await db.updateTable('communities').set({ art: req.art }).where('id', '=', model.id).execute();
+      await audit(model.id, me(request), 'community.art', model.id);
       changed(model);
       return { ok: true };
     },

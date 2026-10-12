@@ -48,6 +48,7 @@ import {
   type SoundView,
   type NoteView,
   type StickerView,
+  ART_IMAGE,
   MAX_FAVORITE_BYTES,
   MAX_FAVORITE_MEDIA,
   STICKER_IMAGE,
@@ -858,6 +859,16 @@ export class CommunityService {
           return { rules: [], welcomeNote: '', filter: null };
         }
       })(),
+      ...((): Pick<CommunityView, 'art'> => {
+        if (!c.art) return {};
+        try {
+          const a = ring.open<{ icon?: unknown; banner?: unknown }>(c.id, 'art', c.art);
+          const ok = (v: unknown): string | null => (typeof v === 'string' && ART_IMAGE.test(v) ? v : null);
+          return { art: { icon: ok(a.icon), banner: ok(a.banner) } };
+        } catch {
+          return {};
+        }
+      })(),
       screening: c.screening ?? false,
       selfRoles: (c.selfRoles ?? []).filter((id) => roles.some((r) => r.id === id)),
       myPending: myPending,
@@ -1400,6 +1411,21 @@ export class CommunityService {
           { onboarding, screening, selfRoles },
           z.unknown(),
         ).catch(explain);
+        await this.refresh();
+        break;
+      }
+      case 'updateArt': {
+        const current = this.requireCommunity(act.communityId).art;
+        const icon = act.icon !== undefined ? act.icon : (current?.icon ?? null);
+        const banner = act.banner !== undefined ? act.banner : (current?.banner ?? null);
+        const art =
+          icon || banner
+            ? seal(this.requireKey(act.communityId), act.communityId, 'art', {
+                ...(icon ? { icon } : {}),
+                ...(banner ? { banner } : {}),
+              })
+            : null;
+        await this.call(`/communities/${act.communityId}/art`, 'PUT', { art }, z.unknown()).catch(explain);
         await this.refresh();
         break;
       }
