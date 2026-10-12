@@ -26,6 +26,7 @@ import {
   callRoomSchema,
   emojisResponseSchema,
   reportsResponseSchema,
+  soundsResponseSchema,
   eventsResponseSchema,
   decodeRelayIn,
   encodeRelayOut,
@@ -41,6 +42,8 @@ import {
   type EventView,
   type EmojiView,
   type ReportView,
+  type SoundView,
+  SOUND_DATA_URL,
   type SavedMessageView,
   EMOJI_NAME,
   type SavedOutgoing,
@@ -176,6 +179,19 @@ function explain(err: unknown): never {
 const PENDING_SIGNALS_MAX = 400;
 const PENDING_SIGNAL_TTL_MS = 30_000;
 
+/** Forum tags from decrypted data: short, unique strings only (1.0.22). */
+function readTags(raw: unknown, max: number): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const t of raw) {
+    if (typeof t !== 'string') continue;
+    const tag = t.trim().slice(0, 24);
+    if (tag && !out.includes(tag)) out.push(tag);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
 export class CommunityService {
   private readonly deps: Deps;
   private communities: CommunityView[] = [];
@@ -216,7 +232,12 @@ export class CommunityService {
   private activeVoice: string | null = null;
   /** The private call room of a 1:1 call in progress (lets the server relay its voice). */
   private activeRoom: string | null = null;
-  private lastVoiceState: { muted: boolean; deafened: boolean; streaming: boolean } | null = null;
+  private lastVoiceState: {
+    muted: boolean;
+    deafened: boolean;
+    streaming: boolean;
+    handRaised?: boolean;
+  } | null = null;
   /** Call setup produced while the connection was down; sent once it is back. */
   private pendingSignals: Array<{ event: unknown; at: number }> = [];
   private heartbeat: NodeJS.Timeout | null = null;
@@ -666,10 +687,16 @@ export class CommunityService {
       .map((ch) => {
         let name = 'channel';
         let topic = '';
+        let tags: string[] = [];
         try {
-          const opened = ring.open<{ name: string; topic?: string }>(c.id, `channel:${ch.id}`, ch.name);
+          const opened = ring.open<{ name: string; topic?: string; tags?: unknown }>(
+            c.id,
+            `channel:${ch.id}`,
+            ch.name,
+          );
           name = String(opened.name).slice(0, 64);
           topic = String(opened.topic ?? '').slice(0, 300);
+          tags = readTags(opened.tags, 20);
         } catch {
           // keep placeholder for undecryptable names
         }
@@ -690,6 +717,9 @@ export class CommunityService {
           announcement: ch.announcement,
           slowmode: ch.slowmode,
           userLimit: ch.userLimit,
+          forum: ch.forum,
+          tags,
+          stage: ch.stage,
         };
       })
       .sort((a, b) => a.position - b.position);
@@ -856,6 +886,7 @@ export class CommunityService {
         poll?: unknown;
         attachments?: unknown[];
         alts?: unknown;
+        tags?: unknown;
       }>(communityId, `message:${m.channelId}`, m.body);
       const body = opened.value;
       const key = opened.key;
@@ -909,6 +940,10 @@ export class CommunityService {
         replyTo,
         attachments,
         ...(Object.keys(alts).length ? { alts } : {}),
+        ...((): { tags?: string[] } => {
+          const tags = readTags(body.tags, 5);
+          return tags.length ? { tags } : {};
+        })(),
         // A reply pings the person replied to, unless the sender turned that off.
         mentionsMe:
           m.sender !== me &&
@@ -1207,6 +1242,7 @@ export class CommunityService {
     noPing = false,
     poll?: Poll,
     alts: Record<string, string> = {},
+    post?: { title?: string; tags?: string[] },
   ): Promise<ChatMessage> {
     const text = attachments.length ? z.string().max(4000).parse(rawText) : textSchema.parse(rawText);
     const communityId = this.communityOf(channelId);
@@ -1218,6 +1254,7 @@ export class CommunityService {
       ...(replyTo ? { replyTo } : {}),
       ...(replyTo && noPing ? { noPing: true } : {}),
       ...(poll ? { poll } : {}),
+      ...(post?.tags?.length ? { tags: post.tags } : {}),
       ...(attachments.length ? { attachments } : {}),
       // Kept beside the pointers (not in them) so older Rivers, which reject unknown pointer fields, still
       // show the attachments.
@@ -1236,6 +1273,9 @@ export class CommunityService {
         body: seal(key, communityId, `message:${channelId}`, body),
         ...(attachments.length ? { attachments: attachments.map((a) => a.id) } : {}),
         ...(threadId ? { threadId } : {}),
+        ...(post?.title && !threadId
+          ? { thread: { name: seal(key, communityId, `thread:${id}`, { name: post.title }) } }
+          : {}),
       },
       messageSchema,
     );
@@ -1293,6 +1333,8 @@ export class CommunityService {
             name: seal(key, act.communityId, `channel:${id}`, { name: act.name, topic: act.topic ?? '' }),
             ...(overwrites ? { overwrites } : {}),
             ...(act.parentId ? { parentId: act.parentId } : {}),
+            ...(act.forum && act.kind === 'text' ? { forum: true } : {}),
+            ...(act.stage && act.kind === 'voice' ? { stage: true } : {}),
           },
           z.unknown(),
         );
@@ -1302,12 +1344,16 @@ export class CommunityService {
         const communityId = this.communityOf(act.channelId);
         const current = this.requireCommunity(communityId).channels.find((c) => c.id === act.channelId);
         const body: Record<string, unknown> = {};
-        if (act.name !== undefined || act.topic !== undefined) {
+        if (act.name !== undefined || act.topic !== undefined || act.tags !== undefined) {
+          const tags = act.tags ?? current?.tags ?? [];
           body.name = seal(this.requireKey(communityId), communityId, `channel:${act.channelId}`, {
             name: act.name ?? current?.name ?? 'channel',
             topic: act.topic ?? current?.topic ?? '',
+            ...(tags.length ? { tags } : {}),
           });
         }
+        if (act.forum !== undefined) body.forum = act.forum;
+        if (act.stage !== undefined) body.stage = act.stage;
         if (act.overwrites) body.overwrites = act.overwrites;
         if (act.synced !== undefined) body.synced = act.synced;
         if (act.announcement !== undefined) body.announcement = act.announcement;
@@ -1332,7 +1378,10 @@ export class CommunityService {
             name: seal(this.requireKey(communityId), communityId, `channel:${id}`, {
               name: act.name,
               topic: source.topic,
+              ...(source.tags.length ? { tags: source.tags } : {}),
             }),
+            ...(source.forum ? { forum: true } : {}),
+            ...(source.stage ? { stage: true } : {}),
             ...(source.synced ? {} : { overwrites: source.overwrites }),
             ...(source.parentId ? { parentId: source.parentId } : {}),
           },
@@ -1570,7 +1619,10 @@ export class CommunityService {
         await this.call(
           `/communities/${act.communityId}/bans/${act.riverId}`,
           'PUT',
-          act.deleteMessagesSeconds ? { deleteMessagesSeconds: act.deleteMessagesSeconds } : {},
+          {
+            ...(act.deleteMessagesSeconds ? { deleteMessagesSeconds: act.deleteMessagesSeconds } : {}),
+            ...(act.durationSeconds ? { durationSeconds: act.durationSeconds } : {}),
+          },
           z.unknown(),
         );
         break;
@@ -1592,6 +1644,7 @@ export class CommunityService {
         const bans: BanView[] = res.bans.map((b) => ({
           riverId: b.riverId,
           bannedOn: b.bannedOn,
+          until: b.until ?? null,
           name: this.knownNames.get(b.riverId) ?? `Member ${b.riverId.slice(0, 4)}`,
         }));
         return bans as CommunityActionResult<A>;
@@ -1606,6 +1659,7 @@ export class CommunityService {
           act.noPing,
           act.poll,
           act.alts,
+          act.title || act.tags ? { title: act.title, tags: act.tags } : undefined,
         )) as CommunityActionResult<A>;
       case 'createThread': {
         const communityId = this.communityOf(act.channelId);
@@ -1738,7 +1792,12 @@ export class CommunityService {
         this.trySend({ t: 'typing', channelId: act.channelId });
         break;
       case 'voiceState':
-        this.lastVoiceState = { muted: act.muted, deafened: act.deafened, streaming: act.streaming };
+        this.lastVoiceState = {
+          muted: act.muted,
+          deafened: act.deafened,
+          streaming: act.streaming,
+          ...(act.handRaised !== undefined ? { handRaised: act.handRaised } : {}),
+        };
         this.trySend({ t: 'voice.state', ...this.lastVoiceState });
         break;
       case 'moderateVoice':
@@ -1747,6 +1806,7 @@ export class CommunityService {
           target: act.riverId,
           ...(act.serverMuted !== undefined ? { serverMuted: act.serverMuted } : {}),
           ...(act.serverDeafened !== undefined ? { serverDeafened: act.serverDeafened } : {}),
+          ...(act.speaker !== undefined ? { speaker: act.speaker } : {}),
           ...(act.disconnect ? { disconnect: true } : {}),
         });
         break;
@@ -1771,6 +1831,40 @@ export class CommunityService {
       }
       case 'reports':
         return (await this.reports(act.communityId)) as CommunityActionResult<A>;
+      case 'sounds':
+        return (await this.sounds(act.communityId)) as CommunityActionResult<A>;
+      case 'addSound': {
+        const soundId = randomId();
+        const data = seal(this.requireKey(act.communityId), act.communityId, `sound:${soundId}`, {
+          name: act.name,
+          emoji: act.emoji,
+          audio: act.audio,
+        });
+        await this.call(
+          `/communities/${act.communityId}/sounds`,
+          'POST',
+          { id: soundId, data },
+          z.unknown(),
+        ).catch(explain);
+        return soundId as CommunityActionResult<A>;
+      }
+      case 'updateSound': {
+        const sound = (await this.sounds(act.communityId)).find((x) => x.id === act.soundId);
+        if (!sound) throw new CommunityError('That sound no longer exists.');
+        const data = seal(this.requireKey(act.communityId), act.communityId, `sound:${act.soundId}`, {
+          name: act.name ?? sound.name,
+          emoji: act.emoji !== undefined ? act.emoji : sound.emoji,
+          audio: sound.audio,
+        });
+        await this.call(`/sounds/${act.soundId}`, 'PATCH', { data }, z.unknown()).catch(explain);
+        break;
+      }
+      case 'deleteSound':
+        await this.call(`/sounds/${act.soundId}`, 'DELETE', undefined, z.unknown()).catch(explain);
+        break;
+      case 'playSound':
+        this.sendEvent({ t: 'voice.sound', soundId: act.soundId });
+        break;
       case 'updateReport':
         await this.call(`/reports/${act.reportId}`, 'PATCH', { status: act.status }, z.unknown()).catch(
           explain,
@@ -2091,9 +2185,13 @@ export class CommunityService {
     return (await this.messages(channelId)).find((m) => m.id === messageId);
   }
 
+  /** A voice join is waiting for the server's answer. */
+  private joiningVoice = false;
+
   voiceJoin(channelId: string): void {
     this.communityOf(channelId);
     this.sendEvent({ t: 'voice.join', channelId });
+    this.joiningVoice = true;
     this.activeVoice = channelId;
     // One call at a time: joining a voice channel ends any 1:1 call's relay room.
     if (this.activeRoom) this.callRoom(null);
@@ -2190,6 +2288,30 @@ export class CommunityService {
         if (!EMOJI_NAME.test(name) || !/^data:image\/(png|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(image))
           return [];
         return [{ id: e.id, name, image }];
+      } catch {
+        return [];
+      }
+    });
+  }
+
+  // ---- Soundboard (1.0.22) -------------------------------------------------------------------
+
+  async sounds(communityId: string): Promise<SoundView[]> {
+    const ring = this.keys.get(communityId);
+    if (!ring) throw new CommunityError('Waiting for the community key…');
+    const res = await this.call(`/communities/${communityId}/sounds`, 'GET', undefined, soundsResponseSchema);
+    return res.sounds.flatMap((x): SoundView[] => {
+      try {
+        const data = ring.open<{ name?: unknown; emoji?: unknown; audio?: unknown }>(
+          communityId,
+          `sound:${x.id}`,
+          x.data,
+        );
+        const name = String(data.name ?? '').slice(0, 32);
+        const emoji = typeof data.emoji === 'string' && data.emoji.length <= 16 ? data.emoji : null;
+        const audio = String(data.audio ?? '');
+        if (!name.trim() || !SOUND_DATA_URL.test(audio)) return [];
+        return [{ id: x.id, name, emoji, audio }];
       } catch {
         return [];
       }
@@ -2496,6 +2618,7 @@ export class CommunityService {
         return;
       }
       case 'voice': {
+        if (e.participants.includes(this.me())) this.joiningVoice = false;
         this.voice.set(e.channelId, e.participants);
         const states: Record<string, VoiceState> = {};
         for (const id of e.participants) {
@@ -2529,14 +2652,26 @@ export class CommunityService {
         break;
       case 'reports':
         this.emit({ t: 'reports', communityId: e.communityId });
+        break;
+      case 'sounds':
+        this.emit({ t: 'sounds', communityId: e.communityId });
+        break;
+      case 'voice.sound':
+        this.emit({ t: 'voiceSound', communityId: e.communityId, from: e.from, soundId: e.soundId });
         return;
       case 'voice.disconnect':
         this.emit({ t: 'voiceDisconnect' });
         return;
       case 'error':
         if (e.code === 'voice_full') this.emit({ t: 'voiceRefused', reason: 'full' });
-        else if (e.code === 'voice_forbidden' || e.code === 'forbidden')
+        // Servers before 1.0.8 refused a voice join with a plain "forbidden": only count it as one while a
+        // join is waiting; otherwise it answers something else (a moderation action, a sound) and must not
+        // end the call.
+        else if (e.code === 'voice_forbidden' || (e.code === 'forbidden' && this.joiningVoice))
           this.emit({ t: 'voiceRefused', reason: 'forbidden' });
+        else if (e.code === 'forbidden') this.emit({ t: 'refused', reason: 'forbidden' });
+        else if (e.code === 'slow_down') this.emit({ t: 'refused', reason: 'slow_down' });
+        this.joiningVoice = false;
         return;
       case 'typing':
         this.emit({ t: 'typing', communityId: e.communityId, channelId: e.channelId, riverId: e.riverId });

@@ -31,6 +31,10 @@ import {
   createEventRequestSchema,
   transferOwnershipRequestSchema,
   createReportRequestSchema,
+  createSoundRequestSchema,
+  updateSoundRequestSchema,
+  MAX_COMMUNITY_SOUNDS,
+  SOUND_COOLDOWN_MS,
   banRequestSchema,
   MAX_BAN_DELETES,
   updateReportRequestSchema,
@@ -393,6 +397,8 @@ export async function registerCommunityRoutes(
               position,
               parent_id: parentId,
               synced: parentId && !req.overwrites?.length ? 1 : 0,
+              forum: req.forum && req.kind === 'text' ? 1 : 0,
+              stage: req.stage && req.kind === 'voice' ? 1 : 0,
             })
             .execute();
           for (const o of req.overwrites ?? []) {
@@ -441,7 +447,9 @@ export async function registerCommunityRoutes(
         req.parentId !== undefined ||
         req.announcement !== undefined ||
         req.slowmode !== undefined ||
-        req.userLimit !== undefined
+        req.userLimit !== undefined ||
+        req.forum !== undefined ||
+        req.stage !== undefined
       ) {
         await trx
           .updateTable('channels')
@@ -452,6 +460,8 @@ export async function registerCommunityRoutes(
             ...(req.announcement !== undefined ? { announcement: req.announcement ? 1 : 0 } : {}),
             ...(req.slowmode !== undefined ? { slowmode: req.slowmode } : {}),
             ...(req.userLimit !== undefined ? { user_limit: req.userLimit } : {}),
+            ...(req.forum !== undefined ? { forum: req.forum ? 1 : 0 } : {}),
+            ...(req.stage !== undefined ? { stage: req.stage ? 1 : 0 } : {}),
           })
           .where('id', '=', channelId)
           .execute();
@@ -476,6 +486,8 @@ export async function registerCommunityRoutes(
       ...(req.announcement !== undefined ? { announcement: req.announcement } : {}),
       ...(req.slowmode !== undefined ? { slowmode: req.slowmode } : {}),
       ...(req.userLimit !== undefined ? { userLimit: req.userLimit } : {}),
+      ...(req.forum !== undefined ? { forum: req.forum } : {}),
+      ...(req.stage !== undefined ? { stage: req.stage } : {}),
     });
     changed(model);
     return { ok: true };
@@ -740,6 +752,89 @@ export async function registerCommunityRoutes(
     await db.updateTable('community_emojis').set({ data: req.data }).where('id', '=', id).execute();
     await audit(model.id, me(request), 'emoji.update', id);
     emojisChanged(model);
+    return { ok: true };
+  });
+
+  // ---- soundboard (1.0.22) ---------------------------------------------------------------------
+  const soundsChanged = (model: CommunityModel): void =>
+    toMembers(model, { t: 'sounds', communityId: model.id });
+
+  app.get<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/sounds`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    const rows = await db
+      .selectFrom('community_sounds')
+      .select(['id', 'created_by', 'data'])
+      .where('community_id', '=', model.id)
+      .orderBy('created_at')
+      .execute();
+    return { sounds: rows.map((r) => ({ id: r.id, createdBy: r.created_by, data: r.data })) };
+  });
+
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/communities/:id/sounds`,
+    { ...authed, bodyLimit: 400 * 1024 },
+    async (request, reply) => {
+      const model = await community(request.params.id, me(request));
+      if (!model.can(me(request), Permission.MANAGE_EXPRESSIONS)) throw forbidden();
+      const req = parse(createSoundRequestSchema, request.body);
+      const count = await db
+        .selectFrom('community_sounds')
+        .select(db.fn.countAll<number>().as('n'))
+        .where('community_id', '=', model.id)
+        .executeTakeFirstOrThrow();
+      if (Number(count.n) >= MAX_COMMUNITY_SOUNDS)
+        throw bad(`A community can have up to ${MAX_COMMUNITY_SOUNDS} sounds`);
+      try {
+        await db
+          .insertInto('community_sounds')
+          .values({
+            id: req.id,
+            community_id: model.id,
+            created_by: me(request),
+            data: req.data,
+            created_at: deps.now().toISOString(),
+          })
+          .execute();
+      } catch {
+        throw new HttpError(409, 'conflict', 'Sound ID already exists');
+      }
+      await audit(model.id, me(request), 'sound.create', req.id);
+      soundsChanged(model);
+      return reply.code(201).send({ id: req.id });
+    },
+  );
+
+  const soundOf = async (request: FastifyRequest<{ Params: { id: string } }>) => {
+    const id = parse(channelIdSchema, request.params.id);
+    const row = await db
+      .selectFrom('community_sounds')
+      .select(['community_id'])
+      .where('id', '=', id)
+      .executeTakeFirst();
+    if (!row) throw notFound();
+    const model = await community(row.community_id, me(request));
+    if (!model.can(me(request), Permission.MANAGE_EXPRESSIONS)) throw forbidden();
+    return { id, model };
+  };
+
+  app.patch<{ Params: { id: string } }>(
+    `${API_PREFIX}/sounds/:id`,
+    { ...authed, bodyLimit: 400 * 1024 },
+    async (request) => {
+      const { id, model } = await soundOf(request);
+      const req = parse(updateSoundRequestSchema, request.body);
+      await db.updateTable('community_sounds').set({ data: req.data }).where('id', '=', id).execute();
+      await audit(model.id, me(request), 'sound.update', id);
+      soundsChanged(model);
+      return { ok: true };
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(`${API_PREFIX}/sounds/:id`, authed, async (request) => {
+    const { id, model } = await soundOf(request);
+    await db.deleteFrom('community_sounds').where('id', '=', id).execute();
+    await audit(model.id, me(request), 'sound.delete', id);
+    soundsChanged(model);
     return { ok: true };
   });
 
@@ -1207,16 +1302,20 @@ export async function registerCommunityRoutes(
       if (model.member(target) && !model.outranks(me(request), target)) throw forbidden();
       if (target === model.ownerId) throw forbidden();
       const req = parse(banRequestSchema, request.body ?? {});
+      const until = req.durationSeconds
+        ? new Date(deps.now().getTime() + req.durationSeconds * 1000).toISOString()
+        : null;
       await db
         .insertInto('bans')
-        .values({ community_id: model.id, river_id: target, banned_on: day(deps.now()) })
-        .onConflict((oc) => oc.columns(['community_id', 'river_id']).doNothing())
+        .values({ community_id: model.id, river_id: target, banned_on: day(deps.now()), until })
+        .onConflict((oc) => oc.columns(['community_id', 'river_id']).doUpdateSet({ until }))
         .execute();
       const deleted = req.deleteMessagesSeconds
         ? await purgeMessages(model, target, req.deleteMessagesSeconds)
         : 0;
       if (model.member(target)) await removeMember(model, target, 'banned', me(request));
       else await audit(model.id, me(request), 'member.ban', target);
+      if (until) await audit(model.id, me(request), 'member.tempban', target, { until });
       if (deleted) await audit(model.id, me(request), 'message.purge', target, { count: deleted });
       return { ok: true, deleted };
     },
@@ -1309,10 +1408,15 @@ export async function registerCommunityRoutes(
     if (!model.can(me(request), Permission.BAN_MEMBERS)) throw forbidden();
     const rows = await db
       .selectFrom('bans')
-      .select(['river_id', 'banned_on'])
+      .select(['river_id', 'banned_on', 'until'])
       .where('community_id', '=', model.id)
       .execute();
-    return { bans: rows.map((r) => ({ riverId: r.river_id, bannedOn: r.banned_on })) };
+    const now = deps.now().toISOString();
+    return {
+      bans: rows
+        .filter((r) => !r.until || r.until > now)
+        .map((r) => ({ riverId: r.river_id, bannedOn: r.banned_on, until: r.until })),
+    };
   });
 
   // ---- invites ---------------------------------------------------------------------------------
@@ -1357,11 +1461,25 @@ export async function registerCommunityRoutes(
         throw new HttpError(404, 'invalid_invite', 'This invite is invalid or expired');
       const banned = await db
         .selectFrom('bans')
-        .select('river_id')
+        .select(['river_id', 'until'])
         .where('community_id', '=', invite.community_id)
         .where('river_id', '=', me(request))
         .executeTakeFirst();
-      if (banned) throw new HttpError(403, 'banned', 'You are banned from this community');
+      if (banned && (!banned.until || banned.until > deps.now().toISOString()))
+        throw new HttpError(
+          403,
+          'banned',
+          banned.until
+            ? `You are banned from this community until ${banned.until.slice(0, 16).replace('T', ' ')} UTC`
+            : 'You are banned from this community',
+        );
+      // A temporary ban that is over is forgotten.
+      if (banned)
+        await db
+          .deleteFrom('bans')
+          .where('community_id', '=', invite.community_id)
+          .where('river_id', '=', me(request))
+          .execute();
       let model = (await loadCommunity(db, invite.community_id))!;
       if (!model.member(me(request))) {
         await db.transaction().execute(async (trx) => {
@@ -1463,6 +1581,10 @@ export async function registerCommunityRoutes(
       if (!model.can(me(request), Permission.SEND_MESSAGES, channelId))
         throw forbidden('You cannot send messages here');
       const req = parse(sendMessageRequestSchema, request.body);
+      if (req.thread && req.threadId) throw bad('A thread cannot start inside another thread');
+      // In a forum every top-level message is a post: it starts its own titled thread.
+      if (ch.forum && !req.threadId && !req.thread)
+        throw new HttpError(400, 'forum_post', 'This is a forum: start a post with a title');
       const attachments = req.attachments ?? [];
       const managesMessages = model.can(me(request), Permission.MANAGE_MESSAGES, channelId);
       if (req.threadId) {
@@ -1510,6 +1632,19 @@ export async function registerCommunityRoutes(
             })
             .execute();
           await linkAttachments(trx, attachments, me(request), req.id);
+          if (req.thread) {
+            await trx
+              .insertInto('threads')
+              .values({
+                id: req.id,
+                channel_id: channelId,
+                name: req.thread.name,
+                creator: me(request),
+                created_at: deps.now().toISOString(),
+                last_at: null,
+              })
+              .execute();
+          }
           if (req.threadId) {
             await trx
               .updateTable('threads')
@@ -1805,6 +1940,37 @@ export async function registerCommunityRoutes(
           if (event.room === null) hub.leaveRoom(self);
           else if (!hub.joinRoom(self, event.room, MAX_CALL_ROOM)) send({ t: 'error', code: 'room_full' });
           return;
+        case 'voice.sound': {
+          const channelId = hub.voiceChannelOf(self);
+          if (!channelId) return send({ t: 'error', code: 'not_in_call' });
+          const cid = await communityOfChannel(db, channelId);
+          const model = cid ? await loadCommunity(db, cid) : null;
+          // Playing a sound is speaking: it needs Speak there, and not being server-muted or timed out.
+          if (
+            !model ||
+            !model.can(self, Permission.SPEAK, channelId) ||
+            model.timedOut(self) ||
+            hub.stateOf(self).serverMuted
+          )
+            return send({ t: 'error', code: 'forbidden' });
+          const sound = await db
+            .selectFrom('community_sounds')
+            .select('id')
+            .where('id', '=', event.soundId)
+            .where('community_id', '=', model.id)
+            .executeTakeFirst();
+          if (!sound) return send({ t: 'error', code: 'not_found' });
+          if (!hub.takeSoundTurn(self, deps.now().getTime(), SOUND_COOLDOWN_MS))
+            return send({ t: 'error', code: 'slow_down' });
+          hub.sendTo(hub.participants(channelId), {
+            t: 'voice.sound',
+            communityId: model.id,
+            channelId,
+            from: self,
+            soundId: sound.id,
+          });
+          return;
+        }
         case 'voice.join': {
           const cid = await communityOfChannel(db, event.channelId);
           const model = cid ? await loadCommunity(db, cid) : null;
@@ -1827,7 +1993,18 @@ export async function registerCommunityRoutes(
           ) {
             return send({ t: 'error', code: 'voice_full' });
           }
+          const rejoin = hub.voiceChannelOf(self) === ch.id;
           const { left } = hub.joinVoice(self, model.id, ch.id);
+          // Stages: the audience listens. Moderators (who may mute members) speak; others raise a hand.
+          if (!rejoin) {
+            const moderator = model.can(self, Permission.MUTE_MEMBERS, ch.id);
+            if (ch.stage && !moderator) {
+              if (!hub.stateOf(self).serverMuted) hub.stageMuted.add(self);
+              hub.setState(self, { serverMuted: true, handRaised: false });
+            } else if (hub.stageMuted.delete(self)) {
+              hub.setState(self, { serverMuted: false, handRaised: false });
+            }
+          }
           if (left) await voiceUpdate(left.communityId, left.channelId);
           await voiceUpdate(model.id, ch.id);
           return;
@@ -1842,6 +2019,12 @@ export async function registerCommunityRoutes(
           if (!channelId) return;
           hub.setState(self, { muted: event.muted, deafened: event.deafened, streaming: event.streaming });
           const cid = await communityOfChannel(db, channelId);
+          if (event.handRaised !== undefined && cid) {
+            // Hands are only for the audience of a stage.
+            const model = await loadCommunity(db, cid);
+            const onStage = !!model?.channel(channelId)?.stage;
+            hub.setState(self, { handRaised: onStage && hub.stateOf(self).serverMuted && event.handRaised });
+          }
           if (cid) await voiceUpdate(cid, channelId);
           return;
         }
@@ -1860,6 +2043,13 @@ export async function registerCommunityRoutes(
             if (!model.can(self, Permission.MUTE_MEMBERS, channelId))
               return send({ t: 'error', code: 'forbidden' });
             hub.setState(event.target, { serverDeafened: event.serverDeafened });
+          }
+          if (event.speaker !== undefined) {
+            if (!model.channel(channelId)?.stage || !model.can(self, Permission.MUTE_MEMBERS, channelId))
+              return send({ t: 'error', code: 'forbidden' });
+            hub.setState(event.target, { serverMuted: !event.speaker, handRaised: false });
+            if (event.speaker) hub.stageMuted.delete(event.target);
+            else hub.stageMuted.add(event.target);
           }
           if (event.disconnect) {
             if (!model.can(self, Permission.MOVE_MEMBERS, channelId))

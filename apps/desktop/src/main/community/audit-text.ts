@@ -48,6 +48,12 @@ export function describeAudit(
         return `dismissed a report about ${person(t)}`;
       case 'report.open':
         return `reopened a report about ${person(t)}`;
+      case 'sound.create':
+        return 'added a soundboard sound';
+      case 'sound.update':
+        return 'changed a soundboard sound';
+      case 'sound.delete':
+        return 'removed a soundboard sound';
       case 'emoji.update':
         return 'renamed a custom emoji';
       case 'emoji.delete':
@@ -60,6 +66,8 @@ export function describeAudit(
         const n = Number(d.count ?? 0);
         return `deleted ${n} message${n === 1 ? '' : 's'} by ${person(t)}`;
       }
+      case 'member.tempban':
+        return `made ${person(t)}'s ban end ${typeof d.until === 'string' ? new Date(d.until).toLocaleString() : 'later'}`;
       case 'member.kick':
         return `kicked ${person(t)}`;
       case 'member.ban':

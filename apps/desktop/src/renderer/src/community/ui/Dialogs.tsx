@@ -1,3 +1,4 @@
+import { ForumSettings } from './Forum.tsx';
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, CommunityView } from '../../../../shared/ipc.ts';
@@ -37,6 +38,14 @@ export function ConfirmDialog({ modal }: { modal: Extract<ModalState, { kind: 'c
   );
 }
 
+const BAN_LENGTHS: Array<[number, string]> = [
+  [0, 'For good'],
+  [3600, 'For 1 hour'],
+  [24 * 3600, 'For 1 day'],
+  [7 * 24 * 3600, 'For 1 week'],
+  [30 * 24 * 3600, 'For 30 days'],
+];
+
 const BAN_DELETE_LABELS: Array<[number, string]> = [
   [0, "Don't delete any"],
   [3600, 'From the last hour'],
@@ -51,6 +60,7 @@ export function BanDialog({ modal }: { modal: Extract<ModalState, { kind: 'ban' 
   const s = useCommunity();
   const [busy, setBusy] = useState(false);
   const [seconds, setSeconds] = useState(0);
+  const [duration, setDuration] = useState(0);
   const community = s.communities.find((c) => c.id === modal.communityId);
   const ban = async (): Promise<void> => {
     setBusy(true);
@@ -59,6 +69,7 @@ export function BanDialog({ modal }: { modal: Extract<ModalState, { kind: 'ban' 
       communityId: modal.communityId,
       riverId: modal.riverId,
       ...(seconds ? { deleteMessagesSeconds: seconds } : {}),
+      ...(duration ? { durationSeconds: duration } : {}),
     });
     setBusy(false);
     s.setModal(modal.then ?? null);
@@ -67,9 +78,19 @@ export function BanDialog({ modal }: { modal: Extract<ModalState, { kind: 'ban' 
   return (
     <Modal title={`Ban ${modal.name}`} onClose={() => s.setModal(modal.then ?? null)}>
       <p className="modal__text">
-        {modal.name} will be removed from {community?.name ?? 'the community'} and cannot rejoin until
-        unbanned.
+        {modal.name} will be removed from {community?.name ?? 'the community'} and cannot rejoin until the ban
+        ends or someone unbans them.
       </p>
+      <label className="textfield">
+        <span className="field__label">How long</span>
+        <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
+          {BAN_LENGTHS.map(([v, label]) => (
+            <option key={v} value={v}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
       <label className="textfield">
         <span className="field__label">Delete their messages</span>
         <select value={seconds} onChange={(e) => setSeconds(Number(e.target.value))}>
@@ -141,11 +162,11 @@ export function CreateChannelDialog(props: {
   parentId?: string;
 }): ReactElement {
   const s = useCommunity();
-  const [kind, setKind] = useState(props.kind);
+  const [kind, setKind] = useState<'text' | 'voice' | 'forum' | 'stage'>(props.kind);
   const [name, setName] = useState('');
   const [isPrivate, setPrivate] = useState(false);
   const [busy, setBusy] = useState(false);
-  const cleaned = kind === 'text' ? name.toLowerCase().replace(/\s+/g, '-') : name;
+  const cleaned = kind === 'text' || kind === 'forum' ? name.toLowerCase().replace(/\s+/g, '-') : name;
   const submit = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
     if (!cleaned.trim()) return;
@@ -153,7 +174,9 @@ export function CreateChannelDialog(props: {
     await s.run({
       a: 'createChannel',
       communityId: props.community.id,
-      kind,
+      kind: kind === 'voice' || kind === 'stage' ? 'voice' : 'text',
+      ...(kind === 'forum' ? { forum: true } : {}),
+      ...(kind === 'stage' ? { stage: true } : {}),
       name: cleaned.trim(),
       private: isPrivate,
       ...(props.parentId ? { parentId: props.parentId } : {}),
@@ -165,16 +188,30 @@ export function CreateChannelDialog(props: {
     <Modal title="Create channel" onClose={() => s.setModal(null)}>
       <form onSubmit={(e) => void submit(e)} className="create-channel">
         <div className="field__label">Channel type</div>
-        {(['text', 'voice'] as const).map((k) => (
+        {(['text', 'voice', 'forum', 'stage'] as const).map((k) => (
           <label key={k} className={`kind-option ${kind === k ? 'is-active' : ''}`}>
             <input type="radio" name="kind" checked={kind === k} onChange={() => setKind(k)} />
-            {k === 'text' ? <HashIcon /> : <SpeakerIcon />}
+            {k === 'text' ? (
+              <HashIcon />
+            ) : k === 'voice' ? (
+              <SpeakerIcon />
+            ) : (
+              <span aria-hidden="true" style={{ fontSize: 20 }}>
+                {k === 'forum' ? '🗂️' : '🎙️'}
+              </span>
+            )}
             <span>
-              <strong>{k === 'text' ? 'Text' : 'Voice'}</strong>
+              <strong>
+                {k === 'text' ? 'Text' : k === 'voice' ? 'Voice' : k === 'forum' ? 'Forum' : 'Stage'}
+              </strong>
               <span className="muted small">
                 {k === 'text'
                   ? 'Messages, emoji, opinions and puns'
-                  : 'Hang out with voice, video and screen share'}
+                  : k === 'voice'
+                    ? 'Hang out with voice, video and screen share'
+                    : k === 'forum'
+                      ? 'Organised posts with titles and tags, each with its own replies'
+                      : 'Talks and events: speakers on stage, everyone else listens'}
               </span>
             </span>
           </label>
@@ -504,6 +541,13 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
               {channel.kind === 'text' && (
                 <>
                   <Toggle
+                    label="Forum"
+                    help="Every message starts a post with a title and its own replies, shown as a list of posts."
+                    checked={channel.forum}
+                    onChange={(on) => void s.run({ a: 'updateChannel', channelId: channel.id, forum: on })}
+                  />
+                  {channel.forum && <ForumSettings channel={channel} />}
+                  <Toggle
                     label="Announcement channel"
                     help="Only people who can manage messages post here; everyone else reads and reacts."
                     checked={channel.announcement}
@@ -534,6 +578,14 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
                     </span>
                   </label>
                 </>
+              )}
+              {channel.kind === 'voice' && (
+                <Toggle
+                  label="Stage"
+                  help="For talks and events: people join as listeners, raise a hand to ask to speak, and moderators invite speakers."
+                  checked={channel.stage}
+                  onChange={(on) => void s.run({ a: 'updateChannel', channelId: channel.id, stage: on })}
+                />
               )}
               {channel.kind === 'voice' && (
                 <label className="textfield">

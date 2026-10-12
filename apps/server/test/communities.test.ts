@@ -21,6 +21,7 @@ import {
   eventsResponseSchema,
   emojisResponseSchema,
   reportsResponseSchema,
+  soundsResponseSchema,
 } from '@river/protocol';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
@@ -516,6 +517,52 @@ describe('communities', () => {
       expect((await fetchCommunity(a, member.token, cid)).channels.map((ch) => ch.id)).toContain(secret);
     });
 
+    it('forums: top-level messages must start a titled thread, replies go inside it', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      expect(await status(a, 'PATCH', `/v1/channels/${text}`, member.token, { forum: true })).toBe(403);
+      expect(await status(a, 'PATCH', `/v1/channels/${text}`, owner.token, { forum: true })).toBe(200);
+      expect((await fetchCommunity(a, member.token, cid)).channels.find((c) => c.id === text)?.forum).toBe(
+        true,
+      );
+      const plain = await a.inject({
+        method: 'POST',
+        url: `/v1/channels/${text}/messages`,
+        headers: auth(member.token),
+        payload: { id: id(), body: sealed() },
+      });
+      expect([plain.statusCode, plain.json().error.code]).toEqual([400, 'forum_post']);
+      const post = id();
+      expect(
+        await status(a, 'POST', `/v1/channels/${text}/messages`, member.token, {
+          id: post,
+          body: sealed(),
+          thread: { name: sealed() },
+        }),
+      ).toBe(201);
+      expect(
+        await status(a, 'POST', `/v1/channels/${text}/messages`, owner.token, {
+          id: id(),
+          body: sealed(),
+          threadId: post,
+        }),
+      ).toBe(201);
+      expect(
+        await status(a, 'POST', `/v1/channels/${text}/messages`, owner.token, {
+          id: id(),
+          body: sealed(),
+          threadId: post,
+          thread: { name: sealed() },
+        }),
+      ).toBe(400);
+      const list = (
+        await a.inject({ method: 'GET', url: `/v1/channels/${text}/messages`, headers: auth(owner.token) })
+      ).json().messages as Array<{ id: string; thread: { count: number } | null }>;
+      expect(list.find((m) => m.id === post)?.thread?.count).toBe(1);
+    });
+
     it('a ban can delete the person’s recent messages, and only those', async () => {
       const a = await start();
       const owner = await user(a);
@@ -542,6 +589,49 @@ describe('communities', () => {
         await a.inject({ method: 'GET', url: `/v1/channels/${text}/messages`, headers: auth(owner.token) })
       ).json().messages as Array<{ id: string }>;
       expect(left.map((m) => m.id)).toEqual([mine]);
+    });
+
+    it('temporary bans end on their own', async () => {
+      let now = Date.parse('2026-10-12T10:00:00Z');
+      database = openDatabase('sqlite::memory:');
+      await migrateToLatest(database.db);
+      const a = await buildApp({
+        config: loadConfig({
+          RIVER_ATTACHMENT_DIR: testBlobDir(),
+          RIVER_LOG_LEVEL: 'silent',
+          RIVER_RATE_LIMIT_PER_MINUTE: '10000',
+        }),
+        database,
+        now: () => new Date(now),
+      });
+      app = a;
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      expect(
+        await status(a, 'PUT', `/v1/communities/${cid}/bans/${member.riverId}`, owner.token, {
+          durationSeconds: 999,
+        }),
+      ).toBe(400);
+      expect(
+        await status(a, 'PUT', `/v1/communities/${cid}/bans/${member.riverId}`, owner.token, {
+          durationSeconds: 3600,
+        }),
+      ).toBe(200);
+      const code = (
+        await a.inject({ method: 'POST', url: `/v1/communities/${cid}/invites`, headers: auth(owner.token) })
+      ).json().code;
+      expect(await status(a, 'POST', '/v1/invites/join', member.token, { code, profile: sealed() })).toBe(
+        403,
+      );
+      const bans = (
+        await a.inject({ method: 'GET', url: `/v1/communities/${cid}/bans`, headers: auth(owner.token) })
+      ).json().bans;
+      expect(bans[0].until).toBe('2026-10-12T11:00:00.000Z');
+      now += 3601_000;
+      expect(await status(a, 'POST', '/v1/invites/join', member.token, { code, profile: sealed() })).toBe(
+        200,
+      );
     });
 
     it('banned users are removed and cannot rejoin until unbanned', async () => {
@@ -1014,6 +1104,143 @@ describe('communities', () => {
       );
       for (const c of [one, two, boss]) c.ws.close();
     });
+    it('soundboard: managers add sounds, people in voice who may speak play them, with a cooldown', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, voice } = await createCommunity(a, owner.token);
+      const guest = await join(a, owner.token, cid);
+      const sid = id();
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/sounds`, guest.token, { id: id(), data: sealed() }),
+      ).toBe(403);
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/sounds`, owner.token, { id: sid, data: sealed() }),
+      ).toBe(201);
+      expect(await status(a, 'PATCH', `/v1/sounds/${sid}`, guest.token, { data: sealed() })).toBe(403);
+      expect(await status(a, 'PATCH', `/v1/sounds/${sid}`, owner.token, { data: sealed() })).toBe(200);
+      const listed = (
+        await a.inject({ method: 'GET', url: `/v1/communities/${cid}/sounds`, headers: auth(guest.token) })
+      ).json();
+      expect(soundsResponseSchema.parse(listed).sounds.map((x) => x.id)).toEqual([sid]);
+
+      await a.listen({ host: '127.0.0.1', port: 0 });
+      const { port } = a.server.address() as { port: number };
+      type Ev = { t: string; code?: string; from?: string; soundId?: string };
+      const connect = async (token: string) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/ws`);
+        const events: Ev[] = [];
+        ws.onmessage = (m) => events.push(JSON.parse(String(m.data)));
+        await new Promise((resolve, reject) => {
+          ws.onopen = resolve;
+          ws.onerror = reject;
+        });
+        ws.send(JSON.stringify({ t: 'auth', token }));
+        await vi.waitFor(() => expect(events.some((e) => e.t === 'ready')).toBe(true));
+        return { ws, events };
+      };
+      const boss = await connect(owner.token);
+      const other = await connect(guest.token);
+      // Not in voice yet.
+      other.ws.send(JSON.stringify({ t: 'voice.sound', soundId: sid }));
+      await vi.waitFor(() => expect(other.events).toContainEqual({ t: 'error', code: 'not_in_call' }));
+      boss.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      other.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      await vi.waitFor(() => expect(boss.events.some((e) => e.t === 'voice')).toBe(true));
+      await new Promise((r) => setTimeout(r, 100));
+      other.ws.send(JSON.stringify({ t: 'voice.sound', soundId: sid }));
+      await vi.waitFor(() =>
+        expect(boss.events).toContainEqual(
+          expect.objectContaining({ t: 'voice.sound', from: guest.riverId, soundId: sid }),
+        ),
+      );
+      other.ws.send(JSON.stringify({ t: 'voice.sound', soundId: sid }));
+      await vi.waitFor(() => expect(other.events).toContainEqual({ t: 'error', code: 'slow_down' }));
+      boss.ws.send(JSON.stringify({ t: 'voice.sound', soundId: id() }));
+      await vi.waitFor(() => expect(boss.events).toContainEqual({ t: 'error', code: 'not_found' }));
+      // Server-muted people cannot play sounds.
+      boss.ws.send(JSON.stringify({ t: 'voice.moderate', target: guest.riverId, serverMuted: true }));
+      await new Promise((r) => setTimeout(r, 2600));
+      other.ws.send(JSON.stringify({ t: 'voice.sound', soundId: sid }));
+      await vi.waitFor(() => expect(other.events).toContainEqual({ t: 'error', code: 'forbidden' }));
+      expect(await status(a, 'DELETE', `/v1/sounds/${sid}`, owner.token)).toBe(200);
+      for (const c of [boss, other]) c.ws.close();
+    }, 15_000);
+
+    it('stages: the audience joins muted, raises hands, and moderators invite them to speak', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, voice } = await createCommunity(a, owner.token);
+      const guest = await join(a, owner.token, cid);
+      expect(await status(a, 'PATCH', `/v1/channels/${voice}`, owner.token, { stage: true })).toBe(200);
+      await a.listen({ host: '127.0.0.1', port: 0 });
+      const { port } = a.server.address() as { port: number };
+      type St = { serverMuted?: boolean; handRaised?: boolean };
+      type Ev = { t: string; code?: string; channelId?: string; states?: Record<string, St> };
+      const connect = async (token: string) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/ws`);
+        const events: Ev[] = [];
+        ws.onmessage = (m) => events.push(JSON.parse(String(m.data)));
+        await new Promise((resolve, reject) => {
+          ws.onopen = resolve;
+          ws.onerror = reject;
+        });
+        ws.send(JSON.stringify({ t: 'auth', token }));
+        await vi.waitFor(() => expect(events.some((e) => e.t === 'ready')).toBe(true));
+        return { ws, events };
+      };
+      const stateOf = (events: Ev[], id: string) =>
+        events.filter((e) => e.t === 'voice' && e.channelId === voice).at(-1)?.states?.[id];
+      const boss = await connect(owner.token);
+      const other = await connect(guest.token);
+      boss.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      other.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      await vi.waitFor(() => expect(stateOf(boss.events, guest.riverId)?.serverMuted).toBe(true));
+      expect(stateOf(boss.events, owner.riverId)?.serverMuted).toBe(false);
+      const hand = (up: boolean) =>
+        other.ws.send(
+          JSON.stringify({
+            t: 'voice.state',
+            muted: false,
+            deafened: false,
+            streaming: false,
+            handRaised: up,
+          }),
+        );
+      hand(true);
+      await vi.waitFor(() => expect(stateOf(boss.events, guest.riverId)?.handRaised).toBe(true));
+      // Members cannot invite themselves.
+      other.ws.send(JSON.stringify({ t: 'voice.moderate', target: guest.riverId, speaker: true }));
+      await vi.waitFor(() => expect(other.events).toContainEqual({ t: 'error', code: 'forbidden' }));
+      boss.ws.send(JSON.stringify({ t: 'voice.moderate', target: guest.riverId, speaker: true }));
+      await vi.waitFor(() =>
+        expect(stateOf(other.events, guest.riverId)).toMatchObject({ serverMuted: false, handRaised: false }),
+      );
+      // Speakers cannot raise a hand; back to the audience.
+      hand(true);
+      boss.ws.send(JSON.stringify({ t: 'voice.moderate', target: guest.riverId, speaker: false }));
+      await vi.waitFor(() =>
+        expect(stateOf(boss.events, guest.riverId)).toMatchObject({ serverMuted: true, handRaised: false }),
+      );
+      // Leaving the stage for a normal voice channel lifts the audience mute.
+      const lounge = id();
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/channels`, owner.token, {
+          id: lounge,
+          kind: 'voice',
+          name: sealed(),
+        }),
+      ).toBe(201);
+      other.ws.send(JSON.stringify({ t: 'voice.join', channelId: lounge }));
+      await vi.waitFor(() =>
+        expect(
+          other.events.filter((e) => e.t === 'voice' && e.channelId === lounge).at(-1)?.states?.[
+            guest.riverId
+          ]?.serverMuted,
+        ).toBe(false),
+      );
+      for (const c of [boss, other]) c.ws.close();
+    });
+
     it('server mute and deafen need Mute members, follow the hierarchy, and stick through a rejoin', async () => {
       const a = await start();
       const owner = await user(a);

@@ -1,3 +1,5 @@
+import { StagePanel } from './Stage.tsx';
+import { SoundboardButton } from './Soundboard.tsx';
 import { describeLink, linkQuality, type LinkStats } from '../link-stats.ts';
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
@@ -48,13 +50,15 @@ export function VoiceChannel(props: {
   const tiles = inThisCall
     ? [{ id: me, self: true as const }, ...remotes.map((r) => ({ id: r.id, self: false as const, peer: r }))]
     : [];
-  const focused = focus && tiles.some((t) => t.id === focus) ? focus : null;
+  // On a stage only the speakers get tiles; the audience is listed in the stage panel.
+  const shownTiles = channel.stage ? tiles.filter((t) => !community.voiceStates[t.id]?.serverMuted) : tiles;
+  const focused = focus && shownTiles.some((t) => t.id === focus) ? focus : null;
 
   return (
     <div className="voice">
       <header className="chat__head">
         <span className="channel__icon">
-          <SpeakerIcon size={20} />
+          {channel.stage ? <span aria-hidden="true">🎙️</span> : <SpeakerIcon size={20} />}
         </span>
         <strong>{channel.name}</strong>
         <span className="chat__topic">
@@ -102,8 +106,12 @@ export function VoiceChannel(props: {
         </div>
       ) : (
         <>
-          <div className={`voice__grid ${focused ? 'voice__grid--focus' : ''}`} data-count={tiles.length}>
-            {tiles.map((t) =>
+          {channel.stage && <StagePanel community={community} channel={channel} me={me} />}
+          <div
+            className={`voice__grid ${focused ? 'voice__grid--focus' : ''}`}
+            data-count={shownTiles.length}
+          >
+            {shownTiles.map((t) =>
               t.self ? (
                 <Tile
                   key={t.id}
@@ -178,6 +186,7 @@ export function VoiceChannel(props: {
             >
               <ScreenIcon />
             </button>
+            <SoundboardButton community={community} channelId={call.channelId} />
             <button
               className="round-btn round-btn--danger"
               aria-label="Leave"

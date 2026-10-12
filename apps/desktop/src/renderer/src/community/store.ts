@@ -9,7 +9,9 @@ import type {
   EventView,
   ReportView,
   SavedMessageView,
+  SoundView,
 } from '../../../shared/community-actions.ts';
+import { playLocally } from './soundboard-player.ts';
 import { effectiveNotify, shouldAlert } from '../../../shared/notify-rules.ts';
 import { play } from './sound.ts';
 import { VoiceCall } from './voice.ts';
@@ -30,7 +32,8 @@ export type Modal =
   | { kind: 'ban'; communityId: string; riverId: string; name: string; then?: Modal }
   | { kind: 'confirm'; title: string; body: string; action: string; run: () => Promise<void> };
 
-export type CommunityTab = 'overview' | 'roles' | 'members' | 'emoji' | 'bans' | 'reports' | 'audit';
+export type CommunityTab =
+  'overview' | 'roles' | 'members' | 'emoji' | 'sounds' | 'bans' | 'reports' | 'audit';
 export type UserTab = 'profile' | 'voice' | 'notifications' | 'appearance';
 
 const TYPING_MS = 7000;
@@ -60,6 +63,8 @@ interface CommunityState {
   callError: string | null;
   selfMuted: boolean;
   selfDeafened: boolean;
+  /** On a stage: asking to speak (1.0.22). */
+  handRaised: boolean;
   modal: Modal | null;
   toast: { text: string; tone: 'info' | 'error' } | null;
   replyTo: ChatMessage | null;
@@ -99,6 +104,9 @@ interface CommunityState {
   /** Reports per community (1.0.21), loaded when a moderator opens them. */
   reports: Record<string, ReportView[]>;
   loadReports(communityId: string): Promise<void>;
+  /** Soundboard sounds per community (1.0.22), loaded on first use. */
+  sounds: Record<string, SoundView[]>;
+  loadSounds(communityId: string): Promise<SoundView[] | null>;
 
   load(): Promise<void>;
   handle(event: CommunityEvent): void;
@@ -157,6 +165,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   callError: null,
   selfMuted: false,
   selfDeafened: false,
+  handRaised: false,
   modal: null,
   toast: null,
   replyTo: null,
@@ -195,6 +204,13 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   },
   noMore: {},
 
+  sounds: {},
+  loadSounds: async (communityId) => {
+    const res = await window.river.community.action({ a: 'sounds', communityId });
+    if (!res.ok) return null;
+    set({ sounds: { ...get().sounds, [communityId]: res.value } });
+    return res.value;
+  },
   reports: {},
   loadReports: async (communityId) => {
     const res = await window.river.community.action({ a: 'reports', communityId });
@@ -351,7 +367,16 @@ export const useCommunity = create<CommunityState>((set, get) => ({
           const left = before.filter((id) => !event.participants.includes(id) && id !== me);
           if (joined.length) play('join');
           else if (left.length) play('leave');
+          const wasMuted = call.serverMuted;
           call.setServerMuted(event.states[me]?.serverMuted ?? false);
+          // Invited onto a stage (or moved back): the raised hand is done.
+          if (wasMuted !== call.serverMuted && get().handRaised) set({ handRaised: false });
+          if (
+            wasMuted &&
+            !call.serverMuted &&
+            get().communities.some((c) => c.channels.some((ch) => ch.id === event.channelId && ch.stage))
+          )
+            get().notify('You can speak now.');
           const deafenedNow = event.states[me]?.serverDeafened ?? false;
           if (deafenedNow !== call.serverDeafened)
             get().notify(deafenedNow ? 'A moderator deafened you.' : 'A moderator undeafened you.');
@@ -408,6 +433,31 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         return;
       case 'reports':
         if (get().reports[event.communityId]) void get().loadReports(event.communityId);
+        return;
+      case 'sounds':
+        if (get().sounds[event.communityId]) void get().loadSounds(event.communityId);
+        return;
+      case 'voiceSound': {
+        const call = get().call;
+        if (!call || call.hearingOff) return;
+        const volume = useRiver.getState().settings?.voice.soundboardVolume ?? 0.6;
+        // Muting someone for yourself (volume 0) silences their sounds too.
+        const personal = useRiver.getState().settings?.voice.userVolumes[event.from] ?? 1;
+        if (volume <= 0 || personal <= 0) return;
+        const known = get().sounds[event.communityId]?.find((x) => x.id === event.soundId);
+        const go = (list: SoundView[] | null | undefined): void => {
+          const sound = list?.find((x) => x.id === event.soundId);
+          if (sound) playLocally(sound, volume * Math.min(1, personal));
+        };
+        if (known) go([known]);
+        else void get().loadSounds(event.communityId).then(go);
+        return;
+      }
+      case 'refused':
+        get().notify(
+          event.reason === 'slow_down' ? 'Slow down a little.' : "You don't have permission to do that.",
+          'error',
+        );
         return;
       case 'eventStarting':
         play('success');
@@ -574,7 +624,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
 
   leaveVoice: async () => {
     const call = get().call;
-    set({ call: null });
+    set({ call: null, handRaised: false });
     if (call) play('selfLeave');
     await call?.leave();
   },
@@ -621,13 +671,14 @@ export const useCommunity = create<CommunityState>((set, get) => ({
 
 /** Tells the server our mute/deafen/streaming state so others see it. */
 export function sendVoiceState(): void {
-  const { call, selfMuted, selfDeafened } = useCommunity.getState();
+  const { call, selfMuted, selfDeafened, handRaised } = useCommunity.getState();
   if (!call) return;
   void window.river.community.action({
     a: 'voiceState',
     muted: selfMuted || (call.pushToTalk && !call.pttActive),
     deafened: selfDeafened,
     streaming: !!call.localTrack('screen'),
+    handRaised,
   });
 }
 

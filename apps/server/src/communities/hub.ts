@@ -40,6 +40,9 @@ export class Hub {
   private readonly voice = new Map<string, { communityId: string; members: Set<string> }>();
   private readonly voiceOf = new Map<string, string>();
   private readonly states = new Map<string, VoiceState>();
+  private readonly lastSound = new Map<string, number>();
+  /** Muted because they are in a stage's audience (not by a moderator), 1.0.22. */
+  readonly stageMuted = new Set<string>();
   /** Chosen presence per account (in memory; apps send it again when they connect). */
   private readonly chosen = new Map<string, ChosenStatus>();
 
@@ -238,5 +241,13 @@ export class Hub {
     return [...this.voice.entries()]
       .filter(([, r]) => r.communityId === communityId)
       .map(([channelId, r]) => ({ channelId, participants: [...r.members] }));
+  }
+
+  /** Soundboard cooldown: true (and remembered) when this person may play a sound now. */
+  takeSoundTurn(riverId: string, now: number, cooldownMs: number): boolean {
+    const last = this.lastSound.get(riverId) ?? -Infinity;
+    if (now - last < cooldownMs) return false;
+    this.lastSound.set(riverId, now);
+    return true;
   }
 }

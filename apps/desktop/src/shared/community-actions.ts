@@ -11,10 +11,20 @@ import { communityIconSchema } from './templates.ts';
 const id = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 const riverId = z.uuid();
 const name = z.string().trim().min(1).max(64);
+const soundName = z.string().trim().min(1).max(32);
+/** A forum tag (1.0.22). */
+const forumTag = z.string().trim().min(1).max(24);
+export const MAX_FORUM_TAGS = 20;
+/** A soundboard clip as a data URL (1.0.22): mp3, ogg, wav or webm, at most 160 KB. */
+export const SOUND_DATA_URL = /^data:audio\/(mpeg|ogg|wav|webm|x-wav);base64,[A-Za-z0-9+/]+=*$/;
+export const SOUND_MAX_BYTES = 160 * 1024;
+export const SOUND_AUDIO_CHARS = Math.ceil((SOUND_MAX_BYTES * 4) / 3) + 64;
 /** A role icon: one emoji (a few code points), 1.0.21. */
 const roleIcon = z.string().min(1).max(16);
 /** How far back a ban may delete someone's messages (matches the server's list, 1.0.21). */
 export const BAN_DELETE_CHOICES = [0, 3600, 6 * 3600, 24 * 3600, 3 * 24 * 3600, 7 * 24 * 3600] as const;
+/** Temporary ban lengths (matches the server, 1.0.22). */
+export const BAN_DURATIONS = [3600, 24 * 3600, 7 * 24 * 3600, 30 * 24 * 3600] as const;
 const text = z
   .string()
   .max(4000)
@@ -107,6 +117,10 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       topic: z.string().max(300).optional(),
       private: z.boolean().optional(),
       parentId: id.nullable().optional(),
+      /** A forum channel (1.0.22). */
+      forum: z.boolean().optional(),
+      /** A stage channel (1.0.22). */
+      stage: z.boolean().optional(),
     })
     .strict(),
   z
@@ -121,6 +135,9 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       announcement: z.boolean().optional(),
       slowmode: z.number().int().min(0).max(21_600).optional(),
       userLimit: z.number().int().min(0).max(99).optional(),
+      forum: z.boolean().optional(),
+      stage: z.boolean().optional(),
+      tags: z.array(forumTag).max(MAX_FORUM_TAGS).optional(),
     })
     .strict(),
   z.object({ a: z.literal('moveChannel'), channelId: id, direction }).strict(),
@@ -224,6 +241,12 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       a: z.literal('ban'),
       communityId: id,
       riverId,
+      /** Ban only for this long (1.0.22); absent = for good. */
+      durationSeconds: z
+        .number()
+        .int()
+        .refine((n) => (BAN_DURATIONS as readonly number[]).includes(n))
+        .optional(),
       /** Also delete their messages from this many seconds back (1.0.21). */
       deleteMessagesSeconds: z
         .number()
@@ -243,6 +266,10 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       attachments: z.array(attachmentPointerSchema).max(10).optional(),
       /** Descriptions of attached pictures, by attachment ID (1.0.21). */
       alts: z.record(id, z.string().trim().max(1000)).optional(),
+      /** Start a forum post with this title (1.0.22). */
+      title: z.string().trim().min(1).max(100).optional(),
+      /** Forum post tags (1.0.22). */
+      tags: z.array(forumTag).max(5).optional(),
       /** Reply inside the thread started from this message. */
       threadId: id.optional(),
       /** A reply that should not notify the person replied to (1.0.18). */
@@ -298,7 +325,13 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     .strict(),
   z.object({ a: z.literal('typing'), channelId: id }).strict(),
   z
-    .object({ a: z.literal('voiceState'), muted: z.boolean(), deafened: z.boolean(), streaming: z.boolean() })
+    .object({
+      a: z.literal('voiceState'),
+      muted: z.boolean(),
+      deafened: z.boolean(),
+      streaming: z.boolean(),
+      handRaised: z.boolean().optional(),
+    })
     .strict(),
   z
     .object({
@@ -306,6 +339,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       riverId,
       serverMuted: z.boolean().optional(),
       serverDeafened: z.boolean().optional(),
+      speaker: z.boolean().optional(),
       disconnect: z.boolean().optional(),
     })
     .strict(),
@@ -379,6 +413,28 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('reports'), communityId: id }).strict(),
+  // Soundboard (1.0.22): name, emoji and clip sealed with the community key.
+  z.object({ a: z.literal('sounds'), communityId: id }).strict(),
+  z
+    .object({
+      a: z.literal('addSound'),
+      communityId: id,
+      name: soundName,
+      emoji: z.string().min(1).max(16).nullable(),
+      audio: z.string().max(SOUND_AUDIO_CHARS).regex(SOUND_DATA_URL),
+    })
+    .strict(),
+  z
+    .object({
+      a: z.literal('updateSound'),
+      communityId: id,
+      soundId: id,
+      name: soundName.optional(),
+      emoji: z.string().min(1).max(16).nullable().optional(),
+    })
+    .strict(),
+  z.object({ a: z.literal('deleteSound'), soundId: id }).strict(),
+  z.object({ a: z.literal('playSound'), soundId: id }).strict(),
   z
     .object({ a: z.literal('updateReport'), reportId: id, status: z.enum(['open', 'resolved', 'dismissed']) })
     .strict(),
@@ -426,6 +482,14 @@ export const REPORT_REASONS = [
   'Something else',
 ];
 
+export interface SoundView {
+  id: string;
+  name: string;
+  emoji: string | null;
+  /** data: URL of the clip. */
+  audio: string;
+}
+
 export interface EmojiView {
   id: string;
   name: string;
@@ -454,10 +518,14 @@ export interface BanView {
   riverId: string;
   name: string;
   bannedOn: string;
+  /** When a temporary ban ends, or null. */
+  until: string | null;
 }
 
 interface Results {
   createRole: string;
+  sounds: SoundView[];
+  addSound: string;
   report: string;
   reports: ReportView[];
   duplicateChannel: string;

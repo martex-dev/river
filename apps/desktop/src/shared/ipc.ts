@@ -219,6 +219,12 @@ export interface ChannelView {
   slowmode: number;
   /** Most people in this voice channel at once (0 = no limit). */
   userLimit: number;
+  /** A forum: every message starts a titled post (1.0.22). */
+  forum: boolean;
+  /** Tags posts in this forum can have (encrypted with the channel name). */
+  tags: string[];
+  /** A stage: invited speakers talk, everyone else listens (1.0.22). */
+  stage: boolean;
 }
 
 export interface CategoryView {
@@ -280,6 +286,8 @@ export interface VoiceStateView {
   deafened: boolean;
   serverMuted: boolean;
   serverDeafened?: boolean;
+  /** On a stage: asking to speak (1.0.22). */
+  handRaised?: boolean;
   streaming: boolean;
   /** Their connection dropped; River is holding their seat while they reconnect. */
   reconnecting?: boolean;
@@ -337,6 +345,8 @@ export interface ChatMessage {
   thread: ThreadView | null;
   /** A poll, if this message is one (1.0.18). Votes are in `reactions` (see shared/poll.ts). */
   poll?: Poll | null;
+  /** Forum post tags (1.0.22). */
+  tags?: string[];
 }
 
 export interface ThreadView {
@@ -363,6 +373,10 @@ export type CommunityEvent =
   | { t: 'events'; communityId: string }
   | { t: 'emojis'; communityId: string }
   | { t: 'reports'; communityId: string }
+  | { t: 'sounds'; communityId: string }
+  | { t: 'voiceSound'; communityId: string; from: string; soundId: string }
+  /** The server said no to something that is not a voice join (1.0.22). */
+  | { t: 'refused'; reason: 'forbidden' | 'slow_down' }
   | { t: 'eventStarting'; communityId: string; eventId: string; name: string; channelId: string | null }
   /** Your server moved to a new address and River followed it. */
   | { t: 'serverMoved'; url: string }

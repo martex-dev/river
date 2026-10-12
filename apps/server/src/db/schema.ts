@@ -75,6 +75,8 @@ export interface ChannelsTable {
   parent_id: string | null;
   synced: Generated<number>;
   announcement: Generated<number>;
+  forum: Generated<number>;
+  stage: Generated<number>;
   slowmode: Generated<number>;
   user_limit: Generated<number>;
 }
@@ -160,6 +162,8 @@ export interface BansTable {
   community_id: string;
   river_id: string;
   banned_on: string;
+  /** When a temporary ban ends (1.0.22), or null. */
+  until: string | null;
 }
 
 export interface MessageReactionsTable {
@@ -257,7 +261,16 @@ export interface CommunityReportsTable {
   resolved_at: string | null;
 }
 
+export interface CommunitySoundsTable {
+  id: string;
+  community_id: string;
+  created_by: string;
+  data: string;
+  created_at: string;
+}
+
 export interface Database {
+  community_sounds: CommunitySoundsTable;
   community_reports: CommunityReportsTable;
   community_emojis: CommunityEmojisTable;
   community_events: CommunityEventsTable;

@@ -373,6 +373,46 @@ describe('reports', () => {
   });
 });
 
+describe('soundboard', () => {
+  it('sounds are sealed, renamed and shared with members', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Sounds');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    await bob.community.refresh();
+    const audio = `data:audio/mpeg;base64,${Buffer.from('ID3 tiny honk').toString('base64')}`;
+    const id = await alice.community.action({
+      a: 'addSound',
+      communityId: created.id,
+      name: 'Honk',
+      emoji: '📯',
+      audio,
+    });
+    expect(await bob.community.action({ a: 'sounds', communityId: created.id })).toEqual([
+      { id, name: 'Honk', emoji: '📯', audio },
+    ]);
+    const stored = JSON.stringify(await serverDb.db.selectFrom('community_sounds').selectAll().execute());
+    expect(stored).not.toContain('Honk');
+    expect(stored).not.toContain('tiny honk');
+    await alice.community.action({
+      a: 'updateSound',
+      communityId: created.id,
+      soundId: id,
+      name: 'Big honk',
+    });
+    expect((await bob.community.action({ a: 'sounds', communityId: created.id }))[0]).toMatchObject({
+      name: 'Big honk',
+      emoji: '📯',
+      audio,
+    });
+    await expect(
+      bob.community.action({ a: 'addSound', communityId: created.id, name: 'nope', emoji: null, audio }),
+    ).rejects.toThrow();
+    await alice.community.action({ a: 'deleteSound', soundId: id });
+    expect(await bob.community.action({ a: 'sounds', communityId: created.id })).toEqual([]);
+  });
+});
+
 describe('saved messages', () => {
   it('are kept on this device, newest first, and can be removed', async () => {
     const alice = await person('Alice');
@@ -1000,6 +1040,43 @@ describe('desktop ↔ server communities', () => {
     expect(lounge.userLimit).toBe(0);
     await alice.community.action({ a: 'updateChannel', channelId: lounge.id, userLimit: 4 });
     expect((await alice.community.refresh())[0]!.channels.find((c) => c.id === lounge.id)?.userLimit).toBe(4);
+  });
+
+  it('forums: posts with sealed titles and tags, replies in their thread', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Forum');
+    await alice.community.action({
+      a: 'createChannel',
+      communityId: created.id,
+      kind: 'text',
+      name: 'help',
+      forum: true,
+    });
+    let forum = (await alice.community.refresh())[0]!.channels.find((c) => c.name === 'help')!;
+    expect(forum.forum).toBe(true);
+    await alice.community.action({ a: 'updateChannel', channelId: forum.id, tags: ['Question', 'Bug'] });
+    forum = (await alice.community.refresh())[0]!.channels.find((c) => c.id === forum.id)!;
+    expect(forum.tags).toEqual(['Question', 'Bug']);
+    await expect(alice.community.send(forum.id, 'no title')).rejects.toThrow();
+    const sent = await alice.community.action({
+      a: 'send',
+      channelId: forum.id,
+      text: 'River will not start on my laptop',
+      title: 'Startup problem',
+      tags: ['Bug'],
+    });
+    await alice.community.action({
+      a: 'send',
+      channelId: forum.id,
+      text: 'Fixed by updating',
+      threadId: sent.id,
+    });
+    const [listed] = await alice.community.messages(forum.id);
+    expect(listed).toMatchObject({ tags: ['Bug'], thread: { name: 'Startup problem', count: 1 } });
+    const stored = JSON.stringify(await serverDb.db.selectFrom('threads').selectAll().execute());
+    expect(stored).not.toContain('Startup problem');
+    const channels = JSON.stringify(await serverDb.db.selectFrom('channels').selectAll().execute());
+    expect(channels).not.toContain('Question');
   });
 
   it('role icons are sealed and shown next to members with the role', async () => {

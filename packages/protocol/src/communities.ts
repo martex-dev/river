@@ -72,6 +72,10 @@ export const channelSchema = z.object({
   slowmode: z.number().int().min(0).max(21_600).default(0),
   /** Most people in a voice channel at once; 0 = no limit (1.0.8). */
   userLimit: z.number().int().min(0).max(99).default(0),
+  /** Every top-level message starts a titled thread: a post (1.0.22). */
+  forum: z.boolean().default(false),
+  /** A voice channel where only invited speakers talk; everyone else listens (1.0.22). */
+  stage: z.boolean().default(false),
 });
 export type ChannelWire = z.infer<typeof channelSchema>;
 
@@ -162,6 +166,8 @@ export const createChannelRequestSchema = z
     name: sealedSchema(SEALED_SMALL),
     overwrites: z.array(overwriteSchema).max(50).optional(),
     parentId: channelIdSchema.nullable().optional(),
+    forum: z.boolean().optional(),
+    stage: z.boolean().optional(),
   })
   .strict();
 
@@ -176,6 +182,8 @@ export const updateChannelRequestSchema = z
     announcement: z.boolean().optional(),
     slowmode: z.number().int().min(0).max(21_600).optional(),
     userLimit: z.number().int().min(0).max(99).optional(),
+    forum: z.boolean().optional(),
+    stage: z.boolean().optional(),
   })
   .strict();
 
@@ -258,7 +266,14 @@ export const joinRequestSchema = z
 export const profileRequestSchema = z.object({ profile: sealedSchema(SEALED_PROFILE) }).strict();
 export const communitiesResponseSchema = z.object({ communities: z.array(communitySchema) });
 export const bansResponseSchema = z.object({
-  bans: z.array(z.object({ riverId: riverIdSchema, bannedOn: z.string() })),
+  bans: z.array(
+    z.object({
+      riverId: riverIdSchema,
+      bannedOn: z.string(),
+      /** When a temporary ban ends (1.0.22); absent or null = for good. */
+      until: z.string().max(40).nullable().optional(),
+    }),
+  ),
 });
 
 export const reactionSchema = z.object({
@@ -302,6 +317,11 @@ export const sendMessageRequestSchema = z
     attachments: z.array(attachmentIdSchema).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
     /** Reply inside the thread started from this message (1.0.7). */
     threadId: messageIdSchema.optional(),
+    /** Start a thread from this message at once, with this sealed name: a forum post (1.0.22). */
+    thread: z
+      .object({ name: sealedSchema(SEALED_SMALL) })
+      .strict()
+      .optional(),
   })
   .strict();
 export const createThreadRequestSchema = z.object({ name: sealedSchema(SEALED_SMALL) }).strict();
@@ -374,6 +394,22 @@ export const createEmojiRequestSchema = z
 /** Rename (1.0.20): the whole sealed { name, image } is replaced. */
 export const updateEmojiRequestSchema = z.object({ data: sealedSchema(SEALED_EMOJI) }).strict();
 
+/** A sealed { name, emoji, audio } soundboard sound (1.0.22); audio is a short clip as a data URL. */
+export const SEALED_SOUND = 240 * 1024;
+export const MAX_COMMUNITY_SOUNDS = 48;
+/** Seconds between two sounds from the same person. */
+export const SOUND_COOLDOWN_MS = 2500;
+export const soundSchema = z.object({
+  id: z.string().regex(COMMUNITY_ID_RE),
+  createdBy: riverIdSchema,
+  data: sealedSchema(SEALED_SOUND),
+});
+export const soundsResponseSchema = z.object({ sounds: z.array(soundSchema) });
+export const createSoundRequestSchema = z
+  .object({ id: z.string().regex(COMMUNITY_ID_RE), data: sealedSchema(SEALED_SOUND) })
+  .strict();
+export const updateSoundRequestSchema = z.object({ data: sealedSchema(SEALED_SOUND) }).strict();
+
 /** A sealed { reason, text, senderName } — what the reporter saw (1.0.21). */
 export const SEALED_REPORT = 8 * 1024;
 export const reportStatusSchema = z.enum(['open', 'resolved', 'dismissed']);
@@ -403,12 +439,20 @@ export const MAX_OPEN_REPORTS = 20;
 
 /** Ban, optionally deleting the person's recent messages in the community (1.0.21). */
 export const BAN_DELETE_CHOICES = [0, 3600, 6 * 3600, 24 * 3600, 3 * 24 * 3600, 7 * 24 * 3600] as const;
+/** How long a temporary ban can last (1.0.22). */
+export const BAN_DURATIONS = [3600, 24 * 3600, 7 * 24 * 3600, 30 * 24 * 3600] as const;
 export const banRequestSchema = z
   .object({
     deleteMessagesSeconds: z
       .number()
       .int()
       .refine((n) => (BAN_DELETE_CHOICES as readonly number[]).includes(n))
+      .optional(),
+    /** Ban only for this long (1.0.22); absent = for good. */
+    durationSeconds: z
+      .number()
+      .int()
+      .refine((n) => (BAN_DURATIONS as readonly number[]).includes(n))
       .optional(),
   })
   .strict();
@@ -428,6 +472,8 @@ export const voiceStateSchema = z.object({
   serverMuted: z.boolean(),
   /** A moderator turned their sound off for everyone (1.0.20); they hear nothing and cannot speak. */
   serverDeafened: z.boolean().optional(),
+  /** On a stage: asking to speak (1.0.22). */
+  handRaised: z.boolean().optional(),
   streaming: z.boolean(),
   /**
    * The member's connection to the server dropped; their seat is kept for a
@@ -449,12 +495,16 @@ export const clientEventSchema = z.discriminatedUnion('t', [
     muted: z.boolean(),
     deafened: z.boolean(),
     streaming: z.boolean(),
+    /** On a stage: raise or lower your hand (1.0.22). */
+    handRaised: z.boolean().optional(),
   }),
   z.object({
     t: z.literal('voice.moderate'),
     target: riverIdSchema,
     serverMuted: z.boolean().optional(),
     serverDeafened: z.boolean().optional(),
+    /** On a stage: invite to speak (true) or move back to the audience (false) (1.0.22). */
+    speaker: z.boolean().optional(),
     disconnect: z.boolean().optional(),
   }),
   z.object({ t: z.literal('signal'), to: riverIdSchema, data: sealedSchema(SEALED_SIGNAL) }),
@@ -467,6 +517,8 @@ export const clientEventSchema = z.discriminatedUnion('t', [
    * call together, nothing else.
    */
   z.object({ t: z.literal('call.room'), room: callRoomSchema.nullable() }),
+  /** Play a soundboard sound to everyone in your voice channel (1.0.22). */
+  z.object({ t: z.literal('voice.sound'), soundId: z.string().regex(COMMUNITY_ID_RE) }),
 ]);
 export type ClientEvent = z.infer<typeof clientEventSchema>;
 
@@ -497,6 +549,16 @@ export const serverEventSchema = z.discriminatedUnion('t', [
     states: z.record(z.string(), voiceStateSchema).optional(),
   }),
   z.object({ t: z.literal('voice.disconnect') }),
+  /** Someone in your voice channel played a soundboard sound (1.0.22). */
+  z.object({
+    t: z.literal('voice.sound'),
+    communityId: communityIdSchema,
+    channelId: channelIdSchema,
+    from: riverIdSchema,
+    soundId: z.string().regex(COMMUNITY_ID_RE),
+  }),
+  /** A community's soundboard changed (1.0.22). */
+  z.object({ t: z.literal('sounds'), communityId: communityIdSchema }),
   /** A community's scheduled events changed: fetch them again (1.0.18). */
   z.object({ t: z.literal('events'), communityId: communityIdSchema }),
   /** A community's custom emoji changed (1.0.19). */

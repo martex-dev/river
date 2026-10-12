@@ -6,6 +6,31 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Soundboard.** Play short sounds to everyone in a voice channel from the
+  🎵 button; right-click one to hear it yourself first. People with *Manage
+  emoji & sounds* upload clips (up to 5.5 seconds) with a name and emoji in
+  Community settings → Soundboard. Sounds are end-to-end encrypted; set or
+  turn off their volume in Settings → Voice, and muting someone for yourself
+  silences their sounds too.
+- **Forum channels:** posts with a title, tags and their own replies, shown
+  as a list you can search, filter by tag and sort. Create one from Create
+  channel, or turn a text channel into a forum in its settings.
+- **Stage channels** for talks and events: people join as listeners, raise
+  a hand to ask to speak, and moderators invite speakers up or move them
+  back to the audience. Create one from Create channel, or turn a voice
+  channel into a stage in its settings.
+- **Temporary bans:** ban someone for an hour, a day, a week or 30 days;
+  they can rejoin once it ends.
+- **Change your voice shortcuts** (Settings → Voice → Keyboard shortcuts):
+  mute, deafen, camera and leave voice, with clash warnings.
+
+### Fixed
+
+- A permission refusal for something other than joining (for example a
+  moderation action) no longer drops you from the voice channel.
+
 ## [1.0.21] - 2026-10-12
 
 **Keep it friendly: reports, cleaner bans, role icons and pictures everyone can follow.**

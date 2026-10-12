@@ -1,3 +1,4 @@
+import { DEFAULT_KEYBINDS } from './keybinds.ts';
 import { z } from 'zod';
 import { RELEASE_CHANNELS } from '@river/release/channels';
 
@@ -34,6 +35,11 @@ export const serverUrlSchema = z
     }
     return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
   });
+
+const keyCombo = z
+  .string()
+  .max(64)
+  .regex(/^(?:(?:Ctrl|Alt|Shift)\+){0,3}[A-Za-z0-9]{1,24}$|^$/);
 
 export const settingsSchema = z.object({
   schemaVersion: z.literal(1),
@@ -113,6 +119,17 @@ export const settingsSchema = z.object({
     userVolumes: z.record(z.string().max(64), z.number().min(0).max(2)),
     /** Added in 1.0.20: voice activity sensitivity, 0–1 on the mic meter's scale; null = automatic. */
     sensitivity: z.number().min(0).max(1).nullable(),
+    /** Added in 1.0.22: how loud other people's soundboard sounds play, 0–1 (0 = off). */
+    soundboardVolume: z.number().min(0).max(1),
+    /** Added in 1.0.22: shortcuts for voice actions ("" = none); see keybinds.ts. */
+    keybinds: z
+      .object({
+        toggleMute: keyCombo,
+        toggleDeafen: keyCombo,
+        toggleCamera: keyCombo,
+        leaveVoice: keyCombo,
+      })
+      .strict(),
   }),
   /** Added in 1.0.7. */
   system: z.object({
@@ -192,6 +209,8 @@ export const DEFAULT_SETTINGS: Settings = {
     echoCancellation: true,
     userVolumes: {},
     sensitivity: null,
+    soundboardVolume: 0.6,
+    keybinds: { ...DEFAULT_KEYBINDS },
   },
   system: { startAtLogin: false, closeToTray: true },
   hosting: { enabled: false, keepAwake: true },
