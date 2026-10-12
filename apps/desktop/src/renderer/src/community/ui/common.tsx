@@ -13,6 +13,7 @@ import type { CommunityView, MemberView } from '../../../../shared/ipc.ts';
 import { highlight, languageOf } from './highlight.ts';
 import { recentEmoji, rememberEmoji, searchEmoji, useEmojiIndex } from '../emoji-data.ts';
 import { openMessageLink } from '../message-link.ts';
+import { useCommunity } from '../store.ts';
 
 // ---- helpers -------------------------------------------------------------------------------------
 
@@ -238,28 +239,42 @@ export function Toggle(props: {
 
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
-export function EmojiPicker(props: { onPick(emoji: string): void }): ReactElement {
+export function EmojiPicker(props: {
+  onPick(emoji: string): void;
+  /** The community's custom emoji, shown first (1.0.19). */
+  custom?: Array<{ id: string; name: string; image: string }>;
+}): ReactElement {
   const index = useEmojiIndex();
+  const custom = props.custom ?? [];
   const [query, setQuery] = useState('');
   const recent = useMemo(() => recentEmoji(), []);
-  const [group, setGroup] = useState(recent.length > 0 ? -1 : 0);
+  // -2: the community's own emoji, -1: recently used, 0…: Unicode categories.
+  const [group, setGroup] = useState(custom.length > 0 ? -2 : recent.length > 0 ? -1 : 0);
   const pick = (emoji: string): void => {
     rememberEmoji(emoji);
     props.onPick(emoji);
   };
+  const q = query.trim().toLowerCase().replace(/:/g, '');
+  const customMatches = q ? custom.filter((e) => e.name.toLowerCase().includes(q)) : [];
   const results = index && query ? searchEmoji(index, query) : null;
   const shown: Array<{ emoji: string; label: string }> = results
     ? results
     : group === -1
       ? recent.map((e) => ({ emoji: e, label: index?.all.find((x) => x.emoji === e)?.label ?? e }))
-      : (index?.groups[group]?.items ?? []);
+      : group === -2
+        ? []
+        : (index?.groups[group]?.items ?? []);
+  const customShown = results ? customMatches : group === -2 ? custom : [];
   const heading = results
-    ? results.length
+    ? results.length + customMatches.length
       ? `Results for “${query}”`
       : `No emoji match “${query}”`
-    : group === -1
-      ? 'Recently used'
-      : (index?.groups[group]?.name ?? 'Loading…');
+    : group === -2
+      ? 'This community'
+      : group === -1
+        ? 'Recently used'
+        : (index?.groups[group]?.name ?? 'Loading…');
+  const first = customMatches[0] ? customEmojiText(customMatches[0]) : results?.[0]?.emoji;
   return (
     <div className="emoji-picker">
       <input
@@ -270,14 +285,25 @@ export function EmojiPicker(props: { onPick(emoji: string): void }): ReactElemen
         autoFocus
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && results?.[0]) {
+          if (e.key === 'Enter' && first) {
             e.preventDefault();
-            pick(results[0].emoji);
+            pick(first);
           }
         }}
       />
       {!query && (
         <div className="emoji-picker__tabs" role="tablist" aria-label="Emoji categories">
+          {custom.length > 0 && (
+            <button
+              role="tab"
+              aria-selected={group === -2}
+              className={`emoji-picker__tab ${group === -2 ? 'is-active' : ''}`}
+              title="This community"
+              onClick={() => setGroup(-2)}
+            >
+              <img className="custom-emoji" src={custom[0]!.image} alt="" />
+            </button>
+          )}
           {recent.length > 0 && (
             <button
               role="tab"
@@ -305,6 +331,17 @@ export function EmojiPicker(props: { onPick(emoji: string): void }): ReactElemen
       )}
       <div className="emoji-picker__label">{heading}</div>
       <div className="emoji-picker__grid">
+        {customShown.map((e) => (
+          <button
+            key={e.id}
+            className="emoji-picker__emoji"
+            title={`:${e.name}:`}
+            aria-label={`:${e.name}:`}
+            onClick={() => pick(customEmojiText(e))}
+          >
+            <img className="custom-emoji" src={e.image} alt="" />
+          </button>
+        ))}
         {shown.map((e) => (
           <button
             key={e.emoji}
@@ -313,12 +350,46 @@ export function EmojiPicker(props: { onPick(emoji: string): void }): ReactElemen
             aria-label={e.label}
             onClick={() => pick(e.emoji)}
           >
-            {e.emoji}
+            {/* Recently used may hold custom emoji too. */}
+            <EmojiGlyph emoji={e.emoji} />
           </button>
         ))}
       </div>
     </div>
   );
+}
+
+// ---- custom emoji (1.0.19) -------------------------------------------------------------------------
+
+/** `<:name:id>` — a community's custom emoji in text or a reaction. */
+export const CUSTOM_EMOJI = /^<a?:([A-Za-z0-9_]{2,32}):([A-Za-z0-9_-]{22})>$/;
+export const customEmojiText = (e: { name: string; id: string }): string => `<:${e.name}:${e.id}>`;
+
+/** A custom emoji's picture, from any community you are in; ":name:" while unknown. */
+export function CustomEmoji({ name, id, big }: { name: string; id: string; big?: boolean }): ReactElement {
+  const image = useCommunity((s) => {
+    for (const list of Object.values(s.emojis)) {
+      const found = list.find((e) => e.id === id);
+      if (found) return found.image;
+    }
+    return null;
+  });
+  if (!image) return <span className="custom-emoji--missing">:{name}:</span>;
+  return (
+    <img
+      className={`custom-emoji ${big ? 'custom-emoji--big' : ''}`}
+      src={image}
+      alt={`:${name}:`}
+      title={`:${name}:`}
+      draggable={false}
+    />
+  );
+}
+
+/** A reaction's emoji: Unicode as text, a custom one as its picture. */
+export function EmojiGlyph({ emoji }: { emoji: string }): ReactElement {
+  const m = CUSTOM_EMOJI.exec(emoji);
+  return m ? <CustomEmoji name={m[1]!} id={m[2]!} /> : <>{emoji}</>;
 }
 
 // ---- safe message formatting ------------------------------------------------------------------------
@@ -485,7 +556,7 @@ function Lines({ text, ctx, keyBase }: { text: string; ctx: InlineCtx; keyBase: 
 }
 
 const INLINE =
-  /(\\[\\*_~|`>#\-[\]()@<]|`[^`\n]+`|\|\|[^|\n]+\|\||\[[^\]\n]{1,200}\]\(https?:\/\/[^\s)]{1,2000}\)|https?:\/\/[^\s<>]+[^\s<>.,:;"')\]!?]|<t:\d{1,12}(?::[tTdDfFR])?>|\*\*\*[^*\n]+\*\*\*|\*\*(?:[^*\n]|\*[^*\n]+\*)+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|_[^_\n]+_|@everyone|@here|@[^\s@]+(?: [^\s@]+)?|#[\w-]+)/g;
+  /(<a?:[A-Za-z0-9_]{2,32}:[A-Za-z0-9_-]{22}>|\\[\\*_~|`>#\-[\]()@<]|`[^`\n]+`|\|\|[^|\n]+\|\||\[[^\]\n]{1,200}\]\(https?:\/\/[^\s)]{1,2000}\)|https?:\/\/[^\s<>]+[^\s<>.,:;"')\]!?]|<t:\d{1,12}(?::[tTdDfFR])?>|\*\*\*[^*\n]+\*\*\*|\*\*(?:[^*\n]|\*[^*\n]+\*)+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|_[^_\n]+_|@everyone|@here|@[^\s@]+(?: [^\s@]+)?|#[\w-]+)/g;
 
 function openLink(url: string): void {
   // A link to a River message opens it here; anything else goes to the browser after a confirmation.
@@ -554,7 +625,10 @@ function inline(text: string, ctx: InlineCtx, key: string): ReactNode[] {
     const at = match.index ?? 0;
     if (at > last) out.push(text.slice(last, at));
     const k = `${key}-${n++}`;
-    if (token.startsWith('\\')) out.push(token.slice(1));
+    const custom = CUSTOM_EMOJI.exec(token);
+    if (custom)
+      out.push(<CustomEmoji key={k} name={custom[1]!} id={custom[2]!} big={text.trim() === token} />);
+    else if (token.startsWith('\\')) out.push(token.slice(1));
     else if (token.startsWith('`'))
       out.push(
         <code key={k} className="md-code">

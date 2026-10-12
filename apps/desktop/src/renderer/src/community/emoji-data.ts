@@ -161,3 +161,20 @@ export function rememberEmoji(emoji: string): void {
     // private storage unavailable: no recents
   }
 }
+
+/** Turns :name: into the community's own emoji (<:name:id>) when sent, outside code (1.0.19). */
+export function replaceCustomShortcodes(text: string, custom: Array<{ id: string; name: string }>): string {
+  if (custom.length === 0) return text;
+  const byName = new Map(custom.map((e) => [e.name.toLowerCase(), e]));
+  return text
+    .split(/(```[\s\S]*?```|`[^`\n]*`|<a?:[A-Za-z0-9_]{2,32}:[A-Za-z0-9_-]{22}>)/g)
+    .map((part) =>
+      part.startsWith('`') || part.startsWith('<')
+        ? part
+        : part.replace(/:([A-Za-z0-9_]{2,32}):/g, (m, name: string) => {
+            const e = byName.get(name.toLowerCase());
+            return e ? `<:${e.name}:${e.id}>` : m;
+          }),
+    )
+    .join('');
+}

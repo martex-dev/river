@@ -1,3 +1,4 @@
+import { SavedPanel } from './Saved.tsx';
 import { CreatePollDialog, PollView } from './Poll.tsx';
 import { isVote } from '../../../../shared/poll.ts';
 import { clockDateTime, clockTime } from '../../time.ts';
@@ -5,7 +6,7 @@ import { formatMessageLink } from '../message-link.ts';
 import { ProfileCard } from './Members.tsx';
 import { ForwardDialog } from './Forward.tsx';
 import { useRiver } from '../../store.ts';
-import { replaceShortcodes, searchEmoji, useEmojiIndex } from '../emoji-data.ts';
+import { replaceCustomShortcodes, replaceShortcodes, searchEmoji, useEmojiIndex } from '../emoji-data.ts';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, ChatMessage, CommunityView } from '../../../../shared/ipc.ts';
@@ -17,7 +18,9 @@ import { AttachmentList, PendingFiles, pendingFrom, uploadAll, type PendingFile 
 import {
   Avatar,
   EditIcon,
+  EmojiGlyph,
   EmojiPicker,
+  customEmojiText,
   HashIcon,
   Highlight,
   MenuItem,
@@ -188,6 +191,14 @@ export function TextChannel(props: {
             🔍
           </button>
           <button
+            className={`icon-btn ${s.showSaved ? 'is-on' : ''}`}
+            aria-label="Saved messages"
+            title="Saved messages"
+            onClick={() => useCommunity.setState({ showSaved: !s.showSaved, showPins: false })}
+          >
+            🔖
+          </button>
+          <button
             className={`icon-btn ${s.showPins ? 'is-on' : ''}`}
             aria-label="Pinned messages"
             title="Pinned messages"
@@ -215,6 +226,7 @@ export function TextChannel(props: {
           </button>
         </div>
       )}
+      {s.showSaved && <SavedPanel />}
       {s.showPins && <PinsPanel community={community} channel={channel} me={me} onJump={jumpTo} />}
       {s.showSearch && <SearchPanel community={community} onJump={jumpTo} />}
       <div
@@ -383,6 +395,10 @@ function Message(props: {
   const canReact = can(channel.permissions, Permission.ADD_REACTIONS);
   // Poll votes are reactions underneath; they show in the poll, not as reactions.
   const reactions = m.reactions.filter((r) => !isVote(r.emoji));
+  const isSaved = useCommunity((x) => !!x.saved?.some((v) => v.messageId === m.id));
+  // Very long messages start folded so the conversation stays readable.
+  const long = m.text.length > 1500 || m.text.split('\n').length > 30;
+  const [expanded, setExpanded] = useState(false);
 
   const react = (emoji: string, on: boolean): void => {
     if (on) play('reaction');
@@ -471,7 +487,16 @@ function Message(props: {
             <EditBox message={m} />
           ) : (
             <div className="msg__text">
-              {m.text && <RichText text={m.text} names={props.names} me={props.myName} refs={props.refs} />}
+              {m.text && (
+                <div className={long && !expanded ? 'msg__long is-collapsed' : undefined}>
+                  <RichText text={m.text} names={props.names} me={props.myName} refs={props.refs} />
+                </div>
+              )}
+              {long && (
+                <button className="btn btn--link msg__more" onClick={() => setExpanded(!expanded)}>
+                  {expanded ? 'Show less' : 'Show more'}
+                </button>
+              )}
               {m.editedAt && (
                 <span className="msg__edited" title={new Date(m.editedAt).toLocaleString()}>
                   {' '}
@@ -507,7 +532,9 @@ function Message(props: {
                     setReactionsAt({ x: e.clientX, y: e.clientY });
                   }}
                 >
-                  <span className="reaction__emoji">{r.emoji}</span>
+                  <span className="reaction__emoji">
+                    <EmojiGlyph emoji={r.emoji} />
+                  </span>
                   <span key={r.count} className="reaction__count">
                     {r.count}
                   </span>
@@ -695,6 +722,15 @@ function Message(props: {
             </MenuItem>
           )}
           <MenuItem
+            icon={<span aria-hidden="true">🔖</span>}
+            onClick={() => {
+              setMenu(null);
+              void s.toggleSaved(channel.id, m.id, !isSaved);
+            }}
+          >
+            {isSaved ? 'Remove from saved' : 'Save message'}
+          </MenuItem>
+          <MenuItem
             icon={<span aria-hidden="true">🔗</span>}
             onClick={() => {
               setMenu(null);
@@ -764,7 +800,7 @@ function Message(props: {
             {reactions.map((r) => (
               <div key={r.tag} role="listitem" className="reactions-pop__row">
                 <span className="reactions-pop__emoji" aria-hidden="true">
-                  {r.emoji}
+                  <EmojiGlyph emoji={r.emoji} />
                 </span>
                 <span className="reactions-pop__count">{r.count}</span>
                 <span className="reactions-pop__names">
@@ -785,6 +821,7 @@ function Message(props: {
       {picker && (
         <Popover x={picker.x} y={picker.y} onClose={() => setPicker(null)}>
           <EmojiPicker
+            custom={s.emojis[community.id]}
             onPick={(e) => {
               setPicker(null);
               const existing = m.reactions.find((r) => r.emoji === e);
@@ -884,17 +921,33 @@ function Composer(props: {
   const emojiTrigger = /(?:^|\s):([a-z0-9_+-]{2,32})$/i.exec(text);
   const emojiIndex = useEmojiIndex(!!emojiTrigger || text.includes(':'));
   const mentionChoices = trigger ? suggest(community, channel, trigger[1] as '@' | '#', trigger[2]!) : [];
+  const customEmoji = s.emojis[community.id] ?? [];
+  const customChoices: Suggestion[] = emojiTrigger
+    ? customEmoji
+        .filter((e) => e.name.toLowerCase().includes(emojiTrigger[1]!.toLowerCase()))
+        .slice(0, 8)
+        .map((e) => ({
+          key: `ce:${e.id}`,
+          insert: customEmojiText(e),
+          symbol: ':' as const,
+          hint: community.name,
+          label: `:${e.name}:`,
+        }))
+    : [];
   const suggestions: Suggestion[] =
     mentionChoices.length > 0
       ? mentionChoices
-      : emojiTrigger && emojiIndex
-        ? searchEmoji(emojiIndex, emojiTrigger[1]!, 8).map((e) => ({
-            key: `e:${e.emoji}`,
-            insert: e.emoji,
-            symbol: ':' as const,
-            hint: e.label,
-            label: `:${e.shortcodes[0] ?? e.label.replace(/\s+/g, '_')}:`,
-          }))
+      : emojiTrigger && (emojiIndex || customChoices.length)
+        ? [
+            ...customChoices,
+            ...(emojiIndex ? searchEmoji(emojiIndex, emojiTrigger[1]!, 8) : []).map((e) => ({
+              key: `e:${e.emoji}`,
+              insert: e.emoji,
+              symbol: ':' as const,
+              hint: e.label,
+              label: `:${e.shortcodes[0] ?? e.label.replace(/\s+/g, '_')}:`,
+            })),
+          ].slice(0, 8)
         : [];
 
   const complete = (choice: Suggestion): void => {
@@ -905,7 +958,8 @@ function Composer(props: {
   };
 
   const send = async (): Promise<void> => {
-    const value = emojiIndex ? replaceShortcodes(text.trim(), emojiIndex) : text.trim();
+    const withCustom = replaceCustomShortcodes(text.trim(), customEmoji);
+    const value = emojiIndex ? replaceShortcodes(withCustom, emojiIndex) : withCustom;
     const files = props.pending;
     if ((!value && files.length === 0) || uploading) return;
     let attachments;
@@ -978,7 +1032,7 @@ function Composer(props: {
             >
               {choice.symbol === ':' ? (
                 <span className="mention-menu__emoji" aria-hidden="true">
-                  {choice.insert}
+                  <EmojiGlyph emoji={choice.insert} />
                 </span>
               ) : choice.member ? (
                 <Avatar
@@ -1176,6 +1230,7 @@ function Composer(props: {
       {picker && (
         <Popover x={picker.x} y={picker.y} onClose={() => setPicker(null)}>
           <EmojiPicker
+            custom={s.emojis[community.id]}
             onPick={(e) => {
               setText(text + e);
               setPicker(null);

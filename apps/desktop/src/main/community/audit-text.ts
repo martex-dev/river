@@ -32,6 +32,18 @@ export function describeAudit(
   const t = e.target;
   const summary = ((): string => {
     switch (e.action) {
+      case 'event.create':
+        return 'planned an event';
+      case 'event.update':
+        return 'changed an event';
+      case 'event.cancel':
+        return 'cancelled an event';
+      case 'event.delete':
+        return 'deleted an event';
+      case 'emoji.create':
+        return 'added a custom emoji';
+      case 'emoji.delete':
+        return 'removed a custom emoji';
       case 'member.join':
         return 'joined the community';
       case 'member.leave':

@@ -152,9 +152,17 @@ export function ProfileCard(props: {
             {new Date(member.timeoutUntil).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
           </div>
         )}
-        <div className="muted small mono" title="River ID">
-          {member.riverId.slice(0, 8)}…
-        </div>
+        <button
+          className="btn btn--link profile-card__id mono small"
+          title="Copy River ID"
+          onClick={() =>
+            void navigator.clipboard
+              .writeText(member.riverId)
+              .then(() => useCommunity.getState().notify('River ID copied.'))
+          }
+        >
+          {member.riverId.slice(0, 8)}… · Copy ID
+        </button>
         {member.bio && (
           <>
             <div className="profile-card__section">About me</div>
@@ -282,6 +290,28 @@ export function ProfileCard(props: {
             {outranks && can(perms, Permission.BAN_MEMBERS) && (
               <button className="btn btn--ghost btn--small btn--danger-text" onClick={() => confirm('ban')}>
                 Ban
+              </button>
+            )}
+            {community.ownerId === me && member.riverId !== me && (
+              <button
+                className="btn btn--ghost btn--small btn--danger-text"
+                onClick={() =>
+                  s.setModal({
+                    kind: 'confirm',
+                    title: `Make ${member.name} the owner?`,
+                    body: `${member.name} will own ${community.name} and can do everything, including deleting it. You become an ordinary member with the roles you have. Only they can hand it back.`,
+                    action: 'Transfer ownership',
+                    run: async () => {
+                      await s.run({
+                        a: 'transferOwnership',
+                        communityId: community.id,
+                        riverId: member.riverId,
+                      });
+                    },
+                  })
+                }
+              >
+                Transfer ownership
               </button>
             )}
           </div>

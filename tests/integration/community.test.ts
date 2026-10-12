@@ -266,6 +266,66 @@ describe('deleting your account', () => {
   });
 });
 
+describe('custom emoji', () => {
+  it('are sealed, shared with members, usable as reactions, and names stay unique', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Emoji Club');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.name === 'general')!;
+    await bob.community.refresh();
+    const image =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    const id = await alice.community.action({
+      a: 'addEmoji',
+      communityId: created.id,
+      name: 'party_parrot',
+      image,
+    });
+    await expect(
+      alice.community.action({ a: 'addEmoji', communityId: created.id, name: 'Party_Parrot', image }),
+    ).rejects.toThrow(/already/);
+    expect(await bob.community.emojis(created.id)).toEqual([{ id, name: 'party_parrot', image }]);
+    const stored = JSON.stringify(await serverDb.db.selectFrom('community_emojis').selectAll().execute());
+    expect(stored).not.toContain('party_parrot');
+    expect(stored).not.toContain('iVBORw0K');
+    // Members cannot add emoji by default.
+    await expect(
+      bob.community.action({ a: 'addEmoji', communityId: created.id, name: 'nope', image }),
+    ).rejects.toThrow();
+    // As a reaction.
+    const m = await alice.community.send(general.id, 'look');
+    await bob.community.messages(general.id);
+    await bob.community.action({
+      a: 'react',
+      channelId: general.id,
+      messageId: m.id,
+      emoji: `<:party_parrot:${id}>`,
+      on: true,
+    });
+    const [seen] = await alice.community.messages(general.id);
+    expect(seen!.reactions.map((r) => r.emoji)).toEqual([`<:party_parrot:${id}>`]);
+  });
+});
+
+describe('saved messages', () => {
+  it('are kept on this device, newest first, and can be removed', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Save Club');
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.name === 'general')!;
+    const first = await alice.community.send(general.id, 'remember this');
+    const second = await alice.community.send(general.id, 'and this');
+    await alice.community.action({ a: 'saveMessage', channelId: general.id, messageId: first.id, on: true });
+    await alice.community.action({ a: 'saveMessage', channelId: general.id, messageId: second.id, on: true });
+    await alice.community.action({ a: 'saveMessage', channelId: general.id, messageId: second.id, on: true });
+    const saved = alice.community.savedMessages();
+    expect(saved.map((m) => m.text).sort()).toEqual(['and this', 'remember this']);
+    expect(saved[0]).toMatchObject({ communityId: created.id, channelId: general.id, senderName: 'Alice' });
+    await alice.community.action({ a: 'saveMessage', channelId: general.id, messageId: first.id, on: false });
+    expect(alice.community.savedMessages().map((m) => m.text)).toEqual(['and this']);
+  });
+});
+
 describe('replies', () => {
   it('notify the person replied to, unless the reply turned that off', async () => {
     const alice = await person('Alice');

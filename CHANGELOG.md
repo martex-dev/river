@@ -6,6 +6,21 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **See how each person's call is doing:** little bars on every call tile;
+  hover for "Direct · 38 ms · 0% loss" or "Via your server".
+- **Saved messages:** right-click → Save message, and find everything you
+  saved under 🔖 in any channel (kept only on this device).
+- **Transfer ownership** of a community from someone's profile card.
+- Each community reopens on the channel you used last; very long messages
+  start folded with **Show more**; profile cards can copy a River ID.
+- **Custom emoji.** Upload a community's own emoji in Community settings →
+  Emoji (people with the new **Manage emoji** permission); everyone uses them
+  with `:name:` in messages and as reactions, from the picker's community tab
+  or by typing `:` and part of the name. A message that is only an emoji shows
+  it big. Pictures and names are end-to-end encrypted.
+
 ## [1.0.18] - 2026-10-12
 
 **Plan together: events, polls, mutes, folders, profiles — and your account is yours to delete.**

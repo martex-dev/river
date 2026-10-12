@@ -248,7 +248,8 @@ function CommunityMenu(props: {
     can(perms, Permission.MANAGE_ROLES) ||
     can(perms, Permission.KICK_MEMBERS) ||
     can(perms, Permission.BAN_MEMBERS) ||
-    can(perms, Permission.VIEW_AUDIT_LOG);
+    can(perms, Permission.VIEW_AUDIT_LOG) ||
+    can(perms, Permission.MANAGE_EXPRESSIONS);
   const run = (f: () => void) => () => {
     props.onClose();
     f();

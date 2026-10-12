@@ -4,6 +4,7 @@ import type { BanView } from '../../../../shared/community-actions.ts';
 import type { AuditView, CommunityView, RoleView } from '../../../../shared/ipc.ts';
 import { COMMUNITY_ICONS } from '../../../../shared/templates.ts';
 import { useCommunity, type CommunityTab } from '../store.ts';
+import { EmojiSettings } from './EmojiSettings.tsx';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -34,6 +35,7 @@ export function CommunitySettings(props: {
     ['overview', 'Overview', can(perms, Permission.MANAGE_COMMUNITY)],
     ['roles', 'Roles', can(perms, Permission.MANAGE_ROLES)],
     ['members', 'Members', true],
+    ['emoji', 'Emoji', true],
     ['bans', 'Bans', can(perms, Permission.BAN_MEMBERS)],
     ['audit', 'Audit log', can(perms, Permission.VIEW_AUDIT_LOG)],
   ];
@@ -86,6 +88,7 @@ export function CommunitySettings(props: {
           {tab === 'overview' && <Overview community={community} />}
           {tab === 'roles' && <Roles community={community} me={me} />}
           {tab === 'members' && <Members community={community} me={me} />}
+          {tab === 'emoji' && <EmojiSettings community={community} />}
           {tab === 'bans' && <Bans community={community} />}
           {tab === 'audit' && <AuditLog community={community} />}
         </section>

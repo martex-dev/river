@@ -29,6 +29,8 @@ export const Permission = {
   VIEW_AUDIT_LOG: 1 << 20,
   /** Create, edit and cancel scheduled events (1.0.18). */
   MANAGE_EVENTS: 1 << 21,
+  /** Add and remove custom emoji (1.0.19). */
+  MANAGE_EXPRESSIONS: 1 << 22,
 } as const;
 export type PermissionName = keyof typeof Permission;
 
@@ -108,6 +110,7 @@ export const PERMISSION_INFO: Array<{ key: PermissionName; label: string; help: 
     help: 'Move people between voice channels or disconnect them.',
   },
   { key: 'MANAGE_EVENTS', label: 'Manage events', help: 'Create, edit and cancel scheduled events.' },
+  { key: 'MANAGE_EXPRESSIONS', label: 'Manage emoji', help: 'Add and remove the community’s custom emoji.' },
 ];
 
 export interface PermissionRole {

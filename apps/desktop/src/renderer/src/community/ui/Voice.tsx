@@ -1,10 +1,11 @@
+import { describeLink, linkQuality, type LinkStats } from '../link-stats.ts';
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, CommunityView, ScreenSource } from '../../../../shared/ipc.ts';
 import { useRiver } from '../../store.ts';
 import { play } from '../sound.ts';
 import { sendVoiceState, useCommunity } from '../store.ts';
-import type { RemotePeer } from '../voice.ts';
+import type { RemotePeer, VoiceCall } from '../voice.ts';
 import {
   Avatar,
   CameraIcon,
@@ -30,6 +31,7 @@ export function VoiceChannel(props: {
   useCommunity((x) => x.callVersion);
   const call = s.call;
   const inThisCall = call !== null && call.channelId === channel.id;
+  const links = useLinkStats(inThisCall ? call : null);
   const participants = community.voice[channel.id] ?? [];
   const [picker, setPicker] = useState<ScreenSource[] | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
@@ -121,6 +123,7 @@ export function VoiceChannel(props: {
                 <RemoteTile
                   key={t.id}
                   peer={t.peer}
+                  link={links[t.id]}
                   community={community}
                   speaking={call.speaking.has(t.id)}
                   focused={focused === t.id}
@@ -297,7 +300,51 @@ function Tile(props: {
   );
 }
 
+/** Connection details for everyone in the call, refreshed every 3 s while shown. */
+function useLinkStats(call: VoiceCall | null): Record<string, LinkStats> {
+  const [links, setLinks] = useState<Record<string, LinkStats>>({});
+  useEffect(() => {
+    if (!call) return;
+    let alive = true;
+    const tick = (): void => {
+      void call.linkStats().then((l) => alive && setLinks(l));
+    };
+    tick();
+    const t = window.setInterval(tick, 3000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, [call]);
+  return links;
+}
+
+function LinkBars({ link }: { link: LinkStats | undefined }): ReactElement | null {
+  if (!link) return null;
+  const q = linkQuality(link);
+  const text = describeLink(link);
+  return (
+    <span
+      className={`link-bars link-bars--${q ?? link.path}`}
+      title={text}
+      aria-label={`Connection: ${text}`}
+      role="img"
+    >
+      {link.path === 'server' ? (
+        '⇄'
+      ) : (
+        <>
+          <i />
+          <i />
+          <i />
+        </>
+      )}
+    </span>
+  );
+}
+
 function RemoteTile(props: {
+  link?: LinkStats | undefined;
   peer: RemotePeer;
   community: CommunityView;
   speaking: boolean;
@@ -325,6 +372,7 @@ function RemoteTile(props: {
         </div>
       )}
       <span className="tile__label">
+        <LinkBars link={props.link} />
         {(peer.muted || state?.serverMuted) && <MicOffIcon size={14} />}
         {state?.deafened && <HeadphonesOffIcon size={14} />}
         {props.speaking && <SpeakingWaves />}

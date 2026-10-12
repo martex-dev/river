@@ -165,6 +165,12 @@ an account. Deletion leaves every community (owned communities are deleted)
 and removes keys, devices, sessions, reactions, event interest, bans, blocks
 and undelivered mail. Messages already sent remain as ciphertext.
 
+### 5h. Custom emoji (1.0.19)
+
+Each emoji's name and picture are sealed with the community key. The server
+stores the sealed blob (it learns its size), who added it and when. Using an
+emoji in a message or a reaction is inside the sealed message or reaction.
+
 ## 6. Key threats and mitigations (STRIDE summary)
 
 | Threat          | Example                                | Mitigation                                                                                                                              | Status                                                 |

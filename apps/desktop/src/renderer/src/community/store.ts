@@ -4,7 +4,7 @@ import type { CommunityAction, CommunityActionResult } from '../../../shared/com
 import type { ChatMessage, CommunityEvent, CommunityView, Result } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
 import { setMessageLinkOpener } from './message-link.ts';
-import type { EventView } from '../../../shared/community-actions.ts';
+import type { EmojiView, EventView, SavedMessageView } from '../../../shared/community-actions.ts';
 import { effectiveNotify, shouldAlert } from '../../../shared/notify-rules.ts';
 import { play } from './sound.ts';
 import { VoiceCall } from './voice.ts';
@@ -23,7 +23,7 @@ export type Modal =
   | { kind: 'events'; communityId: string }
   | { kind: 'confirm'; title: string; body: string; action: string; run: () => Promise<void> };
 
-export type CommunityTab = 'overview' | 'roles' | 'members' | 'bans' | 'audit';
+export type CommunityTab = 'overview' | 'roles' | 'members' | 'emoji' | 'bans' | 'audit';
 export type UserTab = 'profile' | 'voice' | 'notifications' | 'appearance';
 
 const TYPING_MS = 7000;
@@ -80,6 +80,14 @@ interface CommunityState {
   /** Scheduled events per community, once loaded (1.0.18). */
   events: Record<string, EventView[]>;
   loadEvents(communityId: string): Promise<void>;
+  /** Custom emoji per community, once loaded (1.0.19). */
+  emojis: Record<string, EmojiView[]>;
+  loadEmojis(communityId: string): Promise<void>;
+  /** Saved messages (1.0.19); null until loaded. */
+  saved: SavedMessageView[] | null;
+  showSaved: boolean;
+  loadSaved(): Promise<void>;
+  toggleSaved(channelId: string, messageId: string, on: boolean): Promise<void>;
   loadOlder(channelId: string): Promise<number>;
 
   load(): Promise<void>;
@@ -98,6 +106,22 @@ interface CommunityState {
 }
 
 let toastTimer: number | undefined;
+
+/** The last text channel opened in each community, on this device (a convenience; may be unavailable). */
+function lastChannel(communityId: string): string | null {
+  try {
+    return localStorage.getItem(`river.lastChannel.${communityId}`);
+  } catch {
+    return null;
+  }
+}
+function rememberChannel(communityId: string, channelId: string): void {
+  try {
+    localStorage.setItem(`river.lastChannel.${communityId}`, channelId);
+  } catch {
+    // private storage unavailable
+  }
+}
 
 /** Remembers (on this device, encrypted) that a channel was read up to now. */
 const markRead = (channelId: string): Promise<unknown> =>
@@ -360,6 +384,9 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         // Only refresh lists someone has looked at.
         if (get().events[event.communityId]) void get().loadEvents(event.communityId);
         return;
+      case 'emojis':
+        if (get().emojis[event.communityId]) void get().loadEmojis(event.communityId);
+        return;
       case 'eventStarting':
         play('success');
         get().notify(`${event.name} is starting now.`);
@@ -374,6 +401,23 @@ export const useCommunity = create<CommunityState>((set, get) => ({
 
   pendingJump: null,
   draftInsert: null,
+  saved: null,
+  showSaved: false,
+  loadSaved: async () => {
+    const res = await window.river.community.action({ a: 'savedMessages' });
+    if (res.ok) set({ saved: res.value });
+  },
+  toggleSaved: async (channelId, messageId, on) => {
+    const res = await window.river.community.action({ a: 'saveMessage', channelId, messageId, on });
+    if (!res.ok) return get().notify(res.message, 'error');
+    await get().loadSaved();
+    if (on) get().notify('Saved. Find it under 🔖 Saved messages.');
+  },
+  emojis: {},
+  loadEmojis: async (communityId) => {
+    const res = await window.river.community.action({ a: 'emojis', communityId });
+    if (res.ok) set({ emojis: { ...get().emojis, [communityId]: res.value } });
+  },
   events: {},
   loadEvents: async (communityId) => {
     const res = await window.river.community.action({ a: 'events', communityId });
@@ -394,9 +438,19 @@ export const useCommunity = create<CommunityState>((set, get) => ({
 
   select: (communityId, channelId) => {
     const c = get().communities.find((x) => x.id === communityId);
+    // Back where you were in this community (remembered on this device), else its first text channel.
+    const remembered = lastChannel(communityId);
     const channel =
-      channelId ?? c?.channels.find((ch) => ch.kind === 'text')?.id ?? c?.channels[0]?.id ?? null;
+      channelId ??
+      (remembered && c?.channels.some((ch) => ch.id === remembered && ch.kind === 'text')
+        ? remembered
+        : null) ??
+      c?.channels.find((ch) => ch.kind === 'text')?.id ??
+      c?.channels[0]?.id ??
+      null;
     set({ selectedCommunity: communityId, selectedChannel: channel, replyTo: null, editing: null });
+    if (!get().emojis[communityId]) void get().loadEmojis(communityId);
+    if (get().saved === null) void get().loadSaved();
     if (channel) get().selectChannel(channel);
   },
 
@@ -418,6 +472,10 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     const { [channelId]: _u, ...unread } = get().unread;
     const { [channelId]: _m, ...mentions } = get().mentions;
     set({ selectedChannel: channelId, unread, mentions, replyTo: null, editing: null, showPins: false });
+    if (channel?.kind === 'text') {
+      const owner = get().communities.find((c) => c.channels.some((ch) => ch.id === channelId));
+      if (owner) rememberChannel(owner.id, channelId);
+    }
     void get().loadMessages(channelId);
   },
 
