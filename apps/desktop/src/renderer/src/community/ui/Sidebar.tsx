@@ -1,7 +1,8 @@
 import { tr } from '../../i18n.ts';
 import { useState, type DragEvent, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
-import type { ChannelView, CommunityView } from '../../../../shared/ipc.ts';
+import type { ChannelView, CommunityView, MemberView } from '../../../../shared/ipc.ts';
+import { ProfileCard } from './Members.tsx';
 import { useRiver } from '../../store.ts';
 import { useCommunity } from '../store.ts';
 import { ChannelList } from './ChannelList.tsx';
@@ -182,6 +183,7 @@ export function ChannelRow(props: {
 }): ReactElement {
   const { community, channel: ch, me } = props;
   const s = useCommunity();
+  const [card, setCard] = useState<{ member: MemberView; x: number; y: number } | null>(null);
   useCommunity((x) => x.callVersion);
   const mentions = s.mentions[ch.id] ?? 0;
   const active = ch.id === s.selectedChannel;
@@ -335,6 +337,21 @@ export function ChannelRow(props: {
               key={id}
               className={`channel__participant ${state?.reconnecting ? 'is-reconnecting' : ''}`}
               title={state?.reconnecting ? 'Reconnecting…' : undefined}
+              role="button"
+              tabIndex={0}
+              aria-label={`${m?.name ?? 'Someone'} in voice — open profile`}
+              onClick={(e) => m && setCard({ member: m, x: e.clientX + 12, y: e.clientY - 40 })}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (m) setCard({ member: m, x: e.clientX + 12, y: e.clientY - 40 });
+              }}
+              onKeyDown={(e) => {
+                if ((e.key === 'Enter' || e.key === ' ') && m) {
+                  e.preventDefault();
+                  const r = e.currentTarget.getBoundingClientRect();
+                  setCard({ member: m, x: r.right + 8, y: r.top - 40 });
+                }
+              }}
             >
               <Avatar id={id} name={m?.name ?? '?'} avatar={m?.avatar} size={22} speaking={speaking} />
               <span
@@ -365,6 +382,16 @@ export function ChannelRow(props: {
             </div>
           );
         })}
+      {card && (
+        <Popover x={card.x} y={card.y} onClose={() => setCard(null)} className="profile-pop">
+          <ProfileCard
+            community={community}
+            member={community.members.find((x) => x.riverId === card.member.riverId) ?? card.member}
+            me={me}
+            onDone={() => setCard(null)}
+          />
+        </Popover>
+      )}
     </div>
   );
 }

@@ -1847,7 +1847,13 @@ function useMentionRefs(community: CommunityView, me: string): MentionRefs {
     return {
       roles: community.roles
         .filter((r) => !r.everyone)
-        .map((r) => ({ name: r.name, color: r.color, mine: mine.includes(r.id) })),
+        .map((r) => ({
+          name: r.name,
+          color: r.color,
+          mine: mine.includes(r.id),
+          icon: r.icon,
+          members: community.members.filter((m) => m.roles.includes(r.id)).length,
+        })),
       channels: community.channels.filter((c) => c.kind === 'text').map((c) => ({ id: c.id, name: c.name })),
       onChannel: select,
     };

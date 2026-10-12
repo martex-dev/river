@@ -8,6 +8,10 @@ All notable changes to River are documented here. The format follows
 
 ### Added (1.0.27)
 
+- **Role mentions explain themselves:** hover or focus one to see the role,
+  how many people have it and whether you do.
+- **Click someone in a voice channel** (or right-click) to open their
+  profile card, with volume and moderator controls.
 - **Age-restricted channels (18+):** people confirm their age once per
   channel before opening it (channel settings).
 - **Language** (Settings → Appearance): English, or Bulgarian (beta,
