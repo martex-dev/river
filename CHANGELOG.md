@@ -6,7 +6,7 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-### Added (1.0.27)
+### Added
 
 - **Role mentions explain themselves:** hover or focus one to see the role,
   how many people have it and whether you do.
@@ -18,7 +18,11 @@ All notable changes to River are documented here. The format follows
   partly translated: navigation, settings, menus and voice controls so
   far), or follow your system. Changes apply at once.
 
-### Added (1.0.26)
+## [1.0.26] - 2026-10-12
+
+**Understand your community: why someone can or can't, insights, and media channels.**
+
+### Added
 
 - **Media channels:** turn a text channel into a gallery of the pictures
   and videos shared there (channel settings → Media channel); the chat is
