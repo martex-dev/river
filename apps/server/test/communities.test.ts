@@ -391,6 +391,9 @@ describe('communities', () => {
         await a.inject({ method: 'GET', url: `/v1/communities/${cid}/emojis`, headers: auth(member.token) })
       ).json();
       expect(emojisResponseSchema.parse(list).emojis.map((x) => x.id)).toEqual([e]);
+      expect(await status(a, 'PATCH', `/v1/emojis/${e}`, member.token, { data: sealed() })).toBe(403);
+      expect(await status(a, 'PATCH', `/v1/emojis/${e}`, owner.token, { data: sealed() })).toBe(200);
+      expect(await status(a, 'PATCH', `/v1/emojis/${id()}`, owner.token, { data: sealed() })).toBe(404);
       expect(await status(a, 'DELETE', `/v1/emojis/${e}`, member.token)).toBe(403);
       expect(await status(a, 'DELETE', `/v1/emojis/${e}`, owner.token)).toBe(200);
       const stranger = await user(a);

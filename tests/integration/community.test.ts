@@ -305,6 +305,30 @@ describe('custom emoji', () => {
     });
     const [seen] = await alice.community.messages(general.id);
     expect(seen!.reactions.map((r) => r.emoji)).toEqual([`<:party_parrot:${id}>`]);
+    // Renaming keeps the picture and the ID, and names stay unique.
+    const other = await alice.community.action({
+      a: 'addEmoji',
+      communityId: created.id,
+      name: 'cat',
+      image,
+    });
+    await expect(
+      alice.community.action({
+        a: 'renameEmoji',
+        communityId: created.id,
+        emojiId: other,
+        name: 'PARTY_parrot',
+      }),
+    ).rejects.toThrow(/already/);
+    await alice.community.action({ a: 'renameEmoji', communityId: created.id, emojiId: id, name: 'parrot' });
+    expect((await bob.community.emojis(created.id)).find((e) => e.id === id)).toEqual({
+      id,
+      name: 'parrot',
+      image,
+    });
+    await expect(
+      bob.community.action({ a: 'renameEmoji', communityId: created.id, emojiId: id, name: 'mine' }),
+    ).rejects.toThrow();
   });
 });
 

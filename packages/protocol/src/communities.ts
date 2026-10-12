@@ -366,6 +366,9 @@ export const createEmojiRequestSchema = z
   .object({ id: z.string().regex(COMMUNITY_ID_RE), data: sealedSchema(SEALED_EMOJI) })
   .strict();
 
+/** Rename (1.0.20): the whole sealed { name, image } is replaced. */
+export const updateEmojiRequestSchema = z.object({ data: sealedSchema(SEALED_EMOJI) }).strict();
+
 /** Make another member the owner (1.0.19); only the owner may. */
 export const transferOwnershipRequestSchema = z.object({ riverId: riverIdSchema }).strict();
 

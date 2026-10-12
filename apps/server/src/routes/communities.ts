@@ -30,6 +30,7 @@ import {
   updateCategoryRequestSchema,
   createEventRequestSchema,
   transferOwnershipRequestSchema,
+  updateEmojiRequestSchema,
   createEmojiRequestSchema,
   MAX_COMMUNITY_EMOJI,
   updateEventRequestSchema,
@@ -715,6 +716,23 @@ export async function registerCommunityRoutes(
     if (!model.can(me(request), Permission.MANAGE_EXPRESSIONS)) throw forbidden();
     await db.deleteFrom('community_emojis').where('id', '=', id).execute();
     await audit(model.id, me(request), 'emoji.delete', id);
+    emojisChanged(model);
+    return { ok: true };
+  });
+
+  app.patch<{ Params: { id: string } }>(`${API_PREFIX}/emojis/:id`, authed, async (request) => {
+    const id = parse(channelIdSchema, request.params.id);
+    const req = parse(updateEmojiRequestSchema, request.body);
+    const row = await db
+      .selectFrom('community_emojis')
+      .select(['community_id'])
+      .where('id', '=', id)
+      .executeTakeFirst();
+    if (!row) throw notFound();
+    const model = await community(row.community_id, me(request));
+    if (!model.can(me(request), Permission.MANAGE_EXPRESSIONS)) throw forbidden();
+    await db.updateTable('community_emojis').set({ data: req.data }).where('id', '=', id).execute();
+    await audit(model.id, me(request), 'emoji.update', id);
     emojisChanged(model);
     return { ok: true };
   });

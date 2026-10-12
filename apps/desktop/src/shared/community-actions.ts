@@ -342,6 +342,9 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('deleteEmoji'), emojiId: id }).strict(),
+  z
+    .object({ a: z.literal('renameEmoji'), communityId: id, emojiId: id, name: z.string().regex(EMOJI_NAME) })
+    .strict(),
   // Saved messages (1.0.19): kept only on this device.
   z.object({ a: z.literal('savedMessages') }).strict(),
   z.object({ a: z.literal('transferOwnership'), communityId: id, riverId }).strict(),

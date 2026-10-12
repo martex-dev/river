@@ -162,6 +162,35 @@ export function rememberEmoji(emoji: string): void {
   }
 }
 
+const FAVORITES_KEY = 'river.emoji.favorites';
+const FAVORITES_MAX = 60;
+
+/** Favourite emoji (1.0.20), on this device; right-click one in the picker to add or remove it. */
+export function favoriteEmoji(): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FAVORITES_KEY) ?? '[]') as unknown;
+    return Array.isArray(raw)
+      ? raw.filter((x): x is string => typeof x === 'string' && x.length <= 64).slice(0, FAVORITES_MAX)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Adds or removes a favourite and returns the new list. */
+export function toggleFavoriteEmoji(emoji: string): string[] {
+  const current = favoriteEmoji();
+  const next = current.includes(emoji)
+    ? current.filter((e) => e !== emoji)
+    : [...current, emoji].slice(0, FAVORITES_MAX);
+  try {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
+  } catch {
+    // private storage unavailable: favourites last until the picker closes
+  }
+  return next;
+}
+
 /** Turns :name: into the community's own emoji (<:name:id>) when sent, outside code (1.0.19). */
 export function replaceCustomShortcodes(text: string, custom: Array<{ id: string; name: string }>): string {
   if (custom.length === 0) return text;

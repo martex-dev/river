@@ -1763,6 +1763,19 @@ export class CommunityService {
         ).catch(explain);
         return emojiId as CommunityActionResult<A>;
       }
+      case 'renameEmoji': {
+        const existing = await this.emojis(act.communityId);
+        const emoji = existing.find((e) => e.id === act.emojiId);
+        if (!emoji) throw new CommunityError('That emoji no longer exists.');
+        if (existing.some((e) => e.id !== act.emojiId && e.name.toLowerCase() === act.name.toLowerCase()))
+          throw new CommunityError(`There is already an emoji called :${act.name}:.`);
+        const data = seal(this.requireKey(act.communityId), act.communityId, `emoji:${act.emojiId}`, {
+          name: act.name,
+          image: emoji.image,
+        });
+        await this.call(`/emojis/${act.emojiId}`, 'PATCH', { data }, z.unknown()).catch(explain);
+        break;
+      }
       case 'deleteEmoji':
         await this.call(`/emojis/${act.emojiId}`, 'DELETE', undefined, z.unknown()).catch(explain);
         break;
