@@ -2119,11 +2119,33 @@ input.switch:disabled {
   gap: 14px;
 }
 .meter {
+  position: relative;
   flex: 1;
   height: 10px;
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.06);
   overflow: hidden;
+}
+.meter__fill.is-open {
+  background: #23a55a;
+}
+.meter__mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text, #fff);
+}
+.sensitivity__slider {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 10px;
+}
+.sensitivity__slider input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
 }
 .meter__fill {
   height: 100%;

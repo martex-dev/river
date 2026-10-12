@@ -1,5 +1,6 @@
 import { fromBase64, toBase64 } from './relay-crypto.ts';
 import type { RelayEngine } from './relay-audio.ts';
+import { VoiceGate, levelOf } from './voice-gate.ts';
 import { readLinkStats, type LinkStats } from './link-stats.ts';
 
 /**
@@ -126,6 +127,8 @@ export interface CallOptions {
   noiseSuppression: boolean;
   echoCancellation: boolean;
   pushToTalk: boolean;
+  /** Voice activity sensitivity, 0–1 on the meter's scale; null = automatic (always send). */
+  sensitivity: number | null;
 }
 
 const SPEAKING_THRESHOLD = 0.035;
@@ -151,6 +154,9 @@ export class VoiceCall {
   serverMuted = false;
   /** A moderator deafened us: we hear nothing and send nothing (1.0.20). */
   serverDeafened = false;
+  private readonly gate = new VoiceGate();
+  /** A copy of the microphone that is never switched off, so the gate can hear you start talking. */
+  private micProbe: MediaStreamTrack | null = null;
   /** Push-to-talk key is held. */
   pttActive = false;
   private readonly peers = new Map<string, Peer>();
@@ -199,6 +205,7 @@ export class VoiceCall {
       noiseSuppression: true,
       echoCancellation: true,
       pushToTalk: false,
+      sensitivity: null,
       ...options,
     };
   }
@@ -276,7 +283,7 @@ export class VoiceCall {
       }
     } else this.relay = null;
     this.applyMic();
-    this.watch(this.me, this.local.audio);
+    this.probe(this.local.audio);
     try {
       await this.transport.join();
     } catch (err) {
@@ -293,7 +300,7 @@ export class VoiceCall {
       !this.deafened &&
       !this.serverMuted &&
       !this.serverDeafened &&
-      (!this.options.pushToTalk || this.pttActive)
+      (this.options.pushToTalk ? this.pttActive : this.options.sensitivity === null || this.gate.open)
     );
   }
 
@@ -364,7 +371,7 @@ export class VoiceCall {
     if ((deviceChanged || processingChanged) && !this.closed) {
       const track = await this.microphone();
       await this.setSlot('audio', track);
-      this.watch(this.me, track);
+      this.probe(track);
     }
     this.applyMic();
     this.broadcastState();
@@ -408,6 +415,23 @@ export class VoiceCall {
 
   // ---- speaking detection -----------------------------------------------------------------------
 
+  /** Listens to our own microphone through a copy that stays on while the real one is gated. */
+  private probe(track: MediaStreamTrack | null): void {
+    this.micProbe?.stop();
+    let copy: MediaStreamTrack | null;
+    try {
+      copy = track?.clone() ?? null;
+    } catch {
+      copy = null;
+    }
+    // Without a copy (unusual), listen to the track itself: the gate then cannot reopen while closed,
+    // so keep sending in that case.
+    if (track && !copy) this.options.sensitivity = null;
+    this.micProbe = copy;
+    if (copy) copy.enabled = true;
+    this.watch(this.me, copy ?? track);
+  }
+
   private watch(id: string, track: MediaStreamTrack | null): void {
     const existing = this.analysers.get(id);
     if (existing?.track === track) return;
@@ -435,6 +459,9 @@ export class VoiceCall {
       let sum = 0;
       for (const v of buf) sum += v * v;
       const rms = Math.sqrt(sum / buf.length);
+      if (id === this.me && !this.options.pushToTalk && this.options.sensitivity !== null) {
+        if (this.gate.update(levelOf(rms), this.options.sensitivity, now)) this.applyMic();
+      }
       const live = id === this.me ? this.transmitting : !(this.peers.get(id)?.remote.muted ?? false);
       if (live && rms > SPEAKING_THRESHOLD) this.lastLoud.set(id, now);
       const speaking = live && now - (this.lastLoud.get(id) ?? 0) < SPEAKING_HOLD_MS;
@@ -654,6 +681,8 @@ export class VoiceCall {
     this.relay?.close();
     this.relayPeers.clear();
     this.stopLocal();
+    this.micProbe?.stop();
+    this.micProbe = null;
     for (const a of this.analysers.values()) a.source.disconnect();
     this.analysers.clear();
     void this.audioCtx?.close().catch(() => undefined);

@@ -111,6 +111,8 @@ export const settingsSchema = z.object({
     echoCancellation: z.boolean(),
     /** Per-member playback volume, 0–2 (1 = 100%). */
     userVolumes: z.record(z.string().max(64), z.number().min(0).max(2)),
+    /** Added in 1.0.20: voice activity sensitivity, 0–1 on the mic meter's scale; null = automatic. */
+    sensitivity: z.number().min(0).max(1).nullable(),
   }),
   /** Added in 1.0.7. */
   system: z.object({
@@ -189,6 +191,7 @@ export const DEFAULT_SETTINGS: Settings = {
     noiseSuppression: true,
     echoCancellation: true,
     userVolumes: {},
+    sensitivity: null,
   },
   system: { startAtLogin: false, closeToTray: true },
   hosting: { enabled: false, keepAwake: true },

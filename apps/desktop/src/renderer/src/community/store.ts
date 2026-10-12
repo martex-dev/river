@@ -531,6 +531,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         noiseSuppression: voice?.noiseSuppression ?? true,
         echoCancellation: voice?.echoCancellation ?? true,
         pushToTalk: voice?.inputMode === 'push-to-talk',
+        sensitivity: voice?.sensitivity ?? null,
       },
       undefined,
       relay,
