@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.19] - 2026-10-12
+
+**Make it yours: custom emoji, saved messages, and a clear view of every call.**
+
 ### Added
 
 - **See how each person's call is doing:** little bars on every call tile;
