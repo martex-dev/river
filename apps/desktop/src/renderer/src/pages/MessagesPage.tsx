@@ -256,6 +256,8 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
   const c = props.conversation;
   const dm = useDm();
   const messages = useDm((x) => x.messages[c.riverId]) ?? [];
+  const [showPins, setShowPins] = useState(false);
+  const pinned = messages.filter((m) => m.pinned);
   const myName = useRiver((r) => r.identity?.displayName) ?? 'You';
   const myId = dm.myId ?? '';
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -363,6 +365,14 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
               </button>
             </>
           )}
+          <button
+            className={`icon-btn ${showPins ? 'is-on' : ''}`}
+            aria-label="Pinned messages"
+            title="Pinned messages"
+            onClick={() => setShowPins(!showPins)}
+          >
+            📌
+          </button>
           <button
             className="icon-btn"
             aria-label="Conversation options"
@@ -492,6 +502,40 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           </MenuItem>
           <NotifyMenuSection id={c.riverId} kind="conversation" onDone={() => setMenu(null)} />
         </Popover>
+      )}
+      {showPins && (
+        <div className="pins dm-pins">
+          <header className="pins__head">
+            <strong>Pinned messages</strong>
+            <button
+              className="icon-btn"
+              aria-label="Close pinned messages"
+              onClick={() => setShowPins(false)}
+            >
+              ✕
+            </button>
+          </header>
+          {pinned.length === 0 && (
+            <p className="muted small">Nothing pinned yet. Hover a message and press 📌.</p>
+          )}
+          {pinned.map((m) => (
+            <button
+              key={m.id}
+              className="pins__item"
+              onClick={() => {
+                setShowPins(false);
+                const el = document.getElementById(`dm-${m.id}`);
+                el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+              }}
+            >
+              <span>
+                <strong>{m.senderName}</strong>{' '}
+                <span className="muted small">{new Date(m.sentAt).toLocaleDateString()}</span>
+                <span className="pins__text">{m.text.slice(0, 160) || 'A file'}</span>
+              </span>
+            </button>
+          ))}
+        </div>
       )}
       <DmCallPanel conversation={c} />
       {showMembers && c.kind === 'group' && <GroupMembers c={c} onClose={() => setShowMembers(false)} />}
@@ -715,6 +759,7 @@ function DmMessage(props: {
 
   return (
     <div
+      id={`dm-${m.id}`}
       className={`msg ${props.grouped ? 'msg--grouped' : ''} ${m.mine ? 'msg--mine' : ''} ${editing ? 'is-editing' : ''}`}
     >
       {m.replyTo && (
@@ -745,6 +790,11 @@ function DmMessage(props: {
               <time className="muted small" title={new Date(m.sentAt).toLocaleString()}>
                 {timeOf(m.sentAt)}
               </time>
+              {m.pinned && (
+                <span className="msg__pinned" title="Pinned" aria-label="Pinned">
+                  📌
+                </span>
+              )}
             </div>
           )}
           {editing ? (
@@ -810,6 +860,16 @@ function DmMessage(props: {
           <button className="msg__action" aria-label="Reply" onClick={() => useDm.setState({ replyTo: m })}>
             <ReplyIcon size={17} />
           </button>
+          {!m.deleted && (
+            <button
+              className="msg__action"
+              aria-label={m.pinned ? 'Unpin' : 'Pin'}
+              title={m.pinned ? 'Unpin' : 'Pin for everyone in this conversation'}
+              onClick={() => void dm.run({ a: 'pin', peer: c.riverId, id: m.id, pinned: !m.pinned })}
+            >
+              <span aria-hidden="true">📌</span>
+            </button>
+          )}
           {m.text && (
             <button
               className="msg__action"

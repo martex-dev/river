@@ -8,6 +8,8 @@ All notable changes to River are documented here. The format follows
 
 ### Added (1.0.29)
 
+- **Pin messages in direct messages and groups** (📌 on a message); the
+  header lists what's pinned. Everyone in the conversation sees it.
 - **Community picture and banner** (Community settings → Overview): a real
   picture instead of an emoji in the list, and a banner above the channels.
   End-to-end encrypted.

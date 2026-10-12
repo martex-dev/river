@@ -59,6 +59,14 @@ const contentSchema = z.discriminatedUnion('t', [
     groupId: msgId.optional(),
   }),
   z.object({ v: z.literal(1), t: z.literal('delete'), id: msgId, groupId: msgId.optional() }),
+  /** Pin or unpin a message in this conversation (1.0.29); anyone in it may. */
+  z.object({
+    v: z.literal(1),
+    t: z.literal('pin'),
+    id: msgId,
+    pinned: z.boolean(),
+    groupId: msgId.optional(),
+  }),
   z.object({
     v: z.literal(1),
     t: z.literal('react'),
@@ -515,6 +523,11 @@ export class DmService {
             .run(JSON.stringify({ ...body, text: content.text }), now.toISOString(), content.id);
           this.emitMessage(content.id, false);
         }
+        return true;
+      }
+      case 'pin': {
+        const row = this.row(content.id);
+        if (row && row.peer === conv && !row.deleted) this.setPinned(row, content.pinned);
         return true;
       }
       case 'delete': {
@@ -1064,6 +1077,19 @@ export class DmService {
           this.emitMessage(act.id, false);
           return out(null);
         }
+        case 'pin': {
+          const row = this.row(act.id);
+          if (!row || row.peer !== act.peer || row.deleted) throw new CommunityError('That message is gone.');
+          await this.deliver(act.peer, {
+            v: 1,
+            t: 'pin',
+            id: act.id,
+            pinned: act.pinned,
+            ...(isGroupId(act.peer) ? { groupId: act.peer } : {}),
+          });
+          this.setPinned(row, act.pinned);
+          return out(null);
+        }
         case 'delete': {
           const row = this.row(act.id);
           if (!row || row.peer !== act.peer) return out(null);
@@ -1358,8 +1384,23 @@ export class DmService {
     this.emitMessage(row.id, false);
   }
 
+  /** Pins live in the local copy of the message (1.0.29). */
+  private setPinned(row: MessageRow, pinned: boolean): void {
+    const body = JSON.parse(row.body) as Record<string, unknown>;
+    const { pinned: _was, ...rest } = body;
+    this.db()
+      .prepare('UPDATE dm_messages SET body = ? WHERE id = ?')
+      .run(JSON.stringify(pinned ? { ...rest, pinned: true } : rest), row.id);
+    this.emitMessage(row.id, false);
+  }
+
   private view(r: MessageRow): DirectMessageView {
-    const body = JSON.parse(r.body) as { text?: string; replyTo?: string; attachments?: AttachmentPointer[] };
+    const body = JSON.parse(r.body) as {
+      text?: string;
+      replyTo?: string;
+      attachments?: AttachmentPointer[];
+      pinned?: unknown;
+    };
     const me = this.me();
     const reactions = JSON.parse(r.reactions) as Record<string, string[]>;
     const group = isGroupId(r.peer) ? this.group(r.peer) : undefined;
@@ -1375,6 +1416,7 @@ export class DmService {
       sentAt: r.sent_at,
       editedAt: r.edited_at,
       deleted: r.deleted === 1,
+      pinned: !r.deleted && body.pinned === true,
       status: r.status as DirectMessageView['status'],
       reactions: Object.entries(reactions).map(([emoji, users]) => ({
         emoji,
