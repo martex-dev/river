@@ -8,6 +8,23 @@ All notable changes to River are documented here. The format follows
 
 ### Added
 
+- **Report a message** (right-click → Report message): pick a reason and
+  optionally add details. It goes only to the people who moderate messages
+  in that community, who get a **Reports** tab in Community settings to open
+  the message, resolve, dismiss or reopen reports. Reasons and copies are
+  end-to-end encrypted; every decision is in the audit log.
+- **Ban and clean up:** banning someone can also delete their messages from
+  the last hour, 6 hours, a day, 3 days or a week.
+- **Role icons:** give a role an emoji; it shows next to the names of people
+  with that role.
+- **Cancel an upload** while files are encrypting and uploading — your
+  message and files stay in the box.
+- **Describe pictures (alt text)** with the ALT button before sending; screen
+  readers read it, and an ALT badge shows it on the picture.
+- **Member since** on profile cards.
+
+### Added
+
 - **Back and forward**, like a browser: Alt+← / Alt+→ (⌘[ / ⌘] on a Mac)
   or your mouse's back and forward buttons walk through the channels,
   conversations and pages you opened.
