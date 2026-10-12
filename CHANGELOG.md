@@ -6,10 +6,6 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-## [1.0.22] - 2026-10-12
-
-**Bring the room to life: soundboard, forums, stages and your own shortcuts.**
-
 ### Added
 
 - **Link previews, made privately** (Settings → Appearance, off by
@@ -24,6 +20,13 @@ All notable changes to River are documented here. The format follows
 - **Export my data** (Settings → Account): save a readable copy of your
   profile, settings, contacts, direct messages, groups, calls, posts and
   saved messages. It never contains your keys.
+
+## [1.0.22] - 2026-10-12
+
+**Bring the room to life: soundboard, forums, stages and your own shortcuts.**
+
+### Added
+
 - **Soundboard.** Play short sounds to everyone in a voice channel from the
   🎵 button; right-click one to hear it yourself first. People with *Manage
   emoji & sounds* upload clips (up to 5.5 seconds) with a name and emoji in
