@@ -6,10 +6,6 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-## [1.0.20] - 2026-10-12
-
-**Get around faster: back and forward, search filters, quiet hours — and better voice control.**
-
 ### Added
 
 - **Report a message** (right-click → Report message): pick a reason and
@@ -26,6 +22,10 @@ All notable changes to River are documented here. The format follows
 - **Describe pictures (alt text)** with the ALT button before sending; screen
   readers read it, and an ALT badge shows it on the picture.
 - **Member since** on profile cards.
+
+## [1.0.20] - 2026-10-12
+
+**Get around faster: back and forward, search filters, quiet hours — and better voice control.**
 
 ### Added
 
