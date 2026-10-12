@@ -5089,3 +5089,34 @@ input.switch:disabled {
   margin: 0;
   font-size: 12px;
 }
+
+/* Favourite GIFs (1.0.25) */
+.favorite-star {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur);
+}
+.attachment-image:hover .favorite-star,
+.favorite-star:focus-visible,
+.favorite-star.is-on {
+  opacity: 1;
+}
+.favorite-star.is-on {
+  color: #f0b232;
+}
+.composer__gif {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}

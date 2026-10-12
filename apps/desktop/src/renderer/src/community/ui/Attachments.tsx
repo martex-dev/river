@@ -1,3 +1,4 @@
+import { FavoriteStar } from './Favorites.tsx';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { AttachmentPointer } from '../../../../shared/community-actions.ts';
 import { MAX_ATTACHMENT_BYTES } from '../../../../shared/community-actions.ts';
@@ -146,6 +147,7 @@ function ImageAttachment({
           ALT
         </span>
       )}
+      {url && <FavoriteStar pointer={pointer} />}
       {!url && !error && (visible || manual) && <span className="attachment-image__spinner" />}
       {!url && !error && !manual && pointer.size > AUTO_LOAD_BYTES && (
         <span className="attachment-image__hint">Click to load · {formatBytes(pointer.size)}</span>

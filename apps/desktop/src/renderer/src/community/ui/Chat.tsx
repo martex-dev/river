@@ -1,3 +1,4 @@
+import { GifButton } from './Favorites.tsx';
 import { StickerButton, StickerImage } from './Stickers.tsx';
 import { SavedPanel } from './Saved.tsx';
 import { CreatePollDialog, PollView } from './Poll.tsx';
@@ -1240,6 +1241,7 @@ function Composer(props: {
           📊
         </button>
         <StickerButton community={community} channelId={channel.id} />
+        {props.canAttach && <GifButton channelId={channel.id} />}
         {props.canAttach && (
           <>
             <button

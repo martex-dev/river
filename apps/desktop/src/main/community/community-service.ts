@@ -48,6 +48,8 @@ import {
   type SoundView,
   type NoteView,
   type StickerView,
+  MAX_FAVORITE_BYTES,
+  MAX_FAVORITE_MEDIA,
   STICKER_IMAGE,
   SOUND_DATA_URL,
   type SavedMessageView,
@@ -1795,6 +1797,75 @@ export class CommunityService {
         return (await this.upload(act)) as CommunityActionResult<A>;
       case 'download':
         return (await this.downloadAttachment(act.pointer)) as CommunityActionResult<A>;
+      case 'favoriteMedia': {
+        const p = act.pointer;
+        if (!act.on) {
+          this.db().prepare('DELETE FROM favorite_media WHERE id = ?').run(p.id);
+          break;
+        }
+        if (!p.mime.startsWith('image/'))
+          throw new CommunityError('Only pictures and GIFs can be favourites.');
+        if (p.size > MAX_FAVORITE_BYTES)
+          throw new CommunityError('That file is too large to keep as a favourite.');
+        const count = (this.db().prepare('SELECT COUNT(*) AS n FROM favorite_media').get() as { n: number })
+          .n;
+        if (count >= MAX_FAVORITE_MEDIA)
+          throw new CommunityError(`You can keep up to ${MAX_FAVORITE_MEDIA} favourites.`);
+        const bytes = await this.downloadAttachment(p);
+        this.db()
+          .prepare(
+            `INSERT INTO favorite_media (id, name, mime, width, height, bytes, added_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
+          )
+          .run(
+            p.id,
+            p.name.slice(0, 255),
+            p.mime,
+            p.width ?? null,
+            p.height ?? null,
+            Buffer.from(bytes),
+            new Date().toISOString(),
+          );
+        break;
+      }
+      case 'removeFavorite':
+        this.db().prepare('DELETE FROM favorite_media WHERE id = ?').run(act.id);
+        break;
+      case 'favoriteMediaList':
+        return (
+          this.db()
+            .prepare('SELECT id, name, mime, width, height FROM favorite_media ORDER BY added_at DESC')
+            .all() as Array<{
+            id: string;
+            name: string;
+            mime: string;
+            width: number | null;
+            height: number | null;
+          }>
+        ).map((r) => ({ ...r })) as CommunityActionResult<A>;
+      case 'favoriteMediaBytes': {
+        const row = this.db().prepare('SELECT bytes FROM favorite_media WHERE id = ?').get(act.id) as
+          { bytes: Uint8Array } | undefined;
+        if (!row) throw new CommunityError('That favourite is gone.');
+        return new Uint8Array(row.bytes) as CommunityActionResult<A>;
+      }
+      case 'sendFavorite': {
+        const row = this.db()
+          .prepare('SELECT name, mime, width, height, bytes FROM favorite_media WHERE id = ?')
+          .get(act.id) as
+          | { name: string; mime: string; width: number | null; height: number | null; bytes: Uint8Array }
+          | undefined;
+        if (!row) throw new CommunityError('That favourite is gone.');
+        // A fresh encrypted copy for this message: attachments are never shared between messages.
+        const pointer = await this.upload({
+          name: row.name,
+          mime: row.mime,
+          bytes: new Uint8Array(row.bytes),
+          ...(row.width ? { width: row.width } : {}),
+          ...(row.height ? { height: row.height } : {}),
+        });
+        return (await this.send(act.channelId, '', undefined, [pointer])) as CommunityActionResult<A>;
+      }
       case 'edit': {
         const communityId = this.communityOf(act.channelId);
         const existing = await this.findMessage(act.channelId, act.messageId);

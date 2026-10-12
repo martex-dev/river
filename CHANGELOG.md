@@ -6,6 +6,12 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (1.0.25)
+
+- **Your GIFs, privately:** click ☆ on any GIF or picture in a chat to keep
+  it, then send it again from the GIF button. They stay in your encrypted
+  database; no GIF service ever sees what you look for.
+
 ### Added
 
 - **Stickers:** communities add their own (Community settings → Stickers);

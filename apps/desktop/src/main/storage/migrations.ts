@@ -326,4 +326,23 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 19,
+    name: '0019_favorite_media',
+    up(db) {
+      // GIFs and pictures you favourited (1.0.25), kept decrypted only in this encrypted database,
+      // so you can send them again without any outside GIF service.
+      db.exec(`
+        CREATE TABLE favorite_media (
+          id       TEXT PRIMARY KEY,
+          name     TEXT NOT NULL,
+          mime     TEXT NOT NULL,
+          width    INTEGER,
+          height   INTEGER,
+          bytes    BLOB NOT NULL,
+          added_at TEXT NOT NULL
+        ) STRICT;
+      `);
+    },
+  },
 ];
