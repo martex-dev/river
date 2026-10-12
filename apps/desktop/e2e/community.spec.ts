@@ -229,7 +229,7 @@ test('create, invite, join, chat and call between two members', async () => {
   // Roles: Alice creates a role that may kick, and gives it to Bob.
   await alice.locator('.community__title').click();
   await alice.getByRole('menuitem', { name: 'Community settings' }).click();
-  await alice.locator('.settings-tab', { hasText: 'Roles' }).click();
+  await alice.locator('.settings-tab', { hasText: /^Roles$/ }).click();
   await alice.getByRole('button', { name: 'Create role' }).click();
   await alice.getByLabel('Role name').fill('Crew');
   await alice.locator('.toggle-row', { hasText: 'Kick members' }).locator('input').check();
@@ -241,7 +241,7 @@ test('create, invite, join, chat and call between two members', async () => {
   await expect(alice.locator('.role-row', { hasText: 'Crew' })).toBeVisible();
   await auditA11y(alice, 'Community settings → Roles');
   if (process.env.RIVER_SCREENSHOTS) await alice.screenshot({ path: 'test-results/community-roles.png' });
-  await alice.locator('.settings-tab', { hasText: 'Members' }).click();
+  await alice.locator('.settings-tab', { hasText: /^Members$/ }).click();
   await alice.getByLabel('Add role to Bob').selectOption({ label: 'Crew' });
   await expect(alice.locator('.member-table__row', { hasText: 'Bob' })).toContainText('Crew');
   // The audit log tells the story in words.
