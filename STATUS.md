@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-12 · Current version: **1.0.22** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
+_Last updated: 2026-10-12 · Current version: **1.0.23** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
 
 ## Complete
 
@@ -34,6 +34,7 @@ _Last updated: 2026-10-12 · Current version: **1.0.22** · Stage 1 complete · 
 | Navigation & control   | Back/forward history, search filters and jump to date, quiet hours, per-channel drafts, duplicate channel/role, emoji rename and favourites, server deafen, manual input sensitivity                        | `nav-history.test.tsx`, `search-query.test.ts`, `voice-gate.test.ts`, `drafts.test.tsx`, integration, server sockets |
 | Safety & accessibility | Message reports to moderators (encrypted), ban with message cleanup, role icons, alt text, cancel upload, member since                                                                                      | `communities.test.ts`, integration                                                                                   |
 | Community spaces       | Soundboard, forum channels, stage channels, temporary bans, keybind editor                                                                                                                                  | `communities.test.ts` (sockets), integration, `keybinds.test.ts`, e2e                                                |
+| Data & safety          | Export my data, sender-made link previews (opt-in), moderator notes, reaction notices, DM forward                                                                                                           | `data-export.test.ts`, `link-preview.test.ts`, integration                                                           |
 | Diagnostics            | Connection check (Settings → System), startup failure dialog, GPU fallback, `--self-test`                                                                                                                   | `diagnostics*.test.ts*`, `startup-guard.test.ts`                                                                     |
 
 ## Partially complete
