@@ -751,8 +751,10 @@ describe('desktop ↔ server communities', () => {
         ),
       ),
     );
+    // Plaintext would stand on its own; inside random base64 or ids a short word like "Bob"
+    // turns up by chance now and then, so only standalone occurrences count.
     for (const secret of ['The Crew', 'Moderators', 'staff', 'Say hi', 'hello', '🔥', 'Alice', 'Bob']) {
-      expect(dump).not.toContain(secret);
+      expect(dump).not.toMatch(new RegExp(`(?<![A-Za-z0-9+/_-])${secret}(?![A-Za-z0-9+/=_-])`, 'u'));
     }
 
     // Profile: name and avatar reach the other member.
