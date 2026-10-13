@@ -13,7 +13,11 @@ All notable changes to River are documented here. The format follows
   30 days from their profile card (⏳ shows until when); it goes away on its
   own.
 
-### Added (1.0.29)
+## [1.0.29] - 2026-10-13
+
+**Make it yours: community pictures and banners, pins in direct messages, and calls in the conversation.**
+
+### Added
 
 - **Calls show up in the conversation:** "📞 Call · 5 min", "Missed call"
   and "no answer" lines appear between your messages.
@@ -23,7 +27,11 @@ All notable changes to River are documented here. The format follows
   picture instead of an emoji in the list, and a banner above the channels.
   End-to-end encrypted.
 
-### Added (1.0.28)
+## [1.0.28] - 2026-10-13
+
+**Safer communities: a word filter and warnings before suspicious links.**
+
+### Added
 
 - **Suspicious link warnings:** before opening a link, River warns about
   look-alike characters, raw IP addresses, short links that hide where they
@@ -33,7 +41,11 @@ All notable changes to River are documented here. The format follows
   ignores case, accents and look-alikes; moderators still see everything.
   Because the server cannot read messages, each River app applies it.
 
-### Added (1.0.27)
+## [1.0.27] - 2026-10-12
+
+**Speak your language: a language setting, plus age-restricted channels and clearer roles.**
+
+### Added
 
 - **Role mentions explain themselves:** hover or focus one to see the role,
   how many people have it and whether you do.
@@ -45,7 +57,11 @@ All notable changes to River are documented here. The format follows
   partly translated: navigation, settings, menus and voice controls so
   far), or follow your system. Changes apply at once.
 
-### Added (1.0.26)
+## [1.0.26] - 2026-10-12
+
+**Understand your community: why someone can or can't, insights, and media channels.**
+
+### Added
 
 - **Media channels:** turn a text channel into a gallery of the pictures
   and videos shared there (channel settings → Media channel); the chat is
