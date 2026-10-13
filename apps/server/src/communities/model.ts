@@ -61,6 +61,7 @@ export class CommunityModel {
   readonly onboarding: string | null;
   readonly screening: boolean;
   readonly selfRoles: string[];
+  readonly art: string | null;
 
   constructor(init: {
     id: string;
@@ -75,6 +76,7 @@ export class CommunityModel {
     onboarding?: string | null;
     screening?: boolean;
     selfRoles?: string[];
+    art?: string | null;
   }) {
     this.id = init.id;
     this.ownerId = init.ownerId;
@@ -88,6 +90,7 @@ export class CommunityModel {
     this.onboarding = init.onboarding ?? null;
     this.screening = init.screening ?? false;
     this.selfRoles = init.selfRoles ?? [];
+    this.art = init.art ?? null;
   }
 
   /** Must still accept the rules before taking part. */
@@ -184,6 +187,7 @@ export class CommunityModel {
       onboarding: this.onboarding,
       screening: this.screening,
       selfRoles: this.selfRoles,
+      art: this.art,
       roles: this.roles,
       channels: visible.map((c) => ({
         id: c.id,
@@ -228,7 +232,17 @@ export class CommunityModel {
 export async function loadCommunity(db: Kysely<Database>, id: string): Promise<CommunityModel | null> {
   const c = await db
     .selectFrom('communities')
-    .select(['id', 'owner', 'meta', 'key_epoch', 'rotation_needed', 'onboarding', 'screening', 'self_roles'])
+    .select([
+      'id',
+      'owner',
+      'meta',
+      'key_epoch',
+      'rotation_needed',
+      'onboarding',
+      'screening',
+      'self_roles',
+      'art',
+    ])
     .where('id', '=', id)
     .executeTakeFirst();
   if (!c) return null;
@@ -277,6 +291,7 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
     keyEpoch: c.key_epoch,
     rotationNeeded: c.rotation_needed === 1,
     onboarding: c.onboarding,
+    art: c.art,
     screening: c.screening === 1,
     selfRoles: ((): string[] => {
       try {

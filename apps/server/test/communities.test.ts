@@ -506,6 +506,19 @@ describe('communities', () => {
       expect(await status(a, 'GET', url, stranger.token)).not.toBe(200);
     });
 
+    it('community pictures: only managers change them; members get them sealed', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      expect(await status(a, 'PUT', `/v1/communities/${cid}/art`, member.token, { art: sealed() })).toBe(403);
+      const art = sealed();
+      expect(await status(a, 'PUT', `/v1/communities/${cid}/art`, owner.token, { art })).toBe(200);
+      expect((await fetchCommunity(a, member.token, cid)).art).toBe(art);
+      expect(await status(a, 'PUT', `/v1/communities/${cid}/art`, owner.token, { art: null })).toBe(200);
+      expect((await fetchCommunity(a, member.token, cid)).art).toBeNull();
+    });
+
     it('moderator notes are only for people who moderate members', async () => {
       const a = await start();
       const owner = await user(a);

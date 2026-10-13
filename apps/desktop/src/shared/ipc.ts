@@ -332,6 +332,8 @@ export interface CommunityView {
   myPending: boolean;
   /** The community's word filter (1.0.28), or null. */
   filter?: WordFilter | null;
+  /** A picture (shown instead of the emoji icon) and a banner (1.0.29), as image data URLs. */
+  art?: { icon: string | null; banner: string | null };
 }
 
 export interface ReactionView {

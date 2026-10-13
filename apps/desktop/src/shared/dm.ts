@@ -41,6 +41,8 @@ export interface DirectMessageView {
   sentAt: string;
   editedAt: string | null;
   deleted: boolean;
+  /** Pinned in this conversation (1.0.29). */
+  pinned?: boolean;
   status: 'sending' | 'sent' | 'delivered' | 'read' | 'failed' | 'received';
   reactions: Array<{ emoji: string; count: number; mine: boolean; users: string[] }>;
 }
@@ -170,6 +172,7 @@ export const dmActionSchema = z.discriminatedUnion('a', [
       members: z.array(riverId).min(1).max(31),
     })
     .strict(),
+  z.object({ a: z.literal('pin'), peer: conv, id, pinned: z.boolean() }).strict(),
   z.object({ a: z.literal('renameGroup'), peer: id, name: z.string().trim().min(1).max(64) }).strict(),
   z.object({ a: z.literal('setGroupIcon'), peer: id, icon: z.string().min(1).max(16).nullable() }).strict(),
   z.object({ a: z.literal('addGroupMembers'), peer: id, members: z.array(riverId).min(1).max(31) }).strict(),

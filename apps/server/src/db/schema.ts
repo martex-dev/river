@@ -60,6 +60,8 @@ export interface CommunitiesTable {
   screening: Generated<number>;
   /** JSON array of role IDs members may give themselves. */
   self_roles: Generated<string>;
+  /** Sealed { icon, banner } (1.0.29). */
+  art: string | null;
 }
 
 export interface CommunityMembersTable {

@@ -517,6 +517,24 @@ describe('per-community pictures', () => {
   });
 });
 
+describe('community pictures', () => {
+  it('are sealed and keep the other picture when one changes', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Art');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const pic =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    await alice.community.action({ a: 'updateArt', communityId: created.id, icon: pic });
+    await alice.community.action({ a: 'updateArt', communityId: created.id, banner: pic });
+    expect((await bob.community.refresh())[0]!.art).toEqual({ icon: pic, banner: pic });
+    const stored = JSON.stringify(await serverDb.db.selectFrom('communities').selectAll().execute());
+    expect(stored).not.toContain('iVBORw0K');
+    await alice.community.action({ a: 'updateArt', communityId: created.id, icon: null });
+    expect((await bob.community.refresh())[0]!.art).toEqual({ icon: null, banner: pic });
+  });
+});
+
 describe('moderator notes', () => {
   it('are sealed, shown to moderators with their author, and hidden from others', async () => {
     const alice = await person('Alice');

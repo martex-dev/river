@@ -6,6 +6,16 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (1.0.29)
+
+- **Calls show up in the conversation:** "📞 Call · 5 min", "Missed call"
+  and "no answer" lines appear between your messages.
+- **Pin messages in direct messages and groups** (📌 on a message); the
+  header lists what's pinned. Everyone in the conversation sees it.
+- **Community picture and banner** (Community settings → Overview): a real
+  picture instead of an emoji in the list, and a banner above the channels.
+  End-to-end encrypted.
+
 ## [1.0.28] - 2026-10-13
 
 **Safer communities: a word filter and warnings before suspicious links.**

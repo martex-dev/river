@@ -1,3 +1,5 @@
+import type { CallView } from '../../../shared/dm.ts';
+import { callNote, callsBetween } from '../dm/call-notes.ts';
 import { NotifyMenuSection } from '../community/ui/NotifyMenu.tsx';
 import { ForwardDialog } from '../community/ui/Forward.tsx';
 import { useDraft } from '../community/drafts.ts';
@@ -256,6 +258,18 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
   const c = props.conversation;
   const dm = useDm();
   const messages = useDm((x) => x.messages[c.riverId]) ?? [];
+  const [showPins, setShowPins] = useState(false);
+  // Calls with this person, from the local call history, shown between messages (1.0.29).
+  const [calls, setCalls] = useState<CallView[]>([]);
+  // Re-read after a call with this person starts or ends, and when a call was missed.
+  const callBusy = useDmCall((x) => x.active?.peer === c.riverId || x.incoming?.peer === c.riverId);
+  useEffect(() => {
+    if (c.kind === 'group') return;
+    void window.river.dm.action({ a: 'calls' }).then((r) => {
+      if (r.ok) setCalls((r.value as CallView[]).filter((x) => x.peer === c.riverId));
+    });
+  }, [c.riverId, c.kind, callBusy]);
+  const pinned = messages.filter((m) => m.pinned);
   const myName = useRiver((r) => r.identity?.displayName) ?? 'You';
   const myId = dm.myId ?? '';
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -363,6 +377,14 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
               </button>
             </>
           )}
+          <button
+            className={`icon-btn ${showPins ? 'is-on' : ''}`}
+            aria-label="Pinned messages"
+            title="Pinned messages"
+            onClick={() => setShowPins(!showPins)}
+          >
+            📌
+          </button>
           <button
             className="icon-btn"
             aria-label="Conversation options"
@@ -493,6 +515,40 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           <NotifyMenuSection id={c.riverId} kind="conversation" onDone={() => setMenu(null)} />
         </Popover>
       )}
+      {showPins && (
+        <div className="pins dm-pins">
+          <header className="pins__head">
+            <strong>Pinned messages</strong>
+            <button
+              className="icon-btn"
+              aria-label="Close pinned messages"
+              onClick={() => setShowPins(false)}
+            >
+              ✕
+            </button>
+          </header>
+          {pinned.length === 0 && (
+            <p className="muted small">Nothing pinned yet. Hover a message and press 📌.</p>
+          )}
+          {pinned.map((m) => (
+            <button
+              key={m.id}
+              className="pins__item"
+              onClick={() => {
+                setShowPins(false);
+                const el = document.getElementById(`dm-${m.id}`);
+                el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+              }}
+            >
+              <span>
+                <strong>{m.senderName}</strong>{' '}
+                <span className="muted small">{new Date(m.sentAt).toLocaleDateString()}</span>
+                <span className="pins__text">{m.text.slice(0, 160) || 'A file'}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       <DmCallPanel conversation={c} />
       {showMembers && c.kind === 'group' && <GroupMembers c={c} onClose={() => setShowMembers(false)} />}
       {iconPicker && (
@@ -581,6 +637,9 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
             Date.parse(m.sentAt) - Date.parse(prev.sentAt) < GROUP_MS;
           return (
             <div key={m.id}>
+              {callsBetween(calls, prev?.sentAt ?? null, m.sentAt).map((call) => (
+                <CallNote key={call.id} call={call} />
+              ))}
               {newDay && (
                 <div className="chat__day">
                   <span>{dayLabel(m.sentAt)}</span>
@@ -598,6 +657,9 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
             </div>
           );
         })}
+        {callsBetween(calls, messages.at(-1)?.sentAt ?? null, null).map((call) => (
+          <CallNote key={call.id} call={call} />
+        ))}
       </div>
       {c.state === 'left' ? (
         <div className="chat__composer chat__composer--locked">
@@ -675,6 +737,17 @@ function ConvAvatar({ c, size }: { c: ConversationView; size: number }): ReactEl
   return <Avatar id={c.riverId} name={c.name} avatar={c.avatar} size={size} />;
 }
 
+function CallNote({ call }: { call: CallView }): ReactElement {
+  return (
+    <div className={`call-note ${!call.answered && call.direction === 'in' ? 'is-missed' : ''}`}>
+      <span>{callNote(call)}</span>
+      <time className="muted small" title={new Date(call.startedAt).toLocaleString()}>
+        {timeOf(call.startedAt)}
+      </time>
+    </div>
+  );
+}
+
 function DmMessage(props: {
   m: DirectMessageView;
   grouped: boolean;
@@ -715,6 +788,7 @@ function DmMessage(props: {
 
   return (
     <div
+      id={`dm-${m.id}`}
       className={`msg ${props.grouped ? 'msg--grouped' : ''} ${m.mine ? 'msg--mine' : ''} ${editing ? 'is-editing' : ''}`}
     >
       {m.replyTo && (
@@ -745,6 +819,11 @@ function DmMessage(props: {
               <time className="muted small" title={new Date(m.sentAt).toLocaleString()}>
                 {timeOf(m.sentAt)}
               </time>
+              {m.pinned && (
+                <span className="msg__pinned" title="Pinned" aria-label="Pinned">
+                  📌
+                </span>
+              )}
             </div>
           )}
           {editing ? (
@@ -810,6 +889,16 @@ function DmMessage(props: {
           <button className="msg__action" aria-label="Reply" onClick={() => useDm.setState({ replyTo: m })}>
             <ReplyIcon size={17} />
           </button>
+          {!m.deleted && (
+            <button
+              className="msg__action"
+              aria-label={m.pinned ? 'Unpin' : 'Pin'}
+              title={m.pinned ? 'Unpin' : 'Pin for everyone in this conversation'}
+              onClick={() => void dm.run({ a: 'pin', peer: c.riverId, id: m.id, pinned: !m.pinned })}
+            >
+              <span aria-hidden="true">📌</span>
+            </button>
+          )}
           {m.text && (
             <button
               className="msg__action"

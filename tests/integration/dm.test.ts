@@ -131,6 +131,18 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     expect(aliceView.find((m) => m.id === reply.id)).toMatchObject({ text: 'hey!', replyTo: sent.id });
     expect((await alice.dm.action({ a: 'conversations' }))[0]).toMatchObject({ name: 'Bob', unread: 1 });
 
+    // Pins reach the other person, and either of you can unpin (1.0.29).
+    await bob.dm.action({ a: 'pin', peer: alice.riverId, id: sent.id, pinned: true });
+    await alice.dm.sync();
+    expect(
+      (await alice.dm.action({ a: 'messages', peer: bob.riverId })).find((m) => m.id === sent.id)?.pinned,
+    ).toBe(true);
+    await alice.dm.action({ a: 'pin', peer: bob.riverId, id: sent.id, pinned: false });
+    await bob.dm.sync();
+    expect(
+      (await bob.dm.action({ a: 'messages', peer: alice.riverId })).find((m) => m.id === sent.id)?.pinned,
+    ).toBe(false);
+
     // Edit, react, delete for everyone.
     await alice.dm.action({ a: 'edit', peer: bob.riverId, id: sent.id, text: 'hi Bob!' });
     await alice.dm.action({ a: 'react', peer: bob.riverId, id: reply.id, emoji: '❤️', on: true });

@@ -5393,3 +5393,60 @@ input.switch:disabled {
   text-transform: none;
   letter-spacing: 0;
 }
+
+/* Community picture and banner (1.0.29) */
+.community__server-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.community__banner {
+  display: block;
+  width: 100%;
+  height: 84px;
+  object-fit: cover;
+}
+.community-art {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.community-art__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.community-art__icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 22px;
+  object-fit: cover;
+  background: var(--surface-hover);
+}
+.community-art__banner {
+  width: 240px;
+  height: 80px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--surface-hover);
+}
+.community-art__actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* Call notes in conversations (1.0.29) */
+.call-note {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.call-note.is-missed {
+  color: #da373c;
+}
