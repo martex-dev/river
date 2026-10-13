@@ -11,7 +11,7 @@ import { WebhooksPanel } from './Webhooks.tsx';
 import { useEffect, useState, type ReactElement } from 'react';
 import { PERMISSION_INFO, Permission } from '@river/protocol/permissions';
 import type { BanView } from '../../../../shared/community-actions.ts';
-import type { AuditView, CommunityView, RoleView } from '../../../../shared/ipc.ts';
+import type { AuditView, CommunityView, MemberView, RoleView } from '../../../../shared/ipc.ts';
 import { COMMUNITY_ICONS } from '../../../../shared/templates.ts';
 import { useCommunity, type CommunityTab } from '../store.ts';
 import { EmojiSettings } from './EmojiSettings.tsx';
@@ -640,6 +640,35 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
   const members = community.members
     .filter((m) => m.name.toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => b.rank - a.rank || a.name.localeCompare(b.name));
+  // Bulk role changes (1.0.37): pick members, then give or take a role from all of them.
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const mayManage = (m: MemberView): boolean =>
+    can(perms, Permission.MANAGE_ROLES) &&
+    (isOwner || (!m.owner && community.myRank > m.rank) || m.riverId === me);
+  const bulk = async (roleId: string, give: boolean): Promise<void> => {
+    const role = community.roles.find((r) => r.id === roleId);
+    const targets = community.members.filter(
+      (m) => picked.has(m.riverId) && mayManage(m) && m.roles.includes(roleId) !== give,
+    );
+    if (!role || targets.length === 0) return;
+    setBusy(true);
+    let done = 0;
+    for (const m of targets) {
+      const res = await window.river.community.action({
+        a: 'setMemberRoles',
+        communityId: community.id,
+        riverId: m.riverId,
+        roles: give ? [...m.roles, roleId] : m.roles.filter((id) => id !== roleId),
+      });
+      if (res.ok) done++;
+    }
+    setBusy(false);
+    setPicked(new Set());
+    const verb = give ? 'Gave' : 'Took';
+    const what = `${verb} ${role.name} ${give ? 'to' : 'from'} ${done} of ${targets.length} ${targets.length === 1 ? 'member' : 'members'}.`;
+    s.notify(what, done === targets.length ? 'info' : 'error');
+  };
   return (
     <div className="settings-page">
       <h2>Members — {community.members.length}</h2>
@@ -649,12 +678,61 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
+      {picked.size > 0 && assignable.length > 0 && (
+        <div className="bulk-bar" role="toolbar" aria-label="Change roles of selected members">
+          <strong>{picked.size} selected</strong>
+          <select
+            aria-label="Give a role to the selected members"
+            value=""
+            disabled={busy}
+            onChange={(e) => e.target.value && void bulk(e.target.value, true)}
+          >
+            <option value="">Give role…</option>
+            {assignable.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Remove a role from the selected members"
+            value=""
+            disabled={busy}
+            onChange={(e) => e.target.value && void bulk(e.target.value, false)}
+          >
+            <option value="">Remove role…</option>
+            {assignable.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+          <button className="btn btn--link btn--small" disabled={busy} onClick={() => setPicked(new Set())}>
+            Clear
+          </button>
+        </div>
+      )}
       <div className="member-table">
         {members.map((m) => {
           const outranks = isOwner || (!m.owner && community.myRank > m.rank);
           const canRoles = can(perms, Permission.MANAGE_ROLES) && (outranks || m.riverId === me);
           return (
             <div key={m.riverId} className="member-table__row">
+              {can(perms, Permission.MANAGE_ROLES) && assignable.length > 0 && (
+                <input
+                  type="checkbox"
+                  className="member-table__pick"
+                  aria-label={`Select ${m.name}`}
+                  disabled={!canRoles}
+                  checked={picked.has(m.riverId)}
+                  onChange={(e) => {
+                    const next = new Set(picked);
+                    if (e.target.checked) next.add(m.riverId);
+                    else next.delete(m.riverId);
+                    setPicked(next);
+                  }}
+                />
+              )}
               <Avatar id={m.riverId} name={m.name} avatar={m.avatar} size={32} status={presenceOf(m)} />
               <div className="member-table__who">
                 <strong style={m.color ? { color: hex(m.color) } : undefined}>
