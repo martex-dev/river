@@ -21,6 +21,7 @@ import type { HostStatus } from '../../shared/ipc.ts';
 import type { Logger } from '../logger.ts';
 import type { SettingsStore } from '../settings-store.ts';
 import { ensureCloudflared } from './cloudflared.ts';
+import { tailscaleFunnel } from './tailscale.ts';
 import { HostManager, type ServerHandle, type TunnelHandle } from './host-manager.ts';
 import {
   adoptLegacyData,
@@ -95,6 +96,7 @@ export class Hosting {
           onProgress,
         }),
       spawnTunnel: (binary, localUrl) => spawnTunnel(binary, localUrl, join(logs, 'tunnel.log'), this.root),
+      funnel: tailscaleFunnel({ platform: process.platform, env: process.env }),
       // Node's own fetch: requests to the local server must not pick up proxy settings.
       fetch: globalThis.fetch,
       log: deps.log,
@@ -218,6 +220,20 @@ export class Hosting {
   async openFolder(): Promise<void> {
     mkdirSync(this.root, { recursive: true });
     await shell.openPath(this.root);
+  }
+
+  /** Opens Tailscale's "allow Funnel" page (the link came from Tailscale on this PC, not the UI). */
+  async approveAddress(): Promise<boolean> {
+    const link = this.manager.approvalLink();
+    if (!link || !link.startsWith('https://login.tailscale.com/')) return false;
+    await shell.openExternal(link);
+    return true;
+  }
+
+  /** Looks for Tailscale again, e.g. right after it was installed or signed in. */
+  checkAddress(): HostStatus {
+    this.manager.checkPermanentAddress();
+    return this.status();
   }
 
   // --- operator (admin) -------------------------------------------------

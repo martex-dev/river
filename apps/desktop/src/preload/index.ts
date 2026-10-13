@@ -49,6 +49,8 @@ const api: RiverApi = {
     disable: () => ipcRenderer.invoke(IPC.hostDisable),
     backupNow: () => ipcRenderer.invoke(IPC.hostBackup),
     openFolder: () => ipcRenderer.invoke(IPC.hostOpenFolder),
+    approveAddress: () => ipcRenderer.invoke(IPC.hostApproveAddress),
+    checkAddress: () => ipcRenderer.invoke(IPC.hostCheckAddress),
     onStatus: (listener) => {
       const handler = (_event: unknown, status: HostStatus): void => listener(status);
       ipcRenderer.on(IPC.hostStatusChanged, handler);

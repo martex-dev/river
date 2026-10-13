@@ -6,6 +6,30 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**A permanent address for home hosting, and code signing on the way.**
+
+### Added
+
+- **A permanent, free address for communities hosted on your PC.** Install
+  Tailscale on the hosting PC and sign in (free): River serves your
+  communities through Tailscale Funnel at `https://<your-pc>.<tailnet>.ts.net`,
+  an address that never changes and does not drop every few minutes like the
+  Cloudflare quick tunnel. River switches over by itself, keeps members
+  connected through the quick tunnel while it does, and falls back to it if the
+  permanent address ever stops answering. Settings → Hosting walks you through
+  it (Download Tailscale, sign in, **Allow in Tailscale** once).
+- **Windows code signing, ready to switch on.** The release workflow can send
+  the Windows installer to SignPath Foundation's free open-source signing and
+  publish the signed file (with `latest.yml` and the block map rewritten so
+  updates keep working). It turns on once the project is accepted; until then
+  installers stay unsigned. Policy: CODE_SIGNING.md.
+
+### Changed
+
+- PRIVACY.md now lists everything the app talks to today (River server, calls,
+  ntfy.sh for moved servers, invite pages, link previews, updates, and the
+  tunnel provider on a hosting PC).
+
 ## [1.0.42] - 2026-10-13
 
 **A Discord-style layout.**

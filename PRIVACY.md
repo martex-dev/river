@@ -15,20 +15,33 @@ untraceable. This document lists, plainly, what is collected and why.
 - Message, file, post, story and call **content** never reaches the server in
   readable form.
 
-## What the River desktop app sends today (0.0.x)
+## Who the River desktop app talks to
 
-| Request         | Destination                                    | Contents                                                                                | Why                                            |
-| --------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Update check    | `github.com` / `objects.githubusercontent.com` | Standard HTTPS request (your IP address and a generic user agent are visible to GitHub) | Find new versions on your selected channel     |
-| Update download | same                                           | —                                                                                       | Download the installer and its signed manifest |
+River only connects to other computers for things you use. Nothing is sent to
+the River project itself.
+
+| Request                        | Destination                                     | Contents                                                                                        | Why                                                   |
+| ------------------------------ | ----------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Your River server              | The server you or your community use            | End-to-end encrypted messages, files and keys; your account ID. The server sees your IP address | Accounts, communities, delivering messages            |
+| Calls                          | The people in the call (directly, peer to peer) | Encrypted audio and video (DTLS-SRTP). Participants see each other's IP address                 | Voice and video                                       |
+| Following a moved server       | `ntfy.sh`                                       | Nothing about you: River reads the server's signed "this is my new address" note                | Reconnect when a home-hosted server changes address   |
+| Invite pages                   | `martex-dev.github.io` (GitHub Pages)           | Standard HTTPS request when you open an invite link in a browser                                | Show install steps and the "Open in River" button     |
+| Link previews (off by default) | The website you link to                         | Standard HTTPS request from your computer, only when you send a link                            | A title and description inside your encrypted message |
+| Update check and download      | `github.com` / `objects.githubusercontent.com`  | Standard HTTPS request (your IP address and a generic user agent are visible to GitHub)         | Find and download new versions                        |
+
+**Only on a PC that hosts a server:** River downloads `cloudflared` from GitHub
+once and opens a Cloudflare tunnel, or — if you installed and signed in to
+Tailscale — a Tailscale Funnel address. Members' connections pass through that
+provider in encrypted form; it sees their IP addresses, not their messages.
+Cloudflare's and Tailscale's own privacy policies apply to those connections.
 
 You can disable automatic update checks in **Settings → Updates**. GitHub's own
 privacy policy applies to these requests.
 
 ## What River keeps on your computer
 
-Your identity key pair, display name and settings, inside River's encrypted
-local database. Nothing about your identity is sent anywhere in 0.0.x.
+Your identity key pair, messages, display name and settings, inside River's
+encrypted local database.
 
 ## What a River server stores (from 0.1.0)
 

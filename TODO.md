@@ -161,6 +161,15 @@ Each line is one PR; each version ships when its section is done.
 - [x] Thin title bar with the connection status; solid layered colours
 - [x] e2e and accessibility checks updated for the new navigation
 
+### 1.0.43 — Permanent address and code signing
+
+- [x] Tailscale Funnel as the hosting address when Tailscale is signed in; quick tunnel as fallback
+- [x] Hosting panel steps (download, sign in, allow) and automatic switch-over
+- [x] SignPath Foundation signing in the release workflow (off until accepted), latest.yml/blockmap rewrite
+- [x] Code signing policy (CODE_SIGNING.md), README and invite page links, PRIVACY.md brought up to date
+- [ ] Maintainer: install Tailscale on the hosting PC and sign in (then River switches by itself)
+- [ ] Maintainer: apply to SignPath Foundation; add SIGNPATH_API_TOKEN and SIGNPATH_ORGANIZATION_ID when accepted
+
 ### After 1.0.x (not started; see ROADMAP Stage 2)
 
 - [ ] Bot accounts with a small client library (ADR 0004)

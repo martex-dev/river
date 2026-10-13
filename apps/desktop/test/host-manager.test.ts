@@ -339,3 +339,122 @@ describe('HostManager localServer (owner connects over loopback)', () => {
     await m.stop();
   });
 });
+
+/** A Tailscale on this PC, as the host manager sees it. */
+function fakeFunnel(initial: 'missing' | 'signed-out' | 'ready', opts: { approval?: string } = {}) {
+  const f = {
+    state: initial as 'missing' | 'signed-out' | 'ready',
+    opened: [] as string[],
+    closed: 0,
+    allow: null as (() => void) | null,
+    provider: {
+      check: async () =>
+        f.state === 'ready'
+          ? ({ state: 'ready', address: 'https://my-pc.tail1234.ts.net' } as const)
+          : ({ state: f.state } as const),
+      open: async (localUrl: string, onApproval: (url: string) => void) => {
+        f.opened.push(localUrl);
+        if (opts.approval) {
+          onApproval(opts.approval);
+          await new Promise<void>((resolve) => (f.allow = resolve));
+        }
+      },
+      close: async () => {
+        f.closed += 1;
+      },
+    },
+  };
+  return f;
+}
+
+describe('HostManager with a permanent address (Tailscale Funnel)', () => {
+  it('uses the permanent address when Tailscale is signed in, without a quick tunnel', async () => {
+    const funnel = fakeFunnel('ready');
+    routable.add('https://my-pc.tail1234.ts.net');
+    const m = manager({ funnel: funnel.provider });
+    m.start();
+    servers[0]!.say({ type: 'ready', port: 8790 });
+    await tick(1);
+    expect(funnel.opened).toEqual(['http://127.0.0.1:8790']);
+    expect(tunnels).toHaveLength(0);
+    expect(m.status()).toMatchObject({
+      state: 'online',
+      address: 'https://my-pc.tail1234.ts.net',
+      via: 'tailscale',
+      permanent: 'ready',
+    });
+    expect(announced.map((a) => a.url)).toEqual(['https://my-pc.tail1234.ts.net']);
+    await m.stop();
+    expect(funnel.closed).toBe(1);
+  });
+
+  it('falls back to the quick tunnel when Tailscale is not installed, and says so', async () => {
+    const funnel = fakeFunnel('missing');
+    const m = manager({ funnel: funnel.provider });
+    await bringOnline(m);
+    expect(m.status()).toMatchObject({ state: 'online', via: 'quick-tunnel', permanent: 'missing' });
+    expect(funnel.opened).toEqual([]);
+    await m.stop();
+  });
+
+  it('switches members to the permanent address once Tailscale is signed in', async () => {
+    const funnel = fakeFunnel('signed-out');
+    const m = manager({ funnel: funnel.provider });
+    await bringOnline(m);
+    expect(m.status()).toMatchObject({ via: 'quick-tunnel', permanent: 'signed-out' });
+    funnel.state = 'ready';
+    routable.add('https://my-pc.tail1234.ts.net');
+    m.checkPermanentAddress();
+    await tick(1);
+    expect(m.status()).toMatchObject({ address: 'https://my-pc.tail1234.ts.net', via: 'tailscale' });
+    expect(tunnels[0]!.killed).toBe(true);
+    expect(announced.map((a) => a.url)).toEqual([
+      'https://one-two.trycloudflare.com',
+      'https://my-pc.tail1234.ts.net',
+    ]);
+    await m.stop();
+  });
+
+  it('keeps members connected through the quick tunnel while Funnel waits to be allowed', async () => {
+    const funnel = fakeFunnel('ready', { approval: 'https://login.tailscale.com/f/funnel?node=abc' });
+    const m = manager({ funnel: funnel.provider });
+    m.start();
+    servers[0]!.say({ type: 'ready', port: 8790 });
+    await tick(1);
+    expect(m.status().needsApproval).toBe(true);
+    expect(m.approvalLink()).toBe('https://login.tailscale.com/f/funnel?node=abc');
+    routable.add('https://one-two.trycloudflare.com');
+    tunnels[0]!.print('https://one-two.trycloudflare.com');
+    await tick(8_000);
+    expect(m.status()).toMatchObject({ state: 'online', via: 'quick-tunnel' });
+
+    routable.add('https://my-pc.tail1234.ts.net');
+    funnel.allow!();
+    await tick(1);
+    expect(m.status()).toMatchObject({ address: 'https://my-pc.tail1234.ts.net', via: 'tailscale' });
+    expect(m.status().needsApproval).toBeUndefined();
+    expect(m.approvalLink()).toBeNull();
+    expect(tunnels[0]!.killed).toBe(true);
+    await m.stop();
+  });
+
+  it('goes back to a quick tunnel if the permanent address stops answering', async () => {
+    const funnel = fakeFunnel('ready');
+    routable.add('https://my-pc.tail1234.ts.net');
+    const m = manager({ funnel: funnel.provider });
+    m.start();
+    servers[0]!.say({ type: 'ready', port: 8790 });
+    await tick(1);
+    funnel.state = 'signed-out';
+    routable.delete('https://my-pc.tail1234.ts.net');
+    await tick(3 * 60_000);
+    // A quick tunnel opens so members get back in; the permanent address is no longer offered.
+    expect(tunnels).toHaveLength(1);
+    expect(m.status()).toMatchObject({ state: 'starting', address: null, permanent: 'signed-out' });
+    routable.add('https://five-six.trycloudflare.com');
+    tunnels[0]!.print('https://five-six.trycloudflare.com');
+    await tick(8_000);
+    expect(m.status()).toMatchObject({ state: 'online', via: 'quick-tunnel' });
+    await m.stop();
+  });
+});

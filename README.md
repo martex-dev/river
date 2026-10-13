@@ -91,6 +91,9 @@ macOS, are in [INSTALL.md](INSTALL.md).
 update is checked against River's Ed25519 release signature before it is installed.
 You can choose the Stable, Beta or Nightly channel in Settings → Updates.
 
+Windows code signing (free, through SignPath Foundation) is being set up; until it is active the
+installer is unsigned. See the [code signing policy](CODE_SIGNING.md).
+
 ## Host a community
 
 Run a River server on your own PC with a free tunnel:
@@ -118,6 +121,13 @@ npm run dev
 - [CRYPTOGRAPHY.md](CRYPTOGRAPHY.md) — keys, protocols and libraries
 - [BUILD.md](BUILD.md) — building installers
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to help
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org). Who builds, reviews and approves signed
+releases, and what River sends where: [CODE_SIGNING.md](CODE_SIGNING.md) and
+[PRIVACY.md](PRIVACY.md).
 
 ## License
 

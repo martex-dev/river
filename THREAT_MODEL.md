@@ -96,6 +96,13 @@ reach it through a Cloudflare quick tunnel run by `cloudflared`:
   is recorded).
 - Cloudflare terminates TLS for the tunnel and sees members' IP addresses and
   connection times; content stays end-to-end encrypted.
+- When Tailscale is installed and signed in on the hosting PC (1.0.43), River
+  serves the same loopback server through Tailscale Funnel instead. TLS ends
+  on the PC itself, so Tailscale's relays see members' IP addresses, timing and
+  volume but not even the transport-level content. River runs Tailscale's CLI
+  only from its install locations, accepts only a `*.ts.net` name as the
+  address, and opens the "allow Funnel" page only when Tailscale printed it and
+  it is on `login.tailscale.com`.
 - The address announcement endpoint accepts only the per-start secret River
   hands the server process, from loopback, without proxy headers (§5a).
 - Taking over an older River Host stops a process only after its command line

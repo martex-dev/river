@@ -93,10 +93,24 @@ If the tunnel stops answering for three minutes, or the PC restarts, the
 address changes; members' apps find the new one through the signed address
 note (see "River's home server").
 
-**A permanent address** (a named Cloudflare tunnel on your own domain, or a
-small server with a fixed name) removes the address changes. It needs a
-Cloudflare account and a domain, so it is the host's choice; River works the
-same either way. See [self-hosting.md](self-hosting.md).
+### A permanent address, free (1.0.43)
+
+Install [Tailscale](https://tailscale.com/download) on the hosting PC and sign
+in (Google, Microsoft or GitHub; the Personal plan is free). River notices by
+itself and serves your communities through **Tailscale Funnel** at
+`https://<your-pc>.<your-tailnet>.ts.net` — an address that never changes and
+does not drop every few minutes. The first time, Tailscale asks you once to
+allow Funnel: Settings → Hosting shows an **Allow in Tailscale** button.
+
+- Members install nothing extra; the address works like any website.
+- Encryption ends on your PC: Tailscale's relays only pass encrypted bytes.
+- Until Funnel answers (and whenever it stops answering), River keeps members
+  connected through the quick tunnel and moves them over automatically.
+- Funnel traffic has bandwidth limits Tailscale does not publish. River's text
+  and files are small; calls mostly go directly between members.
+
+Other permanent options (a named Cloudflare tunnel on your own domain, or a
+small server with a fixed name) still work; see [self-hosting.md](self-hosting.md).
 
 ## When your PC is off
 

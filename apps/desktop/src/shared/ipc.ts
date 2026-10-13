@@ -26,6 +26,8 @@ export const IPC = {
   hostDisable: 'river:host:disable',
   hostBackup: 'river:host:backup',
   hostOpenFolder: 'river:host:open-folder',
+  hostApproveAddress: 'river:host:approve-address',
+  hostCheckAddress: 'river:host:check-address',
   hostStatusChanged: 'river:host:status-changed',
   adminOverview: 'river:admin:overview',
   adminSuspend: 'river:admin:suspend',
@@ -101,6 +103,7 @@ export const EXTERNAL_LINKS = {
   privacy: 'https://github.com/martex-dev/river/blob/main/PRIVACY.md',
   threatModel: 'https://github.com/martex-dev/river/blob/main/THREAT_MODEL.md',
   license: 'https://github.com/martex-dev/river/blob/main/LICENSE',
+  tailscale: 'https://tailscale.com/download',
 } as const;
 export type ExternalLinkId = keyof typeof EXTERNAL_LINKS;
 
@@ -494,6 +497,10 @@ export interface RiverApi {
     backupNow(): Promise<Result<HostStatus>>;
     /** Opens the folder with the hosted data, backups and logs. */
     openFolder(): Promise<void>;
+    /** Opens Tailscale's page to allow River's permanent address. */
+    approveAddress(): Promise<boolean>;
+    /** Looks for Tailscale again (just installed or signed in). */
+    checkAddress(): Promise<HostStatus>;
     onStatus(listener: (status: HostStatus) => void): () => void;
   };
   /** Server operator tools; only work on the PC that hosts the server. */
@@ -622,6 +629,12 @@ export interface HostRuntime {
   /** 0–1 while the tunnel tool downloads (first time only). */
   progress?: number;
   message?: string;
+  /** How members reach the server: a permanent Tailscale address, or a quick tunnel that changes. */
+  via?: 'tailscale' | 'quick-tunnel';
+  /** What Tailscale on this PC can do, for the "permanent address" steps (1.0.43). */
+  permanent?: 'missing' | 'signed-out' | 'ready';
+  /** Tailscale is waiting for its owner to allow the permanent address. */
+  needsApproval?: boolean;
 }
 
 /** Hosting communities on this PC, as Settings and the start screen show it. */
