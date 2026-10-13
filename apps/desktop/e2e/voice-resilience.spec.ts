@@ -17,6 +17,10 @@ const OBSERVE_MS = Number(process.env.RIVER_CHAOS_OBSERVE_MS ?? 90_000);
 const ALL = ['Ana', 'Ben', 'Cleo', 'Dan', 'Eve', 'Finn', 'Gus', 'Hana', 'Ivo', 'Jade'];
 const PEOPLE = ALL.slice(0, Number(process.env.RIVER_CHAOS_PEOPLE ?? 4));
 
+// Several River windows at once are too much for shared CI machines (the windows time out
+// before the call even starts), so the stress test runs locally, or in CI with RIVER_CHAOS=1.
+test.skip(!!process.env.CI && !process.env.RIVER_CHAOS, 'stress test: run locally or set RIVER_CHAOS=1');
+
 let server: ChildProcess;
 let proxy: Server;
 let url = '';
