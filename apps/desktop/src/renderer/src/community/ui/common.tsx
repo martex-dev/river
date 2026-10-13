@@ -79,6 +79,43 @@ export function CustomStatus({ member }: { member: Pick<MemberView, 'customStatu
   );
 }
 
+/** The first frame of an animated avatar, for people who asked for less motion (1.0.34). */
+function StillPicture({ src, size }: { src: string; size: number }): ReactElement {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    let alive = true;
+    const bytes = Uint8Array.from(atob(src.slice(src.indexOf(',') + 1)), (c) => c.charCodeAt(0));
+    void createImageBitmap(new Blob([bytes], { type: 'image/gif' }))
+      .then((bitmap) => {
+        const canvas = ref.current;
+        if (alive && canvas) {
+          // Cover the square like object-fit: cover.
+          const side = Math.min(bitmap.width, bitmap.height);
+          canvas
+            .getContext('2d')
+            ?.drawImage(
+              bitmap,
+              (bitmap.width - side) / 2,
+              (bitmap.height - side) / 2,
+              side,
+              side,
+              0,
+              0,
+              canvas.width,
+              canvas.height,
+            );
+        }
+        bitmap.close();
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [src]);
+  const px = Math.round(size * (window.devicePixelRatio || 1));
+  return <canvas ref={ref} width={px} height={px} aria-hidden="true" />;
+}
+
 export function Avatar(props: {
   id: string;
   name: string;
@@ -94,7 +131,11 @@ export function Avatar(props: {
       style={{ width: size, height: size, fontSize: Math.max(10, size * 0.38) }}
     >
       {props.avatar ? (
-        <img src={props.avatar} alt="" draggable={false} />
+        props.avatar.startsWith('data:image/gif') && document.documentElement.dataset.motion === 'reduced' ? (
+          <StillPicture src={props.avatar} size={size} />
+        ) : (
+          <img src={props.avatar} alt="" draggable={false} />
+        )
       ) : (
         <span className="avatar__fallback" style={{ background: `hsl(${hueOf(props.id)} 55% 42%)` }}>
           {initials(props.name)}

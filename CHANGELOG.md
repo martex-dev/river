@@ -6,6 +6,12 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (1.0.34)
+
+- **Animated avatars:** a small GIF (up to about 44 KB) stays animated as
+  your picture, everywhere and per community; larger ones are cropped to a
+  still as before. With reduced motion on, you see its first frame.
+
 ### Added (1.0.33)
 
 - **Priority speaker:** a new role permission. People who have it get a 📣
