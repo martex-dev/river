@@ -6,6 +6,8 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.43] - 2026-10-13
+
 **A permanent address for home hosting, and code signing on the way.**
 
 ### Added
@@ -1373,7 +1375,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.42...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.43...HEAD
+[1.0.43]: https://github.com/martex-dev/river/compare/v1.0.42...v1.0.43
 [1.0.42]: https://github.com/martex-dev/river/compare/v1.0.41...v1.0.42
 [1.0.41]: https://github.com/martex-dev/river/compare/v1.0.40...v1.0.41
 [1.0.40]: https://github.com/martex-dev/river/compare/v1.0.39...v1.0.40
