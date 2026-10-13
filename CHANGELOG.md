@@ -6,7 +6,11 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-### Added (1.0.32)
+## [1.0.32] - 2026-10-13
+
+**Webhooks without giving up encryption: services post into channels, and the server still cannot read a word.**
+
+### Added
 
 - **Encrypted incoming webhooks** (Community settings → Webhooks): let a
   script or service post into a text channel. The poster seals each post
