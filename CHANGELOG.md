@@ -6,7 +6,11 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-### Added (1.0.31)
+## [1.0.31] - 2026-10-13
+
+**Know your invites: see who made each link and who joined with it, and revoke it.**
+
+### Added
 
 - **Invite tracking:** Community settings → Invites lists each active link,
   who made it, how many uses are left, when it expires and who joined with
