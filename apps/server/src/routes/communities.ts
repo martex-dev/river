@@ -2102,7 +2102,17 @@ export async function registerCommunityRoutes(
   /** Outside services post here with the webhook's token; the body is already sealed. */
   app.post<{ Params: { id: string } }>(
     `${API_PREFIX}/webhooks/:id`,
-    { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+    {
+      config: {
+        // Per webhook, not per IP: a leaked address used from many machines still cannot flood a channel.
+        rateLimit: {
+          max: 30,
+          timeWindow: '1 minute',
+          keyGenerator: (req: FastifyRequest) =>
+            `webhook:${String((req.params as { id?: unknown }).id ?? '').slice(0, 64)}`,
+        },
+      },
+    },
     async (request, reply) => {
       const unauthorized = new HttpError(401, 'unauthorized', 'Unknown webhook or wrong token');
       const header = request.headers.authorization ?? '';
