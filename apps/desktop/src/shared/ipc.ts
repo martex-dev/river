@@ -48,6 +48,7 @@ export const IPC = {
   accountDelete: 'river:account:delete',
   accountExport: 'river:account:export',
   accountRedeemSignup: 'river:account:redeem-signup',
+  accountStartOver: 'river:account:start-over',
   usersLookup: 'river:users:lookup',
   accountStatusChanged: 'river:account:status-changed',
   communityList: 'river:community:list',
@@ -176,6 +177,11 @@ export type AccountStatus =
       devices: number;
       listVersion: number;
       connection: 'connecting' | 'online' | 'offline' | 'error';
+      /**
+       * The server answers but does not know this account any more (removed by its owner, or
+       * the device was replaced): signing in cannot work until the account is set up again.
+       */
+      missing?: boolean;
       /** What people find you by (1.0.13); null until you choose one. */
       username: string | null;
       message?: string;
@@ -511,6 +517,8 @@ export interface RiverApi {
     setUsername(username: string): Promise<Result<AccountStatus>>;
     /** Use an operator's sign-up link (`…/add#s=…`) to create this account. */
     redeemSignup(link: string): Promise<Result<AccountStatus>>;
+    /** The server no longer knows this account: forget it here and create a new one. */
+    startOver(): Promise<Result<AccountStatus>>;
     /** Delete your account from its server for good (1.0.18). */
     deleteAccount(): Promise<Result<null>>;
     /** Save a readable copy of your data (1.0.23); false when the save dialog was cancelled. */

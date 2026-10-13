@@ -358,6 +358,16 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.accountSetUsername, (_e, username) =>
     result(() => deps.account.setUsername(z.string().max(64).parse(username))),
   );
+  handle(IPC.accountStartOver, () =>
+    result(async () => {
+      const previous = deps.account.forgetMissing();
+      if (deps.homeAccount.enabled()) await deps.homeAccount.ensure();
+      else await deps.account.register(previous);
+      deps.community.stop();
+      deps.community.ensureSocket();
+      return deps.account.status();
+    }),
+  );
   handle(IPC.accountRedeemSignup, (_e, link) =>
     result(async () => {
       const parsed = parseSignup(z.string().max(2048).parse(link));

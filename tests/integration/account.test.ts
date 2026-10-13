@@ -26,10 +26,13 @@ let local: LocalDatabase;
 let server: FastifyInstance;
 let serverDb: RiverDatabase;
 let reachable = true;
+/** Requests that reached the server (to check River stops retrying when it cannot help). */
+let requests = 0;
 
 /** fetch() that delivers requests to the in-process server via Fastify inject. */
 const injectFetch: typeof fetch = async (input, init) => {
   if (!reachable) throw new TypeError('fetch failed: ECONNREFUSED');
+  requests += 1;
   const url = new URL(String(input));
   const res = await server.inject({
     method: (init?.method ?? 'GET') as 'GET' | 'POST',
@@ -187,6 +190,29 @@ describe('desktop ↔ server accounts', () => {
     address = null;
     const after = account.status();
     expect(after.state === 'registered' && after.shareUrl).toBe(SERVER);
+  });
+
+  it('notices when the server no longer knows the account, stops retrying, and can start over', async () => {
+    const c = client();
+    const me = c.identity.create('');
+    await c.account.register(SERVER);
+    // The server's owner removed the account (Admin → Remove).
+    await serverDb.db.deleteFrom('devices').execute();
+    await serverDb.db.deleteFrom('accounts').execute();
+
+    const status = await c.account.connect();
+    expect(status).toMatchObject({ state: 'registered', connection: 'error', missing: true });
+    // No more pointless sign-in attempts while it is missing.
+    const before = requests;
+    await c.account.connect();
+    expect(requests).toBe(before);
+
+    // Start over: same identity, a new account on the same server.
+    expect(c.account.forgetMissing()).toBe(SERVER);
+    expect(c.account.status().state).toBe('none');
+    const again = await c.account.register(SERVER);
+    expect(again).toMatchObject({ state: 'registered', riverId: me.riverId, connection: 'online' });
+    expect(again.state === 'registered' && again.missing).toBeFalsy();
   });
 
   it('refuses a second account on the same device', async () => {
