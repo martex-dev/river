@@ -6,7 +6,11 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-### Added (1.0.28)
+## [1.0.28] - 2026-10-13
+
+**Safer communities: a word filter and warnings before suspicious links.**
+
+### Added
 
 - **Suspicious link warnings:** before opening a link, River warns about
   look-alike characters, raw IP addresses, short links that hide where they
