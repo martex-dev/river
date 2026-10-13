@@ -6,7 +6,11 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-### Added (1.0.35)
+## [1.0.35] - 2026-10-13
+
+**Quicker hands: push-to-talk clicks and right-click menus for categories and roles.**
+
+### Added
 
 - **Push-to-talk clicks:** a tiny sound when you start and stop talking
   with push-to-talk (Settings → Notifications → Voice channels).
