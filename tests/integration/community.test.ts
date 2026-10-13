@@ -19,6 +19,7 @@ import { CLIENT_MIGRATIONS } from '../../apps/desktop/src/main/storage/migration
 import { buildApp } from '../../apps/server/src/app.ts';
 import { loadConfig } from '../../apps/server/src/config.ts';
 import { migrateToLatest, openDatabase, type RiverDatabase } from '../../apps/server/src/db/database.ts';
+import { HOME_LINK_BASE } from '../../apps/desktop/src/shared/home-server.ts';
 
 const testBlobDir = (): string => join(tmpdir(), `river-blobs-${Math.random().toString(36).slice(2)}`);
 
@@ -769,6 +770,19 @@ describe('desktop ↔ server communities', () => {
     expect(bans).toEqual([expect.objectContaining({ riverId: bob.riverId, name: 'Bobby' })]);
     const again = await alice.community.invite(created.id);
     await expect(bob.community.join(again, async () => undefined)).rejects.toThrow(/banned/);
+  });
+
+  it('a permanent link (the River link page, not a server address) joins your own server', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('The Crew');
+    const link = await alice.community.invite(created.id);
+    const permanent = link.replace(SERVER, HOME_LINK_BASE);
+    expect(permanent.startsWith('https://martex-dev.github.io/river/join#c=')).toBe(true);
+    const joined = await bob.community.join(permanent, async () => {
+      throw new Error('Bob already has an account; no new one should be made');
+    });
+    expect(joined.id).toBe(created.id);
   });
 
   it('an invite naming an old address of your own server still works', async () => {

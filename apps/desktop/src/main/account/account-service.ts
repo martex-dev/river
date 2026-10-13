@@ -19,6 +19,7 @@ import {
 } from '@river/protocol';
 import type { AccountStatus } from '../../shared/ipc.ts';
 import { serverUrlSchema } from '../../shared/settings.ts';
+import { HOME_LINK_BASE } from '../../shared/home-server.ts';
 import { ApiError, NetworkError, type RequestJson } from '../http.ts';
 import type { IdentityService } from '../identity/identity-service.ts';
 import type { Logger } from '../logger.ts';
@@ -46,6 +47,8 @@ export interface AccountServiceDeps {
   now?: () => Date;
   /** This PC's public server address while it hosts the server (for links people can open). */
   publicAddress?: () => string | null;
+  /** The account is on River's home server: shared links use its permanent address. */
+  homeLinks?: () => boolean;
 }
 
 const LOOPBACK = /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
@@ -76,7 +79,9 @@ export class AccountService {
       state: 'registered',
       server: new URL(row.server_url).host,
       serverUrl: row.server_url,
-      shareUrl: (LOOPBACK.test(row.server_url) && this.deps.publicAddress?.()) || row.server_url,
+      shareUrl: this.deps.homeLinks?.()
+        ? HOME_LINK_BASE
+        : (LOOPBACK.test(row.server_url) && this.deps.publicAddress?.()) || row.server_url,
       riverId: row.river_id,
       username: row.username,
       deviceId: row.device_id,

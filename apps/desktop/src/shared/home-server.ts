@@ -15,3 +15,17 @@ export const HOME_SERVER = {
   relay: 'https://ntfy.sh',
   topic: 'river-foytAMI1vujBjUAlau5e0YpN',
 } as const;
+
+/**
+ * Where links to River's home server point: a page that never moves (GitHub
+ * Pages, built from site/), unlike the home server's own address, which changes
+ * when its host PC restarts. An invite like `${HOME_LINK_BASE}/join#c=…&k=…`
+ * opens a page to get River and "Open in River"; the app knows such a link means
+ * River's server and finds it through the signed address notes.
+ */
+export const HOME_LINK_BASE = 'https://martex-dev.github.io/river';
+
+/** The server part of a link is River's permanent link address (not a server itself). */
+export function isHomeLink(serverUrl: string): boolean {
+  return serverUrl.replace(/\/+$/, '') === HOME_LINK_BASE;
+}

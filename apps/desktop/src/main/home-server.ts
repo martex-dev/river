@@ -93,6 +93,14 @@ export class HomeAccount {
     return this.deps.enabled;
   }
 
+  /** River's server's current address (verified), for links made with its permanent address. */
+  locate(): Promise<string> {
+    if (!this.deps.enabled) {
+      throw new UserFacingError('This development build does not use River’s server.');
+    }
+    return locateHomeServer(this.deps);
+  }
+
   /** The account is being set up but the server is not reachable yet. */
   isWaiting(): boolean {
     return this.waiting;

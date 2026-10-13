@@ -37,6 +37,7 @@ import type { HomeAccount } from './home-server.ts';
 import { isAllowedAppUrl } from './security.ts';
 import { friendlyError } from './errors.ts';
 import { parseSignup } from '../shared/invite-link.ts';
+import { isHomeLink } from '../shared/home-server.ts';
 import { checkServer } from './server-check.ts';
 import type { SettingsStore } from './settings-store.ts';
 import { MIN_PASSPHRASE_LENGTH, WrongPassphraseError } from './storage/key-file.ts';
@@ -75,7 +76,7 @@ export interface IpcDeps {
   /** Screen chosen in River's picker for the next screen share. */
   selectScreen(sourceId: string): void;
   /** Creates the account on River's home server by itself. */
-  homeAccount: Pick<HomeAccount, 'ensure' | 'kick' | 'isWaiting' | 'enabled'>;
+  homeAccount: Pick<HomeAccount, 'ensure' | 'kick' | 'isWaiting' | 'enabled' | 'locate'>;
   /** Settings → System → Connection check. */
   diagnostics(): Promise<DiagnosticCheck[]>;
   openLogs(): Promise<void>;
@@ -240,6 +241,11 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.communityJoin, (_e, link) =>
     result(() =>
       deps.community.join(link, async (serverUrl) => {
+        // A permanent link names River's server, wherever it is today.
+        if (isHomeLink(serverUrl)) {
+          await deps.homeAccount.ensure();
+          return;
+        }
         try {
           await deps.account.register(serverUrl);
           deps.settings.update({ server: { url: serverUrl } });
@@ -376,8 +382,9 @@ export function registerIpc(deps: IpcDeps): void {
     result(async () => {
       const parsed = parseSignup(z.string().max(2048).parse(link));
       if (!parsed) throw new UserFacingError('That is not a valid River sign-up link.');
-      const status = await deps.account.register(parsed.serverUrl, parsed.code);
-      deps.settings.update({ server: { url: parsed.serverUrl } });
+      const server = isHomeLink(parsed.serverUrl) ? await deps.homeAccount.locate() : parsed.serverUrl;
+      const status = await deps.account.register(server, parsed.code);
+      deps.settings.update({ server: { url: server } });
       return status;
     }),
   );

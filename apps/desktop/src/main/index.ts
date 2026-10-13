@@ -177,12 +177,14 @@ async function start(): Promise<void> {
   const identity = new IdentityService(() => storage.db());
   // Set once hosting exists (below); the account asks it for links people can open.
   let publicAddress: () => string | null = () => null;
+  let homeLinks: () => boolean = () => false;
   const account = new AccountService({
     db: () => storage.db(),
     identity,
     requestJson: createRequestJson((input, init) => net.fetch(input as string, init)),
     log,
     publicAddress: () => publicAddress(),
+    homeLinks: () => homeLinks(),
   });
   const locator = new ServerLocator({
     db: () => storage.db(),
@@ -237,6 +239,11 @@ async function start(): Promise<void> {
     },
   });
   publicAddress = () => hosting.manager.status().address;
+  // Installed builds on River's home server (as a member, or as the PC that hosts it).
+  homeLinks = () =>
+    homeAccount.enabled() &&
+    (locator.pinnedId() === HOME_SERVER.instanceId ||
+      hosting.manager.localServer()?.instanceId === HOME_SERVER.instanceId);
   let lastPublic: string | null = null;
   hosting.manager.onStatus((s) => {
     if (s.address === lastPublic) return;
