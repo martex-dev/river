@@ -3,6 +3,11 @@
  * got, shown once. Fresh installs see nothing; full notes are in the release.
  */
 export const HIGHLIGHTS: Record<string, string[]> = {
+  '1.0.42': [
+    'A Discord-style layout: Home and your communities in one rail on the left',
+    'Home has your friends, direct messages, Social, Calls and Files in one sidebar',
+    'Settings opens over what you are doing, with everything in one list — Esc closes it',
+  ],
   '1.0.41': [
     'Voice calls keep everyone in when the connection blips — tested with 10 people',
     'Invite links never go stale, and clicking one opens River ("Open in River")',

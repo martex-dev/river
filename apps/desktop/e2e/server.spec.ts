@@ -4,7 +4,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { launchRiver } from './launch.ts';
+import { launchRiver, openSettings } from './launch.ts';
 
 // Desktop ↔ server integration: the real River server process and the real desktop app.
 let server: ChildProcess;
@@ -70,7 +70,7 @@ test.afterAll(async () => {
 });
 
 test('connects to a running River server from Settings → Server', async () => {
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await openSettings(page);
   await page.getByRole('button', { name: 'Account', exact: true }).click();
   const input = page.getByPlaceholder('https://river.example.org');
 
@@ -89,13 +89,13 @@ test('connects to a running River server from Settings → Server', async () => 
     .toBe(`http://127.0.0.1:${port}`);
   if (process.env.RIVER_SCREENSHOTS) await page.screenshot({ path: 'test-results/server.png' });
 
-  await page.getByRole('button', { name: 'Security', exact: true }).click();
+  await openSettings(page, 'Security');
   const row = page.locator('.board__row', { hasText: 'Server message access' });
   await expect(row.locator('.board__value')).toContainText(`127.0.0.1:${port}`);
 });
 
 test('reports an unreachable server', async () => {
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await openSettings(page);
   await page.getByRole('button', { name: 'Account', exact: true }).click();
   await page.getByPlaceholder('https://river.example.org').fill(`http://127.0.0.1:${await freePort()}`);
   await page.getByRole('button', { name: 'Test connection' }).click();
@@ -103,7 +103,7 @@ test('reports an unreachable server', async () => {
 });
 
 test('creates an account on the server and reconnects after a restart', async () => {
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await openSettings(page);
   await page.getByRole('button', { name: 'Account', exact: true }).click();
   await page.getByPlaceholder('https://river.example.org').fill(`http://127.0.0.1:${port}`);
   const save = page.getByRole('button', { name: 'Save', exact: true });
@@ -116,7 +116,7 @@ test('creates an account on the server and reconnects after a restart', async ()
   await expect(page.locator('.topbar__pill')).toContainText('Online');
   if (process.env.RIVER_SCREENSHOTS) await page.screenshot({ path: 'test-results/account.png' });
 
-  await page.getByRole('button', { name: 'Security', exact: true }).click();
+  await openSettings(page, 'Security');
   await expect(page.locator('.board__row', { hasText: 'Devices' }).locator('.board__value')).toContainText(
     'signed list v1',
   );

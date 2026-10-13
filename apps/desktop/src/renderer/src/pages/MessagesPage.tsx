@@ -4,7 +4,7 @@ import { NotifyMenuSection } from '../community/ui/NotifyMenu.tsx';
 import { ForwardDialog } from '../community/ui/Forward.tsx';
 import { useDraft } from '../community/drafts.ts';
 import { clockTime } from '../time.ts';
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import type { ConversationView, DirectMessageView } from '../../../shared/dm.ts';
 import { play } from '../community/sound.ts';
 import { useCommunity } from '../community/store.ts';
@@ -88,7 +88,6 @@ export function MessagesPage(): ReactElement {
   const conversation = dm.conversations.find((c) => c.riverId === dm.selected) ?? null;
   return (
     <div className="dms">
-      <ConversationList onNew={() => setComposing(true)} />
       <section className="dms__main">
         {conversation ? (
           <Conversation
@@ -116,10 +115,10 @@ export function MessagesPage(): ReactElement {
   );
 }
 
-function ConversationList({ onNew }: { onNew(): void }): ReactElement {
+/** Search, then your direct messages: the Home sidebar's list (1.0.42), as in Discord. */
+export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNode }): ReactElement {
   const dm = useDm();
   const [query, setQuery] = useState('');
-  const [copied, setCopied] = useState(false);
   const filtered = dm.conversations.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()));
   const [results, setFound] = useState<DirectMessageView[]>([]);
   const found = query.trim().length >= 2 ? results : [];
@@ -134,81 +133,75 @@ function ConversationList({ onNew }: { onNew(): void }): ReactElement {
   const requests = filtered.filter((c) => c.state === 'request');
   const chats = filtered.filter((c) => c.state !== 'request');
   return (
-    <aside className="dms__list" aria-label="Conversations">
-      <div className="dms__list-head">
-        <strong>Messages</strong>
-        <button className="icon-btn" aria-label="New message" title="New message" onClick={onNew}>
-          <PlusIcon size={18} />
-        </button>
+    <div className="dms__list">
+      <div className="home-sidebar__search">
+        <input
+          className="search dms__search"
+          placeholder="Find a conversation"
+          aria-label="Find a conversation or message"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
       </div>
-      <input
-        className="search dms__search"
-        placeholder="Search"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
-      {found.length > 0 && (
-        <>
-          <div className="channel-group__head">
-            <span>Messages — {found.length}</span>
-          </div>
-          {found.map((m) => {
-            const conv = dm.conversations.find((c) => c.riverId === m.peer);
-            return (
-              <button key={m.id} className="dm-row" onClick={() => dm.select(m.peer)}>
-                <span className="dm-row__text">
-                  <span className="dm-row__top">
-                    <strong>{conv?.name ?? m.senderName}</strong>
-                    <time className="muted small">{shortWhen(m.sentAt)}</time>
+      <div className="home-sidebar__scroll" aria-label="Conversations">
+        {nav}
+        {found.length > 0 && (
+          <>
+            <div className="channel-group__head">
+              <span>Messages — {found.length}</span>
+            </div>
+            {found.map((m) => {
+              const conv = dm.conversations.find((c) => c.riverId === m.peer);
+              return (
+                <button key={m.id} className="dm-row" onClick={() => openDm(m.peer)}>
+                  <span className="dm-row__text">
+                    <span className="dm-row__top">
+                      <strong>{conv?.name ?? m.senderName}</strong>
+                      <time className="muted small">{shortWhen(m.sentAt)}</time>
+                    </span>
+                    <span className="dm-row__last muted small">
+                      {m.mine ? 'You: ' : conv?.kind === 'group' ? `${m.senderName}: ` : ''}
+                      {m.text ? (
+                        <Highlight text={m.text} query={query} max={120} />
+                      ) : (
+                        m.attachments.map((a) => a.name).join(', ')
+                      )}
+                    </span>
                   </span>
-                  <span className="dm-row__last muted small">
-                    {m.mine ? 'You: ' : conv?.kind === 'group' ? `${m.senderName}: ` : ''}
-                    {m.text ? (
-                      <Highlight text={m.text} query={query} max={120} />
-                    ) : (
-                      m.attachments.map((a) => a.name).join(', ')
-                    )}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </>
-      )}
-      {requests.length > 0 && (
-        <>
-          <div className="channel-group__head">
-            <span>Message requests — {requests.length}</span>
-          </div>
-          {requests.map((c) => (
-            <ConversationRow key={c.riverId} c={c} />
-          ))}
-        </>
-      )}
-      <div className="channel-group__head">
-        <span>Direct messages</span>
-      </div>
-      {chats.length === 0 && <p className="muted small dms__hint">No conversations yet.</p>}
-      {chats.map((c) => (
-        <ConversationRow key={c.riverId} c={c} />
-      ))}
-      {dm.myId && (
-        <div className="dms__me">
-          <span className="muted small">Your River ID — share it so people can message you</span>
-          <button
-            className="dms__id"
-            title="Copy your River ID"
-            onClick={() =>
-              void navigator.clipboard.writeText(dm.myId!).then(() => (play('success'), setCopied(true)))
-            }
-          >
-            <code>{dm.myId}</code>
-            <span>{copied ? 'Copied ✓' : 'Copy'}</span>
+                </button>
+              );
+            })}
+          </>
+        )}
+        {requests.length > 0 && (
+          <>
+            <div className="channel-group__head">
+              <span>Message requests — {requests.length}</span>
+            </div>
+            {requests.map((c) => (
+              <ConversationRow key={c.riverId} c={c} />
+            ))}
+          </>
+        )}
+        <div className="channel-group__head home-sidebar__dm-head">
+          <span>Direct messages</span>
+          <button className="icon-btn" aria-label="New message" title="New message" onClick={onNew}>
+            <PlusIcon size={16} />
           </button>
         </div>
-      )}
-    </aside>
+        {chats.length === 0 && <p className="muted small dms__hint">No conversations yet.</p>}
+        {chats.map((c) => (
+          <ConversationRow key={c.riverId} c={c} />
+        ))}
+      </div>
+    </div>
   );
+}
+
+/** Opens a conversation from anywhere in the Home sidebar. */
+function openDm(peer: string): void {
+  useDm.getState().select(peer);
+  useRiver.getState().navigate('messages');
 }
 
 function ConversationRow({ c }: { c: ConversationView }): ReactElement {
@@ -218,9 +211,10 @@ function ConversationRow({ c }: { c: ConversationView }): ReactElement {
   return (
     <button
       className={`dm-row ${dm.selected === c.riverId ? 'is-active' : ''} ${c.unread ? 'is-unread' : ''} ${c.state === 'blocked' ? 'is-blocked' : ''}`}
-      onClick={() => dm.select(c.riverId)}
+      aria-current={dm.selected === c.riverId ? 'page' : undefined}
+      onClick={() => openDm(c.riverId)}
     >
-      {c.kind === 'group' ? <GroupAvatar c={c} size={36} /> : <ConvAvatar c={c} size={36} />}
+      {c.kind === 'group' ? <GroupAvatar c={c} size={32} /> : <ConvAvatar c={c} size={32} />}
       <span className="dm-row__text">
         <span className="dm-row__top">
           <strong>{c.name}</strong>
@@ -1158,7 +1152,7 @@ function DmComposer(props: {
   );
 }
 
-function NewMessage({ onClose }: { onClose(): void }): ReactElement {
+export function NewMessage({ onClose }: { onClose(): void }): ReactElement {
   const dm = useDm();
   const communities = useCommunity((s) => s.communities);
   const myId = dm.myId;

@@ -635,11 +635,11 @@ function createWindow(): BrowserWindow {
     minHeight: 620,
     show: false,
     title: 'River',
-    backgroundColor: '#05070d',
+    backgroundColor: '#080b11',
     titleBarStyle: 'hidden',
     ...(isMac
-      ? { trafficLightPosition: { x: 18, y: 18 } }
-      : { titleBarOverlay: { color: '#00000000', symbolColor: '#9aa7c7', height: 44 } }),
+      ? { trafficLightPosition: { x: 14, y: 9 } }
+      : { titleBarOverlay: { color: '#080b11', symbolColor: '#9aa7c7', height: 32 } }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
       partition: UI_PARTITION,

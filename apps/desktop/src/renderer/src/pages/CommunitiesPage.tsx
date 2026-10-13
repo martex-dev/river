@@ -3,7 +3,7 @@ import { PickRolesDialog, RulesGate } from '../community/ui/Onboarding.tsx';
 import { ForumChannel } from '../community/ui/Forum.tsx';
 import { matches, withDefaults } from '../../../shared/keybinds.ts';
 import { ReportDialog } from '../community/ui/Reports.tsx';
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { Celebrations } from '../community/fx.tsx';
 import { ConnectionBanner, NetworkWatcher } from '../community/ui/ConnectionBanner.tsx';
 import { AddFriendDialog, JoinInviteDialog, PasteToJoin } from '../community/ui/PasteToJoin.tsx';
@@ -24,7 +24,6 @@ import {
   InviteDialog,
 } from '../community/ui/Dialogs.tsx';
 import { MemberList } from '../community/ui/Members.tsx';
-import { UserSettings } from '../community/ui/UserSettings.tsx';
 import { VoiceChannel } from '../community/ui/Voice.tsx';
 import { MenuItem, Popover, can } from '../community/ui/common.tsx';
 import { NotifyMenuSection } from '../community/ui/NotifyMenu.tsx';
@@ -39,8 +38,9 @@ export function CommunitiesPage(): ReactElement {
   const s = useCommunity();
   const identity = useRiver((r) => r.identity);
   const account = useRiver((r) => r.account);
-  const [adding, setAdding] = useState(false);
-  const [serverMenu, setServerMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const communityStart = useRiver((r) => r.communityStart);
+  const setCommunityStart = useRiver((r) => r.setCommunityStart);
+
   /** Age-restricted channels confirmed in this session (1.0.27). */
   const [ageOk, setAgeOk] = useState<string[]>([]);
   const me = identity?.riverId ?? '';
@@ -68,35 +68,18 @@ export function CommunitiesPage(): ReactElement {
   const channel = community?.channels.find((ch) => ch.id === s.selectedChannel) ?? null;
 
   if (!s.loaded) return <div className="page muted">Loading…</div>;
-  if (s.communities.length === 0 || adding) {
+  if (s.communities.length === 0 || communityStart) {
     return (
-      <>
-        <StartScreen
-          onDone={() => setAdding(false)}
-          canCancel={s.communities.length > 0}
-          hasAccount={account.state === 'registered'}
-        />
-      </>
+      <StartScreen
+        onDone={() => setCommunityStart(false)}
+        canCancel={s.communities.length > 0}
+        hasAccount={account.state === 'registered'}
+      />
     );
   }
 
   return (
     <div className={`community ${s.showMembers && channel?.kind === 'text' ? '' : 'community--no-members'}`}>
-      <CommunityRail
-        activeId={community?.id ?? null}
-        onAdd={() => setAdding(true)}
-        onMenu={(id, x, y) => setServerMenu({ id, x, y })}
-      />
-      {serverMenu && (
-        <CommunityMenu
-          community={s.communities.find((c) => c.id === serverMenu.id)}
-          me={me}
-          x={serverMenu.x}
-          y={serverMenu.y}
-          onClose={() => setServerMenu(null)}
-        />
-      )}
-
       {community && <ChannelSidebar community={community} me={me} />}
 
       <section className="community__main">
@@ -161,8 +144,6 @@ function Modals({ me }: { me: string }): ReactElement | null {
       return <ConfirmDialog modal={modal} />;
     case 'ban':
       return <BanDialog modal={modal} />;
-    case 'user-settings':
-      return <UserSettings tab={modal.tab} />;
     case 'events': {
       const c = communityById(modal.communityId);
       return c ? <EventsDialog community={c} me={me} /> : null;
@@ -342,5 +323,40 @@ function CommunityMenu(props: {
         </MenuItem>
       )}
     </Popover>
+  );
+}
+
+/**
+ * The rail down the left of River, as in Discord: Home (friends and direct
+ * messages), your communities, "create or join", and — on the PC that hosts
+ * the server — Admin.
+ */
+export function ServerRail(props: { home: ReactNode; bottom?: ReactNode }): ReactElement {
+  const s = useCommunity();
+  const section = useRiver((r) => r.section);
+  const communityStart = useRiver((r) => r.communityStart);
+  const setCommunityStart = useRiver((r) => r.setCommunityStart);
+  const me = useRiver((r) => r.identity?.riverId ?? '');
+  const [serverMenu, setServerMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const inCommunity = section === 'communities' && !communityStart;
+  return (
+    <>
+      <CommunityRail
+        activeId={inCommunity ? s.selectedCommunity : null}
+        onAdd={() => setCommunityStart(true)}
+        onMenu={(id, x, y) => setServerMenu({ id, x, y })}
+        top={props.home}
+        {...(props.bottom ? { bottom: props.bottom } : {})}
+      />
+      {serverMenu && (
+        <CommunityMenu
+          community={s.communities.find((c) => c.id === serverMenu.id)}
+          me={me}
+          x={serverMenu.x}
+          y={serverMenu.y}
+          onClose={() => setServerMenu(null)}
+        />
+      )}
+    </>
   );
 }

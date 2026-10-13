@@ -153,6 +153,14 @@ Each line is one PR; each version ships when its section is done.
 - [x] Invite page with downloads and "Open in River" (river:// links)
 - [x] Permanent link address (GitHub Pages) and version-less installer downloads
 
+### 1.0.42 — Discord-style layout
+
+- [x] One rail: Home, communities, create or join, Admin (host only)
+- [x] Home sidebar: search, Friends, Social, Calls, Files, direct messages, user panel
+- [x] Settings as a full-window overlay with every tab in one list (Security moved in)
+- [x] Thin title bar with the connection status; solid layered colours
+- [x] e2e and accessibility checks updated for the new navigation
+
 ### After 1.0.x (not started; see ROADMAP Stage 2)
 
 - [ ] Bot accounts with a small client library (ADR 0004)

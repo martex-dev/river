@@ -400,7 +400,14 @@ export function ChannelRow(props: {
   );
 }
 
-function VoicePanel({ community, me }: { community: CommunityView; me: string }): ReactElement | null {
+/** "Voice connected" above the user panel, in every sidebar (community or Home). */
+export function VoicePanel({
+  community,
+  me,
+}: {
+  community?: CommunityView;
+  me: string;
+}): ReactElement | null {
   const s = useCommunity();
   useCommunity((x) => x.callVersion);
   const call = s.call;
@@ -408,6 +415,7 @@ function VoicePanel({ community, me }: { community: CommunityView; me: string })
   if (call.channelId.startsWith('dm:')) return null;
   const channelCommunity =
     s.communities.find((c) => c.channels.some((ch) => ch.id === call.channelId)) ?? community;
+  if (!channelCommunity) return null;
   const channel = channelCommunity.channels.find((ch) => ch.id === call.channelId);
   const screen = !!call.localTrack('screen');
   return (
@@ -422,7 +430,10 @@ function VoicePanel({ community, me }: { community: CommunityView; me: string })
           <strong>{tr('Voice connected')}</strong>
           <button
             className="voice-panel__where"
-            onClick={() => s.select(channelCommunity.id, call.channelId)}
+            onClick={() => {
+              s.select(channelCommunity.id, call.channelId);
+              useRiver.getState().navigate('communities');
+            }}
           >
             {channel?.name ?? 'Voice'} / {channelCommunity.name}
           </button>
@@ -510,14 +521,18 @@ function EventsRow({ community }: { community: CommunityView }): ReactElement {
   );
 }
 
-function UserPanel({ me, community }: { me: string; community: CommunityView }): ReactElement {
+/** You, at the bottom of every sidebar: status, mute, deafen and Settings (like Discord). */
+export function UserPanel({ me, community }: { me: string; community?: CommunityView }): ReactElement {
   const s = useCommunity();
   const identity = useRiver((r) => r.identity);
   const settings = useRiver((r) => r.settings);
   const [statusMenu, setStatusMenu] = useState<{ x: number; y: number } | null>(null);
   const presence = myPresence(settings, s.connection === 'online');
   const custom = settings?.presence.customText || settings?.presence.customEmoji;
-  const member = memberOf(community, me);
+  // Your picture and name as a community shows them (any one you are in, on Home).
+  const member = community
+    ? memberOf(community, me)
+    : s.communities.map((c) => memberOf(c, me)).find((m) => m !== undefined && m !== null);
   useCommunity((x) => x.callVersion);
   const ptt = s.call?.pushToTalk ?? false;
   return (
@@ -557,7 +572,7 @@ function UserPanel({ me, community }: { me: string; community: CommunityView }):
           x={statusMenu.x}
           y={statusMenu.y}
           onClose={() => setStatusMenu(null)}
-          onEditProfile={() => s.setModal({ kind: 'user-settings', tab: 'profile' })}
+          onEditProfile={() => useRiver.getState().openSettings('profile')}
         />
       )}
       <button
@@ -578,9 +593,9 @@ function UserPanel({ me, community }: { me: string; community: CommunityView }):
       </button>
       <button
         className="icon-btn"
-        aria-label="User settings"
-        title="User settings"
-        onClick={() => s.setModal({ kind: 'user-settings' })}
+        aria-label="Settings"
+        title="Settings"
+        onClick={() => useRiver.getState().openSettings('account')}
       >
         <GearIcon size={18} />
       </button>

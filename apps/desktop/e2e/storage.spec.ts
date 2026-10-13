@@ -2,14 +2,14 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { _electron as electron, expect, test } from '@playwright/test';
-import { TEST_PASSPHRASE, launchRiver } from './launch.ts';
+import { TEST_PASSPHRASE, launchRiver, openSettings } from './launch.ts';
 
 const userData = mkdtempSync(join(tmpdir(), 'river-e2e-storage-'));
 test.afterAll(() => rmSync(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
 
 test('creates an encrypted local database and reopens it after restart', async () => {
   const first = await launchRiver(userData);
-  await first.page.getByRole('button', { name: 'Security', exact: true }).click();
+  await openSettings(first.page, 'Security');
   const row = first.page.locator('.board__row', { hasText: 'Encrypted local storage' });
   await expect(row.locator('.board__value')).toHaveText(/active/i);
   await first.app.close();
@@ -33,12 +33,12 @@ test('creates an encrypted local database and reopens it after restart', async (
     await expect(page.locator('.field__error')).toContainText('not correct');
     await page.locator('.lock input[type=password]').fill(TEST_PASSPHRASE);
     await page.locator('.lock button[type=submit]').click();
-    await page.waitForSelector('.rail', { timeout: 30_000 });
+    await page.waitForSelector('.workspace', { timeout: 30_000 });
     await app.close();
   } else {
     const second = await launchRiver(userData);
     await expect(second.page.locator('.lock')).toHaveCount(0);
-    await second.page.getByRole('button', { name: 'Security', exact: true }).click();
+    await openSettings(second.page, 'Security');
     await expect(
       second.page.locator('.board__row', { hasText: 'Encrypted local storage' }).locator('.board__value'),
     ).toHaveText(/active/i);

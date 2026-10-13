@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test, type ElectronApplication, type Page } from '@playwright/test';
 import { auditA11y } from './axe.ts';
-import { launchRiver } from './launch.ts';
+import { launchRiver, openCommunities, openHome, openSettings } from './launch.ts';
 
 // Automated accessibility audit (axe-core) of River's main screens.
 let app: ElectronApplication;
@@ -24,15 +24,28 @@ const audit = (where: string): Promise<void> => auditA11y(page, where);
 
 test('main screens have no serious accessibility problems', async () => {
   await audit('Home');
-  for (const section of ['Messages', 'Communities', 'Social', 'Calls', 'Files', 'Friends', 'Security']) {
-    await page.getByRole('button', { name: section, exact: true }).click();
-    await audit(section);
+  for (const place of ['Social', 'Calls', 'Files', 'Friends']) {
+    await openHome(page, place);
+    await audit(place);
   }
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  for (const tab of ['Updates', 'Account', 'Backup', 'Appearance', 'Notifications', 'System', 'About']) {
-    await page.getByRole('button', { name: tab, exact: true }).click();
+  await openCommunities(page);
+  await audit('Communities');
+  for (const tab of [
+    'Account',
+    'Profile',
+    'Security',
+    'Backup',
+    'Appearance',
+    'Voice & video',
+    'Notifications',
+    'System',
+    'Updates',
+    'About',
+  ]) {
+    await openSettings(page, tab);
     await audit(`Settings → ${tab}`);
   }
+  await page.keyboard.press('Escape');
 });
 
 test('the quick switcher and the shortcuts list are accessible', async () => {

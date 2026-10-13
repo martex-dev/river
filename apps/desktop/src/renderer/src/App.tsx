@@ -4,14 +4,14 @@ import { QuickSwitcher } from './components/QuickSwitcher.tsx';
 import { startNavHistory } from './nav-history.ts';
 import { resolveLanguage, useT } from './i18n.ts';
 import { RiverMark } from './components/RiverMark.tsx';
-import { SECTION_ICONS, LockIcon } from './components/Icons.tsx';
+import { AdminIcon, LockIcon } from './components/Icons.tsx';
+import { HOME_SECTIONS, HomeSidebar } from './components/HomeSidebar.tsx';
 import { LockScreen } from './components/LockScreen.tsx';
 import { Onboarding } from './components/Onboarding.tsx';
 import { UpdateToast } from './components/UpdateToast.tsx';
 import { PLANNED } from './features.ts';
-import { HomePage } from './pages/HomePage.tsx';
 import { CallAudio } from './community/ui/Voice.tsx';
-import { CommunitiesPage, Overlays, VoiceHotkeys } from './pages/CommunitiesPage.tsx';
+import { CommunitiesPage, Overlays, ServerRail, VoiceHotkeys } from './pages/CommunitiesPage.tsx';
 import { MessagesPage } from './pages/MessagesPage.tsx';
 import { SocialPage } from './pages/SocialPage.tsx';
 import { CallsPage } from './pages/CallsPage.tsx';
@@ -22,14 +22,13 @@ import { totalUnread, useDm } from './dm/store.ts';
 import { handleCallEvent } from './dm/call.ts';
 import { useCommunity } from './community/store.ts';
 import { PlannedPage } from './pages/PlannedPage.tsx';
-import { SecurityPage } from './pages/SecurityPage.tsx';
-import { SettingsPage } from './pages/SettingsPage.tsx';
+import { SettingsOverlay } from './pages/SettingsPage.tsx';
 import { AdminPage } from './pages/AdminPage.tsx';
 import { useHostStatus } from './components/HostingPanel.tsx';
-import { SECTIONS, useRiver, type Section } from './store.ts';
+import { useRiver, type Section } from './store.ts';
 
 const LABELS: Record<Section, string> = {
-  home: 'Home',
+  home: 'Friends',
   messages: 'Messages',
   communities: 'Communities',
   social: 'Social',
@@ -40,8 +39,6 @@ const LABELS: Record<Section, string> = {
   security: 'Security',
   settings: 'Settings',
 };
-
-const PRIMARY = SECTIONS.filter((s) => s !== 'admin' && s !== 'security' && s !== 'settings');
 
 function useSystemReducedMotion(): boolean {
   const query = '(prefers-reduced-motion: reduce)';
@@ -60,12 +57,10 @@ export function App(): ReactElement {
   const t = useT();
   const {
     section,
-    navigate,
     load,
     setUpdate,
     setStorage,
     setAccount,
-    account,
     settings,
     info,
     loadError,
@@ -144,6 +139,13 @@ export function App(): ReactElement {
   }, [info]);
 
   const planned = PLANNED[section];
+  const settingsOpen = useRiver((r) => r.settingsTab !== null);
+  const inHome = HOME_SECTIONS.includes(section);
+  const community = useCommunity((c) => c.communities.find((x) => x.id === c.selectedCommunity));
+  const communityStart = useRiver((r) => r.communityStart);
+  const noCommunities = useCommunity((c) => c.loaded && c.communities.length === 0);
+  // "Create or join a community" keeps the Home column, so you (and Settings) stay at the bottom left.
+  const homeColumn = inHome || (section === 'communities' && (communityStart || noCommunities));
 
   if (storage.state === 'setup-required' || storage.state === 'locked' || storage.state === 'error') {
     return (
@@ -167,81 +169,57 @@ export function App(): ReactElement {
     );
   }
 
+  const title = settingsOpen
+    ? t('Settings')
+    : section === 'communities'
+      ? communityStart || !community
+        ? t('Communities')
+        : community.name
+      : t(LABELS[section]);
+
   return (
     <div className="shell">
       <div className="backdrop" aria-hidden="true" />
-      <nav className="rail" aria-label="River">
-        <div className="rail__brand">
-          <RiverMark size={38} />
-        </div>
-        <ul className="rail__list">
-          {PRIMARY.map((s) => (
-            <RailItem key={s} section={s} active={section === s} onSelect={navigate} />
-          ))}
-        </ul>
-        <ul className="rail__list rail__list--bottom">
-          {(operator
-            ? (['admin', 'security', 'settings'] as const)
-            : (['security', 'settings'] as const)
-          ).map((s) => (
-            <RailItem key={s} section={s} active={section === s} onSelect={navigate} />
-          ))}
-        </ul>
-      </nav>
-
-      <div className="main">
-        <header className="topbar">
-          <span className="topbar__title">{t(LABELS[section])}</span>
-          {account.state === 'registered' ? (
-            <span className={`topbar__pill is-${account.connection}`} title="Your River connection">
-              <span
-                className={`status-dot status-dot--${account.connection === 'online' ? 'active' : account.connection === 'error' ? 'warning' : 'inactive'}`}
-              />
-              {account.missing
-                ? 'Your account needs to be set up again — Settings → Account'
-                : account.connection === 'online'
-                  ? 'Online'
-                  : account.connection === 'connecting'
-                    ? 'Connecting…'
-                    : 'Offline — messages wait and send by themselves'}
-            </span>
-          ) : account.waiting ? (
-            <span
-              className="topbar__pill"
-              title="River creates your account as soon as its server is reachable"
-            >
-              <span className="status-dot status-dot--warning" /> Setting up your account…
-            </span>
-          ) : (
-            <span className="topbar__pill" title="No River account yet">
-              <LockIcon size={13} /> Local only · no account yet
-            </span>
-          )}
-        </header>
+      <header className="titlebar">
+        <span className="titlebar__brand">
+          <RiverMark size={16} />
+          River
+        </span>
+        <span className="titlebar__title">{title}</span>
+        <ConnectionPill />
+      </header>
+      <div className="workspace">
+        <ServerRail home={<HomeButton />} {...(operator ? { bottom: <AdminButton /> } : {})} />
+        {homeColumn && <HomeSidebar />}
         <main
           className={`content ${section === 'communities' || section === 'messages' ? 'content--full' : ''}`}
           key={section}
         >
-          <UsernamePrompt />
-          <WhatsNew />
-          {loadError && (
-            <div className="glass card card--error" role="alert">
-              River could not load its settings: {loadError}
-            </div>
-          )}
-          {section === 'home' && <HomePage reducedMotion={reducedMotion} />}
-          {section === 'security' && <SecurityPage />}
+          <div className="notices">
+            {info?.startupProblem && (
+              <div className="glass card card--error" role="alert">
+                {info.startupProblem}
+              </div>
+            )}
+            <UsernamePrompt />
+            <WhatsNew />
+            {loadError && (
+              <div className="glass card card--error" role="alert">
+                River could not load its settings: {loadError}
+              </div>
+            )}
+          </div>
+          {(section === 'home' || section === 'contacts') && <FriendsPage />}
           {section === 'communities' && <CommunitiesPage />}
           {section === 'messages' && <MessagesPage />}
           {section === 'social' && <SocialPage />}
           {section === 'calls' && <CallsPage />}
           {section === 'files' && <FilesPage />}
-          {section === 'contacts' && <FriendsPage />}
-          {section === 'settings' && <SettingsPage />}
           {section === 'admin' && <AdminPage />}
           {planned && <PlannedPage section={section} feature={planned} />}
         </main>
       </div>
+      <SettingsOverlay />
       <UpdateToast />
       <CallAudio />
       <VoiceHotkeys />
@@ -251,29 +229,86 @@ export function App(): ReactElement {
   );
 }
 
-function RailItem(props: { section: Section; active: boolean; onSelect(s: Section): void }): ReactElement {
-  const t = useT();
-  const Icon = SECTION_ICONS[props.section];
-  const dmUnread = useDm((d) => totalUnread(d.conversations));
-  const communityMentions = useCommunity((c) => Object.values(c.mentions).reduce((n, v) => n + v, 0));
-  const badge =
-    props.section === 'messages' ? dmUnread : props.section === 'communities' ? communityMentions : 0;
+/** Your connection to River, always in the title bar. */
+function ConnectionPill(): ReactElement {
+  const account = useRiver((r) => r.account);
+  if (account.state === 'registered') {
+    return (
+      <span className={`topbar__pill is-${account.connection}`} title="Your River connection">
+        <span
+          className={`status-dot status-dot--${account.connection === 'online' ? 'active' : account.connection === 'error' ? 'warning' : 'inactive'}`}
+        />
+        {account.missing
+          ? 'Your account needs to be set up again — Settings → Account'
+          : account.connection === 'online'
+            ? 'Online'
+            : account.connection === 'connecting'
+              ? 'Connecting…'
+              : 'Offline — messages wait and send by themselves'}
+      </span>
+    );
+  }
+  if (account.waiting) {
+    return (
+      <span className="topbar__pill" title="River creates your account as soon as its server is reachable">
+        <span className="status-dot status-dot--warning" /> Setting up your account…
+      </span>
+    );
+  }
   return (
-    <li>
+    <span className="topbar__pill" title="No River account yet">
+      <LockIcon size={13} /> Local only · no account yet
+    </span>
+  );
+}
+
+/** Home at the top of the rail: friends and direct messages, like Discord's. */
+function HomeButton(): ReactElement {
+  const section = useRiver((r) => r.section);
+  const navigate = useRiver((r) => r.navigate);
+  const unread = useDm((d) => totalUnread(d.conversations));
+  const active = HOME_SECTIONS.includes(section);
+  return (
+    <div className={`community__server-wrap ${active ? 'is-active' : ''}`}>
+      <span className="community__pill" aria-hidden="true" />
       <button
-        className={`rail__item ${props.active ? 'is-active' : ''}`}
-        aria-current={props.active ? 'page' : undefined}
-        onClick={() => props.onSelect(props.section)}
+        className={`community__server rail-home ${active ? 'is-active' : ''}`}
+        aria-label="Home"
+        title="Home — friends and direct messages"
+        aria-current={active ? 'page' : undefined}
+        onClick={() => {
+          if (!active) navigate(useDm.getState().selected ? 'messages' : 'contacts');
+        }}
       >
-        <Icon size={22} />
-        <span className="rail__label">{t(LABELS[props.section])}</span>
-        {badge > 0 && (
-          <span key={badge} className="badge badge--mention rail__badge">
-            {badge > 99 ? '99+' : badge}
-          </span>
-        )}
+        <RiverMark size={28} />
       </button>
-    </li>
+      {unread > 0 && (
+        <span key={unread} className="badge badge--mention community__server-badge">
+          {unread > 99 ? '99+' : unread}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Admin, at the bottom of the rail on the PC that hosts River. */
+function AdminButton(): ReactElement {
+  const section = useRiver((r) => r.section);
+  const navigate = useRiver((r) => r.navigate);
+  const active = section === 'admin';
+  return (
+    <div className={`community__server-wrap ${active ? 'is-active' : ''}`}>
+      <span className="community__pill" aria-hidden="true" />
+      <button
+        className={`community__server rail-admin ${active ? 'is-active' : ''}`}
+        aria-label="Admin"
+        title="Admin — everyone on your River"
+        aria-current={active ? 'page' : undefined}
+        onClick={() => navigate('admin')}
+      >
+        <AdminIcon size={22} />
+      </button>
+    </div>
   );
 }
 

@@ -14,58 +14,8 @@ import { levelOf } from '../voice-gate.ts';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { useRiver } from '../../store.ts';
 import { SOUND_GROUPS, play, type SoundGroup, type SoundName } from '../sound.ts';
-import { useCommunity, type UserTab } from '../store.ts';
-import { Avatar, Modal, Toggle, XIcon, hex } from './common.tsx';
-
-export function UserSettings(props: { tab?: UserTab }): ReactElement {
-  const s = useCommunity();
-  const navigate = useRiver((r) => r.navigate);
-  const [tab, setTab] = useState<UserTab>(props.tab ?? 'profile');
-  const close = (): void => s.setModal(null);
-  const tabs: Array<[UserTab, string]> = [
-    ['profile', 'My profile'],
-    ['voice', 'Voice & video'],
-    ['notifications', 'Notifications'],
-    ['appearance', 'Appearance'],
-  ];
-  return (
-    <Modal onClose={close} full>
-      <div className="settings-layout">
-        <nav className="settings-layout__nav" aria-label="User settings">
-          <div className="settings-layout__heading">User settings</div>
-          {tabs.map(([id, label]) => (
-            <button
-              key={id}
-              className={`settings-tab ${tab === id ? 'is-active' : ''}`}
-              onClick={() => setTab(id)}
-            >
-              {label}
-            </button>
-          ))}
-          <hr />
-          <button
-            className="settings-tab"
-            onClick={() => {
-              close();
-              navigate('settings');
-            }}
-          >
-            Updates, server & privacy →
-          </button>
-        </nav>
-        <section className="settings-layout__body">
-          <button className="settings-layout__close icon-btn" aria-label="Close settings" onClick={close}>
-            <XIcon />
-          </button>
-          {tab === 'profile' && <Profile />}
-          {tab === 'voice' && <VoiceSettings />}
-          {tab === 'notifications' && <NotificationSettings />}
-          {tab === 'appearance' && <AppearanceSettings />}
-        </section>
-      </div>
-    </Modal>
-  );
-}
+import { useCommunity } from '../store.ts';
+import { Avatar, Toggle, hex } from './common.tsx';
 
 interface ProfileDraft {
   name: string;
@@ -77,7 +27,7 @@ interface ProfileDraft {
 
 const BANNER_COLORS = [0x4fe3d1, 0x5865f2, 0x3ee08f, 0xf0b232, 0xf47fff, 0xed4245, 0x9b59b6, 0x1f2937];
 
-function Profile(): ReactElement {
+export function Profile(): ReactElement {
   const s = useCommunity();
   const identity = useRiver((r) => r.identity);
   const [draft, setDraft] = useState<ProfileDraft>({
@@ -262,7 +212,7 @@ const keyLabel = (code: string): string =>
     .replace('Backquote', '` (backtick)')
     .replace(/([a-z])([A-Z])/g, '$1 $2');
 
-function VoiceSettings(): ReactElement {
+export function VoiceSettings(): ReactElement {
   const settings = useRiver((r) => r.settings);
   const update = useRiver((r) => r.updateSettings);
   const call = useCommunity((x) => x.call);
@@ -384,7 +334,14 @@ function VoiceSettings(): ReactElement {
         <button className="btn btn--ghost btn--small" onClick={() => setLevel(level === null ? 0 : null)}>
           {level === null ? "Let's check" : 'Stop testing'}
         </button>
-        <div className="meter" aria-label="Microphone level">
+        <div
+          className="meter"
+          role="meter"
+          aria-label="Microphone level"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round((level ?? 0) * 100)}
+        >
           <div
             className={`meter__fill ${voice.sensitivity !== null && (level ?? 0) >= voice.sensitivity ? 'is-open' : ''}`}
             style={{ width: `${Math.round((level ?? 0) * 100)}%` }}
@@ -497,7 +454,7 @@ function VoiceSettings(): ReactElement {
   );
 }
 
-function NotificationSettings(): ReactElement {
+export function NotificationSettings(): ReactElement {
   const settings = useRiver((r) => r.settings);
   const update = useRiver((r) => r.updateSettings);
   const n = settings?.notifications;
@@ -673,36 +630,6 @@ const SOUND_GROUP_INFO: Record<
     ],
   },
 };
-
-function AppearanceSettings(): ReactElement {
-  const settings = useRiver((r) => r.settings);
-  const update = useRiver((r) => r.updateSettings);
-  const motion = settings?.appearance.motion ?? 'system';
-  return (
-    <div className="settings-page">
-      <h2>Appearance</h2>
-      <div className="field__label">Animations</div>
-      <div className="radio-cards">
-        {(
-          [
-            ['system', 'Follow my system'],
-            ['full', 'Always animate'],
-            ['reduced', 'Reduce motion'],
-          ] as const
-        ).map(([value, label]) => (
-          <label key={value} className={`radio-card ${motion === value ? 'is-active' : ''}`}>
-            <input
-              type="radio"
-              checked={motion === value}
-              onChange={() => void update({ appearance: { motion: value } })}
-            />
-            {label}
-          </label>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 /** Settings → Voice → Keyboard shortcuts (1.0.22): click a shortcut, press keys, done. */
 function KeybindEditor(): ReactElement {

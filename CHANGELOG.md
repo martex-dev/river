@@ -6,6 +6,29 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.42] - 2026-10-13
+
+**A Discord-style layout.**
+
+### Changed
+
+- **River now looks and works like Discord.** One rail down the left: **Home**
+  at the top, your communities under it, **Create or join a community**, and —
+  on the PC that hosts River — **Admin** at the bottom. Next to it, a sidebar
+  (a community's channels, or Home's friends and direct messages) with you at
+  the bottom: your name, status, mute, deafen and the **Settings** gear.
+- **Home** holds Friends, Social, Calls, Files and your direct messages, with
+  search at the top. The old dashboard page and the separate Messages page are
+  gone; your River ID is no longer shown there.
+- **Settings is one full-window overlay** over whatever you were doing, like
+  Discord's: User settings (Account, Profile, Security, Backup) and App
+  settings (Appearance, Voice & video, Notifications, System, Updates, Hosting,
+  About). Esc or the close button returns you to where you were. The Security
+  Center lives under Settings → Security.
+- A thin title bar shows where you are and your connection; the window
+  controls moved into it. Solid, layered dark colours replace the glass look.
+- "Create or join a community" keeps you and your Settings at the bottom left.
+
 ## [1.0.41] - 2026-10-13
 
 **Calls that stay up, and invites anyone can follow.**
@@ -1326,7 +1349,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.41...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.42...HEAD
+[1.0.42]: https://github.com/martex-dev/river/compare/v1.0.41...v1.0.42
 [1.0.41]: https://github.com/martex-dev/river/compare/v1.0.40...v1.0.41
 [1.0.40]: https://github.com/martex-dev/river/compare/v1.0.39...v1.0.40
 [1.0.39]: https://github.com/martex-dev/river/compare/v1.0.38...v1.0.39
