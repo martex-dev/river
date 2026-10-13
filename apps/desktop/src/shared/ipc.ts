@@ -222,6 +222,8 @@ export interface ChannelView {
   slowmode: number;
   /** Most people in this voice channel at once (0 = no limit). */
   userLimit: number;
+  /** Voice: members allowed to use Priority speaker here (1.0.33). */
+  prioritySpeakers?: string[];
   /** A forum: every message starts a titled post (1.0.22). */
   forum: boolean;
   /** Tags posts in this forum can have (encrypted with the channel name). */

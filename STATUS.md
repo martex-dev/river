@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-12 · Current version: **1.0.32** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
+_Last updated: 2026-10-12 · Current version: **1.0.33** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
 
 ## Complete
 
@@ -44,6 +44,7 @@ _Last updated: 2026-10-12 · Current version: **1.0.32** · Stage 1 complete · 
 | Role order, temporary roles          | Drag-and-drop role order (server checks rank); roles given for 1 hour to 30 days, expiry enforced by the server                                                                                             | server tests (temp roles), e2e                                                                                       |
 | Invite tracking                      | Managers see each active invite's creator, uses, expiry and members who joined with it; revoke is audited                                                                                                   | server test (invites), e2e                                                                                           |
 | Incoming webhooks                    | End-to-end-encrypted webhooks (ADR 0004): posters seal with a key kept after # in the address; token hashed; per-webhook rate limit; WEBHOOK badge                                                          | server tests (webhooks, rate limit), unit (reference script), e2e                                                    |
+| Priority speaker                     | New permission; listeners turn others down while an allowed priority speaker talks (claims without the permission are ignored)                                                                              | unit (priority-speaker), e2e                                                                                         |
 | Diagnostics                          | Connection check (Settings → System), startup failure dialog, GPU fallback, `--self-test`                                                                                                                   | `diagnostics*.test.ts*`, `startup-guard.test.ts`                                                                     |
 
 ## Partially complete

@@ -34,7 +34,7 @@ type Signal =
   /** Sent by the answering side when a working connection falters: "please restart ICE". */
   | { type: 'restart'; sid?: string }
   /** What the sender is currently sending; receivers show tiles from this, not from track heuristics. */
-  | { type: 'state'; camera: boolean; screen: boolean; muted: boolean }
+  | { type: 'state'; camera: boolean; screen: boolean; muted: boolean; priority?: boolean }
   /** "I can't reach you directly: here is my relay key; let's talk through the server" (1.0.17). */
   | { type: 'relay'; key: string }
   /** "We are connected directly again: stop relaying to me." */
@@ -75,6 +75,8 @@ export interface RemotePeer {
   reconnecting: boolean;
   /** Voice goes through the River server (no direct connection); audio only. */
   relayed: boolean;
+  /** Says Priority speaker is on (1.0.33); listeners honour it only if the community allows it. */
+  priority?: boolean;
 }
 
 interface Peer {
@@ -588,6 +590,7 @@ export class VoiceCall {
         peer.remote.cameraOn = !!signal.camera;
         peer.remote.screenOn = !!signal.screen;
         peer.remote.muted = !!signal.muted;
+        peer.remote.priority = signal.priority === true;
         this.onChange();
       }
       return;
@@ -634,6 +637,15 @@ export class VoiceCall {
       if (peer.pc.remoteDescription) await peer.pc.addIceCandidate(signal.candidate).catch(() => undefined);
       else peer.pendingIce.push(signal.candidate);
     }
+  }
+
+  /** Priority speaker (1.0.33): others turn everyone else down while we talk. */
+  priority = false;
+
+  setPriority(on: boolean): void {
+    this.priority = on;
+    this.broadcastState();
+    this.onChange();
   }
 
   setMuted(muted: boolean): void {
@@ -898,6 +910,7 @@ export class VoiceCall {
       camera: !!this.local.camera,
       screen: !!this.local.screen,
       muted: !this.transmitting,
+      ...(this.priority ? { priority: true } : {}),
     };
   }
 

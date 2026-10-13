@@ -6,6 +6,17 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.33] - 2026-10-13
+
+**Be heard when it matters: priority speaker.**
+
+### Added
+
+- **Priority speaker:** a new role permission. People who have it get a 📣
+  button in voice; while it is on and they talk, everyone else is turned
+  down for the listeners. Listeners only honour it from people the
+  community really allows.
+
 ## [1.0.32] - 2026-10-13
 
 **Webhooks without giving up encryption: services post into channels, and the server still cannot read a word.**
