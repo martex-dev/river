@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { Script } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { startServer } from './helpers.ts';
 
@@ -13,6 +14,8 @@ describe('invite landing page', () => {
       const html = res.body;
       // The inline script is exactly the one the security policy allows (else the buttons do nothing).
       const script = /<script>([\s\S]*)<\/script>/.exec(html)?.[1] ?? '';
+      // It must be valid JavaScript (escapes inside the template are easy to get wrong).
+      expect(() => new Script(script)).not.toThrow();
       const hash = createHash('sha256').update(script).digest('base64');
       const csp = String(res.headers['content-security-policy']);
       expect(csp).toContain(`'sha256-${hash}'`);
@@ -25,4 +28,16 @@ describe('invite landing page', () => {
       expect(html).toContain('Run anyway');
     });
   }
+});
+
+describe('static copy for the permanent link address', () => {
+  it('carries the same script with its policy in a meta tag', async () => {
+    const { staticLandingPage } = await import('../src/routes/landing.ts');
+    const html = staticLandingPage();
+    const script = /<script>([\s\S]*)<\/script>/.exec(html)?.[1] ?? '';
+    const hash = createHash('sha256').update(script).digest('base64');
+    expect(html).toContain('http-equiv="Content-Security-Policy"');
+    expect(html).toContain(`'sha256-${hash}'`);
+    expect(html).not.toContain('frame-ancestors');
+  });
 });

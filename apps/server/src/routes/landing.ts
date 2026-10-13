@@ -17,15 +17,18 @@ const DOWNLOAD = `${RELEASES}/download`;
 
 const SCRIPT = `
 (function () {
-  var link = location.href;
+  var path = location.pathname.replace(/\\/+$/, '').replace(/\\.html$/, '');
+  var link = location.origin + path + location.hash;
   var open = document.getElementById('open');
   open.href = 'river://open?link=' + encodeURIComponent(link);
-  var kind = location.pathname.endsWith('/add') ? (location.hash.indexOf('#s=') === 0 ? 'signup' : 'friend') : 'invite';
+  var kind = /\\/add$/.test(path) ? (location.hash.indexOf('#s=') === 0 ? 'signup' : 'friend') : /\\/join$/.test(path) ? 'invite' : 'home';
   var titles = {
     invite: "You're invited to a River community",
     friend: 'Someone wants to be your friend on River',
-    signup: 'Your River account is waiting for you'
+    signup: 'Your River account is waiting for you',
+    home: 'River — private messages, voice and communities'
   };
+  if (kind === 'home' || !location.hash) document.getElementById('come-in').hidden = true;
   document.getElementById('title').textContent = titles[kind];
   document.title = titles[kind];
   var ua = navigator.userAgent;
@@ -45,9 +48,10 @@ const SCRIPT = `
 const SCRIPT_HASH = `sha256-${createHash('sha256').update(SCRIPT).digest('base64')}`;
 const CSP = `default-src 'none'; style-src 'unsafe-inline'; script-src '${SCRIPT_HASH}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
 
-const PAGE = `<!doctype html>
+/** The page; `head` adds tags (the static copy carries its security policy as a meta tag). */
+const page = (head = ''): string => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>River</title>
+${head}<title>River</title>
 <style>
 :root{color-scheme:dark}
 *{box-sizing:border-box}
@@ -91,7 +95,7 @@ footer{color:#6f7a96;font-size:.82rem;margin-top:16px}
 <p class="hint" style="margin-top:0">Your account is created by itself — no e-mail, no phone number.</p>
 </div></div></section>
 
-<section class="card"><div class="step"><span class="num">3</span><div>
+<section class="card" id="come-in"><div class="step"><span class="num">3</span><div>
 <h2>Come in</h2>
 <a id="open" class="btn primary" href="#">Open in River</a><button id="copy" class="btn ghost" type="button">Copy link</button>
 <p class="hint">Opens River and asks before joining. If nothing happens, copy the link and paste it anywhere in River.</p>
@@ -101,6 +105,7 @@ footer{color:#6f7a96;font-size:.82rem;margin-top:16px}
 </main>
 <script>${SCRIPT}</script>
 </body></html>`;
+const PAGE = page();
 
 function landing(reply: FastifyReply): FastifyReply {
   reply.header('content-type', 'text/html; charset=utf-8');
@@ -112,6 +117,17 @@ function landing(reply: FastifyReply): FastifyReply {
 export function registerLandingRoutes(app: FastifyInstance): void {
   app.get('/join', async (_request, reply) => landing(reply));
   app.get('/add', async (_request, reply) => landing(reply));
+}
+
+/**
+ * The static copy published at River's permanent link address (GitHub Pages,
+ * see scripts/site/build-site.ts): same page, policy in a meta tag
+ * (frame-ancestors only works as a header, so it is left out there).
+ */
+export function staticLandingPage(): string {
+  const csp = CSP.replace(/; frame-ancestors 'none'/, '');
+  return page(`<meta http-equiv="Content-Security-Policy" content="${csp}">
+`);
 }
 
 /** For tests. */
