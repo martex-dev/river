@@ -116,6 +116,15 @@ const SOUNDS: Record<SoundName, { gain: number; notes: Note[] }> = {
       [480, 0, 900],
     ],
   },
+  // Push-to-talk (1.0.35): a tiny click when you start and stop talking.
+  pttOn: {
+    gain: 0.03,
+    notes: [[1318.5, 0, 45, 'triangle']],
+  },
+  pttOff: {
+    gain: 0.025,
+    notes: [[987.8, 0, 45, 'triangle']],
+  },
   disconnected: {
     gain: 0.06,
     notes: [

@@ -6,6 +6,11 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (1.0.35)
+
+- **Push-to-talk clicks:** a tiny sound when you start and stop talking
+  with push-to-talk (Settings → Notifications → Voice channels).
+
 ### Added (1.0.34)
 
 - **Animated avatars:** a small GIF (up to about 44 KB) stays animated as
