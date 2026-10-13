@@ -425,9 +425,13 @@ function RemoteTile(props: {
         {label}
         {peer.muted ? ' · muted' : ''}
         {peer.relayed ? ' · via server' : ''}
-        {connecting || (!peer.relayed && state?.reconnecting)
-          ? ` · ${peer.reconnecting || state?.reconnecting ? 'reconnecting…' : 'connecting…'}`
-          : ''}
+        {/* What matters is whether their voice reaches you: a direct connection does not care that
+            their link to the server blipped; relayed voice does. */}
+        {connecting
+          ? ` · ${peer.reconnecting ? 'reconnecting…' : 'connecting…'}`
+          : peer.relayed && state?.reconnecting
+            ? ' · reconnecting…'
+            : ''}
       </span>
       {peer.screenOn && <span className="live-badge tile__live">LIVE</span>}
     </div>
