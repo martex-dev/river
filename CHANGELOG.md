@@ -11,6 +11,9 @@ All notable changes to River are documented here. The format follows
 - **Animated avatars:** a small GIF (up to about 44 KB) stays animated as
   your picture, everywhere and per community; larger ones are cropped to a
   still as before. With reduced motion on, you see its first frame.
+- **Rejoin call:** if River closes or loses a voice call without you
+  pressing Disconnect, the sidebar offers to put you back (for two hours).
+  Not after a moderator disconnects you.
 
 ### Added (1.0.33)
 
