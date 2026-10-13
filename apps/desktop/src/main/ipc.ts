@@ -90,6 +90,8 @@ export interface IpcDeps {
     | 'disable'
     | 'backupNow'
     | 'openFolder'
+    | 'approveAddress'
+    | 'checkAddress'
     | 'adminOverview'
     | 'adminSuspend'
     | 'adminUnsuspend'
@@ -157,6 +159,8 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.hostDisable, () => result(() => deps.hosting.disable()));
   handle(IPC.hostBackup, () => result(() => deps.hosting.backupNow()));
   handle(IPC.hostOpenFolder, () => deps.hosting.openFolder());
+  handle(IPC.hostApproveAddress, () => deps.hosting.approveAddress());
+  handle(IPC.hostCheckAddress, () => deps.hosting.checkAddress());
   const adminId = z.string().min(1).max(64);
   handle(IPC.adminOverview, () => result(() => deps.hosting.adminOverview()));
   handle(IPC.adminSuspend, (_e, riverId, until, reason) =>

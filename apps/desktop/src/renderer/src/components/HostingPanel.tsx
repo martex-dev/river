@@ -180,11 +180,18 @@ export function HostingPanel(): ReactElement {
               </button>
             </div>
           )}
-          <p className="muted small">
-            {status.followable
-              ? 'The address changes when this PC restarts. Members’ River apps find the new one by themselves.'
-              : 'Address announcements are off, so members need the new address after a restart.'}
-          </p>
+          {status.via === 'tailscale' ? (
+            <p className="muted small">
+              ✓ Permanent address, free through Tailscale. It never changes, and members stay connected.
+            </p>
+          ) : (
+            <p className="muted small">
+              {status.followable
+                ? 'This address changes every so often. Members’ River apps find the new one by themselves.'
+                : 'Address announcements are off, so members need the new address after a restart.'}
+            </p>
+          )}
+          {status.via !== 'tailscale' && <PermanentAddress status={status} />}
           <div className="hosting__backup">
             <span className="small">
               {status.lastBackupAt ? `Last backup ${since(status.lastBackupAt)}` : 'No backup yet'}
@@ -240,5 +247,70 @@ export function HostingPanel(): ReactElement {
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * Steps to a permanent address (1.0.43): Tailscale Funnel gives this PC a free
+ * https address that never changes and does not drop like the quick tunnel.
+ */
+function PermanentAddress({ status }: { status: HostStatus }): ReactElement | null {
+  const [checking, setChecking] = useState(false);
+  const check = (): void => {
+    setChecking(true);
+    void window.river.host.checkAddress().finally(() => setTimeout(() => setChecking(false), 1500));
+  };
+  if (status.needsApproval) {
+    return (
+      <div className="hosting__permanent" role="status">
+        <strong>One last step: allow your permanent address</strong>
+        <p className="small">Tailscale asks you once to allow a public address for this PC.</p>
+        <div className="button-row">
+          <button
+            className="btn btn--primary btn--small"
+            onClick={() => void window.river.host.approveAddress()}
+          >
+            Allow in Tailscale
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (status.permanent === 'ready') {
+    return (
+      <div className="hosting__permanent" role="status">
+        <strong>Switching to your permanent address…</strong>
+        <p className="small">Tailscale is signed in. This can take a minute the first time.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="hosting__permanent">
+      <strong>Get a permanent address — free</strong>
+      <p className="small">
+        Calls and chats stay connected, and your invite links always work. Only this PC needs it; members
+        install nothing extra.
+      </p>
+      <ol className="hosting__steps small">
+        <li className={status.permanent === 'signed-out' ? 'is-done' : ''}>
+          Install Tailscale (free).{' '}
+          {status.permanent !== 'signed-out' && (
+            <button
+              className="btn btn--link btn--small"
+              onClick={() => void window.river.links.open('tailscale')}
+            >
+              Download Tailscale
+            </button>
+          )}
+        </li>
+        <li>Open Tailscale and sign in — Google, Microsoft or GitHub all work.</li>
+        <li>That&apos;s it: River switches over by itself.</li>
+      </ol>
+      <div className="button-row">
+        <button className="btn btn--ghost btn--small" disabled={checking} onClick={check}>
+          {checking ? 'Checking…' : 'I did it — check now'}
+        </button>
+      </div>
+    </div>
   );
 }

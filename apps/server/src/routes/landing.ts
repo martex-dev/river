@@ -12,7 +12,8 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
  * river:// link and the copy button.
  */
 
-const RELEASES = 'https://github.com/martex-dev/river/releases/latest';
+const REPO = 'https://github.com/martex-dev/river';
+const RELEASES = `${REPO}/releases/latest`;
 const DOWNLOAD = `${RELEASES}/download`;
 
 const SCRIPT = `
@@ -87,7 +88,7 @@ footer{color:#6f7a96;font-size:.82rem;margin-top:16px}
 <p class="hint">AppImage: make it executable (right-click → Properties → Allow executing), then open it.</p></div>
 <div data-os="phone"><p class="hint">River runs on Windows, Mac and Linux computers for now — phones are coming. Open this link on a computer.</p></div>
 <div data-os="other"><a class="btn primary" href="${RELEASES}">All downloads</a></div>
-<p class="hint" data-os="windows mac linux">Other systems: <a style="color:#4fe3d1" href="${RELEASES}">all downloads</a>.</p>
+<p class="hint" data-os="windows mac linux">Other systems: <a style="color:#4fe3d1" href="${RELEASES}">all downloads</a> · <a style="color:#4fe3d1" href="${REPO}/blob/main/CODE_SIGNING.md">Code signing policy</a>.</p>
 </div></div></section>
 
 <section class="card"><div class="step"><span class="num">2</span><div>

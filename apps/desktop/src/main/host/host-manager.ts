@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { HostRuntime } from '../../shared/ipc.ts';
 import type { Logger } from '../logger.ts';
 import type { FromServerProcess, ToServerProcess } from './server-messages.ts';
+import type { FunnelProvider } from './tailscale.ts';
 
 /** The community server, running in its own process (see src/host/server-process.ts). */
 export interface ServerHandle {
@@ -31,6 +32,8 @@ export interface HostManagerDeps {
   /** Finds or downloads the tunnel tool; reports download progress 0–1. */
   ensureTunnelTool(onProgress: (fraction: number) => void): Promise<string>;
   spawnTunnel(binary: string, localUrl: string): TunnelHandle;
+  /** A permanent address through Tailscale Funnel, preferred over the quick tunnel when available. */
+  funnel?: FunnelProvider;
   fetch: typeof fetch;
   log: Logger;
   now?: () => Date;
@@ -55,6 +58,10 @@ const FIRST_PROBE_MS = 8_000;
 const WATCH_EVERY_MS = 60_000;
 const WATCH_FAILURES = 3;
 const ANNOUNCE_EVERY_MS = 4 * 60 * 60 * 1000;
+/** On the quick tunnel, look this often for a Tailscale that is now signed in. */
+const PERMANENT_CHECK_MS = 5 * 60 * 1000;
+/** A new Funnel address needs its certificate first; that can take a minute or two. */
+const FUNNEL_ROUTE_TIMEOUT_MS = 180_000;
 const BACKUP_EVERY_MS = 24 * 60 * 60 * 1000;
 const BACKUP_CHECK_MS = 60 * 60 * 1000;
 const BACKUPS_KEPT = 7;
@@ -77,6 +84,10 @@ export class HostManager {
   private instanceId: string | null = null;
   private port: number | null = null;
   private lastBackupAt: string | null = null;
+  private via: 'tailscale' | 'quick-tunnel' | null = null;
+  private permanent: 'missing' | 'signed-out' | 'ready' | undefined;
+  private approval: string | null = null;
+  private funnelBusy = false;
 
   private server: ServerHandle | null = null;
   private serverDelay = RESTART_MIN_MS;
@@ -103,7 +114,20 @@ export class HostManager {
       ...(this.instanceId ? { instanceId: this.instanceId } : {}),
       ...(this.progress !== undefined ? { progress: this.progress } : {}),
       ...(this.message ? { message: this.message } : {}),
+      ...(this.state === 'online' && this.via ? { via: this.via } : {}),
+      ...(this.permanent ? { permanent: this.permanent } : {}),
+      ...(this.approval ? { needsApproval: true } : {}),
     };
+  }
+
+  /** The page where Tailscale's owner allows the permanent address, while it waits for that. */
+  approvalLink(): string | null {
+    return this.approval;
+  }
+
+  /** Look again for Tailscale (the user just installed it or signed in). */
+  checkPermanentAddress(): void {
+    if (this.wanted && this.port !== null && this.via !== 'tailscale') void this.tryFunnel();
   }
 
   onStatus(listener: (s: HostRuntime) => void): () => void {
@@ -137,6 +161,7 @@ export class HostManager {
     this.every(ANNOUNCE_EVERY_MS, () => void this.announce());
     this.every(WATCH_EVERY_MS, () => void this.watch());
     this.every(BACKUP_CHECK_MS, () => void this.backupIfDue());
+    this.every(PERMANENT_CHECK_MS, () => this.checkPermanentAddress());
   }
 
   async stop(): Promise<void> {
@@ -148,6 +173,9 @@ export class HostManager {
     this.intervals.clear();
     this.tunnel?.kill();
     this.tunnel = null;
+    if (this.via === 'tailscale') await this.deps.funnel?.close().catch(() => undefined);
+    this.via = null;
+    this.approval = null;
     const server = this.server;
     this.server = null;
     if (server) {
@@ -173,6 +201,7 @@ export class HostManager {
     if (!this.wanted) return;
     this.tunnelDelay = RESTART_MIN_MS;
     if (this.state !== 'online' && this.port !== null && this.tunnelBinary) this.restartTunnel();
+    this.checkPermanentAddress();
   }
 
   /**
@@ -290,7 +319,14 @@ export class HostManager {
       for (const l of this.addressListeners) l(this.address, this.instanceId ?? '');
       return;
     }
-    if (!this.tunnel || moved) {
+    if (this.via === 'tailscale' && !moved) {
+      // The permanent address keeps pointing at this port: just tell the new server process.
+      this.set('online');
+      void this.announce();
+    } else if (this.deps.funnel && (moved || !this.address)) {
+      if (moved && this.via === 'tailscale') this.via = null;
+      if (!(await this.tryFunnel()) && !this.tunnel) await this.launchTunnel();
+    } else if (!this.tunnel || moved) {
       this.tunnel?.kill();
       this.tunnel = null;
       await this.launchTunnel();
@@ -338,6 +374,7 @@ export class HostManager {
       if (this.tunnel !== tunnel) return;
       this.tunnel = null;
       this.address = null;
+      this.via = null;
       if (!this.wanted) return;
       if (Date.now() - startedAt > STABLE_AFTER_MS) this.tunnelDelay = RESTART_MIN_MS;
       this.deps.log.warn(`host: tunnel stopped (code ${code}); reopening`);
@@ -351,6 +388,7 @@ export class HostManager {
     const tunnel = this.tunnel;
     this.tunnel = null;
     this.address = null;
+    if (this.via === 'quick-tunnel') this.via = null;
     tunnel?.kill();
     void this.launchTunnel();
   }
@@ -360,8 +398,11 @@ export class HostManager {
     const deadline = Date.now() + ROUTE_TIMEOUT_MS;
     await this.sleep(FIRST_PROBE_MS);
     while (this.wanted && this.tunnel === tunnel && Date.now() < deadline) {
+      if (this.via === 'tailscale') return;
       if (await this.reachable(url)) {
+        if (this.tunnel !== tunnel) return;
         this.address = url;
+        this.via = 'quick-tunnel';
         this.tunnelDelay = RESTART_MIN_MS;
         this.deps.log.info('host: public address is reachable');
         this.set('online');
@@ -390,7 +431,72 @@ export class HostManager {
       this.watchFailures = 0;
       this.deps.log.warn('host: public address stopped answering; reopening');
       this.set('reconnecting', 'Reconnecting to the internet…');
-      this.restartTunnel();
+      if (this.via === 'tailscale') {
+        // Try the permanent address again; meanwhile a quick tunnel keeps members connected.
+        this.via = null;
+        this.address = null;
+        if (!(await this.tryFunnel()) && !this.tunnel) await this.launchTunnel();
+      } else {
+        this.restartTunnel();
+      }
+    }
+  }
+
+  // --- permanent address (Tailscale Funnel) -------------------------------
+
+  /**
+   * Opens the permanent address and moves members over to it. Returns false when
+   * Tailscale is not ready (not installed, signed out) or the address did not work.
+   */
+  private async tryFunnel(): Promise<boolean> {
+    const funnel = this.deps.funnel;
+    if (!funnel || this.funnelBusy || !this.wanted || this.port === null || this.deps.localOnly) return false;
+    this.funnelBusy = true;
+    try {
+      const check = await funnel.check().catch(() => ({ state: 'missing' }) as const);
+      const changed = this.permanent !== check.state;
+      this.permanent = check.state;
+      if (changed) this.emit();
+      if (check.state !== 'ready') return false;
+      if (this.state !== 'online') this.set('starting', 'Opening your permanent address…');
+      const port = this.port;
+      try {
+        await funnel.open(this.local(), (link) => {
+          this.approval = link;
+          this.deps.log.info('host: Tailscale is waiting for Funnel to be allowed');
+          this.emit();
+          // Members keep reaching the server through the quick tunnel while this waits.
+          if (!this.tunnel) void this.launchTunnel();
+        });
+      } finally {
+        this.approval = null;
+      }
+      const deadline = Date.now() + FUNNEL_ROUTE_TIMEOUT_MS;
+      while (this.wanted && this.port === port && Date.now() < deadline) {
+        if (await this.reachable(check.address)) {
+          const quick = this.tunnel;
+          this.tunnel = null;
+          quick?.kill();
+          this.via = 'tailscale';
+          this.address = check.address;
+          this.tunnelDelay = RESTART_MIN_MS;
+          this.watchFailures = 0;
+          this.deps.log.info('host: permanent address is reachable');
+          this.set('online');
+          await this.announce();
+          for (const l of this.addressListeners) l(check.address, this.instanceId ?? '');
+          return true;
+        }
+        await this.sleep(5_000);
+      }
+      this.deps.log.warn('host: the permanent address did not answer; using the quick tunnel');
+      return false;
+    } catch (err) {
+      this.deps.log.warn(`host: permanent address unavailable: ${(err as Error).message}`);
+      this.emit();
+      return false;
+    } finally {
+      this.funnelBusy = false;
     }
   }
 

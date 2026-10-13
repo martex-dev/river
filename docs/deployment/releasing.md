@@ -22,7 +22,9 @@ Releases are produced only by GitHub Actions from a signed-off tag.
    bash scripts/release/tag-release.sh X.Y.Z <release PR number>
    ```
 8. Watch **Actions → Release**. It verifies, builds all platforms, signs and
-   publishes. Check the release page has installers for all three OSes,
+   publishes. Once SignPath signing is set up (see below), the Windows build
+   waits for you to **approve the signing request** in SignPath (you get an
+   e-mail); it waits up to four hours. Check the release page has installers for all three OSes,
    `latest*.yml`, `SHA256SUMS`, the SBOM and both manifest files.
 9. Smoke-test: an installed previous version must detect, download, verify and
    offer the update (Settings → Updates).
@@ -56,3 +58,24 @@ Any other pre-release identifier is rejected by `set-version.ts` and ignored by 
 
 If the key is **compromised**, remove it from `trusted-keys.ts` immediately and
 ship a release signed with the new key; announce in a security advisory.
+
+## Windows code signing (SignPath Foundation)
+
+Free for open-source projects; see [CODE_SIGNING.md](../../CODE_SIGNING.md).
+
+1. Apply at <https://signpath.org/apply> for `martex-dev/river` (AGPL-3.0).
+2. When accepted, in SignPath: create project `river`, signing policy
+   `release-signing` (manual approval by the maintainer), the GitHub Actions
+   trusted build system for this repository, and artifact configuration
+   `installer` with the contents of
+   [.signpath/artifact-configurations/installer.xml](../../.signpath/artifact-configurations/installer.xml).
+3. In GitHub → Settings → Secrets and variables → Actions: secret
+   `SIGNPATH_API_TOKEN` (a SignPath CI user token) and variable
+   `SIGNPATH_ORGANIZATION_ID`. Different slugs go in the variables
+   `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG` and
+   `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG`.
+
+From then on the Release workflow uploads the unsigned installer, waits for the
+signed one, swaps it in, rewrites `latest.yml` and the `.blockmap` for it
+(`scripts/release/use-signed-installer.ts`) and fails unless Windows reports
+the signature as valid. Without the variable, releases stay unsigned as before.

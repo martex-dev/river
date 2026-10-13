@@ -3,6 +3,10 @@
  * got, shown once. Fresh installs see nothing; full notes are in the release.
  */
 export const HIGHLIGHTS: Record<string, string[]> = {
+  '1.0.43': [
+    'Hosting: a permanent, free address through Tailscale — calls and invites stop dropping',
+    'Settings → Hosting shows the three steps; River switches over by itself',
+  ],
   '1.0.42': [
     'A Discord-style layout: Home and your communities in one rail on the left',
     'Home has your friends, direct messages, Social, Calls and Files in one sidebar',
