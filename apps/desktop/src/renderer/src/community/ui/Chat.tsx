@@ -29,6 +29,7 @@ import {
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, ChatMessage, CommunityView, LinkEmbed } from '../../../../shared/ipc.ts';
 import { useShallow } from 'zustand/react/shallow';
+import { announcement } from '../announce.ts';
 import { useOutbox, type Outgoing } from '../outbox.ts';
 import { useDraft } from '../drafts.ts';
 import { play } from '../sound.ts';
@@ -89,6 +90,17 @@ export function TextChannel(props: {
   const s = useCommunity();
   const messages = useCommunity((x) => x.messages[channel.id]) ?? [];
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Screen readers hear new messages from others as they arrive (1.0.38).
+  const [spoken, setSpoken] = useState('');
+  const lastShown = useRef<{ channelId: string; message: ChatMessage | undefined } | null>(null);
+  const newest = messages[messages.length - 1];
+  useEffect(() => {
+    // A different channel starts quiet: its history is not "new".
+    const before = lastShown.current?.channelId === channel.id ? lastShown.current.message : undefined;
+    lastShown.current = { channelId: channel.id, message: newest };
+    const text = announcement(before, newest);
+    if (text) setSpoken(text);
+  }, [channel.id, newest]);
   const [atBottom, setAtBottom] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const myName = memberOf(community, me)?.name ?? null;
@@ -268,6 +280,9 @@ export function TextChannel(props: {
           </button>
         </span>
       </header>
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {spoken}
+      </div>
       {firstNew && (
         <div className="chat__new-bar" role="status">
           <button className="chat__new-bar-jump" onClick={() => jumpTo(firstNew.id)}>

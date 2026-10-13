@@ -35,6 +35,12 @@
   channels, kick/ban, pins, mentions, reactions, typing, presence, unread markers,
   notifications and sounds. All names, profiles and messages are encrypted with the
   community key, which is replaced when someone is removed.
+- **Everything a community needs** — forums, stages, media channels, soundboard, custom
+  emoji and stickers, events, polls, threads, rules screening and self-assignable roles,
+  temporary roles and bans, reports, a word filter, invite tracking, an audit log with
+  filters, and **end-to-end-encrypted webhooks** that let services post without the
+  server reading anything ([ADR 0004](docs/architecture/decisions/0004-webhooks-and-bots.md)).
+  The full comparison is in [docs/product/parity-status.md](docs/product/parity-status.md).
 - **Social** — posts and 24-hour stories for all your friends or chosen people,
   comments, reactions, story views and profiles with bios.
 - **Files** — every file and picture shared with you, encrypted with its own key and

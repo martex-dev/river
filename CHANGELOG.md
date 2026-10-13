@@ -6,6 +6,18 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.38] - 2026-10-13
+
+**Easier for everyone: screen readers hear new messages, and reduced motion means still pictures.**
+
+### Added
+
+- **Screen readers hear new messages** from others as they arrive in the
+  channel you are reading ("Ada: hello", "Ada: sent 2 files"); loading
+  older history stays quiet.
+- **Reduced motion covers stickers and custom emoji too:** animated ones
+  show their first frame.
+
 ## [1.0.37] - 2026-10-13
 
 **Less clicking, less redrawing: change roles for many members at once, and a smoother chat.**

@@ -118,25 +118,40 @@ Each line is one PR; each version ships when its section is done.
 - [x] Back/forward, search filters, jump to date, quiet hours, drafts, duplicates, emoji rename/favourites, server deafen, input sensitivity (1.0.20)
 - [x] Reports, ban cleanup, role icons, alt text, cancel upload, member since (1.0.21)
 
-### 1.0.22 — Voice and community spaces (PR open)
+### 1.0.22 – 1.0.23 — Voice spaces, your data, safer links (shipped)
 
-- [x] Soundboard, forum channels, stage channels, temporary bans, keybind editor; e2e for forums/stages/soundboard
+- [x] Soundboard, forum channels, stage channels, temporary bans, keybind editor (1.0.22)
+- [x] Export my data, sender-made link previews, moderator notes, reaction notifications (1.0.23)
 
-### 1.0.23 — Your data and safer links (in progress)
+### 1.0.24 – 1.0.31 — Parity, shipped
 
-- [x] Export my data (local, readable JSON, never keys)
-- [x] Sender-made link previews (opt-in, public addresses only)
-- [x] Moderator notes
-- [ ] Reaction notifications (opt-in), DM pins and forward from DMs
+- [x] Rules and onboarding, self-assignable roles, stickers, bulk message delete, audit log filters (1.0.24)
+- [x] Slash commands, followed threads, avatar crop, per-community picture, screen share quality, group icons, favourite GIFs (1.0.25)
+- [x] Media channels, entrance sounds, leave voice when alone, conversation mutes, insights, access check (1.0.26)
+- [x] Language setting with Bulgarian (beta), age-restricted channels, role mention details (1.0.27)
+- [x] Word filter and suspicious link warnings (1.0.28)
+- [x] Community picture and banner, DM and group pins, call notices (1.0.29)
+- [x] Drag to reorder roles, temporary roles (1.0.30)
+- [x] Invite tracking and revoke (1.0.31)
 
-### 1.0.24 – 1.0.40 — Remaining parity (see docs/product/parity-status.md)
+### 1.0.32 – 1.0.40 — Finish 1.0.x
 
-- [ ] Onboarding questions and rules screening; self-assignable roles
-- [ ] Bots, slash commands and webhooks with an end-to-end-encrypted model (design first)
-- [ ] Localization framework and a first translation
-- [ ] Group DM icon, mutual friends, per-community avatar, animated avatars
-- [ ] Audit log filters and export; bulk message delete
-- [ ] Image crop for avatars; PDF preview; stream quality settings
+- [x] End-to-end-encrypted incoming webhooks, design first (ADR 0004) (1.0.32)
+- [x] Priority speaker (1.0.33)
+- [x] Animated avatars, rejoin a call that ended unexpectedly (1.0.34)
+- [x] Push-to-talk sounds, right-click menus on categories and roles (1.0.35)
+- [x] More Bulgarian translation (1.0.36)
+- [x] Bulk role changes, smoother chat rendering (1.0.37)
+- [x] Screen reader announcements for new messages (1.0.38)
+- [ ] Docs, parity audit and STATUS refreshed for the end of 1.0.x (1.0.39)
+- [ ] Final 1.0.x polish release (1.0.40)
+
+### After 1.0.x (not started; see ROADMAP Stage 2)
+
+- [ ] Bot accounts with a small client library (ADR 0004)
+- [ ] PDF preview without loading a PDF engine into the untrusted renderer
+- [ ] Mutual friends — needs a private-set-intersection design; contacts never leave the device today
+- [ ] Screen-share audio — needs echo-safe system audio capture on every platform
 
 ### Later
 

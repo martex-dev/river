@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-12 · Current version: **1.0.37** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
+_Last updated: 2026-10-12 · Current version: **1.0.38** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
 
 ## Complete
 
@@ -49,6 +49,7 @@ _Last updated: 2026-10-12 · Current version: **1.0.37** · Stage 1 complete · 
 | PTT sounds, category and role menus  | Push-to-talk press/release sounds (voice sound group); right-click menus on categories and roles                                                                                                            | unit, e2e                                                                                                            |
 | Translation                          | Bulgarian (beta) now covers community settings, category and role menus and the voice panel                                                                                                                 | unit (i18n), e2e                                                                                                     |
 | Bulk roles, chat rendering           | Give or remove a role for many members (server-checked per member, result reported); messages memoized with narrow store subscriptions                                                                      | e2e                                                                                                                  |
+| Accessibility                        | New messages from others announced in a polite live region; reduced motion shows the first frame of animated avatars, stickers and emoji                                                                    | unit (announce), e2e with axe audits                                                                                 |
 | Diagnostics                          | Connection check (Settings → System), startup failure dialog, GPU fallback, `--self-test`                                                                                                                   | `diagnostics*.test.ts*`, `startup-guard.test.ts`                                                                     |
 
 ## Partially complete

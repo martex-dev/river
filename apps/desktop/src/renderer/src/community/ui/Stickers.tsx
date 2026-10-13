@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { CommunityView } from '../../../../shared/ipc.ts';
 import { useCommunity } from '../store.ts';
-import { Popover, can } from './common.tsx';
+import { Popover, StillPicture, can, holdStill } from './common.tsx';
 
 const MAX_SIDE = 320;
 /** GIFs this small are kept as they are, so they stay animated. */
@@ -50,6 +50,8 @@ export function StickerImage({ id }: { id: string }): ReactElement {
     return null;
   });
   if (!sticker) return <span className="muted small">[a sticker that is no longer here]</span>;
+  if (holdStill(sticker.image))
+    return <StillPicture src={sticker.image} className="sticker" label={`Sticker: ${sticker.name}`} />;
   return (
     <img
       className="sticker"
