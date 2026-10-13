@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.ts';
 import { CommunityArtFields } from './CommunityArt.tsx';
 import { InsightsPanel } from './Insights.tsx';
 import { StickerSettings } from './Stickers.tsx';
@@ -79,7 +80,7 @@ export function CommunitySettings(props: {
               className={`settings-tab ${tab === id ? 'is-active' : ''}`}
               onClick={() => setTab(id)}
             >
-              {label}
+              {tr(label)}
             </button>
           ))}
           {community.ownerId === me && (
@@ -289,7 +290,7 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
         <div className="role-list__head">
           <h2>Roles</h2>
           <button className="btn btn--primary btn--small" onClick={() => void create()}>
-            Create role
+            {tr('Create role')}
           </button>
         </div>
         <p className="muted small">
@@ -341,7 +342,7 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
                       setSelected(r.id);
                     }}
                   >
-                    {editable(r) ? 'Edit role' : 'View role'}
+                    {tr(editable(r) ? 'Edit role' : 'View role')}
                   </MenuItem>
                   {!r.everyone && editable(r) && (
                     <MenuItem
@@ -364,7 +365,7 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
                         });
                       }}
                     >
-                      Delete role
+                      {tr('Delete role')}
                     </MenuItem>
                   )}
                 </Popover>
