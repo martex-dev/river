@@ -52,6 +52,8 @@ const DISCONNECTED_GRACE_MS = 3000;
 const RESTART_TIMEOUT_MS = 8000;
 const RETRY_BASE_MS = 1000;
 const RETRY_MAX_MS = 15_000;
+/** Someone already talking through the server is retried directly this often (no rush: sound flows). */
+const RELAYED_RETRY_MS = 30_000;
 /** Someone missing from the participant list keeps their working connection this long (server restart). */
 const MISSING_GRACE_MS = 10_000;
 /** A pair not connected directly after this long talks through the server meanwhile. */
@@ -180,6 +182,13 @@ export class VoiceCall {
   private relay: RelayEngine | null;
   /** People whose voice goes through the server. */
   private readonly relayPeers = new Set<string>();
+  /**
+   * What the call shows for each person, kept for as long as they are in the
+   * channel. Direct-connection attempts come and go underneath (rebuilt after
+   * failures, replaced after network drops); the person, their relayed voice and
+   * their speaking indicator stay put.
+   */
+  private readonly views = new Map<string, RemotePeer>();
   /** People we gave our relay key to. */
   private readonly keySentTo = new Set<string>();
   private local: Record<Slot, MediaStreamTrack | null> = { audio: null, camera: null, screen: null };
@@ -230,6 +239,8 @@ export class VoiceCall {
   /** Connection details per person, for the call tiles (1.0.19). */
   async linkStats(): Promise<Record<string, LinkStats>> {
     const out: Record<string, LinkStats> = {};
+    for (const id of this.relayPeers)
+      if (!this.peers.has(id)) out[id] = { path: 'server', rttMs: null, loss: null };
     for (const [id, p] of this.peers) {
       if (p.remote.relayed && p.pc.connectionState !== 'connected') {
         out[id] = { path: 'server', rttMs: null, loss: null };
@@ -352,13 +363,13 @@ export class VoiceCall {
 
   /** Plays the relayed voice while relayed, the direct one otherwise. */
   private refreshAudio(id: string): void {
-    const peer = this.peers.get(id);
-    if (!peer) return;
+    if (!this.views.has(id)) return;
+    const view = this.view(id);
     const relayed = this.relayPeers.has(id);
-    const stream = relayed ? (this.relay?.streamFor(id) ?? null) : peer.directAudio;
-    peer.remote.relayed = relayed;
-    if (peer.remote.audio !== stream) {
-      peer.remote.audio = stream;
+    const stream = relayed ? (this.relay?.streamFor(id) ?? null) : (this.peers.get(id)?.directAudio ?? null);
+    view.relayed = relayed;
+    if (view.audio !== stream) {
+      view.audio = stream;
       this.watch(id, stream?.getAudioTracks()[0] ?? null);
     }
     this.onChange();
@@ -478,7 +489,38 @@ export class VoiceCall {
   }
 
   remotes(): RemotePeer[] {
-    return [...this.peers.values()].map((p) => p.remote);
+    return this.participants.filter((id) => id !== this.me && this.views.has(id)).map((id) => this.view(id));
+  }
+
+  /** The stable view of this person (created on first sight). */
+  private view(id: string): RemotePeer {
+    let v = this.views.get(id);
+    if (!v) {
+      v = {
+        id,
+        audio: null,
+        camera: null,
+        screen: null,
+        cameraOn: false,
+        screenOn: false,
+        muted: false,
+        state: 'new',
+        reconnecting: false,
+        relayed: this.relayPeers.has(id),
+      };
+      this.views.set(id, v);
+    }
+    return v;
+  }
+
+  /** The person left the channel: drop their connection and everything shown for them. */
+  private forget(id: string): void {
+    this.dropPeer(id);
+    this.forgetRelay(id);
+    this.views.delete(id);
+    this.analysers.get(id)?.source.disconnect();
+    this.analysers.delete(id);
+    this.speaking.delete(id);
   }
 
   localTrack(slot: Slot): MediaStreamTrack | null {
@@ -500,17 +542,19 @@ export class VoiceCall {
     const now = Date.now();
     this.listed = ids;
     const refilling = now - this.resumedAt < MISSING_GRACE_MS;
-    for (const id of [...this.peers.keys()]) {
+    for (const id of ids) if (id !== this.me) this.view(id);
+    for (const id of new Set([...this.peers.keys(), ...this.views.keys()])) {
       if (ids.includes(id)) {
         this.missingSince.delete(id);
         continue;
       }
-      // A working connection outlives a short gap in the list (the server restarting); others go now.
-      const peer = this.peers.get(id)!;
-      if (!refilling || peer.pc.connectionState !== 'connected') {
+      // Sound that still flows — directly or through the server — outlives a short gap in the
+      // list (the server restarting, a reconnect race); others go now.
+      const peer = this.peers.get(id);
+      const flowing = peer?.pc.connectionState === 'connected' || this.relayPeers.has(id);
+      if (!refilling || !flowing) {
         this.missingSince.delete(id);
-        this.dropPeer(id);
-        this.forgetRelay(id);
+        this.forget(id);
         continue;
       }
       if (!this.missingSince.has(id)) {
@@ -518,8 +562,7 @@ export class VoiceCall {
         this.later(MISSING_GRACE_MS, () => {
           if (this.missingSince.has(id) && !this.listed.includes(id)) {
             this.missingSince.delete(id);
-            this.dropPeer(id);
-            this.forgetRelay(id);
+            this.forget(id);
             this.onChange();
           }
         });
@@ -585,12 +628,12 @@ export class VoiceCall {
       return;
     }
     if (signal.type === 'state') {
-      const peer = this.peers.get(from);
-      if (peer) {
-        peer.remote.cameraOn = !!signal.camera;
-        peer.remote.screenOn = !!signal.screen;
-        peer.remote.muted = !!signal.muted;
-        peer.remote.priority = signal.priority === true;
+      if (this.participants.includes(from)) {
+        const view = this.view(from);
+        view.cameraOn = !!signal.camera;
+        view.screenOn = !!signal.screen;
+        view.muted = !!signal.muted;
+        view.priority = signal.priority === true;
         this.onChange();
       }
       return;
@@ -689,6 +732,7 @@ export class VoiceCall {
     for (const t of this.timers) clearTimeout(t);
     this.timers.clear();
     for (const id of [...this.peers.keys()]) this.dropPeer(id);
+    this.views.clear();
     this.relay?.close();
     this.relayPeers.clear();
     this.stopLocal();
@@ -733,18 +777,7 @@ export class VoiceCall {
       createdAt: Date.now(),
       everConnected: false,
       restarted: false,
-      remote: {
-        id,
-        audio: null,
-        camera: null,
-        screen: null,
-        cameraOn: false,
-        screenOn: false,
-        muted: false,
-        state: 'new',
-        reconnecting: false,
-        relayed: false,
-      },
+      remote: this.view(id),
       pendingIce: [],
       sdpSent: false,
       outgoingIce: [],
@@ -774,8 +807,12 @@ export class VoiceCall {
       peer.remote[slot] = stream;
       this.onChange();
     };
+    peer.remote.state = 'new';
+    peer.remote.camera = null;
+    peer.remote.screen = null;
     this.peers.set(id, peer);
-    if (this.relayPeers.has(id)) queueMicrotask(() => this.refreshAudio(id));
+    // Voice: the relayed stream keeps playing; a direct one arrives with this connection's track.
+    this.refreshAudio(id);
     // Not connected directly after a few seconds: talk through the server meanwhile.
     this.peerTimer(peer, RELAY_AFTER_MS, () => {
       if (pc.connectionState !== 'connected') this.enableRelay(id);
@@ -831,7 +868,9 @@ export class VoiceCall {
     }
     const n = (this.retries.get(id) ?? 0) + 1;
     this.retries.set(id, n);
-    const delay = Math.min(RETRY_BASE_MS * 2 ** Math.min(n - 1, 4), RETRY_MAX_MS);
+    const delay = this.relayPeers.has(id)
+      ? RELAYED_RETRY_MS
+      : Math.min(RETRY_BASE_MS * 2 ** Math.min(n - 1, 4), RETRY_MAX_MS);
     peer.remote.reconnecting = true;
     this.onChange();
     this.later(delay, () => {
@@ -915,8 +954,11 @@ export class VoiceCall {
   }
 
   private broadcastState(): void {
-    for (const [id, p] of this.peers)
-      if (p.pc.connectionState === 'connected') this.send(id, this.stateSignal());
+    for (const id of this.participants) {
+      if (id === this.me) continue;
+      const p = this.peers.get(id);
+      if (p?.pc.connectionState === 'connected' || this.relayPeers.has(id)) this.send(id, this.stateSignal());
+    }
   }
 
   private sendSdp(to: string, peer: Peer): void {
@@ -955,9 +997,10 @@ export class VoiceCall {
     peer.pc.ontrack = null;
     peer.pc.close();
     this.peers.delete(id);
-    this.analysers.get(id)?.source.disconnect();
-    this.analysers.delete(id);
-    this.speaking.delete(id);
+    if (peer.directAudio && peer.remote.audio === peer.directAudio) {
+      peer.remote.audio = null;
+      this.watch(id, null);
+    }
   }
 
   private peerTimer(peer: Peer, ms: number, fn: () => void): void {
