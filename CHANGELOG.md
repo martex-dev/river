@@ -6,7 +6,11 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-### Added (1.0.30)
+## [1.0.30] - 2026-10-13
+
+**Roles that fit: drag to reorder, and roles that end on their own.**
+
+### Added
 
 - **Drag roles to reorder them** in Community settings → Roles.
 - **Temporary roles:** give someone a role for an hour, a day, a week or
