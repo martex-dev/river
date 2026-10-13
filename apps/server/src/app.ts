@@ -14,6 +14,7 @@ import { registerTurnRoutes } from './routes/turn.ts';
 import { registerInstanceRoutes } from './routes/instance.ts';
 import { registerCommunityRoutes } from './routes/communities.ts';
 import { registerAdminRoutes } from './routes/admin.ts';
+import { registerLandingRoutes } from './routes/landing.ts';
 import serverPackage from '../package.json' with { type: 'json' };
 
 export const SERVER_VERSION: string = serverPackage.version;
@@ -134,6 +135,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.addHook('onClose', async () => hub.close());
   const ops = await registerCommunityRoutes(app, { config, database: deps.database, now, hub });
   registerAdminRoutes(app, { config, database: deps.database, now, hub, ops });
+  registerLandingRoutes(app);
   registerSelfRoutes(app, { database: deps.database, now, hub, ops });
   registerMessagingRoutes(app, { config, database: deps.database, now, hub });
   registerTurnRoutes(app, { config, database: deps.database, now });
