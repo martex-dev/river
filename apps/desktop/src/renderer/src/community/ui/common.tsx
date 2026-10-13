@@ -79,8 +79,22 @@ export function CustomStatus({ member }: { member: Pick<MemberView, 'customStatu
   );
 }
 
-/** The first frame of an animated avatar, for people who asked for less motion (1.0.34). */
-function StillPicture({ src, size }: { src: string; size: number }): ReactElement {
+/** True when the user asked for less motion and this picture is an animated GIF (1.0.34, 1.0.38). */
+export function holdStill(src: string): boolean {
+  return src.startsWith('data:image/gif') && document.documentElement.dataset.motion === 'reduced';
+}
+
+/**
+ * The first frame of an animated picture, for people who asked for less motion.
+ * With `size`, a square cover crop (avatars); without, the picture's own shape.
+ */
+export function StillPicture(props: {
+  src: string;
+  size?: number;
+  className?: string;
+  label?: string;
+}): ReactElement {
+  const { src, size } = props;
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     let alive = true;
@@ -89,21 +103,27 @@ function StillPicture({ src, size }: { src: string; size: number }): ReactElemen
       .then((bitmap) => {
         const canvas = ref.current;
         if (alive && canvas) {
-          // Cover the square like object-fit: cover.
-          const side = Math.min(bitmap.width, bitmap.height);
-          canvas
-            .getContext('2d')
-            ?.drawImage(
-              bitmap,
-              (bitmap.width - side) / 2,
-              (bitmap.height - side) / 2,
-              side,
-              side,
-              0,
-              0,
-              canvas.width,
-              canvas.height,
-            );
+          if (size === undefined) {
+            canvas.width = bitmap.width;
+            canvas.height = bitmap.height;
+            canvas.getContext('2d')?.drawImage(bitmap, 0, 0);
+          } else {
+            // Cover the square like object-fit: cover.
+            const side = Math.min(bitmap.width, bitmap.height);
+            canvas
+              .getContext('2d')
+              ?.drawImage(
+                bitmap,
+                (bitmap.width - side) / 2,
+                (bitmap.height - side) / 2,
+                side,
+                side,
+                0,
+                0,
+                canvas.width,
+                canvas.height,
+              );
+          }
         }
         bitmap.close();
       })
@@ -111,9 +131,19 @@ function StillPicture({ src, size }: { src: string; size: number }): ReactElemen
     return () => {
       alive = false;
     };
-  }, [src]);
-  const px = Math.round(size * (window.devicePixelRatio || 1));
-  return <canvas ref={ref} width={px} height={px} aria-hidden="true" />;
+  }, [src, size]);
+  const px = size === undefined ? undefined : Math.round(size * (window.devicePixelRatio || 1));
+  return (
+    <canvas
+      ref={ref}
+      width={px}
+      height={px}
+      className={props.className}
+      {...(props.label
+        ? { role: 'img', 'aria-label': props.label, title: props.label }
+        : { 'aria-hidden': true })}
+    />
+  );
 }
 
 export function Avatar(props: {
@@ -131,7 +161,7 @@ export function Avatar(props: {
       style={{ width: size, height: size, fontSize: Math.max(10, size * 0.38) }}
     >
       {props.avatar ? (
-        props.avatar.startsWith('data:image/gif') && document.documentElement.dataset.motion === 'reduced' ? (
+        holdStill(props.avatar) ? (
           <StillPicture src={props.avatar} size={size} />
         ) : (
           <img src={props.avatar} alt="" draggable={false} />
@@ -449,6 +479,14 @@ export function CustomEmoji({ name, id, big }: { name: string; id: string; big?:
     return null;
   });
   if (!image) return <span className="custom-emoji--missing">:{name}:</span>;
+  if (holdStill(image))
+    return (
+      <StillPicture
+        src={image}
+        className={`custom-emoji ${big ? 'custom-emoji--big' : ''}`}
+        label={`:${name}:`}
+      />
+    );
   return (
     <img
       className={`custom-emoji ${big ? 'custom-emoji--big' : ''}`}

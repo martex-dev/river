@@ -11,6 +11,8 @@ All notable changes to River are documented here. The format follows
 - **Screen readers hear new messages** from others as they arrive in the
   channel you are reading ("Ada: hello", "Ada: sent 2 files"); loading
   older history stays quiet.
+- **Reduced motion covers stickers and custom emoji too:** animated ones
+  show their first frame.
 
 ### Added (1.0.37)
 
