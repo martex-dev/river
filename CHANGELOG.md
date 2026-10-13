@@ -6,7 +6,11 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-### Added (1.0.36)
+## [1.0.36] - 2026-10-13
+
+**More of River in Bulgarian.**
+
+### Added
 
 - **More of River in Bulgarian:** Community settings, category and role
   menus, and the voice panel.
