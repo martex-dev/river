@@ -286,8 +286,20 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('moveRole'), communityId: id, roleId: id, direction }).strict(),
+  /** Drag a role to just above another one, or to the bottom with null (1.0.30). */
+  z.object({ a: z.literal('placeRole'), communityId: id, roleId: id, aboveId: id.nullable() }).strict(),
   z.object({ a: z.literal('deleteRole'), communityId: id, roleId: id }).strict(),
   z.object({ a: z.literal('setMemberRoles'), communityId: id, riverId, roles: z.array(id).max(50) }).strict(),
+  /** Give a role for a while (1.0.30). */
+  z
+    .object({
+      a: z.literal('giveTempRole'),
+      communityId: id,
+      riverId,
+      roleId: id,
+      seconds: z.union([z.literal(3600), z.literal(86_400), z.literal(604_800), z.literal(2_592_000)]),
+    })
+    .strict(),
   z.object({ a: z.literal('kick'), communityId: id, riverId }).strict(),
   z
     .object({

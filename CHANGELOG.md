@@ -6,6 +6,17 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.30] - 2026-10-13
+
+**Roles that fit: drag to reorder, and roles that end on their own.**
+
+### Added
+
+- **Drag roles to reorder them** in Community settings → Roles.
+- **Temporary roles:** give someone a role for an hour, a day, a week or
+  30 days from their profile card (⏳ shows until when); it goes away on its
+  own.
+
 ## [1.0.29] - 2026-10-13
 
 **Make it yours: community pictures and banners, pins in direct messages, and calls in the conversation.**

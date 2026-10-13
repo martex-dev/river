@@ -278,6 +278,8 @@ export interface MemberView {
   timeoutUntil: string | null;
   /** The day they joined this community, YYYY-MM-DD (1.0.21). */
   joinedOn?: string;
+  /** When temporary roles end, by role ID (1.0.30). */
+  roleExpiry?: Record<string, string>;
 }
 
 /** One line of Settings → System → Connection check. Never contains content, keys or tokens. */

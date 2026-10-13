@@ -102,6 +102,7 @@ export function ProfileCard(props: {
   const voiceState = community.voiceStates[member.riverId];
   const volume = settings?.voice.userVolumes[member.riverId] ?? 1;
 
+  const [giveFor, setGiveFor] = useState(0);
   const setRoles = (ids: string[]): void => {
     void s.run({ a: 'setMemberRoles', communityId: community.id, riverId: member.riverId, roles: ids });
   };
@@ -200,6 +201,14 @@ export function ProfileCard(props: {
                 style={{ background: r.color ? hex(r.color) : 'var(--text-faint)' }}
               />
               {r.name}
+              {member.roleExpiry?.[r.id] && (
+                <span
+                  className="role-chip__until"
+                  title={`Until ${new Date(member.roleExpiry[r.id]!).toLocaleString()}`}
+                >
+                  ⏳
+                </span>
+              )}
               {canRoles && assignable.some((a) => a.id === r.id) && (
                 <button
                   className="role-chip__x"
@@ -224,6 +233,16 @@ export function ProfileCard(props: {
         </div>
         {adding && (
           <div className="role-picker">
+            <label className="role-picker__for">
+              <span className="muted small">For</span>
+              <select value={giveFor} onChange={(e) => setGiveFor(Number(e.target.value))}>
+                <option value={0}>Good</option>
+                <option value={3600}>1 hour</option>
+                <option value={86_400}>1 day</option>
+                <option value={604_800}>1 week</option>
+                <option value={2_592_000}>30 days</option>
+              </select>
+            </label>
             {assignable
               .filter((r) => !member.roles.includes(r.id))
               .map((r) => (
@@ -232,7 +251,15 @@ export function ProfileCard(props: {
                   className="role-picker__item"
                   onClick={() => {
                     setAdding(false);
-                    setRoles([...member.roles, r.id]);
+                    if (giveFor)
+                      void s.run({
+                        a: 'giveTempRole',
+                        communityId: community.id,
+                        riverId: member.riverId,
+                        roleId: r.id,
+                        seconds: giveFor as 3600 | 86_400 | 604_800 | 2_592_000,
+                      });
+                    else setRoles([...member.roles, r.id]);
                   }}
                 >
                   <span

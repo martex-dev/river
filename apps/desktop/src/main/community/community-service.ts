@@ -812,6 +812,7 @@ export class CommunityService {
         rank: topPosition(ownerId, wireRoles, { riverId: m.riverId, roles: m.roles }),
         timeoutUntil: m.timeoutUntil && Date.parse(m.timeoutUntil) > Date.now() ? m.timeoutUntil : null,
         ...(m.joinedOn ? { joinedOn: m.joinedOn } : {}),
+        ...(m.roleExpiry ? { roleExpiry: m.roleExpiry } : {}),
       };
     });
 
@@ -1743,13 +1744,21 @@ export class CommunityService {
         await this.call(`/roles/${act.roleId}`, 'PATCH', body, z.unknown());
         break;
       }
-      case 'moveRole': {
+      case 'moveRole':
+      case 'placeRole': {
         const community = this.requireCommunity(act.communityId);
         const list = community.roles.filter((r) => !r.everyone); // highest first
         const from = list.findIndex((r) => r.id === act.roleId);
-        const to = from - act.direction; // direction 1 = up (higher position)
-        if (from < 0 || to < 0 || to >= list.length) break;
-        [list[from], list[to]] = [list[to]!, list[from]!];
+        if (from < 0) break;
+        if (act.a === 'moveRole') {
+          const to = from - act.direction; // direction 1 = up (higher position)
+          if (to < 0 || to >= list.length) break;
+          [list[from], list[to]] = [list[to]!, list[from]!];
+        } else {
+          const [moving] = list.splice(from, 1);
+          const at = act.aboveId ? list.findIndex((r) => r.id === act.aboveId) : list.length;
+          list.splice(at < 0 ? list.length : at, 0, moving!);
+        }
         const count = list.length;
         // Lower roles first, so a role never needs to pass above the mover's own role.
         for (let i = count - 1; i >= 0; i--) {
@@ -1762,6 +1771,15 @@ export class CommunityService {
       }
       case 'deleteRole':
         await this.call(`/roles/${act.roleId}`, 'DELETE', undefined, z.unknown());
+        break;
+      case 'giveTempRole':
+        await this.call(
+          `/communities/${act.communityId}/members/${act.riverId}/temp-role`,
+          'POST',
+          { roleId: act.roleId, seconds: act.seconds },
+          z.unknown(),
+        ).catch(explain);
+        await this.refresh();
         break;
       case 'setMemberRoles':
         await this.call(

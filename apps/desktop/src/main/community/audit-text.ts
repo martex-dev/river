@@ -86,6 +86,8 @@ export function describeAudit(
         const n = Number(d.count ?? 0);
         return `deleted ${n} message${n === 1 ? '' : 's'} in ${channel(typeof d.channelId === 'string' ? d.channelId : null)}`;
       }
+      case 'member.tempRole':
+        return `gave ${person(t)} ${role(typeof d.role === 'string' ? d.role : null)} for a while`;
       case 'member.kick':
         return `kicked ${person(t)}`;
       case 'member.ban':

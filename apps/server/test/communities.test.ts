@@ -519,6 +519,30 @@ describe('communities', () => {
       expect((await fetchCommunity(a, member.token, cid)).art).toBeNull();
     });
 
+    it('temporary roles end on their own and survive other role changes', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const { rid: vip } = await role(a, owner.token, cid, 0);
+      const { rid: other } = await role(a, owner.token, cid, 0);
+      const url = `/v1/communities/${cid}/members/${member.riverId}/temp-role`;
+      expect(await status(a, 'POST', url, member.token, { roleId: vip, seconds: 3600 })).toBe(403);
+      expect(await status(a, 'POST', url, owner.token, { roleId: vip, seconds: 999 })).toBe(400);
+      expect(await status(a, 'POST', url, owner.token, { roleId: vip, seconds: 3600 })).toBe(200);
+      await assign(a, owner.token, cid, member.riverId, [vip, other]);
+      const mine = async () =>
+        (await fetchCommunity(a, owner.token, cid)).members.find((m) => m.riverId === member.riverId)!;
+      expect((await mine()).roles.sort()).toEqual([vip, other].sort());
+      expect((await mine()).roleExpiry?.[vip]).toBeDefined();
+      vi.useFakeTimers({ now: Date.now() + 3_601_000, toFake: ['Date'] });
+      try {
+        expect((await mine()).roles).toEqual([other]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('moderator notes are only for people who moderate members', async () => {
       const a = await start();
       const owner = await user(a);

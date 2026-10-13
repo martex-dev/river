@@ -141,6 +141,8 @@ export interface MemberRolesTable {
   community_id: string;
   river_id: string;
   role_id: string;
+  /** A role given for a while ends then (1.0.30); null = for good. */
+  expires_at?: string | null;
 }
 
 export interface CategoryOverwritesTable {

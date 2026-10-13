@@ -35,6 +35,7 @@ import {
   MAX_COMMUNITY_STICKERS,
   bulkDeleteRequestSchema,
   updateOnboardingRequestSchema,
+  tempRoleRequestSchema,
   updateArtRequestSchema,
   selfRolesRequestSchema,
   createNoteRequestSchema,
@@ -400,6 +401,40 @@ export async function registerCommunityRoutes(
     },
   );
 
+  app.post<{ Params: { id: string; member: string } }>(
+    `${API_PREFIX}/communities/:id/members/:member/temp-role`,
+    authed,
+    async (request) => {
+      const model = await community(request.params.id, me(request));
+      const target = parse(riverIdSchema, request.params.member);
+      if (!model.member(target)) throw notFound();
+      if (!model.can(me(request), Permission.MANAGE_ROLES)) throw forbidden();
+      const req = parse(tempRoleRequestSchema, request.body);
+      const role = model.role(req.roleId);
+      if (!role || role.id === model.everyoneRoleId) throw bad('Unknown role');
+      const top = model.ownerId === me(request) ? Infinity : model.top(me(request));
+      if (role.position >= top) throw forbidden('You can only give roles below your highest role');
+      if (target !== me(request) && !model.outranks(me(request), target) && model.ownerId !== me(request))
+        throw forbidden('You can only change roles of members below you');
+      const expiresAt = new Date(deps.now().getTime() + req.seconds * 1000).toISOString();
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .deleteFrom('member_roles')
+          .where('community_id', '=', model.id)
+          .where('river_id', '=', target)
+          .where('role_id', '=', role.id)
+          .execute();
+        await trx
+          .insertInto('member_roles')
+          .values({ community_id: model.id, river_id: target, role_id: role.id, expires_at: expiresAt })
+          .execute();
+      });
+      await audit(model.id, me(request), 'member.tempRole', target, { role: role.id, until: expiresAt });
+      changed(model);
+      return { ok: true, expiresAt };
+    },
+  );
+
   app.post<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/accept`, authed, async (request) => {
     const model = await community(request.params.id, me(request));
     await db
@@ -422,6 +457,16 @@ export async function registerCommunityRoutes(
     // Keep every role that is not self-assignable; set the self-assignable ones to the choice.
     const next = [...new Set([...current.filter((id) => !model.selfRoles.includes(id)), ...req.roles])];
     await db.transaction().execute(async (trx) => {
+      const expiry = new Map(
+        (
+          await trx
+            .selectFrom('member_roles')
+            .select(['role_id', 'expires_at'])
+            .where('community_id', '=', model.id)
+            .where('river_id', '=', me(request))
+            .execute()
+        ).map((r) => [r.role_id, r.expires_at ?? null]),
+      );
       await trx
         .deleteFrom('member_roles')
         .where('community_id', '=', model.id)
@@ -430,7 +475,12 @@ export async function registerCommunityRoutes(
       for (const id of next)
         await trx
           .insertInto('member_roles')
-          .values({ community_id: model.id, river_id: me(request), role_id: id })
+          .values({
+            community_id: model.id,
+            river_id: me(request),
+            role_id: id,
+            expires_at: expiry.get(id) ?? null,
+          })
           .execute();
     });
     await audit(model.id, me(request), 'member.selfRoles', me(request), { roles: req.roles });
@@ -1460,6 +1510,17 @@ export async function registerCommunityRoutes(
         throw forbidden('You can only change roles of members below you');
       }
       await db.transaction().execute(async (trx) => {
+        // A temporary role that stays keeps its end time (1.0.30).
+        const expiry = new Map(
+          (
+            await trx
+              .selectFrom('member_roles')
+              .select(['role_id', 'expires_at'])
+              .where('community_id', '=', model.id)
+              .where('river_id', '=', target)
+              .execute()
+          ).map((r) => [r.role_id, r.expires_at ?? null]),
+        );
         await trx
           .deleteFrom('member_roles')
           .where('community_id', '=', model.id)
@@ -1468,7 +1529,12 @@ export async function registerCommunityRoutes(
         for (const id of after)
           await trx
             .insertInto('member_roles')
-            .values({ community_id: model.id, river_id: target, role_id: id })
+            .values({
+              community_id: model.id,
+              river_id: target,
+              role_id: id,
+              expires_at: expiry.get(id) ?? null,
+            })
             .execute();
       });
       await audit(model.id, me(request), 'member.roles', target, {

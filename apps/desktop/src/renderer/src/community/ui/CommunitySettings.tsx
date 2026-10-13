@@ -254,6 +254,7 @@ export const infoOf = (bit: number): { label: string; help: string } => {
 };
 
 function Roles({ community, me }: { community: CommunityView; me: string }): ReactElement {
+  const [dragOver, setDragOver] = useState<string | null>(null);
   const s = useCommunity();
   const [selected, setSelected] = useState<string>(
     community.roles.find((r) => !r.everyone)?.id ?? community.id,
@@ -284,13 +285,41 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
         </div>
         <p className="muted small">
           Members get every permission from all their roles. Higher roles can manage lower ones. The owner can
-          do everything.
+          do everything. Drag roles to reorder them.
         </p>
         {community.roles.map((r, i) => {
           const others = community.roles.filter((x) => !x.everyone);
           const idx = others.findIndex((x) => x.id === r.id);
           return (
-            <div key={r.id} className={`role-row ${r.id === role.id ? 'is-active' : ''}`}>
+            <div
+              key={r.id}
+              className={`role-row ${r.id === role.id ? 'is-active' : ''} ${dragOver === r.id ? 'is-drop' : ''}`}
+              draggable={!r.everyone && editable(r)}
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/role', r.id);
+                e.dataTransfer.effectAllowed = 'move';
+              }}
+              onDragOver={(e) => {
+                if (!e.dataTransfer.types.includes('text/role')) return;
+                // Only above roles you may place things under (or the bottom, @everyone's row).
+                if (!r.everyone && !isOwner && r.position >= community.myRank) return;
+                e.preventDefault();
+                setDragOver(r.id);
+              }}
+              onDragLeave={() => setDragOver(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(null);
+                const moving = e.dataTransfer.getData('text/role');
+                if (!moving || moving === r.id) return;
+                void s.run({
+                  a: 'placeRole',
+                  communityId: community.id,
+                  roleId: moving,
+                  aboveId: r.everyone ? null : r.id,
+                });
+              }}
+            >
               <button className="role-row__main" onClick={() => setSelected(r.id)}>
                 <span
                   className="role-chip__dot"
