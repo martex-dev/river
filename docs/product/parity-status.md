@@ -70,25 +70,25 @@ are named where it helps. This file is updated with every release.
 
 ## 3. The chat interface
 
-| Item                                      | Status  | Notes                                                                                          |
-| ----------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
-| Hover toolbar, timestamps, reactions      | ✅      |                                                                                                |
-| Avatar/name click → profile               | ✅      | 1.0.17                                                                                         |
-| Click timestamp → copy link               | ✅      | 1.0.17                                                                                         |
-| Reactions add/remove, who reacted         | ✅      | View reactions (1.0.18)                                                                        |
-| Reply preview → jump                      | ✅      |                                                                                                |
-| Attachment click → viewer                 | ✅      | Zoom/pan/copy (1.0.18)                                                                         |
-| Channel/user/role mentions clickable      | ✅      | Role details on hover/focus (1.0.27)                                                           |
-| Invite link preview & join flow           | ✅      |                                                                                                |
-| Right-click everywhere                    | ✅ / 🔨 | Messages, channels, categories (1.0.35), communities, members, voice participants ✅; roles ⏳ |
-| Paste images, drag files                  | ✅      |                                                                                                |
-| Scroll restore after navigation           | ✅      | 1.0.18                                                                                         |
-| Jump to latest / unread / reply origin    | ✅      |                                                                                                |
-| Date separators, relative times, grouping | ✅      |                                                                                                |
-| Expand/collapse long messages             | ✅      | Show more / Show less (1.0.19)                                                                 |
-| Spoilers, highlighted code + copy         | ✅      | 1.0.17                                                                                         |
-| Embeds with loading/failed states         | 🔒      | Sender-made previews (1.0.23)                                                                  |
-| Empty/loading/error/permission states     | ✅      |                                                                                                |
+| Item                                      | Status | Notes                                                                                       |
+| ----------------------------------------- | ------ | ------------------------------------------------------------------------------------------- |
+| Hover toolbar, timestamps, reactions      | ✅     |                                                                                             |
+| Avatar/name click → profile               | ✅     | 1.0.17                                                                                      |
+| Click timestamp → copy link               | ✅     | 1.0.17                                                                                      |
+| Reactions add/remove, who reacted         | ✅     | View reactions (1.0.18)                                                                     |
+| Reply preview → jump                      | ✅     |                                                                                             |
+| Attachment click → viewer                 | ✅     | Zoom/pan/copy (1.0.18)                                                                      |
+| Channel/user/role mentions clickable      | ✅     | Role details on hover/focus (1.0.27)                                                        |
+| Invite link preview & join flow           | ✅     |                                                                                             |
+| Right-click everywhere                    | ✅     | Messages, channels, categories and roles (1.0.35), communities, members, voice participants |
+| Paste images, drag files                  | ✅     |                                                                                             |
+| Scroll restore after navigation           | ✅     | 1.0.18                                                                                      |
+| Jump to latest / unread / reply origin    | ✅     |                                                                                             |
+| Date separators, relative times, grouping | ✅     |                                                                                             |
+| Expand/collapse long messages             | ✅     | Show more / Show less (1.0.19)                                                              |
+| Spoilers, highlighted code + copy         | ✅     | 1.0.17                                                                                      |
+| Embeds with loading/failed states         | 🔒     | Sender-made previews (1.0.23)                                                               |
+| Empty/loading/error/permission states     | ✅     |                                                                                             |
 
 ## 4. Formatting, reactions and expression
 
