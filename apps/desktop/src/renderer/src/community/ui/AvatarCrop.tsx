@@ -116,3 +116,22 @@ export function AvatarCropDialog(props: {
     </Modal>
   );
 }
+
+/** Small animated GIFs stay animated as avatars (1.0.34); anything larger is cropped to a still. */
+export const KEEP_GIF_BYTES = 44_000;
+
+/** A data URL of a small, real GIF to use as is, or null to crop it like any picture (pure, for tests). */
+export function animatedAvatar(bytes: Uint8Array): string | null {
+  if (bytes.length > KEEP_GIF_BYTES) return null;
+  const magic = String.fromCharCode(...bytes.subarray(0, 6));
+  if (magic !== 'GIF87a' && magic !== 'GIF89a') return null;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return `data:image/gif;base64,${btoa(binary)}`;
+}
+
+export async function keepAnimated(file: File): Promise<string | null> {
+  if (file.type !== 'image/gif' || file.size > KEEP_GIF_BYTES) return null;
+  return animatedAvatar(new Uint8Array(await file.arrayBuffer()));
+}

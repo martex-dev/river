@@ -18,6 +18,7 @@ import { effectiveNotify, newReactions, shouldAlert, silenced } from '../../../s
 import { play } from './sound.ts';
 import { VoiceCall } from './voice.ts';
 import { WebCodecsRelay } from './relay-audio.ts';
+import { forgetCall, rememberCall } from './rejoin.ts';
 
 export type Modal =
   | { kind: 'community-settings'; communityId: string; tab?: CommunityTab }
@@ -443,6 +444,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         const call = get().call;
         if (call && !call.channelId.startsWith('dm:')) {
           set({ call: null });
+          forgetCall();
           void call.leave();
         }
         play('error');
@@ -456,6 +458,8 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         const call = get().call;
         if (!call) return;
         set({ call: null });
+        // A moderator ended it: do not offer to rejoin.
+        forgetCall();
         void call.leave();
         play('disconnected');
         get().notify('You were disconnected from the voice channel.');
@@ -672,6 +676,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     set({ call, callError: null });
     try {
       await call.start();
+      if (!channelId.startsWith('dm:')) rememberCall(channelId);
       play('selfJoin');
       sendVoiceState();
       // Your entrance sound for this community, if you picked one (1.0.26).
@@ -696,6 +701,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   leaveVoice: async () => {
     const call = get().call;
     set({ call: null, handRaised: false });
+    forgetCall();
     if (call) play('selfLeave');
     await call?.leave();
   },

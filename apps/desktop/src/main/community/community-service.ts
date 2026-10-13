@@ -168,7 +168,7 @@ export function readCustomStatus(
   return { text, emoji };
 }
 
-const AVATAR_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/;
+const AVATAR_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+=*$/;
 
 /** Server error codes turned into messages people understand. */
 function explain(err: unknown): never {

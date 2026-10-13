@@ -1,4 +1,4 @@
-import { AvatarCropDialog } from './AvatarCrop.tsx';
+import { AvatarCropDialog, keepAnimated } from './AvatarCrop.tsx';
 import {
   DEFAULT_KEYBINDS,
   KEYBIND_ACTIONS,
@@ -165,7 +165,7 @@ function Profile(): ReactElement {
               e.target.value = '';
               if (!file) return;
               if (file.size > 15 * 1024 * 1024) return s.notify('That image is too large.', 'error');
-              setCropping(file);
+              void keepAnimated(file).then((gif) => (gif ? set({ avatar: gif }) : setCropping(file)));
             }}
           />
           {cropping && (

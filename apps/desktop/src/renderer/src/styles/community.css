@@ -460,6 +460,7 @@
   transition: box-shadow var(--dur-fast);
 }
 .avatar img,
+.avatar canvas,
 .avatar__fallback {
   display: grid;
   place-items: center;

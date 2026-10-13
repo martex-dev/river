@@ -1,5 +1,5 @@
 import { AccessCheck } from './AccessCheck.tsx';
-import { AvatarCropDialog } from './AvatarCrop.tsx';
+import { AvatarCropDialog, keepAnimated } from './AvatarCrop.tsx';
 import { ForumSettings } from './Forum.tsx';
 import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
@@ -774,7 +774,7 @@ function CommunityAvatarField({ community }: { community: CommunityView }): Reac
           onChange={(e) => {
             const file = e.target.files?.[0];
             e.target.value = '';
-            if (file) setCropping(file);
+            if (file) void keepAnimated(file).then((gif) => (gif ? set(gif) : setCropping(file)));
           }}
         />
         {cropping && (

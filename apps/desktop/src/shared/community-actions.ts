@@ -58,7 +58,7 @@ const direction = z.union([z.literal(-1), z.literal(1)]);
 export const avatarSchema = z
   .string()
   .max(60_000)
-  .regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/);
+  .regex(/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+=*$/);
 
 const b64 = (bytes: number) =>
   z

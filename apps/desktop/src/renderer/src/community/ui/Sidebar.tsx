@@ -1,5 +1,6 @@
 import { tr } from '../../i18n.ts';
 import { useState, type DragEvent, type ReactElement } from 'react';
+import { forgetCall, lastCall } from '../rejoin.ts';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, CommunityView, MemberView } from '../../../../shared/ipc.ts';
 import { ProfileCard } from './Members.tsx';
@@ -165,7 +166,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
       )}
       <EventsRow community={community} />
       <ChannelList community={community} me={me} />
-      <VoicePanel community={community} />
+      <VoicePanel community={community} me={me} />
       <UserPanel me={me} community={community} />
     </aside>
   );
@@ -399,11 +400,12 @@ export function ChannelRow(props: {
   );
 }
 
-function VoicePanel({ community }: { community: CommunityView }): ReactElement | null {
+function VoicePanel({ community, me }: { community: CommunityView; me: string }): ReactElement | null {
   const s = useCommunity();
   useCommunity((x) => x.callVersion);
   const call = s.call;
-  if (!call || call.channelId.startsWith('dm:')) return null;
+  if (!call) return <RejoinPanel me={me} />;
+  if (call.channelId.startsWith('dm:')) return null;
   const channelCommunity =
     s.communities.find((c) => c.channels.some((ch) => ch.id === call.channelId)) ?? community;
   const channel = channelCommunity.channels.find((ch) => ch.id === call.channelId);
@@ -439,6 +441,45 @@ function VoicePanel({ community }: { community: CommunityView }): ReactElement |
           onClick={() => void s.leaveVoice()}
         >
           <PhoneOffIcon size={18} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** "You were in 🔊 Lounge — Rejoin" after River closed or lost the call (1.0.34). */
+function RejoinPanel({ me }: { me: string }): ReactElement | null {
+  const s = useCommunity();
+  const [, setDismissed] = useState(0);
+  const last = lastCall();
+  if (!last) return null;
+  const where = s.communities.find((c) => c.channels.some((ch) => ch.id === last.channelId));
+  const channel = where?.channels.find((ch) => ch.id === last.channelId);
+  if (!where || !channel || channel.kind !== 'voice') return null;
+  return (
+    <div className="voice-panel voice-panel--rejoin" role="status">
+      <div className="voice-panel__status">
+        <div>
+          <strong>Call ended unexpectedly</strong>
+          <span className="voice-panel__where">
+            {channel.name} / {where.name}
+          </span>
+        </div>
+      </div>
+      <div className="voice-panel__actions">
+        <button className="btn btn--primary btn--small" onClick={() => void s.joinVoice(last.channelId, me)}>
+          Rejoin
+        </button>
+        <button
+          className="icon-btn"
+          aria-label="Dismiss"
+          title="Dismiss"
+          onClick={() => {
+            forgetCall();
+            setDismissed((n) => n + 1);
+          }}
+        >
+          ✕
         </button>
       </div>
     </div>
