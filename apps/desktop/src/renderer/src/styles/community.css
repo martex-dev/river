@@ -5507,3 +5507,34 @@ input.switch:disabled {
   border-radius: 6px;
   background: var(--surface-2, rgba(127, 127, 127, 0.12));
 }
+
+/* Bulk role changes (1.0.37) */
+.bulk-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-strong);
+}
+.bulk-bar select {
+  font: inherit;
+  font-size: 13px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+.member-table__pick {
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  accent-color: var(--accent);
+}

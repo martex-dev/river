@@ -6,6 +6,12 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (1.0.37)
+
+- **Change roles of many members at once:** tick members in Community
+  settings → Members, then give or remove a role for all of them. River says
+  how many changes the server accepted.
+
 ### Added (1.0.36)
 
 - **More of River in Bulgarian:** Community settings, category and role
