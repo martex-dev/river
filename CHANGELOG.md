@@ -6,6 +6,44 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.41] - 2026-10-13
+
+**Calls that stay up, and invites anyone can follow.**
+
+### Fixed
+
+- **Voice calls no longer lose people every few minutes.** The free tunnel that
+  connects members to a home-hosted server drops every connection every few
+  minutes (median 3.4 min on the live host). People whose voice went through
+  the server vanished from the call for up to ~20 seconds each time; now
+  everyone stays in the call and keeps hearing everyone. Tested with 10 people
+  and the connection cut every 20 seconds for 5 minutes: nobody dropped, sound
+  never stopped.
+- **"reconnecting…" only when someone's voice is actually interrupted** — not
+  every time their link to the server blips while their voice keeps playing.
+- **No more dead end when the server forgets your account.** River used to
+  retry forever ("The server did not recognise this device"); now it explains
+  what happened and offers **Set up my account again** in Settings → Account.
+- **New accounts are set up within seconds** after a network blip, instead of
+  waiting a minute.
+
+### Added
+
+- **Invite links that never go stale.** Links to River's home server now use
+  https://martex-dev.github.io/river/join#… — they keep working after the host's
+  PC restarts and its address changes.
+- **A real invite page.** Opening an invite in a browser shows a download for
+  your computer, exactly what to click past "Windows protected your PC" and
+  macOS warnings, and **Open in River**.
+- **Open in River.** River now handles `river://` links, so clicking an invite
+  opens River and asks "Join this community?" — no copying and pasting.
+- **Stable download links** for the newest installer, e.g.
+  https://github.com/martex-dev/river/releases/latest/download/River-Setup.exe
+
+### Security
+
+- Review: `docs/security/1.0.41-review.md`.
+
 ## [1.0.40] - 2026-10-13
 
 **River 1.0.x, complete: what's new after every update, and everything from 1.0.28 to here in one place.**
@@ -1288,7 +1326,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.40...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.41...HEAD
+[1.0.41]: https://github.com/martex-dev/river/compare/v1.0.40...v1.0.41
 [1.0.40]: https://github.com/martex-dev/river/compare/v1.0.39...v1.0.40
 [1.0.39]: https://github.com/martex-dev/river/compare/v1.0.38...v1.0.39
 [1.0.38]: https://github.com/martex-dev/river/compare/v1.0.37...v1.0.38
