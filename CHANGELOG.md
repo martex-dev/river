@@ -6,6 +6,16 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.31] - 2026-10-13
+
+**Know your invites: see who made each link and who joined with it, and revoke it.**
+
+### Added
+
+- **Invite tracking:** Community settings → Invites lists each active link,
+  who made it, how many uses are left, when it expires and who joined with
+  it. Revoke stops a link at once (audited); people who already joined stay.
+
 ## [1.0.30] - 2026-10-13
 
 **Roles that fit: drag to reorder, and roles that end on their own.**

@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-12 · Current version: **1.0.30** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
+_Last updated: 2026-10-12 · Current version: **1.0.31** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
 
 ## Complete
 
@@ -42,6 +42,7 @@ _Last updated: 2026-10-12 · Current version: **1.0.30** · Stage 1 complete · 
 | Word filter, link warnings           | Community word filter (sealed, applied by each app) and warnings for look-alike, raw-IP, shortened and plain-http links                                                                                     | unit (word-filter, link-warnings), e2e                                                                               |
 | Community art, DM pins, call notices | Sealed community picture and banner; pins in DMs and groups over libsignal; call lines built from local call history                                                                                        | server test (art), unit (call-notes), e2e                                                                            |
 | Role order, temporary roles          | Drag-and-drop role order (server checks rank); roles given for 1 hour to 30 days, expiry enforced by the server                                                                                             | server tests (temp roles), e2e                                                                                       |
+| Invite tracking                      | Managers see each active invite's creator, uses, expiry and members who joined with it; revoke is audited                                                                                                   | server test (invites), e2e                                                                                           |
 | Diagnostics                          | Connection check (Settings → System), startup failure dialog, GPU fallback, `--self-test`                                                                                                                   | `diagnostics*.test.ts*`, `startup-guard.test.ts`                                                                     |
 
 ## Partially complete

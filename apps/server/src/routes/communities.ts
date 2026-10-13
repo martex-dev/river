@@ -1750,10 +1750,68 @@ export async function registerCommunityRoutes(
           uses: 0,
           max_uses: INVITE_MAX_USES,
           check: inviteReq.check ?? null,
+          id: randomBytes(12).toString('base64url'),
+          created_by: me(request),
+          created_at: deps.now().toISOString(),
         })
         .execute();
       await audit(model.id, me(request), 'invite.create', null, { expiresAt });
       return reply.code(201).send({ code, expiresAt });
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/invites`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    if (!model.can(me(request), Permission.MANAGE_COMMUNITY)) throw forbidden();
+    const rows = await db
+      .selectFrom('invites')
+      .selectAll()
+      .where('community_id', '=', model.id)
+      .where('expires_at', '>', deps.now().toISOString())
+      .orderBy('expires_at', 'desc')
+      .execute();
+    const joinedWith = await db
+      .selectFrom('community_members')
+      .select(['river_id', 'invite_id'])
+      .where('community_id', '=', model.id)
+      .where('invite_id', 'is not', null)
+      .execute();
+    return {
+      invites: rows
+        .filter((r) => r.id)
+        .map((r) => ({
+          id: r.id!,
+          createdBy: r.created_by ?? null,
+          createdAt: r.created_at ?? null,
+          expiresAt: r.expires_at,
+          uses: r.uses,
+          maxUses: r.max_uses,
+          joined: joinedWith.filter((m) => m.invite_id === r.id).map((m) => m.river_id),
+        })),
+    };
+  });
+
+  app.delete<{ Params: { id: string; invite: string } }>(
+    `${API_PREFIX}/communities/:id/invites/:invite`,
+    authed,
+    async (request) => {
+      const model = await community(request.params.id, me(request));
+      const row = await db
+        .selectFrom('invites')
+        .select(['created_by'])
+        .where('community_id', '=', model.id)
+        .where('id', '=', String(request.params.invite).slice(0, 64))
+        .executeTakeFirst();
+      if (!row) throw notFound();
+      if (row.created_by !== me(request) && !model.can(me(request), Permission.MANAGE_COMMUNITY))
+        throw forbidden();
+      await db
+        .deleteFrom('invites')
+        .where('community_id', '=', model.id)
+        .where('id', '=', String(request.params.invite).slice(0, 64))
+        .execute();
+      await audit(model.id, me(request), 'invite.revoke', null);
+      return { ok: true };
     },
   );
 
@@ -1804,6 +1862,7 @@ export async function registerCommunityRoutes(
               profile: req.profile,
               joined_on: day(now),
               accepted: model.screening ? 0 : 1,
+              invite_id: invite.id ?? null,
             })
             .execute();
           await trx
