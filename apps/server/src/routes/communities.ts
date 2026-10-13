@@ -174,6 +174,8 @@ export async function registerCommunityRoutes(
     );
   const changed = (model: CommunityModel): void =>
     toMembers(model, { t: 'community', communityId: model.id });
+  /** Members a moderator just moved: they may join that channel once even if it is full (1.0.39). */
+  const movePasses = new Map<string, { channelId: string; until: number }>();
   const voiceUpdate = async (communityId: string, channelId: string): Promise<void> => {
     const model = await loadCommunity(db, communityId);
     if (!model) return;
@@ -2510,12 +2512,16 @@ export async function registerCommunityRoutes(
           ) {
             return send({ t: 'error', code: 'voice_forbidden' });
           }
-          // A full channel turns people away, except those who may move members.
+          // A full channel turns people away, except those who may move members or were just moved here.
           const inside = hub.participants(ch.id);
+          const pass = movePasses.get(self);
+          const moved = !!pass && pass.channelId === ch.id && pass.until > Date.now();
+          movePasses.delete(self);
           if (
             ch.userLimit > 0 &&
             inside.length >= ch.userLimit &&
             !inside.includes(self) &&
+            !moved &&
             !model.can(self, Permission.MOVE_MEMBERS, ch.id)
           ) {
             return send({ t: 'error', code: 'voice_full' });
@@ -2578,7 +2584,25 @@ export async function registerCommunityRoutes(
             if (event.speaker) hub.stageMuted.delete(event.target);
             else hub.stageMuted.add(event.target);
           }
-          if (event.disconnect) {
+          if (event.moveTo !== undefined) {
+            // Moving needs Move members in both channels, and the person must be allowed to connect there.
+            const dest = model.channel(event.moveTo);
+            if (
+              !dest ||
+              dest.kind !== 'voice' ||
+              dest.id === channelId ||
+              !model.can(self, Permission.MOVE_MEMBERS, channelId) ||
+              !model.can(self, Permission.MOVE_MEMBERS, dest.id) ||
+              !model.can(event.target, Permission.VIEW_CHANNELS | Permission.CONNECT, dest.id)
+            )
+              return send({ t: 'error', code: 'forbidden' });
+            hub.leaveVoice(event.target);
+            // A moved member may join even if the channel is full, once, for a short while.
+            movePasses.set(event.target, { channelId: dest.id, until: Date.now() + 30_000 });
+            // Apps before 1.0.39 ignore `moveTo` and just leave the call.
+            hub.sendTo([event.target], { t: 'voice.disconnect', moveTo: dest.id });
+            await audit(model.id, self, 'voice.move', event.target, { from: channelId, to: dest.id });
+          } else if (event.disconnect) {
             if (!model.can(self, Permission.MOVE_MEMBERS, channelId))
               return send({ t: 'error', code: 'forbidden' });
             hub.leaveVoice(event.target);

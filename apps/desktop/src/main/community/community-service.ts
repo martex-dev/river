@@ -2162,6 +2162,7 @@ export class CommunityService {
           ...(act.serverDeafened !== undefined ? { serverDeafened: act.serverDeafened } : {}),
           ...(act.speaker !== undefined ? { speaker: act.speaker } : {}),
           ...(act.disconnect ? { disconnect: true } : {}),
+          ...(act.moveTo ? { moveTo: act.moveTo } : {}),
         });
         break;
       case 'events':
@@ -3141,7 +3142,7 @@ export class CommunityService {
         this.emit({ t: 'voiceSound', communityId: e.communityId, from: e.from, soundId: e.soundId });
         return;
       case 'voice.disconnect':
-        this.emit({ t: 'voiceDisconnect' });
+        this.emit({ t: 'voiceDisconnect', ...(e.moveTo ? { moveTo: e.moveTo } : {}) });
         return;
       case 'error':
         if (e.code === 'voice_full') this.emit({ t: 'voiceRefused', reason: 'full' });

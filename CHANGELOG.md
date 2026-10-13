@@ -6,6 +6,12 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (1.0.39)
+
+- **Move people between voice channels:** moderators with Move members pick
+  "Move to…" on someone's profile card; River takes them there (even into a
+  full channel) and tells them where they were moved. Audited.
+
 ### Added (1.0.38)
 
 - **Screen readers hear new messages** from others as they arrive in the

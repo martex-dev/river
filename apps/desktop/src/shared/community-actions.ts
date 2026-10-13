@@ -429,6 +429,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       serverDeafened: z.boolean().optional(),
       speaker: z.boolean().optional(),
       disconnect: z.boolean().optional(),
+      moveTo: id.optional(),
     })
     .strict(),
   z

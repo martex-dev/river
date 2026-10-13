@@ -342,6 +342,39 @@ export function ProfileCard(props: {
                 Disconnect
               </button>
             )}
+            {voiceChannel &&
+              outranks &&
+              can(perms, Permission.MOVE_MEMBERS) &&
+              community.channels.some(
+                (ch) =>
+                  ch.kind === 'voice' &&
+                  ch.id !== voiceChannel &&
+                  can(ch.permissions, Permission.MOVE_MEMBERS),
+              ) && (
+                <select
+                  className="role-add"
+                  aria-label={`Move ${member.name} to another voice channel`}
+                  value=""
+                  onChange={(e) =>
+                    e.target.value &&
+                    void s.run({ a: 'moderateVoice', riverId: member.riverId, moveTo: e.target.value })
+                  }
+                >
+                  <option value="">Move to…</option>
+                  {community.channels
+                    .filter(
+                      (ch) =>
+                        ch.kind === 'voice' &&
+                        ch.id !== voiceChannel &&
+                        can(ch.permissions, Permission.MOVE_MEMBERS),
+                    )
+                    .map((ch) => (
+                      <option key={ch.id} value={ch.id}>
+                        {ch.name}
+                      </option>
+                    ))}
+                </select>
+              )}
             {outranks && can(perms, Permission.MODERATE_MEMBERS) && (
               <TimeoutButton community={community} member={member} onDone={props.onDone} />
             )}

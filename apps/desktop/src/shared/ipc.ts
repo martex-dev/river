@@ -419,7 +419,7 @@ export type CommunityEvent =
       participants: string[];
       states: Record<string, VoiceStateView>;
     }
-  | { t: 'voiceDisconnect' }
+  | { t: 'voiceDisconnect'; moveTo?: string }
   /** A community's events changed (fetch them again), or one you are interested in starts now. */
   | { t: 'events'; communityId: string }
   | { t: 'emojis'; communityId: string }
