@@ -753,6 +753,15 @@ export class CommunityService {
           announcement: ch.announcement,
           slowmode: ch.slowmode,
           userLimit: ch.userLimit,
+          ...(ch.kind === 'voice'
+            ? {
+                prioritySpeakers: c.members
+                  .filter(
+                    (m) => (permsOf(m.riverId, m.roles, ch.overwrites) & Permission.PRIORITY_SPEAKER) !== 0,
+                  )
+                  .map((m) => m.riverId),
+              }
+            : {}),
           forum: ch.forum,
           tags,
           stage: ch.stage,

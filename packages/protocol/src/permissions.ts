@@ -31,6 +31,8 @@ export const Permission = {
   MANAGE_EVENTS: 1 << 21,
   /** Add and remove custom emoji (1.0.19). */
   MANAGE_EXPRESSIONS: 1 << 22,
+  /** Turn on Priority speaker in voice: others are turned down while you talk (1.0.33). */
+  PRIORITY_SPEAKER: 1 << 23,
 } as const;
 export type PermissionName = keyof typeof Permission;
 
@@ -118,6 +120,11 @@ export const PERMISSION_INFO: Array<{ key: PermissionName; label: string; help: 
     key: 'MANAGE_EXPRESSIONS',
     label: 'Manage emoji & sounds',
     help: 'Add, rename and remove the community’s custom emoji and soundboard sounds.',
+  },
+  {
+    key: 'PRIORITY_SPEAKER',
+    label: 'Priority speaker',
+    help: 'In voice, turn on Priority speaker so everyone else is turned down while they talk.',
   },
 ];
 

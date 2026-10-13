@@ -1,6 +1,7 @@
 import { tr } from '../../i18n.ts';
 import { SCREEN_QUALITIES, saveQuality, savedQuality, type ScreenQuality } from '../screen-quality.ts';
 import { StagePanel } from './Stage.tsx';
+import { priorityFactor } from '../priority-speaker.ts';
 import { SoundboardButton } from './Soundboard.tsx';
 import { describeLink, linkQuality, type LinkStats } from '../link-stats.ts';
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactElement } from 'react';
@@ -190,6 +191,21 @@ export function VoiceChannel(props: {
               <ScreenIcon />
             </button>
             <SoundboardButton community={community} channelId={call.channelId} />
+            {channel.prioritySpeakers?.includes(me) && (
+              <button
+                className={`round-btn ${call.priority ? 'round-btn--on' : ''}`}
+                aria-label={call.priority ? 'Priority speaker on' : 'Priority speaker off'}
+                aria-pressed={call.priority}
+                title={
+                  call.priority
+                    ? 'Priority speaker is on: others are turned down while you talk. Click to turn off.'
+                    : 'Priority speaker: turn others down while you talk'
+                }
+                onClick={() => call.setPriority(!call.priority)}
+              >
+                <span aria-hidden="true">📣</span>
+              </button>
+            )}
             <button
               className="round-btn round-btn--danger"
               aria-label={tr('Leave')}
@@ -424,18 +440,41 @@ function RemoteTile(props: {
  */
 export function CallAudio(): ReactElement | null {
   const call = useCommunity((x) => x.call);
+  const communities = useCommunity((x) => x.communities);
   useCommunity((x) => x.callVersion);
   if (!call) return null;
+  // Priority speaker (1.0.33): only people the community allows count.
+  const allowed =
+    communities.flatMap((c) => c.channels).find((ch) => ch.id === call.channelId)?.prioritySpeakers ?? [];
+  const on = new Set(
+    call
+      .remotes()
+      .filter((p) => p.priority)
+      .map((p) => p.id),
+  );
   return (
     <div className="call-audio" hidden>
       {call.remotes().map((peer) => (
-        <PeerAudio key={peer.id} peer={peer} deafened={call.hearingOff} />
+        <PeerAudio
+          key={peer.id}
+          peer={peer}
+          deafened={call.hearingOff}
+          duck={priorityFactor(peer.id, call.speaking, on, allowed)}
+        />
       ))}
     </div>
   );
 }
 
-function PeerAudio({ peer, deafened }: { peer: RemotePeer; deafened: boolean }): ReactElement {
+function PeerAudio({
+  peer,
+  deafened,
+  duck,
+}: {
+  peer: RemotePeer;
+  deafened: boolean;
+  duck: number;
+}): ReactElement {
   const ref = useRef<HTMLAudioElement>(null);
   const voiceSettings = useRiver((r) => r.settings?.voice);
   const volume = voiceSettings?.userVolumes[peer.id] ?? 1;
@@ -449,7 +488,7 @@ function PeerAudio({ peer, deafened }: { peer: RemotePeer; deafened: boolean }):
       el.srcObject = track ? new MediaStream([track]) : null;
       if (track) void el.play().catch(() => undefined);
     }
-    el.volume = Math.min(1, volume);
+    el.volume = Math.min(1, volume) * duck;
     el.muted = deafened || volume === 0;
     const sink = el as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void>; sinkId?: string };
     if (sink.setSinkId && (sink.sinkId ?? '') !== (output ?? '')) {

@@ -6,6 +6,13 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (1.0.33)
+
+- **Priority speaker:** a new role permission. People who have it get a 📣
+  button in voice; while it is on and they talk, everyone else is turned
+  down for the listeners. Listeners only honour it from people the
+  community really allows.
+
 ### Added (1.0.32)
 
 - **Encrypted incoming webhooks** (Community settings → Webhooks): let a
