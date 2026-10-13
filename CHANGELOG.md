@@ -6,7 +6,11 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-### Added (1.0.29)
+## [1.0.29] - 2026-10-13
+
+**Make it yours: community pictures and banners, pins in direct messages, and calls in the conversation.**
+
+### Added
 
 - **Calls show up in the conversation:** "📞 Call · 5 min", "Missed call"
   and "no answer" lines appear between your messages.
