@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.ts';
 import { useState, type DragEvent, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { CategoryView, ChannelView, CommunityView } from '../../../../shared/ipc.ts';
@@ -217,7 +218,7 @@ export function ChannelList(props: { community: CommunityView; me: string }): Re
                       s.markChannelsRead(g.channels.map((ch) => ch.id));
                     }}
                   >
-                    Mark category as read
+                    {tr('Mark category as read')}
                   </MenuItem>
                   <MenuItem
                     icon={<ChevronIcon size={14} />}
@@ -226,7 +227,7 @@ export function ChannelList(props: { community: CommunityView; me: string }): Re
                       toggle(k.id);
                     }}
                   >
-                    {closed ? 'Expand category' : 'Collapse category'}
+                    {tr(closed ? 'Expand category' : 'Collapse category')}
                   </MenuItem>
                   {manage && (
                     <MenuItem
@@ -241,7 +242,7 @@ export function ChannelList(props: { community: CommunityView; me: string }): Re
                         });
                       }}
                     >
-                      Create channel
+                      {tr('Create channel')}
                     </MenuItem>
                   )}
                   {manage && (
@@ -252,7 +253,7 @@ export function ChannelList(props: { community: CommunityView; me: string }): Re
                         s.setModal({ kind: 'category', communityId: community.id, categoryId: k.id });
                       }}
                     >
-                      Edit category
+                      {tr('Edit category')}
                     </MenuItem>
                   )}
                 </Popover>

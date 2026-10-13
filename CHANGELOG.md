@@ -6,6 +6,11 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (1.0.36)
+
+- **More of River in Bulgarian:** Community settings, category and role
+  menus, and the voice panel.
+
 ### Added (1.0.35)
 
 - **Push-to-talk clicks:** a tiny sound when you start and stop talking

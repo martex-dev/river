@@ -419,7 +419,7 @@ function VoicePanel({ community, me }: { community: CommunityView; me: string })
           <i />
         </span>
         <div>
-          <strong>Voice connected</strong>
+          <strong>{tr('Voice connected')}</strong>
           <button
             className="voice-panel__where"
             onClick={() => s.select(channelCommunity.id, call.channelId)}
@@ -436,8 +436,8 @@ function VoicePanel({ community, me }: { community: CommunityView; me: string })
         )}
         <button
           className="icon-btn icon-btn--danger"
-          aria-label="Disconnect"
-          title="Disconnect"
+          aria-label={tr('Disconnect')}
+          title={tr('Disconnect')}
           onClick={() => void s.leaveVoice()}
         >
           <PhoneOffIcon size={18} />
@@ -460,7 +460,7 @@ function RejoinPanel({ me }: { me: string }): ReactElement | null {
     <div className="voice-panel voice-panel--rejoin" role="status">
       <div className="voice-panel__status">
         <div>
-          <strong>Call ended unexpectedly</strong>
+          <strong>{tr('Call ended unexpectedly')}</strong>
           <span className="voice-panel__where">
             {channel.name} / {where.name}
           </span>
@@ -468,12 +468,12 @@ function RejoinPanel({ me }: { me: string }): ReactElement | null {
       </div>
       <div className="voice-panel__actions">
         <button className="btn btn--primary btn--small" onClick={() => void s.joinVoice(last.channelId, me)}>
-          Rejoin
+          {tr('Rejoin')}
         </button>
         <button
           className="icon-btn"
-          aria-label="Dismiss"
-          title="Dismiss"
+          aria-label={tr('Dismiss')}
+          title={tr('Dismiss')}
           onClick={() => {
             forgetCall();
             setDismissed((n) => n + 1);
