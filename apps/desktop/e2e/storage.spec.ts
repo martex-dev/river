@@ -33,7 +33,7 @@ test('creates an encrypted local database and reopens it after restart', async (
     await expect(page.locator('.field__error')).toContainText('not correct');
     await page.locator('.lock input[type=password]').fill(TEST_PASSPHRASE);
     await page.locator('.lock button[type=submit]').click();
-    await page.waitForSelector('.rail', { timeout: 30_000 });
+    await page.waitForSelector('.workspace', { timeout: 30_000 });
     await app.close();
   } else {
     const second = await launchRiver(userData);
