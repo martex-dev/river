@@ -1,7 +1,9 @@
 # ADR 0004 — Webhooks and bots without giving up end-to-end encryption
 
-Status: accepted (1.0.32). Implementation: incoming webhooks in 1.0.32;
-bot accounts and slash commands in 1.0.33.
+Status: accepted (1.0.32). Incoming webhooks shipped in 1.0.32. Bot
+accounts need a small client library that speaks River's protocol
+(libsignal sessions, community keys); they are planned after 1.0 and are not
+available yet. Built-in slash commands have existed since 1.0.25.
 
 ## Context
 

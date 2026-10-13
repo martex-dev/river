@@ -613,6 +613,36 @@ describe('communities', () => {
       expect((await fetchCommunity(a, member.token, cid)).webhooks?.[0]?.revoked).toBe(true);
     });
 
+    it('webhooks are rate limited per webhook, whatever address the posts come from', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const token = randomBytes(32).toString('base64url');
+      const hook = id();
+      const tokenHash = createHash('sha256').update(token).digest('hex');
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/webhooks`, owner.token, {
+          id: hook,
+          channelId: text,
+          sealed: sealed(),
+          tokenHash,
+        }),
+      ).toBe(201);
+      const codes: number[] = [];
+      for (let i = 0; i < 31; i++) {
+        const res = await a.inject({
+          method: 'POST',
+          url: `/v1/webhooks/${hook}`,
+          remoteAddress: `10.0.0.${i + 1}`,
+          headers: { authorization: `Bearer ${token}` },
+          payload: { id: id(), body: sealed() },
+        });
+        codes.push(res.statusCode);
+      }
+      expect(codes.slice(0, 30).every((c) => c === 201)).toBe(true);
+      expect(codes[30]).toBe(429);
+    });
+
     it('moderator notes are only for people who moderate members', async () => {
       const a = await start();
       const owner = await user(a);
