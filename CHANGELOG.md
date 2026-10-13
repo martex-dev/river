@@ -6,13 +6,17 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-### Added (1.0.37)
+## [1.0.37] - 2026-10-13
+
+**Less clicking, less redrawing: change roles for many members at once, and a smoother chat.**
+
+### Added
 
 - **Change roles of many members at once:** tick members in Community
   settings → Members, then give or remove a role for all of them. River says
   how many changes the server accepted.
 
-### Changed (1.0.37)
+### Changed
 
 - **Smoother chat during calls:** messages no longer redraw when someone
   types or speaks; each one updates only when something it shows changes.
