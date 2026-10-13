@@ -7,7 +7,7 @@ import { expect, test, type ElectronApplication, type Page } from '@playwright/t
 import { launchRiver } from './launch.ts';
 
 // River hosted on a home PC reaches members through a free tunnel whose single connection is
-// dropped and re-made every one to four minutes â€” every member's live connection is cut at once.
+// dropped and re-made every one to four minutes — every member's live connection is cut at once.
 // This puts a proxy in front of a real server that does the same (much more often), with several
 // people in a voice channel, and checks nobody is thrown out of the call and sound keeps flowing.
 
