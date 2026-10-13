@@ -145,7 +145,7 @@ interface Analyser {
 
 export class VoiceCall {
   readonly channelId: string;
-  private readonly me: string;
+  readonly me: string;
   private options: CallOptions;
   private audioCtx: AudioContext | null = null;
   private readonly analysers = new Map<string, Analyser>();

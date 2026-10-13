@@ -6,6 +6,16 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.39] - 2026-10-13
+
+**Moderators can move people between voice channels, and the 1.0.x docs are up to date.**
+
+### Added
+
+- **Move people between voice channels:** moderators with Move members pick
+  "Move to…" on someone's profile card; River takes them there (even into a
+  full channel) and tells them where they were moved. Audited.
+
 ## [1.0.38] - 2026-10-13
 
 **Easier for everyone: screen readers hear new messages, and reduced motion means still pictures.**

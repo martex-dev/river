@@ -1,6 +1,6 @@
 # River 1.0 parity status (audit of parity-checklist.md)
 
-Last audited: **2026-10-12**, against `main` + open PRs up to 1.0.27.
+Last audited: **2026-10-13**, against releases up to 1.0.32 and the 1.0.33–1.0.38 work.
 Status: ✅ done · 🔨 partial · ⏳ to do · 🔒 privacy-preserving equivalent ·
 ✖ not planned (reason given). Each ✅ is backed by code and tests; the tests
 are named where it helps. This file is updated with every release.
@@ -144,7 +144,7 @@ are named where it helps. This file is updated with every release.
 | ---------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
 | Create/edit/delete roles, colour, hoist, mentionable | ✅      | Duplicate (1.0.20), icons (1.0.21)                                                             |
 | Drag-and-drop hierarchy                              | 🔨      | Up/down arrows today                                                                           |
-| Assign/remove, view members                          | ✅      | Bulk via self-roles; bulk moderator assign ⏳                                                  |
+| Assign/remove, view members                          | ✅      | Self-roles (1.0.24); bulk moderator assign (1.0.37)                                            |
 | Self-assignable / reaction roles                     | ✅      | Self-assignable roles (1.0.24)                                                                 |
 | Temporary roles                                      | ✅      | 1 hour to 30 days, server-enforced expiry (1.0.30)                                             |
 | Hierarchy enforcement, owner protection              | ✅      | Server-side                                                                                    |
@@ -162,7 +162,7 @@ are named where it helps. This file is updated with every release.
 | Connection quality display                     | ✅     | Connection check ✅; per-person bars (1.0.19) ✅                      |
 | Mute/deafen, devices, volumes, per-user volume | ✅     |                                                                       |
 | Mic test, input sensitivity, PTT, noise/echo   | ✅     | Sensitivity slider (1.0.20)                                           |
-| Server mute/deafen, move, disconnect           | ✅     | Server deafen (1.0.20)                                                |
+| Server mute/deafen, move, disconnect           | ✅     | Server deafen (1.0.20); move to another channel (1.0.39)              |
 | Speaking indicators, priority speaker          | ✅     | Priority speaker permission and toggle (1.0.33)                       |
 | Camera, screen share, grid/focus, pin          | ✅     | Stream quality presets (1.0.25)                                       |
 | Stream audio                                   | ⏳     |                                                                       |
@@ -229,15 +229,15 @@ are named where it helps. This file is updated with every release.
 
 ## 21–25. Media, calls, security, reliability, accessibility
 
-| Item                                                       | Status  | Notes                                 |
-| ---------------------------------------------------------- | ------- | ------------------------------------- |
-| Attachments end to end, viewer, save                       | ✅      | PDF preview ⏳                        |
-| Call state machine, reconnection                           | ✅      | 1.0.16                                |
-| Rate limiting, server-side permission checks               | ✅      |                                       |
-| Data export                                                | ✅      | Export my data (1.0.23)               |
-| Crash recovery, startup diagnostics, self-test             | ✅      | 1.0.16                                |
-| Keyboard navigation, focus, screen-reader labels, contrast | ✅ / 🔨 | axe audits in CI                      |
-| Localization                                               | 🔨      | Framework and Bulgarian beta (1.0.27) |
+| Item                                                       | Status | Notes                                                                                                |
+| ---------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------- |
+| Attachments end to end, viewer, save                       | ✅     | PDF preview ⏳                                                                                       |
+| Call state machine, reconnection                           | ✅     | 1.0.16                                                                                               |
+| Rate limiting, server-side permission checks               | ✅     |                                                                                                      |
+| Data export                                                | ✅     | Export my data (1.0.23)                                                                              |
+| Crash recovery, startup diagnostics, self-test             | ✅     | 1.0.16                                                                                               |
+| Keyboard navigation, focus, screen-reader labels, contrast | ✅     | axe audits in CI; new messages announced to screen readers (1.0.38); reduced motion holds GIFs still |
+| Localization                                               | 🔨     | Framework and Bulgarian beta (1.0.27), wider coverage (1.0.36)                                       |
 
 ## 26–27. Analytics and premium
 
@@ -246,6 +246,7 @@ possible). Premium/monetization ✖ — River is free software with no paid tier
 
 ## 28. System messages and edge cases
 
-Join/leave and pin notices ✅; "user moved", "call started" notices ⏳;
+Join/leave and pin notices ✅; call lines in direct conversations ✅ (1.0.29);
+"you were moved" notice (1.0.39); "call started" notices in channels ⏳;
 deleted-reply and missing-attachment states ✅; concurrent edits rely on
 server last-write; double submissions are idempotent (client message IDs) ✅.

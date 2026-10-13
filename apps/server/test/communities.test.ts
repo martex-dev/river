@@ -1484,6 +1484,54 @@ describe('communities', () => {
       for (const c of [boss, other]) c.ws.close();
     });
 
+    it('moving someone to another voice channel needs Move members and lets them into a full channel', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, voice } = await createCommunity(a, owner.token);
+      const guest = await join(a, owner.token, cid);
+      const lounge = id();
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/channels`, owner.token, {
+          id: lounge,
+          kind: 'voice',
+          name: sealed(),
+        }),
+      ).toBe(201);
+      // Full: only one seat, already taken by the owner below.
+      expect(await status(a, 'PATCH', `/v1/channels/${lounge}`, owner.token, { userLimit: 1 })).toBe(200);
+      await a.listen({ host: '127.0.0.1', port: 0 });
+      const { port } = a.server.address() as { port: number };
+      type Ev = { t: string; code?: string; moveTo?: string; channelId?: string; participants?: string[] };
+      const connect = async (token: string, channelId: string) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/ws`);
+        const events: Ev[] = [];
+        ws.onmessage = (m) => events.push(JSON.parse(String(m.data)));
+        await new Promise((resolve, reject) => {
+          ws.onopen = resolve;
+          ws.onerror = reject;
+        });
+        ws.send(JSON.stringify({ t: 'auth', token }));
+        await vi.waitFor(() => expect(events.some((e) => e.t === 'ready')).toBe(true));
+        ws.send(JSON.stringify({ t: 'voice.join', channelId }));
+        return { ws, events };
+      };
+      const boss = await connect(owner.token, lounge);
+      const other = await connect(guest.token, voice);
+      const inside = (events: Ev[], ch: string) =>
+        events.filter((e) => e.t === 'voice' && e.channelId === ch).at(-1)?.participants ?? [];
+      await vi.waitFor(() => expect(inside(boss.events, voice)).toContain(guest.riverId));
+      // A member cannot move the owner.
+      other.ws.send(JSON.stringify({ t: 'voice.moderate', target: owner.riverId, moveTo: voice }));
+      await vi.waitFor(() => expect(other.events).toContainEqual({ t: 'error', code: 'forbidden' }));
+      boss.ws.send(JSON.stringify({ t: 'voice.moderate', target: guest.riverId, moveTo: lounge }));
+      await vi.waitFor(() => expect(other.events).toContainEqual({ t: 'voice.disconnect', moveTo: lounge }));
+      // The app follows; the full channel lets them in because they were moved there.
+      other.ws.send(JSON.stringify({ t: 'voice.join', channelId: lounge }));
+      await vi.waitFor(() => expect(inside(boss.events, lounge)).toContain(guest.riverId));
+      expect(other.events).not.toContainEqual({ t: 'error', code: 'voice_full' });
+      for (const c of [boss, other]) c.ws.close();
+    });
+
     it('server mute and deafen need Mute members, follow the hierarchy, and stick through a rejoin', async () => {
       const a = await start();
       const owner = await user(a);

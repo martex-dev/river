@@ -627,6 +627,8 @@ export const clientEventSchema = z.discriminatedUnion('t', [
     /** On a stage: invite to speak (true) or move back to the audience (false) (1.0.22). */
     speaker: z.boolean().optional(),
     disconnect: z.boolean().optional(),
+    /** Move them to another voice channel of the community (1.0.39). */
+    moveTo: channelIdSchema.optional(),
   }),
   z.object({ t: z.literal('signal'), to: riverIdSchema, data: sealedSchema(SEALED_SIGNAL) }),
   z.object({ t: z.literal('typing'), channelId: channelIdSchema }),
@@ -669,7 +671,8 @@ export const serverEventSchema = z.discriminatedUnion('t', [
     participants: z.array(riverIdSchema),
     states: z.record(z.string(), voiceStateSchema).optional(),
   }),
-  z.object({ t: z.literal('voice.disconnect') }),
+  /** You were taken out of voice; with `moveTo`, a moderator moved you there (1.0.39). */
+  z.object({ t: z.literal('voice.disconnect'), moveTo: channelIdSchema.optional() }),
   /** Someone in your voice channel played a soundboard sound (1.0.22). */
   z.object({
     t: z.literal('voice.sound'),

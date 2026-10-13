@@ -461,6 +461,15 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         // A moderator ended it: do not offer to rejoin.
         forgetCall();
         void call.leave();
+        if (event.moveTo) {
+          // Moved by a moderator (1.0.39): follow into the other channel.
+          const dest = get()
+            .communities.flatMap((c) => c.channels)
+            .find((ch) => ch.id === event.moveTo);
+          get().notify(`A moderator moved you to ${dest ? dest.name : 'another voice channel'}.`);
+          void get().joinVoice(event.moveTo, call.me);
+          return;
+        }
         play('disconnected');
         get().notify('You were disconnected from the voice channel.');
         return;
