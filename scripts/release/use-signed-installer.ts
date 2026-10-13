@@ -5,7 +5,7 @@
 //
 // Runs in the Windows build job, before the release files are collected, so the
 // River release manifest and SHA256SUMS are made from the signed file.
-import { copyFileSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { sha512Base64 } from '../../packages/release/src/index.ts';
@@ -23,8 +23,12 @@ if (signed.length !== 1) {
   process.exit(1);
 }
 const name = signed[0]!;
+// The signed file must replace an installer this build made, under the same name.
+if (!readdirSync(releaseDir).includes(name)) {
+  console.error(`${name} is not an installer this build made`);
+  process.exit(1);
+}
 const target = join(releaseDir, name);
-statSync(target); // the signed file must replace an installer this build made
 copyFileSync(join(signedDir, name), target);
 
 // electron-builder's own block map writer, so differential updates keep working.
