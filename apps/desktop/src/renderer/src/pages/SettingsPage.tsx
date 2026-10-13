@@ -327,19 +327,41 @@ function AccountPanel({
         {account.message && account.connection === 'error' && (
           <p className="field__error">{account.message}</p>
         )}
-        {!connected && (
+        {account.missing ? (
           <div className="button-row">
             <button
-              className="btn btn--ghost btn--small"
-              disabled={busy || account.connection === 'connecting'}
+              className="btn btn--primary btn--small"
+              disabled={busy}
               onClick={() => {
                 setBusy(true);
-                void window.river.account.connect().finally(() => setBusy(false));
+                void window.river.account.startOver().then((res) => {
+                  setBusy(false);
+                  if (res.ok) useRiver.getState().setAccount(res.value);
+                  else play('error');
+                });
               }}
             >
-              Try now
+              {busy ? 'Setting up…' : 'Set up my account again'}
             </button>
+            <span className="muted small">
+              Same name and messages on this computer; rejoin communities with an invite.
+            </span>
           </div>
+        ) : (
+          !connected && (
+            <div className="button-row">
+              <button
+                className="btn btn--ghost btn--small"
+                disabled={busy || account.connection === 'connecting'}
+                onClick={() => {
+                  setBusy(true);
+                  void window.river.account.connect().finally(() => setBusy(false));
+                }}
+              >
+                Try now
+              </button>
+            </div>
+          )
         )}
       </div>
       <details className="account-tech">

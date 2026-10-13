@@ -197,11 +197,13 @@ export function App(): ReactElement {
               <span
                 className={`status-dot status-dot--${account.connection === 'online' ? 'active' : account.connection === 'error' ? 'warning' : 'inactive'}`}
               />
-              {account.connection === 'online'
-                ? 'Online'
-                : account.connection === 'connecting'
-                  ? 'Connecting…'
-                  : 'Offline — messages wait and send by themselves'}
+              {account.missing
+                ? 'Your account needs to be set up again — Settings → Account'
+                : account.connection === 'online'
+                  ? 'Online'
+                  : account.connection === 'connecting'
+                    ? 'Connecting…'
+                    : 'Offline — messages wait and send by themselves'}
             </span>
           ) : account.waiting ? (
             <span

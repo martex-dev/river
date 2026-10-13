@@ -28,6 +28,11 @@ electronFuses:
   onlyLoadAppFromAsar: true
   grantFileProtocolExtraPrivileges: false
   resetAdHocDarwinSignature: true
+# "Open in River" on invite pages (river://open?link=…). Windows registers it at runtime too.
+protocols:
+  - name: River link
+    schemes:
+      - river
 publish:
   provider: github
   owner: martex-dev

@@ -15,7 +15,7 @@ import {
 import { autoUpdater } from 'electron-updater';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import { channelOfVersion } from '@river/release/channels';
-import type { AppInfo } from '../shared/ipc.ts';
+import { IPC, type AppInfo, type DeepLink } from '../shared/ipc.ts';
 import {
   broadcastAccountStatus,
   broadcastCommunityEvents,
@@ -29,6 +29,7 @@ import {
 import { CommunityService } from './community/community-service.ts';
 import { ServerLocator } from './community/server-locator.ts';
 import { Hosting } from './host/hosting.ts';
+import { DEEP_LINK_SCHEME, deepLinkInArgs, parseDeepLink } from './deep-link.ts';
 import { HomeAccount } from './home-server.ts';
 import { HOME_SERVER } from '../shared/home-server.ts';
 import { createFileLogger } from './logger.ts';
@@ -73,6 +74,26 @@ const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
 registerAppScheme();
 app.setAppUserModelId('io.github.martex-dev.river');
+// "Open in River" on invite pages: river://open?link=… (see deep-link.ts). Development runs
+// register the dev Electron with this app's path; installed builds register River itself.
+if (process.defaultApp) {
+  if (process.argv[1]) app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME, process.execPath, [process.argv[1]]);
+} else {
+  app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
+}
+/** A link opened before the window could take it (first launch, or while locked/onboarding). */
+let pendingDeepLink: DeepLink | null = deepLinkInArgs(process.argv);
+let deliverDeepLink: ((link: DeepLink) => void) | null = null;
+const openDeepLink = (link: DeepLink | null): void => {
+  if (!link) return;
+  if (deliverDeepLink) deliverDeepLink(link);
+  else pendingDeepLink = link;
+};
+// macOS hands links over with this event (also before the app is ready).
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  openDeepLink(parseDeepLink(url));
+});
 // Privacy: Chromium's Linux spellchecker downloads dictionaries from Google; keep it off until River bundles its own.
 app.commandLine.appendSwitch('disable-features', 'SpellcheckService');
 
@@ -156,12 +177,14 @@ async function start(): Promise<void> {
   const identity = new IdentityService(() => storage.db());
   // Set once hosting exists (below); the account asks it for links people can open.
   let publicAddress: () => string | null = () => null;
+  let homeLinks: () => boolean = () => false;
   const account = new AccountService({
     db: () => storage.db(),
     identity,
     requestJson: createRequestJson((input, init) => net.fetch(input as string, init)),
     log,
     publicAddress: () => publicAddress(),
+    homeLinks: () => homeLinks(),
   });
   const locator = new ServerLocator({
     db: () => storage.db(),
@@ -216,6 +239,11 @@ async function start(): Promise<void> {
     },
   });
   publicAddress = () => hosting.manager.status().address;
+  // Installed builds on River's home server (as a member, or as the PC that hosts it).
+  homeLinks = () =>
+    homeAccount.enabled() &&
+    (locator.pinnedId() === HOME_SERVER.instanceId ||
+      hosting.manager.localServer()?.instanceId === HOME_SERVER.instanceId);
   let lastPublic: string | null = null;
   hosting.manager.onStatus((s) => {
     if (s.address === lastPublic) return;
@@ -367,6 +395,11 @@ async function start(): Promise<void> {
     },
     hosting,
     homeAccount,
+    takeDeepLink: () => {
+      const link = pendingDeepLink;
+      pendingDeepLink = null;
+      return link;
+    },
     diagnostics: () =>
       runMainDiagnostics({
         fetchBytes: serverFetch,
@@ -437,7 +470,21 @@ async function start(): Promise<void> {
   window.once('ready-to-show', () => {
     if (!startedHidden) window.show();
   });
-  app.on('second-instance', show);
+  // Windows and Linux start a second River with the link in its arguments: bring this one forward.
+  app.on('second-instance', (_event, argv) => {
+    show();
+    openDeepLink(deepLinkInArgs(argv));
+  });
+  deliverDeepLink = (link) => {
+    if (window.isDestroyed()) {
+      pendingDeepLink = link;
+      return;
+    }
+    // The UI takes it when it is ready for it (after unlocking and setting up), so keep it too.
+    pendingDeepLink = link;
+    window.webContents.send(IPC.appDeepLink, link);
+    show();
+  };
 
   // The tray keeps River (calls, messages, notifications) running with the window closed.
   let quitting = false;

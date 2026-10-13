@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react';
-import { inviteHost, looksLikeInvite, parseFriend } from '../../../../shared/invite-link.ts';
+import { looksLikeInvite, parseFriend } from '../../../../shared/invite-link.ts';
+import type { DeepLink } from '../../../../shared/ipc.ts';
 import { GREETING, sendFriendRequest } from '../../dm/friends.ts';
 import { useRiver } from '../../store.ts';
 import { useCommunity } from '../store.ts';
@@ -9,11 +10,46 @@ import { joinWithLink } from './StartScreen.tsx';
 const editable = (el: EventTarget | null): boolean =>
   el instanceof HTMLElement && (el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
 
+/** Asks before acting on a link that came from outside River (pasted, or "Open in River"). */
+function offer(link: DeepLink): void {
+  const s = useCommunity.getState();
+  if (link.kind === 'invite') {
+    useRiver.getState().navigate('communities');
+    s.setModal({ kind: 'join-invite', link: link.link });
+    return;
+  }
+  if (link.kind === 'friend') {
+    const friend = parseFriend(link.link);
+    if (friend?.serverUrl)
+      s.setModal({ kind: 'add-friend', riverId: friend.riverId, serverUrl: friend.serverUrl });
+    return;
+  }
+  // A sign-up link is for someone without an account yet.
+  if (useRiver.getState().account.state === 'none') {
+    void window.river.account.redeemSignup(link.link).then((res) => {
+      if (res.ok) {
+        useRiver.getState().setAccount(res.value);
+        s.notify('Your account is ready');
+      } else s.notify(res.message, 'error');
+    });
+  } else s.notify('That sign-up link is for a new account — you already have one.', 'error');
+}
+
 /**
- * Paste an invite or friend link anywhere in River (outside a text field) and River
- * offers to join it. Nothing is read from the clipboard unless you paste.
+ * Paste an invite or friend link anywhere in River (outside a text field) — or
+ * click "Open in River" on an invite page — and River offers to join it.
+ * Nothing is read from the clipboard unless you paste.
  */
 export function PasteToJoin(): null {
+  useEffect(() => {
+    // Links from the browser: taken once, whichever comes first (on start, or as they arrive).
+    const take = (): void =>
+      void window.river.app.takeDeepLink().then((link) => {
+        if (link) offer(link);
+      });
+    take();
+    return window.river.app.onDeepLink(take);
+  }, []);
   useEffect(() => {
     const onPaste = (e: ClipboardEvent): void => {
       if (editable(e.target) || editable(document.activeElement)) return;
@@ -42,8 +78,7 @@ export function JoinInviteDialog({ link }: { link: string }): ReactElement {
   return (
     <Modal title="Join this community?" onClose={() => s.setModal(null)}>
       <p className="modal__text">
-        You pasted an invite to a community on <strong>{inviteHost(link)}</strong>. Joining shares your River
-        name and avatar with its members.
+        You've been invited to a River community. Joining shares your River name and avatar with its members.
       </p>
       {error && <p className="field__error">{error}</p>}
       <div className="modal__foot">

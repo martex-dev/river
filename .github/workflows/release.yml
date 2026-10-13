@@ -115,6 +115,18 @@ jobs:
           merge-multiple: true
       - name: Software bill of materials (CycloneDX)
         run: npx --yes @cyclonedx/cyclonedx-npm@6.0.1 --omit dev --output-format JSON --output-file dist/river-sbom.cdx.json
+      - name: Version-less download names
+        # Stable links for the invite page and the README: …/releases/latest/download/River-Setup.exe
+        # always gets the newest installer. Updates keep using the versioned files in latest*.yml.
+        run: |
+          cd dist
+          copy() { [ -f "$1" ] && cp "$1" "$2" || echo "missing $1"; }
+          copy "River-Setup-$VERSION.exe" River-Setup.exe
+          copy "River-$VERSION-arm64.dmg" River-mac-apple-silicon.dmg
+          copy "River-$VERSION-x64.dmg" River-mac-intel.dmg
+          copy "River-$VERSION-x86_64.AppImage" River-linux.AppImage
+          copy "River-$VERSION-amd64.deb" River-linux.deb
+          copy "River-$VERSION-x86_64.rpm" River-linux.rpm
       - name: Sign release manifest
         env:
           RIVER_RELEASE_SIGNING_KEY: ${{ secrets.RIVER_RELEASE_SIGNING_KEY }}

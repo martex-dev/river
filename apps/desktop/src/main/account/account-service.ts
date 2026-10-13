@@ -19,6 +19,7 @@ import {
 } from '@river/protocol';
 import type { AccountStatus } from '../../shared/ipc.ts';
 import { serverUrlSchema } from '../../shared/settings.ts';
+import { HOME_LINK_BASE } from '../../shared/home-server.ts';
 import { ApiError, NetworkError, type RequestJson } from '../http.ts';
 import type { IdentityService } from '../identity/identity-service.ts';
 import type { Logger } from '../logger.ts';
@@ -46,6 +47,8 @@ export interface AccountServiceDeps {
   now?: () => Date;
   /** This PC's public server address while it hosts the server (for links people can open). */
   publicAddress?: () => string | null;
+  /** The account is on River's home server: shared links use its permanent address. */
+  homeLinks?: () => boolean;
 }
 
 const LOOPBACK = /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
@@ -58,6 +61,8 @@ const LOOPBACK = /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
 export class AccountService {
   private readonly deps: AccountServiceDeps;
   private token: string | null = null;
+  /** Refused signing in although the server answered: it does not know this account. */
+  private missing = false;
   private connection: 'connecting' | 'online' | 'offline' | 'error' = 'offline';
   private message: string | undefined;
   private readonly listeners = new Set<(s: AccountStatus) => void>();
@@ -74,13 +79,16 @@ export class AccountService {
       state: 'registered',
       server: new URL(row.server_url).host,
       serverUrl: row.server_url,
-      shareUrl: (LOOPBACK.test(row.server_url) && this.deps.publicAddress?.()) || row.server_url,
+      shareUrl: this.deps.homeLinks?.()
+        ? HOME_LINK_BASE
+        : (LOOPBACK.test(row.server_url) && this.deps.publicAddress?.()) || row.server_url,
       riverId: row.river_id,
       username: row.username,
       deviceId: row.device_id,
       devices: list.devices.length,
       listVersion: row.device_list_version,
       connection: this.connection,
+      ...(this.missing ? { missing: true } : {}),
       ...(this.message ? { message: this.message } : {}),
     };
   }
@@ -223,6 +231,8 @@ export class AccountService {
     const row = this.row();
     const signer = this.deps.identity.signer();
     if (!row || !signer) return this.status();
+    // Asking again cannot help; the person decides (Settings → Account → Set up again).
+    if (this.missing) return this.status();
     this.setConnection('connecting');
     const { requestJson } = this.deps;
     try {
@@ -273,7 +283,15 @@ export class AccountService {
     } catch (err) {
       this.token = null;
       if (err instanceof NetworkError) this.setConnection('offline', 'Server unreachable');
-      else {
+      else if (err instanceof ApiError && err.status === 401 && err.code === 'unauthorized') {
+        // The server is there and answered the challenge, but not for this account.
+        this.missing = true;
+        this.deps.log.warn('Account not recognised by its server');
+        this.setConnection(
+          'error',
+          'Your account is no longer on this River server — it may have been removed. Set it up again to keep using River.',
+        );
+      } else {
         this.deps.log.warn(`Account connect failed: ${(err as Error).name}`);
         this.setConnection('error', toUserFacing(err).message);
       }
@@ -308,6 +326,24 @@ export class AccountService {
     this.token = null;
     this.deps.db()?.prepare('DELETE FROM account WHERE id = 1').run();
     this.setConnection('offline');
+  }
+
+  /**
+   * The server no longer knows this account. Forgets it on this device (your
+   * identity, contacts and messages stay) so a new account can be created.
+   * Returns the address the old account used.
+   */
+  forgetMissing(): string {
+    const row = this.row();
+    if (!row) throw new UserFacingError('There is no account to set up again.');
+    if (!this.missing) throw new UserFacingError('Your account is fine — nothing to set up again.');
+    this.token = null;
+    this.missing = false;
+    const db = this.deps.db();
+    db?.prepare('DELETE FROM account WHERE id = 1').run();
+    db?.prepare('DELETE FROM server_instance').run();
+    this.setConnection('offline');
+    return row.server_url;
   }
 
   private signWithDevice(message: Uint8Array): Uint8Array {

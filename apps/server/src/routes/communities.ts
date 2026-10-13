@@ -2688,17 +2688,6 @@ export async function registerCommunityRoutes(
     });
   });
 
-  app.get('/add', async (_request, reply) => {
-    reply.header('content-type', 'text/html; charset=utf-8');
-    reply.header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'");
-    return reply.send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Add me on River</title>
-<body style="font-family:system-ui,sans-serif;background:#05070d;color:#e7ecf8;display:grid;place-items:center;min-height:100vh;margin:0">
-<main style="max-width:520px;padding:24px;line-height:1.5"><h1 style="margin:0 0 12px">Someone wants to be your friend on River</h1>
-<ol><li>Install River: <a style="color:#4fe3d1" href="https://github.com/martex-dev/river/releases/latest">github.com/martex-dev/river/releases/latest</a></li>
-<li>Open River and create your identity.</li><li>Copy this page's full address and paste it anywhere in River.</li></ol>
-<p style="color:#9ca8c6">River is end-to-end encrypted: this server never sees your messages.</p></main></body>`);
-  });
-
   // A link to a message, opened in a browser: explain where it opens (it reveals nothing).
   app.get('/channels/*', async (_request, reply) => {
     reply.header('content-type', 'text/html; charset=utf-8');
@@ -2707,17 +2696,6 @@ export async function registerCommunityRoutes(
 <body style="font-family:system-ui,sans-serif;background:#05070d;color:#e7ecf8;display:grid;place-items:center;min-height:100vh;margin:0">
 <main style="max-width:520px;padding:24px;line-height:1.5"><h1 style="margin:0 0 12px">This is a link to a River message</h1>
 <p>Paste it into River to open the message. Only members of its community can read it: messages are end-to-end encrypted and this server cannot show them.</p></main></body>`);
-  });
-
-  app.get('/join', async (_request, reply) => {
-    reply.header('content-type', 'text/html; charset=utf-8');
-    reply.header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'");
-    return reply.send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>River invite</title>
-<body style="font-family:system-ui,sans-serif;background:#05070d;color:#e7ecf8;display:grid;place-items:center;min-height:100vh;margin:0">
-<main style="max-width:520px;padding:24px;line-height:1.5"><h1 style="margin:0 0 12px">You're invited to a River community</h1>
-<ol><li>Install River: <a style="color:#4fe3d1" href="https://github.com/martex-dev/river/releases/latest">github.com/martex-dev/river/releases/latest</a></li>
-<li>Open River and create your identity.</li><li>Copy this page's full address and paste it anywhere in River (or in <b>Communities → Got an invite?</b>).</li></ol>
-<p style="color:#9ca8c6">The secret part of this link never reaches this server.</p></main></body>`);
   });
 
   return {

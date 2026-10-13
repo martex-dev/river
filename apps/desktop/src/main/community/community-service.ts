@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { isHomeLink } from '../../shared/home-server.ts';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
@@ -1238,7 +1239,10 @@ export class CommunityService {
     // A server on a home PC changes address when the PC restarts, so an invite may name an old
     // address of your own server. Invite codes are secrets only the server that made them knows:
     // if your server accepts the code, it is the same server.
-    const elsewhere = account.state === 'registered' && account.serverUrl !== invite.serverUrl;
+    const elsewhere =
+      account.state === 'registered' &&
+      account.serverUrl !== invite.serverUrl &&
+      !isHomeLink(invite.serverUrl);
     // The community ID is only learned from the response, so the real sealed profile follows right after.
     const res = await this.call(
       '/invites/join',

@@ -6,7 +6,9 @@ import type { Logger } from './logger.ts';
 import { latestNote } from './community/server-locator.ts';
 
 const MAX_RELAY_BYTES = 256 * 1024;
-const RETRY_MS = 60_000;
+/** First retries come quickly (a tunnel blip lasts seconds), then settle at once a minute. */
+const RETRY_MIN_MS = 5_000;
+const RETRY_MAX_MS = 60_000;
 
 export class HomeServerUnavailable extends Error {
   constructor() {
@@ -91,6 +93,14 @@ export class HomeAccount {
     return this.deps.enabled;
   }
 
+  /** River's server's current address (verified), for links made with its permanent address. */
+  locate(): Promise<string> {
+    if (!this.deps.enabled) {
+      throw new UserFacingError('This development build does not use River’s server.');
+    }
+    return locateHomeServer(this.deps);
+  }
+
   /** The account is being set up but the server is not reachable yet. */
   isWaiting(): boolean {
     return this.waiting;
@@ -109,16 +119,25 @@ export class HomeAccount {
     return this.running;
   }
 
-  /** Tries now, and keeps trying every minute until it works. Never throws. */
+  private retryMs = RETRY_MIN_MS;
+
+  /** Tries now, and keeps trying (5 s, 10 s, 20 s … then every minute) until it works. Never throws. */
   kick(): void {
     if (!this.needed() || this.deps.autoAccount?.() === false) return;
-    void this.ensure().catch(() => {
-      if (this.timer) return;
-      this.timer = setTimeout(() => {
-        this.timer = null;
-        this.kick();
-      }, RETRY_MS);
-    });
+    void this.ensure().then(
+      () => {
+        this.retryMs = RETRY_MIN_MS;
+      },
+      () => {
+        if (this.timer) return;
+        const wait = this.retryMs;
+        this.retryMs = Math.min(this.retryMs * 2, RETRY_MAX_MS);
+        this.timer = setTimeout(() => {
+          this.timer = null;
+          this.kick();
+        }, wait);
+      },
+    );
   }
 
   private needed(): boolean {

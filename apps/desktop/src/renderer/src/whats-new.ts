@@ -3,6 +3,12 @@
  * got, shown once. Fresh installs see nothing; full notes are in the release.
  */
 export const HIGHLIGHTS: Record<string, string[]> = {
+  '1.0.41': [
+    'Voice calls keep everyone in when the connection blips — tested with 10 people',
+    'Invite links never go stale, and clicking one opens River ("Open in River")',
+    'Opening an invite in a browser shows how to install River on any computer',
+    'If your account is removed from the server, River offers to set it up again',
+  ],
   '1.0.40': [
     'Webhooks that stay end-to-end encrypted — services post, the server still reads nothing',
     'Priority speaker, moving people between voice channels, and a quick way back into a call',

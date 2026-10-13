@@ -146,6 +146,13 @@ Each line is one PR; each version ships when its section is done.
 - [x] Move members between voice channels; docs, parity audit and STATUS refreshed for the end of 1.0.x (1.0.39)
 - [x] Final 1.0.x polish release: what's new after an update, changelog links (1.0.40)
 
+### 1.0.41 — Calls that stay up, invites anyone can follow
+
+- [x] Voice: people stay in the call while their connection is rebuilt (chaos e2e, 10 people)
+- [x] Account recovery when the server no longer knows the account
+- [x] Invite page with downloads and "Open in River" (river:// links)
+- [x] Permanent link address (GitHub Pages) and version-less installer downloads
+
 ### After 1.0.x (not started; see ROADMAP Stage 2)
 
 - [ ] Bot accounts with a small client library (ADR 0004)

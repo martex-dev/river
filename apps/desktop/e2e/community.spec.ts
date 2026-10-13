@@ -393,7 +393,10 @@ test('a brand-new user creates a community from a template in one step', async (
     data.setData('text', text);
     document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true }));
   }, link);
-  await expect(dave.getByRole('dialog', { name: 'Join this community?' })).toContainText('127.0.0.1');
+  // The prompt speaks plainly: no server addresses.
+  const prompt = dave.getByRole('dialog', { name: 'Join this community?' });
+  await expect(prompt).toContainText("You've been invited to a River community");
+  await expect(prompt).not.toContainText('127.0.0.1');
   await dave.getByRole('dialog').getByRole('button', { name: 'Join community' }).click();
   await expect(dave.locator('.community__title strong')).toHaveText('Squad Goals', { timeout: 20_000 });
 
