@@ -182,6 +182,21 @@ the reporter's, moderators are told to check the original message when it
 still exists. Each person can report a message once and have at most 20 open
 reports per community.
 
+### 5j. Incoming webhooks (1.0.32, ADR 0004)
+
+A webhook's name and posting key are sealed with the community key; the
+server stores only the channel, the creator, the creation time and a SHA-256
+hash of the posting token. The token and key travel only in the part of the
+webhook address after `#`, which River and HTTP clients do not send. The
+outside service seals each post itself, so the server sees ciphertext, the
+webhook ID, the time and the size — as for any message. Whoever holds the
+address can post (not read) until the webhook is deleted, which disables the
+token at once; deleted webhooks keep their sealed key so earlier posts stay
+readable. A member removed later may still know a webhook key, but reading
+posts also needs membership; deleting and recreating the webhook removes even
+that. Webhook posts cannot be edited, and they carry a visible WEBHOOK badge.
+There are no outgoing webhooks: the server cannot forward what it cannot read.
+
 ## 6. Key threats and mitigations (STRIDE summary)
 
 | Threat          | Example                                | Mitigation                                                                                                                              | Status                                                 |

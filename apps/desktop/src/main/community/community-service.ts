@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
@@ -77,6 +78,7 @@ import type {
   CommunityView,
   MemberView,
   RoleView,
+  WebhookView,
 } from '../../shared/ipc.ts';
 import type { AccountService } from '../account/account-service.ts';
 import { decryptAttachment, encryptAttachment, paddedSize } from '@river/crypto';
@@ -214,6 +216,8 @@ export class CommunityService {
   private readonly wires = new Map<string, CommunityWire>();
   /** Which key opened each message, so reactions use the same key. */
   private readonly messageKeys = new Map<string, Buffer>();
+  /** Webhook ID → { name, key } opened from the community (1.0.32). */
+  private readonly webhookKeys = new Map<string, { name: string; key: Buffer }>();
   /** Who sent recent messages, so a reply to one of yours counts as a mention. */
   private readonly messageSenders = new Map<string, string>();
   private keyChannel: { send(peer: string, message: KeyMessage): Promise<void> } | null = null;
@@ -872,6 +876,22 @@ export class CommunityService {
           return {};
         }
       })(),
+      ...((): Pick<CommunityView, 'webhooks'> => {
+        const hooks = (c.webhooks ?? []).flatMap((w): WebhookView[] => {
+          try {
+            const o = ring.open<{ name?: unknown; key?: unknown }>(c.id, `webhook:${w.id}`, w.sealed);
+            const key = typeof o.key === 'string' ? Buffer.from(o.key, 'base64url') : null;
+            if (!key || key.length !== 32) return [];
+            const name = String(o.name ?? 'Webhook').slice(0, 40) || 'Webhook';
+            this.webhookKeys.set(w.id, { name, key });
+            const { sealed: _sealed, ...rest } = w;
+            return [{ ...rest, name }];
+          } catch {
+            return [];
+          }
+        });
+        return hooks.length ? { webhooks: hooks } : {};
+      })(),
       screening: c.screening ?? false,
       selfRoles: (c.selfRoles ?? []).filter((id) => roles.some((r) => r.id === id)),
       myPending: myPending,
@@ -948,7 +968,14 @@ export class CommunityService {
     const ring = this.keys.get(communityId);
     if (!ring) return null;
     try {
-      const opened = ring.openWith<{
+      // A webhook post is sealed with that webhook's key, not the community key (ADR 0004).
+      const hook = m.webhook ? this.webhookKeys.get(m.webhook) : undefined;
+      if (m.webhook && !hook) return null;
+      const openMessage = <T>(): { value: T; key: Buffer } =>
+        hook
+          ? { value: open<T>(hook.key, communityId, `message:${m.channelId}`, m.body), key: hook.key }
+          : ring.openWith<T>(communityId, `message:${m.channelId}`, m.body);
+      const opened = openMessage<{
         text: string;
         replyTo?: string;
         noPing?: unknown;
@@ -958,7 +985,7 @@ export class CommunityService {
         tags?: unknown;
         embed?: unknown;
         sticker?: unknown;
-      }>(communityId, `message:${m.channelId}`, m.body);
+      }>();
       const body = opened.value;
       const key = opened.key;
       this.messageKeys.set(m.id, key);
@@ -1001,7 +1028,8 @@ export class CommunityService {
         communityId,
         channelId: m.channelId,
         sender: m.sender,
-        senderName: sender?.name ?? `Member ${m.sender.slice(0, 4)}`,
+        senderName: hook ? hook.name : (sender?.name ?? `Member ${m.sender.slice(0, 4)}`),
+        ...(hook ? { webhook: m.webhook! } : {}),
         text,
         poll: readPoll(body.poll),
         sentAt: m.sentAt,
@@ -1027,7 +1055,7 @@ export class CommunityService {
         mentionsMe:
           m.sender !== me &&
           this.mentions(text, community, m.sender, body.noPing === true ? undefined : (replyTo ?? undefined)),
-        mine: m.sender === me,
+        mine: m.sender === me && !hook,
         threadId: m.threadId,
         thread: m.thread
           ? {
@@ -1835,6 +1863,43 @@ export class CommunityService {
             : 'Unknown',
         })) as CommunityActionResult<A>;
       }
+      case 'createWebhook': {
+        const key = randomBytes(32);
+        const token = randomBytes(32).toString('base64url');
+        const webhookId = randomId();
+        await this.call(
+          `/communities/${act.communityId}/webhooks`,
+          'POST',
+          {
+            id: webhookId,
+            channelId: act.channelId,
+            sealed: seal(this.requireKey(act.communityId), act.communityId, `webhook:${webhookId}`, {
+              name: act.name,
+              key: key.toString('base64url'),
+            }),
+            tokenHash: createHash('sha256').update(token).digest('hex'),
+          },
+          z.unknown(),
+        ).catch(explain);
+        await this.refresh();
+        // The part after # (token and key) is never sent to the server by River or by HTTP clients.
+        const secret = new URLSearchParams({
+          c: act.communityId,
+          ch: act.channelId,
+          t: token,
+          k: key.toString('base64url'),
+        });
+        return `${this.shareServer()}${API_PREFIX}/webhooks/${webhookId}#${secret.toString()}` as CommunityActionResult<A>;
+      }
+      case 'revokeWebhook':
+        await this.call(
+          `/communities/${act.communityId}/webhooks/${act.webhookId}`,
+          'DELETE',
+          undefined,
+          z.unknown(),
+        ).catch(explain);
+        await this.refresh();
+        break;
       case 'revokeInvite':
         await this.call(
           `/communities/${act.communityId}/invites/${encodeURIComponent(act.inviteId)}`,

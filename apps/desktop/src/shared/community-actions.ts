@@ -324,6 +324,16 @@ export const communityActionSchema = z.discriminatedUnion('a', [
   z.object({ a: z.literal('bans'), communityId: id }).strict(),
   /** Invites with who made them and who joined with them (1.0.31). */
   z.object({ a: z.literal('invites'), communityId: id }).strict(),
+  /** Incoming webhooks (1.0.32, ADR 0004). */
+  z
+    .object({
+      a: z.literal('createWebhook'),
+      communityId: id,
+      channelId: id,
+      name: z.string().trim().min(1).max(40),
+    })
+    .strict(),
+  z.object({ a: z.literal('revokeWebhook'), communityId: id, webhookId: id }).strict(),
   z.object({ a: z.literal('revokeInvite'), communityId: id, inviteId: z.string().max(64) }).strict(),
   z
     .object({
@@ -667,6 +677,8 @@ export interface BanView {
 
 interface Results {
   createRole: string;
+  /** The secret webhook address, shown once. */
+  createWebhook: string;
   invites: InviteView[];
   activity: ActivitySummary;
   favoriteMediaList: FavoriteMediaView[];

@@ -6,6 +6,7 @@ import {
   topPosition,
   type CommunityWire,
   type MessageWire,
+  type WebhookWire,
   type OverwriteWire,
   type ReactionWire,
   type RoleWire,
@@ -64,6 +65,7 @@ export class CommunityModel {
   readonly screening: boolean;
   readonly selfRoles: string[];
   readonly art: string | null;
+  readonly webhooks: WebhookWire[];
 
   constructor(init: {
     id: string;
@@ -79,6 +81,7 @@ export class CommunityModel {
     screening?: boolean;
     selfRoles?: string[];
     art?: string | null;
+    webhooks?: WebhookWire[];
   }) {
     this.id = init.id;
     this.ownerId = init.ownerId;
@@ -93,6 +96,7 @@ export class CommunityModel {
     this.screening = init.screening ?? false;
     this.selfRoles = init.selfRoles ?? [];
     this.art = init.art ?? null;
+    this.webhooks = init.webhooks ?? [];
   }
 
   /** Must still accept the rules before taking part. */
@@ -190,6 +194,10 @@ export class CommunityModel {
       screening: this.screening,
       selfRoles: this.selfRoles,
       art: this.art,
+      ...((): { webhooks?: WebhookWire[] } => {
+        const mine = this.webhooks.filter((w) => visible.some((c) => c.id === w.channelId));
+        return mine.length ? { webhooks: mine } : {};
+      })(),
       roles: this.roles,
       channels: visible.map((c) => ({
         id: c.id,
@@ -249,7 +257,7 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
     .where('id', '=', id)
     .executeTakeFirst();
   if (!c) return null;
-  const [roles, channels, overwrites, members, memberRoles, categories, categoryOverwrites] =
+  const [roles, channels, overwrites, members, memberRoles, categories, categoryOverwrites, webhooks] =
     await Promise.all([
       db.selectFrom('roles').selectAll().where('community_id', '=', id).orderBy('position').execute(),
       db.selectFrom('channels').selectAll().where('community_id', '=', id).orderBy('position').execute(),
@@ -284,6 +292,7 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
         ])
         .where('categories.community_id', '=', id)
         .execute(),
+      db.selectFrom('webhooks').selectAll().where('community_id', '=', id).orderBy('created_at').execute(),
     ]);
   const categoryModels: CategoryModel[] = categories.map((k) => ({
     id: k.id,
@@ -301,6 +310,14 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
     rotationNeeded: c.rotation_needed === 1,
     onboarding: c.onboarding,
     art: c.art,
+    webhooks: webhooks.map((w) => ({
+      id: w.id,
+      channelId: w.channel_id,
+      sealed: w.sealed,
+      createdBy: w.created_by,
+      createdAt: w.created_at,
+      revoked: w.revoked === 1,
+    })),
     screening: c.screening === 1,
     selfRoles: ((): string[] => {
       try {
@@ -392,6 +409,7 @@ export async function loadMessages(
     edited_at: string | null;
     pinned: number;
     thread_id: string | null;
+    webhook_id?: string | null;
   }>,
 ): Promise<MessageWire[]> {
   const ids = rows.map((r) => r.id);
@@ -437,6 +455,7 @@ export async function loadMessages(
               creator: t.creator,
             }
           : null)(threads.find((t) => t.id === r.id)),
+      ...(r.webhook_id ? { webhook: r.webhook_id } : {}),
     };
   });
 }

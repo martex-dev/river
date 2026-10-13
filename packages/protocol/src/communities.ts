@@ -134,6 +134,29 @@ export const MAX_SELF_ROLES = 25;
 /** A community's sealed picture and banner (1.0.29). */
 export const SEALED_ART = 160 * 1024;
 
+/** Incoming webhooks (1.0.32, ADR 0004). */
+export const webhookIdSchema = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
+export const MAX_WEBHOOKS = 15;
+export const webhookSchema = z.object({
+  id: webhookIdSchema,
+  channelId: channelIdSchema,
+  /** Sealed { name, key }: the key outside services seal posts with. */
+  sealed: sealedSchema(SEALED_SMALL),
+  createdBy: riverIdSchema,
+  createdAt: z.string().max(40),
+  revoked: z.boolean(),
+});
+export type WebhookWire = z.infer<typeof webhookSchema>;
+export const createWebhookRequestSchema = z
+  .object({
+    id: webhookIdSchema,
+    channelId: channelIdSchema,
+    sealed: sealedSchema(SEALED_SMALL),
+    /** sha256 of the posting token, hex; the token itself never reaches the server. */
+    tokenHash: z.string().regex(/^[0-9a-f]{64}$/),
+  })
+  .strict();
+
 export const communitySchema = z.object({
   id: communityIdSchema,
   meta: sealedSchema(SEALED_SMALL),
@@ -154,6 +177,8 @@ export const communitySchema = z.object({
   selfRoles: z.array(roleIdSchema).max(MAX_SELF_ROLES).optional(),
   /** Sealed { icon, banner } pictures (1.0.29). */
   art: sealedSchema(SEALED_ART).nullable().optional(),
+  /** Webhooks of channels you can see (1.0.32). */
+  webhooks: z.array(webhookSchema).max(200).optional(),
 });
 export type CommunityWire = z.infer<typeof communitySchema>;
 export const joinResponseSchema = communitySchema.extend({
@@ -363,8 +388,14 @@ export const messageSchema = z.object({
     })
     .nullable()
     .default(null),
+  /** Posted by this incoming webhook; sealed with its key, not the community key (1.0.32). */
+  webhook: webhookIdSchema.nullable().optional(),
 });
 export type MessageWire = z.infer<typeof messageSchema>;
+/** What an outside service posts to /v1/webhooks/:id with its token. */
+export const webhookPostRequestSchema = z
+  .object({ id: messageIdSchema, body: sealedSchema(SEALED_MESSAGE) })
+  .strict();
 export const sendMessageRequestSchema = z
   .object({
     id: messageIdSchema,

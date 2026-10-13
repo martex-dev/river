@@ -1,0 +1,119 @@
+import { useState, type ReactElement } from 'react';
+import type { CommunityView } from '../../../../shared/ipc.ts';
+import { useCommunity } from '../store.ts';
+
+/**
+ * Community settings → Webhooks (1.0.32, ADR 0004). Outside services post with
+ * a secret address and seal each post themselves, so the server still never
+ * sees content.
+ */
+export function WebhooksPanel({ community }: { community: CommunityView }): ReactElement {
+  const s = useCommunity();
+  const channels = community.channels.filter((c) => c.kind === 'text' && !c.forum);
+  const [name, setName] = useState('');
+  const [channelId, setChannelId] = useState(channels[0]?.id ?? '');
+  const [address, setAddress] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const active = (community.webhooks ?? []).filter((w) => !w.revoked);
+  const who = (id: string): string =>
+    community.members.find((m) => m.riverId === id)?.name ?? 'Someone who left';
+  const channelName = (id: string): string =>
+    community.channels.find((c) => c.id === id)?.name ?? 'deleted channel';
+
+  const create = async (): Promise<void> => {
+    if (!name.trim() || !channelId) return;
+    const res = await s.run({ a: 'createWebhook', communityId: community.id, channelId, name: name.trim() });
+    if (res) {
+      setAddress(res);
+      setCopied(false);
+      setName('');
+    }
+  };
+
+  return (
+    <div className="settings-page">
+      <h2>Webhooks</h2>
+      <p className="muted small">
+        Let a script or another service post into a channel. It encrypts each post itself with a key that is
+        only in the webhook address, so the server still cannot read it. Anyone with the address can post as
+        the webhook (not read), so keep it secret.
+      </p>
+
+      {address && (
+        <div className="field" role="status">
+          <strong>Copy this address now — River will not show it again.</strong>
+          <div className="webhook-address">
+            <code>{address}</code>
+            <button
+              className="btn btn--small"
+              onClick={() => void navigator.clipboard.writeText(address).then(() => setCopied(true))}
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <p className="muted small">
+            Post with <code>scripts/webhook/post.mjs</code> from the River repository, or any tool that
+            follows ADR 0004.
+          </p>
+        </div>
+      )}
+
+      {channels.length === 0 ? (
+        <p className="muted">Webhooks can post only in text channels; this community has none.</p>
+      ) : (
+        <div className="row">
+          <input
+            aria-label="Webhook name"
+            placeholder="Name, e.g. Build bot"
+            value={name}
+            maxLength={40}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void create()}
+          />
+          <select aria-label="Channel" value={channelId} onChange={(e) => setChannelId(e.target.value)}>
+            {channels.map((c) => (
+              <option key={c.id} value={c.id}>
+                #{c.name}
+              </option>
+            ))}
+          </select>
+          <button
+            className="btn btn--primary btn--small"
+            disabled={!name.trim()}
+            onClick={() => void create()}
+          >
+            Create webhook
+          </button>
+        </div>
+      )}
+
+      {active.length === 0 ? (
+        <p className="muted">No webhooks yet.</p>
+      ) : (
+        <ul className="report-list">
+          {active.map((w) => (
+            <li key={w.id} className="report">
+              <div className="report__head">
+                <strong>{w.name}</strong>
+                <span className="muted small">
+                  posts in #{channelName(w.channelId)} · made by {who(w.createdBy)} ·{' '}
+                  {new Date(w.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+              <div className="report__actions">
+                <button
+                  className="btn btn--ghost btn--small btn--danger-text"
+                  onClick={() =>
+                    void s.run({ a: 'revokeWebhook', communityId: community.id, webhookId: w.id })
+                  }
+                >
+                  Delete
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

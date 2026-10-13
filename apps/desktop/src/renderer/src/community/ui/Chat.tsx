@@ -335,6 +335,7 @@ export function TextChannel(props: {
             !m.replyTo &&
             prev !== undefined &&
             prev.sender === m.sender &&
+            prev.webhook === m.webhook &&
             Date.parse(m.sentAt) - Date.parse(prev.sentAt) < GROUP_MS;
           return (
             <div key={m.id}>
@@ -439,7 +440,8 @@ function Message(props: {
   };
   const openProfile = (e: { clientX: number; clientY: number }): void =>
     setProfile({ x: e.clientX + 12, y: e.clientY - 40 });
-  const member = memberOf(community, m.sender);
+  // A webhook post shows the webhook, not the person who made it (1.0.32).
+  const member = m.webhook ? undefined : memberOf(community, m.sender);
   const color = member?.color ? hex(member.color) : undefined;
   const canManage = can(channel.permissions, Permission.MANAGE_MESSAGES);
   // The community's word filter (1.0.28): readers' apps fold such messages away.
@@ -531,7 +533,7 @@ function Message(props: {
               aria-label={`${m.senderName}'s profile`}
               onClick={openProfile}
             >
-              <Avatar id={m.sender} name={m.senderName} avatar={member?.avatar} size={38} />
+              <Avatar id={m.webhook ?? m.sender} name={m.senderName} avatar={member?.avatar} size={38} />
             </button>
           )}
         </div>
@@ -546,6 +548,14 @@ function Message(props: {
               >
                 {m.senderName}
               </button>
+              {m.webhook && (
+                <span
+                  className="tag-badge"
+                  title={`Posted through a webhook made by ${memberOf(community, m.sender)?.name ?? 'someone who left'}`}
+                >
+                  WEBHOOK
+                </span>
+              )}
               {member?.roleIcon && (
                 <span className="role-icon" title="Role icon" aria-hidden="true">
                   {member.roleIcon}

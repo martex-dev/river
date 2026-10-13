@@ -88,6 +88,10 @@ export function describeAudit(
       }
       case 'member.tempRole':
         return `gave ${person(t)} ${role(typeof d.role === 'string' ? d.role : null)} for a while`;
+      case 'webhook.create':
+        return 'made a webhook';
+      case 'webhook.revoke':
+        return 'deleted a webhook';
       case 'invite.revoke':
         return 'revoked an invite';
       case 'member.kick':

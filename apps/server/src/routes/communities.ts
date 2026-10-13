@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import websocket from '@fastify/websocket';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
@@ -36,6 +36,9 @@ import {
   bulkDeleteRequestSchema,
   updateOnboardingRequestSchema,
   tempRoleRequestSchema,
+  createWebhookRequestSchema,
+  webhookPostRequestSchema,
+  MAX_WEBHOOKS,
   updateArtRequestSchema,
   selfRolesRequestSchema,
   createNoteRequestSchema,
@@ -2041,6 +2044,114 @@ export async function registerCommunityRoutes(
     },
   );
 
+  // ---- incoming webhooks (1.0.32, ADR 0004) ----------------------------------------------------
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/communities/:id/webhooks`,
+    { ...authed, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const model = await community(request.params.id, me(request));
+      const req = parse(createWebhookRequestSchema, request.body);
+      const ch = model.channel(req.channelId);
+      if (!ch || ch.kind !== 'text' || ch.forum) throw bad('Webhooks can post only in text channels');
+      if (!model.can(me(request), Permission.MANAGE_CHANNELS, ch.id)) throw forbidden();
+      if (model.webhooks.filter((w) => !w.revoked).length >= MAX_WEBHOOKS)
+        throw bad(`A community can have up to ${MAX_WEBHOOKS} webhooks`);
+      try {
+        await db
+          .insertInto('webhooks')
+          .values({
+            id: req.id,
+            community_id: model.id,
+            channel_id: ch.id,
+            sealed: req.sealed,
+            token_hash: req.tokenHash,
+            created_by: me(request),
+            created_at: deps.now().toISOString(),
+          })
+          .execute();
+      } catch {
+        throw new HttpError(409, 'conflict', 'Webhook ID already exists');
+      }
+      await audit(model.id, me(request), 'webhook.create', null, { channel: ch.id });
+      changed(model);
+      return reply.code(201).send({ ok: true });
+    },
+  );
+
+  app.delete<{ Params: { id: string; webhook: string } }>(
+    `${API_PREFIX}/communities/:id/webhooks/:webhook`,
+    authed,
+    async (request) => {
+      const model = await community(request.params.id, me(request));
+      const hook = model.webhooks.find((w) => w.id === request.params.webhook);
+      if (!hook) throw notFound();
+      if (!model.can(me(request), Permission.MANAGE_CHANNELS, hook.channelId)) throw forbidden();
+      // Keep the row (and its sealed key) so earlier posts stay readable; the token stops working.
+      await db
+        .updateTable('webhooks')
+        .set({ revoked: 1, token_hash: null })
+        .where('id', '=', hook.id)
+        .where('community_id', '=', model.id)
+        .execute();
+      await audit(model.id, me(request), 'webhook.revoke', null, { channel: hook.channelId });
+      changed(model);
+      return { ok: true };
+    },
+  );
+
+  /** Outside services post here with the webhook's token; the body is already sealed. */
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/webhooks/:id`,
+    {
+      config: {
+        // Per webhook, not per IP: a leaked address used from many machines still cannot flood a channel.
+        rateLimit: {
+          max: 30,
+          timeWindow: '1 minute',
+          keyGenerator: (req: FastifyRequest) =>
+            `webhook:${String((req.params as { id?: unknown }).id ?? '').slice(0, 64)}`,
+        },
+      },
+    },
+    async (request, reply) => {
+      const unauthorized = new HttpError(401, 'unauthorized', 'Unknown webhook or wrong token');
+      const header = request.headers.authorization ?? '';
+      const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+      if (!token || token.length > 128) throw unauthorized;
+      const hook = await db
+        .selectFrom('webhooks')
+        .selectAll()
+        .where('id', '=', String(request.params.id).slice(0, 64))
+        .executeTakeFirst();
+      const given = Buffer.from(sha256(token), 'hex');
+      const stored = Buffer.from(hook?.token_hash ?? '0'.repeat(64), 'hex');
+      if (!hook || hook.revoked || !hook.token_hash || !timingSafeEqual(given, stored)) throw unauthorized;
+      const model = await loadCommunity(db, hook.community_id);
+      const ch = model?.channel(hook.channel_id);
+      if (!model || !ch || ch.kind !== 'text' || ch.forum) throw notFound();
+      const req = parse(webhookPostRequestSchema, request.body);
+      try {
+        await db
+          .insertInto('messages')
+          .values({
+            id: req.id,
+            channel_id: ch.id,
+            sender: hook.created_by,
+            body: req.body,
+            sent_at: deps.now().toISOString(),
+            pinned: 0,
+            thread_id: null,
+            webhook_id: hook.id,
+          })
+          .execute();
+      } catch {
+        throw new HttpError(409, 'conflict', 'Message ID already exists');
+      }
+      await pushMessage(model, req.id);
+      return reply.code(201).send({ id: req.id });
+    },
+  );
+
   // ---- threads ----------------------------------------------------------------------------------
   app.post<{ Params: { id: string } }>(
     `${API_PREFIX}/messages/:id/thread`,
@@ -2106,7 +2217,7 @@ export async function registerCommunityRoutes(
 
   app.patch<{ Params: { id: string } }>(`${API_PREFIX}/messages/:id`, authed, async (request) => {
     const { model, msg } = await messageContext(request.params.id, me(request));
-    if (msg.sender !== me(request)) throw forbidden('You can only edit your own messages');
+    if (msg.sender !== me(request) || msg.webhook_id) throw forbidden('You can only edit your own messages');
     const req = parse(editMessageRequestSchema, request.body);
     await db
       .updateTable('messages')
