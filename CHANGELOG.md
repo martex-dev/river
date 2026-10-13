@@ -6,6 +6,12 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (1.0.40)
+
+- **What's new after an update:** a small card lists the highlights of the
+  version you just got, once, with a link to all changes. Fresh installs see
+  nothing.
+
 ### Added (1.0.39)
 
 - **Move people between voice channels:** moderators with Move members pick

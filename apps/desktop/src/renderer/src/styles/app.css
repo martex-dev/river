@@ -1645,3 +1645,20 @@ html[data-density='compact'] .member {
   border-radius: 6px;
   padding: 2px 6px;
 }
+
+/* What's new after an update (1.0.40) */
+.whats-new {
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(79, 227, 209, 0.4);
+  border-radius: 12px;
+}
+.whats-new h2 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+.whats-new ul {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  line-height: 1.5;
+}
