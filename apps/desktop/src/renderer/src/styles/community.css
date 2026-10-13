@@ -5480,3 +5480,29 @@ input.switch:disabled {
   border-radius: 6px;
   padding: 2px 4px;
 }
+
+/* Webhooks (1.0.32) */
+.tag-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  cursor: help;
+}
+.webhook-address {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.webhook-address code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.12));
+}

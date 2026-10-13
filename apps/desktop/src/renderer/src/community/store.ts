@@ -39,6 +39,7 @@ export type CommunityTab =
   | 'overview'
   | 'onboarding'
   | 'invites'
+  | 'webhooks'
   | 'roles'
   | 'members'
   | 'emoji'

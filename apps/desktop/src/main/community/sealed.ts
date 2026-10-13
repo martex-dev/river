@@ -25,6 +25,7 @@ export type SealPurpose =
   | `sound:${string}`
   | `note:${string}`
   | `sticker:${string}`
+  | `webhook:${string}`
   | 'invite';
 
 const aad = (communityId: string, purpose: SealPurpose): Buffer =>

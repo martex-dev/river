@@ -132,6 +132,8 @@ export interface MessagesTable {
   edited_at: string | null;
   pinned: number;
   thread_id: string | null;
+  /** Posted through this incoming webhook (1.0.32). */
+  webhook_id?: string | null;
 }
 
 export interface RolesTable {
@@ -295,6 +297,17 @@ export interface MemberNotesTable {
   created_at: string;
 }
 
+export interface WebhooksTable {
+  id: string;
+  community_id: string;
+  channel_id: string;
+  sealed: string;
+  token_hash: string | null;
+  created_by: string;
+  created_at: string;
+  revoked: Generated<number>;
+}
+
 export interface CommunityStickersTable {
   id: string;
   community_id: string;
@@ -305,6 +318,7 @@ export interface CommunityStickersTable {
 
 export interface Database {
   community_stickers: CommunityStickersTable;
+  webhooks: WebhooksTable;
   member_notes: MemberNotesTable;
   community_sounds: CommunitySoundsTable;
   community_reports: CommunityReportsTable;

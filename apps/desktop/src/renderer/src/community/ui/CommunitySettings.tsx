@@ -6,6 +6,7 @@ import { OnboardingSettings, WordFilterSettings } from './Onboarding.tsx';
 import { SoundSettings } from './Soundboard.tsx';
 import { ReportsPanel } from './Reports.tsx';
 import { InvitesPanel } from './Invites.tsx';
+import { WebhooksPanel } from './Webhooks.tsx';
 import { useEffect, useState, type ReactElement } from 'react';
 import { PERMISSION_INFO, Permission } from '@river/protocol/permissions';
 import type { BanView } from '../../../../shared/community-actions.ts';
@@ -51,6 +52,7 @@ export function CommunitySettings(props: {
     ['sounds', 'Soundboard', true],
     ['bans', 'Bans', can(perms, Permission.BAN_MEMBERS)],
     ['invites', 'Invites', can(perms, Permission.MANAGE_COMMUNITY)],
+    ['webhooks', 'Webhooks', can(perms, Permission.MANAGE_CHANNELS)],
     ['reports', 'Reports', can(perms, Permission.MANAGE_MESSAGES)],
     [
       'insights',
@@ -119,6 +121,7 @@ export function CommunitySettings(props: {
           {tab === 'sounds' && <SoundSettings community={community} />}
           {tab === 'bans' && <Bans community={community} />}
           {tab === 'invites' && <InvitesPanel community={community} />}
+          {tab === 'webhooks' && <WebhooksPanel community={community} />}
           {tab === 'reports' && <ReportsPanel community={community} />}
           {tab === 'insights' && <InsightsPanel community={community} />}
           {tab === 'audit' && <AuditLog community={community} />}

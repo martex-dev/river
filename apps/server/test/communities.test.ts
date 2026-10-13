@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createIdentity, generateKeyPair, sign } from '@river/crypto';
@@ -565,6 +565,52 @@ describe('communities', () => {
         ).json(),
       ).invites;
       expect(after.some((i) => i.id === used.id)).toBe(false);
+    });
+
+    it('webhooks: managers create them, the token posts sealed messages, revoking stops it', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text, voice } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const token = randomBytes(32).toString('base64url');
+      const hook = id();
+      const req = (channelId: string, hid = hook) => ({
+        id: hid,
+        channelId,
+        sealed: sealed(),
+        tokenHash: createHash('sha256').update(token).digest('hex'),
+      });
+      expect(await status(a, 'POST', `/v1/communities/${cid}/webhooks`, member.token, req(text))).toBe(403);
+      expect(await status(a, 'POST', `/v1/communities/${cid}/webhooks`, owner.token, req(voice, id()))).toBe(
+        400,
+      );
+      expect(await status(a, 'POST', `/v1/communities/${cid}/webhooks`, owner.token, req(text))).toBe(201);
+      // Every member who can see the channel gets the sealed webhook (to read its posts).
+      const seen = await fetchCommunity(a, member.token, cid);
+      expect(seen.webhooks?.map((w) => [w.id, w.channelId, w.revoked])).toEqual([[hook, text, false]]);
+
+      const post = (tok: string, mid = id()) =>
+        a.inject({
+          method: 'POST',
+          url: `/v1/webhooks/${hook}`,
+          headers: { authorization: `Bearer ${tok}` },
+          payload: { id: mid, body: sealed() },
+        });
+      expect((await post('wrong-token')).statusCode).toBe(401);
+      const mid = id();
+      expect((await post(token, mid)).statusCode).toBe(201);
+      const msgs = (
+        await a.inject({ method: 'GET', url: `/v1/channels/${text}/messages`, headers: auth(member.token) })
+      ).json().messages as Array<{ id: string; sender: string; webhook?: string }>;
+      expect(msgs.find((m) => m.id === mid)).toMatchObject({ sender: owner.riverId, webhook: hook });
+      // Nobody can edit a webhook post, not even the person who made the webhook.
+      expect(await status(a, 'PATCH', `/v1/messages/${mid}`, owner.token, { body: sealed() })).toBe(403);
+
+      expect(await status(a, 'DELETE', `/v1/communities/${cid}/webhooks/${hook}`, member.token)).toBe(403);
+      expect(await status(a, 'DELETE', `/v1/communities/${cid}/webhooks/${hook}`, owner.token)).toBe(200);
+      expect((await post(token)).statusCode).toBe(401);
+      // Kept (revoked) so earlier posts can still be opened.
+      expect((await fetchCommunity(a, member.token, cid)).webhooks?.[0]?.revoked).toBe(true);
     });
 
     it('moderator notes are only for people who moderate members', async () => {

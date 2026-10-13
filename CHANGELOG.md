@@ -6,6 +6,15 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (1.0.32)
+
+- **Encrypted incoming webhooks** (Community settings → Webhooks): let a
+  script or service post into a text channel. The poster seals each post
+  with a key that lives only in the secret webhook address, so the server
+  still cannot read it ([ADR 0004](docs/architecture/decisions/0004-webhooks-and-bots.md)).
+  Posts show a **WEBHOOK** badge; deleting a webhook stops its address at
+  once. `scripts/webhook/post.mjs` is a dependency-free example poster.
+
 ### Added (1.0.31)
 
 - **Invite tracking:** Community settings → Invites lists each active link,

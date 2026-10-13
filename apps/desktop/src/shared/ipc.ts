@@ -336,6 +336,17 @@ export interface CommunityView {
   filter?: WordFilter | null;
   /** A picture (shown instead of the emoji icon) and a banner (1.0.29), as image data URLs. */
   art?: { icon: string | null; banner: string | null };
+  /** Incoming webhooks of channels you can see (1.0.32). */
+  webhooks?: WebhookView[];
+}
+
+export interface WebhookView {
+  id: string;
+  channelId: string;
+  name: string;
+  createdBy: string;
+  createdAt: string;
+  revoked: boolean;
 }
 
 export interface ReactionView {
@@ -383,6 +394,8 @@ export interface ChatMessage {
   embed?: LinkEmbed | null;
   /** A community sticker (1.0.24): its ID, shown from the community's stickers. */
   sticker?: string | null;
+  /** Posted by an incoming webhook (1.0.32); `senderName` is the webhook's name. */
+  webhook?: string;
 }
 
 export interface ThreadView {
