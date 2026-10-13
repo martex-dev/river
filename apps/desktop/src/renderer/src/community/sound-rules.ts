@@ -16,6 +16,8 @@ export type SoundName =
   | 'streamStart'
   | 'streamStop'
   | 'disconnected'
+  | 'pttOn'
+  | 'pttOff'
   | 'ring'
   | 'ringback'
   | 'send'
@@ -50,6 +52,8 @@ export const SOUND_GROUP: Record<SoundName, SoundGroup> = {
   streamStart: 'voice',
   streamStop: 'voice',
   disconnected: 'voice',
+  pttOn: 'voice',
+  pttOff: 'voice',
   ring: 'calls',
   ringback: 'calls',
   callConnected: 'calls',

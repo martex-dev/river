@@ -6,6 +6,18 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.35] - 2026-10-13
+
+**Quicker hands: push-to-talk clicks and right-click menus for categories and roles.**
+
+### Added
+
+- **Push-to-talk clicks:** a tiny sound when you start and stop talking
+  with push-to-talk (Settings → Notifications → Voice channels).
+- **Right-click a category** to mark it read, collapse or expand it, and
+  (for managers) create a channel in it or edit it; right-click a role in
+  Community settings to edit or delete it.
+
 ## [1.0.34] - 2026-10-13
 
 **Little things that feel right: animated avatars, and a quick way back into a call.**

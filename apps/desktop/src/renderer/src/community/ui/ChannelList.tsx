@@ -9,7 +9,7 @@ import {
   type ChannelGroup,
 } from '../../../../shared/layout.ts';
 import { useCommunity } from '../store.ts';
-import { ChevronIcon, GearIcon, PlusIcon, can } from './common.tsx';
+import { ChevronIcon, GearIcon, MenuItem, PlusIcon, Popover, can } from './common.tsx';
 import { ChannelRow } from './Sidebar.tsx';
 
 type Groups = Array<ChannelGroup<ChannelView, CategoryView>>;
@@ -60,6 +60,8 @@ export function ChannelList(props: { community: CommunityView; me: string }): Re
   const [drag, setDrag] = useState<{ type: 'channel' | 'category'; id: string } | null>(null);
   const [over, setOver] = useState<Target | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed);
+  /** Right-click menu on a category (1.0.35). */
+  const [catMenu, setCatMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const groups = sidebarGroups(community.channels, community.categories);
   const hasCategories = community.categories.length > 0;
 
@@ -201,7 +203,60 @@ export function ChannelList(props: { community: CommunityView; me: string }): Re
             <div
               className={`channel-group__head category__head ${marker('category', k.id)}`}
               {...dnd('category', k.id, 'category')}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setCatMenu({ id: k.id, x: e.clientX, y: e.clientY });
+              }}
             >
+              {catMenu?.id === k.id && (
+                <Popover x={catMenu.x} y={catMenu.y} onClose={() => setCatMenu(null)} className="menu">
+                  <MenuItem
+                    icon={<span aria-hidden="true">✓</span>}
+                    onClick={() => {
+                      setCatMenu(null);
+                      s.markChannelsRead(g.channels.map((ch) => ch.id));
+                    }}
+                  >
+                    Mark category as read
+                  </MenuItem>
+                  <MenuItem
+                    icon={<ChevronIcon size={14} />}
+                    onClick={() => {
+                      setCatMenu(null);
+                      toggle(k.id);
+                    }}
+                  >
+                    {closed ? 'Expand category' : 'Collapse category'}
+                  </MenuItem>
+                  {manage && (
+                    <MenuItem
+                      icon={<PlusIcon size={14} />}
+                      onClick={() => {
+                        setCatMenu(null);
+                        s.setModal({
+                          kind: 'create-channel',
+                          communityId: community.id,
+                          channelKind: 'text',
+                          parentId: k.id,
+                        });
+                      }}
+                    >
+                      Create channel
+                    </MenuItem>
+                  )}
+                  {manage && (
+                    <MenuItem
+                      icon={<GearIcon size={14} />}
+                      onClick={() => {
+                        setCatMenu(null);
+                        s.setModal({ kind: 'category', communityId: community.id, categoryId: k.id });
+                      }}
+                    >
+                      Edit category
+                    </MenuItem>
+                  )}
+                </Popover>
+              )}
               <button
                 className={`category__toggle ${closed ? 'is-collapsed' : ''}`}
                 aria-expanded={!closed}

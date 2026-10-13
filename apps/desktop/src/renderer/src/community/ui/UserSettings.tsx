@@ -635,7 +635,7 @@ const SOUND_GROUP_INFO: Record<
   },
   voice: {
     label: 'Voice channels',
-    help: 'Joining, leaving, mute, deafen and screen sharing.',
+    help: 'Joining, leaving, mute, deafen, push-to-talk and screen sharing.',
     previews: [
       ['selfJoin', 'You join'],
       ['join', 'Someone joins'],
@@ -643,6 +643,7 @@ const SOUND_GROUP_INFO: Record<
       ['mute', 'Mute'],
       ['deafen', 'Deafen'],
       ['streamStart', 'Go live'],
+      ['pttOn', 'Push-to-talk'],
     ],
   },
   calls: {

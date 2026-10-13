@@ -10,6 +10,7 @@ import { AddFriendDialog, JoinInviteDialog, PasteToJoin } from '../community/ui/
 import { StartScreen } from '../community/ui/StartScreen.tsx';
 import { ThreadPanel } from '../community/ui/Thread.tsx';
 import { useCommunity } from '../community/store.ts';
+import { play } from '../community/sound.ts';
 import { ChannelSidebar } from '../community/ui/Sidebar.tsx';
 import { TextChannel } from '../community/ui/Chat.tsx';
 import { CommunitySettings } from '../community/ui/CommunitySettings.tsx';
@@ -256,12 +257,16 @@ export function VoiceHotkeys(): null {
       }
       if (e.code === pttKey && s.call?.pushToTalk && !e.repeat) {
         e.preventDefault();
+        if (!s.call.pttActive) play('pttOn');
         s.call.setPushToTalkActive(true);
       }
     };
     const up = (e: KeyboardEvent): void => {
       const call = useCommunity.getState().call;
-      if (e.code === pttKey && call?.pushToTalk) call.setPushToTalkActive(false);
+      if (e.code === pttKey && call?.pushToTalk) {
+        if (call.pttActive) play('pttOff');
+        call.setPushToTalkActive(false);
+      }
     };
     const blur = (): void => useCommunity.getState().call?.setPushToTalkActive(false);
     window.addEventListener('keydown', down);

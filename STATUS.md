@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-12 · Current version: **1.0.34** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
+_Last updated: 2026-10-12 · Current version: **1.0.35** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
 
 ## Complete
 
@@ -46,6 +46,7 @@ _Last updated: 2026-10-12 · Current version: **1.0.34** · Stage 1 complete · 
 | Incoming webhooks                    | End-to-end-encrypted webhooks (ADR 0004): posters seal with a key kept after # in the address; token hashed; per-webhook rate limit; WEBHOOK badge                                                          | server tests (webhooks, rate limit), unit (reference script), e2e                                                    |
 | Priority speaker                     | New permission; listeners turn others down while an allowed priority speaker talks (claims without the permission are ignored)                                                                              | unit (priority-speaker), e2e                                                                                         |
 | Animated avatars, rejoin call        | Small GIF avatars stay animated (still frame with reduced motion); rejoin offer after a call ends unexpectedly                                                                                              | unit (animated-avatar, rejoin), e2e                                                                                  |
+| PTT sounds, category and role menus  | Push-to-talk press/release sounds (voice sound group); right-click menus on categories and roles                                                                                                            | unit, e2e                                                                                                            |
 | Diagnostics                          | Connection check (Settings → System), startup failure dialog, GPU fallback, `--self-test`                                                                                                                   | `diagnostics*.test.ts*`, `startup-guard.test.ts`                                                                     |
 
 ## Partially complete

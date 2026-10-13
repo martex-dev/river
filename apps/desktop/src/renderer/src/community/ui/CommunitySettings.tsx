@@ -19,6 +19,7 @@ import {
   ArrowUpIcon,
   Avatar,
   EmojiPicker,
+  MenuItem,
   Modal,
   Popover,
   Toggle,
@@ -261,6 +262,8 @@ export const infoOf = (bit: number): { label: string; help: string } => {
 
 function Roles({ community, me }: { community: CommunityView; me: string }): ReactElement {
   const [dragOver, setDragOver] = useState<string | null>(null);
+  /** Right-click menu on a role (1.0.35). */
+  const [roleMenu, setRoleMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const s = useCommunity();
   const [selected, setSelected] = useState<string>(
     community.roles.find((r) => !r.everyone)?.id ?? community.id,
@@ -313,6 +316,10 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
                 setDragOver(r.id);
               }}
               onDragLeave={() => setDragOver(null)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setRoleMenu({ id: r.id, x: e.clientX, y: e.clientY });
+              }}
               onDrop={(e) => {
                 e.preventDefault();
                 setDragOver(null);
@@ -326,6 +333,42 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
                 });
               }}
             >
+              {roleMenu?.id === r.id && (
+                <Popover x={roleMenu.x} y={roleMenu.y} onClose={() => setRoleMenu(null)} className="menu">
+                  <MenuItem
+                    onClick={() => {
+                      setRoleMenu(null);
+                      setSelected(r.id);
+                    }}
+                  >
+                    {editable(r) ? 'Edit role' : 'View role'}
+                  </MenuItem>
+                  {!r.everyone && editable(r) && (
+                    <MenuItem
+                      danger
+                      onClick={() => {
+                        setRoleMenu(null);
+                        s.setModal({
+                          kind: 'confirm',
+                          title: `Delete ${r.name}`,
+                          body: 'Members with this role lose it. This cannot be undone.',
+                          action: 'Delete role',
+                          run: async () => {
+                            await s.run({ a: 'deleteRole', communityId: community.id, roleId: r.id });
+                            s.setModal({
+                              kind: 'community-settings',
+                              communityId: community.id,
+                              tab: 'roles',
+                            });
+                          },
+                        });
+                      }}
+                    >
+                      Delete role
+                    </MenuItem>
+                  )}
+                </Popover>
+              )}
               <button className="role-row__main" onClick={() => setSelected(r.id)}>
                 <span
                   className="role-chip__dot"
