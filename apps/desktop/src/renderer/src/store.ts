@@ -25,6 +25,22 @@ export const SECTIONS = [
 ] as const;
 export type Section = (typeof SECTIONS)[number];
 
+/** Tabs of the Settings overlay (1.0.42): one place for user and app settings, like Discord. */
+export const SETTINGS_TABS = [
+  'account',
+  'profile',
+  'security',
+  'backup',
+  'appearance',
+  'voice',
+  'notifications',
+  'system',
+  'updates',
+  'hosting',
+  'about',
+] as const;
+export type SettingsTab = (typeof SETTINGS_TABS)[number];
+
 interface RiverState {
   section: Section;
   info: AppInfo | null;
@@ -38,6 +54,13 @@ interface RiverState {
   /** True while the first-run flow is on screen (kept until the user leaves the final step). */
   onboarding: boolean;
   loadError: string | null;
+  /** The Settings overlay's open tab, or null when closed. It sits over whatever is open. */
+  settingsTab: SettingsTab | null;
+  openSettings(tab?: SettingsTab): void;
+  closeSettings(): void;
+  /** The "Create or join a community" screen is showing. */
+  communityStart: boolean;
+  setCommunityStart(open: boolean): void;
   navigate(section: Section): void;
   load(): Promise<void>;
   updateSettings(patch: SettingsPatch): Promise<void>;
@@ -60,7 +83,19 @@ export const useRiver = create<RiverState>((set) => ({
   account: { state: 'none' },
   onboarding: false,
   loadError: null,
-  navigate: (section) => set({ section }),
+  settingsTab: null,
+  openSettings: (tab) => set({ settingsTab: tab ?? 'account' }),
+  closeSettings: () => set({ settingsTab: null }),
+  communityStart: false,
+  setCommunityStart: (open) =>
+    set(open ? { communityStart: true, section: 'communities' } : { communityStart: false }),
+  // Settings and Security open the overlay over the current view instead of replacing it.
+  navigate: (section) =>
+    section === 'settings'
+      ? set({ settingsTab: 'account' })
+      : section === 'security'
+        ? set({ settingsTab: 'security' })
+        : set({ section, settingsTab: null, communityStart: false }),
   load: async () => {
     try {
       const [info, settings, update, security, storage, identity, account] = await Promise.all([

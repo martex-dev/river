@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { launchRiver } from './launch.ts';
+import { launchRiver, openHome, openSettings } from './launch.ts';
 
 // Runs the built app (`npm run build` first) exactly as the packaged app loads it: river://app/ with CSP.
 let app: ElectronApplication;
@@ -21,7 +21,12 @@ test.afterAll(async () => {
 
 test('loads the UI from the private river:// scheme', async () => {
   expect(page.url()).toBe('river://app/index.html');
-  await expect(page.locator('.hero__title')).toContainText('Welcome, E2E Tester');
+  // Discord-style layout: the rail, then Home (friends and direct messages), with you at the bottom.
+  await expect(page.getByRole('button', { name: 'Home', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(page.locator('.user-panel')).toContainText('E2E Tester');
   if (process.env.RIVER_SCREENSHOTS) await page.screenshot({ path: 'test-results/home.png' });
 });
 
@@ -62,17 +67,16 @@ test('content security policy is served and blocks inline and remote scripts', a
 });
 
 test('navigates every section', async () => {
-  // Messages is built: without an account it explains how to start.
-  await page.getByRole('button', { name: 'Messages', exact: true }).click();
-  await expect(page.locator('.page__title')).toHaveText('Private conversations');
-  await page.getByRole('button', { name: 'Social', exact: true }).click();
+  // Direct messages are built: without an account Home explains how they start.
+  await expect(page.locator('.home-sidebar')).toContainText('Direct messages start once you have an account');
+  await openHome(page, 'Social');
   await expect(page.locator('.page__title')).toHaveText('Share with your people');
   for (const [label, title] of [
     ['Calls', 'Calls'],
     ['Files', 'Your files'],
     ['Friends', 'Your people'],
   ] as const) {
-    await page.getByRole('button', { name: label, exact: true }).click();
+    await openHome(page, label);
     await expect(page.locator('.page__title')).toHaveText(title);
   }
   // Every section is built: nothing claims to be "coming".
@@ -80,7 +84,7 @@ test('navigates every section', async () => {
 });
 
 test('Security Center never claims encryption that is not active', async () => {
-  await page.getByRole('button', { name: 'Security', exact: true }).click();
+  await openSettings(page, 'Security');
   await expect(page.getByText('What is protected, right now')).toBeVisible();
   const e2ee = page.locator('.board__row', { hasText: 'End-to-end encryption' });
   await expect(e2ee.locator('.board__value')).toHaveText(/direct messages and communities/i);
@@ -89,7 +93,7 @@ test('Security Center never claims encryption that is not active', async () => {
 });
 
 test('settings persist and updater reports dev-mode state', async () => {
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await openSettings(page, 'Updates');
   await expect(page.getByRole('status')).toContainText('disabled in development builds');
   await page.getByText('Beta', { exact: true }).click();
   await expect(page.getByText('You will receive pre-release builds')).toBeVisible();

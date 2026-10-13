@@ -44,6 +44,25 @@ export function hueOf(id: string): number {
   return h;
 }
 
+/** Relative luminance (WCAG) of an HSL colour; s and l from 0 to 1. */
+function luminanceOf(h: number, s: number, l: number): number {
+  const k = (n: number): number => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const channel = (n: number): number => {
+    const c = l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(0) + 0.7152 * channel(8) + 0.0722 * channel(4);
+}
+
+/** Someone's picture colour when they have none: their own hue, dark enough for white initials (WCAG AA). */
+export function avatarColor(id: string): string {
+  const h = hueOf(id);
+  let l = 42;
+  while (l > 20 && 1.05 / (luminanceOf(h, 0.55, l / 100) + 0.05) < 4.6) l -= 2;
+  return `hsl(${h} 55% ${l}%)`;
+}
+
 export function memberOf(community: CommunityView | null | undefined, id: string): MemberView | undefined {
   return community?.members.find((m) => m.riverId === id);
 }
@@ -167,7 +186,7 @@ export function Avatar(props: {
           <img src={props.avatar} alt="" draggable={false} />
         )
       ) : (
-        <span className="avatar__fallback" style={{ background: `hsl(${hueOf(props.id)} 55% 42%)` }}>
+        <span className="avatar__fallback" style={{ background: avatarColor(props.id) }}>
           {initials(props.name)}
         </span>
       )}

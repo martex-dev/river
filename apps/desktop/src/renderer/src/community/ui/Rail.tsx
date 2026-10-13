@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type DragEvent, type ReactElement } from 'react';
+import { useState, type CSSProperties, type DragEvent, type ReactElement, type ReactNode } from 'react';
 import type { CommunityView } from '../../../../shared/ipc.ts';
 import { isMuted } from '../../../../shared/notify-rules.ts';
 import {
@@ -39,6 +39,9 @@ export function CommunityRail(props: {
   activeId: string | null;
   onAdd(): void;
   onMenu(id: string, x: number, y: number): void;
+  /** Above the communities (the Home button), and at the bottom of the rail. */
+  top?: ReactNode;
+  bottom?: ReactNode;
 }): ReactElement {
   const s = useCommunity();
   const settings = useRiver((r) => r.settings);
@@ -116,7 +119,10 @@ export function CommunityRail(props: {
             setDrag(null);
             setDrop(null);
           }}
-          onClick={() => s.select(c.id)}
+          onClick={() => {
+            s.select(c.id);
+            useRiver.getState().navigate('communities');
+          }}
           onContextMenu={(e) => {
             e.preventDefault();
             props.onMenu(c.id, e.clientX, e.clientY);
@@ -143,6 +149,8 @@ export function CommunityRail(props: {
 
   return (
     <nav className="community__servers" aria-label="Your communities">
+      {props.top}
+      {props.top && <div className="rail-separator" aria-hidden="true" />}
       {entries.map((e) => {
         if (e.kind === 'community') return item(e.community, false);
         const f = e.folder;
@@ -213,6 +221,8 @@ export function CommunityRail(props: {
           <PlusIcon size={22} />
         </button>
       </div>
+      {props.bottom && <div className="rail-spacer" aria-hidden="true" />}
+      {props.bottom}
       {folderMenu && (
         <Popover x={folderMenu.x} y={folderMenu.y} onClose={() => setFolderMenu(null)} className="menu">
           <MenuItem

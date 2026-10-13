@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { auditA11y } from './axe.ts';
-import { launchRiver } from './launch.ts';
+import { launchRiver, openSettings, openCommunities, openHome } from './launch.ts';
 
 // Hosting from inside River, with the community server bundled into the app. The public tunnel
 // is left out (RIVER_DEV_LOCAL_HOSTING), so members join over this computer's loopback address —
@@ -28,7 +28,7 @@ async function open(name: string, env: Record<string, string> = {}): Promise<Pag
 }
 
 async function setUsername(page: Page, username: string): Promise<void> {
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await openSettings(page);
   await page.getByRole('button', { name: 'Account', exact: true }).click();
   await page.getByLabel('Username — how people add you').fill(username);
   await page.getByRole('button', { name: /Set username|Change/ }).click();
@@ -39,7 +39,7 @@ test('the operator hosts River on their PC, a friend joins, and the operator man
   test.setTimeout(150_000);
   const hana = await open('Hana', { RIVER_DEV_LOCAL_HOSTING: 'true', RIVER_DEV_HOME: tmp('river-home-') });
   // Hosting is not in everyone's way: it is reached from Settings → Server.
-  await hana.getByRole('button', { name: 'Settings', exact: true }).click();
+  await openSettings(hana);
   await expect(hana.getByRole('button', { name: 'Hosting', exact: true })).toHaveCount(0);
   await hana.getByRole('button', { name: 'Account', exact: true }).click();
   await hana.getByRole('button', { name: 'Run a River server on this PC…' }).click();
@@ -53,7 +53,7 @@ test('the operator hosts River on their PC, a friend joins, and the operator man
   expect(settings.system).toEqual({ startAtLogin: true, closeToTray: true });
 
   // Her community lives on the server inside her own River.
-  await hana.getByRole('button', { name: 'Communities', exact: true }).click();
+  await openCommunities(hana);
   await hana.getByPlaceholder('e.g. The Crew').fill('Hosted Here');
   await hana.getByRole('button', { name: 'Use a different server' }).click();
   await hana.getByPlaceholder('https://river.example.org').fill(address);
@@ -64,7 +64,7 @@ test('the operator hosts River on their PC, a friend joins, and the operator man
   await hana.getByRole('button', { name: 'Close', exact: true }).click();
 
   const ivan = await open('Ivan');
-  await ivan.getByRole('button', { name: 'Communities', exact: true }).click();
+  await openCommunities(ivan);
   await ivan.getByLabel('Invite link').fill(invite);
   await ivan.getByRole('button', { name: 'Join community' }).click();
   await expect(ivan.locator('.community__title strong')).toHaveText('Hosted Here');
@@ -72,19 +72,19 @@ test('the operator hosts River on their PC, a friend joins, and the operator man
   // Discord-style usernames: people are @names, not IDs.
   await setUsername(hana, 'hana');
   await setUsername(ivan, 'ivan');
-  await hana.getByRole('button', { name: 'Communities', exact: true }).click();
-  await ivan.getByRole('button', { name: 'Communities', exact: true }).click();
+  await openCommunities(hana);
+  await openCommunities(ivan);
 
   // Ivan adds Hana by her @username from the Friends page.
-  await ivan.getByRole('button', { name: 'Friends', exact: true }).click();
+  await openHome(ivan, 'Friends');
   await ivan.getByRole('tab', { name: 'Add friend' }).click();
   await ivan.getByLabel("Friend's username").fill('hana');
   await ivan.getByRole('button', { name: 'Send friend request' }).click();
-  await hana.getByRole('button', { name: 'Friends', exact: true }).click();
+  await openHome(hana, 'Friends');
   await hana.getByRole('tab', { name: 'Pending' }).click();
   await expect(hana.locator('.friend-row')).toContainText('Ivan');
-  await hana.getByRole('button', { name: 'Communities', exact: true }).click();
-  await ivan.getByRole('button', { name: 'Communities', exact: true }).click();
+  await openCommunities(hana);
+  await openCommunities(ivan);
 
   // Live, encrypted chat through the server running inside Hana's River.
   await ivan.getByPlaceholder('Message #general').fill('hello from ivan');
@@ -126,7 +126,7 @@ test('the operator hosts River on their PC, a friend joins, and the operator man
   await expect(row).not.toContainText('Banned');
 
   // Turning hosting off asks first, and nothing is deleted.
-  await hana.getByRole('button', { name: 'Settings', exact: true }).click();
+  await openSettings(hana);
   await hana.getByRole('button', { name: 'Hosting', exact: true }).click();
   await hana.getByRole('switch', { name: 'Host communities on this PC' }).click({ force: true });
   await expect(hana.getByRole('alertdialog')).toContainText('Stop hosting?');

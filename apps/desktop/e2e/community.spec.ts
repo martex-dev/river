@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { auditA11y } from './axe.ts';
-import { launchRiver } from './launch.ts';
+import { launchRiver, openSettings, openCommunities, openHome } from './launch.ts';
 
 // Two real River apps and a real server: create, invite, join, chat, call.
 const FAKE_MEDIA = ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'];
@@ -74,13 +74,13 @@ test('create, invite, join, chat and call between two members', async () => {
   test.setTimeout(120_000);
   // Alice creates an account and a community.
   const alice = await open('Alice');
-  await alice.getByRole('button', { name: 'Settings', exact: true }).click();
+  await openSettings(alice);
   await alice.getByRole('button', { name: 'Account', exact: true }).click();
   await alice.getByPlaceholder('https://river.example.org').fill(url);
   await alice.getByRole('button', { name: 'Save', exact: true }).click();
   await alice.getByRole('button', { name: 'Create account' }).click();
   await expect(alice.locator('.account-card .chip')).toHaveText('Connected');
-  await alice.getByRole('button', { name: 'Communities', exact: true }).click();
+  await openCommunities(alice);
   await alice.getByPlaceholder('e.g. The Crew').fill('The Crew');
   await alice.getByRole('button', { name: 'Create community' }).click();
   await expect(alice.locator('.community__title strong')).toHaveText('The Crew');
@@ -95,7 +95,7 @@ test('create, invite, join, chat and call between two members', async () => {
 
   // Bob joins with nothing but the link (his account is created automatically).
   const bob = await open('Bob');
-  await bob.getByRole('button', { name: 'Communities', exact: true }).click();
+  await openCommunities(bob);
   await bob.getByLabel('Invite link').fill(invite);
   await bob.getByRole('button', { name: 'Join community' }).click();
   await expect(bob.locator('.community__title strong')).toHaveText('The Crew');
@@ -281,7 +281,7 @@ test('create, invite, join, chat and call between two members', async () => {
   await alice.getByPlaceholder('Message Bob').fill('psst, a private hello');
   await alice.keyboard.press('Enter');
   await expect(alice.locator('.dm-status').last()).toHaveText(/Sent|Delivered/, { timeout: 15_000 });
-  await bob.getByRole('button', { name: /^Messages/ }).click();
+  await openHome(bob);
   await bob.locator('.dm-row', { hasText: 'Alice' }).click();
   await expect(bob.locator('.chat__messages')).toContainText('psst, a private hello', { timeout: 15_000 });
   await bob.getByRole('button', { name: 'Accept', exact: true }).click();
@@ -335,12 +335,12 @@ test('create, invite, join, chat and call between two members', async () => {
   await expect(alice.locator('.msg', { hasText: 'hi group' })).toContainText('Bob');
 
   // Social: Alice posts to her friends; Bob sees it and comments; Alice sees the comment.
-  await alice.getByRole('button', { name: /^Social/ }).click();
+  await openHome(alice, 'Social');
   await alice.locator('.social__compose').click();
   await alice.getByPlaceholder('What do you want to share?').fill('First post on River 🌊');
   await alice.getByRole('button', { name: 'Post', exact: true }).click();
   await expect(alice.locator('.post')).toContainText('First post on River', { timeout: 15_000 });
-  await bob.getByRole('button', { name: /^Social/ }).click();
+  await openHome(bob, 'Social');
   await expect(bob.locator('.post')).toContainText('First post on River', { timeout: 15_000 });
   await bob.locator('.post').getByPlaceholder('Add a comment…').fill('Looks great!');
   await bob.locator('.post').getByRole('button', { name: 'Post', exact: true }).click();
@@ -351,7 +351,7 @@ test('create, invite, join, chat and call between two members', async () => {
 
 test('a brand-new user creates a community from a template in one step', async () => {
   const carol = await open('Carol');
-  await carol.getByRole('button', { name: 'Communities', exact: true }).click();
+  await openCommunities(carol);
   await carol.getByRole('radio', { name: /Gaming/ }).click();
   await expect(carol.getByLabel('Gaming channels')).toContainText('looking-for-group');
   await carol.getByPlaceholder('e.g. The Crew').fill('Squad Goals');
@@ -412,7 +412,7 @@ test('a brand-new user creates a community from a template in one step', async (
   if ((await dave.locator('.community__members').count()) > 0) {
     await dave.getByRole('button', { name: 'Member list' }).click();
   }
-  await carol.getByRole('button', { name: 'Friends', exact: true }).click();
+  await openHome(carol, 'Friends');
   await carol.getByRole('tab', { name: /Pending/ }).click();
   const request = carol.locator('.friend-row', { hasText: 'Dave' });
   await expect(request).toContainText('Wants to be friends', { timeout: 15_000 });
@@ -424,7 +424,7 @@ test('a brand-new user creates a community from a template in one step', async (
   await expect(carol.locator('.friends__add code')).toContainText('/add#');
 
   // Messages that arrive while you are elsewhere get a "New messages" divider when you open the channel.
-  await carol.getByRole('button', { name: 'Communities', exact: true }).click();
+  await openCommunities(carol);
   await carol.getByPlaceholder('Message #general').fill('hello Dave, welcome!');
   await carol.keyboard.press('Enter');
   await expect(dave.getByRole('button', { name: 'Text channel general, unread' })).toBeVisible({
@@ -463,20 +463,20 @@ test('a brand-new user creates a community from a template in one step', async (
 test('voice goes through the server, encrypted, when members cannot connect directly', async () => {
   test.setTimeout(120_000);
   const carol = await open('Carol');
-  await carol.getByRole('button', { name: 'Settings', exact: true }).click();
+  await openSettings(carol);
   await carol.getByRole('button', { name: 'Account', exact: true }).click();
   await carol.getByPlaceholder('https://river.example.org').fill(url);
   await carol.getByRole('button', { name: 'Save', exact: true }).click();
   await carol.getByRole('button', { name: 'Create account' }).click();
   await expect(carol.locator('.account-card .chip')).toHaveText('Connected');
-  await carol.getByRole('button', { name: 'Communities', exact: true }).click();
+  await openCommunities(carol);
   await carol.getByPlaceholder('e.g. The Crew').fill('Relay Crew');
   await carol.getByRole('button', { name: 'Create community' }).click();
   await carol.getByRole('button', { name: 'Invite people' }).first().click();
   const invite = (await carol.locator('.invite-box__link').innerText()).trim();
   await carol.getByRole('button', { name: 'Close', exact: true }).click();
   const dave = await open('Dave');
-  await dave.getByRole('button', { name: 'Communities', exact: true }).click();
+  await openCommunities(dave);
   await dave.getByLabel('Invite link').fill(invite);
   await dave.getByRole('button', { name: 'Join community' }).click();
   await expect(dave.locator('.community__title strong')).toHaveText('Relay Crew');
@@ -521,7 +521,7 @@ test('voice goes through the server, encrypted, when members cannot connect dire
   await carol.getByRole('button', { name: 'Message', exact: true }).click();
   await carol.getByPlaceholder('Message Dave').fill('call me?');
   await carol.keyboard.press('Enter');
-  await dave.getByRole('button', { name: /^Messages/ }).click();
+  await openHome(dave);
   await dave.locator('.dm-row', { hasText: 'Carol' }).click();
   await dave.getByRole('button', { name: 'Accept', exact: true }).click();
   await carol.getByRole('button', { name: 'Start voice call' }).click();
@@ -538,20 +538,20 @@ test('voice goes through the server, encrypted, when members cannot connect dire
 test('status menu: do not disturb and a custom status show to others; formatting and emoji work', async () => {
   test.setTimeout(120_000);
   const erin = await open('Erin');
-  await erin.getByRole('button', { name: 'Settings', exact: true }).click();
+  await openSettings(erin);
   await erin.getByRole('button', { name: 'Account', exact: true }).click();
   await erin.getByPlaceholder('https://river.example.org').fill(url);
   await erin.getByRole('button', { name: 'Save', exact: true }).click();
   await erin.getByRole('button', { name: 'Create account' }).click();
   await expect(erin.locator('.account-card .chip')).toHaveText('Connected');
-  await erin.getByRole('button', { name: 'Communities', exact: true }).click();
+  await openCommunities(erin);
   await erin.getByPlaceholder('e.g. The Crew').fill('Status Crew');
   await erin.getByRole('button', { name: 'Create community' }).click();
   await erin.getByRole('button', { name: 'Invite people' }).first().click();
   const invite = (await erin.locator('.invite-box__link').innerText()).trim();
   await erin.getByRole('button', { name: 'Close', exact: true }).click();
   const finn = await open('Finn');
-  await finn.getByRole('button', { name: 'Communities', exact: true }).click();
+  await openCommunities(finn);
   await finn.getByLabel('Invite link').fill(invite);
   await finn.getByRole('button', { name: 'Join community' }).click();
   await expect(finn.locator('.community__title strong')).toHaveText('Status Crew');
@@ -679,13 +679,13 @@ test('status menu: do not disturb and a custom status show to others; formatting
 test('forums, stages and the soundboard work in the app', async () => {
   test.setTimeout(120_000);
   const gus = await open('Gus');
-  await gus.getByRole('button', { name: 'Settings', exact: true }).click();
+  await openSettings(gus);
   await gus.getByRole('button', { name: 'Account', exact: true }).click();
   await gus.getByPlaceholder('https://river.example.org').fill(url);
   await gus.getByRole('button', { name: 'Save', exact: true }).click();
   await gus.getByRole('button', { name: 'Create account' }).click();
   await expect(gus.locator('.account-card .chip')).toHaveText('Connected');
-  await gus.getByRole('button', { name: 'Communities', exact: true }).click();
+  await openCommunities(gus);
   await gus.getByPlaceholder('e.g. The Crew').fill('Club House');
   await gus.getByRole('button', { name: 'Create community' }).click();
   await expect(gus.locator('.community__title strong')).toHaveText('Club House', { timeout: 20_000 });

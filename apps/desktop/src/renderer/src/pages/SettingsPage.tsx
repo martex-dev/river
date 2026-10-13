@@ -1,5 +1,5 @@
 import { LANGUAGES, useT } from '../i18n.ts';
-import { useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { BackupPanel } from '../components/BackupPanel.tsx';
 import { ConnectionCheck } from '../components/ConnectionCheck.tsx';
 import { HostingPanel, useHostStatus } from '../components/HostingPanel.tsx';
@@ -8,32 +8,34 @@ import type { AccountStatus, ServerCheckResult, UpdateStatus } from '../../../sh
 import { serverUrlSchema, type Settings } from '../../../shared/settings.ts';
 import { inQuietHours } from '../../../shared/notify-rules.ts';
 import { ExternalIcon } from '../components/Icons.tsx';
-import { Modal } from '../community/ui/common.tsx';
+import { Modal, XIcon } from '../community/ui/common.tsx';
+import { NotificationSettings, Profile, VoiceSettings } from '../community/ui/UserSettings.tsx';
+import { SecurityPage } from './SecurityPage.tsx';
 import { useCommunity } from '../community/store.ts';
-import { useRiver } from '../store.ts';
+import { useRiver, type SettingsTab } from '../store.ts';
 import { play } from '../community/sound.ts';
 
-const TABS = [
-  'updates',
-  'server',
-  'hosting',
-  'backup',
-  'appearance',
-  'notifications',
-  'system',
-  'about',
-] as const;
-type Tab = (typeof TABS)[number];
-const TAB_LABEL: Record<Tab, string> = {
-  updates: 'Updates',
-  hosting: 'Hosting',
-  server: 'Account',
+const TAB_LABEL: Record<SettingsTab, string> = {
+  account: 'Account',
+  profile: 'Profile',
+  security: 'Security',
   backup: 'Backup',
   appearance: 'Appearance',
+  voice: 'Voice & video',
   notifications: 'Notifications',
   system: 'System',
+  updates: 'Updates',
+  hosting: 'Hosting',
   about: 'About',
 };
+
+const GROUPS: Array<{ title: string; tabs: SettingsTab[] }> = [
+  { title: 'User settings', tabs: ['account', 'profile', 'security', 'backup'] },
+  {
+    title: 'App settings',
+    tabs: ['appearance', 'voice', 'notifications', 'system', 'updates', 'hosting', 'about'],
+  },
+];
 
 const CHANNELS: Array<{ id: ReleaseChannel; name: string; text: string }> = [
   { id: 'stable', name: 'Stable', text: 'Tested releases. Recommended for everyone.' },
@@ -66,50 +68,72 @@ export function describeUpdate(status: UpdateStatus): string {
   }
 }
 
-export function SettingsPage(): ReactElement {
+/**
+ * Settings (1.0.42): a full-window overlay over whatever is open, like
+ * Discord's — your account and profile, security, and the app's own settings,
+ * all in one list. Esc or the close button returns to where you were.
+ */
+export function SettingsOverlay(): ReactElement | null {
   const tr = useT();
-  const [tab, setTab] = useState<Tab>('updates');
+  const tab = useRiver((s) => s.settingsTab);
+  const openSettings = useRiver((s) => s.openSettings);
+  const close = useRiver((s) => s.closeSettings);
   const settings = useRiver((s) => s.settings);
   const host = useHostStatus();
   const [askedForHosting, setAskedForHosting] = useState(false);
   // Hosting is for whoever runs a server; everyone else never sees it.
-  const tabs = TABS.filter(
-    (t) => t !== 'hosting' || askedForHosting || host?.enabled || (host?.legacy ?? 'none') !== 'none',
-  );
+  const showHosting =
+    askedForHosting || tab === 'hosting' || host?.enabled || (host?.legacy ?? 'none') !== 'none';
 
+  useEffect(() => {
+    if (!tab) return;
+    const onKey = (e: KeyboardEvent): void => {
+      // A dialog opened from Settings (a crop, a confirmation) closes first.
+      if (e.key === 'Escape' && !document.querySelector('.modal')) close();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [tab, close]);
+
+  if (!tab) return null;
   return (
-    <div className="page settings">
-      <header className="page__header">
-        <div className="eyebrow">Settings</div>
-        <h1 className="page__title">Make River yours</h1>
-      </header>
-      <div className="settings__layout">
-        <nav className="settings__tabs glass" aria-label="Settings sections">
-          {tabs.map((id) => (
-            <button
-              key={id}
-              className={`settings__tab ${tab === id ? 'is-active' : ''}`}
-              aria-current={tab === id ? 'page' : undefined}
-              onClick={() => setTab(id)}
-            >
-              {tr(TAB_LABEL[id])}
-            </button>
+    <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="Settings">
+      <nav className="settings-overlay__nav" aria-label="Settings sections">
+        <div className="settings-overlay__nav-inner">
+          {GROUPS.map((g) => (
+            <div key={g.title} className="settings-overlay__group">
+              <div className="settings-overlay__heading">{g.title}</div>
+              {g.tabs
+                .filter((id) => id !== 'hosting' || showHosting)
+                .map((id) => (
+                  <button
+                    key={id}
+                    className={`settings-overlay__tab ${tab === id ? 'is-active' : ''}`}
+                    aria-current={tab === id ? 'page' : undefined}
+                    onClick={() => openSettings(id)}
+                  >
+                    {tr(TAB_LABEL[id])}
+                  </button>
+                ))}
+            </div>
           ))}
-        </nav>
-        <div className="settings__panel glass">
-          {settings ? (
+        </div>
+      </nav>
+      <section className="settings-overlay__body">
+        <div className="settings-overlay__content" key={tab}>
+          {!settings ? (
+            <p className="muted">Loading…</p>
+          ) : (
             <>
-              {tab === 'updates' && <UpdatesPanel settings={settings} />}
-              {tab === 'hosting' && <HostingTab />}
-              {tab === 'server' && (
+              {tab === 'account' && (
                 <>
                   <ServerPanel settings={settings} />
-                  {!tabs.includes('hosting') && (
+                  {!showHosting && (
                     <button
                       className="btn btn--link"
                       onClick={() => {
                         setAskedForHosting(true);
-                        setTab('hosting');
+                        openSettings('hosting');
                       }}
                     >
                       Run a River server on this PC…
@@ -117,17 +141,31 @@ export function SettingsPage(): ReactElement {
                   )}
                 </>
               )}
+              {tab === 'profile' && <Profile />}
+              {tab === 'security' && <SecurityPage />}
               {tab === 'backup' && <BackupPanel />}
               {tab === 'appearance' && <AppearancePanel settings={settings} />}
-              {tab === 'notifications' && <NotificationsPanel settings={settings} />}
+              {tab === 'voice' && <VoiceSettings />}
+              {tab === 'notifications' && (
+                <>
+                  <NotificationSettings />
+                  <NotificationsPanel settings={settings} />
+                </>
+              )}
               {tab === 'system' && <SystemPanel settings={settings} />}
+              {tab === 'updates' && <UpdatesPanel settings={settings} />}
+              {tab === 'hosting' && <HostingTab />}
               {tab === 'about' && <AboutPanel />}
             </>
-          ) : (
-            <p className="muted">Loading…</p>
           )}
         </div>
-      </div>
+        <div className="settings-overlay__close">
+          <button className="settings-overlay__x" aria-label="Close settings" onClick={close}>
+            <XIcon />
+          </button>
+          <span aria-hidden="true">ESC</span>
+        </div>
+      </section>
     </div>
   );
 }
@@ -824,7 +862,6 @@ function NotificationsPanel({ settings }: { settings: Settings }): ReactElement 
   ];
   return (
     <div className="panel">
-      <h2 className="panel__title">Notifications</h2>
       <fieldset className="field">
         <legend className="field__label">Notification preview</legend>
         <div className="choice-grid">

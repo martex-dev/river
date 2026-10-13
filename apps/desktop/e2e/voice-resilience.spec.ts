@@ -4,7 +4,7 @@ import { createServer, connect, type Server, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { launchRiver } from './launch.ts';
+import { launchRiver, openSettings, openCommunities } from './launch.ts';
 
 // River hosted on a home PC reaches members through a free tunnel whose single connection is
 // dropped and re-made every one to four minutes — every member's live connection is cut at once.
@@ -128,20 +128,20 @@ for (const mode of ['direct', 'relayed'] as const) {
     for (const name of PEOPLE) pages.push(await open(`${name}-${mode}`));
     const [host, ...guests] = pages as [Page, ...Page[]];
 
-    await host.getByRole('button', { name: 'Settings', exact: true }).click();
+    await openSettings(host);
     await host.getByRole('button', { name: 'Account', exact: true }).click();
     await host.getByPlaceholder('https://river.example.org').fill(url);
     await host.getByRole('button', { name: 'Save', exact: true }).click();
     await host.getByRole('button', { name: 'Create account' }).click();
     await expect(host.locator('.account-card .chip')).toHaveText('Connected');
-    await host.getByRole('button', { name: 'Communities', exact: true }).click();
+    await openCommunities(host);
     await host.getByPlaceholder('e.g. The Crew').fill(`Chaos ${mode}`);
     await host.getByRole('button', { name: 'Create community' }).click();
     await host.getByRole('button', { name: 'Invite people' }).first().click();
     const invite = (await host.locator('.invite-box__link').innerText()).trim();
     await host.getByRole('button', { name: 'Close', exact: true }).click();
     for (const g of guests) {
-      await g.getByRole('button', { name: 'Communities', exact: true }).click();
+      await openCommunities(g);
       await g.getByLabel('Invite link').fill(invite);
       await g.getByRole('button', { name: 'Join community' }).click();
       await expect(g.locator('.community__title strong')).toHaveText(`Chaos ${mode}`);

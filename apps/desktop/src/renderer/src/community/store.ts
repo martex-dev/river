@@ -29,7 +29,6 @@ export type Modal =
   | { kind: 'join-invite'; link: string }
   | { kind: 'nickname'; communityId: string }
   | { kind: 'add-friend'; riverId: string; serverUrl: string }
-  | { kind: 'user-settings'; tab?: UserTab }
   | { kind: 'events'; communityId: string }
   | { kind: 'report'; communityId: string; message: ChatMessage }
   | { kind: 'pick-roles'; communityId: string }
@@ -50,7 +49,6 @@ export type CommunityTab =
   | 'reports'
   | 'insights'
   | 'audit';
-export type UserTab = 'profile' | 'voice' | 'notifications' | 'appearance';
 
 const TYPING_MS = 7000;
 

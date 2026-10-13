@@ -1,0 +1,425 @@
+/*
+ * The Discord-style layout (1.0.42): a thin title bar, the rail of Home and
+ * communities on the left, a sidebar (channels, or friends and direct
+ * messages) with you at the bottom, then the conversation. Solid layers
+ * instead of glass, each one a step lighter than the one to its left.
+ */
+:root {
+  --rail-w: 72px;
+  --titlebar-h: 32px;
+  --sidebar-w: 240px;
+
+  --layer-0: #080b11; /* title bar and rail */
+  --layer-1: #0f131b; /* sidebars */
+  --layer-2: #151a24; /* the conversation */
+  --layer-3: #1c2230; /* cards, inputs, popovers */
+  --layer-user: #0b0f16; /* you, at the bottom of a sidebar */
+  --layer-hover: rgba(120, 140, 190, 0.1);
+  /* Secondary text stays readable (WCAG AA, 4.5:1) on the lighter layers too. */
+  --text-faint: #939eba;
+  --layer-active: rgba(120, 140, 190, 0.18);
+}
+
+/* ---------- Shell ---------- */
+.shell {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--titlebar-h) minmax(0, 1fr);
+  background: var(--layer-0);
+}
+.backdrop {
+  background: var(--layer-0);
+}
+.glass {
+  background: var(--layer-3);
+  border-color: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  height: var(--titlebar-h);
+  padding: 0 148px 0 14px;
+  background: var(--layer-0);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+html[data-platform='darwin'] .titlebar {
+  padding: 0 14px 0 84px;
+}
+.titlebar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.titlebar__title {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.titlebar .topbar__pill {
+  margin-left: 0;
+  padding: 2px 9px;
+  font-size: 11px;
+  background: var(--layer-1);
+  -webkit-app-region: no-drag;
+}
+
+.workspace {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ---------- Rail ---------- */
+.workspace > .community__servers {
+  flex: none;
+  width: var(--rail-w);
+  padding: 4px 0 12px;
+  border-right: 0;
+  background: var(--layer-0);
+  scrollbar-width: none;
+}
+.workspace > .community__servers::-webkit-scrollbar {
+  display: none;
+}
+.rail-separator {
+  flex: none;
+  width: 32px;
+  height: 2px;
+  margin: 0 auto;
+  border-radius: 1px;
+  background: var(--layer-active);
+}
+.rail-spacer {
+  flex: 1 0 8px;
+}
+.community__server {
+  border: 0;
+  background: var(--layer-2);
+}
+.rail-home,
+.rail-admin {
+  color: var(--text-dim);
+}
+.rail-home:hover,
+.rail-home.is-active {
+  background: var(--accent-grad);
+  color: var(--accent-ink);
+}
+.rail-admin {
+  color: var(--warn);
+}
+.rail-admin:hover,
+.rail-admin.is-active {
+  background: var(--warn);
+  color: #1d1300;
+}
+.community__server-badge {
+  border-color: var(--layer-0);
+}
+
+/* ---------- Sidebar column (channels, or Home) ---------- */
+.home-sidebar,
+.community__channels {
+  background: var(--layer-1);
+}
+.home-sidebar {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: var(--sidebar-w);
+  min-height: 0;
+  border-top-left-radius: 10px;
+}
+.home-sidebar .dms__list {
+  flex: 1;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+}
+.home-sidebar__search {
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: 48px;
+  padding: 0 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+.home-sidebar__search .dms__search {
+  width: 100%;
+  margin: 0;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--layer-0);
+}
+.home-sidebar__scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  padding: 8px;
+  overflow-y: auto;
+}
+.home-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+.home-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 42px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast),
+    color var(--dur-fast);
+}
+.home-nav__item:hover {
+  background: var(--layer-hover);
+  color: var(--text);
+}
+.home-nav__item.is-active {
+  background: var(--layer-active);
+  color: var(--text);
+}
+.home-sidebar__dm-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 4px;
+}
+.home-sidebar__dm-head .icon-btn {
+  width: 22px;
+  height: 22px;
+}
+.home-sidebar .dm-row {
+  padding: 5px 8px;
+  border-radius: 6px;
+}
+.home-sidebar .dm-row.is-active {
+  background: var(--layer-active);
+}
+.user-panel {
+  border-top: 0;
+  background: var(--layer-user);
+}
+
+/* ---------- The conversation ---------- */
+.workspace > .content {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 32px 40px;
+  background: var(--layer-2);
+}
+.workspace > .community__servers + .content {
+  border-top-left-radius: 10px;
+}
+.workspace > .content--full {
+  padding: 0;
+}
+.community,
+.community--no-members {
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 240px;
+}
+.community--no-members {
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+}
+.community__main,
+.dms__main {
+  background: var(--layer-2);
+}
+.community__members {
+  background: var(--layer-1);
+}
+.dms {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Notices (pick a username, what's new) sit in a strip above the conversation. */
+.notices:empty {
+  display: none;
+}
+.workspace > .content--full {
+  display: flex;
+  flex-direction: column;
+}
+.content--full > .notices {
+  flex: none;
+  max-height: 40vh;
+  padding: 10px 16px 0;
+  overflow-y: auto;
+  background: var(--layer-2);
+}
+.content--full > .notices > * {
+  margin-bottom: 10px;
+}
+.content--full > :not(.notices) {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---------- Settings ---------- */
+.settings-overlay {
+  position: fixed;
+  inset: var(--titlebar-h) 0 0 0;
+  z-index: 35;
+  display: grid;
+  grid-template-columns: minmax(232px, 1fr) minmax(0, 2.2fr);
+  background: var(--layer-2);
+  animation: settings-in var(--dur) var(--ease-out);
+}
+@keyframes settings-in {
+  from {
+    opacity: 0;
+    transform: scale(1.03);
+  }
+}
+.settings-overlay__nav {
+  display: flex;
+  justify-content: flex-end;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--layer-1);
+}
+.settings-overlay__nav-inner {
+  width: 218px;
+  padding: 48px 8px 48px 20px;
+}
+.settings-overlay__group + .settings-overlay__group {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--layer-hover);
+}
+.settings-overlay__heading {
+  padding: 6px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.settings-overlay__tab {
+  display: block;
+  width: 100%;
+  margin-bottom: 2px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.settings-overlay__tab:hover {
+  background: var(--layer-hover);
+  color: var(--text);
+}
+.settings-overlay__tab.is-active {
+  background: var(--layer-active);
+  color: var(--text);
+}
+.settings-overlay__body {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.settings-overlay__content {
+  flex: 1;
+  min-width: 0;
+  max-width: 760px;
+  padding: 48px 40px 80px;
+  animation: page-in var(--dur) var(--ease-out);
+}
+.settings-overlay__content > .page {
+  max-width: none;
+}
+.settings-overlay__close {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 72px;
+  padding-top: 48px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+.settings-overlay__x {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--text-faint);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.settings-overlay__x:hover {
+  border-color: var(--text);
+  color: var(--text);
+  background: var(--layer-hover);
+}
+
+/* Narrower windows: the member list slides over the conversation, then the sidebar narrows. */
+@media (max-width: 1100px) {
+  .community,
+  .community--no-members {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  }
+  .community__members {
+    top: 48px;
+    background: var(--layer-1);
+  }
+}
+@media (max-width: 900px) {
+  :root {
+    --sidebar-w: 208px;
+  }
+  .settings-overlay {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+  .settings-overlay__nav-inner {
+    width: 100%;
+    padding-left: 8px;
+  }
+  .settings-overlay__content {
+    padding: 32px 20px 60px;
+  }
+}
