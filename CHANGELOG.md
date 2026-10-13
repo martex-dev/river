@@ -6,7 +6,11 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-### Added (1.0.33)
+## [1.0.33] - 2026-10-13
+
+**Be heard when it matters: priority speaker.**
+
+### Added
 
 - **Priority speaker:** a new role permission. People who have it get a 📣
   button in voice; while it is on and they talk, everyone else is turned
