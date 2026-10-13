@@ -6,7 +6,11 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-### Added (1.0.34)
+## [1.0.34] - 2026-10-13
+
+**Little things that feel right: animated avatars, and a quick way back into a call.**
+
+### Added
 
 - **Animated avatars:** a small GIF (up to about 44 KB) stays animated as
   your picture, everywhere and per community; larger ones are cropped to a
