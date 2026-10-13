@@ -16,7 +16,16 @@ import { ProfileCard } from './Members.tsx';
 import { ForwardDialog } from './Forward.tsx';
 import { useRiver } from '../../store.ts';
 import { replaceCustomShortcodes, replaceShortcodes, searchEmoji, useEmojiIndex } from '../emoji-data.ts';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, ChatMessage, CommunityView, LinkEmbed } from '../../../../shared/ipc.ts';
 import { useShallow } from 'zustand/react/shallow';
@@ -136,13 +145,14 @@ export function TextChannel(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, channel.id, outgoing.length]);
 
-  const jumpTo = (id: string): void => {
+  // Stable, so memoized messages do not re-render because of it.
+  const jumpTo = useCallback((id: string): void => {
     const el = document.getElementById(`msg-${id}`);
     if (!el) return;
     el.scrollIntoView({ block: 'center', behavior: 'smooth' });
     el.classList.add('is-flash');
     window.setTimeout(() => el.classList.remove('is-flash'), 1600);
-  };
+  }, []);
 
   // A message link or search result for this channel: scroll to it once it is on screen.
   const pendingJump = useCommunity((x) => x.pendingJump);
@@ -397,7 +407,14 @@ export function TextChannel(props: {
 /** How far from the newest message each channel was left, for this session. */
 const scrollMemory = new Map<string, number>();
 
-function Message(props: {
+/**
+ * One message. Memoized and subscribed only to what it shows (1.0.37), so typing
+ * indicators, voice activity and other store changes do not re-render the whole
+ * conversation.
+ */
+const Message = memo(MessageView);
+
+function MessageView(props: {
   message: ChatMessage;
   grouped: boolean;
   community: CommunityView;
@@ -410,14 +427,17 @@ function Message(props: {
   onJump(id: string): void;
 }): ReactElement {
   const { message: m, community, channel } = props;
-  const s = useCommunity();
+  // Actions only (stable functions); state below comes from narrow selectors.
+  const s = useCommunity.getState();
+  const editingThis = useCommunity((x) => x.editing === m.id);
+  const customEmojis = useCommunity((x) => x.emojis[community.id]);
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [profile, setProfile] = useState<{ x: number; y: number } | null>(null);
   const [forwarding, setForwarding] = useState(false);
   const [reactionsAt, setReactionsAt] = useState<{ x: number; y: number } | null>(null);
   const account = useRiver((r) => r.account);
-  const editing = s.editing === m.id;
+  const editing = editingThis;
   const link = (): string | null =>
     account?.state === 'registered'
       ? formatMessageLink(account.shareUrl, {
@@ -957,7 +977,7 @@ function Message(props: {
       {picker && (
         <Popover x={picker.x} y={picker.y} onClose={() => setPicker(null)}>
           <EmojiPicker
-            custom={s.emojis[community.id]}
+            custom={customEmojis}
             onPick={(e) => {
               setPicker(null);
               const existing = m.reactions.find((r) => r.emoji === e);

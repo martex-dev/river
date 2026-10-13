@@ -12,6 +12,11 @@ All notable changes to River are documented here. The format follows
   settings → Members, then give or remove a role for all of them. River says
   how many changes the server accepted.
 
+### Changed (1.0.37)
+
+- **Smoother chat during calls:** messages no longer redraw when someone
+  types or speaks; each one updates only when something it shows changes.
+
 ### Added (1.0.36)
 
 - **More of River in Bulgarian:** Community settings, category and role
