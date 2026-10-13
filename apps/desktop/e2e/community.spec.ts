@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -715,4 +715,26 @@ test('forums, stages and the soundboard work in the app', async () => {
   await expect(gus.locator('.soundboard')).toContainText('No sounds yet');
   await gus.keyboard.press('Escape');
   await gus.getByRole('button', { name: 'Leave' }).click();
+
+  // An encrypted webhook (ADR 0004): made in the app, posted by the reference script.
+  await gus.locator('.community__title').click();
+  await gus.getByRole('menuitem', { name: 'Community settings' }).click();
+  await gus.locator('.settings-tab', { hasText: /^Webhooks$/ }).click();
+  await gus.getByLabel('Webhook name').fill('Build bot');
+  await gus.getByRole('button', { name: 'Create webhook' }).click();
+  const address = (await gus.locator('.webhook-address code').textContent())!.trim();
+  expect(address).toContain('#');
+  await auditA11y(gus, 'Community settings → Webhooks');
+  await gus.getByRole('button', { name: 'Close settings' }).click();
+  const posted = spawnSync(
+    process.execPath,
+    [resolve(__dirname, '../../../scripts/webhook/post.mjs'), address, 'Build 42 passed'],
+    { encoding: 'utf8' },
+  );
+  expect(posted.stderr + posted.stdout).toContain('Posted.');
+  await gus.locator('.channel', { hasText: 'general' }).getByRole('button').first().click();
+  const hookMsg = gus.locator('.msg', { hasText: 'Build 42 passed' });
+  await expect(hookMsg).toBeVisible({ timeout: 15_000 });
+  await expect(hookMsg).toContainText('Build bot');
+  await expect(hookMsg.locator('.tag-badge')).toHaveText('WEBHOOK');
 });
