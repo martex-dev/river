@@ -144,7 +144,7 @@ Each line is one PR; each version ships when its section is done.
 - [x] Bulk role changes, smoother chat rendering (1.0.37)
 - [x] Screen reader announcements for new messages (1.0.38)
 - [x] Move members between voice channels; docs, parity audit and STATUS refreshed for the end of 1.0.x (1.0.39)
-- [ ] Final 1.0.x polish release (1.0.40)
+- [x] Final 1.0.x polish release: what's new after an update, changelog links (1.0.40)
 
 ### After 1.0.x (not started; see ROADMAP Stage 2)
 

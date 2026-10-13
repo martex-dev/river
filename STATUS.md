@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-12 · Current version: **1.0.39** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
+_Last updated: 2026-10-12 · Current version: **1.0.40** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
 
 ## Complete
 
@@ -51,6 +51,7 @@ _Last updated: 2026-10-12 · Current version: **1.0.39** · Stage 1 complete · 
 | Bulk roles, chat rendering           | Give or remove a role for many members (server-checked per member, result reported); messages memoized with narrow store subscriptions                                                                      | e2e                                                                                                                  |
 | Accessibility                        | New messages from others announced in a polite live region; reduced motion shows the first frame of animated avatars, stickers and emoji                                                                    | unit (announce), e2e with axe audits                                                                                 |
 | Move members                         | Moderators move people to another voice channel (server checks rank and Move members in both channels; one-time pass for full channels)                                                                     | server test (move), e2e                                                                                              |
+| What's new                           | A once-per-update card with the version's highlights and a link to all changes                                                                                                                              | unit (whats-new), e2e                                                                                                |
 | Diagnostics                          | Connection check (Settings → System), startup failure dialog, GPU fallback, `--self-test`                                                                                                                   | `diagnostics*.test.ts*`, `startup-guard.test.ts`                                                                     |
 
 ## Partially complete
