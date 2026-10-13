@@ -6,6 +6,16 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.40] - 2026-10-13
+
+**River 1.0.x, complete: what's new after every update, and everything from 1.0.28 to here in one place.**
+
+### Added
+
+- **What's new after an update:** a small card lists the highlights of the
+  version you just got, once, with a link to all changes. Fresh installs see
+  nothing.
+
 ## [1.0.39] - 2026-10-13
 
 **Moderators can move people between voice channels, and the 1.0.x docs are up to date.**
@@ -1278,7 +1288,29 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.18...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.40...HEAD
+[1.0.40]: https://github.com/martex-dev/river/compare/v1.0.39...v1.0.40
+[1.0.39]: https://github.com/martex-dev/river/compare/v1.0.38...v1.0.39
+[1.0.38]: https://github.com/martex-dev/river/compare/v1.0.37...v1.0.38
+[1.0.37]: https://github.com/martex-dev/river/compare/v1.0.36...v1.0.37
+[1.0.36]: https://github.com/martex-dev/river/compare/v1.0.35...v1.0.36
+[1.0.35]: https://github.com/martex-dev/river/compare/v1.0.34...v1.0.35
+[1.0.34]: https://github.com/martex-dev/river/compare/v1.0.33...v1.0.34
+[1.0.33]: https://github.com/martex-dev/river/compare/v1.0.32...v1.0.33
+[1.0.32]: https://github.com/martex-dev/river/compare/v1.0.31...v1.0.32
+[1.0.31]: https://github.com/martex-dev/river/compare/v1.0.30...v1.0.31
+[1.0.30]: https://github.com/martex-dev/river/compare/v1.0.29...v1.0.30
+[1.0.29]: https://github.com/martex-dev/river/compare/v1.0.28...v1.0.29
+[1.0.28]: https://github.com/martex-dev/river/compare/v1.0.27...v1.0.28
+[1.0.27]: https://github.com/martex-dev/river/compare/v1.0.26...v1.0.27
+[1.0.26]: https://github.com/martex-dev/river/compare/v1.0.25...v1.0.26
+[1.0.25]: https://github.com/martex-dev/river/compare/v1.0.24...v1.0.25
+[1.0.24]: https://github.com/martex-dev/river/compare/v1.0.23...v1.0.24
+[1.0.23]: https://github.com/martex-dev/river/compare/v1.0.22...v1.0.23
+[1.0.22]: https://github.com/martex-dev/river/compare/v1.0.21...v1.0.22
+[1.0.21]: https://github.com/martex-dev/river/compare/v1.0.20...v1.0.21
+[1.0.20]: https://github.com/martex-dev/river/compare/v1.0.19...v1.0.20
+[1.0.19]: https://github.com/martex-dev/river/compare/v1.0.18...v1.0.19
 [1.0.18]: https://github.com/martex-dev/river/compare/v1.0.17...v1.0.18
 [1.0.17]: https://github.com/martex-dev/river/compare/v1.0.16...v1.0.17
 [1.0.16]: https://github.com/martex-dev/river/compare/v1.0.15...v1.0.16

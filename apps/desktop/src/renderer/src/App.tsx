@@ -1,3 +1,4 @@
+import { WhatsNew } from './components/WhatsNew.tsx';
 import { useEffect, useState, type ReactElement } from 'react';
 import { QuickSwitcher } from './components/QuickSwitcher.tsx';
 import { startNavHistory } from './nav-history.ts';
@@ -220,6 +221,7 @@ export function App(): ReactElement {
           key={section}
         >
           <UsernamePrompt />
+          <WhatsNew />
           {loadError && (
             <div className="glass card card--error" role="alert">
               River could not load its settings: {loadError}
