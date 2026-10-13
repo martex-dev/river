@@ -63,6 +63,7 @@ import type { ServerLocator } from './server-locator.ts';
 import type { PresenceTracker } from '../presence.ts';
 import { readPoll, type Poll } from '../../shared/poll.ts';
 import { summarizeActivity } from '../../shared/insights.ts';
+import { readFilter } from '../../shared/word-filter.ts';
 import { hasCriteria, matchesSearch, parseSearch } from '../../shared/search-query.ts';
 import type {
   CategoryView,
@@ -837,11 +838,16 @@ export class CommunityService {
       members,
       voice,
       voiceStates,
-      ...((): Pick<CommunityView, 'rules' | 'welcomeNote'> => {
-        if (!c.onboarding) return { rules: [], welcomeNote: '' };
+      ...((): Pick<CommunityView, 'rules' | 'welcomeNote' | 'filter'> => {
+        if (!c.onboarding) return { rules: [], welcomeNote: '', filter: null };
         try {
-          const o = ring.open<{ rules?: unknown; welcome?: unknown }>(c.id, 'onboarding', c.onboarding);
+          const o = ring.open<{ rules?: unknown; welcome?: unknown; filter?: unknown }>(
+            c.id,
+            'onboarding',
+            c.onboarding,
+          );
           return {
+            filter: readFilter(o.filter),
             rules: (Array.isArray(o.rules) ? o.rules : [])
               .filter((r): r is string => typeof r === 'string')
               .slice(0, 20)
@@ -849,7 +855,7 @@ export class CommunityService {
             welcomeNote: typeof o.welcome === 'string' ? o.welcome.slice(0, 1000) : '',
           };
         } catch {
-          return { rules: [], welcomeNote: '' };
+          return { rules: [], welcomeNote: '', filter: null };
         }
       })(),
       screening: c.screening ?? false,
@@ -1366,18 +1372,32 @@ export class CommunityService {
         await this.call(`/communities/${act.communityId}`, 'PATCH', { meta }, z.unknown());
         break;
       }
-      case 'updateOnboarding': {
-        const has = act.rules.length > 0 || act.welcome.trim().length > 0;
+      case 'updateOnboarding':
+      case 'updateFilter': {
+        const current = this.requireCommunity(act.communityId);
+        const rules = act.a === 'updateOnboarding' ? act.rules : current.rules;
+        const welcome = act.a === 'updateOnboarding' ? act.welcome.trim() : current.welcomeNote;
+        const filter =
+          act.a === 'updateFilter'
+            ? act.words.length
+              ? { words: act.words, mode: act.mode }
+              : null
+            : (current.filter ?? null);
+        const has = rules.length > 0 || welcome.length > 0 || !!filter;
         const onboarding = has
           ? seal(this.requireKey(act.communityId), act.communityId, 'onboarding', {
-              rules: act.rules,
-              welcome: act.welcome.trim(),
+              rules,
+              welcome,
+              ...(filter ? { filter } : {}),
             })
           : null;
+        const screening =
+          act.a === 'updateOnboarding' ? act.screening && act.rules.length > 0 : current.screening;
+        const selfRoles = act.a === 'updateOnboarding' ? act.selfRoles : current.selfRoles;
         await this.call(
           `/communities/${act.communityId}/onboarding`,
           'PUT',
-          { onboarding, screening: act.screening && act.rules.length > 0, selfRoles: act.selfRoles },
+          { onboarding, screening, selfRoles },
           z.unknown(),
         ).catch(explain);
         await this.refresh();

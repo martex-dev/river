@@ -412,6 +412,21 @@ describe('onboarding', () => {
     await bob.community.action({ a: 'setSelfRoles', communityId: created.id, roles: [gamer] });
     mine = (await bob.community.refresh())[0]!;
     expect(mine.members.find((m) => m.riverId === bob.riverId)?.roles).toEqual([gamer]);
+
+    // The word filter is sealed with the rules and keeps them (1.0.28).
+    await alice.community.action({
+      a: 'updateFilter',
+      communityId: created.id,
+      words: ['scamcoin'],
+      mode: 'block',
+    });
+    mine = (await bob.community.refresh())[0]!;
+    expect(mine.filter).toEqual({ words: ['scamcoin'], mode: 'block' });
+    expect(mine).toMatchObject({ rules: ['Be kind', 'No spam'], screening: true, selfRoles: [gamer] });
+    const sealed = JSON.stringify(await serverDb.db.selectFrom('communities').selectAll().execute());
+    expect(sealed).not.toContain('scamcoin');
+    await alice.community.action({ a: 'updateFilter', communityId: created.id, words: [], mode: 'hide' });
+    expect((await bob.community.refresh())[0]!.filter).toBeNull();
   });
 });
 

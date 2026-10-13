@@ -134,6 +134,15 @@ export const communityActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('acceptRules'), communityId: id }).strict(),
+  /** The word filter (1.0.28), sealed with the rules. */
+  z
+    .object({
+      a: z.literal('updateFilter'),
+      communityId: id,
+      words: z.array(z.string().trim().min(1).max(60)).max(200),
+      mode: z.enum(['hide', 'block']),
+    })
+    .strict(),
   z.object({ a: z.literal('setSelfRoles'), communityId: id, roles: z.array(id).max(25) }).strict(),
   z.object({ a: z.literal('leave'), communityId: id }).strict(),
   z

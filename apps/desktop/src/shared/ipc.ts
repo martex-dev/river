@@ -1,3 +1,4 @@
+import type { WordFilter } from './word-filter.ts';
 import type { Poll } from './poll.ts';
 import type { AdminOverview } from '@river/protocol/admin';
 import type { ReleaseChannel } from '@river/release/channels';
@@ -329,6 +330,8 @@ export interface CommunityView {
   selfRoles: string[];
   /** You have not accepted the rules yet, so you can only read. */
   myPending: boolean;
+  /** The community's word filter (1.0.28), or null. */
+  filter?: WordFilter | null;
 }
 
 export interface ReactionView {

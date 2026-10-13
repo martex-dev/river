@@ -6,6 +6,16 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (1.0.28)
+
+- **Suspicious link warnings:** before opening a link, River warns about
+  look-alike characters, raw IP addresses, short links that hide where they
+  go, and unencrypted http.
+- **Word filter** (Community settings → Rules & roles): words and phrases
+  that River hides (with Show anyway) or stops people from sending. It
+  ignores case, accents and look-alikes; moderators still see everything.
+  Because the server cannot read messages, each River app applies it.
+
 ## [1.0.27] - 2026-10-12
 
 **Speak your language: a language setting, plus age-restricted channels and clearer roles.**

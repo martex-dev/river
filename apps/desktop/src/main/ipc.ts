@@ -1,3 +1,4 @@
+import { linkWarnings } from './link-warnings.ts';
 import { fetchPreview } from './link-preview.ts';
 import { buildExport } from './data-export.ts';
 import { writeFile } from 'node:fs/promises';
@@ -453,14 +454,15 @@ export function registerIpc(deps: IpcDeps): void {
     const url = safeExternalUrl(raw);
     if (!url) return false;
     const window = BrowserWindow.fromWebContents(event.sender);
+    const warnings = linkWarnings(url);
     const options = {
-      type: 'question' as const,
+      type: warnings.some((w) => w.startsWith('⚠')) ? ('warning' as const) : ('question' as const),
       title: 'Open link',
       message: `Open this link in your browser?`,
       detail: `${url.hostname}
 
 ${url.href}
-
+${warnings.length ? `\n${warnings.join('\n')}\n` : ''}
 Links can lead anywhere. Only open it if you trust where it goes.`,
       buttons: ['Open link', 'Cancel'],
       defaultId: 0,

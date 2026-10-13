@@ -3,6 +3,7 @@ import { Permission } from '@river/protocol/permissions';
 import type { CommunityView } from '../../../../shared/ipc.ts';
 import { useCommunity } from '../store.ts';
 import { Modal, Toggle, can, hex } from './common.tsx';
+import { parseWords, type FilterMode } from '../../../../shared/word-filter.ts';
 
 /** Permissions a self-assignable role may not have (the server refuses them too). */
 const MODERATING =
@@ -174,6 +175,54 @@ export function OnboardingSettings({ community }: { community: CommunityView }):
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Community settings → Rules & roles → Word filter (1.0.28). */
+export function WordFilterSettings({ community }: { community: CommunityView }): ReactElement {
+  const s = useCommunity();
+  const [text, setText] = useState((community.filter?.words ?? []).join('\n'));
+  const [mode, setMode] = useState<FilterMode>(community.filter?.mode ?? 'hide');
+  const [busy, setBusy] = useState(false);
+  const words = parseWords(text);
+  const dirty =
+    JSON.stringify(words) !== JSON.stringify(community.filter?.words ?? []) ||
+    (words.length > 0 && mode !== (community.filter?.mode ?? 'hide'));
+  const save = async (): Promise<void> => {
+    setBusy(true);
+    const res = await s.run({ a: 'updateFilter', communityId: community.id, words, mode });
+    setBusy(false);
+    if (res !== null) s.notify(words.length ? 'Word filter saved.' : 'Word filter turned off.');
+  };
+  return (
+    <div className="word-filter">
+      <h3>Word filter</h3>
+      <p className="muted small">
+        One word or phrase per line. Matching ignores case, accents and look-alikes like 4 for a. Your server
+        cannot read messages, so every River app applies the filter itself — a modified app could ignore it.
+        People who manage messages always see everything.
+      </p>
+      <textarea
+        rows={5}
+        value={text}
+        aria-label="Filtered words"
+        placeholder={'spam\nfree money'}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <div className="radio-cards">
+        <label className={`radio-card ${mode === 'hide' ? 'is-active' : ''}`}>
+          <input type="radio" checked={mode === 'hide'} onChange={() => setMode('hide')} />
+          Hide messages with these words (members can still show them)
+        </label>
+        <label className={`radio-card ${mode === 'block' ? 'is-active' : ''}`}>
+          <input type="radio" checked={mode === 'block'} onChange={() => setMode('block')} />
+          Also stop people from sending them
+        </label>
+      </div>
+      <button className="btn btn--primary btn--small" disabled={!dirty || busy} onClick={() => void save()}>
+        {words.length || !community.filter ? 'Save filter' : 'Turn off filter'}
+      </button>
     </div>
   );
 }

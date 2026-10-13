@@ -1,3 +1,4 @@
+import { findFiltered } from '../../../../shared/word-filter.ts';
 import { tr } from '../../i18n.ts';
 import { MediaGallery } from './MediaGallery.tsx';
 import { setFollowing } from '../thread-follow.ts';
@@ -441,6 +442,9 @@ function Message(props: {
   const member = memberOf(community, m.sender);
   const color = member?.color ? hex(member.color) : undefined;
   const canManage = can(channel.permissions, Permission.MANAGE_MESSAGES);
+  // The community's word filter (1.0.28): readers' apps fold such messages away.
+  const filtered = community.filter ? findFiltered(m.text, community.filter.words) : null;
+  const [revealed, setRevealed] = useState(false);
   const canPin = canManage || can(channel.permissions, Permission.PIN_MESSAGES);
   const canReact = can(channel.permissions, Permission.ADD_REACTIONS);
   // Poll votes are reactions underneath; they show in the poll, not as reactions.
@@ -565,10 +569,27 @@ function Message(props: {
             <EditBox message={m} />
           ) : (
             <div className="msg__text">
-              {m.text && (
-                <div className={long && !expanded ? 'msg__long is-collapsed' : undefined}>
-                  <RichText text={m.text} names={props.names} me={props.myName} refs={props.refs} />
-                </div>
+              {filtered && !canManage && !revealed ? (
+                <span className="msg__filtered muted">
+                  Hidden by this community&apos;s word filter.{' '}
+                  <button className="btn btn--link btn--small" onClick={() => setRevealed(true)}>
+                    Show anyway
+                  </button>
+                </span>
+              ) : (
+                m.text && (
+                  <div className={long && !expanded ? 'msg__long is-collapsed' : undefined}>
+                    <RichText text={m.text} names={props.names} me={props.myName} refs={props.refs} />
+                  </div>
+                )
+              )}
+              {filtered && canManage && (
+                <span
+                  className="chip msg__filter-chip"
+                  title={`Contains “${filtered}”, which the word filter hides`}
+                >
+                  filtered word
+                </span>
               )}
               {long && (
                 <button className="btn btn--link msg__more" onClick={() => setExpanded(!expanded)}>
@@ -1155,6 +1176,18 @@ function Composer(props: {
   };
 
   const sendText = async (raw: string): Promise<void> => {
+    // Word filter set to block (1.0.28): the message stays in the box and you are told why.
+    if (
+      community.filter?.mode === 'block' &&
+      !can(channel.permissions, Permission.MANAGE_MESSAGES) &&
+      findFiltered(raw, community.filter.words)
+    ) {
+      s.notify(
+        `This community does not allow “${findFiltered(raw, community.filter.words)}”. Edit your message to send it.`,
+        'error',
+      );
+      return;
+    }
     const withCustom = replaceCustomShortcodes(raw.trim(), customEmoji);
     const value = emojiIndex ? replaceShortcodes(withCustom, emojiIndex) : withCustom;
     const files = props.pending;
