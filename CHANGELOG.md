@@ -10,6 +10,8 @@ All notable changes to River are documented here. The format follows
 
 - **Push-to-talk clicks:** a tiny sound when you start and stop talking
   with push-to-talk (Settings → Notifications → Voice channels).
+- **Right-click a category** to mark it read, collapse or expand it, and
+  (for managers) create a channel in it or edit it.
 
 ### Added (1.0.34)
 
