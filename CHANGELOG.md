@@ -11,7 +11,11 @@ All notable changes to River are documented here. The format follows
 - **More of River in Bulgarian:** Community settings, category and role
   menus, and the voice panel.
 
-### Added (1.0.35)
+## [1.0.35] - 2026-10-13
+
+**Quicker hands: push-to-talk clicks and right-click menus for categories and roles.**
+
+### Added
 
 - **Push-to-talk clicks:** a tiny sound when you start and stop talking
   with push-to-talk (Settings → Notifications → Voice channels).
@@ -19,7 +23,11 @@ All notable changes to River are documented here. The format follows
   (for managers) create a channel in it or edit it; right-click a role in
   Community settings to edit or delete it.
 
-### Added (1.0.34)
+## [1.0.34] - 2026-10-13
+
+**Little things that feel right: animated avatars, and a quick way back into a call.**
+
+### Added
 
 - **Animated avatars:** a small GIF (up to about 44 KB) stays animated as
   your picture, everywhere and per community; larger ones are cropped to a
@@ -28,14 +36,22 @@ All notable changes to River are documented here. The format follows
   pressing Disconnect, the sidebar offers to put you back (for two hours).
   Not after a moderator disconnects you.
 
-### Added (1.0.33)
+## [1.0.33] - 2026-10-13
+
+**Be heard when it matters: priority speaker.**
+
+### Added
 
 - **Priority speaker:** a new role permission. People who have it get a 📣
   button in voice; while it is on and they talk, everyone else is turned
   down for the listeners. Listeners only honour it from people the
   community really allows.
 
-### Added (1.0.32)
+## [1.0.32] - 2026-10-13
+
+**Webhooks without giving up encryption: services post into channels, and the server still cannot read a word.**
+
+### Added
 
 - **Encrypted incoming webhooks** (Community settings → Webhooks): let a
   script or service post into a text channel. The poster seals each post
@@ -44,20 +60,32 @@ All notable changes to River are documented here. The format follows
   Posts show a **WEBHOOK** badge; deleting a webhook stops its address at
   once. `scripts/webhook/post.mjs` is a dependency-free example poster.
 
-### Added (1.0.31)
+## [1.0.31] - 2026-10-13
+
+**Know your invites: see who made each link and who joined with it, and revoke it.**
+
+### Added
 
 - **Invite tracking:** Community settings → Invites lists each active link,
   who made it, how many uses are left, when it expires and who joined with
   it. Revoke stops a link at once (audited); people who already joined stay.
 
-### Added (1.0.30)
+## [1.0.30] - 2026-10-13
+
+**Roles that fit: drag to reorder, and roles that end on their own.**
+
+### Added
 
 - **Drag roles to reorder them** in Community settings → Roles.
 - **Temporary roles:** give someone a role for an hour, a day, a week or
   30 days from their profile card (⏳ shows until when); it goes away on its
   own.
 
-### Added (1.0.29)
+## [1.0.29] - 2026-10-13
+
+**Make it yours: community pictures and banners, pins in direct messages, and calls in the conversation.**
+
+### Added
 
 - **Calls show up in the conversation:** "📞 Call · 5 min", "Missed call"
   and "no answer" lines appear between your messages.
@@ -67,7 +95,11 @@ All notable changes to River are documented here. The format follows
   picture instead of an emoji in the list, and a banner above the channels.
   End-to-end encrypted.
 
-### Added (1.0.28)
+## [1.0.28] - 2026-10-13
+
+**Safer communities: a word filter and warnings before suspicious links.**
+
+### Added
 
 - **Suspicious link warnings:** before opening a link, River warns about
   look-alike characters, raw IP addresses, short links that hide where they
@@ -77,7 +109,11 @@ All notable changes to River are documented here. The format follows
   ignores case, accents and look-alikes; moderators still see everything.
   Because the server cannot read messages, each River app applies it.
 
-### Added (1.0.27)
+## [1.0.27] - 2026-10-12
+
+**Speak your language: a language setting, plus age-restricted channels and clearer roles.**
+
+### Added
 
 - **Role mentions explain themselves:** hover or focus one to see the role,
   how many people have it and whether you do.
@@ -89,7 +125,11 @@ All notable changes to River are documented here. The format follows
   partly translated: navigation, settings, menus and voice controls so
   far), or follow your system. Changes apply at once.
 
-### Added (1.0.26)
+## [1.0.26] - 2026-10-12
+
+**Understand your community: why someone can or can't, insights, and media channels.**
+
+### Added
 
 - **Media channels:** turn a text channel into a gallery of the pictures
   and videos shared there (channel settings → Media channel); the chat is
