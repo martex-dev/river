@@ -5,6 +5,7 @@ import {
   IPC,
   type AccountStatus,
   type CommunityEvent,
+  type DeepLink,
   type HostStatus,
   type RiverApi,
   type StorageStatus,
@@ -13,7 +14,17 @@ import {
 
 // The only surface the UI gets. No Node, no ipcRenderer, no arbitrary channels.
 const api: RiverApi = {
-  app: { info: () => ipcRenderer.invoke(IPC.appInfo) },
+  app: {
+    info: () => ipcRenderer.invoke(IPC.appInfo),
+    takeDeepLink: () => ipcRenderer.invoke(IPC.appTakeDeepLink),
+    onDeepLink: (listener) => {
+      const handler = (_event: unknown, link: DeepLink): void => listener(link);
+      ipcRenderer.on(IPC.appDeepLink, handler);
+      return () => {
+        ipcRenderer.removeListener(IPC.appDeepLink, handler);
+      };
+    },
+  },
   settings: {
     get: () => ipcRenderer.invoke(IPC.settingsGet),
     update: (patch) => ipcRenderer.invoke(IPC.settingsUpdate, patch),

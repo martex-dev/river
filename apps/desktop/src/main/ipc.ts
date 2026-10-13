@@ -22,6 +22,7 @@ import {
   type AccountActionResult,
   type AccountStatus,
   type AppInfo,
+  type DeepLink,
   type IdentityInfo,
   type PassphraseResult,
   type Result,
@@ -78,6 +79,8 @@ export interface IpcDeps {
   /** Settings → System → Connection check. */
   diagnostics(): Promise<DiagnosticCheck[]>;
   openLogs(): Promise<void>;
+  /** A River link opened from a browser that the UI has not taken yet. */
+  takeDeepLink(): DeepLink | null;
   /** Hosting communities on this PC. */
   hosting: Pick<
     Hosting,
@@ -130,6 +133,7 @@ export function registerIpc(deps: IpcDeps): void {
   };
 
   handle(IPC.appInfo, () => deps.appInfo());
+  handle(IPC.appTakeDeepLink, () => deps.takeDeepLink());
   handle(IPC.settingsGet, () => deps.settings.get());
   handle(IPC.settingsUpdate, (_e, patch) => deps.settings.update(patch));
 
