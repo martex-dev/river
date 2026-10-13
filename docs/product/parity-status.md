@@ -1,6 +1,6 @@
 # River 1.0 parity status (audit of parity-checklist.md)
 
-Last audited: **2026-10-12**, against `main` + open PRs up to 1.0.27.
+Last audited: **2026-10-13**, against releases up to 1.0.32 and the 1.0.33–1.0.38 work.
 Status: ✅ done · 🔨 partial · ⏳ to do · 🔒 privacy-preserving equivalent ·
 ✖ not planned (reason given). Each ✅ is backed by code and tests; the tests
 are named where it helps. This file is updated with every release.
@@ -229,15 +229,15 @@ are named where it helps. This file is updated with every release.
 
 ## 21–25. Media, calls, security, reliability, accessibility
 
-| Item                                                       | Status  | Notes                                 |
-| ---------------------------------------------------------- | ------- | ------------------------------------- |
-| Attachments end to end, viewer, save                       | ✅      | PDF preview ⏳                        |
-| Call state machine, reconnection                           | ✅      | 1.0.16                                |
-| Rate limiting, server-side permission checks               | ✅      |                                       |
-| Data export                                                | ✅      | Export my data (1.0.23)               |
-| Crash recovery, startup diagnostics, self-test             | ✅      | 1.0.16                                |
-| Keyboard navigation, focus, screen-reader labels, contrast | ✅ / 🔨 | axe audits in CI                      |
-| Localization                                               | 🔨      | Framework and Bulgarian beta (1.0.27) |
+| Item                                                       | Status | Notes                                                                                                |
+| ---------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------- |
+| Attachments end to end, viewer, save                       | ✅     | PDF preview ⏳                                                                                       |
+| Call state machine, reconnection                           | ✅     | 1.0.16                                                                                               |
+| Rate limiting, server-side permission checks               | ✅     |                                                                                                      |
+| Data export                                                | ✅     | Export my data (1.0.23)                                                                              |
+| Crash recovery, startup diagnostics, self-test             | ✅     | 1.0.16                                                                                               |
+| Keyboard navigation, focus, screen-reader labels, contrast | ✅     | axe audits in CI; new messages announced to screen readers (1.0.38); reduced motion holds GIFs still |
+| Localization                                               | 🔨     | Framework and Bulgarian beta (1.0.27), wider coverage (1.0.36)                                       |
 
 ## 26–27. Analytics and premium
 
@@ -246,6 +246,7 @@ possible). Premium/monetization ✖ — River is free software with no paid tier
 
 ## 28. System messages and edge cases
 
-Join/leave and pin notices ✅; "user moved", "call started" notices ⏳;
+Join/leave and pin notices ✅; call lines in direct conversations ✅ (1.0.29);
+"user moved" and "call started" notices in channels ⏳;
 deleted-reply and missing-attachment states ✅; concurrent edits rely on
 server last-write; double submissions are idempotent (client message IDs) ✅.
