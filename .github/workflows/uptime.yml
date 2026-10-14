@@ -1,0 +1,64 @@
+name: Uptime
+
+# Watches River's home server from outside (1.0.45): every 15 minutes GitHub
+# checks that it answers on its public address. When it does not, an issue
+# "River is offline" is opened (GitHub e-mails the maintainer); when it is back,
+# the issue is closed with how long it was down. The address is found the way
+# members' apps find it: the newest "this is where I am" note on the relay.
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RELAY: https://ntfy.sh/river-foytAMI1vujBjUAlau5e0YpN
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Is River reachable?
+        id: check
+        shell: bash
+        run: |
+          relay=$(curl -fsS -m 20 "$RELAY/json?poll=1&since=all") || { echo "Relay unreachable."; echo "up=unknown" >> "$GITHUB_OUTPUT"; exit 0; }
+          url=$(echo "$relay" | tail -n 1 | jq -r '.message | fromjson | .url' 2>/dev/null || true)
+          if [ -z "$url" ] || [ "$url" = "null" ]; then
+            # The server re-announces every 4 hours and the relay keeps notes for 12: none means it is down.
+            echo "No address note on the relay for 12 hours."; echo "up=no" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "address=$url" >> "$GITHUB_OUTPUT"
+          for i in 1 2 3 4; do
+            if curl -fsS -m 15 -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" "$url/v1/health"; then
+              echo "up=yes" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            sleep 20
+          done
+          echo "up=no" >> "$GITHUB_OUTPUT"
+      - name: Open or close the outage issue
+        if: steps.check.outputs.up == 'yes' || steps.check.outputs.up == 'no'
+        shell: bash
+        env:
+          UP: ${{ steps.check.outputs.up }}
+          ADDRESS: ${{ steps.check.outputs.address }}
+        run: |
+          gh label create river-down --color d73a4a --description "River's home server is not answering" 2>/dev/null || true
+          open=$(gh issue list --label river-down --state open --json number --jq '.[0].number // empty')
+          now=$(date -u +"%Y-%m-%d %H:%M UTC")
+          if [ "$UP" = "no" ] && [ -z "$open" ]; then
+            gh issue create --label river-down --title "River is offline" \
+              --body "River's home server stopped answering at about $now ($ADDRESS). Is the PC on, awake and connected? This issue closes by itself when it is back."
+          elif [ "$UP" = "yes" ] && [ -n "$open" ]; then
+            since=$(gh issue view "$open" --json createdAt --jq .createdAt)
+            gh issue close "$open" --comment "Back online at $now (offline since $since)."
+          fi
