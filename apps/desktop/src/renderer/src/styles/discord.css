@@ -14,10 +14,10 @@
   --layer-2: #151a24; /* the conversation */
   --layer-3: #1c2230; /* cards, inputs, popovers */
   --layer-user: #0b0f16; /* you, at the bottom of a sidebar */
-  --layer-hover: rgba(120, 140, 190, 0.1);
+  --layer-hover: rgb(var(--line-rgb) / 0.1);
   /* Secondary text stays readable (WCAG AA, 4.5:1) on the lighter layers too. */
   --text-faint: #939eba;
-  --layer-active: rgba(120, 140, 190, 0.18);
+  --layer-active: rgb(var(--line-rgb) / 0.18);
 }
 
 /* ---------- Shell ---------- */
@@ -31,7 +31,7 @@
 }
 .glass {
   background: var(--layer-3);
-  border-color: rgba(255, 255, 255, 0.04);
+  border-color: rgb(var(--fg-rgb) / 0.04);
   border-radius: 10px;
   backdrop-filter: none;
   box-shadow: none;
@@ -160,7 +160,7 @@ html[data-platform='darwin'] .titlebar {
   height: 48px;
   padding: 0 10px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.35);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02);
+  box-shadow: 0 1px 0 rgb(var(--fg-rgb) / 0.02);
 }
 .home-sidebar__search .dms__search {
   width: 100%;
@@ -249,7 +249,7 @@ html[data-platform='darwin'] .titlebar {
 }
 .community,
 .community--no-members {
-  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 240px;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--member-w);
 }
 .community--no-members {
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);

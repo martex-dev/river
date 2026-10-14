@@ -48,6 +48,31 @@ test('main screens have no serious accessibility problems', async () => {
   await page.keyboard.press('Escape');
 });
 
+test('screens stay accessible in very different themes (1.0.45)', async () => {
+  for (const theme of ['Pure White', 'Neon District', 'Paper', 'Phosphor Green', 'Swiss Typography']) {
+    await openSettings(page, 'Appearance');
+    await page.getByLabel('Search themes').fill(theme);
+    await page
+      .getByRole('article', { name: `${theme} theme` })
+      .getByRole('button', { name: 'Apply' })
+      .click();
+    await audit(`Appearance in ${theme}`);
+    await page.getByRole('button', { name: 'Close settings' }).click();
+    await openHome(page, 'Friends');
+    await audit(`Friends in ${theme}`);
+    await openCommunities(page);
+    await audit(`Communities in ${theme}`);
+  }
+  // Back to the default look for the tests after this one.
+  await openSettings(page, 'Appearance');
+  await page.getByLabel('Search themes').fill('Deep Current');
+  await page
+    .getByRole('article', { name: 'Deep Current theme' })
+    .getByRole('button', { name: 'Apply' })
+    .click();
+  await page.getByRole('button', { name: 'Close settings' }).click();
+});
+
 test('the quick switcher and the shortcuts list are accessible', async () => {
   await page.getByRole('button', { name: 'Home', exact: true }).click();
   await page.keyboard.press('Control+K');

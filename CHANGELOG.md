@@ -6,6 +6,43 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**Make River yours: 14 skins, 107 themes, and a personalisation centre.**
+
+### Added
+
+- **Skins** — whole design languages, not colour swaps: River (signature),
+  Cyberpunk, Space Tech, Glass, Neon, Luxury, Minimal, Corporate, Industrial,
+  Terminal, Retro Future, Nature, Editorial and Accessible. Each has its own
+  typography, shapes (cut corners, hexagon avatars, sharp or pill buttons),
+  materials (glass, glow, flat), background pattern and message layout.
+- **107 themes** across them, light and dark — from Neon District and Outrun
+  to Enterprise Blue, Paper and High Contrast.
+- **Settings → Appearance**, rebuilt as a personalisation centre:
+  - a theme browser with live miniature previews, search, skin and style
+    filters, favourites, and **Try** (see the whole app, then Apply or Cancel);
+  - every colour editable, with contrast checks, saved as your own themes;
+  - typography (8 interface fonts, 7 heading fonts, 4 code fonts, weight, line
+    height, letter spacing, table numbers);
+  - layout (messages as classic, bubbles, cards, compact or terminal; your
+    messages left or right; picture shapes; navigation left or right; rail,
+    sidebar and member-list sizes; readable column; spacing; focus mode);
+  - components (button and tab styles, badges, scrollbars, rounding, borders,
+    icon size and stroke);
+  - effects (intensity, contrast, saturation, depth, glass, blur, glow,
+    gradients, shadows, ten patterns);
+  - backgrounds (gradient, aurora, mesh, or your own picture, dimmed and
+    blurred), motion speed and hover effects;
+  - **profiles**: save complete looks, switch in one click, seven starting
+    points, export and import (validated data, never code), reset.
+- The window buttons on Windows follow the theme; River remembers the look so
+  it never flashes the old one at startup.
+
+### Changed
+
+- The old single look is gone; River starts in River · Deep Current. Every
+  screen now draws from shared design tokens, and text stays readable (WCAG AA)
+  whatever theme or colours are chosen.
+
 ## [1.0.44] - 2026-10-14
 
 **Big calls that stay clear: tested with 16 people for an hour, Bulgaria ↔ USA.**

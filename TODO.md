@@ -176,6 +176,15 @@ Each line is one PR; each version ships when its section is done.
 - [x] Fix: stale relay after a server reconnect left a person unheard
 - [x] 16 people, 65 minutes, Bulgaria ↔ USA: nobody dropped, 14.95–15 of 15 heard on average
 
+### 1.0.45 — Skins, themes and personalisation
+
+- [x] Theme engine with design tokens; 14 skins, 107 themes; contrast guaranteed
+- [x] Appearance centre: browser with previews and try-on, colours, type, layout, components, effects, background, motion, profiles, import/export
+- [x] All component styles on tokens (no theme colours hard-coded)
+- [ ] Contextual appearance (per community / activity)
+- [ ] Faster relayed-voice recovery after a server reconnect (field test: ~45 s gaps when every voice is relayed)
+- [ ] Re-send relay keys when a pair stays silent (field test: one pair never exchanged keys)
+
 ### After 1.0.x (not started; see ROADMAP Stage 2)
 
 - [ ] Bot accounts with a small client library (ADR 0004)

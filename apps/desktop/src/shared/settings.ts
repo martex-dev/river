@@ -1,6 +1,7 @@
 import { DEFAULT_KEYBINDS } from './keybinds.ts';
 import { z } from 'zod';
 import { RELEASE_CHANNELS } from '@river/release/channels';
+import { DEFAULT_DESIGN, designSettingsSchema } from './design.ts';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
@@ -67,6 +68,8 @@ export const settingsSchema = z.object({
     /** Added in 1.0.23: add previews to links you send (River fetches the page from your computer). */
     linkPreviews: z.boolean(),
   }),
+  /** Added in 1.0.45: skins, themes, personalisation and appearance profiles. */
+  design: designSettingsSchema,
   notifications: z.object({
     /** Default 'none': notifications say "New River message" with no sender or content. */
     preview: z.enum(['none', 'sender', 'full']),
@@ -201,6 +204,7 @@ export const DEFAULT_SETTINGS: Settings = {
     linkPreviews: false,
     language: 'en',
   },
+  design: structuredClone(DEFAULT_DESIGN),
   notifications: {
     preview: 'none',
     desktop: true,
@@ -236,6 +240,7 @@ export const DEFAULT_SETTINGS: Settings = {
 export const SETTINGS_SECTIONS = [
   'updates',
   'appearance',
+  'design',
   'notifications',
   'server',
   'voice',
@@ -269,6 +274,7 @@ export const settingsPatchSchema = z
   .object({
     updates: settingsSchema.shape.updates.partial().strict().optional(),
     appearance: settingsSchema.shape.appearance.partial().strict().optional(),
+    design: settingsSchema.shape.design.partial().strict().optional(),
     notifications: settingsSchema.shape.notifications.partial().strict().optional(),
     server: settingsSchema.shape.server.partial().strict().optional(),
     voice: settingsSchema.shape.voice.partial().strict().optional(),
@@ -286,6 +292,7 @@ export function applySettingsPatch(current: Settings, patch: z.output<typeof set
     ...current,
     updates: { ...current.updates, ...patch.updates },
     appearance: { ...current.appearance, ...patch.appearance },
+    design: { ...current.design, ...patch.design },
     notifications: { ...current.notifications, ...patch.notifications },
     server: { ...current.server, ...patch.server },
     voice: { ...current.voice, ...patch.voice },

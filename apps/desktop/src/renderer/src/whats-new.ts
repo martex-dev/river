@@ -3,6 +3,11 @@
  * got, shown once. Fresh installs see nothing; full notes are in the release.
  */
 export const HIGHLIGHTS: Record<string, string[]> = {
+  '1.0.45': [
+    '14 skins and 107 themes — Cyberpunk, Glass, Luxury, Terminal, Corporate and more',
+    'Settings → Appearance: try any theme on the whole app, then Apply or Cancel',
+    'Change every colour, font, message style and layout, and save looks as profiles',
+  ],
   '1.0.44': [
     'Group calls stay clear: tested with 16 people for an hour between Bulgaria and the USA',
     'Fixed: after a short reconnect, someone could stay in the call but go silent for others',
