@@ -2,7 +2,7 @@
 // Deterministic fields come from fixed private keys; signatures (XEdDSA is
 // randomised) are produced once and then FROZEN: the vector test only verifies them.
 // Run only when the protocol major version changes:  node packages/crypto/scripts/generate-vectors.ts
-import { writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   formatFingerprint,
@@ -16,10 +16,6 @@ import {
 
 const hex = (b: Uint8Array) => Buffer.from(b).toString('hex');
 const out = fileURLToPath(new URL('../../protocol/vectors/identity-v1.json', import.meta.url));
-if (existsSync(out) && process.argv[2] !== '--force') {
-  process.stderr.write('identity-v1.json is frozen. Pass --force only for a new protocol major version.\n');
-  process.exit(1);
-}
 
 const seed = (n: number) => Uint8Array.from({ length: 32 }, (_, i) => (n * 31 + i * 7 + 1) & 0xff);
 const identities = [
@@ -61,5 +57,14 @@ const vectors = {
     signature: hex(sign(identities[0]!.privateKey, message)),
   },
 };
-writeFileSync(out, JSON.stringify(vectors, null, 2) + '\n');
-process.stdout.write(`wrote ${out} (${readFileSync(out).length} bytes)\n`);
+try {
+  // 'wx' fails if the file exists, so the freeze is enforced by the write itself (no check-then-write race).
+  writeFileSync(out, JSON.stringify(vectors, null, 2) + '\n', {
+    flag: process.argv[2] === '--force' ? 'w' : 'wx',
+  });
+} catch (err) {
+  if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+  process.stderr.write('identity-v1.json is frozen. Pass --force only for a new protocol major version.\n');
+  process.exit(1);
+}
+process.stdout.write(`wrote ${out}\n`);
