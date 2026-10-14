@@ -165,6 +165,12 @@ test('field voice test', async () => {
   }
 
   for (const p of pages) {
+    // RIVER_FIELD_RELAY=1: no direct connections at all — every voice goes through the server.
+    if (process.env.RIVER_FIELD_RELAY === '1') {
+      await p.evaluate(() => {
+        (globalThis as { __riverForceRelay?: boolean }).__riverForceRelay = true;
+      });
+    }
     ids.push(await p.evaluate(async () => (await window.river.identity.get())?.riverId ?? '?'));
     await p.locator('.channel', { hasText: CHANNEL }).click();
     await expect(p.locator('.voice-panel')).toContainText(/Voice connected/i, { timeout: 120_000 });
