@@ -3,6 +3,10 @@
  * got, shown once. Fresh installs see nothing; full notes are in the release.
  */
 export const HIGHLIGHTS: Record<string, string[]> = {
+  '1.0.44': [
+    'Group calls stay clear: tested with 16 people for an hour between Bulgaria and the USA',
+    'Fixed: after a short reconnect, someone could stay in the call but go silent for others',
+  ],
   '1.0.43': [
     'Hosting: a permanent, free address through Tailscale — calls and invites stop dropping',
     'Settings → Hosting shows the three steps; River switches over by itself',

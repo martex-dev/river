@@ -64,11 +64,11 @@ platform pieces native:
 
 ## Plan
 
-| Step | Delivers                                                                                   |
-| ---- | ------------------------------------------------------------------------------------------ |
-| 1    | Core runs outside Electron (interfaces for storage, secrets, sockets); tested in Node        |
-| 2    | Android shell + libsignal-android + SQLCipher plugins; sign up, join, text chat (APK)       |
-| 3    | Phone layout of the UI (one column, swipe), notifications                                  |
-| 4    | Voice in the WebView; DMs; files                                                           |
-| 5    | iOS shell with the same plugins (needs the Apple decision)                                 |
-| 6    | Content-free push; background reconnect; parity checks → 2.0.0                             |
+| Step | Delivers                                                                              |
+| ---- | ------------------------------------------------------------------------------------- |
+| 1    | Core runs outside Electron (interfaces for storage, secrets, sockets); tested in Node |
+| 2    | Android shell + libsignal-android + SQLCipher plugins; sign up, join, text chat (APK) |
+| 3    | Phone layout of the UI (one column, swipe), notifications                             |
+| 4    | Voice in the WebView; DMs; files                                                      |
+| 5    | iOS shell with the same plugins (needs the Apple decision)                            |
+| 6    | Content-free push; background reconnect; parity checks → 2.0.0                        |
