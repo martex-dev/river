@@ -170,6 +170,28 @@ Each line is one PR; each version ships when its section is done.
 - [ ] Maintainer: install Tailscale on the hosting PC and sign in (then River switches by itself)
 - [ ] Maintainer: apply to SignPath Foundation; add SIGNPATH_API_TOKEN and SIGNPATH_ORGANIZATION_ID when accepted
 
+## Stage 2 — 1.1 → 2.0.0 (started 2026-10-14)
+
+### 1.1.x — Protocol freeze
+
+- [x] JSON Schema of every wire message frozen as `packages/protocol/schema/v1.json`, drift fails CI
+- [x] Cross-language test vectors for identity, fingerprints, words, safety numbers, signatures
+- [x] Stability rules (docs/protocol/stability.md)
+- [ ] Test vectors for attachments (Signal attachment format), backup format and device-list signing
+- [ ] Message-level spec docs: realtime events, community key epochs, group sender keys, calls signalling
+- [ ] Release-key hardening steps (protected `release` environment with manual approval) — needs the maintainer
+
+### 1.2.x — Devices (multi-device linking, transfer, revocation)
+
+- [ ] `PUT /v1/devices/list` with monotonic version; device approval by an existing device
+- [ ] Link a new device by QR/code; encrypted history transfer; key rotation and revocation tooling
+
+### 1.3.x iOS · 1.4.x Android — need maintainer decisions and tooling
+
+- [ ] iOS (SwiftUI, libsignal-swift) — needs macOS/Xcode builders in CI and an Apple Developer account
+- [ ] Android (Compose, libsignal-android) — needs the Android SDK in CI and a signing key
+- [ ] 1.5–1.7 mobile parity, push, calls; 1.8 consent-based remote assistance; 1.9 sync and hardening
+
 ### After 1.0.x (not started; see ROADMAP Stage 2)
 
 - [ ] Bot accounts with a small client library (ADR 0004)

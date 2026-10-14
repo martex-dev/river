@@ -1,0 +1,69 @@
+{
+  "protocol": 1,
+  "note": "Cross-language test vectors. Every River client must reproduce these exactly. Keys are test-only.",
+  "identities": [
+    {
+      "riverId": "3f2b8c1e-5d4a-4e7b-9a10-0c6d2f8e4b71",
+      "privateKey": "20272e353c434a51585f666d747b828990979ea5acb3bac1c8cfd6dde4ebf2f9",
+      "publicKey": "05c1c318eeeead11778e566a24a8cb04b9b431eb84cfa623c6a682c7ee56c8e206",
+      "fingerprint": "df7853d404cefabdc076adbe8b6a5fee",
+      "fingerprintFormatted": "DF78 53D4 04CE FABD C076 ADBE 8B6A 5FEE",
+      "words": [
+        "user",
+        "keys",
+        "guru",
+        "tiny",
+        "aqua",
+        "taco",
+        "zaps",
+        "ruby",
+        "rust",
+        "keno",
+        "poem",
+        "ruin",
+        "luau",
+        "item",
+        "hope",
+        "waxy"
+      ]
+    },
+    {
+      "riverId": "9a1d7e52-2c3f-4b88-8d0e-71f4a5c6b923",
+      "privateKey": "3f464d545b626970777e858c939aa1a8afb6bdc4cbd2d9e0e7eef5fc030a1118",
+      "publicKey": "05cbc2e6302e9a1bc8a47304805f3b49a5130d3eb39c527a05a4d258541290f92f",
+      "fingerprint": "cfbb85c8c49e6b9dcfd9edb367705ecc",
+      "fingerprintFormatted": "CFBB 85C8 C49E 6B9D CFD9 EDB3 6770 5ECC",
+      "words": [
+        "task",
+        "rock",
+        "limp",
+        "soap",
+        "sets",
+        "noon",
+        "jade",
+        "next",
+        "task",
+        "tuna",
+        "wave",
+        "quad",
+        "into",
+        "judo",
+        "holy",
+        "surf"
+      ]
+    }
+  ],
+  "safetyNumber": {
+    "between": ["3f2b8c1e-5d4a-4e7b-9a10-0c6d2f8e4b71", "9a1d7e52-2c3f-4b88-8d0e-71f4a5c6b923"],
+    "digits": "037462845877728112631273957004730437388182759298102460147980",
+    "formatted": "03746 28458 77728 11263 12739 57004 73043 73881 82759 29810 24601 47980",
+    "scannableFromFirst": "080212220a2080b45f8633d025ab3179a2b17739c7db5ab020126af0c2b15982f7f79b4c542e1a220a20f09faf19a23fe835050a96a7617a20a187dc86df030f100fc30afdb036ecca22",
+    "scannableFromSecond": "080212220a20f09faf19a23fe835050a96a7617a20a187dc86df030f100fc30afdb036ecca221a220a2080b45f8633d025ab3179a2b17739c7db5ab020126af0c2b15982f7f79b4c542e"
+  },
+  "signature": {
+    "scheme": "XEdDSA over libsignal Curve25519 keys",
+    "signer": 0,
+    "message": "72697665722070726f746f636f6c207631207369676e617475726520766563746f72",
+    "signature": "c7a90fc76f4dee9206ee84408e172f4031eb4727997f5367c9d119b5e5ce3500f1d729bf20dc5b42646d29a7339fe6b49ac81baa5c935d69c5d85698ee7bf00d"
+  }
+}

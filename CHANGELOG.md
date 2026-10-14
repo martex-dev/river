@@ -6,6 +6,14 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Protocol v1 is frozen (1.1.x).** `packages/protocol/schema/v1.json` holds
+  the JSON Schema of every wire message and `packages/protocol/vectors/identity-v1.json`
+  the cross-language test vectors (identity keys, fingerprints, verification
+  words, safety numbers, a frozen signature) that the iOS and Android clients
+  must reproduce. Tests fail on any drift. Rules: docs/protocol/stability.md.
+
 ## [1.0.43] - 2026-10-13
 
 **A permanent address for home hosting, and code signing on the way.**
