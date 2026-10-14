@@ -60,10 +60,9 @@ jobs:
         env:
           INVITE: ${{ inputs.invite }}
         run: |
-          origin=$(printf '%s' "$INVITE" | sed -E 's#^(https?://[^/]+).*##')
+          origin=$(printf '%s' "$INVITE" | sed -E 's#^(https?://[^/]+).*#\1#')
           for i in $(seq 1 12); do
-            if curl -fsS -m 10 -o /dev/null -w "try $i: HTTP %{http_code} in %{time_total}s via %{remote_ip}
-" "$origin/v1/health"; then exit 0; fi
+            if curl -fsS -m 10 -o /dev/null -w "try $i: HTTP %{http_code} in %{time_total}s via %{remote_ip}\n" "$origin/v1/health"; then exit 0; fi
             echo "try $i: not reachable"; sleep 10
           done
           exit 1
