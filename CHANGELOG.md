@@ -6,6 +6,26 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.44] - 2026-10-14
+
+**Big calls that stay clear: tested with 16 people for an hour, Bulgaria ↔ USA.**
+
+### Fixed
+
+- **Nobody goes silent in a call any more.** After a short server reconnect,
+  one person could stay shown as connected while some others could no longer
+  hear them for the rest of the call. Found by a real 16-person test across
+  the Atlantic; River now corrects such a pair within 2 seconds.
+
+### Added
+
+- A voice field test: real River clients on machines in another country join
+  one call through the internet and measure, every 15 seconds, whose voice they
+  actually hear. Result with 16 people for 65 minutes: nobody dropped, everyone
+  heard on average 14.95–15 of 15 others. See
+  docs/security/voice-field-test-2026-10-14.md.
+- ADR 0005: proposed plan for the phone apps.
+
 ## [1.0.43] - 2026-10-13
 
 **A permanent address for home hosting, and code signing on the way.**
@@ -1375,7 +1395,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.43...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.44...HEAD
+[1.0.44]: https://github.com/martex-dev/river/compare/v1.0.43...v1.0.44
 [1.0.43]: https://github.com/martex-dev/river/compare/v1.0.42...v1.0.43
 [1.0.42]: https://github.com/martex-dev/river/compare/v1.0.41...v1.0.42
 [1.0.41]: https://github.com/martex-dev/river/compare/v1.0.40...v1.0.41

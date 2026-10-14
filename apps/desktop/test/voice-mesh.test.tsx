@@ -450,6 +450,30 @@ describe('voice mesh', () => {
       for (const id of people) expect(relays.get(id)!.recipients).toEqual([]);
     });
 
+    it('a late relay request after the direct connection is up never leaves anyone unheard', async () => {
+      const people = ids(2);
+      const calls = await Promise.all(people.map((id) => joinCall(id, true)));
+      await runUntil(() => fullMesh(calls));
+      // A "please relay" from a moment ago, delivered late (e.g. after a server reconnect).
+      const key = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
+      await calls[1]!.handleSignal(people[0]!, { type: 'relay', key });
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(relayedPairs(calls)).toEqual([]);
+      for (const id of people) expect(relays.get(id)!.recipients).toEqual([]);
+    });
+
+    it('a pair stuck "via server" while connected directly goes back to direct by itself', async () => {
+      const people = ids(2);
+      const calls = await Promise.all(people.map((id) => joinCall(id, true)));
+      await runUntil(() => fullMesh(calls));
+      // Force the stale state the field test found: relayed although the direct link is up.
+      (calls[1] as unknown as { enableRelay(id: string): void }).enableRelay(people[0]!);
+      expect(relayedPairs(calls)).toEqual(['1>0']);
+      await vi.advanceTimersByTimeAsync(2500);
+      expect(relayedPairs(calls)).toEqual([]);
+      expect(relays.get(people[1]!)!.recipients).toEqual([]);
+    });
+
     it('stops relaying to someone who left', async () => {
       const people = ids(2);
       net.broken.add(Net.key(people[0]!, people[1]!));

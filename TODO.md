@@ -170,6 +170,12 @@ Each line is one PR; each version ships when its section is done.
 - [ ] Maintainer: install Tailscale on the hosting PC and sign in (then River switches by itself)
 - [ ] Maintainer: apply to SignPath Foundation; add SIGNPATH_API_TOKEN and SIGNPATH_ORGANIZATION_ID when accepted
 
+### 1.0.44 — Calls proven at scale
+
+- [x] Voice field test over the internet (host PC + GitHub machines in another country)
+- [x] Fix: stale relay after a server reconnect left a person unheard
+- [x] 16 people, 65 minutes, Bulgaria ↔ USA: nobody dropped, 14.95–15 of 15 heard on average
+
 ### After 1.0.x (not started; see ROADMAP Stage 2)
 
 - [ ] Bot accounts with a small client library (ADR 0004)

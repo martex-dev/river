@@ -55,6 +55,17 @@ jobs:
       - name: Where this machine is
         shell: bash
         run: curl -fsS https://ipinfo.io/json | grep -E '"(city|region|country|org)"' || true
+      - name: Can this machine reach the server?
+        shell: bash
+        env:
+          INVITE: ${{ inputs.invite }}
+        run: |
+          origin=$(printf '%s' "$INVITE" | sed -E 's#^(https?://[^/]+).*#\1#')
+          for i in $(seq 1 12); do
+            if curl -fsS -m 10 -o /dev/null -w "try $i: HTTP %{http_code} in %{time_total}s via %{remote_ip}\n" "$origin/v1/health"; then exit 0; fi
+            echo "try $i: not reachable"; sleep 10
+          done
+          exit 1
       - name: Join the call and measure (Linux)
         if: runner.os == 'Linux'
         working-directory: apps/desktop
