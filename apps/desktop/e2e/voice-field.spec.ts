@@ -62,6 +62,8 @@ interface Sample {
   heard: string[];
   /** Tiles showing a problem ("connecting", "reconnecting"), by label. */
   trouble: string[];
+  /** People whose voice comes through the server instead of directly. */
+  viaServer: number;
 }
 
 /** Starts an audio meter on every remote voice (once per page). */
@@ -120,6 +122,7 @@ async function sample(p: Page): Promise<Sample> {
       voices: tracks.length,
       heard: live.filter((x) => Date.now() - (loud.get(x.track.id) ?? 0) < 3000).map((x) => x.peer),
       trouble: tiles.filter((t) => /connecting|reconnecting|lost/i.test(t)),
+      viaServer: tiles.filter((t) => /via server/i.test(t)).length,
     };
   });
 }
