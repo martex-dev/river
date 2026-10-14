@@ -6,6 +6,8 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.45] - 2026-10-15
+
 **Make River yours: 14 skins, 107 themes, and a personalisation centre.**
 
 ### Added
@@ -1432,7 +1434,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.44...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.45...HEAD
+[1.0.45]: https://github.com/martex-dev/river/compare/v1.0.44...v1.0.45
 [1.0.44]: https://github.com/martex-dev/river/compare/v1.0.43...v1.0.44
 [1.0.43]: https://github.com/martex-dev/river/compare/v1.0.42...v1.0.43
 [1.0.42]: https://github.com/martex-dev/river/compare/v1.0.41...v1.0.42
