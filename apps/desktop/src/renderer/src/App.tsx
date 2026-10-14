@@ -2,6 +2,8 @@ import { WhatsNew } from './components/WhatsNew.tsx';
 import { useEffect, useState, type ReactElement } from 'react';
 import { QuickSwitcher } from './components/QuickSwitcher.tsx';
 import { startNavHistory } from './nav-history.ts';
+import { useDesignEngine } from './appearance/use-design.ts';
+import { TryBar } from './appearance/TryBar.tsx';
 import { resolveLanguage, useT } from './i18n.ts';
 import { RiverMark } from './components/RiverMark.tsx';
 import { AdminIcon, LockIcon } from './components/Icons.tsx';
@@ -69,6 +71,8 @@ export function App(): ReactElement {
     identityCreated,
     finishOnboarding,
   } = useRiver();
+  // Skins, themes and personalisation (1.0.45): applied to <html> on every change.
+  useDesignEngine();
   const systemReduced = useSystemReducedMotion();
   // The PC that hosts River's server gets the operator's Admin section.
   const operator = useHostStatus()?.enabled ?? false;
@@ -220,6 +224,7 @@ export function App(): ReactElement {
         </main>
       </div>
       <SettingsOverlay />
+      <TryBar />
       <UpdateToast />
       <CallAudio />
       <VoiceHotkeys />

@@ -84,6 +84,8 @@ describe('SettingsStore', () => {
     expect(s).toEqual({
       ...v001,
       appearance: { ...DEFAULT_SETTINGS.appearance, motion: 'reduced' },
+      // 1.0.45: skins arrived later; an old file gets River's default design.
+      design: DEFAULT_SETTINGS.design,
       notifications: { ...DEFAULT_SETTINGS.notifications, preview: 'sender' },
       server: DEFAULT_SETTINGS.server,
       voice: DEFAULT_SETTINGS.voice,

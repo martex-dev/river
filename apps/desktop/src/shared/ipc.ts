@@ -87,6 +87,7 @@ export const IPC = {
   attachmentSave: 'river:attachment:save',
   openLink: 'river:link:open',
   openUrl: 'river:link:open-url',
+  appTitleBar: 'river:app:title-bar',
   linkPreview: 'river:link:preview',
 } as const;
 
@@ -478,6 +479,8 @@ export interface RiverApi {
     /** A River link opened from a browser ("Open in River") before the window could take it. */
     takeDeepLink(): Promise<DeepLink | null>;
     onDeepLink(listener: (link: DeepLink) => void): () => void;
+    /** Colours of the window buttons area (Windows/Linux), following the theme. */
+    setTitleBar(colors: { color: string; symbol: string }): Promise<void>;
   };
   settings: { get(): Promise<Settings>; update(patch: SettingsPatch): Promise<Settings> };
   updates: {

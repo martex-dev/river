@@ -10,6 +10,7 @@ import type {
 import { setSoundConfigSource } from './community/sound.ts';
 import { silenced } from '../../shared/notify-rules.ts';
 import type { Settings, SettingsPatch } from '../../shared/settings.ts';
+import type { DesignSettings } from '../../shared/design.ts';
 
 export const SECTIONS = [
   'home',
@@ -58,6 +59,13 @@ interface RiverState {
   settingsTab: SettingsTab | null;
   openSettings(tab?: SettingsTab): void;
   closeSettings(): void;
+  /**
+   * A design shown before it is saved: while a slider moves ('live', saved a moment later)
+   * or while a theme is tried on from the browser ('try', until Apply or Cancel).
+   */
+  designPreview: DesignSettings | null;
+  designTrying: boolean;
+  setDesignPreview(design: DesignSettings | null, trying?: boolean): void;
   /** The "Create or join a community" screen is showing. */
   communityStart: boolean;
   setCommunityStart(open: boolean): void;
@@ -86,6 +94,10 @@ export const useRiver = create<RiverState>((set) => ({
   settingsTab: null,
   openSettings: (tab) => set({ settingsTab: tab ?? 'account' }),
   closeSettings: () => set({ settingsTab: null }),
+  designPreview: null,
+  designTrying: false,
+  setDesignPreview: (designPreview, trying = false) =>
+    set({ designPreview, designTrying: designPreview ? trying : false }),
   communityStart: false,
   setCommunityStart: (open) =>
     set(open ? { communityStart: true, section: 'communities' } : { communityStart: false }),

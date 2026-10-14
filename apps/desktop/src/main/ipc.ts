@@ -472,6 +472,22 @@ export function registerIpc(deps: IpcDeps): void {
     }
   });
   handle(IPC.serverCheck, (_e, url) => checkServer(url, deps.fetchBytes));
+  // The window-buttons area follows the theme (1.0.45). Only two hex colours are accepted.
+  const titleBarSchema = z.object({
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    symbol: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  });
+  handle(IPC.appTitleBar, async (event, raw) => {
+    const { color, symbol } = titleBarSchema.parse(raw);
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (window && process.platform !== 'darwin') {
+      try {
+        window.setTitleBarOverlay({ color, symbolColor: symbol, height: 32 });
+      } catch {
+        // no title bar overlay on this window
+      }
+    }
+  });
   handle(IPC.openLink, async (_e, id) => {
     await shell.openExternal(EXTERNAL_LINKS[linkIdSchema.parse(id)]);
   });
