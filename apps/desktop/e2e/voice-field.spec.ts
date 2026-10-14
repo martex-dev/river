@@ -29,7 +29,8 @@ const JOIN_WAIT_MIN = Number(process.env.RIVER_FIELD_JOIN_WAIT ?? 25);
 const LINGER_MIN = Number(process.env.RIVER_FIELD_LINGER ?? 3);
 const SAMPLE_MS = 15_000;
 const CHANNEL = 'Lounge';
-const FAKE_MEDIA = ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'];
+// --mute-audio: nothing plays on the machine's speakers; the meter still measures every voice.
+const FAKE_MEDIA = ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--mute-audio'];
 
 const dirs: string[] = [];
 const apps: ElectronApplication[] = [];
