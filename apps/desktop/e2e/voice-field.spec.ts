@@ -43,7 +43,9 @@ test.afterAll(async () => {
 async function open(name: string): Promise<Page> {
   const dir = mkdtempSync(join(tmpdir(), 'river-field-'));
   dirs.push(dir);
-  const { app, page } = await launchRiver(dir, { name, args: FAKE_MEDIA });
+  // RIVER_FIELD_ARGS: extra Chromium switches, e.g. a --host-resolver-rules=… to force the public path.
+  const extra = process.env.RIVER_FIELD_ARGS ? [process.env.RIVER_FIELD_ARGS] : [];
+  const { app, page } = await launchRiver(dir, { name, args: [...FAKE_MEDIA, ...extra] });
   apps.push(app);
   return page;
 }
@@ -56,6 +58,10 @@ interface Sample {
   audible: number;
   /** Remote voices attached and playing. */
   voices: number;
+  /** River IDs of the people heard in this sample (from the audio elements' data-peer). */
+  heard: string[];
+  /** Tiles showing a problem ("connecting", "reconnecting"), by label. */
+  trouble: string[];
 }
 
 /** Starts an audio meter on every remote voice (once per page). */
@@ -96,9 +102,15 @@ async function sample(p: Page): Promise<Sample> {
     const panel = document.querySelector('.voice-panel');
     const tiles = [...document.querySelectorAll('.tile')].map((t) => (t.textContent ?? '').trim());
     const els = [...document.querySelectorAll<HTMLAudioElement>('.call-audio audio')];
-    const tracks = els
-      .map((a) => (a.srcObject as MediaStream | null)?.getAudioTracks()[0])
-      .filter((t): t is MediaStreamTrack => !!t && t.readyState === 'live');
+    const live = els
+      .map((a) => ({
+        peer: a.dataset.peer ?? '?',
+        track: (a.srcObject as MediaStream | null)?.getAudioTracks()[0],
+      }))
+      .filter(
+        (x): x is { peer: string; track: MediaStreamTrack } => !!x.track && x.track.readyState === 'live',
+      );
+    const tracks = live.map((x) => x.track);
     return {
       inCall: Boolean(panel && /Voice connected|Reconnecting/i.test(panel.textContent ?? '')),
       // Our own tile is not counted: what matters is everyone else.
@@ -106,6 +118,8 @@ async function sample(p: Page): Promise<Sample> {
       problems: tiles.filter((t) => /connecting|reconnecting|lost/i.test(t)).length,
       audible: tracks.filter((t) => Date.now() - (loud.get(t.id) ?? 0) < 3000).length,
       voices: tracks.length,
+      heard: live.filter((x) => Date.now() - (loud.get(x.track.id) ?? 0) < 3000).map((x) => x.peer),
+      trouble: tiles.filter((t) => /connecting|reconnecting|lost/i.test(t)),
     };
   });
 }
@@ -114,6 +128,7 @@ test('field voice test', async () => {
   test.setTimeout((JOIN_WAIT_MIN + MINUTES + LINGER_MIN + 15) * 60_000);
   const pages: Page[] = [];
   const names: string[] = [];
+  const ids: string[] = [];
 
   if (ROLE === 'host') {
     const host = await open('Host');
@@ -147,6 +162,7 @@ test('field voice test', async () => {
   }
 
   for (const p of pages) {
+    ids.push(await p.evaluate(async () => (await window.river.identity.get())?.riverId ?? '?'));
     await p.locator('.channel', { hasText: CHANNEL }).click();
     await expect(p.locator('.voice-panel')).toContainText(/Voice connected/i, { timeout: 120_000 });
     await installMeter(p);
@@ -177,6 +193,7 @@ test('field voice test', async () => {
   const summary = {
     role: ROLE,
     tag: TAG,
+    clients: names.map((name, i) => ({ name, riverId: ids[i] })),
     people: names.length,
     expected: EXPECTED,
     minutes: MINUTES,
