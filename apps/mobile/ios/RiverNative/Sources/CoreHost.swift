@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import UIKit
 import UniformTypeIdentifiers
@@ -187,6 +188,11 @@ public final class CoreHost: NSObject {
             notify(
                 id: id, title: a["title"] as? String ?? "River", body: a["body"] as? String ?? "",
                 reply: (a["reply"] as? Bool) ?? false)
+        case "speaker":
+            let session = AVAudioSession.sharedInstance()
+            let port: AVAudioSession.PortOverride = (a["on"] as? Bool) == true ? .speaker : AVAudioSession.PortOverride.none
+            try? session.overrideOutputAudioPort(port)
+            answer(id, value: nil)
         case "appLock":
             let available = AppLock.shared.setEnabled((a["enabled"] as? Bool) ?? false)
             answer(id, value: ["available": available] as [String: Any])

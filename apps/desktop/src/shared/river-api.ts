@@ -136,6 +136,7 @@ export function createRiverApi(t: RiverTransport): RiverApi {
         t.on(IPC.voiceRelayIn, (...args) => listener(args[0] as string, args[1] as Uint8Array)),
       screenSources: () => t.invoke(IPC.screenSources),
       selectScreen: (id) => t.invoke(IPC.screenSelect, id),
+      setSpeaker: (on) => t.invoke(IPC.voiceSpeaker, on),
       shareStatus: (status) => t.send(IPC.screenShareStatus, status),
       point: (x, y) => t.send(IPC.screenPoint, x, y),
     },

@@ -302,6 +302,7 @@ async function start(): Promise<void> {
       community.ensureSocket();
     },
     selectScreen: () => undefined,
+    speaker: (on) => void ask('speaker', { on }).catch(() => undefined),
     hosting: noHosting,
     homeAccount,
     takeDeepLink: (kind) => {

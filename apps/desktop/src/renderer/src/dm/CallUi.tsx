@@ -2,7 +2,7 @@ import { isPhone } from '../../../shared/platform.ts';
 import type { ReactElement } from 'react';
 import type { ConversationView } from '../../../shared/dm.ts';
 import { useCommunity } from '../community/store.ts';
-import { pointOnVideo, Video } from '../community/ui/Voice.tsx';
+import { pointOnVideo, SpeakerButton, Video } from '../community/ui/Voice.tsx';
 import {
   Avatar,
   CameraIcon,
@@ -180,6 +180,8 @@ export function DmCallPanel({ conversation: c }: { conversation: ConversationVie
         >
           <CameraIcon />
         </button>
+        {/* Video calls start on the loudspeaker, voice calls at the ear, as on any phone. */}
+        {phone && <SpeakerButton initial={active.video} />}
         {/* Phones have no screen picker yet. */}
         {!phone && (
           <button

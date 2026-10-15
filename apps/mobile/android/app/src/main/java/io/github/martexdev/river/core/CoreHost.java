@@ -213,6 +213,28 @@ public final class CoreHost {
     if (ask != null) answer(ask, (Object) "clicked");
   }
 
+  /** Calls through the loudspeaker or the earpiece. */
+  private void speaker(boolean on) {
+    android.media.AudioManager am =
+        (android.media.AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+    if (am == null) return;
+    am.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
+    if (android.os.Build.VERSION.SDK_INT >= 31) {
+      if (!on) {
+        am.clearCommunicationDevice();
+        return;
+      }
+      for (android.media.AudioDeviceInfo d : am.getAvailableCommunicationDevices()) {
+        if (d.getType() == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+          am.setCommunicationDevice(d);
+          return;
+        }
+      }
+    } else {
+      am.setSpeakerphoneOn(on);
+    }
+  }
+
   /** Hang up from the "In a call" notification. */
   public void hangUp() {
     main.post(
@@ -347,6 +369,12 @@ public final class CoreHost {
             CallService.setActive(context, active);
             if (active) callAsk = id;
             else answer(id, (Object) "ended");
+            break;
+          }
+        case "speaker":
+          {
+            speaker(a.optBoolean("on", false));
+            answer(id, (Object) null);
             break;
           }
         case "background":

@@ -77,6 +77,8 @@ export interface IpcDeps {
   afterRestore(): Promise<void>;
   /** Screen chosen in River's picker for the next screen share. */
   selectScreen(sourceId: string): void;
+  /** Phones: loudspeaker or earpiece for calls (absent on computers). */
+  speaker?: (on: boolean) => void;
   /** The "can see your screen" bar and pointing (desktop only; ADR 0007). */
   share?: { status(sharing: boolean, viewers: string[]): void; point(x: number, y: number): void };
   /** Creates the account on River's home server by itself. */
@@ -373,6 +375,7 @@ export function registerIpc(deps: IpcDeps): void {
     return sources.map((s) => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL() }));
   });
   handle(IPC.screenSelect, (_e, id) => deps.selectScreen(z.string().max(200).parse(id)));
+  handle(IPC.voiceSpeaker, (_e, on) => deps.speaker?.(z.boolean().parse(on)));
   const shareStatus = z.object({
     sharing: z.boolean(),
     viewers: z.array(z.string().max(64)).max(32),

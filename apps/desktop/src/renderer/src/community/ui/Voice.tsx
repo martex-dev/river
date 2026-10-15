@@ -177,6 +177,7 @@ export function VoiceChannel(props: {
             >
               <CameraIcon />
             </button>
+            {phone && <SpeakerButton initial />}
             {/* Phones have no screen picker yet. */}
             {!phone && (
               <button
@@ -281,6 +282,31 @@ export function VoiceChannel(props: {
         </div>
       )}
     </div>
+  );
+}
+
+/** Phones: loudspeaker or earpiece for this call. */
+export function SpeakerButton(props: { initial: boolean }): ReactElement {
+  const [on, setOn] = useState(props.initial);
+  useEffect(() => {
+    void window.river.voice.setSpeaker(props.initial).catch(() => undefined);
+    // Set once for this call; afterwards the button decides.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <button
+      className={`round-btn ${on ? 'round-btn--on' : ''}`}
+      aria-pressed={on}
+      aria-label={on ? 'Speaker on' : 'Speaker off'}
+      title={on ? 'Playing through the loudspeaker' : 'Playing through the earpiece'}
+      onClick={() => {
+        const next = !on;
+        setOn(next);
+        void window.river.voice.setSpeaker(next).catch(() => undefined);
+      }}
+    >
+      <SpeakerIcon />
+    </button>
   );
 }
 
