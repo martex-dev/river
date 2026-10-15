@@ -227,6 +227,8 @@ describe('linked devices', { timeout: 60_000 }, () => {
     await phone.link.join(offered.code, 'Phone');
     await until(() => desktop.link.status().state === 'request');
     await desktop.link.confirm();
+    await until(() => phone.link.status().state === 'review');
+    await phone.link.accept();
     await until(() => phone.link.status().state === 'linked');
     expect(phone.identity.get()?.riverId).toBe(me.riverId);
 
