@@ -15,6 +15,7 @@ type Pane = 'nav' | 'main';
 
 const root = document.documentElement;
 root.dataset.pane = 'main';
+if (/iPhone|iPad|iPod/.test(navigator.userAgent)) root.dataset.platform = 'ios';
 
 function show(pane: Pane): void {
   if (root.dataset.pane === pane) return;

@@ -1,0 +1,73 @@
+name: iOS
+
+# Builds River for iOS: the simulator app (started in an iPhone simulator,
+# where the client core must come up and open its encrypted storage) and an
+# unsigned device app packaged as an .ipa for sideloading. Release builds are
+# made by release.yml with the same steps.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and run on a simulator
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build the UI and the client core, sync the iOS project (pod install)
+        run: npm run sync:ios -w @river/mobile
+      - name: Build for the simulator
+        working-directory: apps/mobile/ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tail -40
+          test -d build/Build/Products/Debug-iphonesimulator/App.app
+      - name: Start River in a simulator
+        working-directory: apps/mobile/ios/App
+        run: |
+          device=$(xcrun simctl list devices available -j | node -e "const d=JSON.parse(require('fs').readFileSync(0)).devices;const all=Object.entries(d).filter(([k])=>k.includes('iOS')).flatMap(([,v])=>v);const p=all.find(x=>/^iPhone/.test(x.name));console.log(p.udid)")
+          xcrun simctl boot "$device"
+          xcrun simctl bootstatus "$device" -b
+          xcrun simctl install "$device" build/Build/Products/Debug-iphonesimulator/App.app
+          xcrun simctl launch "$device" io.github.martexdev.river -RiverSelfTest
+          for i in $(seq 1 60); do
+            xcrun simctl spawn "$device" log show --last 5m --predicate 'eventMessage CONTAINS "[River]"' --style compact > river.log 2>/dev/null || true
+            if grep -q "self-test storage" river.log; then break; fi
+            sleep 5
+          done
+          cat river.log
+          grep -q "client core ready" river.log
+          grep "self-test storage" river.log | grep -q '"state":"open"'
+          grep "self-test storage" river.log | grep -q '"protection":"os-keystore"'
+      - name: Build the device app (unsigned) and package it
+        working-directory: apps/mobile/ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tail -20
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qry River-ios-unsigned.ipa Payload
+          ls -la River-ios-unsigned.ipa
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: river-ios-unsigned
+          path: apps/mobile/ios/App/River-ios-unsigned.ipa
+          retention-days: 7

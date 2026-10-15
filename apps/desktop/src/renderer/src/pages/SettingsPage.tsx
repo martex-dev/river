@@ -1,3 +1,4 @@
+import { isPhone } from '../../../shared/platform.ts';
 import { LANGUAGES, useT } from '../i18n.ts';
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { BackupPanel } from '../components/BackupPanel.tsx';
@@ -85,7 +86,7 @@ export function SettingsOverlay(): ReactElement | null {
   const [askedForHosting, setAskedForHosting] = useState(false);
   // Hosting is for whoever runs a server; everyone else never sees it.
   // Phones never host: hosting runs on a computer.
-  const phone = useRiver((r) => r.info?.platform === 'android');
+  const phone = useRiver((r) => isPhone(r.info?.platform));
   const showHosting =
     !phone && (askedForHosting || tab === 'hosting' || host?.enabled || (host?.legacy ?? 'none') !== 'none');
 

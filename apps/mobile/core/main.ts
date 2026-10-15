@@ -100,6 +100,8 @@ const noHosting: IpcDeps['hosting'] = {
   },
 } as unknown as IpcDeps['hosting'];
 
+/** Android or iOS: the same core runs on both. */
+const PLATFORM = /iPhone|iPad|iPod/.test(navigator.userAgent) ? 'ios' : 'android';
 let foreground = true;
 /** A River link opened from a browser that the UI has not taken yet (the UI asks when it is ready). */
 let pendingDeepLink: DeepLink | null = null;
@@ -115,7 +117,7 @@ async function start(): Promise<void> {
   await cryptoReady;
   const userData = app.getPath('userData');
   const log = createFileLogger(join(userData, 'logs'));
-  log.info(`River ${app.getVersion()} starting on android`);
+  log.info(`River ${app.getVersion()} starting on ${PLATFORM}`);
 
   const settings = new SettingsStore(join(userData, 'settings.json'), log);
   const storage = new StorageService({
@@ -216,7 +218,7 @@ async function start(): Promise<void> {
   const appInfo = (): AppInfo => ({
     version: app.getVersion(),
     channel: channelOfVersion(app.getVersion()),
-    platform: 'android',
+    platform: PLATFORM,
     arch: 'arm64',
     isPackaged: true,
     versions: {
@@ -231,7 +233,7 @@ async function start(): Promise<void> {
     appInfo,
     settings,
     updates: null,
-    updatesDisabledReason: 'River for Android updates from its download page.',
+    updatesDisabledReason: 'River on phones updates from its download page.',
     devServerUrl: undefined,
     fetchBytes: serverFetch,
     storage,
@@ -263,7 +265,7 @@ async function start(): Promise<void> {
         hosting: () => noHosting.status(),
         homeServerEnabled: homeAccount.enabled(),
         version: app.getVersion(),
-        platform: 'android',
+        platform: PLATFORM,
       }),
     openLogs: async () => undefined,
   });
