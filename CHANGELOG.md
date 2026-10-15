@@ -6,6 +6,8 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**River for Android.**
+
 ### Security
 
 - **A sign-up link from outside River no longer creates an account by itself.**
@@ -19,6 +21,17 @@ All notable changes to River are documented here. The format follows
 
 ### Added
 
+- **River for Android** (Android 8.0+): the same River on your phone — the
+  desktop's own interface and client, so everything works the same way and
+  phones and computers talk to each other directly. Communities, channels,
+  voice, direct messages and calls, files, invites; "Open in River" links;
+  message notifications. Download `River-android.apk` from the release.
+- Phone layout: one pane at a time — the conversation, or the server and
+  channel list behind ☰; Back returns to the list.
+- On the phone, the same protections as the desktop: libsignal for direct
+  messages, sealed community content, the local database encrypted with
+  SQLCipher and its key held by the Android Keystore. River's data is excluded
+  from Android backups.
 - **Protocol v1 is frozen.** `packages/protocol/schema/v1.json` holds
   the JSON Schema of every wire message and `packages/protocol/vectors/identity-v1.json`
   the cross-language test vectors (identity keys, fingerprints, verification
@@ -36,6 +49,13 @@ All notable changes to River are documented here. The format follows
 - **Realtime reference** (docs/protocol/realtime.md): the `/v1/ws` handshake,
   every client and server event, rate limits, close codes and the binary voice
   relay frame format.
+
+### Changed
+
+- Servers accept requests from River's phone apps (CORS for River's own app
+  origins only; the API uses bearer tokens, never cookies).
+- The roadmap for Stage 2 now starts with Android (1.1.x), then phones day to
+  day (push, 1.2.x), one account on several devices (1.3.x) and iOS (1.4.x).
 
 ### Fixed
 

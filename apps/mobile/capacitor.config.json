@@ -1,0 +1,12 @@
+{
+  "appId": "io.github.martexdev.river",
+  "appName": "River",
+  "webDir": "dist/ui",
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

@@ -2,3 +2,5 @@
 *.png binary
 *.ico binary
 *.icns binary
+*.bat text eol=crlf
+*.jar binary
