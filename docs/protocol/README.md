@@ -1,13 +1,13 @@
 # River protocol
 
 Specification of the River client–server API and the end-to-end layer.
-Implemented incrementally from 0.0.2; the protocol is frozen as **v1** in 1.1.x
+Implemented incrementally from 0.0.2; the protocol is frozen as **v1**
 with cross-language test vectors for the desktop, iOS and Android clients.
 
 Planned documents:
 
-- [`stability.md`](stability.md) — **v1 is frozen**: stability rules, JSON Schema and cross-language test vectors (**1.1.0, implemented**)
-- [`realtime.md`](realtime.md) — the `/v1/ws` WebSocket: auth, events, limits, voice relay frames (**1.1.0, implemented**)
+- [`stability.md`](stability.md) — **v1 is frozen**: stability rules, JSON Schema and cross-language test vectors (**implemented**)
+- [`realtime.md`](realtime.md) — the `/v1/ws` WebSocket: auth, events, limits, voice relay frames (**implemented**)
 - `transport.md` — HTTPS/WSS, versioning, authentication (0.0.2–0.1.0)
 - [`accounts.md`](accounts.md) — River ID, keys, signed device lists, registration and sessions (**0.1.0, implemented**)
 - `messaging.md` — envelopes, prekeys, sessions, receipts (0.2.0)

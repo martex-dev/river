@@ -1,6 +1,6 @@
 # Protocol v1: stability and test vectors
 
-From 1.1.0 the River client–server protocol is **v1 and frozen**. Desktop, iOS
+The River client–server protocol is **v1 and frozen**. Desktop, iOS
 and Android clients, and every server, can rely on what is described here.
 
 ## What is frozen
@@ -23,7 +23,7 @@ fails CI until it is made deliberately.
    it cannot parse and logs a warning). **Request** schemas are strict today
    (an unknown field is a 400), so a client may send a new optional request
    field only to a server whose `GET /v1/version` lists the matching
-   `capabilities` entry (servers before 1.1 list none). Capability names are
+   `capabilities` entry (older servers list none). Capability names are
    append-only and never reused.
 2. **Never changed within v1:** the meaning, type or requiredness of an existing
    field, an endpoint's path or method, an error code's meaning, any value in

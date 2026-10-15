@@ -185,29 +185,20 @@ Each line is one PR; each version ships when its section is done.
 - [ ] Faster relayed-voice recovery after a server reconnect (field test: ~45 s gaps when every voice is relayed)
 - [ ] Re-send relay keys when a pair stays silent (field test: one pair never exchanged keys)
 
-## Stage 2 — 1.1 → 2.0.0 (started 2026-10-14)
+## Protocol freeze (ROADMAP 1.5.x, started early)
 
-### 1.1.x — Protocol freeze
+The freeze work was done ahead of its slot because the phone apps need a fixed
+contract. It does not change the version plan: Android is 1.1.x, phones day to
+day 1.2.x, devices 1.3.x, iOS 1.4.x (see ROADMAP).
 
 - [x] JSON Schema of every wire message frozen as `packages/protocol/schema/v1.json`, drift fails CI
 - [x] Cross-language test vectors for identity, fingerprints, words, safety numbers, signatures
 - [x] Stability rules (docs/protocol/stability.md)
 - [x] Test vectors for attachments (Signal attachment format), backup format and device-list signing
 - [x] Message-level spec docs: realtime events and voice relay frames (docs/protocol/realtime.md); community key epochs, groups and call signalling are specified in CRYPTOGRAPHY.md §4–§8 and docs/protocol/messaging.md (groups are pairwise, not sender keys — fixed in the docs)
-- [ ] Identity-bound call keys: today a server colluding with a community member who holds the community key could tamper with sealed call setup (CRYPTOGRAPHY.md §8)
 - [x] Capability list in `GET /v1/version` so clients can feature-detect new optional request fields (request schemas are strict)
+- [ ] Identity-bound call keys: today a server colluding with a community member who holds the community key could tamper with sealed call setup (CRYPTOGRAPHY.md §8)
 - [ ] Release-key hardening steps (protected `release` environment with manual approval) — needs the maintainer
-
-### 1.2.x — Devices (multi-device linking, transfer, revocation)
-
-- [ ] `PUT /v1/devices/list` with monotonic version; device approval by an existing device
-- [ ] Link a new device by QR/code; encrypted history transfer; key rotation and revocation tooling
-
-### 1.3.x iOS · 1.4.x Android — need maintainer decisions and tooling
-
-- [ ] iOS (SwiftUI, libsignal-swift) — needs macOS/Xcode builders in CI and an Apple Developer account
-- [ ] Android (Compose, libsignal-android) — needs the Android SDK in CI and a signing key
-- [ ] 1.5–1.7 mobile parity, push, calls; 1.8 consent-based remote assistance; 1.9 sync and hardening
 
 ### After 1.0.x (not started; see ROADMAP Stage 2)
 
