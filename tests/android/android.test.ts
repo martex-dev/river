@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -217,5 +217,30 @@ describe('River for Android on an emulator', { timeout: 180_000 }, () => {
     });
     const theirs = await alice.dm.action({ a: 'safetyNumber', peer: phoneId });
     expect(mine.digits).toBe(theirs.digits);
+  });
+
+  it('shows one pane at a time on the phone (screenshots for review)', async () => {
+    const shots = join(process.cwd(), 'android-screenshots');
+    mkdirSync(shots, { recursive: true });
+    // The UI was driven through window.river; load it again to show the account it now has.
+    await ui.reload();
+    await ui.waitForSelector('.workspace, .skin-gate', { timeout: 60_000 });
+    await ui.screenshot({ path: join(shots, '0-first-screen.png') });
+    if (await ui.locator('.skin-gate').isVisible()) {
+      await ui.getByRole('radio', { name: 'Specter skin' }).click();
+      await ui.getByRole('radio', { name: 'Specter palette' }).click();
+      await ui.getByRole('button', { name: 'Continue' }).click();
+      await ui.waitForSelector('.workspace', { timeout: 15_000 });
+    }
+    await sleep(1500);
+    await ui.screenshot({ path: join(shots, '1-conversation.png') });
+    await ui.click('.phone-menu');
+    await until(() => ui.evaluate("document.documentElement.dataset.pane === 'nav'"));
+    await sleep(500);
+    await ui.screenshot({ path: join(shots, '2-list.png') });
+    await ui.click('.channel__open');
+    await until(() => ui.evaluate("document.documentElement.dataset.pane === 'main'"));
+    await sleep(500);
+    await ui.screenshot({ path: join(shots, '3-channel.png') });
   });
 });

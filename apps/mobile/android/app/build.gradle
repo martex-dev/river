@@ -28,6 +28,8 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_21
         targetCompatibility JavaVersion.VERSION_21
+        // libsignal uses java.time and newer collections APIs.
+        coreLibraryDesugaringEnabled true
     }
     signingConfigs {
         if (keystoreFile) {
@@ -91,6 +93,7 @@ dependencies {
     implementation "androidx.webkit:webkit:$androidxWebkitVersion"
     // Same libsignal version as the desktop (apps/desktop/package.json).
     implementation 'org.signal:libsignal-android:0.105.0'
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     implementation 'net.zetetic:sqlcipher-android:4.19.0@aar'
     implementation 'androidx.sqlite:sqlite:2.7.0'
     implementation project(':capacitor-android')
