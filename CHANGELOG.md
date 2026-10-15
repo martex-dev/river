@@ -6,6 +6,29 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-15
+
+**Protocol and security: identity-bound calls, safer linking.**
+
+### Security
+
+- **Calls in communities are bound to each person's identity key.** Call setup
+  (the connection details that protect a call's encryption) from people you
+  have exchanged direct messages with must now carry a fresh signature by
+  their identity key — the one your safety numbers verify — as well as the
+  community key's seal. Before, the server together with another member could
+  in principle have tampered with it. For people you have not messaged
+  directly, calls are protected as before. People you message directly need
+  this version for community calls with you.
+- **"Is this you?" before linking.** A new device now shows whose account it
+  received (name, server, River ID) and links only after you confirm, so a
+  link code someone else made — for example one a web page opened — cannot
+  quietly put your new device into their account.
+- **Linking can no longer be blocked by strangers.** The device showing a link
+  code now reserves its mailbox on the server first; only that slot accepts the
+  new device's hello. Codes from older apps still work, a few at a time per
+  network address. Before, anyone could fill every linking slot on a server.
+
 ## [1.4.0] - 2026-10-15
 
 **Phones, day to day.**

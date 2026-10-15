@@ -57,6 +57,7 @@ export const IPC = {
   accountLinkConfirm: 'river:account:link-confirm',
   accountLinkJoin: 'river:account:link-join',
   accountLinkCancel: 'river:account:link-cancel',
+  accountLinkAccept: 'river:account:link-accept',
   accountLinkStatus: 'river:account:link-status',
   accountLinkChanged: 'river:account:link-changed',
   accountDevices: 'river:account:devices',
@@ -127,6 +128,8 @@ export type LinkProgress =
   | { state: 'request'; deviceName: string }
   /** The new device sent its request and waits for the other device. */
   | { state: 'joining' }
+  /** The new device received an account: whose it is, before it links (the person confirms). */
+  | { state: 'review'; displayName: string; riverId: string; server: string }
   | { state: 'linked' }
   | { state: 'failed'; message: string };
 
@@ -585,6 +588,8 @@ export interface RiverApi {
       /** On a new device: use a link code (the river://link?… link, or the code alone on River's server). */
       join(code: string, deviceName: string): Promise<Result<LinkProgress>>;
       cancel(): Promise<void>;
+      /** On the new device, after checking whose account it received ("Is this you?"). */
+      accept(): Promise<Result<LinkProgress>>;
       status(): Promise<LinkProgress>;
       onStatus(listener: (progress: LinkProgress) => void): () => void;
     };

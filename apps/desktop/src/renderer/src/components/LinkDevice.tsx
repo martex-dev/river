@@ -64,6 +64,47 @@ export function LinkThisDevice(props: {
     if (!res.ok) setError(res.message);
   };
 
+  if (progress.state === 'review') {
+    return (
+      <div className="lock__form" role="alertdialog" aria-labelledby="link-review">
+        <h1 className="onboarding__title" id="link-review">
+          Is this you?
+        </h1>
+        <p className="lock__text">
+          This device is about to join the River account of <strong>{progress.displayName}</strong> on{' '}
+          <strong>{progress.server}</strong> (River ID {progress.riverId.slice(0, 8)}…).
+        </p>
+        <p className="muted small">
+          Only continue if it is your own account. If someone sent you this code, cancel: they would see
+          everything you send from this device.
+        </p>
+        {error && (
+          <p className="field__error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="button-row">
+          <button className="btn btn--ghost" onClick={() => void window.river.account.link.cancel()}>
+            Cancel
+          </button>
+          <button
+            className="btn btn--primary"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              void window.river.account.link.accept().then((res) => {
+                setBusy(false);
+                if (!res.ok) setError(res.message);
+              });
+            }}
+          >
+            Yes, link this device <ArrowIcon size={16} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (progress.state === 'joining' || progress.state === 'linked') {
     return (
       <div className="lock__form" role="status" aria-live="polite">

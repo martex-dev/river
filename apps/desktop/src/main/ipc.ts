@@ -378,6 +378,7 @@ export function registerIpc(deps: IpcDeps): void {
     result(() => deps.link.join(z.string().max(2048).parse(code), deviceName)),
   );
   handle(IPC.accountLinkCancel, () => deps.link.cancel());
+  handle(IPC.accountLinkAccept, () => result(() => deps.link.accept()));
   handle(IPC.accountLinkStatus, () => deps.link.status());
   handle(IPC.accountDevices, () => result(() => deps.link.devices()));
   handle(IPC.accountRemoveDevice, (_e, deviceId) =>
