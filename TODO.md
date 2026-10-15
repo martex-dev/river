@@ -205,7 +205,7 @@ Each line is one PR; each version ships when its section is done.
 - [ ] Content-free push through UnifiedPush (optional, for people who run a distributor)
 - [ ] Call audio routing (speaker / earpiece / Bluetooth) on phones
 
-## Protocol freeze (ROADMAP 1.5.x, started early)
+## Protocol freeze and security (1.5.x, released in 1.5.0)
 
 The freeze work was done ahead of its slot because the phone apps need a fixed
 contract. Version plan (see ROADMAP): Android 1.1.x, devices 1.2.x, iPhone
@@ -217,7 +217,7 @@ contract. Version plan (see ROADMAP): Android 1.1.x, devices 1.2.x, iPhone
 - [x] Test vectors for attachments (Signal attachment format), backup format and device-list signing
 - [x] Message-level spec docs: realtime events and voice relay frames (docs/protocol/realtime.md); community key epochs, groups and call signalling are specified in CRYPTOGRAPHY.md §4–§8 and docs/protocol/messaging.md (groups are pairwise, not sender keys — fixed in the docs)
 - [x] Capability list in `GET /v1/version` so clients can feature-detect new optional request fields (request schemas are strict)
-- [x] Identity-bound call setup: community call signals signed with the sender's identity key and pinned (CRYPTOGRAPHY.md §8, 1.5.0)
+- [x] Identity-bound call setup: community call signals signed with the sender's identity key, required for people libsignal holds a key for, fresh within 10 minutes (CRYPTOGRAPHY.md §8, 1.5.0)
 - [ ] Release-key hardening steps (protected `release` environment with manual approval) — needs the maintainer
 
 ## 1.3.x — iPhone (released in 1.3.0)
