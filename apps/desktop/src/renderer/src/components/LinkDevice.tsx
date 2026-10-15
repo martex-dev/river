@@ -36,6 +36,17 @@ export function LinkThisDevice(props: {
   const [busy, setBusy] = useState(false);
 
   const failure = error ?? (progress.state === 'failed' ? progress.message : null);
+  // A whole link names the server whose account this device would join: show it before joining.
+  const linkServer = ((): string | null => {
+    const text = code.trim();
+    if (!text.startsWith('river:')) return null;
+    try {
+      const server = new URL(text).searchParams.get('s');
+      return server ? new URL(server).host : null;
+    } catch {
+      return null;
+    }
+  })();
   useEffect(() => {
     if (progress.state !== 'linked') return;
     void window.river.identity.get().then((identity) => {
@@ -102,6 +113,12 @@ export function LinkThisDevice(props: {
         <span className="field__label">Name for this device</span>
         <input type="text" maxLength={64} value={name} onChange={(e) => setName(e.target.value)} />
       </label>
+      {linkServer && (
+        <p className="card card--note small" role="note">
+          This code links to an account on <strong>{linkServer}</strong>. Only continue if you created it
+          yourself on your own device just now — never with a code someone sent you.
+        </p>
+      )}
       {failure && (
         <p className="field__error" role="alert">
           {failure}
@@ -158,7 +175,13 @@ export function DevicesPanel(): ReactElement {
     if (!res.ok) setError(res.message);
   };
   const remove = async (d: LinkedDevice): Promise<void> => {
-    if (!window.confirm(`Remove device ${d.deviceId}? It is signed out and gets no more messages.`)) return;
+    if (
+      !window.confirm(
+        `Remove device ${d.deviceId}? Your server signs it out at once and stops delivering to it. ` +
+          'It keeps what it already received; if it was lost or stolen, also leave and rejoin communities you care about.',
+      )
+    )
+      return;
     const res = await window.river.account.removeDevice(d.deviceId);
     if (res.ok) load();
     else setError(res.message);

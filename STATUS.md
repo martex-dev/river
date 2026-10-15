@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-15 · Current version: **1.3.0** · Stage 1 complete · Stage 2 under way: 1.1 Android, 1.2 linked devices, 1.3 iPhone_
+_Last updated: 2026-10-15 · Current version: **1.3.1** · Stage 1 complete · Stage 2 under way: 1.1 Android, 1.2 linked devices, 1.3 iPhone_
 
 ## Complete
 

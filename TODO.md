@@ -227,6 +227,10 @@ contract. Version plan (see ROADMAP): Android 1.1.x, devices 1.2.x, iPhone
 
 ## 1.2.x — Devices (ADR 0006, released in 1.2.0)
 
+- [x] Removed devices lose their open connection; device-list version floors (1.3.1, own review)
+- [ ] Link mailbox: let the offering device reserve the slot (an unauthenticated flood can fill all slots)
+- [ ] "Is this you?" step showing the account name before a new device adopts it
+
 - [x] Link a device with a code from a linked device (secret-bound hello and provisioning, HPKE)
 - [x] Signed device-list updates on the server (versioned, keys never change), removal signs a device out
 - [x] Direct messages to every device; sent messages copied to the account's other devices

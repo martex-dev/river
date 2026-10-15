@@ -67,6 +67,15 @@ sign in.
 - Works across desktop, Android and iOS with the shared client core.
 - The phone usually is the new device: a 16-character code is easy to type.
 
+**Removal, honestly.** Removing a device makes the server delete its session,
+keys and mail and close its open connection (1.3.1), and other people's apps
+stop encrypting to it once they see the newer signed device list (they never
+accept an older one). A removed device keeps what it already received and,
+like every linked device, holds the identity key and the community keys; River
+does not rotate those on removal. Against a lost or stolen device the server's
+cooperation is therefore needed, and leaving and rejoining sensitive
+communities rotates their keys.
+
 ## Limits
 
 - History is not copied (as Signal): new devices start with new messages.
