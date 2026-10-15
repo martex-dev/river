@@ -6,7 +6,12 @@ import { ReportDialog } from '../community/ui/Reports.tsx';
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { Celebrations } from '../community/fx.tsx';
 import { ConnectionBanner, NetworkWatcher } from '../community/ui/ConnectionBanner.tsx';
-import { AddFriendDialog, JoinInviteDialog, PasteToJoin } from '../community/ui/PasteToJoin.tsx';
+import {
+  AddFriendDialog,
+  JoinInviteDialog,
+  PasteToJoin,
+  SignupDialog,
+} from '../community/ui/PasteToJoin.tsx';
 import { StartScreen } from '../community/ui/StartScreen.tsx';
 import { ThreadPanel } from '../community/ui/Thread.tsx';
 import { useCommunity } from '../community/store.ts';
@@ -162,6 +167,8 @@ function Modals({ me }: { me: string }): ReactElement | null {
     }
     case 'join-invite':
       return <JoinInviteDialog link={modal.link} />;
+    case 'signup':
+      return <SignupDialog link={modal.link} />;
     case 'add-friend':
       return <AddFriendDialog riverId={modal.riverId} serverUrl={modal.serverUrl} />;
     case 'invite': {

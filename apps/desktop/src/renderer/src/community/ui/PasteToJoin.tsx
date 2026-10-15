@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react';
-import { looksLikeInvite, parseFriend } from '../../../../shared/invite-link.ts';
+import { looksLikeInvite, parseFriend, parseSignup } from '../../../../shared/invite-link.ts';
 import type { DeepLink } from '../../../../shared/ipc.ts';
 import { GREETING, sendFriendRequest } from '../../dm/friends.ts';
 import { useRiver } from '../../store.ts';
@@ -24,14 +24,12 @@ function offer(link: DeepLink): void {
       s.setModal({ kind: 'add-friend', riverId: friend.riverId, serverUrl: friend.serverUrl });
     return;
   }
-  // A sign-up link is for someone without an account yet.
+  // A sign-up link is for someone without an account yet. It names the server the account would
+  // live on, so a link from outside River only ever opens a question; nothing is created until
+  // the person confirms (a web page must not be able to pick your server for you).
   if (useRiver.getState().account.state === 'none') {
-    void window.river.account.redeemSignup(link.link).then((res) => {
-      if (res.ok) {
-        useRiver.getState().setAccount(res.value);
-        s.notify('Your account is ready');
-      } else s.notify(res.message, 'error');
-    });
+    useRiver.getState().navigate('communities');
+    s.setModal({ kind: 'signup', link: link.link });
   } else s.notify('That sign-up link is for a new account — you already have one.', 'error');
 }
 
@@ -99,6 +97,53 @@ export function JoinInviteDialog({ link }: { link: string }): ReactElement {
           }}
         >
           {busy ? 'Joining…' : 'Join community'}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/** Confirms a sign-up link from outside River, naming the server the account would be created on. */
+export function SignupDialog({ link }: { link: string }): ReactElement {
+  const s = useCommunity();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const parsed = parseSignup(link);
+  const host = parsed ? new URL(parsed.serverUrl).host : null;
+  return (
+    <Modal title="Create your account here?" onClose={() => s.setModal(null)}>
+      <p className="modal__text">
+        {host ? (
+          <>
+            This link would create your River account on <strong>{host}</strong>. That server will know your
+            River ID and which devices you use, never your messages. Continue only if you trust whoever sent
+            you this link.
+          </>
+        ) : (
+          'This sign-up link is not valid.'
+        )}
+      </p>
+      {error && <p className="field__error">{error}</p>}
+      <div className="modal__foot">
+        <button className="btn btn--link" onClick={() => s.setModal(null)}>
+          Not now
+        </button>
+        <button
+          className="btn btn--primary"
+          autoFocus
+          disabled={busy || !host}
+          onClick={() => {
+            setBusy(true);
+            void window.river.account.redeemSignup(link).then((res) => {
+              setBusy(false);
+              if (!res.ok) return setError(res.message);
+              useRiver.getState().setAccount(res.value);
+              s.notify('Your account is ready');
+              s.setModal(null);
+            });
+          }}
+        >
+          {busy ? 'Creating…' : 'Create account'}
         </button>
       </div>
     </Modal>
