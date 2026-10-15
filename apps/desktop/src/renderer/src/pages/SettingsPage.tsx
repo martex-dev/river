@@ -833,21 +833,33 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
 
 function SystemPanel({ settings }: { settings: Settings }): ReactElement {
   const updateSettings = useRiver((s) => s.updateSettings);
+  const phone = useRiver((r) => isPhone(r.info?.platform));
   return (
     <div className="panel">
       <h2 className="panel__title">System</h2>
-      <Toggle
-        label="Start River when I sign in"
-        hint="River opens quietly in the tray, so you get messages and calls right away."
-        checked={settings.system.startAtLogin}
-        onChange={(v) => void updateSettings({ system: { startAtLogin: v } })}
-      />
-      <Toggle
-        label="Keep River running when I close the window"
-        hint="River stays in the tray. Quit it from the tray icon's menu."
-        checked={settings.system.closeToTray}
-        onChange={(v) => void updateSettings({ system: { closeToTray: v } })}
-      />
+      {phone ? (
+        <Toggle
+          label="Lock River"
+          hint="Ask for your fingerprint, face or screen lock whenever River opens. Needs a screen lock on this phone. Your messages are encrypted on the phone either way; this keeps out someone holding your unlocked phone."
+          checked={settings.system.appLock}
+          onChange={(v) => void updateSettings({ system: { appLock: v } })}
+        />
+      ) : (
+        <>
+          <Toggle
+            label="Start River when I sign in"
+            hint="River opens quietly in the tray, so you get messages and calls right away."
+            checked={settings.system.startAtLogin}
+            onChange={(v) => void updateSettings({ system: { startAtLogin: v } })}
+          />
+          <Toggle
+            label="Keep River running when I close the window"
+            hint="River stays in the tray. Quit it from the tray icon's menu."
+            checked={settings.system.closeToTray}
+            onChange={(v) => void updateSettings({ system: { closeToTray: v } })}
+          />
+        </>
+      )}
       <ConnectionCheck />
     </div>
   );

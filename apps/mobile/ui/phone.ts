@@ -45,6 +45,60 @@ document.addEventListener(
   true,
 );
 
+/**
+ * Long-press opens River's menus (messages, channels, members…), which listen
+ * for "contextmenu". Android's WebView sends it on a long press; iOS does not,
+ * so River sends it there itself, and the tap that ends the press is ignored.
+ */
+if (root.dataset.platform === 'ios') {
+  let timer: number | undefined;
+  let start: { x: number; y: number; target: EventTarget | null } | null = null;
+  let swallowClick = false;
+  const cancel = (): void => {
+    if (timer !== undefined) window.clearTimeout(timer);
+    timer = undefined;
+    start = null;
+  };
+  document.addEventListener(
+    'touchstart',
+    (e) => {
+      if (e.touches.length !== 1) return cancel();
+      const t = e.touches[0]!;
+      start = { x: t.clientX, y: t.clientY, target: e.target };
+      timer = window.setTimeout(() => {
+        if (!start) return;
+        const { x, y, target } = start;
+        cancel();
+        swallowClick = true;
+        target?.dispatchEvent(
+          new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y }),
+        );
+      }, 500);
+    },
+    { passive: true },
+  );
+  document.addEventListener(
+    'touchmove',
+    (e) => {
+      const t = e.touches[0];
+      if (start && t && Math.hypot(t.clientX - start.x, t.clientY - start.y) > 10) cancel();
+    },
+    { passive: true },
+  );
+  document.addEventListener('touchend', cancel, { passive: true });
+  document.addEventListener('touchcancel', cancel, { passive: true });
+  document.addEventListener(
+    'click',
+    (e) => {
+      if (!swallowClick) return;
+      swallowClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    true,
+  );
+}
+
 const menu = document.createElement('button');
 menu.className = 'phone-menu';
 menu.type = 'button';

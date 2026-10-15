@@ -30,7 +30,7 @@ import { runMainDiagnostics } from '../../desktop/src/main/diagnostics.ts';
 import { PresenceTracker } from '../../desktop/src/main/presence.ts';
 import { ready as cryptoReady } from './shims/crypto.ts';
 import { native } from './native.ts';
-import { emit, inbound, onDeepLink, onLifecycle, ready, ui } from './host.ts';
+import { ask, emit, inbound, onDeepLink, onLifecycle, ready, ui } from './host.ts';
 import { parseDeepLink } from '../../desktop/src/main/deep-link.ts';
 import { IPC, type DeepLink } from '../../desktop/src/shared/ipc.ts';
 
@@ -120,6 +120,22 @@ async function start(): Promise<void> {
   log.info(`River ${app.getVersion()} starting on ${PLATFORM}`);
 
   const settings = new SettingsStore(join(userData, 'settings.json'), log);
+  // Settings → System → Lock River: the app shell asks for biometrics or the screen lock.
+  // Without a screen lock on the phone the setting cannot work, so it turns itself off.
+  let lockState: boolean | null = null;
+  const syncLock = (): void => {
+    const enabled = settings.get().system.appLock;
+    if (enabled === lockState) return;
+    lockState = enabled;
+    void ask<{ available: boolean }>('appLock', { enabled }).then(
+      (r) => {
+        if (enabled && !r?.available) settings.update({ system: { appLock: false } });
+      },
+      () => undefined,
+    );
+  };
+  settings.onChange(syncLock);
+  syncLock();
   const storage = new StorageService({
     dir: join(userData, 'data'),
     keystore,

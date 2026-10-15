@@ -124,3 +124,8 @@ html:is([data-platform='android'], [data-platform='ios']) textarea,
 html:is([data-platform='android'], [data-platform='ios']) select {
   font-size: 16px;
 }
+
+/* iOS: a long press opens River's menu, not the system's text callout. */
+html[data-platform='ios'] body {
+  -webkit-touch-callout: none;
+}

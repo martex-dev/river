@@ -33,6 +33,8 @@
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>River uses the microphone for voice channels and calls.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>River can ask for Face ID when it opens (Settings → System → Lock River).</string>
 	<key>NSCameraUsageDescription</key>
 	<string>River uses the camera for video in calls.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

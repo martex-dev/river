@@ -58,5 +58,6 @@ open class RiverBridgeViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(RiverCorePlugin())
         CoreHost.shared.start(in: self)
+        AppLock.shared.start(in: self)
     }
 }

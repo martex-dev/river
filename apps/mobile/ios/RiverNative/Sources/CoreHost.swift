@@ -167,6 +167,9 @@ public final class CoreHost: NSObject {
             answer(id, value: ["canceled": false, "filePath": path] as [String: Any])
         case "notify":
             notify(id: id, title: a["title"] as? String ?? "River", body: a["body"] as? String ?? "")
+        case "appLock":
+            let available = AppLock.shared.setEnabled((a["enabled"] as? Bool) ?? false)
+            answer(id, value: ["available": available] as [String: Any])
         default:
             answerError(id, "not available on this phone")
         }
