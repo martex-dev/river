@@ -197,11 +197,13 @@ Each line is one PR; each version ships when its section is done.
 - [ ] Permanent signing key (maintainer runs `python scripts/release/create-android-key.py`)
 - [ ] Voice in the Android WebView verified on a real phone (microphone permission, audio routing)
 
-### 1.2.x — Phones, day to day
+### 1.4.x — Phones, day to day (released in 1.4.0)
 
-- [ ] Content-free push (UnifiedPush, then FCM) and background reconnect
-- [ ] Share sheet, camera and photo picker, call audio routing, biometric lock
-- [ ] Touch: long-press message menu instead of hover actions
+- [x] Background reconnect: Stay connected (Android foreground service; no Google/Apple push)
+- [x] Calls with the screen off (Android "In a call" service), replies from notifications
+- [x] Share → River, biometric lock (Lock River), long-press menus, swipe between panes
+- [ ] Content-free push through UnifiedPush (optional, for people who run a distributor)
+- [ ] Call audio routing (speaker / earpiece / Bluetooth) on phones
 
 ## Protocol freeze (ROADMAP 1.5.x, started early)
 

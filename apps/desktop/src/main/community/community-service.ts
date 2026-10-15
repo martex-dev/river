@@ -139,6 +139,8 @@ interface Deps {
   createSocket?: (url: string) => WebSocket;
   /** Finds the server again if its address changes. */
   locator?: ServerLocator;
+  /** A call or voice channel started or ended (phones keep calls running with the screen off). */
+  onCallChange?: (inCall: boolean) => void;
   /** How this person appears (status and custom status), 1.0.17. */
   presence?: Pick<PresenceTracker, 'status' | 'custom'>;
 }
@@ -264,6 +266,13 @@ export class CommunityService {
   /** How often the app pings the server, and how long silence means a dead connection (tests shorten them). */
   heartbeatMs = 20_000;
   deadAfterMs = 50_000;
+  /**
+   * In a call a dead connection must be noticed fast: relayed voice and call signals stop with
+   * it. Field test 2026-10-14: a 45 s gap after the tunnel blipped. Ping more often and give up
+   * on a silent connection sooner while in a voice channel or a 1:1 call.
+   */
+  callHeartbeatMs = 4_000;
+  callDeadAfterMs = 10_000;
   private readonly listeners = new Set<(e: CommunityEvent) => void>();
   private readonly relayListeners = new Set<(from: string, payload: Uint8Array) => void>();
   private readonly rawListeners = new Set<(e: ServerEvent) => void>();
@@ -2679,12 +2688,29 @@ export class CommunityService {
     // One call at a time: joining a voice channel ends any 1:1 call's relay room.
     if (this.activeRoom) this.callRoom(null);
     this.lastVoiceState = null;
+    this.callChanged();
+  }
+
+  private callNotified = false;
+
+  private callChanged(): void {
+    const inCall = this.activeVoice !== null || this.activeRoom !== null;
+    if (inCall === this.callNotified) return;
+    this.callNotified = inCall;
+    this.deps.onCallChange?.(inCall);
+  }
+
+  /** Hang up from outside the window (the phone's "In a call" notification). */
+  hangUp(): void {
+    if (this.activeVoice === null && this.activeRoom === null) return;
+    this.emit({ t: 'hangUp' });
   }
 
   voiceLeave(): void {
     this.activeVoice = null;
     this.lastVoiceState = null;
     this.pendingSignals = [];
+    this.callChanged();
     // Offline: the server frees the seat by itself when the grace period ends.
     this.trySend({ t: 'voice.leave' });
   }
@@ -2719,6 +2745,7 @@ export class CommunityService {
   callRoom(room: string | null): void {
     this.activeRoom = room === null ? null : callRoomSchema.parse(room);
     this.trySend({ t: 'call.room', room: this.activeRoom });
+    this.callChanged();
   }
 
   /** After a reconnect: take the voice seat back, restore its state, then send held call setup. */
@@ -2939,15 +2966,24 @@ export class CommunityService {
   private startHeartbeat(socket: WebSocket): void {
     this.stopHeartbeat();
     this.lastHeard = Date.now();
+    let lastPing = Date.now();
+    const tick = Math.min(this.heartbeatMs, this.callHeartbeatMs);
     this.heartbeat = setInterval(() => {
       if (this.socket !== socket) return this.stopHeartbeat();
-      if (Date.now() - this.lastHeard > this.deadAfterMs) {
+      const inCall = this.activeVoice !== null || this.activeRoom !== null;
+      const now = Date.now();
+      const deadAfter = inCall ? Math.min(this.callDeadAfterMs, this.deadAfterMs) : this.deadAfterMs;
+      if (now - this.lastHeard > deadAfter) {
         this.deps.log.warn('Realtime connection went silent; reconnecting');
         this.dropSocket(socket);
         return;
       }
-      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ t: 'ping' }));
-    }, this.heartbeatMs);
+      const every = inCall ? Math.min(this.callHeartbeatMs, this.heartbeatMs) : this.heartbeatMs;
+      if (now - lastPing >= every - tick / 2) {
+        lastPing = now;
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ t: 'ping' }));
+      }
+    }, tick);
     this.heartbeat.unref?.();
   }
 

@@ -1,0 +1,89 @@
+package io.github.martexdev.river.core;
+
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.ServiceInfo;
+import android.os.Build;
+import android.os.IBinder;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.ServiceCompat;
+import androidx.core.content.ContextCompat;
+
+/**
+ * Settings → System → Stay connected (phones): keeps River's client core and
+ * its connection running while River is closed, so new messages and calls
+ * notify like any messaging app. Android shows a quiet, permanent "River is
+ * connected" notification while it runs; River never runs hidden.
+ *
+ * River does not use Google's or Apple's push services (they would need an
+ * account with them and would see when you get messages); this is the
+ * alternative, at some cost in battery.
+ */
+public final class RiverService extends Service {
+  private static final String CHANNEL = "connection";
+  private static final int NOTIFICATION = 0x52495645; // "RIVE"
+
+  /** The screen the permanent notification opens (set by MainActivity). */
+  public static Class<?> activityClass;
+
+  private static SharedPreferences prefs(Context context) {
+    return context.getSharedPreferences("river-background", Context.MODE_PRIVATE);
+  }
+
+  public static boolean enabled(Context context) {
+    return prefs(context).getBoolean("enabled", false);
+  }
+
+  /** Turns staying connected on or off, and starts or stops the service to match. */
+  public static void setEnabled(Context context, boolean on) {
+    prefs(context).edit().putBoolean("enabled", on).apply();
+    Intent intent = new Intent(context, RiverService.class);
+    if (on) ContextCompat.startForegroundService(context, intent);
+    else context.stopService(intent);
+  }
+
+  @Override
+  public void onCreate() {
+    super.onCreate();
+    NotificationManager nm = getSystemService(NotificationManager.class);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
+      NotificationChannel channel =
+          new NotificationChannel(CHANNEL, "Staying connected", NotificationManager.IMPORTANCE_MIN);
+      channel.setDescription("Shown while River stays connected in the background");
+      channel.setShowBadge(false);
+      nm.createNotificationChannel(channel);
+    }
+    NotificationCompat.Builder b =
+        new NotificationCompat.Builder(this, CHANNEL)
+            .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
+            .setContentTitle("River is connected")
+            .setContentText("New messages arrive while River is closed. Turn off in Settings → System.")
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_MIN);
+    if (activityClass != null) {
+      Intent open = new Intent(this, activityClass).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+      b.setContentIntent(PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE));
+    }
+    Notification notification = b.build();
+    int type = Build.VERSION.SDK_INT >= 34 ? ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING : 0;
+    ServiceCompat.startForeground(this, NOTIFICATION, notification, type);
+    CoreHost.get(this).start();
+  }
+
+  @Override
+  public int onStartCommand(Intent intent, int flags, int startId) {
+    CoreHost.get(this).start();
+    return START_STICKY;
+  }
+
+  @Override
+  public IBinder onBind(Intent intent) {
+    return null;
+  }
+}

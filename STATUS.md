@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-15 · Current version: **1.3.1** · Stage 1 complete · Stage 2 under way: 1.1 Android, 1.2 linked devices, 1.3 iPhone_
+_Last updated: 2026-10-15 · Current version: **1.4.0** · Stage 1 complete · Stage 2 under way: 1.1 Android, 1.2 linked devices, 1.3 iPhone, 1.4 phones day to day_
 
 ## Complete
 
@@ -60,6 +60,7 @@ _Last updated: 2026-10-15 · Current version: **1.3.1** · Stage 1 complete · S
   current version keeps running. Automatic rollback _after_ a successfully
   installed update that then fails to start is not implemented (TODO).
 - **macOS updates**: notify-and-download only until an Apple Developer ID exists.
+- **Phones, day to day** (1.4.0): Stay connected on Android (a visible foreground service), calls that keep going with the screen off, Share → River, replies from notifications, swipe navigation.
 - **River for iPhone** (1.3.0, `apps/mobile/ios`): the shared client core in its own WKWebView with libsignal (LibSignalClient), SQLCipher and the Keychain; built and started in a simulator in CI; shipped as an unsigned .ipa for sideloading until there is an Apple developer account.
 - **Linked devices** (1.2.0, ADR 0006): one account on several devices — link with a code or a QR code, see and remove devices; direct messages reach every device.
 - **River for Android** (1.1.0, `apps/mobile`): built and tested on an emulator in CI

@@ -16,9 +16,13 @@ interface RiverCorePlugin {
 const Core = registerPlugin<RiverCorePlugin>('RiverCore');
 
 const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+/** Something shared to River while nothing listened yet (River was opened by the share). */
+let unclaimedShare: unknown[] | null = null;
 void Core.addListener('event', ({ json }) => {
   const { channel, args } = decodeWire<{ channel: string; args: unknown[] }>(json);
-  for (const l of listeners.get(channel) ?? []) l(...args);
+  const set = listeners.get(channel);
+  if (channel === 'river:app:share' && !set?.size) unclaimedShare = args;
+  for (const l of set ?? []) l(...args);
 });
 
 const api = createRiverApi({
@@ -35,6 +39,11 @@ const api = createRiverApi({
     const set = listeners.get(channel) ?? new Set();
     set.add(listener);
     listeners.set(channel, set);
+    if (channel === 'river:app:share' && unclaimedShare) {
+      const args = unclaimedShare;
+      unclaimedShare = null;
+      queueMicrotask(() => listener(...args));
+    }
     return () => {
       set.delete(listener);
     };

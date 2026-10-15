@@ -25,6 +25,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Share → River from other apps: text, links, photos, files. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+
             <!-- "Open in River" on invite pages: river://open?link=…; device link QR codes: river://link?… -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -35,6 +47,23 @@
             </intent-filter>
 
         </activity>
+
+        <!-- Settings → System → Stay connected: River's connection while River is closed. -->
+        <service
+            android:name=".core.RiverService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging" />
+
+        <!-- Reply from a message notification (River's own notifications only). -->
+        <receiver
+            android:name=".core.NotificationReplyReceiver"
+            android:exported="false" />
+
+        <!-- Calls and voice channels keep running with the screen off (an "In a call" notification). -->
+        <service
+            android:name=".core.CallService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -56,6 +85,11 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Message notifications (Android 13+ asks first). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Stay connected (optional): a visible foreground service for messages. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <!-- Calls: the microphone keeps working with the screen off, while "In a call" shows. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />

@@ -16,11 +16,28 @@ export function startMessageNotifications(deps: {
   window: BrowserWindow;
 }): () => void {
   const { community, window } = deps;
-  const show = (title: string, body: string, mention: boolean, onClick: () => void): void => {
+  const show = (
+    title: string,
+    body: string,
+    mention: boolean,
+    onClick: () => void,
+    onReply?: (text: string) => void,
+  ): void => {
     if (window.isDestroyed() || window.isFocused() || !Notification.isSupported()) return;
     // Do Not Disturb or quiet hours: nothing pops up.
     if (silenced(deps.settings())) return;
-    const notification = new Notification({ title, body, silent: true });
+    const notification = new Notification({
+      title,
+      body,
+      silent: true,
+      ...(onReply ? { hasReply: true, replyPlaceholder: 'Reply' } : {}),
+    });
+    if (onReply) {
+      notification.on('reply', (_e, reply) => {
+        const text = reply.trim();
+        if (text) onReply(text.slice(0, 4000));
+      });
+    }
     notification.on('click', () => {
       if (window.isDestroyed()) return;
       if (window.isMinimized()) window.restore();
@@ -48,7 +65,14 @@ export function startMessageNotifications(deps: {
             : m.text
           : 'Sent a file'
         : 'New direct message';
-    show(title, body, true, () => deps.dm.focus(m.peer));
+    // Reply right from the notification (phones; macOS), sent end-to-end encrypted like any message.
+    show(
+      title,
+      body,
+      true,
+      () => deps.dm.focus(m.peer),
+      (text) => void deps.dm.action({ a: 'send', peer: m.peer, text }).catch(() => undefined),
+    );
   });
   const offEvents = community.onEvent((event) => {
     if (event.t !== 'eventStarting') return;

@@ -32,31 +32,43 @@ public final class AppLock {
 
   public AppLock(AppCompatActivity activity) {
     this.activity = activity;
-    this.prefs = activity.getSharedPreferences("river-app-lock", Context.MODE_PRIVATE);
+    this.prefs = prefsOf(activity);
+    current = this;
   }
 
-  public boolean available() {
-    return BiometricManager.from(activity).canAuthenticate(AUTHENTICATORS) == BiometricManager.BIOMETRIC_SUCCESS;
+  private static SharedPreferences prefsOf(Context context) {
+    return context.getSharedPreferences("river-app-lock", Context.MODE_PRIVATE);
+  }
+
+  public static boolean available(Context context) {
+    return BiometricManager.from(context).canAuthenticate(AUTHENTICATORS) == BiometricManager.BIOMETRIC_SUCCESS;
+  }
+
+  /** Last screen that was open, so turning the lock on does not lock it straight away. */
+  private static AppLock current;
+
+  /** From the client core: Settings → System → Lock River. Returns whether the phone can do it. */
+  public static boolean setEnabled(Context context, boolean enabled) {
+    boolean can = available(context);
+    SharedPreferences prefs = prefsOf(context);
+    boolean was = prefs.getBoolean("enabled", false);
+    prefs.edit().putBoolean("enabled", enabled && can).apply();
+    AppLock lock = current;
+    if (lock != null) {
+      if (!enabled || !can) {
+        lock.unlocked = true;
+        lock.hide();
+      } else if (!was) {
+        // Switched on just now, by someone using River: no need to ask straight away.
+        lock.unlocked = true;
+      }
+      // Already on (the core repeats the setting when it starts): the lock stays as it is.
+    }
+    return can;
   }
 
   public boolean enabled() {
     return prefs.getBoolean("enabled", false);
-  }
-
-  /** Returns whether the phone can do it (a screen lock is set up). */
-  public boolean setEnabled(boolean enabled) {
-    boolean can = available();
-    boolean was = enabled();
-    prefs.edit().putBoolean("enabled", enabled && can).apply();
-    if (!enabled || !can) {
-      unlocked = true;
-      hide();
-    } else if (!was) {
-      // Switched on just now, by someone using River: no need to ask straight away.
-      unlocked = true;
-    }
-    // Already on (the core repeats the setting when it starts): the lock stays as it is.
-    return can;
   }
 
   /** Activity came to the front. */

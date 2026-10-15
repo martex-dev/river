@@ -13,6 +13,8 @@ export const IPC = {
   appInfo: 'river:app:info',
   appTakeDeepLink: 'river:app:take-deep-link',
   appDeepLink: 'river:app:deep-link',
+  /** Something shared to River from another app (phones). */
+  appShare: 'river:app:share',
   settingsGet: 'river:settings:get',
   settingsUpdate: 'river:settings:update',
   updatesStatus: 'river:updates:status',
@@ -460,6 +462,8 @@ export type CommunityEvent =
       states: Record<string, VoiceStateView>;
     }
   | { t: 'voiceDisconnect'; moveTo?: string }
+  /** Hang up the current call or voice channel (from the phone's "In a call" notification). */
+  | { t: 'hangUp' }
   /** A community's events changed (fetch them again), or one you are interested in starts now. */
   | { t: 'events'; communityId: string }
   | { t: 'emojis'; communityId: string }
@@ -508,6 +512,8 @@ export interface RiverApi {
     /** Takes the pending link (only if it is of `kind`, when given; others stay pending). */
     takeDeepLink(kind?: DeepLink['kind']): Promise<DeepLink | null>;
     onDeepLink(listener: (link: DeepLink) => void): () => void;
+    /** Text and files shared to River from another app (phones; "Share → River"). */
+    onShare(listener: (content: SharedContent) => void): () => void;
     /** Colours of the window buttons area (Windows/Linux), following the theme. */
     setTitleBar(colors: { color: string; symbol: string }): Promise<void>;
   };
@@ -691,6 +697,12 @@ export interface HostStatus extends HostRuntime {
   yours: boolean;
   /** River Host, the separate host from 1.0.8, is set up ('installed') or running on this PC. */
   legacy: 'none' | 'installed' | 'running';
+}
+
+/** What another app shared to River. Nothing is sent until the person picks where and sends. */
+export interface SharedContent {
+  text: string;
+  files: Array<{ name: string; type: string; data: Uint8Array }>;
 }
 
 /** A River link the operating system handed to River (river://open?link=…, river://link?…). */

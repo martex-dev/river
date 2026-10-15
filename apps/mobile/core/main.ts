@@ -138,6 +138,16 @@ async function start(): Promise<void> {
   };
   settings.onChange(syncLock);
   syncLock();
+  // Settings → System → Stay connected (Android): the shell runs a visible foreground service.
+  let backgroundState: boolean | null = null;
+  const syncBackground = (): void => {
+    const enabled = settings.get().system.background;
+    if (enabled === backgroundState || PLATFORM !== 'android') return;
+    backgroundState = enabled;
+    void ask('background', { enabled }).catch(() => undefined);
+  };
+  settings.onChange(syncBackground);
+  syncBackground();
   const storage = new StorageService({
     dir: join(userData, 'data'),
     keystore,
@@ -180,6 +190,17 @@ async function start(): Promise<void> {
     log,
     locator,
     presence,
+    // Android: an "In a call" foreground service keeps the call running with the screen off; its
+    // Hang up button answers the open ask.
+    onCallChange: (inCall) => {
+      if (PLATFORM !== 'android') return;
+      void ask<string>('call', { active: inCall }).then(
+        (how) => {
+          if (how === 'hangup') community.hangUp();
+        },
+        () => undefined,
+      );
+    },
   });
   let lastCustom = JSON.stringify(presence.custom());
   presence.onChange(() => {

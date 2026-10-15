@@ -68,6 +68,7 @@ async function person(
   riverId: string;
   sockets: FreezableSocket[];
   events: CommunityEvent[];
+  calls: boolean[];
 }> {
   const local = migrateDatabase(join(dir, `${name}.db`), newDatabaseKey(), CLIENT_MIGRATIONS).db;
   locals.push(local);
@@ -81,7 +82,9 @@ async function person(
   const created = identity.create(name);
   await account.register(SERVER);
   const sockets: FreezableSocket[] = [];
+  const calls: boolean[] = [];
   const community = new CommunityService({
+    onCallChange: (inCall) => calls.push(inCall),
     db: () => local,
     account,
     identity,
@@ -98,7 +101,7 @@ async function person(
   services.push(community);
   const events: CommunityEvent[] = [];
   community.onEvent((e) => events.push(e));
-  return { community, riverId: created.riverId, sockets, events };
+  return { community, riverId: created.riverId, sockets, events, calls };
 }
 
 const online = (c: CommunityService) => () => expect(c.connectionState()).toBe('online');
@@ -239,8 +242,14 @@ describe('voice survives dropped connections', () => {
     alice.community.relaySend([bob.riverId], new Uint8Array([8]));
     await vi.waitFor(() => expect(got.at(-1)).toEqual({ from: alice.riverId, payload: [8] }));
 
+    // The phone shell hears when the call starts; its Hang up reaches the window.
+    expect(bob.calls).toEqual([true]);
+    bob.community.hangUp();
+    expect(bob.events.at(-1)).toEqual({ t: 'hangUp' });
+
     // After hanging up nothing more is accepted for Bob.
     bob.community.callRoom(null);
+    expect(bob.calls).toEqual([true, false]);
     await new Promise((r) => setTimeout(r, 100));
     alice.community.relaySend([bob.riverId], new Uint8Array([9]));
     await new Promise((r) => setTimeout(r, 300));

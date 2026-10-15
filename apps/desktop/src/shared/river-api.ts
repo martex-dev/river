@@ -5,6 +5,7 @@ import {
   type AccountStatus,
   type CommunityEvent,
   type DeepLink,
+  type SharedContent,
   type HostStatus,
   type LinkProgress,
   type RiverApi,
@@ -31,6 +32,7 @@ export function createRiverApi(t: RiverTransport): RiverApi {
       takeDeepLink: (kind) => t.invoke(IPC.appTakeDeepLink, kind),
       setTitleBar: (colors) => t.invoke(IPC.appTitleBar, colors),
       onDeepLink: (listener) => t.on(IPC.appDeepLink, (...args) => listener(args[0] as DeepLink)),
+      onShare: (listener) => t.on(IPC.appShare, (...args) => listener(args[0] as SharedContent)),
     },
     settings: {
       get: () => t.invoke(IPC.settingsGet),
