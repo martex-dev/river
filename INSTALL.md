@@ -70,9 +70,19 @@ macOS / Linux: `shasum -a 256 <file>` or `sha256sum <file>`
 
 Compare the result with the line for that file in `SHA256SUMS`.
 
-## iOS and Android
+## Android and iPhone
 
-Mobile apps arrive with River 2.0 (Stage 2). See the [roadmap](ROADMAP.md).
+- **Android 8 or newer:** download `River-android.apk` from the latest release
+  on the phone and open it (Android asks once to allow installing from the
+  browser).
+- **iPhone (iOS 16 or newer):** the release has an unsigned
+  `River-ios-unsigned.ipa`, which you install with a free Apple ID through
+  Sideloadly or AltStore.
+
+Step by step, including updates: [docs/mobile/README.md](docs/mobile/README.md).
+To use the same account on your computer and your phone, link the phone in
+Settings → Account → Devices → Link a new device (scan the QR code with the
+phone's camera).
 
 ## Uninstalling
 
