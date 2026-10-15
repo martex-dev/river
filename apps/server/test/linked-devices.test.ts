@@ -154,6 +154,52 @@ describe('linked devices (1.3)', () => {
     expect(dropSelf.statusCode).toBe(400);
   });
 
+  it('the device showing the code reserves the mailbox; strangers cannot crowd out or take slots', async () => {
+    const user = await registerUser(app);
+    const other = await registerUser(app);
+    const hello = {
+      authKey: b64(generateKeyPair().publicKey),
+      registrationId: 777,
+      linkKey: b64(generateKeyPair().publicKey),
+      deviceName: 'Test phone',
+    };
+    const mac = 'A'.repeat(43);
+    const id = 'ReServedSlot0123456789';
+    const reserve = (token: string, slot = id) =>
+      app.inject({ method: 'POST', url: `/v1/link/${slot}/reserve`, headers: auth(token) });
+    expect((await app.inject({ method: 'POST', url: `/v1/link/${id}/reserve` })).statusCode).toBe(401);
+    expect((await reserve(user.token)).statusCode).toBe(201);
+    expect((await reserve(user.token)).statusCode).toBe(200);
+    expect((await reserve(other.token)).statusCode).toBe(409);
+    // The hello goes into the reserved slot, once.
+    expect(
+      (await app.inject({ method: 'PUT', url: `/v1/link/${id}`, payload: { hello, mac } })).statusCode,
+    ).toBe(201);
+    expect(
+      (await app.inject({ method: 'PUT', url: `/v1/link/${id}`, payload: { hello, mac } })).statusCode,
+    ).toBe(409);
+    expect((await app.inject({ method: 'GET', url: `/v1/link/${id}` })).json()).toMatchObject({ hello });
+    // An account holds a few reservations at most.
+    expect((await reserve(user.token, 'ReServedSlot0123456781')).statusCode).toBe(201);
+    expect((await reserve(user.token, 'ReServedSlot0123456782')).statusCode).toBe(201);
+    expect((await reserve(user.token, 'ReServedSlot0123456783')).statusCode).toBe(429);
+    // Unreserved codes (older apps) are capped per network address.
+    for (const n of [0, 1, 2]) {
+      const res = await app.inject({
+        method: 'PUT',
+        url: `/v1/link/OpenSlot0000000000000${n}`,
+        payload: { hello, mac },
+      });
+      expect(res.statusCode).toBe(201);
+    }
+    const crowd = await app.inject({
+      method: 'PUT',
+      url: '/v1/link/OpenSlot00000000000009',
+      payload: { hello, mac },
+    });
+    expect(crowd.statusCode).toBe(429);
+  });
+
   it('carries the hello and the sealed provisioning message through the link mailbox, once each', async () => {
     const user = await registerUser(app);
     const phone = generateKeyPair();

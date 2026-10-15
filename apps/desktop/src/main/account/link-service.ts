@@ -239,6 +239,14 @@ export class LinkService {
     const id = mailboxId(secret);
     const expires = Date.now() + TTL_MS;
     this.offer = { secret, id, serverUrl: status.serverUrl, expires, hello: null };
+    // Reserve the mailbox (servers from 1.3.1), so nobody else can take or crowd out the slot.
+    await this.deps
+      .requestJson(
+        `${status.serverUrl}${API_PREFIX}/link/${id}/reserve`,
+        { method: 'POST', token: this.deps.account.sessionToken() ?? undefined },
+        z.unknown(),
+      )
+      .catch(() => undefined);
     this.set({
       state: 'offering',
       code: formatLinkCode(status.serverUrl, secret),

@@ -6,6 +6,13 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- **Linking can no longer be blocked by strangers.** The device showing a link
+  code now reserves its mailbox on the server first; only that slot accepts the
+  new device's hello. Codes from older apps still work, a few at a time per
+  network address. Before, anyone could fill every linking slot on a server.
+
 ## [1.3.0] - 2026-10-15
 
 **River for iPhone.**
