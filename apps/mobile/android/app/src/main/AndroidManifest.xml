@@ -36,6 +36,12 @@
 
         </activity>
 
+        <!-- Settings → System → Stay connected: River's connection while River is closed. -->
+        <service
+            android:name=".core.RiverService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -56,6 +62,9 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Message notifications (Android 13+ asks first). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Stay connected (optional): a visible foreground service for messages. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />

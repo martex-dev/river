@@ -21,8 +21,6 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
@@ -40,6 +38,10 @@ import org.json.JSONObject;
  * RiverCorePlugin, which hands calls over here; replies and events come back
  * the same way. This keeps the desktop's split: the UI is untrusted and never
  * sees keys, the core validates every call.
+ *
+ * There is one core per app process. It lives as long as River's screen is
+ * open, or — with "Stay connected" on — as long as {@link RiverService} runs,
+ * so messages keep arriving when River is closed.
  */
 public final class CoreHost {
   private static final String TAG = "RiverCore";
@@ -48,6 +50,8 @@ public final class CoreHost {
   private static final String CHANNEL = "messages";
   public static final String EXTRA_NOTIFICATION = "river.notification";
 
+  private static CoreHost instance;
+
   /** Where replies and events go (the UI's plugin). */
   public interface Listener {
     void onReply(int id, String payload);
@@ -55,74 +59,76 @@ public final class CoreHost {
     void onEvent(String payload);
   }
 
-  private final AppCompatActivity activity;
+  /** What only River's open screen can do: pickers, permission prompts, dialogs. */
+  public interface Screen {
+    AppCompatActivity activity();
+
+    /** Asks where to save `name`; `done` gets the chosen document, or null. */
+    void saveDocument(String name, java.util.function.Consumer<Uri> done);
+
+    /** Asks for permission to post notifications, then runs `after`. */
+    void requestNotifications(Runnable after);
+
+    /** The activity River's notifications open. */
+    Class<?> activityClass();
+  }
+
+  public static synchronized CoreHost get(Context context) {
+    if (instance == null) instance = new CoreHost(context.getApplicationContext());
+    return instance;
+  }
+
+  private final Context context;
   private final Handler main = new Handler(Looper.getMainLooper());
   private final ArrayDeque<String> queue = new ArrayDeque<>();
   private final Map<Integer, Integer> notificationAsks = new HashMap<>();
-  private final ActivityResultLauncher<Intent> saveLauncher;
-  private final ActivityResultLauncher<String> notificationPermission;
   private RiverNative nativeInterface;
-  private AppLock appLock;
   private WebView web;
   private boolean ready = false;
   private volatile Listener listener;
-  private int pendingSaveAsk = -1;
-  private String pendingSaveName = "";
+  private Screen screen;
   private int nextNotification = 1;
-  private Runnable afterPermission;
 
-  /** Call from onCreate, before the activity starts (activity results are registered here). */
-  public CoreHost(AppCompatActivity activity) {
-    this.activity = activity;
-    saveLauncher =
-        activity.registerForActivityResult(
-            new ActivityResultContracts.StartActivityForResult(),
-            result -> {
-              int ask = pendingSaveAsk;
-              pendingSaveAsk = -1;
-              if (ask < 0) return;
-              Uri uri = result.getData() == null ? null : result.getData().getData();
-              if (result.getResultCode() != android.app.Activity.RESULT_OK || uri == null) {
-                answer(ask, json("canceled", true));
-                return;
-              }
-              String path = nativeInterface.files.saveTarget(uri, pendingSaveName);
-              answer(ask, json("canceled", false, "filePath", path));
-            });
-    notificationPermission =
-        activity.registerForActivityResult(
-            new ActivityResultContracts.RequestPermission(),
-            granted -> {
-              Runnable next = afterPermission;
-              afterPermission = null;
-              if (next != null) next.run();
-            });
-  }
-
-  public void setAppLock(AppLock lock) {
-    this.appLock = lock;
+  private CoreHost(Context context) {
+    this.context = context;
   }
 
   public void setListener(Listener listener) {
     this.listener = listener;
   }
 
+  public void attach(Screen screen) {
+    this.screen = screen;
+  }
+
+  public void detach(Screen screen) {
+    if (this.screen == screen) this.screen = null;
+  }
+
+  public boolean running() {
+    return web != null;
+  }
+
+  /** Starts the core if it is not running. Main thread only. */
   public void start() {
+    if (web != null) return;
     try {
-      nativeInterface = new RiverNative(activity);
+      nativeInterface = new RiverNative(context);
     } catch (java.io.IOException e) {
       fatal("River could not open its storage: " + e.getMessage());
       return;
     }
     WebViewAssetLoader assets =
         new WebViewAssetLoader.Builder()
-            .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(activity))
+            .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(context))
             .build();
     // Debug builds only: lets the emulator test inspect the core (release builds never allow it).
-    if ((activity.getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+    if ((context.getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
       WebView.setWebContentsDebuggingEnabled(true);
     }
-    web = new WebView(activity);
+    ready = false;
+    queue.clear();
+    web = new WebView(context);
     WebSettings s = web.getSettings();
     s.setJavaScriptEnabled(true);
     s.setDomStorageEnabled(false);
@@ -150,11 +156,13 @@ public final class CoreHost {
     createChannel();
   }
 
-  public void destroy() {
-    if (web != null) {
-      web.destroy();
-      web = null;
-    }
+  /** Stops the core (River's screen closed and it does not stay connected). */
+  public void stop() {
+    if (web == null) return;
+    web.destroy();
+    web = null;
+    ready = false;
+    queue.clear();
   }
 
   // ---- UI → core ----
@@ -261,37 +269,45 @@ public final class CoreHost {
             Uri uri = Uri.parse(a.getString("url"));
             String scheme = uri.getScheme();
             if ("https".equals(scheme) || "http".equals(scheme)) {
-              activity.startActivity(new Intent(Intent.ACTION_VIEW, uri));
+              context.startActivity(new Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             }
             answer(id, (Object) null);
             break;
           }
         case "clipboard":
           {
-            ClipboardManager cb = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
+            ClipboardManager cb = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
             if (cb != null) cb.setPrimaryClip(ClipData.newPlainText("River", a.optString("text")));
             answer(id, (Object) null);
             break;
           }
         case "saveFile":
           {
-            pendingSaveAsk = id;
-            pendingSaveName = a.optString("name", "River file");
-            Intent intent =
-                new Intent(Intent.ACTION_CREATE_DOCUMENT)
-                    .addCategory(Intent.CATEGORY_OPENABLE)
-                    .setType("application/octet-stream")
-                    .putExtra(Intent.EXTRA_TITLE, pendingSaveName);
-            saveLauncher.launch(intent);
+            Screen s = screen;
+            String name = a.optString("name", "River file");
+            if (s == null) {
+              answer(id, json("canceled", true));
+              break;
+            }
+            s.saveDocument(
+                name,
+                uri -> {
+                  if (uri == null) answer(id, json("canceled", true));
+                  else answer(id, json("canceled", false, "filePath", nativeInterface.files.saveTarget(uri, name)));
+                });
             break;
           }
         case "notify":
           notify(id, a.optString("title", "River"), a.optString("body", ""));
           break;
         case "appLock":
+          answer(id, json("available", AppLock.setEnabled(context, a.optBoolean("enabled", false))));
+          break;
+        case "background":
           {
-            boolean available = appLock != null && appLock.setEnabled(a.optBoolean("enabled", false));
-            answer(id, json("available", available));
+            boolean on = a.optBoolean("enabled", false);
+            RiverService.setEnabled(context, on);
+            answer(id, json("running", on));
             break;
           }
         default:
@@ -306,12 +322,19 @@ public final class CoreHost {
     JSONArray buttons = a.optJSONArray("buttons");
     int count = buttons == null ? 0 : Math.min(buttons.length(), 3);
     int cancelId = a.optInt("cancelId", -1);
+    int cancel = cancelId < 0 ? Math.max(0, count - 1) : cancelId;
+    Screen s = screen;
+    if (s == null) {
+      // No screen to ask on: the safe answer is "cancel".
+      answer(id, json("response", cancel));
+      return;
+    }
     String detail = a.optString("detail", "");
     AlertDialog.Builder b =
-        new AlertDialog.Builder(activity)
+        new AlertDialog.Builder(s.activity())
             .setTitle(a.optString("title", "River"))
             .setMessage(a.optString("message", "") + (detail.isEmpty() ? "" : "\n\n" + detail))
-            .setOnCancelListener(d -> answer(id, json("response", cancelId < 0 ? Math.max(0, count - 1) : cancelId)));
+            .setOnCancelListener(d -> answer(id, json("response", cancel)));
     if (count == 0) {
       b.setPositiveButton(android.R.string.ok, (d, w) -> answer(id, json("response", 0)));
     }
@@ -323,42 +346,45 @@ public final class CoreHost {
 
   private void createChannel() {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
-    NotificationManager nm = activity.getSystemService(NotificationManager.class);
+    NotificationManager nm = context.getSystemService(NotificationManager.class);
     if (nm == null) return;
-    NotificationChannel channel =
-        new NotificationChannel(CHANNEL, "Messages", NotificationManager.IMPORTANCE_HIGH);
+    NotificationChannel channel = new NotificationChannel(CHANNEL, "Messages", NotificationManager.IMPORTANCE_HIGH);
     channel.setDescription("New messages and mentions while River is in the background");
     nm.createNotificationChannel(channel);
   }
 
+  private boolean mayNotify() {
+    return Build.VERSION.SDK_INT < 33
+        || ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+            == PackageManager.PERMISSION_GRANTED;
+  }
+
   private void notify(int ask, String title, String body) {
-    if (Build.VERSION.SDK_INT >= 33
-        && ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS)
-            != PackageManager.PERMISSION_GRANTED) {
-      afterPermission = () -> show(ask, title, body);
-      notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS);
+    Screen s = screen;
+    if (!mayNotify() && s != null) {
+      s.requestNotifications(() -> show(ask, title, body));
       return;
     }
     show(ask, title, body);
   }
 
   private void show(int ask, String title, String body) {
-    if (Build.VERSION.SDK_INT >= 33
-        && ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS)
-            != PackageManager.PERMISSION_GRANTED) {
+    if (!mayNotify()) {
       answer(ask, (Object) "denied");
       return;
     }
     int n = nextNotification++;
     notificationAsks.put(n, ask);
+    Screen s = screen;
+    Class<?> target = s != null ? s.activityClass() : RiverService.activityClass;
     Intent open =
-        new Intent(activity, activity.getClass())
-            .setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        new Intent(context, target)
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP)
             .putExtra(EXTRA_NOTIFICATION, n);
     PendingIntent tap =
-        PendingIntent.getActivity(activity, n, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent.getActivity(context, n, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     NotificationCompat.Builder b =
-        new NotificationCompat.Builder(activity, CHANNEL)
+        new NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
             .setContentTitle(title)
             .setContentText(body)
@@ -366,7 +392,7 @@ public final class CoreHost {
             .setContentIntent(tap)
             .setPriority(NotificationCompat.PRIORITY_HIGH);
     try {
-      NotificationManagerCompat.from(activity).notify(n, b.build());
+      NotificationManagerCompat.from(context).notify(n, b.build());
     } catch (SecurityException e) {
       notificationAsks.remove(n);
       answer(ask, (Object) "denied");
@@ -376,12 +402,15 @@ public final class CoreHost {
   private void fatal(String details) {
     Log.e(TAG, "the client core failed to start");
     main.post(
-        () ->
-            new AlertDialog.Builder(activity)
-                .setTitle("River could not start")
-                .setMessage(details)
-                .setPositiveButton(android.R.string.ok, null)
-                .show());
+        () -> {
+          Screen s = screen;
+          if (s == null) return;
+          new AlertDialog.Builder(s.activity())
+              .setTitle("River could not start")
+              .setMessage(details)
+              .setPositiveButton(android.R.string.ok, null)
+              .show();
+        });
   }
 
   private static JSONObject json(Object... pairs) {

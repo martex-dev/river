@@ -835,10 +835,19 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
 
 function SystemPanel({ settings }: { settings: Settings }): ReactElement {
   const updateSettings = useRiver((s) => s.updateSettings);
-  const phone = useRiver((r) => isPhone(r.info?.platform));
+  const platform = useRiver((r) => r.info?.platform);
+  const phone = isPhone(platform);
   return (
     <div className="panel">
       <h2 className="panel__title">System</h2>
+      {phone && platform === 'android' && (
+        <Toggle
+          label="Stay connected"
+          hint="New messages and calls notify you even when River is closed. Android shows a quiet “River is connected” notification while it runs, and it uses some battery. River does not use Google’s push service."
+          checked={settings.system.background}
+          onChange={(v) => void updateSettings({ system: { background: v } })}
+        />
+      )}
       {phone ? (
         <Toggle
           label="Lock River"
