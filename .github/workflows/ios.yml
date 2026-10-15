@@ -29,16 +29,23 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Use the newest Xcode (libsignal's Swift needs Swift 6.2)
+        run: |
+          xcode=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+          swift --version
       - run: npm ci
       - name: Build the UI and the client core, sync the iOS project (pod install)
         run: npm run sync:ios -w @river/mobile
       - name: Build for the simulator
         working-directory: apps/mobile/ios/App
         run: |
+          set -o pipefail
           xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tail -40
-          test -d build/Build/Products/Debug-iphonesimulator/App.app
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | grep -E 'error:|warning: .*RiverNative|BUILD' || true
+          test -f build/Build/Products/Debug-iphonesimulator/App.app/Info.plist
       - name: Start River in a simulator
         working-directory: apps/mobile/ios/App
         run: |
@@ -59,9 +66,11 @@ jobs:
       - name: Build the device app (unsigned) and package it
         working-directory: apps/mobile/ios/App
         run: |
+          set -o pipefail
           xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tail -20
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | grep -E 'error:|BUILD' || true
+          test -f build/Build/Products/Release-iphoneos/App.app/Info.plist
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/App.app Payload/
           zip -qry River-ios-unsigned.ipa Payload
