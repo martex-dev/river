@@ -192,7 +192,7 @@ Each line is one PR; each version ships when its section is done.
 - [x] JSON Schema of every wire message frozen as `packages/protocol/schema/v1.json`, drift fails CI
 - [x] Cross-language test vectors for identity, fingerprints, words, safety numbers, signatures
 - [x] Stability rules (docs/protocol/stability.md)
-- [ ] Test vectors for attachments (Signal attachment format), backup format and device-list signing
+- [x] Test vectors for attachments (Signal attachment format), backup format and device-list signing
 - [ ] Message-level spec docs: realtime events, community key epochs, group sender keys, calls signalling
 - [ ] Release-key hardening steps (protected `release` environment with manual approval) — needs the maintainer
 

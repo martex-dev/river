@@ -13,6 +13,11 @@ All notable changes to River are documented here. The format follows
   the cross-language test vectors (identity keys, fingerprints, verification
   words, safety numbers, a frozen signature) that the iOS and Android clients
   must reproduce. Tests fail on any drift. Rules: docs/protocol/stability.md.
+- **Format vectors for protocol v1:** `packages/protocol/vectors/formats-v1.json`
+  freezes the encrypted-attachment format, the recovery phrase and backup file,
+  and the exact bytes signed for device lists, registration, sessions and
+  account deletion. They are built independently of the library, so the code
+  is checked against the specification.
 
 ## [1.0.46] - 2026-10-15
 

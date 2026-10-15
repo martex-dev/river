@@ -5,13 +5,15 @@ and Android clients, and every server, can rely on what is described here.
 
 ## What is frozen
 
-| Artifact                                                                                         | Role                                                                                                           |
-| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| [`packages/protocol/schema/v1.json`](../../packages/protocol/schema/v1.json)                     | JSON Schema of every request, response and realtime message (generated from the zod schemas)                   |
-| [`packages/protocol/vectors/identity-v1.json`](../../packages/protocol/vectors/identity-v1.json) | Cross-language test vectors for identity keys, fingerprints, verification words, safety numbers and signatures |
+| Artifact                                                                                         | Role                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`packages/protocol/schema/v1.json`](../../packages/protocol/schema/v1.json)                     | JSON Schema of every request, response and realtime message (generated from the zod schemas)                                                                             |
+| [`packages/protocol/vectors/identity-v1.json`](../../packages/protocol/vectors/identity-v1.json) | Cross-language test vectors for identity keys, fingerprints, verification words, safety numbers and signatures                                                           |
+| [`packages/protocol/vectors/formats-v1.json`](../../packages/protocol/vectors/formats-v1.json)   | Vectors for the attachment format, the recovery phrase and backup file, and device-list signing (the exact signed bytes for registration, sessions and account deletion) |
 
-Both files are checked by tests (`schema-freeze.test.ts`, `vectors.test.ts`).
-A change that alters either file fails CI until it is made deliberately.
+All of these are checked by tests (`schema-freeze.test.ts`, `vectors.test.ts`,
+`tests/integration/format-vectors.test.ts`). A change that alters any of them
+fails CI until it is made deliberately.
 
 ## Rules
 
@@ -27,7 +29,8 @@ A change that alters either file fails CI until it is made deliberately.
 4. **Regenerating the schema** (`node packages/protocol/scripts/export-schemas.ts`)
    is allowed only for additive changes, and the diff must be reviewed as a
    wire change. The vectors are regenerated only for a new major version
-   (`generate-vectors.ts` refuses to overwrite without `--force`).
+   (`packages/crypto/scripts/generate-vectors.ts` and
+   `tests/scripts/generate-format-vectors.ts` refuse to overwrite without `--force`).
 
 ## For other-language clients
 
@@ -40,6 +43,15 @@ A client in Swift or Kotlin is conformant when it:
   (libsignal numeric fingerprint, 5200 iterations, version 2), and the scannable
   form from each side;
 - accepts the frozen XEdDSA signature and rejects any altered message or
-  signature.
+  signature;
+- decrypts the attachment blob in `formats-v1.json` (AES-256-CBC + HMAC-SHA256,
+  IV ‖ ciphertext ‖ MAC, zero padding to the size bucket) and rejects a changed
+  bit, digest or key;
+- turns the recovery secret into the same 18-word phrase, derives the same
+  backup key (HKDF-SHA256, info `river-backup-v1`), opens the backup file and
+  rejects a wrong secret or damaged file;
+- builds the device-list, registration, session and account-deletion messages
+  byte for byte, and verifies the frozen device-list signature, which must not
+  verify against any other message domain.
 
 The keys in the vectors are test-only and must never be used for real accounts.
