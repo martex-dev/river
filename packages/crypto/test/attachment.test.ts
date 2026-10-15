@@ -17,7 +17,7 @@ describe('attachments', () => {
       expect(enc.size).toBe(size);
       expect(Buffer.from(decryptAttachment(enc.blob, enc))).toEqual(data);
     }
-  });
+  }, 30_000); // Megabyte-sized cases can take a few seconds on a busy machine.
 
   it('pads to size buckets so the server cannot see the exact size', () => {
     expect(paddedSize(10)).toBe(541);

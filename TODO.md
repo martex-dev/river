@@ -197,6 +197,11 @@ Each line is one PR; each version ships when its section is done.
 - [ ] Permanent signing key (maintainer runs `python scripts/release/create-android-key.py`)
 - [ ] Voice in the Android WebView verified on a real phone (microphone permission, audio routing)
 
+### 1.9.x — Hardening (released in 1.9.0)
+
+- [x] Stage 2 security review (docs/security/1.9.0-review.md); all findings fixed; threat model updated
+- [ ] Independent audit (needs the maintainer and funding)
+
 ### 1.8.x — Remote assistance (ADR 0007, released in 1.8.0)
 
 - [x] Consent asked by main before every screen share; no default screen

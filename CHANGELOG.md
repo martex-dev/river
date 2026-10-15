@@ -6,6 +6,22 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-16
+
+**Hardening: River's Stage 2 security review.**
+
+### Security
+
+- **Stage 2 security review** (docs/security/1.9.0-review.md): the phone apps,
+  linked devices, calls and remote assistance were reviewed; every finding is
+  fixed in 1.3.1–1.8.0, and the threat model now covers phones, linked devices
+  and remote assistance, including what remains (keys are not rotated when a
+  device is removed; the Android preview key; the unsigned iPhone app).
+
+### Fixed
+
+- A slow encryption test no longer fails on a busy machine.
+
 ## [1.8.0] - 2026-10-16
 
 **Remote assistance: see and point.**

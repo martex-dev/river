@@ -204,6 +204,34 @@ posts also needs membership; deleting and recreating the webhook removes even
 that. Webhook posts cannot be edited, and they carry a visible WEBHOOK badge.
 There are no outgoing webhooks: the server cannot forward what it cannot read.
 
+### 5k. Phones (1.1 Android, 1.3 iPhone)
+
+The phone apps run the desktop's client core in a private WebView with the
+same native protections: libsignal, SQLCipher with the key in the Android
+Keystore or the iOS Keychain, and an untrusted interface that only sends the
+same validated calls. "Stay connected" (Android) keeps that connection open
+with a visible notification instead of using Google's or Apple's push
+services, so neither learns when you get messages. Notifications follow the
+preview setting; replies typed into a notification are encrypted by the core
+like any message.
+
+### 5l. Linked devices (1.2, ADR 0006)
+
+A new device gets the account's identity key and community keys sealed to it
+(HPKE) through a short-lived mailbox; the server sees public keys, sealed
+blobs and timing. The device list is signed by the identity key, and clients
+refuse lists older than one they have seen. Removing a device makes the server
+end its sessions and connection; a removed device keeps what it already had
+(including keys), so against a lost device the server's cooperation matters.
+
+### 5m. Remote assistance (1.8, ADR 0007)
+
+Screen sharing in a call needs a pick in River's picker and a "Share your
+screen?" question asked by main; an always-on-top bar outside the window says
+who can see it and stops it. Viewers can point (a ring on the shared screen);
+there is no remote control and no unattended mode. The server relays the
+encrypted call and point signals and sees who takes part, as for any call.
+
 ## 6. Key threats and mitigations (STRIDE summary)
 
 | Threat          | Example                                | Mitigation                                                                                                                              | Status                                                 |
@@ -219,10 +247,16 @@ There are no outgoing webhooks: the server cannot forward what it cannot read.
 | DoS             | Message flooding                       | Per-account/per-device rate limits, message requests                                                                                    | 0.2.x                                                  |
 | Elevation       | Renderer XSS → key theft               | Sandboxed renderer, CSP, keys only in main process, validated IPC                                                                       | **0.0.1**                                              |
 | Elevation       | Malicious file/attachment              | Attachments never auto-executed; previews rendered in sandbox; filename sanitisation; path traversal checks                             | ✅ 0.4.0                                               |
-| Elevation       | Remote-assistance abuse                | Consent flow, visible banner, scam warnings ("River staff will never ask for remote access")                                            | Stage 2                                                |
+| Elevation       | Remote-assistance abuse                | Consent asked by main per share, always-visible bar with Stop outside the window, no control or unattended mode (ADR 0007)              | ✅ 1.8.0                                               |
 
 ## 7. Residual risks (current)
 
+- **Linked devices are not revoked cryptographically.** A removed device keeps
+  the identity and community keys it had; the server ends its access. Leaving
+  and rejoining a community rotates that community's key.
+- **Android preview signing, unsigned iPhone app.** Until the maintainer
+  creates River's permanent Android key, APKs use a one-off key (the first
+  permanent build needs a reinstall); the iPhone app is an unsigned .ipa.
 - **No independent audit yet.** River's own reviews do not replace a
   professional audit; this is stated in SECURITY.md.
 - **macOS builds are not notarized** (no Apple Developer ID yet). Gatekeeper
