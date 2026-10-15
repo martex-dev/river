@@ -84,6 +84,8 @@ export const IPC = {
   diagnosticsOpenLogs: 'river:diagnostics:open-logs',
   screenSources: 'river:voice:screen-sources',
   screenSelect: 'river:voice:screen-select',
+  /** Phones: play calls through the loudspeaker (true) or the earpiece. */
+  voiceSpeaker: 'river:voice:speaker',
   screenShareStatus: 'river:voice:share-status',
   screenPoint: 'river:voice:point',
   communityEvent: 'river:community:event',
@@ -651,6 +653,8 @@ export interface RiverApi {
     iceServers(): Promise<Array<{ urls: string[]; username?: string; credential?: string }>>;
     screenSources(): Promise<ScreenSource[]>;
     selectScreen(sourceId: string): Promise<void>;
+    /** Phones: calls through the loudspeaker (true) or the earpiece (false). Nothing on computers. */
+    setSpeaker(on: boolean): Promise<void>;
     /**
      * Remote assistance (ADR 0007): this app is sharing its screen (or stopped) with these people.
      * Main shows the always-on-top "can see your screen" bar with Stop, outside River's window.

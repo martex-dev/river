@@ -6,6 +6,12 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Speaker or earpiece** (phones): a speaker button in calls and voice
+  channels. Voice calls start at the ear, video calls and voice channels on the
+  loudspeaker.
+
 ## [2.0.0] - 2026-10-16
 
 **River 2.0 — Stage 2 is complete: River on your computer and your phone.**
