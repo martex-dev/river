@@ -33,6 +33,10 @@ post_install do |installer|
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
       config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
+      # libsignal_ffi.a contains BoringSSL's C++: the framework links the C++ standard library.
+      if target.name == 'LibSignalClient'
+        config.build_settings['OTHER_LDFLAGS'] = '$(inherited) -lc++'
+      end
     end
   end
 end
