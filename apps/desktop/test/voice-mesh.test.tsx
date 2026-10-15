@@ -499,9 +499,10 @@ describe('remote assistance (ADR 0007)', () => {
     const point = vi.fn();
     (globalThis as { river?: unknown }).river = { voice: { shareStatus, point } };
     const screenTrack = { stop: vi.fn(), contentHint: '', onended: null };
-    (navigator as { mediaDevices: Record<string, unknown> }).mediaDevices.getDisplayMedia = async () => ({
-      getVideoTracks: () => [screenTrack],
-    });
+    (navigator as unknown as { mediaDevices: Record<string, unknown> }).mediaDevices.getDisplayMedia =
+      async () => ({
+        getVideoTracks: () => [screenTrack],
+      });
     try {
       const [a, b] = ids(2);
       const sharer = await joinCall(a!);
