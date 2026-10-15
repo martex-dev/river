@@ -187,7 +187,7 @@ public final class CoreHost: NSObject {
         case "notify":
             notify(
                 id: id, title: a["title"] as? String ?? "River", body: a["body"] as? String ?? "",
-                reply: (a["reply"] as? Bool) ?? false)
+                reply: (a["reply"] as? Bool) ?? false, call: (a["call"] as? Bool) ?? false)
         case "speaker":
             let session = AVAudioSession.sharedInstance()
             let port: AVAudioSession.PortOverride = (a["on"] as? Bool) == true ? .speaker : AVAudioSession.PortOverride.none
@@ -219,7 +219,7 @@ public final class CoreHost: NSObject {
     private static let replyCategory = "river.reply"
     private static let replyAction = "river.reply.text"
 
-    private func notify(id: Int, title: String, body: String, reply: Bool) {
+    private func notify(id: Int, title: String, body: String, reply: Bool, call: Bool) {
         let center = UNUserNotificationCenter.current()
         if reply {
             // Reply from the notification: the text goes to the core, which sends it encrypted.
@@ -240,6 +240,8 @@ public final class CoreHost: NSObject {
             content.title = title
             content.body = body
             if reply { content.categoryIdentifier = CoreHost.replyCategory }
+            // An incoming call makes a sound; other notifications stay quiet, as on computers.
+            if call { content.sound = .default }
             let identifier = UUID().uuidString
             DispatchQueue.main.async { self.notificationAsks[identifier] = id }
             center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
