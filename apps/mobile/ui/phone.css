@@ -75,6 +75,12 @@ html[data-platform='android'] .workspace > .content--full {
 html[data-platform='android'] .workspace > .community__servers + .content {
   border-top-left-radius: 0;
 }
+/* Notices (pick a username, what's new) stay small above the conversation. */
+html[data-platform='android'] .content--full > .notices {
+  max-height: 22vh;
+  padding: 8px 10px 0;
+}
+
 /* Members and threads cover the conversation instead of sitting beside it. */
 html[data-platform='android'] .community__members,
 html[data-platform='android'] .thread-panel {
