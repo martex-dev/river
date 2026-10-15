@@ -6,6 +6,36 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Phones: swipe right on a conversation to open the server and channel list,
+  and left to go back, as in Discord.
+- **Stay connected** (Android, Settings → System): River keeps its connection
+  while closed, so messages and calls notify like any messaging app. Android
+  shows a quiet "River is connected" notification while it runs. River uses no
+  Google or Apple push service.
+- **Calls keep going with the screen off** (Android): while you are in a call
+  or a voice channel, an "In a call" notification keeps the microphone and the
+  call running when you lock the phone or switch apps, with a Hang up button.
+- **Reply from the notification** (Android, iPhone, macOS): answer a direct message
+  right from its notification, without opening River. The reply is sent
+  end-to-end encrypted like any message.
+- **Share → River** (Android): share text, links, photos or files from any
+  app to River, pick a conversation or channel, and it opens with them in the
+  message box. Nothing is sent until you press Send.
+
+### Security
+
+- Android: other apps can no longer fake a tap on River's notifications (each
+  carries a random secret), and Share → River refuses any address that could
+  point back at River's own files.
+
+### Fixed
+
+- Voice: a connection that silently stops answering during a call is noticed
+  within about ten seconds (was up to a minute) and replaced, and the voice
+  relay key is sent again, so people who reconnect mid-call hear and are heard.
+
 ## [1.3.1] - 2026-10-15
 
 **Security fixes for linked devices.**
@@ -36,32 +66,6 @@ All notable changes to River are documented here. The format follows
   face or screen lock whenever it opens, and hides itself in the app switcher.
 - iPhone: a long press opens River's menus (messages, channels, members), as
   right-click does on computers.
-- **Stay connected** (Android, Settings → System): River keeps its connection
-  while closed, so messages and calls notify like any messaging app. Android
-  shows a quiet "River is connected" notification while it runs. River uses no
-  Google or Apple push service.
-- **Calls keep going with the screen off** (Android): while you are in a call
-  or a voice channel, an "In a call" notification keeps the microphone and the
-  call running when you lock the phone or switch apps, with a Hang up button.
-
-- **Reply from the notification** (Android, iPhone, macOS): answer a direct message
-  right from its notification, without opening River. The reply is sent
-  end-to-end encrypted like any message.
-- **Share → River** (Android): share text, links, photos or files from any
-  app to River, pick a conversation or channel, and it opens with them in the
-  message box. Nothing is sent until you press Send.
-
-### Security
-
-- Android: other apps can no longer fake a tap on River's notifications (each
-  carries a random secret), and Share → River refuses any address that could
-  point back at River's own files.
-
-### Fixed
-
-- Voice: a connection that silently stops answering during a call is noticed
-  within about ten seconds (was up to a minute) and replaced, and the voice
-  relay key is sent again, so people who reconnect mid-call hear and are heard.
 
 ## [1.2.0] - 2026-10-15
 
