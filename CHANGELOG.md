@@ -6,6 +6,8 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-10-16
+
 ### Added
 
 - **Device names.** Settings → Account → Devices shows each device by the name
