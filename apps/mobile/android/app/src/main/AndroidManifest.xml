@@ -41,6 +41,12 @@
             android:exported="false"
             android:foregroundServiceType="remoteMessaging" />
 
+        <!-- Calls and voice channels keep running with the screen off (an "In a call" notification). -->
+        <service
+            android:name=".core.CallService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -64,6 +70,8 @@
     <!-- Stay connected (optional): a visible foreground service for messages. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <!-- Calls: the microphone keeps working with the screen off, while "In a call" shows. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />

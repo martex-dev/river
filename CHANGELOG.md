@@ -17,6 +17,19 @@ All notable changes to River are documented here. The format follows
   face or screen lock whenever it opens, and hides itself in the app switcher.
 - iPhone: a long press opens River's menus (messages, channels, members), as
   right-click does on computers.
+- **Stay connected** (Android, Settings → System): River keeps its connection
+  while closed, so messages and calls notify like any messaging app. Android
+  shows a quiet "River is connected" notification while it runs. River uses no
+  Google or Apple push service.
+- **Calls keep going with the screen off** (Android): while you are in a call
+  or a voice channel, an "In a call" notification keeps the microphone and the
+  call running when you lock the phone or switch apps, with a Hang up button.
+
+### Fixed
+
+- Voice: a connection that silently stops answering during a call is noticed
+  within about ten seconds (was up to a minute) and replaced, and the voice
+  relay key is sent again, so people who reconnect mid-call hear and are heard.
 
 ## [1.1.0] - 2026-10-15
 

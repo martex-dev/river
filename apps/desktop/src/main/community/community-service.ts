@@ -139,6 +139,8 @@ interface Deps {
   createSocket?: (url: string) => WebSocket;
   /** Finds the server again if its address changes. */
   locator?: ServerLocator;
+  /** A call or voice channel started or ended (phones keep calls running with the screen off). */
+  onCallChange?: (inCall: boolean) => void;
   /** How this person appears (status and custom status), 1.0.17. */
   presence?: Pick<PresenceTracker, 'status' | 'custom'>;
 }
@@ -2686,12 +2688,29 @@ export class CommunityService {
     // One call at a time: joining a voice channel ends any 1:1 call's relay room.
     if (this.activeRoom) this.callRoom(null);
     this.lastVoiceState = null;
+    this.callChanged();
+  }
+
+  private callNotified = false;
+
+  private callChanged(): void {
+    const inCall = this.activeVoice !== null || this.activeRoom !== null;
+    if (inCall === this.callNotified) return;
+    this.callNotified = inCall;
+    this.deps.onCallChange?.(inCall);
+  }
+
+  /** Hang up from outside the window (the phone's "In a call" notification). */
+  hangUp(): void {
+    if (this.activeVoice === null && this.activeRoom === null) return;
+    this.emit({ t: 'hangUp' });
   }
 
   voiceLeave(): void {
     this.activeVoice = null;
     this.lastVoiceState = null;
     this.pendingSignals = [];
+    this.callChanged();
     // Offline: the server frees the seat by itself when the grace period ends.
     this.trySend({ t: 'voice.leave' });
   }
@@ -2726,6 +2745,7 @@ export class CommunityService {
   callRoom(room: string | null): void {
     this.activeRoom = room === null ? null : callRoomSchema.parse(room);
     this.trySend({ t: 'call.room', room: this.activeRoom });
+    this.callChanged();
   }
 
   /** After a reconnect: take the voice seat back, restore its state, then send held call setup. */

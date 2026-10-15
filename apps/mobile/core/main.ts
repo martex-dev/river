@@ -188,6 +188,17 @@ async function start(): Promise<void> {
     log,
     locator,
     presence,
+    // Android: an "In a call" foreground service keeps the call running with the screen off; its
+    // Hang up button answers the open ask.
+    onCallChange: (inCall) => {
+      if (PLATFORM !== 'android') return;
+      void ask<string>('call', { active: inCall }).then(
+        (how) => {
+          if (how === 'hangup') community.hangUp();
+        },
+        () => undefined,
+      );
+    },
   });
   let lastCustom = JSON.stringify(presence.custom());
   presence.onChange(() => {
