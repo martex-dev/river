@@ -131,6 +131,8 @@ export const dmActionSchema = z.discriminatedUnion('a', [
   z.object({ a: z.literal('unblock'), peer: riverId }).strict(),
   z.object({ a: z.literal('removeConversation'), peer: conv }).strict(),
   z.object({ a: z.literal('safetyNumber'), peer: riverId }).strict(),
+  /** A call that is ringing right now (River opened from its "Incoming call" notification). */
+  z.object({ a: z.literal('pendingCall') }).strict(),
   z.object({ a: z.literal('setVerified'), peer: riverId, verified: z.boolean() }).strict(),
   z.object({ a: z.literal('acknowledgeKeyChange'), peer: riverId }).strict(),
   z
@@ -205,6 +207,7 @@ interface DmResults {
   search: DirectMessageView[];
   files: FileView[];
   calls: CallView[];
+  pendingCall: Extract<DmEvent, { t: 'call' }> | null;
 }
 
 export type DmActionResult<A extends DmAction> = A['a'] extends keyof DmResults ? DmResults[A['a']] : null;
