@@ -47,7 +47,7 @@ final class ShareReceiver {
       long total = 0;
       for (Uri uri : streams(intent)) {
         if (files.length() >= MAX_FILES) break;
-        JSONObject file = readFile(context.getContentResolver(), uri, MAX_BYTES - total);
+        JSONObject file = readFile(context.getContentResolver(), context.getPackageName(), uri, MAX_BYTES - total);
         if (file == null) continue;
         total += file.getLong("size");
         file.remove("size");
@@ -85,13 +85,13 @@ final class ShareReceiver {
     return out;
   }
 
-  private static JSONObject readFile(ContentResolver resolver, Uri uri, long budget) {
+  private static JSONObject readFile(ContentResolver resolver, String self, Uri uri, long budget) {
     // Only content the sharing app granted us; never River's own files.
     if (!"content".equals(uri.getScheme())) return null;
     String authority = uri.getAuthority();
     // "content://0@authority" (a user-ID prefix) still reaches the provider named after the "@".
     if (authority == null || authority.contains("@")) return null;
-    if (authority.equals(BuildConfig.APPLICATION_ID) || authority.startsWith(BuildConfig.APPLICATION_ID + ".")) {
+    if (authority.equals(self) || authority.startsWith(self + ".")) {
       return null;
     }
     String name = "shared file";

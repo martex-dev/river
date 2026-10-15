@@ -411,7 +411,7 @@ public final class CoreHost {
       s.requestNotifications(() -> show(ask, title, body, reply));
       return;
     }
-    show(ask, title, body);
+    show(ask, title, body, reply);
   }
 
   private void show(int ask, String title, String body, boolean reply) {
