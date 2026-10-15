@@ -197,6 +197,12 @@ Each line is one PR; each version ships when its section is done.
 - [ ] Permanent signing key (maintainer runs `python scripts/release/create-android-key.py`)
 - [ ] Voice in the Android WebView verified on a real phone (microphone permission, audio routing)
 
+### 1.7.x — Calls (released in 1.7.0)
+
+- [x] Incoming 1:1 calls notify while River is in the tray or closed (with Stay connected); opening River shows the ringing call
+- [x] Calls keep going with the screen off on Android (1.4.0)
+- [ ] Android ConnectionService / iOS CallKit: the system's own incoming-call screen and audio routing
+
 ### 1.4.x — Phones, day to day (released in 1.4.0)
 
 - [x] Background reconnect: Stay connected (Android foreground service; no Google/Apple push)
