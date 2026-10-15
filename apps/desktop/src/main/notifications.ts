@@ -33,6 +33,16 @@ export function startMessageNotifications(deps: {
   };
   // Direct messages always notify (they are personal), subject to the preview setting.
   const offDm = deps.dm.onEvent((event) => {
+    if (event.t === 'call' && event.kind === 'invite') {
+      // A call rings even while River is in the tray (or closed, on a phone that stays connected).
+      if (!deps.settings().notifications.desktop) return;
+      const prefs = deps.settings().notifications;
+      const name = prefs.preview === 'none' ? 'Someone' : deps.dm.nameOf(event.peer);
+      show(`Incoming ${event.video ? 'video ' : ''}call`, `${name} is calling you`, true, () =>
+        deps.dm.focus(event.peer),
+      );
+      return;
+    }
     if (event.t !== 'message' || !event.isNew || event.message.mine) return;
     const prefs = deps.settings().notifications;
     if (!prefs.desktop) return;

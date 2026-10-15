@@ -38,6 +38,9 @@ import type { IdentityService } from '../identity/identity-service.ts';
 import type { Logger } from '../logger.ts';
 import type { LocalDatabase } from '../storage/database.ts';
 
+/** How long a call invite rings (the same as the window's ring timeout). */
+const RING_MS = 45_000;
+
 /** What travels inside the libsignal envelope. Everything here is untrusted input when received. */
 const msgId = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 const messageFields = {
@@ -266,6 +269,9 @@ export class DmService {
   }
 
   /** Used by notifications: brings a conversation to the front. */
+  /** The call invite ringing right now, if any (in memory only). */
+  private ringing: { event: Extract<DmEvent, { t: 'call' }>; at: number } | null = null;
+
   focus(peer: string): void {
     this.emit({ t: 'focus', peer });
   }
@@ -580,19 +586,24 @@ export class DmService {
         if (groupId) this.emit({ t: 'typing', peer: conv, who: peer });
         else if (contact?.state === 'accepted') this.emit({ t: 'typing', peer });
         return true;
-      case 'call':
+      case 'call': {
         // Only accepted contacts can ring you; call setup is never stored.
         if (contact?.state !== 'accepted') return true;
         if (content.data !== undefined && JSON.stringify(content.data).length > 30_000) return true;
-        this.emit({
-          t: 'call',
+        const event = {
+          t: 'call' as const,
           peer,
           callId: content.callId,
           kind: content.kind,
           video: content.video ?? false,
           ...(content.data !== undefined ? { data: content.data } : {}),
-        });
+        };
+        // An invite is remembered while it rings, so a window that opens because of it can show it.
+        if (content.kind === 'invite') this.ringing = { event, at: Date.now() };
+        else if (this.ringing?.event.callId === content.callId) this.ringing = null;
+        this.emit(event);
         return true;
+      }
       case 'profile': {
         if (!contact) this.upsertContact(peer, 'request');
         // A profile shared with you directly means they accepted (or started) the conversation.
@@ -795,7 +806,8 @@ export class DmService {
     }
   }
 
-  private nameOf(riverId: string, g?: GroupRow): string {
+  /** How a person appears (contact name, shared community, or their group's records). */
+  nameOf(riverId: string, g?: GroupRow): string {
     if (riverId === this.me()) return this.deps.identity.get()?.displayName ?? 'You';
     const c = this.contact(riverId);
     if (c?.name) return c.name;
@@ -1272,6 +1284,11 @@ export class DmService {
           this.db().prepare(`DELETE FROM contacts WHERE river_id = ? AND state != 'blocked'`).run(act.peer);
           this.emitConversations();
           return out(null);
+        case 'pendingCall': {
+          const ringing = this.ringing;
+          if (!ringing || Date.now() - ringing.at > RING_MS) return out(null);
+          return out(ringing.event);
+        }
         case 'safetyNumber': {
           const mine = this.deps.identity.protocolIdentity();
           let theirs = this.protocol().identityOf(act.peer);

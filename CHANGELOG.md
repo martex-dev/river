@@ -6,6 +6,13 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Calls ring while River is in the background.** An incoming 1:1 call shows
+  an "Incoming call" notification when River is in the tray (or closed on a
+  phone that stays connected), and opening River from it shows the call ready
+  to answer.
+
 ## [1.3.0] - 2026-10-15
 
 **River for iPhone.**
