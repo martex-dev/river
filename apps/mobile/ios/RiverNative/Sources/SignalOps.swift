@@ -43,6 +43,14 @@ final class SignalOps {
         case "sig.verify":
             guard let key = try? PublicKey(try a.bytes("pub")) else { return false }
             return (try? key.verifySignature(message: try a.bytes("data"), signature: try a.bytes("sig"))) ?? false
+        case "sig.seal":
+            return try PublicKey(try a.bytes("pub")).seal(
+                try a.bytes("data"), info: try a.bytes("info"), associatedData: try a.bytes("aad")
+            ).b64
+        case "sig.open":
+            return try PrivateKey(try a.bytes("priv")).open(
+                try a.bytes("data"), info: try a.bytes("info"), associatedData: try a.bytes("aad")
+            ).b64
         case "sig.kemKeyPair":
             let pair = KEMKeyPair.generate()
             let handle = nextKem
