@@ -48,6 +48,9 @@ public final class CoreHost {
   private static final String ORIGIN = "https://appassets.androidplatform.net";
   private static final String CORE_URL = ORIGIN + "/assets/core/index.html";
   private static final String CHANNEL = "messages";
+  private static final String CALL_CHANNEL = "calls";
+  /** Set on the screen opened by an incoming call: it may show over the lock screen. */
+  public static final String EXTRA_CALL = "river.call";
   public static final String EXTRA_NOTIFICATION = "river.notification";
   /** A random secret per notification, so other apps cannot fake a tap on River's notifications. */
   public static final String EXTRA_NOTIFICATION_TOKEN = "river.notification.token";
@@ -354,7 +357,12 @@ public final class CoreHost {
             break;
           }
         case "notify":
-          notify(id, a.optString("title", "River"), a.optString("body", ""), a.optBoolean("reply", false));
+          notify(
+              id,
+              a.optString("title", "River"),
+              a.optString("body", ""),
+              a.optBoolean("reply", false),
+              a.optBoolean("call", false));
           break;
         case "appLock":
           answer(id, json("available", AppLock.setEnabled(context, a.optBoolean("enabled", false))));
@@ -425,6 +433,17 @@ public final class CoreHost {
     NotificationChannel channel = new NotificationChannel(CHANNEL, "Messages", NotificationManager.IMPORTANCE_HIGH);
     channel.setDescription("New messages and mentions while River is in the background");
     nm.createNotificationChannel(channel);
+    // Incoming calls ring with the phone's ringtone, like any calling app.
+    NotificationChannel calls = new NotificationChannel(CALL_CHANNEL, "Calls", NotificationManager.IMPORTANCE_HIGH);
+    calls.setDescription("Incoming calls while River is in the background");
+    calls.setSound(
+        android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE),
+        new android.media.AudioAttributes.Builder()
+            .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build());
+    calls.enableVibration(true);
+    nm.createNotificationChannel(calls);
   }
 
   private boolean mayNotify() {
@@ -433,16 +452,16 @@ public final class CoreHost {
             == PackageManager.PERMISSION_GRANTED;
   }
 
-  private void notify(int ask, String title, String body, boolean reply) {
+  private void notify(int ask, String title, String body, boolean reply, boolean call) {
     Screen s = screen;
     if (!mayNotify() && s != null) {
-      s.requestNotifications(() -> show(ask, title, body, reply));
+      s.requestNotifications(() -> show(ask, title, body, reply, call));
       return;
     }
-    show(ask, title, body, reply);
+    show(ask, title, body, reply, call);
   }
 
-  private void show(int ask, String title, String body, boolean reply) {
+  private void show(int ask, String title, String body, boolean reply, boolean call) {
     if (!mayNotify()) {
       answer(ask, (Object) "denied");
       return;
@@ -459,17 +478,24 @@ public final class CoreHost {
         new Intent(context, target)
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP)
             .putExtra(EXTRA_NOTIFICATION, n)
-            .putExtra(EXTRA_NOTIFICATION_TOKEN, token);
+            .putExtra(EXTRA_NOTIFICATION_TOKEN, token)
+            .putExtra(EXTRA_CALL, call);
     PendingIntent tap =
         PendingIntent.getActivity(context, n, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     NotificationCompat.Builder b =
-        new NotificationCompat.Builder(context, CHANNEL)
+        new NotificationCompat.Builder(context, call ? CALL_CHANNEL : CHANNEL)
             .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
             .setContentTitle(title)
             .setContentText(body)
             .setAutoCancel(true)
             .setContentIntent(tap)
             .setPriority(NotificationCompat.PRIORITY_HIGH);
+    if (call) {
+      // Rings for as long as the call does, and fills the screen when the phone is locked.
+      b.setCategory(NotificationCompat.CATEGORY_CALL)
+          .setTimeoutAfter(45_000)
+          .setFullScreenIntent(tap, true);
+    }
     if (reply) {
       // Reply from the notification: the text goes to the core, which sends it end-to-end encrypted.
       Intent replied =

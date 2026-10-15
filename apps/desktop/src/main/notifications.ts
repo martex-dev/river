@@ -22,6 +22,7 @@ export function startMessageNotifications(deps: {
     mention: boolean,
     onClick: () => void,
     onReply?: (text: string) => void,
+    call = false,
   ): void => {
     if (window.isDestroyed() || window.isFocused() || !Notification.isSupported()) return;
     // Do Not Disturb or quiet hours: nothing pops up.
@@ -29,8 +30,10 @@ export function startMessageNotifications(deps: {
     const notification = new Notification({
       title,
       body,
-      silent: true,
+      silent: !call,
       ...(onReply ? { hasReply: true, replyPlaceholder: 'Reply' } : {}),
+      // An incoming call stays until it is answered or stops ringing (phones ring for it).
+      ...(call ? { urgency: 'critical' as const, timeoutType: 'never' as const } : {}),
     });
     if (onReply) {
       notification.on('reply', (_e, reply) => {
@@ -55,8 +58,13 @@ export function startMessageNotifications(deps: {
       if (!deps.settings().notifications.desktop) return;
       const prefs = deps.settings().notifications;
       const name = prefs.preview === 'none' ? 'Someone' : deps.dm.nameOf(event.peer);
-      show(`Incoming ${event.video ? 'video ' : ''}call`, `${name} is calling you`, true, () =>
-        deps.dm.focus(event.peer),
+      show(
+        `Incoming ${event.video ? 'video ' : ''}call`,
+        `${name} is calling you`,
+        true,
+        () => deps.dm.focus(event.peer),
+        undefined,
+        true,
       );
       return;
     }

@@ -113,11 +113,23 @@ type ClickListener = () => void;
 type ReplyListener = (event: unknown, reply: string) => void;
 
 export class Notification {
-  private readonly options: { title: string; body: string; reply: boolean };
+  private readonly options: { title: string; body: string; reply: boolean; call: boolean };
   private readonly clicks: ClickListener[] = [];
   private readonly replies: ReplyListener[] = [];
-  constructor(options: { title: string; body: string; silent?: boolean; hasReply?: boolean }) {
-    this.options = { title: options.title, body: options.body, reply: options.hasReply === true };
+  constructor(options: {
+    title: string;
+    body: string;
+    silent?: boolean;
+    hasReply?: boolean;
+    urgency?: 'normal' | 'critical' | 'low';
+  }) {
+    this.options = {
+      title: options.title,
+      body: options.body,
+      reply: options.hasReply === true,
+      // A critical notification is an incoming call: phones ring for it.
+      call: options.urgency === 'critical',
+    };
   }
   static isSupported(): boolean {
     return true;
