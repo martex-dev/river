@@ -34,7 +34,10 @@ html[data-platform='android'] .titlebar {
 html[data-pane='nav'] .phone-menu {
   background: var(--layer-hover);
 }
-html:not([data-platform='android']) .phone-menu {
+html:not([data-platform='android']) .phone-menu,
+body:has(.skin-gate) .phone-menu,
+body:has(.onboarding) .phone-menu,
+body:has(.lock) .phone-menu {
   display: none;
 }
 

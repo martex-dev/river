@@ -239,9 +239,21 @@ describe('River for Android on an emulator', { timeout: 180_000 }, () => {
     await until(() => ui.evaluate("document.documentElement.dataset.pane === 'nav'"));
     await sleep(500);
     await ui.screenshot({ path: join(shots, '2-list.png') });
-    await ui.click('.channel__open');
+    // Home's list: open the conversation with Alice.
+    await ui.click('.dm-row');
     await until(() => ui.evaluate("document.documentElement.dataset.pane === 'main'"));
+    await sleep(800);
+    await ui.screenshot({ path: join(shots, '3-direct-message.png') });
+    // The community: choose it in the rail, then its channel.
+    await ui.click('.phone-menu');
+    await ui.click('.community__server:not(.community__server--add)');
+    await ui.waitForSelector('.channel__open', { timeout: 15_000 });
     await sleep(500);
-    await ui.screenshot({ path: join(shots, '3-channel.png') });
+    await ui.screenshot({ path: join(shots, '4-channels.png') });
+    await ui.locator('.channel__open').first().click();
+    await until(() => ui.evaluate("document.documentElement.dataset.pane === 'main'"));
+    await sleep(800);
+    await ui.screenshot({ path: join(shots, '5-channel.png') });
+    expect(await ui.locator('text=hi Android').count()).toBeGreaterThan(0);
   });
 });
