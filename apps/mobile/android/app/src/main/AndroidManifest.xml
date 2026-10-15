@@ -54,6 +54,11 @@
             android:exported="false"
             android:foregroundServiceType="remoteMessaging" />
 
+        <!-- Reply from a message notification (River's own notifications only). -->
+        <receiver
+            android:name=".core.NotificationReplyReceiver"
+            android:exported="false" />
+
         <!-- Calls and voice channels keep running with the screen off (an "In a call" notification). -->
         <service
             android:name=".core.CallService"

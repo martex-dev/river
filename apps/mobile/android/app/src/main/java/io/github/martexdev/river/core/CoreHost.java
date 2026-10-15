@@ -189,6 +189,19 @@ public final class CoreHost {
     run("__riverCore.deepLink(" + JSONObject.quote(url) + ")");
   }
 
+  /** Someone replied from a River notification: the core sends it. */
+  public void notificationReplied(int notification, String token, String text) {
+    String expected = notificationTokens.get(notification);
+    if (expected == null
+        || token == null
+        || text == null
+        || !java.security.MessageDigest.isEqual(expected.getBytes(), token.getBytes())) return;
+    notificationTokens.remove(notification);
+    Integer ask = notificationAsks.remove(notification);
+    NotificationManagerCompat.from(context).cancel(notification);
+    if (ask != null) answer(ask, json("reply", text.length() > 4000 ? text.substring(0, 4000) : text));
+  }
+
   /** A notification River posted was tapped: tell the core, which opens the conversation. */
   public void notificationTapped(int notification, String token) {
     String expected = notificationTokens.get(notification);
@@ -319,7 +332,7 @@ public final class CoreHost {
             break;
           }
         case "notify":
-          notify(id, a.optString("title", "River"), a.optString("body", ""));
+          notify(id, a.optString("title", "River"), a.optString("body", ""), a.optBoolean("reply", false));
           break;
         case "appLock":
           answer(id, json("available", AppLock.setEnabled(context, a.optBoolean("enabled", false))));
@@ -392,16 +405,16 @@ public final class CoreHost {
             == PackageManager.PERMISSION_GRANTED;
   }
 
-  private void notify(int ask, String title, String body) {
+  private void notify(int ask, String title, String body, boolean reply) {
     Screen s = screen;
     if (!mayNotify() && s != null) {
-      s.requestNotifications(() -> show(ask, title, body));
+      s.requestNotifications(() -> show(ask, title, body, reply));
       return;
     }
     show(ask, title, body);
   }
 
-  private void show(int ask, String title, String body) {
+  private void show(int ask, String title, String body, boolean reply) {
     if (!mayNotify()) {
       answer(ask, (Object) "denied");
       return;
@@ -429,6 +442,25 @@ public final class CoreHost {
             .setAutoCancel(true)
             .setContentIntent(tap)
             .setPriority(NotificationCompat.PRIORITY_HIGH);
+    if (reply) {
+      // Reply from the notification: the text goes to the core, which sends it end-to-end encrypted.
+      Intent replied =
+          new Intent(context, NotificationReplyReceiver.class)
+              .putExtra(EXTRA_NOTIFICATION, n)
+              .putExtra(EXTRA_NOTIFICATION_TOKEN, token);
+      // RemoteInput needs a mutable PendingIntent; the intent is explicit, to River's own receiver.
+      int flags =
+          PendingIntent.FLAG_UPDATE_CURRENT
+              | (android.os.Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
+      PendingIntent action = PendingIntent.getBroadcast(context, n, replied, flags);
+      androidx.core.app.RemoteInput input =
+          new androidx.core.app.RemoteInput.Builder(NotificationReplyReceiver.KEY_TEXT).setLabel("Reply").build();
+      b.addAction(
+          new NotificationCompat.Action.Builder(0, "Reply", action)
+              .addRemoteInput(input)
+              .setAllowGeneratedReplies(false)
+              .build());
+    }
     try {
       NotificationManagerCompat.from(context).notify(n, b.build());
     } catch (SecurityException e) {

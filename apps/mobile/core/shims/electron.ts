@@ -110,23 +110,32 @@ export const webContents = { getAllWebContents: () => [ui] };
 type ClickListener = () => void;
 
 /** A system notification, shown by the app shell; tapping it opens River and runs the click handler. */
+type ReplyListener = (event: unknown, reply: string) => void;
+
 export class Notification {
-  private readonly options: { title: string; body: string };
+  private readonly options: { title: string; body: string; reply: boolean };
   private readonly clicks: ClickListener[] = [];
-  constructor(options: { title: string; body: string; silent?: boolean }) {
-    this.options = { title: options.title, body: options.body };
+  private readonly replies: ReplyListener[] = [];
+  constructor(options: { title: string; body: string; silent?: boolean; hasReply?: boolean }) {
+    this.options = { title: options.title, body: options.body, reply: options.hasReply === true };
   }
   static isSupported(): boolean {
     return true;
   }
-  on(event: 'click', listener: ClickListener): this {
-    if (event === 'click') this.clicks.push(listener);
+  on(event: 'click', listener: ClickListener): this;
+  on(event: 'reply', listener: ReplyListener): this;
+  on(event: 'click' | 'reply', listener: ClickListener | ReplyListener): this {
+    if (event === 'click') this.clicks.push(listener as ClickListener);
+    if (event === 'reply') this.replies.push(listener as ReplyListener);
     return this;
   }
   show(): void {
-    void ask<string>('notify', this.options).then(
+    void ask<string | { reply?: unknown }>('notify', this.options).then(
       (result) => {
         if (result === 'clicked') for (const fn of this.clicks) fn();
+        else if (result && typeof result === 'object' && typeof result.reply === 'string') {
+          for (const fn of this.replies) fn({}, result.reply);
+        }
       },
       () => undefined,
     );
