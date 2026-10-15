@@ -6,6 +6,24 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-16
+
+**River 2.0 — Stage 2 is complete: River on your computer and your phone.**
+
+Everything since 1.0 in one place: River for Android (1.1) and iPhone (1.3);
+one account on all your devices, linked with a code or a QR code (1.2), with
+your friends list in step (1.6); phones that stay connected, keep calls going
+with the screen off, take shares from other apps and let you reply from
+notifications (1.4); call setup bound to identity keys and safer linking
+(1.5); calls that ring in the background (1.7); consent-based remote
+assistance — see and point, never control (1.8); and River's Stage 2 security
+review with every finding fixed (1.9). From here River uses regular semantic
+versioning (2.0.1, 2.1.0, …).
+
+### Changed
+
+- README, roadmap and status describe the finished Stage 2.
+
 ## [1.9.0] - 2026-10-16
 
 **Hardening: River's Stage 2 security review.**
