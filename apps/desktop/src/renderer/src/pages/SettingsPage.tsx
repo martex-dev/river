@@ -84,8 +84,10 @@ export function SettingsOverlay(): ReactElement | null {
   const host = useHostStatus();
   const [askedForHosting, setAskedForHosting] = useState(false);
   // Hosting is for whoever runs a server; everyone else never sees it.
+  // Phones never host: hosting runs on a computer.
+  const phone = useRiver((r) => r.info?.platform === 'android');
   const showHosting =
-    askedForHosting || tab === 'hosting' || host?.enabled || (host?.legacy ?? 'none') !== 'none';
+    !phone && (askedForHosting || tab === 'hosting' || host?.enabled || (host?.legacy ?? 'none') !== 'none');
 
   useEffect(() => {
     if (!tab) return;
@@ -134,7 +136,7 @@ export function SettingsOverlay(): ReactElement | null {
               {tab === 'account' && (
                 <>
                   <ServerPanel settings={settings} />
-                  {!showHosting && (
+                  {!showHosting && !phone && (
                     <button
                       className="btn btn--link"
                       onClick={() => {

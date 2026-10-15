@@ -32,6 +32,7 @@ export function VoiceChannel(props: {
   me: string;
 }): ReactElement {
   const { community, channel, me } = props;
+  const phone = useRiver((r) => r.info?.platform === 'android');
   const s = useCommunity();
   useCommunity((x) => x.callVersion);
   const call = s.call;
@@ -174,22 +175,25 @@ export function VoiceChannel(props: {
             >
               <CameraIcon />
             </button>
-            <button
-              className={`round-btn ${call.localTrack('screen') ? 'round-btn--on' : ''}`}
-              aria-label={call.localTrack('screen') ? tr('Stop sharing') : tr('Share screen')}
-              title={call.localTrack('screen') ? 'Stop sharing' : 'Share your screen'}
-              disabled={!canStream}
-              onClick={() => {
-                if (call.localTrack('screen')) {
-                  void call.setScreen(false).then(() => {
-                    play('streamStop');
-                    sendVoiceState();
-                  });
-                } else void window.river.voice.screenSources().then(setPicker);
-              }}
-            >
-              <ScreenIcon />
-            </button>
+            {/* Phones have no screen picker yet. */}
+            {!phone && (
+              <button
+                className={`round-btn ${call.localTrack('screen') ? 'round-btn--on' : ''}`}
+                aria-label={call.localTrack('screen') ? tr('Stop sharing') : tr('Share screen')}
+                title={call.localTrack('screen') ? 'Stop sharing' : 'Share your screen'}
+                disabled={!canStream}
+                onClick={() => {
+                  if (call.localTrack('screen')) {
+                    void call.setScreen(false).then(() => {
+                      play('streamStop');
+                      sendVoiceState();
+                    });
+                  } else void window.river.voice.screenSources().then(setPicker);
+                }}
+              >
+                <ScreenIcon />
+              </button>
+            )}
             <SoundboardButton community={community} channelId={call.channelId} />
             {channel.prioritySpeakers?.includes(me) && (
               <button
