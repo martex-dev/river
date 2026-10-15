@@ -6,6 +6,8 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-15
+
 **River for Android.**
 
 ### Security
@@ -26,6 +28,8 @@ All notable changes to River are documented here. The format follows
   phones and computers talk to each other directly. Communities, channels,
   voice, direct messages and calls, files, invites; "Open in River" links;
   message notifications. Download `River-android.apk` from the release.
+  This first build is a **preview** signed with a one-off key: the first build
+  with River's permanent key will need one reinstall.
 - Phone layout: one pane at a time — the conversation, or the server and
   channel list behind ☰; Back returns to the list.
 - On the phone, the same protections as the desktop: libsignal for direct
