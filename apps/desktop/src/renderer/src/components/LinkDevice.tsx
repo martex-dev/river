@@ -218,7 +218,7 @@ export function DevicesPanel(): ReactElement {
   const remove = async (d: LinkedDevice): Promise<void> => {
     if (
       !window.confirm(
-        `Remove device ${d.deviceId}? Your server signs it out at once and stops delivering to it. ` +
+        `Remove ${d.name ?? `device ${d.deviceId}`}? Your server signs it out at once and stops delivering to it. ` +
           'It keeps what it already received; if it was lost or stolen, also leave and rejoin communities you care about.',
       )
     )
@@ -242,7 +242,11 @@ export function DevicesPanel(): ReactElement {
           {devices.map((d) => (
             <li key={d.deviceId} className="devices__item">
               <span>
-                <strong>{d.current ? 'This device' : `Device ${d.deviceId}`}</strong>
+                <strong>
+                  {d.current
+                    ? `This device${d.name ? ` · ${d.name}` : ''}`
+                    : (d.name ?? `Device ${d.deviceId}`)}
+                </strong>
                 <span className="muted small"> · linked {when(d.addedAt)}</span>
               </span>
               {!d.current && (

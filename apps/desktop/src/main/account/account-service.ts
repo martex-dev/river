@@ -318,6 +318,37 @@ export class AccountService {
     return !!row && parseDeviceList(row.device_list).devices.length > 1;
   }
 
+  /**
+   * Names of this account's devices, as typed when they were linked (kept on the devices only,
+   * shared between them end-to-end encrypted; the server never sees them).
+   */
+  deviceNames(): Record<string, string> {
+    const row = this.deps.db()?.prepare("SELECT value FROM meta WHERE key = 'device_names'").get() as
+      { value: string } | undefined;
+    try {
+      const parsed: unknown = row ? JSON.parse(row.value) : {};
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** Adds or replaces device names (ID → name); unknown shapes are ignored. */
+  setDeviceNames(patch: Record<string, unknown>, onlyMissing = false): void {
+    const db = this.deps.db();
+    if (!db) return;
+    const names = this.deviceNames();
+    for (const [id, name] of Object.entries(patch)) {
+      if (!/^[1-9][0-9]?$/.test(id) || typeof name !== 'string' || !name.trim()) continue;
+      if (onlyMissing && names[id]) continue;
+      names[id] = name.trim().slice(0, 64);
+    }
+    const kept = Object.fromEntries(Object.entries(names).slice(0, 20));
+    db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('device_names', ?)").run(
+      JSON.stringify(kept),
+    );
+  }
+
   /** This device's ID on the account (1 for the device that created it). */
   deviceId(): number | null {
     return this.row()?.device_id ?? null;
