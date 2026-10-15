@@ -276,7 +276,12 @@ export class AccountService {
     if (!verify(signer.publicKey, deviceListMessage(listBytes), unb64(account.deviceListSignature))) {
       throw new UserFacingError('The server returned a device list that is not signed by your identity.');
     }
-    return parseDeviceList(listBytes);
+    const list = parseDeviceList(listBytes);
+    // An older list could bring back a removed device: never go backwards.
+    if (list.riverId !== row.river_id || list.version < row.device_list_version) {
+      throw new UserFacingError('The server returned an older or foreign device list. Nothing was changed.');
+    }
+    return list;
   }
 
   /** Signs and uploads a new device list (adds or removes devices); keeps the local copy. */

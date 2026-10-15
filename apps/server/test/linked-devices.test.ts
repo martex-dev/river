@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { generateKeyPair, sign } from '@river/crypto';
 import { challengeResponseSchema, deviceListMessage, sessionMessage, type DeviceList } from '@river/protocol';
 import type { RiverDatabase } from '../src/db/database.ts';
@@ -41,6 +41,10 @@ function signed(user: User, list: DeviceList, signer = user.identity.privateKey)
 }
 
 async function signIn(riverId: string, deviceId: number, key: Uint8Array): Promise<number> {
+  return (await session(riverId, deviceId, key)).statusCode;
+}
+
+async function session(riverId: string, deviceId: number, key: Uint8Array) {
   const chal = Buffer.from(
     challengeResponseSchema.parse(
       (
@@ -59,10 +63,47 @@ async function signIn(riverId: string, deviceId: number, key: Uint8Array): Promi
       signature: b64(sign(key, sessionMessage(chal, riverId, deviceId))),
     },
   });
-  return res.statusCode;
+  return res;
 }
 
 describe('linked devices (1.3)', () => {
+  it('a removed device loses its open realtime connection at once', async () => {
+    const user = await registerUser(app);
+    const phone = generateKeyPair();
+    const entry = {
+      deviceId: 2,
+      authKey: b64(phone.publicKey),
+      registrationId: 4242,
+      addedAt: new Date().toISOString(),
+    };
+    const put = (version: number, extra: DeviceList['devices']) =>
+      app.inject({
+        method: 'PUT',
+        url: '/v1/accounts/me/devices',
+        headers: auth(user.token),
+        payload: signed(user, listOf(user, version, extra)),
+      });
+    expect((await put(2, [entry])).statusCode).toBe(200);
+    const phoneToken = (await session(user.riverId, 2, phone.privateKey)).json().token as string;
+
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const { port } = app.server.address() as { port: number };
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/ws`);
+    const events: Array<{ t: string }> = [];
+    let closedWith: number | null = null;
+    ws.onmessage = (m) => events.push(JSON.parse(String(m.data)));
+    ws.onclose = (e) => (closedWith = e.code);
+    await new Promise((resolve, reject) => {
+      ws.onopen = resolve;
+      ws.onerror = reject;
+    });
+    ws.send(JSON.stringify({ t: 'auth', token: phoneToken }));
+    await vi.waitFor(() => expect(events.some((e) => e.t === 'ready')).toBe(true));
+
+    expect((await put(3, [])).json().removed).toEqual([2]);
+    await vi.waitFor(() => expect(closedWith).toBe(4401));
+  });
+
   it('advertises the capability', async () => {
     const res = await app.inject({ method: 'GET', url: '/v1/version' });
     expect(res.json().capabilities).toContain('linked-devices');

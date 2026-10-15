@@ -2434,6 +2434,7 @@ export async function registerCommunityRoutes(
         }
         clearTimeout(authTimer);
         riverId = session.riverId;
+        hubSocket.deviceId = session.deviceId;
         hub.setStatus(riverId, event.status ?? 'online');
         const cameOnline = hub.add(riverId, hubSocket);
         send({ t: 'ready', riverId });

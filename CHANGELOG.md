@@ -6,6 +6,17 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- **Removing a linked device now ends its connection at once.** Before, a
+  removed device that was online kept its realtime connection until it next
+  reconnected. Found in River's own review of linked devices.
+- **Older device lists are refused.** River remembers the newest signed device
+  list it has seen for you and for each person, so a server cannot bring back a
+  removed device by replaying an older list.
+- Linking shows which server the code belongs to before you continue, and the
+  removal message says plainly what removal does and does not do.
+
 ## [1.2.0] - 2026-10-15
 
 **One account on your phone and your computer.**

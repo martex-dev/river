@@ -3,6 +3,8 @@ import type { ChosenStatus, PresenceStatus, ServerEvent, VoiceState } from '@riv
 export interface HubSocket {
   send(data: string | Buffer): void;
   close(code?: number): void;
+  /** The account device this connection signed in as (set at auth). */
+  deviceId?: number;
 }
 
 const DEFAULT_STATE: VoiceState = { muted: false, deafened: false, serverMuted: false, streaming: false };
@@ -45,6 +47,18 @@ export class Hub {
   readonly stageMuted = new Set<string>();
   /** Chosen presence per account (in memory; apps send it again when they connect). */
   private readonly chosen = new Map<string, ChosenStatus>();
+
+  /** Devices removed from an account: their open connections end now (linked devices, 1.3.1). */
+  disconnectDevices(riverId: string, deviceIds: readonly number[]): number {
+    let closed = 0;
+    for (const socket of [...(this.sockets.get(riverId) ?? [])]) {
+      if (socket.deviceId !== undefined && deviceIds.includes(socket.deviceId)) {
+        socket.close(4401);
+        closed += 1;
+      }
+    }
+    return closed;
+  }
 
   add(riverId: string, socket: HubSocket): boolean {
     let set = this.sockets.get(riverId);

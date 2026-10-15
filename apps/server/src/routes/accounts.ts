@@ -53,7 +53,13 @@ function fail(reply: FastifyReply, status: number, code: string, message: string
 /** Accounts and device authentication routes (protocol v1). */
 export function registerAccountRoutes(
   app: FastifyInstance,
-  deps: { config: ServerConfig; database: RiverDatabase; now: () => Date },
+  deps: {
+    config: ServerConfig;
+    database: RiverDatabase;
+    now: () => Date;
+    /** Devices were removed from an account (their live connections must end). */
+    onDevicesRemoved?: (riverId: string, deviceIds: number[]) => void;
+  },
 ): void {
   const { db } = deps.database;
   const sensitive = { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } };
@@ -389,6 +395,7 @@ export function registerAccountRoutes(
             .execute();
         }
       });
+      if (removed.length) deps.onDevicesRemoved?.(riverId, removed);
       return { devices: list.devices.length, removed };
     },
   );

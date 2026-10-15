@@ -891,6 +891,14 @@ export class DmService {
     }
     const list = deviceListSchema.parse(JSON.parse(listBytes.toString('utf8')));
     if (list.riverId !== peer) throw new CommunityError('The server returned keys for someone else.');
+    // A server must not bring back a device that was removed by replaying an older signed list.
+    const seen = Number(this.meta(`listVersion:${peer}`) ?? '0');
+    if (list.version < seen) {
+      throw new CommunityError(
+        'The server offered an older device list for this person than River has already seen. Messages were not sent.',
+      );
+    }
+    if (list.version > seen) this.setMeta(`listVersion:${peer}`, String(list.version));
     const devices: Array<{ deviceId: number; registrationId: number }> = [];
     for (const d of res.devices) {
       if (peer === this.me() && d.deviceId === this.deviceId()) continue;

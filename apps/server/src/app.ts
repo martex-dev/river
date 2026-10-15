@@ -167,8 +167,14 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   }));
 
   const now = deps.now ?? (() => new Date());
-  registerAccountRoutes(app, { config, database: deps.database, now });
   const hub = new Hub(deps.voiceGraceMs !== undefined ? { voiceGraceMs: deps.voiceGraceMs } : {});
+  registerAccountRoutes(app, {
+    config,
+    database: deps.database,
+    now,
+    // A removed device's realtime connection ends at once, not when it next reconnects.
+    onDevicesRemoved: (riverId, removed) => hub.disconnectDevices(riverId, removed),
+  });
   app.addHook('onClose', async () => hub.close());
   const ops = await registerCommunityRoutes(app, { config, database: deps.database, now, hub });
   registerAdminRoutes(app, { config, database: deps.database, now, hub, ops });
