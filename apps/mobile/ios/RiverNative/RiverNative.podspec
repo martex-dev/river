@@ -17,5 +17,6 @@ Pod::Spec.new do |s|
   s.dependency 'Capacitor'
   s.dependency 'LibSignalClient'
   s.dependency 'SQLCipher', '4.10.0'
-  s.frameworks = 'WebKit', 'CryptoKit', 'Security', 'Compression', 'UserNotifications', 'UniformTypeIdentifiers', 'LocalAuthentication'
+  s.frameworks = 'WebKit', 'CryptoKit', 'Security', 'UserNotifications', 'UniformTypeIdentifiers', 'LocalAuthentication'
+  s.libraries = 'compression'
 end
