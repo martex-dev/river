@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-15
+
+**Phones, day to day.**
+
 ### Added
 
 - Phones: swipe right on a conversation to open the server and channel list,
