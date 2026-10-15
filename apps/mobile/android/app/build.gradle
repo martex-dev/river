@@ -65,6 +65,8 @@ android {
             excludes += ['*.dylib', '*.dll', 'libsignal_jni_amd64.so', 'libsignal_jni_testing_amd64.so']
         }
         jniLibs {
+            // Compressed inside the APK: a much smaller download (Android unpacks them on install).
+            useLegacyPackaging = true
             // libsignal's test-only library: never used by the app.
             excludes += ['**/libsignal_jni_testing.so']
         }
