@@ -264,6 +264,13 @@ export class CommunityService {
   /** How often the app pings the server, and how long silence means a dead connection (tests shorten them). */
   heartbeatMs = 20_000;
   deadAfterMs = 50_000;
+  /**
+   * In a call a dead connection must be noticed fast: relayed voice and call signals stop with
+   * it. Field test 2026-10-14: a 45 s gap after the tunnel blipped. Ping more often and give up
+   * on a silent connection sooner while in a voice channel or a 1:1 call.
+   */
+  callHeartbeatMs = 4_000;
+  callDeadAfterMs = 10_000;
   private readonly listeners = new Set<(e: CommunityEvent) => void>();
   private readonly relayListeners = new Set<(from: string, payload: Uint8Array) => void>();
   private readonly rawListeners = new Set<(e: ServerEvent) => void>();
@@ -2939,15 +2946,24 @@ export class CommunityService {
   private startHeartbeat(socket: WebSocket): void {
     this.stopHeartbeat();
     this.lastHeard = Date.now();
+    let lastPing = Date.now();
+    const tick = Math.min(this.heartbeatMs, this.callHeartbeatMs);
     this.heartbeat = setInterval(() => {
       if (this.socket !== socket) return this.stopHeartbeat();
-      if (Date.now() - this.lastHeard > this.deadAfterMs) {
+      const inCall = this.activeVoice !== null || this.activeRoom !== null;
+      const now = Date.now();
+      const deadAfter = inCall ? Math.min(this.callDeadAfterMs, this.deadAfterMs) : this.deadAfterMs;
+      if (now - this.lastHeard > deadAfter) {
         this.deps.log.warn('Realtime connection went silent; reconnecting');
         this.dropSocket(socket);
         return;
       }
-      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ t: 'ping' }));
-    }, this.heartbeatMs);
+      const every = inCall ? Math.min(this.callHeartbeatMs, this.heartbeatMs) : this.heartbeatMs;
+      if (now - lastPing >= every - tick / 2) {
+        lastPing = now;
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ t: 'ping' }));
+      }
+    }, tick);
     this.heartbeat.unref?.();
   }
 
