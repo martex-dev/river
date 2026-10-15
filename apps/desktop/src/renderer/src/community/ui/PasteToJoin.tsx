@@ -13,6 +13,13 @@ const editable = (el: EventTarget | null): boolean =>
 /** Asks before acting on a link that came from outside River (pasted, or "Open in River"). */
 function offer(link: DeepLink): void {
   const s = useCommunity.getState();
+  if (link.kind === 'device') {
+    s.notify(
+      'That is a link code for a new device. Open it on the device you are adding, on its welcome screen.',
+      'error',
+    );
+    return;
+  }
   if (link.kind === 'invite') {
     useRiver.getState().navigate('communities');
     s.setModal({ kind: 'join-invite', link: link.link });

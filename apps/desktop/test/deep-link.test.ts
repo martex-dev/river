@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { formatLinkCode } from '../src/main/account/link-service.ts';
 import { deepLinkInArgs, parseDeepLink } from '../src/main/deep-link.ts';
 
 const invite = `https://crew.trycloudflare.com/join#c=${'a'.repeat(22)}&k=${'b'.repeat(43)}`;
@@ -11,6 +12,20 @@ describe('river:// links (Open in River)', () => {
     expect(parseDeepLink(wrap(invite))).toEqual({ kind: 'invite', link: invite });
     expect(parseDeepLink(wrap(friend))).toEqual({ kind: 'friend', link: friend });
     expect(parseDeepLink(wrap(signup))).toEqual({ kind: 'signup', link: signup });
+  });
+
+  it('reads device link codes (the QR code in Settings → Devices)', () => {
+    const device = 'river://link?s=https%3A%2F%2Fcrew.trycloudflare.com&c=ABCD-EFGH-JKMN-PQRS';
+    expect(parseDeepLink(device)).toEqual({ kind: 'device', link: device });
+    const real = formatLinkCode('https://river.example', new Uint8Array(10).fill(7));
+    expect(parseDeepLink(real)).toEqual({ kind: 'device', link: real });
+    for (const bad of [
+      'river://link?s=javascript%3Aalert(1)&c=ABCD-EFGH-JKMN-PQRS',
+      'river://link?s=https%3A%2F%2Fcrew.trycloudflare.com&c=short',
+      'river://link?c=ABCD-EFGH-JKMN-PQRS',
+    ]) {
+      expect(parseDeepLink(bad)).toBeNull();
+    }
   });
 
   it('refuses anything else', () => {
