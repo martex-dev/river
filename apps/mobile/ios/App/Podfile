@@ -5,6 +5,8 @@ use_frameworks!
 
 # libsignal's prebuilt library for iOS, pinned to the checksum Signal-iOS uses for v0.105.0.
 ENV['LIBSIGNAL_FFI_PREBUILD_CHECKSUM'] = '556a82414b545490085a0e21d94990788bdcbee4d769043f7889397872443faf'
+# Xcode 26 builds Swift modules explicitly and then cannot see libsignal's C module (SignalFfi).
+ENV['LIBSIGNAL_TESTING_DISABLE_EXPLICIT_MODULES'] = '1'
 
 # workaround to avoid Xcode caching of Pods that requires
 # Product -> Clean Build Folder after new Cordova plugins installed
@@ -30,6 +32,7 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
+      config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
     end
   end
 end
