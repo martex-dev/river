@@ -85,6 +85,7 @@ export function createRiverApi(t: RiverTransport): RiverApi {
         confirm: () => t.invoke(IPC.accountLinkConfirm),
         join: (code, deviceName) => t.invoke(IPC.accountLinkJoin, code, deviceName),
         cancel: () => t.invoke(IPC.accountLinkCancel),
+        accept: () => t.invoke(IPC.accountLinkAccept),
         status: () => t.invoke(IPC.accountLinkStatus),
         onStatus: (listener) => t.on(IPC.accountLinkChanged, (...args) => listener(args[0] as LinkProgress)),
       },

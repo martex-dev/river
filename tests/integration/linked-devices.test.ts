@@ -145,6 +145,12 @@ describe('linked devices', { timeout: 60_000 }, () => {
     expect(request.deviceName).toBe('Alice’s phone');
     const { deviceId } = await desktop.link.confirm();
     expect(deviceId).toBe(2);
+    const review = await until(() => {
+      const p = phone.link.status();
+      return p.state === 'review' ? p : null;
+    });
+    expect(review.server).toBe(new URL(SERVER).host);
+    await phone.link.accept();
     await until(() => phone.link.status().state === 'linked');
 
     // Same person, its own device.

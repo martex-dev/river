@@ -6,6 +6,13 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- **"Is this you?" before linking.** A new device now shows whose account it
+  received (name, server, River ID) and links only after you confirm, so a
+  link code someone else made — for example one a web page opened — cannot
+  quietly put your new device into their account.
+
 ## [1.3.0] - 2026-10-15
 
 **River for iPhone.**
