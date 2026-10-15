@@ -41,10 +41,10 @@ jobs:
       - name: Build for the simulator
         working-directory: apps/mobile/ios/App
         run: |
-          set -o pipefail
-          xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug \
-            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build | grep -E 'error:|Undefined symbol|ld: |warning: .*RiverNative|BUILD' || true
+          status=0
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator'             -derivedDataPath build ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build > xcodebuild-sim.log 2>&1 || status=$?
+          grep -E 'error:|Undefined symbol|ld: |BUILD' xcodebuild-sim.log | head -60 || true
+          if [ "$status" != 0 ]; then grep -B5 -A40 'Undefined symbols' xcodebuild-sim.log | head -120 || true; exit "$status"; fi
           test -f build/Build/Products/Debug-iphonesimulator/App.app/Info.plist
       - name: Start River in a simulator
         working-directory: apps/mobile/ios/App
@@ -75,6 +75,12 @@ jobs:
           cp -R build/Build/Products/Release-iphoneos/App.app Payload/
           zip -qry River-ios-unsigned.ipa Payload
           ls -la River-ios-unsigned.ipa
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-build-logs
+          path: apps/mobile/ios/App/xcodebuild-*.log
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: river-ios-unsigned
