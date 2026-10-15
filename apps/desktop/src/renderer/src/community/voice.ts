@@ -60,6 +60,9 @@ const MISSING_GRACE_MS = 10_000;
 const RELAY_AFTER_MS = 6000;
 /** How often relayed pairs are checked for a direct connection that works again. */
 const RELAY_CHECK_MS = 2000;
+/** While relayed, our key is sent again this many times, this far apart (lost signals). */
+const RELAY_KEY_RESENDS = 5;
+const RELAY_KEY_RESEND_MS = 8000;
 
 function newSid(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(9));
@@ -192,8 +195,13 @@ export class VoiceCall {
    * their speaking indicator stay put.
    */
   private readonly views = new Map<string, RemotePeer>();
-  /** People we gave our relay key to. */
-  private readonly keySentTo = new Set<string>();
+  /**
+   * People we gave our relay key to: when, and how often. A key signal can be lost (it travels
+   * while the server connection is reconnecting); the field test of 2026-10-14 had one pair that
+   * never heard each other. While relayed, the key is sent again a few times, and again after
+   * our connection to the server comes back.
+   */
+  private readonly keySentTo = new Map<string, { at: number; times: number }>();
   private local: Record<Slot, MediaStreamTrack | null> = { audio: null, camera: null, screen: null };
   private readonly onChange: () => void;
   muted = false;
@@ -319,8 +327,19 @@ export class VoiceCall {
    */
   private checkRelays(): void {
     if (this.closed) return;
+    const now = Date.now();
     for (const id of [...this.relayPeers]) {
-      if (this.peers.get(id)?.pc.connectionState === 'connected') this.disableRelay(id, true);
+      if (this.peers.get(id)?.pc.connectionState === 'connected') {
+        this.disableRelay(id, true);
+        continue;
+      }
+      // Our key again, in case the first one was lost: a few times, and after a reconnect.
+      const sent = this.keySentTo.get(id);
+      const reconnected = sent !== undefined && this.resumedAt > sent.at;
+      if (!sent || reconnected || (sent.times < RELAY_KEY_RESENDS && now - sent.at >= RELAY_KEY_RESEND_MS)) {
+        if (reconnected) this.keySentTo.set(id, { at: sent.at, times: 0 });
+        this.sendRelayKey(id);
+      }
     }
   }
 
@@ -356,11 +375,15 @@ export class VoiceCall {
       this.relayPeers.add(id);
       this.relay.setRecipients([...this.relayPeers]);
     }
-    if (!this.keySentTo.has(id)) {
-      this.keySentTo.add(id);
-      this.send(id, { type: 'relay', key: toBase64(this.relay.ownKey()) });
-    }
+    if (!this.keySentTo.has(id)) this.sendRelayKey(id);
     this.refreshAudio(id);
+  }
+
+  private sendRelayKey(id: string): void {
+    if (!this.relay) return;
+    const sent = this.keySentTo.get(id);
+    this.keySentTo.set(id, { at: Date.now(), times: (sent?.times ?? 0) + 1 });
+    this.send(id, { type: 'relay', key: toBase64(this.relay.ownKey()) });
   }
 
   private disableRelay(id: string, tell: boolean): void {
