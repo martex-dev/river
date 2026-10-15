@@ -136,6 +136,16 @@ async function start(): Promise<void> {
   };
   settings.onChange(syncLock);
   syncLock();
+  // Settings → System → Stay connected (Android): the shell runs a visible foreground service.
+  let backgroundState: boolean | null = null;
+  const syncBackground = (): void => {
+    const enabled = settings.get().system.background;
+    if (enabled === backgroundState || PLATFORM !== 'android') return;
+    backgroundState = enabled;
+    void ask('background', { enabled }).catch(() => undefined);
+  };
+  settings.onChange(syncBackground);
+  syncBackground();
   const storage = new StorageService({
     dir: join(userData, 'data'),
     keystore,

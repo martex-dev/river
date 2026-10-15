@@ -152,6 +152,8 @@ export const settingsSchema = z.object({
     closeToTray: z.boolean(),
     /** Added in 1.2.0 (phones): ask for the fingerprint, face or screen lock when River opens. */
     appLock: z.boolean(),
+    /** Added in 1.4.0 (Android): keep the connection while River is closed (a visible service). */
+    background: z.boolean(),
   }),
   /** Added in 1.0.11: communities hosted by this PC, from inside River. */
   hosting: z.object({
@@ -233,7 +235,7 @@ export const DEFAULT_SETTINGS: Settings = {
     leaveAloneMinutes: 0,
     entranceSounds: {},
   },
-  system: { startAtLogin: false, closeToTray: true, appLock: false },
+  system: { startAtLogin: false, closeToTray: true, appLock: false, background: false },
   hosting: { enabled: false, keepAwake: true },
   rail: { order: [], folders: [] },
   presence: { status: 'online', autoIdle: true, customText: '', customEmoji: '', customUntil: null },

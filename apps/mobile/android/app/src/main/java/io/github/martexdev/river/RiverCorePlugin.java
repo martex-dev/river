@@ -23,7 +23,7 @@ public class RiverCorePlugin extends Plugin implements CoreHost.Listener {
 
   @Override
   public void load() {
-    core = ((MainActivity) getActivity()).core();
+    core = CoreHost.get(getContext());
     core.setListener(this);
   }
 
