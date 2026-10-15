@@ -44,7 +44,7 @@ jobs:
           set -o pipefail
           xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | grep -E 'error:|warning: .*RiverNative|BUILD' || true
+            -derivedDataPath build ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build | grep -E 'error:|Undefined symbol|ld: |warning: .*RiverNative|BUILD' || true
           test -f build/Build/Products/Debug-iphonesimulator/App.app/Info.plist
       - name: Start River in a simulator
         working-directory: apps/mobile/ios/App
@@ -69,7 +69,7 @@ jobs:
           set -o pipefail
           xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | grep -E 'error:|BUILD' || true
+            ARCHS=arm64 CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | grep -E 'error:|Undefined symbol|ld: |BUILD' || true
           test -f build/Build/Products/Release-iphoneos/App.app/Info.plist
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/App.app Payload/
