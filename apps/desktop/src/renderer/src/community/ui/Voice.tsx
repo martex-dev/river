@@ -142,6 +142,7 @@ export function VoiceChannel(props: {
                   speaking={call.speaking.has(t.id)}
                   focused={focused === t.id}
                   onClick={() => setFocus(focused === t.id ? null : t.id)}
+                  onPoint={(x, y) => call.pointAt(t.id, x, y)}
                 />
               ),
             )}
@@ -394,8 +395,26 @@ function LinkBars({ link }: { link: LinkStats | undefined }): ReactElement | nul
   );
 }
 
+/**
+ * Where a click landed on the screen shown in a tile's video, as fractions of the shared
+ * screen (the video is letterboxed: object-fit contain). Null outside the picture.
+ */
+export function pointOnVideo(e: MouseEvent<HTMLElement>): { x: number; y: number } | null {
+  const video = e.currentTarget.querySelector('video');
+  if (!video || !video.videoWidth || !video.videoHeight) return null;
+  const rect = video.getBoundingClientRect();
+  const scale = Math.min(rect.width / video.videoWidth, rect.height / video.videoHeight);
+  const w = video.videoWidth * scale;
+  const h = video.videoHeight * scale;
+  const x = (e.clientX - rect.left - (rect.width - w) / 2) / w;
+  const y = (e.clientY - rect.top - (rect.height - h) / 2) / h;
+  return x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { x, y } : null;
+}
+
 function RemoteTile(props: {
   link?: LinkStats | undefined;
+  /** Remote assistance: point at a spot on their shared screen (ADR 0007). */
+  onPoint?(x: number, y: number): void;
   peer: RemotePeer;
   community: CommunityView;
   speaking: boolean;
@@ -412,6 +431,18 @@ function RemoteTile(props: {
     <div
       className={`tile ${connecting ? 'tile--connecting' : ''} ${peer.screenOn ? 'tile--screen' : ''} ${props.speaking ? 'is-speaking' : ''} ${props.focused ? 'is-focused' : ''}`}
       {...tileControls(label, props.speaking, props.focused, props.onClick)}
+      onClick={(e) => {
+        // On a shared screen, Alt+click (or a click in fullscreen) points instead of focusing.
+        if (peer.screenOn && props.onPoint && (e.altKey || document.fullscreenElement === e.currentTarget)) {
+          const at = pointOnVideo(e);
+          if (at) props.onPoint(at.x, at.y);
+          return;
+        }
+        props.onClick();
+      }}
+      title={
+        peer.screenOn ? 'Alt+click (or click in fullscreen) to point at something on their screen' : undefined
+      }
     >
       {peer.screenOn && peer.screen ? (
         <Video stream={peer.screen} />

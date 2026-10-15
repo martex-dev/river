@@ -197,6 +197,13 @@ Each line is one PR; each version ships when its section is done.
 - [ ] Permanent signing key (maintainer runs `python scripts/release/create-android-key.py`)
 - [ ] Voice in the Android WebView verified on a real phone (microphone permission, audio routing)
 
+### 1.8.x — Remote assistance (ADR 0007, released in 1.8.0)
+
+- [x] Consent asked by main before every screen share; no default screen
+- [x] Always-on-top "can see your screen" bar with Stop, outside the window; comes back if it crashes
+- [x] Pointing: viewers point at the shared screen, the sharer sees a ring
+- [ ] Control (separate per-session grant, hardware-key stop) — needs OS input injection; not before its own review
+
 ### 1.7.x — Calls (released in 1.7.0)
 
 - [x] Incoming 1:1 calls notify while River is in the tray or closed (with Stay connected); opening River shows the ringing call

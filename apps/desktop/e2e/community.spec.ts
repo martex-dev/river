@@ -67,6 +67,16 @@ test.afterAll(async () => {
 async function open(name: string): Promise<Page> {
   const { app, page } = await launchRiver(tmp('river-ui-'), { name, args: FAKE_MEDIA });
   apps.push(app);
+  // Answer River's own "Share your screen?" question (a native dialog Playwright cannot click).
+  await app.evaluate(({ dialog }) => {
+    const ask = dialog.showMessageBox.bind(dialog);
+    dialog.showMessageBox = ((...args: unknown[]) => {
+      const options = args.find((a) => a && typeof a === 'object' && 'title' in a) as { title?: string };
+      if (options?.title === 'River — share your screen')
+        return Promise.resolve({ response: 0, checkboxChecked: false });
+      return (ask as (...a: unknown[]) => Promise<unknown>)(...args);
+    }) as typeof dialog.showMessageBox;
+  });
   return page;
 }
 

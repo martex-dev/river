@@ -77,6 +77,8 @@ export interface IpcDeps {
   afterRestore(): Promise<void>;
   /** Screen chosen in River's picker for the next screen share. */
   selectScreen(sourceId: string): void;
+  /** The "can see your screen" bar and pointing (desktop only; ADR 0007). */
+  share?: { status(sharing: boolean, viewers: string[]): void; point(x: number, y: number): void };
   /** Creates the account on River's home server by itself. */
   homeAccount: Pick<HomeAccount, 'ensure' | 'kick' | 'isWaiting' | 'enabled' | 'locate'>;
   /** Settings → System → Connection check. */
@@ -371,6 +373,28 @@ export function registerIpc(deps: IpcDeps): void {
     return sources.map((s) => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL() }));
   });
   handle(IPC.screenSelect, (_e, id) => deps.selectScreen(z.string().max(200).parse(id)));
+  const shareStatus = z.object({
+    sharing: z.boolean(),
+    viewers: z.array(z.string().max(64)).max(32),
+  });
+  ipcMain.on(IPC.screenShareStatus, (event, status: unknown) => {
+    try {
+      assertTrustedSender(event as unknown as IpcMainInvokeEvent, deps.devServerUrl);
+      const s = shareStatus.parse(status);
+      deps.share?.status(s.sharing, s.viewers);
+    } catch {
+      // invalid or untrusted: dropped
+    }
+  });
+  const fraction = z.number().min(0).max(1);
+  ipcMain.on(IPC.screenPoint, (event, x: unknown, y: unknown) => {
+    try {
+      assertTrustedSender(event as unknown as IpcMainInvokeEvent, deps.devServerUrl);
+      deps.share?.point(fraction.parse(x), fraction.parse(y));
+    } catch {
+      // invalid or untrusted: dropped
+    }
+  });
   handle(IPC.accountStatus, () => accountView(deps.account, deps.homeAccount));
   handle(IPC.accountLinkStart, () => result(() => deps.link.start()));
   handle(IPC.accountLinkConfirm, () => result(() => deps.link.confirm()));

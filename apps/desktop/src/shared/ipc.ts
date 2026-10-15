@@ -84,6 +84,8 @@ export const IPC = {
   diagnosticsOpenLogs: 'river:diagnostics:open-logs',
   screenSources: 'river:voice:screen-sources',
   screenSelect: 'river:voice:screen-select',
+  screenShareStatus: 'river:voice:share-status',
+  screenPoint: 'river:voice:point',
   communityEvent: 'river:community:event',
   dmAction: 'river:dm:action',
   socialAction: 'river:social:action',
@@ -467,6 +469,8 @@ export type CommunityEvent =
   | { t: 'voiceDisconnect'; moveTo?: string }
   /** Hang up the current call or voice channel (from the phone's "In a call" notification). */
   | { t: 'hangUp' }
+  /** Stop sharing the screen (the Stop button on the "can see your screen" bar). */
+  | { t: 'stopScreenShare' }
   /** A community's events changed (fetch them again), or one you are interested in starts now. */
   | { t: 'events'; communityId: string }
   | { t: 'emojis'; communityId: string }
@@ -647,6 +651,13 @@ export interface RiverApi {
     iceServers(): Promise<Array<{ urls: string[]; username?: string; credential?: string }>>;
     screenSources(): Promise<ScreenSource[]>;
     selectScreen(sourceId: string): Promise<void>;
+    /**
+     * Remote assistance (ADR 0007): this app is sharing its screen (or stopped) with these people.
+     * Main shows the always-on-top "can see your screen" bar with Stop, outside River's window.
+     */
+    shareStatus(status: { sharing: boolean; viewers: string[] }): void;
+    /** Someone watching our screen pointed at (x, y), fractions of the shared screen. */
+    point(x: number, y: number): void;
     /** Sends an encrypted voice frame through the server to people we cannot reach directly. */
     relay(to: string[], payload: Uint8Array): void;
     /** Joins (null: leaves) a 1:1 call's private relay room. */
