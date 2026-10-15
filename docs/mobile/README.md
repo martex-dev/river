@@ -1,7 +1,6 @@
 # River on phones
 
-River for Android ships from 1.1.0; iOS follows in 1.4.x (it needs the Apple
-decision in ROADMAP). Design: [ADR 0005](../architecture/decisions/0005-mobile-apps.md)
+River for Android ships from 1.1.0, River for iPhone from 1.2.0. Design: [ADR 0005](../architecture/decisions/0005-mobile-apps.md)
 and [ARCHITECTURE.md §13](../../ARCHITECTURE.md#13-mobile-architecture-stage-2).
 
 ## Install (Android)
@@ -15,7 +14,27 @@ Android 8.0 or newer.
 Updates: install the newer APK over the old one (same signing key, so your
 data stays). Obtainium can watch the GitHub releases and do it for you.
 
-## What works on a phone (1.1.0)
+## Install (iPhone)
+
+Without an Apple Developer account River cannot be in the App Store or
+TestFlight, so the release has an **unsigned** app, `River-ios-unsigned.ipa`,
+that you install yourself with a free Apple ID:
+
+1. On a computer, install [Sideloadly](https://sideloadly.io) or
+   [AltStore](https://altstore.io).
+2. Download `River-ios-unsigned.ipa` from the
+   [latest release](https://github.com/martex-dev/river/releases/latest).
+3. Connect the iPhone, open the .ipa with Sideloadly (or AltStore) and sign in
+   with your Apple ID. It signs River for your phone and installs it.
+4. On the iPhone: Settings → General → VPN & Device Management → trust your
+   Apple ID. iOS 16 or newer.
+
+Apps signed with a free Apple ID run for **7 days**; AltStore renews them
+automatically while your computer is on the same Wi-Fi. River's data stays when
+you reinstall the same app. With the Apple Developer account (ROADMAP, open
+decisions) River can go to TestFlight and the App Store instead.
+
+## What works on a phone
 
 - Everything in communities: channels, messages, replies, reactions, threads,
   files, roles, invites, voice channels.
