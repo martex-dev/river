@@ -32,7 +32,7 @@ import { runMainDiagnostics } from '../../desktop/src/main/diagnostics.ts';
 import { PresenceTracker } from '../../desktop/src/main/presence.ts';
 import { ready as cryptoReady } from './shims/crypto.ts';
 import { native } from './native.ts';
-import { emit, inbound, onDeepLink, onLifecycle, ready, ui } from './host.ts';
+import { ask, emit, inbound, onDeepLink, onLifecycle, ready, ui } from './host.ts';
 import { parseDeepLink } from '../../desktop/src/main/deep-link.ts';
 import { IPC, type DeepLink } from '../../desktop/src/shared/ipc.ts';
 
@@ -102,6 +102,8 @@ const noHosting: IpcDeps['hosting'] = {
   },
 } as unknown as IpcDeps['hosting'];
 
+/** Android or iOS: the same core runs on both. */
+const PLATFORM = /iPhone|iPad|iPod/.test(navigator.userAgent) ? 'ios' : 'android';
 let foreground = true;
 /** A River link opened from a browser that the UI has not taken yet (the UI asks when it is ready). */
 let pendingDeepLink: DeepLink | null = null;
@@ -117,9 +119,25 @@ async function start(): Promise<void> {
   await cryptoReady;
   const userData = app.getPath('userData');
   const log = createFileLogger(join(userData, 'logs'));
-  log.info(`River ${app.getVersion()} starting on android`);
+  log.info(`River ${app.getVersion()} starting on ${PLATFORM}`);
 
   const settings = new SettingsStore(join(userData, 'settings.json'), log);
+  // Settings → System → Lock River: the app shell asks for biometrics or the screen lock.
+  // Without a screen lock on the phone the setting cannot work, so it turns itself off.
+  let lockState: boolean | null = null;
+  const syncLock = (): void => {
+    const enabled = settings.get().system.appLock;
+    if (enabled === lockState) return;
+    lockState = enabled;
+    void ask<{ available: boolean }>('appLock', { enabled }).then(
+      (r) => {
+        if (enabled && !r?.available) settings.update({ system: { appLock: false } });
+      },
+      () => undefined,
+    );
+  };
+  settings.onChange(syncLock);
+  syncLock();
   const storage = new StorageService({
     dir: join(userData, 'data'),
     keystore,
@@ -230,7 +248,7 @@ async function start(): Promise<void> {
   const appInfo = (): AppInfo => ({
     version: app.getVersion(),
     channel: channelOfVersion(app.getVersion()),
-    platform: 'android',
+    platform: PLATFORM,
     arch: 'arm64',
     isPackaged: true,
     versions: {
@@ -245,7 +263,7 @@ async function start(): Promise<void> {
     appInfo,
     settings,
     updates: null,
-    updatesDisabledReason: 'River for Android updates from its download page.',
+    updatesDisabledReason: 'River on phones updates from its download page.',
     devServerUrl: undefined,
     fetchBytes: serverFetch,
     storage,
@@ -279,7 +297,7 @@ async function start(): Promise<void> {
         hosting: () => noHosting.status(),
         homeServerEnabled: homeAccount.enabled(),
         version: app.getVersion(),
-        platform: 'android',
+        platform: PLATFORM,
       }),
     openLogs: async () => undefined,
   });

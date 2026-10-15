@@ -9,3 +9,7 @@ CHANGELOG.md
 apps/mobile/android/app/src/main/assets
 apps/mobile/android/**/build
 apps/mobile/android/capacitor-cordova-android-plugins
+apps/mobile/ios/App/App/public
+apps/mobile/ios/RiverNative/core
+apps/mobile/ios/App/Pods
+apps/mobile/ios/capacitor-cordova-ios-plugins

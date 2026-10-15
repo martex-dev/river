@@ -50,7 +50,7 @@ test('the operator hosts River on their PC, a friend joins, and the operator man
   await expect(hana.locator('.hosting__backup')).toContainText('Last backup today');
   await auditA11y(hana, 'Settings → Hosting');
   const settings = await hana.evaluate(() => window.river.settings.get());
-  expect(settings.system).toEqual({ startAtLogin: true, closeToTray: true });
+  expect(settings.system).toMatchObject({ startAtLogin: true, closeToTray: true });
 
   // Her community lives on the server inside her own River.
   await openCommunities(hana);

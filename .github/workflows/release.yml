@@ -193,9 +193,44 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  ios:
+    name: Build iOS
+    needs: verify
+    runs-on: macos-15
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Use the newest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+      - run: npm ci
+      - name: Build the UI and the client core, sync the iOS project (pod install)
+        run: npm run sync:ios -w @river/mobile
+      - name: Build the device app (unsigned) and package it
+        working-directory: apps/mobile/ios/App
+        run: |
+          set -o pipefail
+          build=$(echo "$VERSION" | awk -F. '{ printf "%d", $1 * 1000000 + $2 * 1000 + $3 }')
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build             MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$build" ARCHS=arm64             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | grep -E 'error:|BUILD' || true
+          test -f build/Build/Products/Release-iphoneos/App.app/Info.plist
+          mkdir -p Payload ../../../../upload
+          cp -R build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qry "../../../../upload/River-$VERSION-ios-unsigned.ipa" Payload
+          ls -la ../../../../upload
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-iOS
+          path: upload/*
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     name: Sign and publish
-    needs: [verify, build, android]
+    needs: [verify, build, android, ios]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -228,6 +263,7 @@ jobs:
           copy "River-$VERSION-amd64.deb" River-linux.deb
           copy "River-$VERSION-x86_64.rpm" River-linux.rpm
           if [ -f "River-$VERSION-android-arm64.apk" ]; then cp "River-$VERSION-android-arm64.apk" River-android.apk; fi
+          copy "River-$VERSION-ios-unsigned.ipa" River-ios-unsigned.ipa
       - name: Sign release manifest
         env:
           RIVER_RELEASE_SIGNING_KEY: ${{ secrets.RIVER_RELEASE_SIGNING_KEY }}
