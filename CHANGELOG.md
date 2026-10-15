@@ -6,6 +6,16 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Remote assistance: see and point.** When you share your screen in a call,
+  a red bar stays on top of that screen saying who can see it, with a **Stop
+  sharing** button — River shows it itself, outside the app window, so it
+  cannot be hidden. People watching can point at something on your screen
+  (Alt+click, or a click in fullscreen; in a 1:1 call just click), and you see
+  a ring there. They can see and point; they cannot control your computer.
+  Design: docs/architecture/decisions/0007-remote-assistance.md.
+
 ## [1.1.0] - 2026-10-15
 
 **River for Android.**

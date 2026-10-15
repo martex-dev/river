@@ -165,6 +165,15 @@ function rememberChannel(communityId: string, channelId: string): void {
 const markRead = (channelId: string): Promise<unknown> =>
   window.river.community.action({ a: 'markRead', channelId }).catch(() => undefined);
 
+/** A person's name from any shared community (for the "can see your screen" bar). */
+function nameOfPerson(communities: CommunityView[], id: string): string {
+  for (const c of communities) {
+    const m = c.members.find((x) => x.riverId === id);
+    if (m) return m.name;
+  }
+  return 'Someone';
+}
+
 export const useCommunity = create<CommunityState>((set, get) => ({
   loaded: false,
   error: null,
@@ -453,6 +462,11 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         );
         return;
       }
+      case 'stopScreenShare': {
+        // The Stop button on the "can see your screen" bar, outside River's window.
+        void get().call?.setScreen(false);
+        return;
+      }
       case 'voiceDisconnect': {
         const call = get().call;
         if (!call) return;
@@ -681,6 +695,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     );
     call.muted = get().selfMuted;
     call.deafened = get().selfDeafened;
+    call.nameOf = (id) => nameOfPerson(get().communities, id);
     set({ call, callError: null });
     try {
       await call.start();

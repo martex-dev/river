@@ -29,6 +29,7 @@ import {
 import { CommunityService } from './community/community-service.ts';
 import { ServerLocator } from './community/server-locator.ts';
 import { Hosting } from './host/hosting.ts';
+import { ShareIndicator } from './share-indicator.ts';
 import { DEEP_LINK_SCHEME, deepLinkInArgs, parseDeepLink } from './deep-link.ts';
 import { HomeAccount } from './home-server.ts';
 import { HOME_SERVER } from '../shared/home-server.ts';
@@ -314,13 +315,23 @@ async function start(): Promise<void> {
 
   // Screen sharing: River shows its own picker; the chosen source is used for the next request.
   let chosenScreen: string | null = null;
+  /** The display being shared, when a whole screen is (pointing maps onto it). */
+  let sharedDisplay: string | null = null;
+  const indicator = new ShareIndicator(() => {
+    indicator.hide();
+    if (!window.isDestroyed()) window.webContents.send(IPC.communityEvent, { t: 'stopScreenShare' });
+  });
   uiSession().setDisplayMediaRequestHandler((_request, callback) => {
     void desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
       const source =
         sources.find((s) => s.id === chosenScreen) ?? sources.find((s) => s.id.startsWith('screen:'));
       chosenScreen = null;
-      if (source) callback({ video: source });
-      else callback({});
+      sharedDisplay = source?.id.startsWith('screen:') ? source.display_id || null : null;
+      if (source) {
+        callback({ video: source });
+        // The bar appears as soon as a screen is handed out, whatever the window reports later.
+        indicator.show(sharedDisplay, []);
+      } else callback({});
     });
   });
   app.on('will-quit', () => storage.close());
@@ -392,6 +403,13 @@ async function start(): Promise<void> {
     },
     selectScreen: (id) => {
       chosenScreen = id;
+    },
+    share: {
+      status: (sharing, viewers) => {
+        if (sharing) indicator.show(sharedDisplay, viewers);
+        else indicator.hide();
+      },
+      point: (x, y) => indicator.ping(x, y),
     },
     hosting,
     homeAccount,
