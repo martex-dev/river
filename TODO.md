@@ -206,8 +206,8 @@ Each line is one PR; each version ships when its section is done.
 ## Protocol freeze (ROADMAP 1.5.x, started early)
 
 The freeze work was done ahead of its slot because the phone apps need a fixed
-contract. It does not change the version plan: Android is 1.1.x, phones day to
-day 1.2.x, devices 1.3.x, iOS 1.4.x (see ROADMAP).
+contract. Version plan (see ROADMAP): Android 1.1.x, devices 1.2.x, iPhone
+1.3.x, phones day to day 1.4.x.
 
 - [x] JSON Schema of every wire message frozen as `packages/protocol/schema/v1.json`, drift fails CI
 - [x] Cross-language test vectors for identity, fingerprints, words, safety numbers, signatures
@@ -217,6 +217,13 @@ day 1.2.x, devices 1.3.x, iOS 1.4.x (see ROADMAP).
 - [x] Capability list in `GET /v1/version` so clients can feature-detect new optional request fields (request schemas are strict)
 - [ ] Identity-bound call keys: today a server colluding with a community member who holds the community key could tamper with sealed call setup (CRYPTOGRAPHY.md §8)
 - [ ] Release-key hardening steps (protected `release` environment with manual approval) — needs the maintainer
+
+## 1.3.x — iPhone (released in 1.3.0)
+
+- [x] iOS app: the shared core in its own WKWebView; libsignal, SQLCipher, Keychain; deep links; Lock River
+- [x] CI: simulator build and start-up self-test; unsigned .ipa in the release
+- [ ] Signed App Store / TestFlight builds — needs an Apple developer account (maintainer decision)
+- [ ] CallKit for calls with the screen locked
 
 ## 1.2.x — Devices (ADR 0006, released in 1.2.0)
 

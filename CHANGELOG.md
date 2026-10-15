@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-15
+
+**River for iPhone.**
+
 ### Added
 
 - **River for iPhone** (iOS 16+): the same River as on Android and computers —
