@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-15 · Current version: **1.1.0** · Stage 1 complete · Stage 2 under way: 1.1 River for Android_
+_Last updated: 2026-10-15 · Current version: **1.2.0** · Stage 1 complete · Stage 2 under way: 1.1 River for Android, 1.2 linked devices_
 
 ## Complete
 
@@ -60,6 +60,7 @@ _Last updated: 2026-10-15 · Current version: **1.1.0** · Stage 1 complete · S
   current version keeps running. Automatic rollback _after_ a successfully
   installed update that then fails to start is not implemented (TODO).
 - **macOS updates**: notify-and-download only until an Apple Developer ID exists.
+- **Linked devices** (1.2.0, ADR 0006): one account on several devices — link with a code or a QR code, see and remove devices; direct messages reach every device.
 - **River for Android** (1.1.0, `apps/mobile`): built and tested on an emulator in CI
   (accounts, communities, sealed messages, libsignal DMs, SQLCipher + Keystore).
   Release APKs need the signing key (`scripts/release/create-android-key.py`).

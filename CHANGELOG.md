@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-15
+
+**One account on your phone and your computer.**
+
 ### Added
 
 - **Linked devices — one account on your phone and your computer.** In

@@ -218,7 +218,7 @@ day 1.2.x, devices 1.3.x, iOS 1.4.x (see ROADMAP).
 - [ ] Identity-bound call keys: today a server colluding with a community member who holds the community key could tamper with sealed call setup (CRYPTOGRAPHY.md §8)
 - [ ] Release-key hardening steps (protected `release` environment with manual approval) — needs the maintainer
 
-## 1.3.x — Devices (ADR 0006)
+## 1.2.x — Devices (ADR 0006, released in 1.2.0)
 
 - [x] Link a device with a code from a linked device (secret-bound hello and provisioning, HPKE)
 - [x] Signed device-list updates on the server (versioned, keys never change), removal signs a device out

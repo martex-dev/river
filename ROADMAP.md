@@ -64,15 +64,16 @@ desktop platforms, and no critical security issue is open.
 ## Stage 2 — Full ecosystem (1.0.x → 2.0.0)
 
 Windows, macOS, Linux, iOS, Android, all with the full feature set plus
-consent-based remote assistance.
+consent-based remote assistance. The order of 1.2–1.4 follows what was ready
+first (devices, then iPhone, then day-to-day phone work).
 
 | Series    | Theme                           | Contents                                                                                                                                              |
 | --------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **1.0.x** | Stabilisation                   | Fixes from 1.0 feedback, performance                                                                                                                  |
 | **1.1.x** | Android                         | River for Android from the desktop's own UI and client core (ADR 0005): libsignal-android, SQLCipher, Android Keystore; signed APK on GitHub Releases |
-| **1.2.x** | Phones, day to day              | Content-free push (UnifiedPush, then FCM), background reconnect, share sheet, camera and photo picker, call audio routing, biometric lock             |
-| **1.3.x** | Devices                         | One account on phone and computer: multi-device linking, device approval, revocation, transfer                                                        |
-| **1.4.x** | iOS                             | The same app shell for iPhone (needs the Apple decision below); Keychain, CallKit                                                                     |
+| **1.2.x** | Devices                         | One account on phone and computer: multi-device linking (code or QR), device list, removal (1.2.0)                                                    |
+| **1.3.x** | iPhone                          | The same app shell for iPhone: libsignal, SQLCipher, Keychain; unsigned .ipa until the Apple decision below                                           |
+| **1.4.x** | Phones, day to day              | Stay connected (background reconnect), calls with the screen off, biometric lock, share sheet, camera and photo picker                                |
 | **1.5.x** | Protocol freeze                 | Protocol v1 spec, schemas, cross-language test vectors, API stability guarantees                                                                      |
 | **1.6.x** | Mobile parity                   | Social feed, stories, files, everything desktop has, tuned for touch                                                                                  |
 | **1.7.x** | Mobile calls                    | ConnectionService / CallKit, calls that survive the screen turning off                                                                                |
