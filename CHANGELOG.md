@@ -6,12 +6,15 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-10-16
+
 ### Added
 
 - **Calls ring like a phone call** (Android): an incoming call uses River's own
   "Calls" notification channel with the phone's ringtone, rings for as long as
   the call does, and fills the screen when the phone is locked. On computers
-  the call notification stays until you answer or it stops ringing.
+  the call notification stays until you answer or it stops ringing; on iPhone
+  it makes a sound.
 
 ## [2.0.1] - 2026-10-16
 
