@@ -168,7 +168,7 @@ jobs:
           RIVER_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.RIVER_ANDROID_KEYSTORE_PASSWORD }}
           RIVER_ANDROID_KEY_ALIAS: ${{ secrets.RIVER_ANDROID_KEY_ALIAS }}
           RIVER_ANDROID_KEY_PASSWORD: ${{ secrets.RIVER_ANDROID_KEY_PASSWORD }}
-        run: ./gradlew --no-daemon assembleRelease
+        run: RIVER_NDK_VERSION=$(basename "$ANDROID_NDK_LATEST_HOME") ./gradlew --no-daemon assembleRelease
       - if: steps.key.outputs.present == 'true'
         name: Collect APKs
         run: |

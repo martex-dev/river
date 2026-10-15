@@ -36,7 +36,8 @@ jobs:
         run: npm run sync -w @river/mobile
       - name: Build debug APKs
         working-directory: apps/mobile/android
-        run: ./gradlew --no-daemon assembleDebug
+        # The NDK strips libsignal's and SQLCipher's debug symbols (about 100 MB per library).
+        run: RIVER_NDK_VERSION=$(basename "$ANDROID_NDK_LATEST_HOME") ./gradlew --no-daemon assembleDebug
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: river-android-debug
@@ -74,8 +75,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             adb install -r apk/app-x86_64-debug.apk
-            npx vitest run --config tests/android/vitest.config.ts
-            adb logcat -d -s RiverCore RiverNative chromium AndroidRuntime > logcat.txt || true
+            npx vitest run --config tests/android/vitest.config.ts; status=$?; adb logcat -d -s RiverCore RiverNative chromium Capacitor Capacitor/Console AndroidRuntime > logcat.txt; exit $status
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import { chromium, type Browser, type Page } from '@playwright/test';
+import { _android as android, type AndroidDevice, type Page } from '@playwright/test';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AccountService } from '../../apps/desktop/src/main/account/account-service.ts';
 import { CommunityService } from '../../apps/desktop/src/main/community/community-service.ts';
@@ -33,7 +33,7 @@ const SERVER = `http://127.0.0.1:${PORT}`;
 let dir: string;
 let server: FastifyInstance;
 let serverDb: RiverDatabase;
-let browser: Browser;
+let device: AndroidDevice;
 let ui: Page;
 let core: Page;
 const locals: LocalDatabase[] = [];
@@ -111,19 +111,20 @@ beforeAll(async () => {
   await server.listen({ host: '127.0.0.1', port: PORT });
   adb('reverse', `tcp:${PORT}`, `tcp:${PORT}`);
 
-  adb('shell', 'am', 'force-stop', PACKAGE);
-  adb('shell', 'am', 'start', '-W', '-n', `${PACKAGE}/.MainActivity`);
-  const pid = await until(async () => adb('shell', 'pidof', PACKAGE) || null);
-  adb('forward', 'tcp:9222', `localabstract:webview_devtools_remote_${pid}`);
-  browser = await until(() => chromium.connectOverCDP('http://127.0.0.1:9222'));
-  const pages = (): Page[] => browser.contexts().flatMap((c) => c.pages());
-  ui = await until(async () => pages().find((p) => p.url().startsWith('https://localhost')) ?? null);
-  core = await until(async () => pages().find((p) => p.url().includes('/assets/core/')) ?? null);
+  [device] = await until(() => android.devices().then((d) => (d.length ? d : null)));
+  await device.shell(`am force-stop ${PACKAGE}`);
+  await device.shell(`am start -W -n ${PACKAGE}/.MainActivity`);
+  // Both WebViews live in River's process: the UI (Capacitor) and the private client core.
+  const webview = await device.webView({ pkg: PACKAGE }, { timeout: 60_000 });
+  const first = await webview.page();
+  const pages = (): Page[] => first.context().pages();
+  ui = await until(async () => pages().find((p) => p.url().startsWith('https://localhost')) ?? null, 60_000);
+  core = await until(async () => pages().find((p) => p.url().includes('/assets/core/')) ?? null, 60_000);
   await until(() => ui.evaluate(() => 'river' in globalThis));
 }, 240_000);
 
 afterAll(async () => {
-  await browser?.close().catch(() => undefined);
+  await device?.close().catch(() => undefined);
   for (const l of locals.splice(0)) l.close();
   await server?.close();
   await serverDb?.close();

@@ -13,6 +13,8 @@ def keystoreFile = System.getenv('RIVER_ANDROID_KEYSTORE_FILE')
 android {
     namespace = "io.github.martexdev.river"
     compileSdk = rootProject.ext.compileSdkVersion
+    // With an NDK, native libraries are stripped of debug symbols (CI passes the installed version).
+    if (System.getenv('RIVER_NDK_VERSION')) ndkVersion = System.getenv('RIVER_NDK_VERSION')
     defaultConfig {
         applicationId "io.github.martexdev.river"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -61,6 +63,10 @@ android {
         resources {
             // libsignal-client's desktop libraries (macOS, Linux, Windows): never needed on a phone.
             excludes += ['*.dylib', '*.dll', 'libsignal_jni_amd64.so', 'libsignal_jni_testing_amd64.so']
+        }
+        jniLibs {
+            // libsignal's test-only library: never used by the app.
+            excludes += ['**/libsignal_jni_testing.so']
         }
     }
 }
