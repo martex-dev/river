@@ -93,6 +93,8 @@ export function App(): ReactElement {
       e.t === 'call' ? handleCallEvent(e) : useDm.getState().handle(e),
     );
     void useDm.getState().load();
+    // The rail shows your communities on every page, not only after opening Communities.
+    void useCommunity.getState().load();
     const offSocial = window.river.social.onEvent(() => onSocialChanged());
     return () => {
       offUpdates();

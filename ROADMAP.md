@@ -66,19 +66,19 @@ desktop platforms, and no critical security issue is open.
 Windows, macOS, Linux, iOS, Android, all with the full feature set plus
 consent-based remote assistance.
 
-| Series    | Theme                           | Contents                                                                                                                                            |
-| --------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1.0.x** | Stabilisation                   | Fixes from 1.0 feedback, performance                                                                                                                |
-| **1.1.x** | Protocol freeze                 | Protocol v1 spec, protobuf schemas, cross-language test vectors, API stability guarantees                                                           |
-| **1.2.x** | Devices                         | Multi-device linking (moved here from 0.9), device-to-device transfer, device approval UX, key rotation tooling, revocation                         |
-| **1.3.x** | iOS foundation                  | SwiftUI app, libsignal-swift, Keychain/Secure Enclave, onboarding, messaging (TestFlight)                                                           |
-| **1.4.x** | Android foundation              | Compose app, libsignal-android, Keystore/StrongBox, onboarding, messaging (APK + F-Droid track)                                                     |
-| **1.5.x** | Mobile parity I                 | Groups, media, files; content-free push (APNs, FCM, UnifiedPush); biometric lock                                                                    |
-| **1.6.x** | Mobile parity II                | Communities, social feed, stories, camera                                                                                                           |
-| **1.7.x** | Mobile calls                    | CallKit / ConnectionService, group calls on mobile                                                                                                  |
-| **1.8.x** | Remote assistance               | Consent-based remote support: session request/code, view, control, clipboard, file transfer, always-visible indicator, instant termination, history |
-| **1.9.x** | Cross-platform sync & hardening | Full multi-device sync across desktop and mobile, migrations from every 1.x, security review                                                        |
-| **2.0.0** | **Stage 2 release**             | Complete cross-platform ecosystem                                                                                                                   |
+| Series    | Theme                           | Contents                                                                                                                                              |
+| --------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1.0.x** | Stabilisation                   | Fixes from 1.0 feedback, performance                                                                                                                  |
+| **1.1.x** | Android                         | River for Android from the desktop's own UI and client core (ADR 0005): libsignal-android, SQLCipher, Android Keystore; signed APK on GitHub Releases |
+| **1.2.x** | Phones, day to day              | Content-free push (UnifiedPush, then FCM), background reconnect, share sheet, camera and photo picker, call audio routing, biometric lock             |
+| **1.3.x** | Devices                         | One account on phone and computer: multi-device linking, device approval, revocation, transfer                                                        |
+| **1.4.x** | iOS                             | The same app shell for iPhone (needs the Apple decision below); Keychain, CallKit                                                                     |
+| **1.5.x** | Protocol freeze                 | Protocol v1 spec, schemas, cross-language test vectors, API stability guarantees                                                                      |
+| **1.6.x** | Mobile parity                   | Social feed, stories, files, everything desktop has, tuned for touch                                                                                  |
+| **1.7.x** | Mobile calls                    | ConnectionService / CallKit, calls that survive the screen turning off                                                                                |
+| **1.8.x** | Remote assistance               | Consent-based remote support: session request/code, view, control, clipboard, file transfer, always-visible indicator, instant termination, history   |
+| **1.9.x** | Cross-platform sync & hardening | Full multi-device sync across desktop and mobile, migrations from every 1.x, security review                                                          |
+| **2.0.0** | **Stage 2 release**             | Complete cross-platform ecosystem                                                                                                                     |
 
 After 2.0.0: regular semantic versioning (2.0.1, 2.1.0, …). Every release is
 delivered to installed clients through the signed update channel.
@@ -89,5 +89,5 @@ delivered to installed clients through the signed update channel.
 | -------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Public server hosting            | 0.1.0                                                                       | Messaging needs a reachable server. Options: maintainer-hosted instance, community instances, or self-host only. River works with any of them (server URL is configurable). |
 | Apple Developer ID ($99/yr)      | before relying on macOS auto-install; required for iOS App Store/TestFlight | Without it: macOS gets notify-and-download updates; iOS limited to sideloading/AltStore/EU marketplaces                                                                     |
-| Release-key hardening            | 1.1.x                                                                       | Protected `release` environment with manual approval, then a hardware security key for signing. See docs/security/release-signing.md                                        |
+| Release-key hardening            | 1.5.x                                                                       | Protected `release` environment with manual approval, then a hardware security key for signing. See docs/security/release-signing.md                                        |
 | Windows code-signing certificate | optional                                                                    | Removes SmartScreen warning; River's own update signatures already protect updates                                                                                          |

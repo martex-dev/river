@@ -1,0 +1,123 @@
+/*
+ * River on a phone: the desktop UI, one pane at a time (see phone.ts).
+ * Safe areas (notch, gesture bar) come from viewport-fit=cover.
+ */
+html[data-platform='android'] {
+  --titlebar-h: 48px;
+}
+html[data-platform='android'] body {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+/* The top bar: no window buttons on a phone; room for the ☰ button on the left. */
+html[data-platform='android'] .titlebar {
+  padding: 0 12px 0 56px;
+}
+.phone-menu {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 4px);
+  left: calc(env(safe-area-inset-left) + 6px);
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--text);
+  background: transparent;
+}
+.phone-menu:active,
+html[data-pane='nav'] .phone-menu {
+  background: var(--layer-hover);
+}
+html:not([data-platform='android']) .phone-menu,
+body:has(.skin-gate) .phone-menu,
+body:has(.onboarding) .phone-menu,
+body:has(.lock) .phone-menu {
+  display: none;
+}
+
+/* ---------- The list ---------- */
+html[data-platform='android'][data-pane='nav'] .workspace > .home-sidebar {
+  flex: 1;
+  width: auto;
+  max-width: none;
+}
+html[data-platform='android'][data-pane='nav'] .workspace > .home-sidebar ~ .content {
+  display: none;
+}
+html[data-platform='android'] .community,
+html[data-platform='android'] .community--no-members {
+  grid-template-columns: minmax(0, 1fr);
+}
+html[data-platform='android'][data-pane='nav'] .community__main,
+html[data-platform='android'][data-pane='nav'] .community__members,
+html[data-platform='android'][data-pane='nav'] .thread-panel {
+  display: none;
+}
+
+/* ---------- The conversation ---------- */
+html[data-platform='android'][data-pane='main'] .workspace > .community__servers,
+html[data-platform='android'][data-pane='main'] .workspace > .home-sidebar,
+html[data-platform='android'][data-pane='main'] .community__channels {
+  display: none;
+}
+html[data-platform='android'] .workspace > .content {
+  padding: 16px 14px 28px;
+}
+html[data-platform='android'] .workspace > .content--full {
+  padding: 0;
+}
+html[data-platform='android'] .workspace > .community__servers + .content {
+  border-top-left-radius: 0;
+}
+/* Notices (pick a username, what's new) stay small above the conversation. */
+html[data-platform='android'] .content--full > .notices {
+  max-height: 22vh;
+  padding: 8px 10px 0;
+}
+
+/* Members and threads cover the conversation instead of sitting beside it. */
+html[data-platform='android'] .community__members,
+html[data-platform='android'] .thread-panel {
+  position: fixed;
+  inset: calc(env(safe-area-inset-top) + var(--titlebar-h)) 0 env(safe-area-inset-bottom) 0;
+  z-index: 30;
+  width: auto;
+  max-width: none;
+  border-left: 0;
+  background: var(--layer-1);
+}
+
+/* ---------- Settings ---------- */
+html[data-platform='android'] .settings-overlay {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+html[data-platform='android'] .settings-overlay__nav {
+  justify-content: flex-start;
+  max-height: 34vh;
+}
+html[data-platform='android'] .settings-overlay__nav-inner {
+  width: 100%;
+  padding: 12px 10px;
+}
+html[data-platform='android'] .settings-overlay__content {
+  padding: 20px 14px 60px;
+}
+
+/* Touch: bigger targets, no hover-only surprises. */
+html[data-platform='android'] .channel__open,
+html[data-platform='android'] .dm-row,
+html[data-platform='android'] .home-nav__item {
+  min-height: 44px;
+}
+html[data-platform='android'] input,
+html[data-platform='android'] textarea,
+html[data-platform='android'] select {
+  font-size: 16px;
+}

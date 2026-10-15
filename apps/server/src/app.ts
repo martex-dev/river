@@ -25,6 +25,16 @@ import serverPackage from '../package.json' with { type: 'json' };
 
 export const SERVER_VERSION: string = serverPackage.version;
 
+/**
+ * Origins of River's own phone apps: the Android client core's WebView
+ * (androidx WebViewAssetLoader) and Capacitor's app pages on Android and iOS.
+ */
+export const APP_ORIGINS: ReadonlySet<string> = new Set([
+  'https://appassets.androidplatform.net',
+  'https://localhost',
+  'capacitor://localhost',
+]);
+
 export interface AppDeps {
   config: ServerConfig;
   database: RiverDatabase;
@@ -66,6 +76,26 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     bodyLimit: 256 * 1024,
     trustProxy: config.trustProxy,
     return503OnClosing: true,
+  });
+
+  // River's phone apps run their client in a WebView with its own origin, so they need CORS.
+  // The API authenticates with bearer tokens, never cookies: allowing these origins grants nothing
+  // a script could not already do with its own token. Preflights are answered before rate limiting.
+  app.addHook('onRequest', async (request, reply) => {
+    const origin = request.headers.origin;
+    if (!origin || !APP_ORIGINS.has(origin)) return;
+    reply.header('access-control-allow-origin', origin);
+    reply.header('vary', 'origin');
+    if (request.method === 'OPTIONS') {
+      reply.header('access-control-allow-methods', 'GET, POST, PUT, PATCH, DELETE');
+      reply.header('access-control-allow-headers', 'authorization, content-type');
+      reply.header('access-control-max-age', '600');
+      // Chromium's Private Network Access: a phone reaching a River server on its own network.
+      if (request.headers['access-control-request-private-network'] === 'true') {
+        reply.header('access-control-allow-private-network', 'true');
+      }
+      await reply.code(204).send();
+    }
   });
 
   await app.register(rateLimit, {

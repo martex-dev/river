@@ -1,0 +1,92 @@
+name: Android
+
+# Builds River for Android and runs it on an emulator against a real server
+# and the desktop client (tests/android). Release APKs are built and signed
+# by release.yml with the same steps.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build APKs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - name: Build the UI and the client core, sync the Android project
+        run: npm run sync -w @river/mobile
+      - name: Build debug APKs
+        working-directory: apps/mobile/android
+        # The NDK strips libsignal's and SQLCipher's debug symbols (about 100 MB per library).
+        run: |
+          RIVER_NDK_VERSION=$(basename "$ANDROID_NDK_LATEST_HOME") ./gradlew --no-daemon assembleDebug
+          ls -la app/build/outputs/apk/debug/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: river-android-debug
+          path: apps/mobile/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+  emulator:
+    name: Emulator end-to-end
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: river-android-debug
+          path: apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run on an Android 14 emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            adb install -r apk/app-x86_64-debug.apk
+            npx vitest run --config tests/android/vitest.config.ts; status=$?; adb logcat -d -s RiverCore RiverNative chromium Capacitor Capacitor/Console AndroidRuntime > logcat.txt; exit $status
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-logcat
+          path: logcat.txt
+          if-no-files-found: ignore
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-screenshots
+          path: android-screenshots
+          if-no-files-found: ignore

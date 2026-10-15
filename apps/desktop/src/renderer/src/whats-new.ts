@@ -3,6 +3,10 @@
  * got, shown once. Fresh installs see nothing; full notes are in the release.
  */
 export const HIGHLIGHTS: Record<string, string[]> = {
+  '1.1.0': [
+    'River for Android: the same River on your phone — download River-android.apk from the release page',
+    'Phones join your communities and talk to computers directly, with the same encryption',
+  ],
   '1.0.46': [
     'Specter’s skins: Neon, Aurora, Terminal, Paper, Synthwave, Blueprint, Brutal, Retro, Holo, Glitch and more',
     'Choose your look first — every skin has its own palettes',

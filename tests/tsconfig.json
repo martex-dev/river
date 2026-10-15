@@ -7,5 +7,5 @@
       "better-sqlite3-multiple-ciphers": ["../node_modules/better-sqlite3-multiple-ciphers/index.d.ts"]
     }
   },
-  "include": ["integration", "scripts", "vitest.config.ts"]
+  "include": ["integration", "mobile", "android", "scripts", "vitest.config.ts"]
 }

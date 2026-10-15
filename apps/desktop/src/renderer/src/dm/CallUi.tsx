@@ -92,6 +92,7 @@ export function DmCallPanel({ conversation: c }: { conversation: ConversationVie
   const s = useCommunity();
   useCommunity((x) => x.callVersion);
   const me = useRiver((r) => r.identity);
+  const phone = useRiver((r) => r.info?.platform === 'android');
   const [picker, setPicker] = useState<ScreenSource[] | null>(null);
   const call = s.call;
   if (!active || active.peer !== c.riverId || !call) return null;
@@ -171,16 +172,19 @@ export function DmCallPanel({ conversation: c }: { conversation: ConversationVie
         >
           <CameraIcon />
         </button>
-        <button
-          className={`round-btn ${call.localTrack('screen') ? 'round-btn--on' : ''}`}
-          aria-label={call.localTrack('screen') ? 'Stop sharing' : 'Share screen'}
-          onClick={() => {
-            if (call.localTrack('screen')) void call.setScreen(false);
-            else void window.river.voice.screenSources().then(setPicker);
-          }}
-        >
-          <ScreenIcon />
-        </button>
+        {/* Phones have no screen picker yet. */}
+        {!phone && (
+          <button
+            className={`round-btn ${call.localTrack('screen') ? 'round-btn--on' : ''}`}
+            aria-label={call.localTrack('screen') ? 'Stop sharing' : 'Share screen'}
+            onClick={() => {
+              if (call.localTrack('screen')) void call.setScreen(false);
+              else void window.river.voice.screenSources().then(setPicker);
+            }}
+          >
+            <ScreenIcon />
+          </button>
+        )}
         <button
           className="round-btn round-btn--danger"
           aria-label="Hang up"
