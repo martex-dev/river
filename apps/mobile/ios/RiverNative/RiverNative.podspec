@@ -12,7 +12,8 @@ Pod::Spec.new do |s|
   s.platform = :ios, '16.0'
   s.swift_version = '5'
   s.source_files = 'Sources/**/*.swift'
-  # The client core bundle, copied here by `npm run sync:ios`.
+  # The client core bundle, copied here by `npm run sync:ios` before `pod install` (CocoaPods
+  # only picks up resources that exist when it runs).
   s.resources = ['core']
   s.dependency 'Capacitor'
   s.dependency 'LibSignalClient'

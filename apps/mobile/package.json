@@ -11,7 +11,7 @@
     "build:ui": "vite build -c vite.ui.config.ts",
     "sync": "npm run build && cap sync android && node -e \"require('node:fs').cpSync('dist/core','android/app/src/main/assets/core',{recursive:true})\"",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.ui.json",
-    "sync:ios": "npm run build && cap sync ios && node -e \"require('node:fs').cpSync('dist/core','ios/RiverNative/core',{recursive:true})\""
+    "sync:ios": "npm run build && node -e \"require('node:fs').cpSync('dist/core','ios/RiverNative/core',{recursive:true})\" && cap sync ios"
   },
   "dependencies": {
     "@capacitor/android": "8.5.2",
