@@ -53,16 +53,24 @@ jobs:
           xcrun simctl boot "$device"
           xcrun simctl bootstatus "$device" -b
           xcrun simctl install "$device" build/Build/Products/Debug-iphonesimulator/App.app
-          xcrun simctl launch "$device" io.github.martexdev.river -RiverSelfTest
+          # NSLog goes to the app's stderr: stream it to a file while River runs.
+          (xcrun simctl launch --console-pty --terminate-running-process "$device" io.github.martexdev.river -RiverSelfTest > river.log 2>&1 &)
           for i in $(seq 1 60); do
-            xcrun simctl spawn "$device" log show --last 5m --predicate 'eventMessage CONTAINS "[River]"' --style compact > river.log 2>/dev/null || true
-            if grep -q "self-test storage" river.log; then break; fi
+            if grep -q "self-test storage" river.log 2>/dev/null; then break; fi
             sleep 5
           done
-          cat river.log
-          grep -q "client core ready" river.log
-          grep "self-test storage" river.log | grep -q '"state":"open"'
-          grep "self-test storage" river.log | grep -q '"protection":"os-keystore"'
+          cat river.log | grep -a "\[River\]\|error\|Error\|fatal" | head -100 || true
+          if ! grep -aq "self-test storage" river.log; then
+            echo "---- app log (last 150 lines)"
+            xcrun simctl spawn "$device" log show --last 10m --predicate 'process == "App"' --style compact | tail -150 || true
+            echo "---- crash reports"
+            ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null | tail -10 || true
+            for f in $(ls -t ~/Library/Logs/DiagnosticReports/App* 2>/dev/null | head -1); do head -120 "$f"; done
+            exit 1
+          fi
+          grep -aq "client core ready" river.log
+          grep -a "self-test storage" river.log | grep -q '"state":"open"'
+          grep -a "self-test storage" river.log | grep -q '"protection":"os-keystore"'
       - name: Build the device app (unsigned) and package it
         working-directory: apps/mobile/ios/App
         run: |
