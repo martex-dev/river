@@ -460,6 +460,8 @@ export type CommunityEvent =
       states: Record<string, VoiceStateView>;
     }
   | { t: 'voiceDisconnect'; moveTo?: string }
+  /** Hang up the current call or voice channel (from the phone's "In a call" notification). */
+  | { t: 'hangUp' }
   /** A community's events changed (fetch them again), or one you are interested in starts now. */
   | { t: 'events'; communityId: string }
   | { t: 'emojis'; communityId: string }

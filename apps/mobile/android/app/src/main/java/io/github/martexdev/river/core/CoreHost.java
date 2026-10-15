@@ -82,6 +82,8 @@ public final class CoreHost {
   private final Handler main = new Handler(Looper.getMainLooper());
   private final ArrayDeque<String> queue = new ArrayDeque<>();
   private final Map<Integer, Integer> notificationAsks = new HashMap<>();
+  /** The core's open "call" ask: answered "hangup" (notification button) or "ended". */
+  private Integer callAsk;
   private RiverNative nativeInterface;
   private WebView web;
   private boolean ready = false;
@@ -187,6 +189,16 @@ public final class CoreHost {
   public void notificationTapped(int notification) {
     Integer ask = notificationAsks.remove(notification);
     if (ask != null) answer(ask, (Object) "clicked");
+  }
+
+  /** Hang up from the "In a call" notification. */
+  public void hangUp() {
+    main.post(
+        () -> {
+          Integer ask = callAsk;
+          callAsk = null;
+          if (ask != null) answer(ask, (Object) "hangup");
+        });
   }
 
   private void answer(int id, Object value) {
@@ -303,6 +315,18 @@ public final class CoreHost {
         case "appLock":
           answer(id, json("available", AppLock.setEnabled(context, a.optBoolean("enabled", false))));
           break;
+        case "call":
+          {
+            // Stays open while the call lasts; the answer says how it ended.
+            Integer previous = callAsk;
+            callAsk = null;
+            if (previous != null) answer(previous, (Object) "ended");
+            boolean active = a.optBoolean("active", false);
+            CallService.setActive(context, active);
+            if (active) callAsk = id;
+            else answer(id, (Object) "ended");
+            break;
+          }
         case "background":
           {
             boolean on = a.optBoolean("enabled", false);

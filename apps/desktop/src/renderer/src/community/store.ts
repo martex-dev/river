@@ -453,6 +453,13 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         );
         return;
       }
+      case 'hangUp': {
+        const call = get().call;
+        if (!call) return;
+        if (call.channelId.startsWith('dm:')) void import('../dm/call.ts').then((m) => m.endDmCall());
+        else void get().leaveVoice();
+        return;
+      }
       case 'voiceDisconnect': {
         const call = get().call;
         if (!call) return;
