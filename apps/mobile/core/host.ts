@@ -9,6 +9,7 @@ import { decodeWire, encodeWire } from '../shared/wire.ts';
  *   send(json)         a UI fire-and-forget message; json = {channel, args}
  *   answer(id, json)   the shell's answer to an ask; json = {ok, value?, error?}
  *   lifecycle(state)   'foreground' | 'background'
+ *   deepLink(url)      a river://open?link=… URL the system handed to the app
  *
  * Out (core → app shell): `RiverHost.post(header, payload)`. The header is a
  * small JSON object the shell reads; the payload goes on untouched:
@@ -31,6 +32,7 @@ const handlers = new Map<string, Handler>();
 const listeners = new Map<string, Listener[]>();
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 const lifecycleListeners = new Set<(state: 'foreground' | 'background') => void>();
+let deepLinkHandler: (url: string) => void = () => undefined;
 let nextAsk = 1;
 
 function shell(): ShellInterface {
@@ -80,6 +82,10 @@ export function ask<T = unknown>(kind: string, args: unknown): Promise<T> {
   });
 }
 
+export function onDeepLink(fn: (url: string) => void): void {
+  deepLinkHandler = fn;
+}
+
 export function onLifecycle(fn: (state: 'foreground' | 'background') => void): () => void {
   lifecycleListeners.add(fn);
   return () => lifecycleListeners.delete(fn);
@@ -98,12 +104,10 @@ function reply(id: number, body: { ok: boolean; value?: unknown; error?: string 
 }
 
 async function invoke(id: number, json: string): Promise<void> {
-  let channel = '';
   try {
     const call = decodeWire<{ channel: string; args: unknown[] }>(json);
-    channel = call.channel;
-    const handler = handlers.get(channel);
-    if (!handler) throw new Error(`No handler registered for '${channel}'`);
+    const handler = handlers.get(call.channel);
+    if (!handler) throw new Error(`No handler registered for '${call.channel}'`);
     reply(id, { ok: true, value: await handler(uiEvent, ...(Array.isArray(call.args) ? call.args : [])) });
   } catch (err) {
     reply(id, { ok: false, error: message(err) });
@@ -143,4 +147,7 @@ export const inbound = {
   send,
   answer,
   lifecycle,
+  deepLink: (url: string): void => {
+    if (typeof url === 'string') deepLinkHandler(url);
+  },
 };

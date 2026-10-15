@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Notification icon: River's wave, single colour (Android tints it). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3,9.5c2.2,-2 4.4,-2 6.6,0s4.4,2 6.6,0s3.3,-1.5 4.8,-1v2.6c-1.5,-0.5 -2.6,0 -4.8,1.9c-2.2,2 -4.4,2 -6.6,0s-4.4,-2 -6.6,0z M3,15.5c2.2,-2 4.4,-2 6.6,0s4.4,2 6.6,0s3.3,-1.5 4.8,-1v2.6c-1.5,-0.5 -2.6,0 -4.8,1.9c-2.2,2 -4.4,2 -6.6,0s-4.4,-2 -6.6,0z" />
+</vector>

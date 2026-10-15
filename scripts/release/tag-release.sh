@@ -7,7 +7,7 @@ state=$(gh pr view "$pr" --json state --jq .state)
 [ "$state" = "MERGED" ] || { echo "PR #$pr is $state, not MERGED" >&2; exit 1; }
 git fetch -q origin
 sha=$(git rev-parse origin/main)
-for f in package.json apps/desktop/package.json apps/server/package.json; do
+for f in package.json apps/desktop/package.json apps/server/package.json apps/mobile/package.json; do
   v=$(git show "$sha:$f" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).version))')
   [ "$v" = "$version" ] || { echo "$f on main is $v, not $version" >&2; exit 1; }
 done

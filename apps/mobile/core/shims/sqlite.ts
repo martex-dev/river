@@ -235,19 +235,26 @@ export default class Database {
     return rows;
   }
 
+  /**
+   * Like better-sqlite3's, except that a nested transaction is part of the
+   * outer one rather than a savepoint (SQLCipher for Android cannot roll back
+   * to a savepoint inside its transactions): an error in it rolls back the
+   * whole transaction when it reaches the outermost one. River's client code
+   * does not nest transactions.
+   */
   transaction<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
     return (...args: A): R => {
-      const savepoint = `river_tx_${this.depth}`;
-      this.exec(this.depth === 0 ? 'BEGIN' : `SAVEPOINT ${savepoint}`);
+      if (this.depth > 0) return fn(...args);
+      this.exec('BEGIN');
       this.depth++;
       try {
         const result = fn(...args);
         this.depth--;
-        this.exec(this.depth === 0 ? 'COMMIT' : `RELEASE ${savepoint}`);
+        this.exec('COMMIT');
         return result;
       } catch (err) {
         this.depth--;
-        this.exec(this.depth === 0 ? 'ROLLBACK' : `ROLLBACK TO ${savepoint}; RELEASE ${savepoint}`);
+        this.exec('ROLLBACK');
         throw err;
       }
     };

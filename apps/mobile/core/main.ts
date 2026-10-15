@@ -30,7 +30,9 @@ import { runMainDiagnostics } from '../../desktop/src/main/diagnostics.ts';
 import { PresenceTracker } from '../../desktop/src/main/presence.ts';
 import { ready as cryptoReady } from './shims/crypto.ts';
 import { native } from './native.ts';
-import { emit, inbound, onLifecycle, ready, ui } from './host.ts';
+import { emit, inbound, onDeepLink, onLifecycle, ready, ui } from './host.ts';
+import { parseDeepLink } from '../../desktop/src/main/deep-link.ts';
+import { IPC, type DeepLink } from '../../desktop/src/shared/ipc.ts';
 
 /**
  * River's client core on a phone: the desktop's services (accounts,
@@ -99,6 +101,14 @@ const noHosting: IpcDeps['hosting'] = {
 } as unknown as IpcDeps['hosting'];
 
 let foreground = true;
+/** A River link opened from a browser that the UI has not taken yet (the UI asks when it is ready). */
+let pendingDeepLink: DeepLink | null = null;
+onDeepLink((url) => {
+  const link = parseDeepLink(url);
+  if (!link) return;
+  pendingDeepLink = link;
+  emit(IPC.appDeepLink, [link]);
+});
 let lastActive = Date.now();
 
 async function start(): Promise<void> {
@@ -240,7 +250,11 @@ async function start(): Promise<void> {
     selectScreen: () => undefined,
     hosting: noHosting,
     homeAccount,
-    takeDeepLink: () => null,
+    takeDeepLink: () => {
+      const link = pendingDeepLink;
+      pendingDeepLink = null;
+      return link;
+    },
     diagnostics: () =>
       runMainDiagnostics({
         fetchBytes: serverFetch,

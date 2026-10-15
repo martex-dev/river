@@ -13,6 +13,9 @@ export default tseslint.config(
       '**/release/**',
       '**/coverage/**',
       '**/test-results/**',
+      // Copies of built bundles inside the Android project.
+      'apps/mobile/android/app/src/main/assets/**',
+      'apps/mobile/android/**/build/**',
     ],
   },
   js.configs.recommended,

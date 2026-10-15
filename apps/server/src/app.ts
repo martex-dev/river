@@ -84,6 +84,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       reply.header('access-control-allow-methods', 'GET, POST, PUT, PATCH, DELETE');
       reply.header('access-control-allow-headers', 'authorization, content-type');
       reply.header('access-control-max-age', '600');
+      // Chromium's Private Network Access: a phone reaching a River server on its own network.
+      if (request.headers['access-control-request-private-network'] === 'true') {
+        reply.header('access-control-allow-private-network', 'true');
+      }
       await reply.code(204).send();
     }
   });

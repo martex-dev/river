@@ -9,7 +9,7 @@
     "build": "vite build -c vite.core.config.ts && vite build -c vite.ui.config.ts",
     "build:core": "vite build -c vite.core.config.ts",
     "build:ui": "vite build -c vite.ui.config.ts",
-    "sync": "npm run build && cap sync android",
+    "sync": "npm run build && cap sync android && node -e \"require('node:fs').cpSync('dist/core','android/app/src/main/assets/core',{recursive:true})\"",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

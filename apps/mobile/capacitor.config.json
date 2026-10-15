@@ -4,8 +4,7 @@
   "webDir": "dist/ui",
   "android": {
     "allowMixedContent": false,
-    "captureInput": true,
-    "webContentsDebuggingEnabled": false
+    "captureInput": true
   },
   "server": {
     "androidScheme": "https"
