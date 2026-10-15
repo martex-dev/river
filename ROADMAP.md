@@ -67,19 +67,19 @@ Windows, macOS, Linux, iOS, Android, all with the full feature set plus
 consent-based remote assistance. The order of 1.2–1.4 follows what was ready
 first (devices, then iPhone, then day-to-day phone work).
 
-| Series    | Theme                           | Contents                                                                                                                                              |
-| --------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1.0.x** | Stabilisation                   | Fixes from 1.0 feedback, performance                                                                                                                  |
-| **1.1.x** | Android                         | River for Android from the desktop's own UI and client core (ADR 0005): libsignal-android, SQLCipher, Android Keystore; signed APK on GitHub Releases |
-| **1.2.x** | Devices                         | One account on phone and computer: multi-device linking (code or QR), device list, removal (1.2.0)                                                    |
-| **1.3.x** | iPhone                          | The same app shell for iPhone: libsignal, SQLCipher, Keychain; unsigned .ipa until the Apple decision below                                           |
-| **1.4.x** | Phones, day to day              | Stay connected (background reconnect), calls with the screen off, biometric lock, share sheet, camera and photo picker                                |
-| **1.5.x** | Protocol freeze                 | Protocol v1 spec, schemas, cross-language test vectors, API stability guarantees                                                                      |
-| **1.6.x** | Mobile parity                   | Social feed, stories, files, everything desktop has, tuned for touch                                                                                  |
-| **1.7.x** | Mobile calls                    | ConnectionService / CallKit, calls that survive the screen turning off                                                                                |
-| **1.8.x** | Remote assistance               | Consent-based remote support: session request/code, view, control, clipboard, file transfer, always-visible indicator, instant termination, history   |
-| **1.9.x** | Cross-platform sync & hardening | Full multi-device sync across desktop and mobile, migrations from every 1.x, security review                                                          |
-| **2.0.0** | **Stage 2 release**             | Complete cross-platform ecosystem                                                                                                                     |
+| Series       | Theme                           | Contents                                                                                                                                              |
+| ------------ | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1.0.x**    | Stabilisation                   | Fixes from 1.0 feedback, performance                                                                                                                  |
+| **1.1.x**    | Android                         | River for Android from the desktop's own UI and client core (ADR 0005): libsignal-android, SQLCipher, Android Keystore; signed APK on GitHub Releases |
+| **1.2.x**    | Devices                         | One account on phone and computer: multi-device linking (code or QR), device list, removal (1.2.0)                                                    |
+| **1.3.x**    | iPhone                          | The same app shell for iPhone: libsignal, SQLCipher, Keychain; unsigned .ipa until the Apple decision below                                           |
+| **1.4.x**    | Phones, day to day              | Stay connected (background reconnect), calls with the screen off, biometric lock, share sheet, camera and photo picker                                |
+| **1.5.x**    | Protocol freeze                 | Protocol v1 spec, schemas, cross-language test vectors, API stability guarantees                                                                      |
+| **1.6.x**    | Mobile parity                   | Social feed, stories, files, everything desktop has, tuned for touch                                                                                  |
+| **1.7.x**    | Mobile calls                    | ConnectionService / CallKit, calls that survive the screen turning off                                                                                |
+| **1.8.x**    | Remote assistance               | Consent-based remote support: session request/code, view, control, clipboard, file transfer, always-visible indicator, instant termination, history   |
+| **1.9.x**    | Cross-platform sync & hardening | Full multi-device sync across desktop and mobile, migrations from every 1.x, security review                                                          |
+| **2.0.0** ✅ | **Stage 2 release**             | Complete cross-platform ecosystem                                                                                                                     |
 
 After 2.0.0: regular semantic versioning (2.0.1, 2.1.0, …). Every release is
 delivered to installed clients through the signed update channel.

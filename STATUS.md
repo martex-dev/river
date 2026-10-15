@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-15 · Current version: **1.9.0** · Stage 1 complete · Stage 2 nearly complete: Android, iPhone, linked devices, phones day to day, identity-bound calls, remote assistance (see and point); 1.9 security review_
+_Last updated: 2026-10-16 · Current version: **2.0.0** · Stage 1 and Stage 2 complete: Windows, macOS, Linux, Android, iPhone; linked devices; remote assistance (see and point)_
 
 ## Complete
 

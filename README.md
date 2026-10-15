@@ -19,9 +19,19 @@
 
 ---
 
-> **River 1.0 — the complete desktop platform (Stage 1).** Windows, macOS and Linux.
-> Mobile apps, linked devices and consent-based remote assistance come in Stage 2
-> (see the [roadmap](ROADMAP.md)). River has not had an independent security audit yet.
+> **River 2.0 — on your computer and your phone (Stage 2).** Windows, macOS, Linux,
+> Android and iPhone, one account on all your devices, and consent-based remote
+> assistance. River has not had an independent security audit yet.
+
+- **Phones** — the same River on Android and iPhone, with libsignal, an encrypted
+  database and the phone's keystore; Stay connected (Android), calls that keep going with
+  the screen off, Share → River, replies from notifications, Lock River with your
+  fingerprint or face.
+- **Linked devices** — one account on your computer and phone: link with a code or by
+  scanning a QR code, see and remove devices; your friends list follows you.
+- **Remote assistance** — share your screen with someone you trust and let them point at
+  what to click; River asks before every share and shows who can see your screen, with a
+  Stop button, until it ends. No remote control, no unattended access.
 
 ## What works today
 
@@ -58,7 +68,8 @@ and when (no sealed sender yet).
 River brings together things people already know how to use — private chats
 and groups, large channels, communities with roles and voice rooms, profiles
 with posts and stories, an encrypted file vault, voice and video calls, and
-(later) consent-based remote assistance — in one cohesive app with its own design.
+consent-based remote assistance — in one cohesive app with its own design, on your
+computer and your phone.
 
 Privacy is the foundation, not a feature:
 
@@ -82,6 +93,8 @@ against and what it does not.
 | **macOS** (Apple silicon) | `River-<version>-arm64.dmg`   | Open, drag River to Applications. First launch: right-click → Open.            |
 | **macOS** (Intel)         | `River-<version>-x64.dmg`     | Same as above.                                                                 |
 | **Linux**                 | `.AppImage`, `.deb` or `.rpm` | AppImage: make executable and run. deb/rpm: install with your package manager. |
+| **Android 8+**            | `River-android.apk`           | Open it on the phone and allow installing from your browser.                   |
+| **iPhone** (iOS 16+)      | `River-ios-unsigned.ipa`      | Sideload with a free Apple ID (Sideloadly or AltStore), see docs/mobile.       |
 
 Get the files from the **[latest release](https://github.com/martex-dev/river/releases/latest)**.
 Step-by-step instructions, including the one-time security prompts on Windows and
@@ -105,7 +118,7 @@ Members just install River and paste your invite link.
 | Stage    | Version           | Platforms             | Scope                                                                                                  |
 | -------- | ----------------- | --------------------- | ------------------------------------------------------------------------------------------------------ |
 | **1** ✅ | 0.0.1 → **1.0.0** | Windows, macOS, Linux | Encrypted messaging, groups, channels, communities, social profiles/posts/stories, media, files, calls |
-| **2**    | 1.0.x → **2.0.0** | + iOS, Android        | Everything in Stage 1 on all platforms, multi-device sync, consent-based remote assistance             |
+| **2** ✅ | 1.0.x → **2.0.0** | + iOS, Android        | Everything in Stage 1 on all platforms, multi-device sync, consent-based remote assistance             |
 
 ## For developers
 
