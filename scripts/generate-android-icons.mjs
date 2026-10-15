@@ -11,7 +11,7 @@ const inner = icon.replace(/^[\s\S]*?<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '')
 const defs = /<defs>[\s\S]*?<\/defs>/.exec(inner)?.[0] ?? '';
 const waves = /<g fill="none"[\s\S]*?<\/g>/.exec(inner)?.[0] ?? '';
 
-const render = (svg, width, height = width) =>
+const render = (svg, width) =>
   new Resvg(svg, { fitTo: { mode: 'width', value: width }, background: 'rgba(0,0,0,0)' }).render().asPng();
 const write = (path, png) => {
   writeFileSync(`${RES}/${path}`, png);
@@ -43,7 +43,7 @@ const sizes = {
   xxxhdpi: [1280, 1920],
 };
 for (const [d, [w, h]] of Object.entries(sizes)) {
-  write(`drawable-port-${d}/splash.png`, render(splash(w, h), w, h));
-  write(`drawable-land-${d}/splash.png`, render(splash(h, w), h, w));
+  write(`drawable-port-${d}/splash.png`, render(splash(w, h), w));
+  write(`drawable-land-${d}/splash.png`, render(splash(h, w), h));
 }
-write('drawable/splash.png', render(splash(480, 320), 480, 320));
+write('drawable/splash.png', render(splash(480, 320), 480));
