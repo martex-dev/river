@@ -6,6 +6,13 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Your friends list follows you to new devices.** A newly linked device gets
+  your friends and the people you blocked from your other devices (end-to-end
+  encrypted, device to device), and accepting or blocking someone on one device
+  reaches the others. A copy never unblocks or removes anyone.
+
 ## [1.2.0] - 2026-10-15
 
 **One account on your phone and your computer.**

@@ -220,6 +220,8 @@ day 1.2.x, devices 1.3.x, iOS 1.4.x (see ROADMAP).
 
 ## 1.2.x — Devices (ADR 0006, released in 1.2.0)
 
+- [x] Friends list and blocks copied to new devices and kept in step (1.9 sync, early)
+
 - [x] Link a device with a code from a linked device (secret-bound hello and provisioning, HPKE)
 - [x] Signed device-list updates on the server (versioned, keys never change), removal signs a device out
 - [x] Direct messages to every device; sent messages copied to the account's other devices
