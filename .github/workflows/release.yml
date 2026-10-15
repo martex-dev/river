@@ -131,6 +131,8 @@ jobs:
     name: Build Android
     needs: verify
     runs-on: ubuntu-latest
+    outputs:
+      preview: ${{ steps.key.outputs.preview }}
     env:
       VERSION: ${{ needs.verify.outputs.version }}
     steps:
@@ -148,29 +150,33 @@ jobs:
         env:
           KEYSTORE: ${{ secrets.RIVER_ANDROID_KEYSTORE }}
         run: |
-          if [ -z "$KEYSTORE" ]; then
-            echo "::warning::No Android signing key yet (scripts/release/create-android-key.py): this release has no APKs."
-            echo "present=false" >> "$GITHUB_OUTPUT"
+          if [ -n "$KEYSTORE" ]; then
+            echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/river-android.p12"
+            echo "preview=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/river-android.p12"
-          echo "present=true" >> "$GITHUB_OUTPUT"
-      - if: steps.key.outputs.present == 'true'
-        run: npm ci
-      - if: steps.key.outputs.present == 'true'
-        name: Build the UI and the client core, sync the Android project
+          # No permanent key yet (scripts/release/create-android-key.py): sign this build with a
+          # one-off key, so the APK installs. Moving to the permanent key later needs one reinstall.
+          echo "::warning::No Android signing key yet: the APKs are signed with a one-off preview key."
+          pw=$(openssl rand -hex 24)
+          echo "::add-mask::$pw"
+          keytool -genkeypair -keystore "$RUNNER_TEMP/river-android.p12" -storetype PKCS12 -storepass "$pw" -keypass "$pw" -alias river -keyalg RSA -keysize 4096 -validity 3650 -dname "CN=River preview, O=martex-dev" > /dev/null
+          echo "RIVER_PREVIEW_PASSWORD=$pw" >> "$GITHUB_ENV"
+          echo "preview=true" >> "$GITHUB_OUTPUT"
+      - run: npm ci
+      - name: Build the UI and the client core, sync the Android project
         run: npm run sync -w @river/mobile
-      - if: steps.key.outputs.present == 'true'
-        name: Build signed release APKs
+      - name: Build signed release APKs
         working-directory: apps/mobile/android
         env:
           RIVER_ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/river-android.p12
-          RIVER_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.RIVER_ANDROID_KEYSTORE_PASSWORD }}
-          RIVER_ANDROID_KEY_ALIAS: ${{ secrets.RIVER_ANDROID_KEY_ALIAS }}
-          RIVER_ANDROID_KEY_PASSWORD: ${{ secrets.RIVER_ANDROID_KEY_PASSWORD }}
-        run: RIVER_NDK_VERSION=$(basename "$ANDROID_NDK_LATEST_HOME") ./gradlew --no-daemon assembleRelease
-      - if: steps.key.outputs.present == 'true'
-        name: Collect APKs
+          PERMANENT_PASSWORD: ${{ secrets.RIVER_ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          export RIVER_ANDROID_KEYSTORE_PASSWORD="${RIVER_PREVIEW_PASSWORD:-$PERMANENT_PASSWORD}"
+          export RIVER_ANDROID_KEY_PASSWORD="$RIVER_ANDROID_KEYSTORE_PASSWORD"
+          export RIVER_ANDROID_KEY_ALIAS=river
+          RIVER_NDK_VERSION=$(basename "$ANDROID_NDK_LATEST_HOME") ./gradlew --no-daemon assembleRelease
+      - name: Collect APKs
         run: |
           mkdir -p upload
           out=apps/mobile/android/app/build/outputs/apk/release
@@ -180,8 +186,7 @@ jobs:
           "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" verify --print-certs "upload/River-$VERSION-android-arm64.apk" | head -3
           rm -f "$RUNNER_TEMP/river-android.p12"
           ls -la upload
-      - if: steps.key.outputs.present == 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-Android
           path: upload/*
@@ -228,7 +233,14 @@ jobs:
           RIVER_RELEASE_SIGNING_KEY: ${{ secrets.RIVER_RELEASE_SIGNING_KEY }}
         run: node scripts/release/sign-manifest.ts dist "$VERSION" "$GITHUB_SHA"
       - name: Release notes
-        run: node scripts/release/changelog-section.ts "$VERSION" > notes.md
+        run: |
+          node scripts/release/changelog-section.ts "$VERSION" > notes.md
+          if [ "${{ needs.android.outputs.preview }}" = "true" ]; then
+            {
+              echo
+              echo "> **Android:** these APKs are a preview, signed with a one-off key. The first build signed with River's permanent key will ask you to uninstall the preview first (River on the phone starts fresh once)."
+            } >> notes.md
+          fi
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
