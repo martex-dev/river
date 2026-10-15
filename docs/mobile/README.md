@@ -1,6 +1,6 @@
 # River on phones
 
-River for Android ships from 1.1.0, River for iPhone from 1.2.0. Design: [ADR 0005](../architecture/decisions/0005-mobile-apps.md)
+River for Android ships from 1.1.0, River for iPhone from 1.3.0. Design: [ADR 0005](../architecture/decisions/0005-mobile-apps.md)
 and [ARCHITECTURE.md §13](../../ARCHITECTURE.md#13-mobile-architecture-stage-2).
 
 ## Install (Android)
@@ -39,13 +39,23 @@ decisions) River can go to TestFlight and the App Store instead.
 - Everything in communities: channels, messages, replies, reactions, threads,
   files, roles, invites, voice channels.
 - Direct messages and calls (libsignal, the same as the desktop).
-- Encrypted local storage: SQLCipher, its key held by the Android Keystore.
-- Notifications for new messages while River is open in the background.
+- Encrypted local storage: SQLCipher, its key held by the Android Keystore or
+  the iOS Keychain. Lock River asks for your fingerprint, face or screen lock.
+- One account on your phone and your computer (linked devices, 1.2): link with
+  the QR code shown in Settings → Account → Devices on the computer.
+- Notifications, with replies right from the notification (1.4). On Android,
+  **Stay connected** (Settings → System) keeps River connected while closed,
+  with a quiet permanent notification — River uses no Google or Apple push
+  service.
+- Calls keep going with the screen off on Android, ring while River is in the
+  background (1.7), and have a speaker button.
+- Share → River from other apps (Android); swipe between the list and the
+  conversation.
+- Watching and pointing at someone's shared screen (remote assistance).
 - "Open in River" links on invite pages.
 
-Not yet: hosting (a computer feature), screen sharing, push notifications when
-River has been closed (1.2.x), one account on phone and computer together
-(1.3.x — a phone is its own account until then), link previews.
+Not yet: hosting and sharing your own screen (computer features), the system's
+own incoming-call screen (CallKit / ConnectionService), link previews.
 
 ## How it is built
 
