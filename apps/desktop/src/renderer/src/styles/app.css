@@ -1681,3 +1681,30 @@ html[data-density='compact'] .member {
   padding-left: 18px;
   line-height: 1.5;
 }
+
+/* "Share → River" destination picker (phones). */
+.share-sheet__list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+.share-sheet__target {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.share-sheet__target:hover,
+.share-sheet__target:focus-visible {
+  background: var(--surface-hover, rgba(127, 127, 127, 0.12));
+}

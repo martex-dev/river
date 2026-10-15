@@ -13,6 +13,8 @@ export const IPC = {
   appInfo: 'river:app:info',
   appTakeDeepLink: 'river:app:take-deep-link',
   appDeepLink: 'river:app:deep-link',
+  /** Something shared to River from another app (phones). */
+  appShare: 'river:app:share',
   settingsGet: 'river:settings:get',
   settingsUpdate: 'river:settings:update',
   updatesStatus: 'river:updates:status',
@@ -481,6 +483,8 @@ export interface RiverApi {
     /** A River link opened from a browser ("Open in River") before the window could take it. */
     takeDeepLink(): Promise<DeepLink | null>;
     onDeepLink(listener: (link: DeepLink) => void): () => void;
+    /** Text and files shared to River from another app (phones; "Share → River"). */
+    onShare(listener: (content: SharedContent) => void): () => void;
     /** Colours of the window buttons area (Windows/Linux), following the theme. */
     setTitleBar(colors: { color: string; symbol: string }): Promise<void>;
   };
@@ -650,6 +654,12 @@ export interface HostStatus extends HostRuntime {
   yours: boolean;
   /** River Host, the separate host from 1.0.8, is set up ('installed') or running on this PC. */
   legacy: 'none' | 'installed' | 'running';
+}
+
+/** What another app shared to River. Nothing is sent until the person picks where and sends. */
+export interface SharedContent {
+  text: string;
+  files: Array<{ name: string; type: string; data: Uint8Array }>;
 }
 
 /** A River link the operating system handed to River (river://open?link=…). */
