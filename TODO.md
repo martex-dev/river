@@ -193,7 +193,8 @@ Each line is one PR; each version ships when its section is done.
 - [x] Android app: core in its own WebView; libsignal-android, SQLCipher, Android Keystore, notifications, deep links
 - [x] Phone layout (one pane at a time), River icons
 - [x] CI: APK build and emulator end-to-end test
-- [ ] Release signing key (maintainer runs `python scripts/release/create-android-key.py`)
+- [x] Released as a preview (APKs signed with a one-off key)
+- [ ] Permanent signing key (maintainer runs `python scripts/release/create-android-key.py`)
 - [ ] Voice in the Android WebView verified on a real phone (microphone permission, audio routing)
 
 ### 1.2.x — Phones, day to day
