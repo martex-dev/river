@@ -166,7 +166,9 @@ public final class CoreHost: NSObject {
             }
             answer(id, value: ["canceled": false, "filePath": path] as [String: Any])
         case "notify":
-            notify(id: id, title: a["title"] as? String ?? "River", body: a["body"] as? String ?? "")
+            notify(
+                id: id, title: a["title"] as? String ?? "River", body: a["body"] as? String ?? "",
+                reply: (a["reply"] as? Bool) ?? false)
         case "appLock":
             let available = AppLock.shared.setEnabled((a["enabled"] as? Bool) ?? false)
             answer(id, value: ["available": available] as [String: Any])
@@ -190,8 +192,21 @@ public final class CoreHost: NSObject {
         top()?.present(alert, animated: true)
     }
 
-    private func notify(id: Int, title: String, body: String) {
+    private static let replyCategory = "river.reply"
+    private static let replyAction = "river.reply.text"
+
+    private func notify(id: Int, title: String, body: String, reply: Bool) {
         let center = UNUserNotificationCenter.current()
+        if reply {
+            // Reply from the notification: the text goes to the core, which sends it encrypted.
+            let action = UNTextInputNotificationAction(
+                identifier: CoreHost.replyAction, title: "Reply", options: [],
+                textInputButtonTitle: "Send", textInputPlaceholder: "Reply")
+            center.setNotificationCategories([
+                UNNotificationCategory(
+                    identifier: CoreHost.replyCategory, actions: [action], intentIdentifiers: [], options: [])
+            ])
+        }
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             guard granted else {
                 self.answer(id, value: "denied")
@@ -200,6 +215,7 @@ public final class CoreHost: NSObject {
             let content = UNMutableNotificationContent()
             content.title = title
             content.body = body
+            if reply { content.categoryIdentifier = CoreHost.replyCategory }
             let identifier = UUID().uuidString
             DispatchQueue.main.async { self.notificationAsks[identifier] = id }
             center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
@@ -257,7 +273,13 @@ extension CoreHost: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         if let id = notificationAsks.removeValue(forKey: response.notification.request.identifier) {
-            answer(id, value: "clicked")
+            if let text = (response as? UNTextInputNotificationResponse)?.userText
+                .trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty
+            {
+                answer(id, value: ["reply": String(text.prefix(4000))] as [String: Any])
+            } else {
+                answer(id, value: "clicked")
+            }
         }
         completionHandler()
     }
