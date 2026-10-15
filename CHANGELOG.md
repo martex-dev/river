@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-15
+
+**Security fixes for linked devices.**
+
 ### Security
 
 - **Removing a linked device now ends its connection at once.** Before, a
