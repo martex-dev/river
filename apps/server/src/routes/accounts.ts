@@ -407,6 +407,10 @@ export function registerAccountRoutes(
    * device. Ten minutes, in memory, never written to disk; each part is written once.
    */
   interface PendingLink {
+    /** Reserved by a signed-in device that showed the code (1.3.1); null: opened by a hello. */
+    reservedBy: string | null;
+    /** Who opened an unreserved slot (older apps), for the per-address cap. */
+    openedBy: string | null;
     hello: LinkHello | null;
     mac: string | null;
     provision: string | null;
@@ -416,6 +420,9 @@ export function registerAccountRoutes(
   const links = new Map<string, PendingLink>();
   const LINK_TTL_MS = 10 * 60 * 1000;
   const MAX_LINKS = 1000;
+  /** Slots one account may hold reserved at once, and unreserved slots per network address. */
+  const MAX_RESERVED_PER_ACCOUNT = 3;
+  const MAX_OPEN_PER_IP = 3;
   const sweep = (): void => {
     const t = deps.now().getTime();
     for (const [id, l] of links) if (l.expires <= t) links.delete(id);
@@ -430,16 +437,67 @@ export function registerAccountRoutes(
   const notFound = (reply: FastifyReply): FastifyReply =>
     fail(reply, 404, 'not_found', 'Nothing is waiting under this link code.');
 
+  // The device showing the code reserves its mailbox first, so strangers cannot use up the slots:
+  // a hello then goes into a slot that already exists.
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/link/:id/reserve`,
+    { ...sensitive, preHandler: requireSession },
+    async (request, reply) => {
+      sweep();
+      const id = linkIdSchema.safeParse(request.params.id);
+      if (!id.success) return fail(reply, 400, 'bad_request', 'Bad request');
+      const riverId = request.session!.riverId;
+      const existing = links.get(id.data);
+      if (existing) {
+        if (existing.reservedBy === riverId) return reply.code(200).send(linkState(existing));
+        return fail(reply, 409, 'link_in_use', 'This link code was already used.');
+      }
+      const mine = [...links.values()].filter((l) => l.reservedBy === riverId).length;
+      if (mine >= MAX_RESERVED_PER_ACCOUNT) {
+        return fail(reply, 429, 'too_many_links', 'Finish or cancel the devices you are already linking');
+      }
+      if (links.size >= MAX_LINKS) {
+        return fail(reply, 503, 'busy', 'Too many devices are being linked right now');
+      }
+      const l: PendingLink = {
+        reservedBy: riverId,
+        openedBy: null,
+        hello: null,
+        mac: null,
+        provision: null,
+        deviceId: null,
+        expires: deps.now().getTime() + LINK_TTL_MS,
+      };
+      links.set(id.data, l);
+      return reply.code(201).send(linkState(l));
+    },
+  );
+
   app.put<{ Params: { id: string } }>(`${API_PREFIX}/link/:id`, sensitive, async (request, reply) => {
     sweep();
     const id = linkIdSchema.safeParse(request.params.id);
     const parsed = putLinkHelloRequestSchema.safeParse(request.body);
     if (!id.success || !parsed.success) return fail(reply, 400, 'bad_request', 'Bad request');
-    if (links.has(id.data)) return fail(reply, 409, 'link_in_use', 'This link code was already used.');
+    const reserved = links.get(id.data);
+    if (reserved) {
+      if (reserved.reservedBy === null || reserved.hello !== null) {
+        return fail(reply, 409, 'link_in_use', 'This link code was already used.');
+      }
+      reserved.hello = parsed.data.hello;
+      reserved.mac = parsed.data.mac;
+      return reply.code(201).send(linkState(reserved));
+    }
+    // A code from an older app that did not reserve: allowed, a few per network address.
+    const opened = [...links.values()].filter((l) => l.openedBy === request.ip).length;
+    if (opened >= MAX_OPEN_PER_IP) {
+      return fail(reply, 429, 'too_many_links', 'Too many devices are being linked from here right now');
+    }
     if (links.size >= MAX_LINKS) {
       return fail(reply, 503, 'busy', 'Too many devices are being linked right now');
     }
     const l: PendingLink = {
+      reservedBy: null,
+      openedBy: request.ip,
       hello: parsed.data.hello,
       mac: parsed.data.mac,
       provision: null,
