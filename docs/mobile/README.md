@@ -47,8 +47,8 @@ decisions) River can go to TestFlight and the App Store instead.
   **Stay connected** (Settings → System) keeps River connected while closed,
   with a quiet permanent notification — River uses no Google or Apple push
   service.
-- Calls keep going with the screen off on Android, ring while River is in the
-  background (1.7), and have a speaker button.
+- Calls keep going with the screen off on Android and ring while River is in
+  the background (1.7).
 - Share → River from other apps (Android); swipe between the list and the
   conversation.
 - Watching and pointing at someone's shared screen (remote assistance).
