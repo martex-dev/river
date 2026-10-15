@@ -411,8 +411,9 @@ async function start(): Promise<void> {
     },
     hosting,
     homeAccount,
-    takeDeepLink: () => {
+    takeDeepLink: (kind) => {
       const link = pendingDeepLink;
+      if (!link || (kind && link.kind !== kind)) return null;
       pendingDeepLink = null;
       return link;
     },

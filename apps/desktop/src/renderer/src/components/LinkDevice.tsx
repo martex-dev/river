@@ -3,6 +3,7 @@ import type { IdentityInfo, LinkedDevice, LinkProgress } from '../../../shared/i
 import { isPhone } from '../../../shared/platform.ts';
 import { useRiver } from '../store.ts';
 import { ArrowIcon, CheckIcon } from './Icons.tsx';
+import { QrCode } from './QrCode.tsx';
 
 /** Live link progress from the client core. */
 function useLinkProgress(): LinkProgress {
@@ -22,12 +23,14 @@ const when = (iso: string): string =>
  * on a device that is already linked (Settings → Account → Devices → Link a new device).
  */
 export function LinkThisDevice(props: {
+  /** A link code that arrived from outside (river://link?…), filled in for the person to confirm. */
+  initialCode?: string;
   onBack(): void;
   onLinked(identity: IdentityInfo): void;
 }): ReactElement {
   const phone = useRiver((r) => isPhone(r.info?.platform));
   const progress = useLinkProgress();
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(props.initialCode ?? '');
   const [name, setName] = useState(phone ? 'My phone' : 'My computer');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -190,7 +193,11 @@ export function DevicesPanel(): ReactElement {
 
       {progress.state === 'offering' && (
         <div className="devices__offer" role="status" aria-live="polite">
-          <p>On the new device, choose “I already use River — link this device” and enter:</p>
+          <p>
+            New phone: scan this with its camera. Another computer: choose “I already use River — link this
+            device” and enter the code below.
+          </p>
+          <QrCode value={progress.code} label="Link code as a QR code" />
           <p className="devices__code mono" aria-label="Link code">
             {progress.shortCode}
           </p>

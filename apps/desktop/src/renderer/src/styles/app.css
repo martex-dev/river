@@ -1706,6 +1706,12 @@ html[data-density='compact'] .member {
   border-radius: var(--radius-m);
   background: var(--layer-1);
 }
+.qr-code {
+  display: block;
+  margin: 12px 0;
+  border-radius: 8px;
+}
+
 .devices__code {
   margin: 8px 0;
   font-size: 26px;

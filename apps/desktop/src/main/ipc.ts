@@ -83,7 +83,7 @@ export interface IpcDeps {
   diagnostics(): Promise<DiagnosticCheck[]>;
   openLogs(): Promise<void>;
   /** A River link opened from a browser that the UI has not taken yet. */
-  takeDeepLink(): DeepLink | null;
+  takeDeepLink(kind?: DeepLink['kind']): DeepLink | null;
   /** Hosting communities on this PC. */
   hosting: Pick<
     Hosting,
@@ -138,7 +138,9 @@ export function registerIpc(deps: IpcDeps): void {
   };
 
   handle(IPC.appInfo, () => deps.appInfo());
-  handle(IPC.appTakeDeepLink, () => deps.takeDeepLink());
+  handle(IPC.appTakeDeepLink, (_e, kind) =>
+    deps.takeDeepLink(z.enum(['invite', 'friend', 'signup', 'device']).optional().parse(kind)),
+  );
   handle(IPC.settingsGet, () => deps.settings.get());
   handle(IPC.settingsUpdate, (_e, patch) => deps.settings.update(patch));
 

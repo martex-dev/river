@@ -505,7 +505,8 @@ export interface RiverApi {
   app: {
     info(): Promise<AppInfo>;
     /** A River link opened from a browser ("Open in River") before the window could take it. */
-    takeDeepLink(): Promise<DeepLink | null>;
+    /** Takes the pending link (only if it is of `kind`, when given; others stay pending). */
+    takeDeepLink(kind?: DeepLink['kind']): Promise<DeepLink | null>;
     onDeepLink(listener: (link: DeepLink) => void): () => void;
     /** Colours of the window buttons area (Windows/Linux), following the theme. */
     setTitleBar(colors: { color: string; symbol: string }): Promise<void>;
@@ -692,9 +693,9 @@ export interface HostStatus extends HostRuntime {
   legacy: 'none' | 'installed' | 'running';
 }
 
-/** A River link the operating system handed to River (river://open?link=…). */
+/** A River link the operating system handed to River (river://open?link=…, river://link?…). */
 export interface DeepLink {
-  kind: 'invite' | 'friend' | 'signup';
-  /** The https invite, friend or sign-up link itself. */
+  kind: 'invite' | 'friend' | 'signup' | 'device';
+  /** The https invite, friend or sign-up link itself; for 'device', the river://link?… link code. */
   link: string;
 }

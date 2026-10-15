@@ -16,6 +16,9 @@ All notable changes to River are documented here. The format follows
   device of its own). Direct messages reach all your devices, and what you
   send from one shows on the others. Remove a device any time; it is signed
   out for good. History from before linking stays where it was.
+- **Link a phone with its camera.** The link screen shows a QR code; scan it
+  with the new phone's camera app and River opens with the code filled in. You
+  still confirm on both devices.
 - Servers: `PUT /v1/accounts/me/devices` and the link mailbox (`/v1/link`),
   advertised as the `linked-devices` capability.
 

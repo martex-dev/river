@@ -22,6 +22,19 @@ export function Onboarding(props: {
   const [savingUser, setSavingUser] = useState(false);
   const [needsLink, setNeedsLink] = useState(false);
   const [link, setLink] = useState('');
+  const [deviceCode, setDeviceCode] = useState('');
+
+  // A device link code opened from outside (the camera app read the QR code on the other device).
+  useEffect(() => {
+    const take = (): void =>
+      void window.river.app.takeDeepLink('device').then((pending) => {
+        if (!pending) return;
+        setDeviceCode(pending.link);
+        setStep('link');
+      });
+    take();
+    return window.river.app.onDeepLink(take);
+  }, []);
 
   useEffect(() => {
     if (step !== 'creating') return;
@@ -123,6 +136,8 @@ export function Onboarding(props: {
 
         {step === 'link' && (
           <LinkThisDevice
+            key={deviceCode}
+            initialCode={deviceCode}
             onBack={() => setStep('welcome')}
             onLinked={(linked) => {
               props.onCreated(linked);

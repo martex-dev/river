@@ -28,7 +28,7 @@ export function createRiverApi(t: RiverTransport): RiverApi {
   return {
     app: {
       info: () => t.invoke(IPC.appInfo),
-      takeDeepLink: () => t.invoke(IPC.appTakeDeepLink),
+      takeDeepLink: (kind) => t.invoke(IPC.appTakeDeepLink, kind),
       setTitleBar: (colors) => t.invoke(IPC.appTitleBar, colors),
       onDeepLink: (listener) => t.on(IPC.appDeepLink, (...args) => listener(args[0] as DeepLink)),
     },
