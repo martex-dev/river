@@ -2,6 +2,7 @@ import { isPhone } from '../../../shared/platform.ts';
 import { LANGUAGES, useT } from '../i18n.ts';
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { BackupPanel } from '../components/BackupPanel.tsx';
+import { DevicesPanel } from '../components/LinkDevice.tsx';
 import { ConnectionCheck } from '../components/ConnectionCheck.tsx';
 import { HostingPanel, useHostStatus } from '../components/HostingPanel.tsx';
 import type { ReleaseChannel } from '@river/release/channels';
@@ -137,6 +138,7 @@ export function SettingsOverlay(): ReactElement | null {
               {tab === 'account' && (
                 <>
                   <ServerPanel settings={settings} />
+                  <DevicesPanel />
                   {!showHosting && !phone && (
                     <button
                       className="btn btn--link"

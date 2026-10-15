@@ -83,6 +83,10 @@ export interface NativeMethods {
   'sig.checkPrivate': [{ priv: B64 }, B64];
   'sig.sign': [{ priv: B64; data: B64 }, B64];
   'sig.verify': [{ pub: B64; data: B64; sig: B64 }, boolean];
+  /** libsignal HPKE (RFC 9180): `info` and `aad` are base64 bytes. */
+  'sig.seal': [{ pub: B64; data: B64; info: B64; aad: B64 }, B64];
+  /** Fails when the key, info, aad or ciphertext do not match. */
+  'sig.open': [{ priv: B64; data: B64; info: B64; aad: B64 }, B64];
   'sig.kemKeyPair': [Record<string, never>, { handle: number; pub: B64 }];
   'sig.checkKemPublic': [{ pub: B64 }, B64];
   'sig.preKeyRecord': [{ id: number; pub: B64; priv: B64 }, B64];

@@ -107,6 +107,17 @@ export class PublicKey {
   verify(msg: Uint8Array, signature: Uint8Array): boolean {
     return native('sig.verify', { pub: b64(this.bytes), data: b64(msg), sig: b64(signature) });
   }
+  seal(msg: Uint8Array, info: string | Uint8Array, associatedData: Uint8Array = new Uint8Array()): Bytes {
+    const infoBytes = typeof info === 'string' ? new TextEncoder().encode(info) : info;
+    return raw(
+      native('sig.seal', {
+        pub: b64(this.bytes),
+        data: b64(msg),
+        info: b64(infoBytes),
+        aad: b64(associatedData),
+      }),
+    );
+  }
   equals(other: PublicKey): boolean {
     return Buffer.from(this.bytes).equals(Buffer.from(other.bytes));
   }
@@ -136,6 +147,23 @@ export class PrivateKey {
   }
   getPublicKey(): PublicKey {
     return PublicKey.trusted(raw(native('sig.publicOf', { priv: b64(this.bytes) })));
+  }
+  open(
+    ciphertext: Uint8Array,
+    info: string | Uint8Array,
+    associatedData: Uint8Array = new Uint8Array(),
+  ): Bytes {
+    const infoBytes = typeof info === 'string' ? new TextEncoder().encode(info) : info;
+    return raw(
+      sig('PrivateKey.open', () =>
+        native('sig.open', {
+          priv: b64(this.bytes),
+          data: b64(ciphertext),
+          info: b64(infoBytes),
+          aad: b64(associatedData),
+        }),
+      ),
+    );
   }
 }
 

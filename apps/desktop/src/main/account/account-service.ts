@@ -194,6 +194,131 @@ export class AccountService {
   }
 
   /**
+   * A device linked to an existing account (1.3): signs in as `deviceId` with this device's key,
+   * checks the account record is signed by the adopted identity and lists this device, and stores
+   * the account. The identity must already be adopted.
+   */
+  async adoptLinked(
+    rawServerUrl: string,
+    deviceId: number,
+    device: { publicKey: Uint8Array; privateKey: Uint8Array },
+  ): Promise<AccountStatus> {
+    const db = this.deps.db();
+    const signer = this.deps.identity.signer();
+    if (!db || !signer) throw new UserFacingError('Link this device first.');
+    if (this.row()) throw new UserFacingError('This device already has an account.');
+    const server = serverUrlSchema.parse(rawServerUrl);
+    const { requestJson } = this.deps;
+    try {
+      const { challenge } = await requestJson(
+        `${server}${API_PREFIX}/auth/challenge`,
+        { method: 'POST', body: { purpose: 'session' } },
+        challengeResponseSchema,
+      );
+      const signature = sign(device.privateKey, sessionMessage(unb64(challenge), signer.riverId, deviceId));
+      const session = await requestJson(
+        `${server}${API_PREFIX}/auth/session`,
+        { method: 'POST', body: { riverId: signer.riverId, deviceId, challenge, signature: b64(signature) } },
+        sessionResponseSchema,
+      );
+      const account = await requestJson(
+        `${server}${API_PREFIX}/accounts/me`,
+        { method: 'GET', token: session.token },
+        accountResponseSchema,
+      );
+      const listBytes = unb64(account.deviceList);
+      const list = parseDeviceList(listBytes);
+      const genuine =
+        account.riverId === signer.riverId &&
+        Buffer.from(unb64(account.identityKey)).equals(Buffer.from(signer.publicKey)) &&
+        verify(signer.publicKey, deviceListMessage(listBytes), unb64(account.deviceListSignature)) &&
+        list.devices.some((d) => d.deviceId === deviceId && d.authKey === b64(device.publicKey));
+      if (!genuine)
+        throw new UserFacingError('The server returned account data that does not match the link.');
+      db.prepare('DELETE FROM server_instance').run();
+      db.prepare(
+        `INSERT INTO account (id, server_url, river_id, device_id, device_public_key, device_private_key,
+                              device_list, device_list_signature, device_list_version, registered_at, username)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        server,
+        signer.riverId,
+        deviceId,
+        Buffer.from(device.publicKey),
+        Buffer.from(device.privateKey),
+        listBytes,
+        unb64(account.deviceListSignature),
+        list.version,
+        this.now().toISOString(),
+        account.username ?? null,
+      );
+      this.token = session.token;
+      this.deps.log.info(`Linked as device ${deviceId}`);
+      this.setConnection('online');
+      return this.status();
+    } catch (err) {
+      throw toUserFacing(err);
+    }
+  }
+
+  /** This account's signed device list as the server has it (verified against our identity). */
+  async deviceList(): Promise<DeviceList> {
+    const row = this.row();
+    const signer = this.deps.identity.signer();
+    if (!row || !signer || !this.token)
+      throw new UserFacingError('Connect to your server first, then try again.');
+    const account = await this.deps.requestJson(
+      `${row.server_url}${API_PREFIX}/accounts/me`,
+      { method: 'GET', token: this.token },
+      accountResponseSchema,
+    );
+    const listBytes = unb64(account.deviceList);
+    if (!verify(signer.publicKey, deviceListMessage(listBytes), unb64(account.deviceListSignature))) {
+      throw new UserFacingError('The server returned a device list that is not signed by your identity.');
+    }
+    return parseDeviceList(listBytes);
+  }
+
+  /** Signs and uploads a new device list (adds or removes devices); keeps the local copy. */
+  async publishDeviceList(list: DeviceList): Promise<void> {
+    const row = this.row();
+    const signer = this.deps.identity.signer();
+    const db = this.deps.db();
+    if (!row || !signer || !db || !this.token) {
+      throw new UserFacingError('Connect to your server first, then try again.');
+    }
+    const listBytes = Buffer.from(JSON.stringify(list), 'utf8');
+    const signature = signer.sign(deviceListMessage(listBytes));
+    try {
+      await this.deps.requestJson(
+        `${row.server_url}${API_PREFIX}/accounts/me/devices`,
+        {
+          method: 'PUT',
+          token: this.token,
+          body: { deviceList: b64(listBytes), deviceListSignature: b64(signature) },
+        },
+        z.object({ devices: z.number(), removed: z.array(z.number()) }),
+      );
+    } catch (err) {
+      throw toUserFacing(err);
+    }
+    db.prepare(
+      'UPDATE account SET device_list = ?, device_list_signature = ?, device_list_version = ? WHERE id = 1',
+    ).run(listBytes, Buffer.from(signature), list.version);
+  }
+
+  /** True if this account is linked on other devices too (from the last device list seen). */
+  hasOtherDevices(): boolean {
+    const row = this.row();
+    return !!row && parseDeviceList(row.device_list).devices.length > 1;
+  }
+
+  /** This device's ID on the account (1 for the device that created it). */
+  deviceId(): number | null {
+    return this.row()?.device_id ?? null;
+  }
+
+  /**
    * True if this account can sign in at `url` with its device key — i.e. that
    * server really holds this account. Changes nothing; used before moving the
    * account to a new address it was not told about by a signed note.
@@ -278,6 +403,16 @@ export class AccountService {
           'The server returned account data that is not signed by your identity. River stopped talking to it.',
         );
         return this.status();
+      }
+      // Another of this account's devices changed the device list (linked or removed a device).
+      const serverVersion = parseDeviceList(listBytes).version;
+      if (serverVersion > row.device_list_version) {
+        this.deps
+          .db()
+          ?.prepare(
+            'UPDATE account SET device_list = ?, device_list_signature = ?, device_list_version = ? WHERE id = 1',
+          )
+          .run(listBytes, unb64(account.deviceListSignature), serverVersion);
       }
       this.setConnection('online');
     } catch (err) {

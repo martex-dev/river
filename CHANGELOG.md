@@ -18,6 +18,26 @@ All notable changes to River are documented here. The format follows
 - iPhone: a long press opens River's menus (messages, channels, members), as
   right-click does on computers.
 
+## [1.2.0] - 2026-10-15
+
+**One account on your phone and your computer.**
+
+### Added
+
+- **Linked devices — one account on your phone and your computer.** In
+  Settings → Account → Devices, choose _Link a new device_; on the new device
+  choose _I already use River — link this device_ and type the code. The new
+  device gets your account, your communities and your name, handed over
+  encrypted from device to device (the server cannot read it or slip in a
+  device of its own). Direct messages reach all your devices, and what you
+  send from one shows on the others. Remove a device any time; it is signed
+  out for good. History from before linking stays where it was.
+- **Link a phone with its camera.** The link screen shows a QR code; scan it
+  with the new phone's camera app and River opens with the code filled in. You
+  still confirm on both devices.
+- Servers: `PUT /v1/accounts/me/devices` and the link mailbox (`/v1/link`),
+  advertised as the `linked-devices` capability.
+
 ## [1.1.0] - 2026-10-15
 
 **River for Android.**

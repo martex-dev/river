@@ -342,6 +342,8 @@ export function createNodeNative(root: string): {
         return false;
       }
     },
+    'sig.seal': (a) => s64(PublicKey.deserialize(b(a.pub)).seal(b(a.data), b(a.info), b(a.aad))),
+    'sig.open': (a) => s64(PrivateKey.deserialize(b(a.priv)).open(b(a.data), b(a.info), b(a.aad))),
     'sig.kemKeyPair': () => {
       const pair = KEMKeyPair.generate();
       const handle = next++;

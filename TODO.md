@@ -218,6 +218,16 @@ day 1.2.x, devices 1.3.x, iOS 1.4.x (see ROADMAP).
 - [ ] Identity-bound call keys: today a server colluding with a community member who holds the community key could tamper with sealed call setup (CRYPTOGRAPHY.md §8)
 - [ ] Release-key hardening steps (protected `release` environment with manual approval) — needs the maintainer
 
+## 1.2.x — Devices (ADR 0006, released in 1.2.0)
+
+- [x] Link a device with a code from a linked device (secret-bound hello and provisioning, HPKE)
+- [x] Signed device-list updates on the server (versioned, keys never change), removal signs a device out
+- [x] Direct messages to every device; sent messages copied to the account's other devices
+- [x] Settings → Account → Devices; onboarding “link this device”
+- [ ] QR code for the link (phones scanning a computer's screen)
+- [ ] Device names in the device list (needs a sealed per-account record)
+- [ ] Copy history to a new device (device-to-device transfer)
+
 ### After 1.0.x (not started; see ROADMAP Stage 2)
 
 - [ ] Bot accounts with a small client library (ADR 0004)
