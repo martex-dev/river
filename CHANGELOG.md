@@ -6,6 +6,31 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.46] - 2026-10-15
+
+**Specter's skins, and you choose your look.**
+
+### Changed
+
+- **The skins are now Specter's** (martex-dev/specter): Specter, Neon, Aurora,
+  Terminal, Paper, Synthwave, Blueprint, Brutal, Retro, Holo and Glitch — each
+  with its six palettes — plus Luxury, Corporate and Nature: 14 skins, 84
+  palettes. Specter's typography (Segoe, Bahnschrift, Sitka, Arial Black,
+  Tahoma, Cascadia), Retro's bevels and caption bar, Brutal's hard shadows,
+  Holo's prism borders, Glitch's RGB split and notches, Blueprint's grid
+  paper, and floating panels in Aurora, Synthwave and Holo.
+- **No built-in look any more.** River's own default skin is gone: everyone
+  chooses a skin and palette first (once — existing users too), and can switch
+  or customise it any time in Settings → Appearance.
+- Settings → Appearance shows the skins as a gallery and the chosen skin's
+  palettes as chips, like Specter.
+- Palette accents fill buttons and highlights in their true colours; wherever
+  an accent colours text, a readable version is used.
+
+### Fixed
+
+- Buttons without a style used the browser's grey instead of the theme.
+
 ## [1.0.45] - 2026-10-15
 
 **Make River yours: 14 skins, 107 themes, and a personalisation centre.**
@@ -1434,7 +1459,8 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.45...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.46...HEAD
+[1.0.46]: https://github.com/martex-dev/river/compare/v1.0.45...v1.0.46
 [1.0.45]: https://github.com/martex-dev/river/compare/v1.0.44...v1.0.45
 [1.0.44]: https://github.com/martex-dev/river/compare/v1.0.43...v1.0.44
 [1.0.43]: https://github.com/martex-dev/river/compare/v1.0.42...v1.0.43

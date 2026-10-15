@@ -149,19 +149,29 @@ export function resolveDesign(
   // Secondary text appears on every surface: readable against all of them, not just the conversation.
   const readableOn = (fg: string, ratio: number): string =>
     [base, surface, raised, bg].reduce((c, bgc) => ensureContrast(c, bgc, ratio), fg);
-  const dim = readableOn(mix(text, base, 0.26 / k), minor);
-  const faint = readableOn(colors.muted ?? mix(text, base, 0.42 / k), minor);
+  // Palettes may carry their own secondary text (Specter's fg1/fg2); always kept readable.
+  const dim = readableOn(theme.dim ?? mix(text, base, 0.26 / k), minor);
+  const faint = readableOn(colors.muted ?? theme.faint ?? mix(text, base, 0.42 / k), minor);
 
   // --- accents ----------------------------------------------------------------------------------
   const sat = prefs.saturation;
   // Accents and status colours are also used as text (links, labels): readable on every surface.
-  const accent = readableOn(saturate(colors.accent ?? theme.accent, sat), 4.9);
-  const accent2 = readableOn(saturate(colors.accent2 ?? theme.accent2, sat), 4.9);
-  const accent3 = mix(accent, accent2, 0.5);
+  // The palette's own accents fill buttons and highlights unchanged (Brutal's loud yellow stays
+  // yellow, with dark ink on it); where an accent colours text, its readable version is used.
+  const accentRaw = saturate(colors.accent ?? theme.accent, sat);
+  // A fill must carry readable text (white or black): nudge it only if neither quite reaches 4.5:1.
+  const accent =
+    contrast(inkOn(accentRaw), accentRaw) >= 4.5
+      ? accentRaw
+      : ensureContrast(accentRaw, inkOn(accentRaw), 4.5);
+  const accent2 = saturate(colors.accent2 ?? theme.accent2, sat);
+  const accentText = readableOn(accent, 4.9);
+  const accent2Text = readableOn(accent2, 4.9);
+  const accent3 = theme.accent3 ? readableOn(theme.accent3, 3) : mix(accent, accent2, 0.5);
   const sem = SEMANTIC[mode];
-  const ok = readableOn(colors.ok ?? sem.ok, 4.9);
-  const warn = readableOn(colors.warn ?? sem.warn, 4.9);
-  const danger = readableOn(colors.danger ?? sem.danger, 4.9);
+  const ok = readableOn(colors.ok ?? theme.ok ?? sem.ok, 4.9);
+  const warn = readableOn(colors.warn ?? theme.warn ?? sem.warn, 4.9);
+  const danger = readableOn(colors.danger ?? theme.danger ?? sem.danger, 4.9);
   const info = readableOn(colors.info ?? sem.info, 4.9);
   const g = Math.min(2, skin.gradient * prefs.gradient * prefs.intensity);
   const glow = Math.min(2, skin.glow * prefs.glow * prefs.intensity);
@@ -171,13 +181,14 @@ export function resolveDesign(
   const borderStrong = colors.border ?? rgba(text, Math.min(0.75, borderAlpha * 2));
   const hover = rgba(text, light ? 0.06 : 0.07);
   const active = colors.selection ? rgba(colors.selection, 0.28) : rgba(text, light ? 0.1 : 0.13);
-  const focus = colors.focus ?? accent;
+  const focus = colors.focus ?? readableOn(accent, 3);
   const grad =
     g > 0.02
       ? `linear-gradient(135deg, ${accent} 0%, ${mix(accent, accent2, Math.min(1, 0.55 * g))} 55%, ${mix(accent, accent2, Math.min(1, g))} 100%)`
       : accent;
   const gradEnd = g > 0.02 ? mix(accent, accent2, Math.min(1, g)) : accent;
-  const ink = inkOn(accent);
+  // The palette's own ink on its accent (Specter's accentFg) when it reads well, else the best of black/white.
+  const ink = theme.ink && !colors.accent && contrast(theme.ink, accent) >= 4.5 ? theme.ink : inkOn(accent);
   const inkGrad = contrast(ink, gradEnd) >= 3 ? ink : inkOn(gradEnd);
 
   // --- geometry ---------------------------------------------------------------------------------
@@ -237,6 +248,8 @@ export function resolveDesign(
     '--accent': accent,
     '--accent-2': accent2,
     '--accent-3': accent3,
+    '--accent-text': accentText,
+    '--accent-2-text': accent2Text,
     '--accent-ink': inkGrad,
     '--accent-solid-ink': ink,
     '--accent-grad': grad,
@@ -333,6 +346,7 @@ export function resolveDesign(
     tabular: prefs.tabularNumbers ? 'on' : 'off',
     pattern,
     backdrop: kind,
+    frame: skin.frame,
   };
   return { skin, theme, vars, attrs, mode };
 }
@@ -372,7 +386,7 @@ export function catalog(custom: CustomTheme[]): CatalogEntry[] {
     skin: skinById(t.skin) ?? SKINS[0]!,
     theme: t,
     custom: false,
-    description: t.description,
+    description: t.description || (skinById(t.skin) ?? SKINS[0]!).tagline,
   }));
   const mine = custom.map((c) => {
     const base = themeById(c.base) ?? THEMES[0]!;

@@ -4,7 +4,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { launchRiver, openSettings } from './launch.ts';
+import { chooseTheme, launchRiver, openSettings } from './launch.ts';
 
 // A tour of River's main screens with real content, saved as screenshots for design work
 // (RIVER_UI_TOUR=<folder>). Skipped otherwise.
@@ -149,23 +149,22 @@ test('tour', async () => {
   await ana.getByRole('button', { name: 'In the trenches', exact: true }).click();
   await shot(ana, '08-back-in-community');
 
-  // Skins (1.0.45): the appearance centre, then River in a theme from each skin family.
+  // Skins (1.0.46): the appearance centre, then River in a palette of every skin.
   await openSettings(ana, 'Appearance');
   await shot(ana, '09-appearance');
-  const themes = (
+  const looks = (
     process.env.RIVER_UI_TOUR_THEMES ??
-    'Neon District,Orbital Command,Aurora Glass,Hot Magenta,Midnight Gold,Pure White,Enterprise Blue,Control Room,Phosphor Green,Outrun,Forest Canopy,Swiss Typography,High Contrast Dark'
+    'Specter:Midnight,Neon:Cyber,Aurora:Borealis,Terminal:Phosphor,Paper:Ivory,Synthwave:Outrun,Blueprint:Cyanotype,Brutal:Concrete,Retro:Teal,Holo:Pearl,Glitch:VHS,Luxury:Midnight Gold,Corporate:Enterprise Blue,Nature:Northern Lights'
   )
     .split(',')
-    .filter(Boolean);
-  for (const [i, theme] of themes.entries()) {
-    await openSettings(ana, 'Appearance');
-    await ana.getByLabel('Search themes').fill(theme);
-    await ana
-      .getByRole('article', { name: `${theme} theme` })
-      .getByRole('button', { name: 'Apply' })
-      .click();
+    .filter(Boolean)
+    .map((x) => x.split(':') as [string, string]);
+  for (const [i, [skin, palette]] of looks.entries()) {
+    await chooseTheme(ana, skin, palette);
     await ana.getByRole('button', { name: 'Close settings' }).click();
-    await shot(ana, `t${String(i + 1).padStart(2, '0')}-${theme.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`);
+    await shot(
+      ana,
+      `t${String(i + 1).padStart(2, '0')}-${`${skin}-${palette}`.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+    );
   }
 });

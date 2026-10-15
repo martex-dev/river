@@ -24,7 +24,7 @@ describe('skin and theme catalog', () => {
     for (const skin of SKINS) expect(themesOf(skin.id).length).toBeGreaterThanOrEqual(5);
     expect(new Set(THEMES.map((t) => t.id)).size).toBe(THEMES.length);
     expect(THEMES.every((t) => SKINS.some((s) => s.id === t.skin))).toBe(true);
-    expect(THEMES.length).toBeGreaterThanOrEqual(100);
+    expect(THEMES.length).toBeGreaterThanOrEqual(80);
   });
 
   it('includes both expressive and professional skins, and light and dark themes', () => {
@@ -33,10 +33,28 @@ describe('skin and theme catalog', () => {
     expect(THEMES.filter((t) => t.mode === 'light').length).toBeGreaterThan(15);
   });
 
-  it('the default design resolves to River · Deep Current', () => {
+  it('has no River skin any more; Specter is only the look before a skin is chosen', () => {
+    expect(SKINS.some((s) => s.id === 'river')).toBe(false);
     const r = resolveDesign(DEFAULT_DESIGN);
-    expect(r.theme.id).toBe('river-current');
-    expect(r.skin.id).toBe('river');
+    expect(r.theme.id).toBe('specter-specter');
+    expect(DEFAULT_DESIGN.chosen).toBe(false);
+  });
+
+  it('carries every Specter skin with six palettes each', () => {
+    for (const id of [
+      'specter',
+      'neon',
+      'aurora',
+      'terminal',
+      'paper',
+      'synthwave',
+      'blueprint',
+      'brutal',
+      'retro',
+      'holo',
+      'glitch',
+    ])
+      expect(themesOf(id)).toHaveLength(6);
   });
 });
 
@@ -48,7 +66,16 @@ describe('every theme stays readable', () => {
       expect(contrast(r.vars['--text']!, base)).toBeGreaterThanOrEqual(7);
       // Secondary text, accents and status colours read on every surface they appear on.
       for (const surface of ['--layer-0', '--layer-1', '--layer-2', '--layer-3'])
-        for (const fg of ['--text-dim', '--text-faint', '--accent', '--ok', '--warn', '--danger', '--info'])
+        for (const fg of [
+          '--text-dim',
+          '--text-faint',
+          '--accent-text',
+          '--accent-2-text',
+          '--ok',
+          '--warn',
+          '--danger',
+          '--info',
+        ])
           expect(contrast(r.vars[fg]!, r.vars[surface]!), `${fg} on ${surface}`).toBeGreaterThanOrEqual(4.45);
       expect(contrast(r.vars['--accent-solid-ink']!, r.vars['--accent']!)).toBeGreaterThanOrEqual(4.5);
       for (const k of ['--ok', '--warn', '--danger', '--info'])
@@ -59,7 +86,7 @@ describe('every theme stays readable', () => {
 
 describe('personalisation can never make River unreadable', () => {
   it('survives extreme settings and hostile colour choices', () => {
-    for (const theme of ['river-current', 'minimal-pure-white', 'terminal-amber']) {
+    for (const theme of ['specter-specter', 'paper-ivory', 'terminal-amber']) {
       const r = resolveDesign(
         withTheme(theme, {
           contrast: 0.8,
@@ -72,19 +99,19 @@ describe('personalisation can never make River unreadable', () => {
       const base = r.vars['--layer-2']!;
       expect(contrast(r.vars['--text']!, base)).toBeGreaterThanOrEqual(4.5);
       expect(contrast(r.vars['--text-faint']!, base)).toBeGreaterThanOrEqual(3.5);
-      expect(contrast(r.vars['--accent']!, base)).toBeGreaterThanOrEqual(3);
+      expect(contrast(r.vars['--accent-text']!, base)).toBeGreaterThanOrEqual(3);
     }
   });
 
   it('unknown or missing themes fall back to the default instead of breaking', () => {
     const r = resolveDesign({ ...DEFAULT_DESIGN, theme: 'no-such-theme' });
-    expect(r.theme.id).toBe('river-current');
+    expect(r.theme.id).toBe('specter-specter');
   });
 
   it('light/dark preference switches to a sibling theme of the same skin', () => {
-    expect(resolveDesign(withTheme('river-current', { mode: 'light' })).theme.mode).toBe('light');
-    expect(resolveDesign(withTheme('minimal-pure-white', { mode: 'dark' })).theme.skin).toBe('minimal');
-    const sys = resolveDesign(withTheme('river-current', { mode: 'system' }), {
+    expect(resolveDesign(withTheme('blueprint-cyanotype', { mode: 'light' })).theme.mode).toBe('light');
+    expect(resolveDesign(withTheme('paper-ivory', { mode: 'dark' })).theme.skin).toBe('paper');
+    const sys = resolveDesign(withTheme('blueprint-cyanotype', { mode: 'system' }), {
       systemDark: false,
       highContrast: false,
     });
@@ -99,7 +126,7 @@ describe('personalisation can never make River unreadable', () => {
         {
           id: 'custom-a',
           name: 'Mine',
-          base: 'neon-hot-magenta',
+          base: 'neon-havoc',
           colors: { accent: '#00ff00' },
           createdAt: 'x',
         },
@@ -140,7 +167,7 @@ describe('design settings are data only', () => {
       kind: 'river-appearance',
       version: 1,
       skin: 'river',
-      theme: 'river-current',
+      theme: 'specter-specter',
       prefs: DEFAULT_DESIGN_PREFS,
     };
     expect(designExportSchema.safeParse(ok).success).toBe(true);
@@ -154,7 +181,9 @@ describe('design settings are data only', () => {
     const old = structuredClone(DEFAULT_SETTINGS) as Record<string, unknown>;
     delete old.design;
     const upgraded = settingsSchema.parse(upgradeSettings(old));
-    expect(upgraded.design.theme).toBe('river-current');
+    expect(upgraded.design.theme).toBe('specter-specter');
+    // Everyone (old settings included) is asked to choose a skin.
+    expect(upgraded.design.chosen).toBe(false);
     const partial = {
       ...structuredClone(DEFAULT_SETTINGS),
       design: { ...DEFAULT_DESIGN, prefs: { glow: 1.5 } },

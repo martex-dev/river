@@ -113,7 +113,7 @@
   color: var(--accent-ink);
 }
 .story-bubble__addicon {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .story-bubble__name {
   max-width: 76px;

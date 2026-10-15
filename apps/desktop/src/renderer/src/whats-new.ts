@@ -3,6 +3,10 @@
  * got, shown once. Fresh installs see nothing; full notes are in the release.
  */
 export const HIGHLIGHTS: Record<string, string[]> = {
+  '1.0.46': [
+    'Specter’s skins: Neon, Aurora, Terminal, Paper, Synthwave, Blueprint, Brutal, Retro, Holo, Glitch and more',
+    'Choose your look first — every skin has its own palettes',
+  ],
   '1.0.45': [
     '14 skins and 107 themes — Cyberpunk, Glass, Luxury, Terminal, Corporate and more',
     'Settings → Appearance: try any theme on the whole app, then Apply or Cancel',
