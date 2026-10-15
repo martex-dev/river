@@ -362,27 +362,15 @@ export class CommunityService {
     return this.deps.identity.get()?.riverId ?? '';
   }
 
-  /** Keys for checking identity-bound call signals (call-signal.ts). */
+  /** Keys for checking identity-bound call signals (call-signal.ts): libsignal's, never a profile's. */
   private signalKeys(): SignalKeys {
     const db = this.deps.db();
-    const read = (kind: string, id: string): Uint8Array | null => {
-      const row = db?.prepare('SELECT value FROM signal_store WHERE kind = ? AND id = ?').get(kind, id) as
-        { value: Uint8Array } | undefined;
-      return row ? new Uint8Array(row.value) : null;
-    };
     return {
-      sessionKey: (riverId) => read('identity', riverId),
-      pinned: (riverId) => read('meta', `call-key:${riverId}`),
-      pin: (riverId, key) => {
-        db?.prepare('INSERT OR IGNORE INTO signal_store (kind, id, value) VALUES (?, ?, ?)').run(
-          'meta',
-          `call-key:${riverId}`,
-          Buffer.from(key),
-        );
-      },
-      profileKey: (riverId) => {
-        const key = this.profileKeys.get(riverId);
-        return key ? new Uint8Array(Buffer.from(key, 'base64')) : null;
+      sessionKey: (riverId) => {
+        const row = db
+          ?.prepare("SELECT value FROM signal_store WHERE kind = 'identity' AND id = ?")
+          .get(riverId) as { value: Uint8Array } | undefined;
+        return row ? new Uint8Array(row.value) : null;
       },
     };
   }
