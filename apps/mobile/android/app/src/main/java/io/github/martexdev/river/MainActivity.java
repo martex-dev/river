@@ -102,6 +102,11 @@ public class MainActivity extends BridgeActivity implements CoreHost.Screen {
           .start();
       return;
     }
+    if (intent.getBooleanExtra(CoreHost.EXTRA_CALL, false) && android.os.Build.VERSION.SDK_INT >= 27) {
+      // An incoming call may show over the lock screen and wake it, like any phone call.
+      setShowWhenLocked(true);
+      setTurnScreenOn(true);
+    }
     int notification = intent.getIntExtra(CoreHost.EXTRA_NOTIFICATION, 0);
     if (notification > 0) {
       core.notificationTapped(notification, intent.getStringExtra(CoreHost.EXTRA_NOTIFICATION_TOKEN));

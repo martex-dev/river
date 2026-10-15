@@ -36,6 +36,7 @@ function setup() {
       return () => undefined;
     },
     focus: vi.fn(),
+    nameOf: () => 'Bob',
     action,
   };
   const community = { onEvent: () => () => undefined };
@@ -82,5 +83,18 @@ describe('replying from a notification', () => {
     });
     shown[0]!.listeners.get('reply')!({}, '   ');
     expect(action).not.toHaveBeenCalled();
+  });
+
+  it('an incoming call rings: a critical, not silent, notification that stays', () => {
+    const { emit } = setup();
+    emit({ t: 'call', kind: 'invite', peer: 'bob-id', callId: 'C'.repeat(22), video: true });
+    expect(shown).toHaveLength(1);
+    expect(shown[0]!.options).toMatchObject({
+      title: 'Incoming video call',
+      body: 'Bob is calling you',
+      silent: false,
+      urgency: 'critical',
+      timeoutType: 'never',
+    });
   });
 });
