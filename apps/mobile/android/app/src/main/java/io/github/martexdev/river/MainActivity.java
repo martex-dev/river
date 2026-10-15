@@ -91,10 +91,26 @@ public class MainActivity extends BridgeActivity implements CoreHost.Screen {
 
   private void handle(Intent intent) {
     if (intent == null) return;
+    if (ShareReceiver.isShare(intent)) {
+      // Reading shared files can take a moment: off the main thread, then to the interface.
+      new Thread(
+              () -> {
+                String event = ShareReceiver.read(getApplicationContext(), intent);
+                if (event != null) runOnUiThread(() -> shareToUi(event));
+              },
+              "river-share")
+          .start();
+      return;
+    }
     int notification = intent.getIntExtra(CoreHost.EXTRA_NOTIFICATION, 0);
     if (notification > 0) core.notificationTapped(notification);
     Uri data = intent.getData();
     if (data != null && "river".equals(data.getScheme())) core.deepLink(data.toString());
+  }
+
+  private void shareToUi(String event) {
+    com.getcapacitor.PluginHandle handle = getBridge() == null ? null : getBridge().getPlugin("RiverCore");
+    if (handle != null && handle.getInstance() instanceof RiverCorePlugin plugin) plugin.onEvent(event);
   }
 
   @Override

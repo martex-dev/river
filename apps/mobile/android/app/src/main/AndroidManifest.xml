@@ -25,6 +25,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Share → River from other apps: text, links, photos, files. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+
             <!-- "Open in River" on invite pages: river://open?link=…; device link QR codes: river://link?… -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

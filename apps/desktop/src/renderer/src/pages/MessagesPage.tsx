@@ -1,4 +1,5 @@
 import type { CallView } from '../../../shared/dm.ts';
+import { useSharedFiles, useSharedText } from '../components/ShareSheet.tsx';
 import { callNote, callsBetween } from '../dm/call-notes.ts';
 import { NotifyMenuSection } from '../community/ui/NotifyMenu.tsx';
 import { ForwardDialog } from '../community/ui/Forward.tsx';
@@ -294,6 +295,8 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
     if (next.length > 10) notify('You can attach up to 10 files to one message.', 'error');
     setPending(next.slice(0, 10));
   };
+  // Shared from another app ("Share → River" on phones) into this conversation.
+  useSharedFiles(`d:${c.riverId}`, addFiles);
 
   const confirmRemove = (): void =>
     setModal({
@@ -976,6 +979,14 @@ function DmComposer(props: {
   const c = props.conversation;
   const dm = useDm();
   const [text, setText] = useDraft(`d:${c.riverId}`);
+  useSharedText(`d:${c.riverId}`, (shared) =>
+    setText((t) =>
+      t
+        ? `${t}
+${shared}`
+        : shared,
+    ),
+  );
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null);
   const lastTyping = useRef(0);

@@ -1,4 +1,5 @@
 import { findFiltered } from '../../../../shared/word-filter.ts';
+import { useSharedFiles, useSharedText } from '../../components/ShareSheet.tsx';
 import { tr } from '../../i18n.ts';
 import { MediaGallery } from './MediaGallery.tsx';
 import { setFollowing } from '../thread-follow.ts';
@@ -120,6 +121,8 @@ export function TextChannel(props: {
     if (next.length > 10) s.notify('You can attach up to 10 files to one message.', 'error');
     setPending(next.slice(0, 10));
   };
+  // Shared from another app ("Share → River" on phones) into this channel.
+  useSharedFiles(`c:${channel.id}`, addFiles);
 
   // The "New messages" divider sits before the first message from someone else since you last read.
   const dividerAfter = useCommunity((x) => (x.divider?.channelId === channel.id ? x.divider.after : null));
@@ -1061,6 +1064,14 @@ function Composer(props: {
   const s = useCommunity();
   // Each channel keeps its own unsent text while River is open (never written to disk).
   const [text, setText] = useDraft(`c:${channel.id}`);
+  useSharedText(`c:${channel.id}`, (shared) =>
+    setText((t) =>
+      t
+        ? `${t}
+${shared}`
+        : shared,
+    ),
+  );
   // Replies notify the person you reply to, unless you switch it off for that reply (like Discord's "@ ON").
   const [pingOffFor, setPingOffFor] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
