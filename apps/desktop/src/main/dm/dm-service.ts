@@ -40,16 +40,27 @@ import type { LocalDatabase } from '../storage/database.ts';
 
 /** What travels inside the libsignal envelope. Everything here is untrusted input when received. */
 const msgId = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
+const messageFields = {
+  id: msgId,
+  text: z.string().max(4000),
+  replyTo: msgId.optional(),
+  attachments: z.array(attachmentPointerSchema).max(10).optional(),
+  sentAt: z.iso.datetime(),
+  groupId: msgId.optional(),
+};
+
 const contentSchema = z.discriminatedUnion('t', [
+  z.object({ v: z.literal(1), t: z.literal('msg'), ...messageFields }),
+  /**
+   * Linked devices (1.3): a message this account sent from another of its devices, so every
+   * device shows the whole conversation. Accepted only from this account's own devices.
+   */
   z.object({
     v: z.literal(1),
-    t: z.literal('msg'),
-    id: msgId,
-    text: z.string().max(4000),
-    replyTo: msgId.optional(),
-    attachments: z.array(attachmentPointerSchema).max(10).optional(),
-    sentAt: z.iso.datetime(),
-    groupId: msgId.optional(),
+    t: z.literal('sync'),
+    /** The conversation: a person's River ID or a group ID. */
+    conv: z.string().min(1).max(64),
+    message: z.object(messageFields).strict(),
   }),
   z.object({
     v: z.literal(1),
@@ -423,6 +434,11 @@ export class DmService {
       this.deps.log.warn(`Dropped a direct message that could not be decrypted (${(err as Error).name})`);
       return true;
     }
+    if (env.sender === this.me()) {
+      if (content.t === 'sync') this.applySync(content.conv, content.message);
+      return true;
+    }
+    if (content.t === 'sync') return true;
     if (contact?.state === 'blocked') return true;
     const peer = env.sender;
     if (SOCIAL.has(content.t)) {
@@ -802,6 +818,43 @@ export class DmService {
 
   // ---- sending ---------------------------------------------------------------------------------
 
+  /** Copies a message we sent to this account's other devices (if it has any). */
+  private async syncToMyDevices(
+    conv: string,
+    message: z.infer<z.ZodObject<typeof messageFields>>,
+  ): Promise<void> {
+    if (!this.deps.account.hasOtherDevices()) return;
+    try {
+      await this.sendContent(this.me(), { v: 1, t: 'sync', conv, message });
+    } catch (err) {
+      this.deps.log.warn(`A sent message was not copied to your other devices: ${(err as Error).message}`);
+    }
+  }
+
+  /** A message this account sent from another device: show it as ours. */
+  private applySync(conv: string, message: z.infer<z.ZodObject<typeof messageFields>>): void {
+    if (this.db().prepare('SELECT 1 FROM dm_messages WHERE id = ?').get(message.id)) return;
+    if (isGroupId(conv)) {
+      const g = this.group(conv);
+      if (!g || g.state === 'left') return;
+    } else if (!this.contact(conv)) {
+      this.upsertContact(conv, 'accepted');
+    }
+    this.db()
+      .prepare(
+        `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions) VALUES (?, ?, ?, ?, ?, 'sent', '{}')`,
+      )
+      .run(
+        message.id,
+        conv,
+        this.me(),
+        JSON.stringify({ text: message.text, replyTo: message.replyTo, attachments: message.attachments }),
+        message.sentAt,
+      );
+    this.emitMessage(message.id, false);
+    this.emitConversations();
+  }
+
   /** Verifies a key bundle and starts sessions with devices we have none with. */
   private async prepareSessions(
     peer: string,
@@ -840,6 +893,7 @@ export class DmService {
     if (list.riverId !== peer) throw new CommunityError('The server returned keys for someone else.');
     const devices: Array<{ deviceId: number; registrationId: number }> = [];
     for (const d of res.devices) {
+      if (peer === this.me() && d.deviceId === this.deviceId()) continue;
       const listed = list.devices.find((x) => x.deviceId === d.deviceId);
       if (!listed || listed.registrationId !== d.registrationId) continue;
       if (force || !protocol.hasSession(peer, d.deviceId)) {
@@ -1050,6 +1104,14 @@ export class DmService {
             this.db()
               .prepare(`UPDATE dm_messages SET status = 'sent' WHERE id = ? AND status = 'sending'`)
               .run(id);
+            void this.syncToMyDevices(act.peer, {
+              id,
+              text: act.text,
+              ...(act.replyTo ? { replyTo: act.replyTo } : {}),
+              ...(act.attachments?.length ? { attachments: act.attachments } : {}),
+              sentAt,
+              ...(group ? { groupId: group.id } : {}),
+            });
           } catch (err) {
             this.db().prepare(`UPDATE dm_messages SET status = 'failed' WHERE id = ?`).run(id);
             this.emitMessage(id, false);

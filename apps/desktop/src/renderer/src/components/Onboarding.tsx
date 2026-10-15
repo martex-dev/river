@@ -4,8 +4,9 @@ import { ArrowIcon, CheckIcon, LockIcon } from './Icons.tsx';
 import { RiverMark } from './RiverMark.tsx';
 import { IdentityFingerprint } from './IdentityFingerprint.tsx';
 import { RestoreForm } from './BackupPanel.tsx';
+import { LinkThisDevice } from './LinkDevice.tsx';
 
-type Step = 'welcome' | 'name' | 'creating' | 'username' | 'done' | 'restore';
+type Step = 'welcome' | 'name' | 'creating' | 'username' | 'done' | 'restore' | 'link';
 
 /** First run: create the user's cryptographic identity. No phone number, no e-mail. */
 export function Onboarding(props: {
@@ -21,6 +22,19 @@ export function Onboarding(props: {
   const [savingUser, setSavingUser] = useState(false);
   const [needsLink, setNeedsLink] = useState(false);
   const [link, setLink] = useState('');
+  const [deviceCode, setDeviceCode] = useState('');
+
+  // A device link code opened from outside (the camera app read the QR code on the other device).
+  useEffect(() => {
+    const take = (): void =>
+      void window.river.app.takeDeepLink('device').then((pending) => {
+        if (!pending) return;
+        setDeviceCode(pending.link);
+        setStep('link');
+      });
+    take();
+    return window.river.app.onDeepLink(take);
+  }, []);
 
   useEffect(() => {
     if (step !== 'creating') return;
@@ -111,10 +125,25 @@ export function Onboarding(props: {
             <button className="btn btn--primary lock__submit" onClick={() => setStep('name')}>
               Create my identity <ArrowIcon size={16} />
             </button>
+            <button className="btn btn--link" onClick={() => setStep('link')}>
+              I already use River — link this device
+            </button>
             <button className="btn btn--link" onClick={() => setStep('restore')}>
-              I already use River — restore from a backup
+              Restore from a backup
             </button>
           </>
+        )}
+
+        {step === 'link' && (
+          <LinkThisDevice
+            key={deviceCode}
+            initialCode={deviceCode}
+            onBack={() => setStep('welcome')}
+            onLinked={(linked) => {
+              props.onCreated(linked);
+              props.onFinished();
+            }}
+          />
         )}
 
         {step === 'restore' && (

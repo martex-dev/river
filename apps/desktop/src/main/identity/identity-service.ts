@@ -78,6 +78,35 @@ export class IdentityService {
   }
 
   /**
+   * A device linked to an existing account (1.3): takes the account's identity, with this
+   * device's own registration ID. Only on a device that has no identity yet.
+   */
+  adopt(linked: {
+    riverId: string;
+    publicKey: Uint8Array;
+    privateKey: Uint8Array;
+    registrationId: number;
+    displayName: string | null;
+  }): IdentityInfo {
+    const db = this.db();
+    if (!db) throw new Error('Local storage is not open');
+    if (this.get()) throw new Error('An identity already exists');
+    const displayName = linked.displayName ? displayNameSchema.parse(linked.displayName) : null;
+    db.prepare(
+      `INSERT INTO identity (id, river_id, public_key, private_key, registration_id, display_name, created_at)
+       VALUES (1, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      linked.riverId,
+      Buffer.from(linked.publicKey),
+      Buffer.from(linked.privateKey),
+      linked.registrationId,
+      displayName,
+      this.now().toISOString(),
+    );
+    return this.get()!;
+  }
+
+  /**
    * Main-process-only: the full identity for libsignal's identity-key store,
    * which needs the private key for session agreement. Never sent over IPC.
    */

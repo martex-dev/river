@@ -25,12 +25,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- "Open in River" on invite pages: river://open?link=… -->
+            <!-- "Open in River" on invite pages: river://open?link=…; device link QR codes: river://link?… -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="river" android:host="open" />
+                <data android:scheme="river" android:host="link" />
             </intent-filter>
 
         </activity>

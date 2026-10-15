@@ -19,6 +19,14 @@ export function parseDeepLink(raw: string): DeepLink | null {
     return null;
   }
   if (url.protocol !== `${DEEP_LINK_SCHEME}:`) return null;
+  // A device link code (QR code or "copy link" in Settings → Devices). It only fills in the
+  // code on the "link this device" screen; the person still confirms on both devices.
+  if (url.hostname === 'link') {
+    const server = url.searchParams.get('s') ?? '';
+    const code = url.searchParams.get('c') ?? '';
+    if (!/^https?:\/\//.test(server) || !/^[0-9A-Za-z-]{16,24}$/.test(code)) return null;
+    return { kind: 'device', link: raw.trim() };
+  }
   const link = url.searchParams.get('link')?.trim() ?? '';
   if (!link) return null;
   if (looksLikeInvite(link)) return { kind: 'invite', link };

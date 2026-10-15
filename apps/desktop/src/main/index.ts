@@ -20,6 +20,7 @@ import {
   broadcastAccountStatus,
   broadcastCommunityEvents,
   broadcastDmEvents,
+  broadcastLinkStatus,
   broadcastHostStatus,
   broadcastSocialEvents,
   broadcastStorageStatus,
@@ -51,6 +52,7 @@ import { electronKeystore } from './storage/electron-keystore.ts';
 import { StorageService } from './storage/storage-service.ts';
 import { IdentityService } from './identity/identity-service.ts';
 import { AccountService } from './account/account-service.ts';
+import { LinkService } from './account/link-service.ts';
 import { UpdateService } from './updater/update-service.ts';
 import { createFetchBytes, createRequestBytes, createRequestJson } from './http.ts';
 import { verifyDownloadedUpdate } from './updater/verify-download.ts';
@@ -279,6 +281,19 @@ async function start(): Promise<void> {
     log,
   });
   const dm = new DmService({ db: () => storage.db(), identity, account, community, log });
+  // Linked devices (1.3): this device can join an account, or add another device to it.
+  const link = new LinkService({
+    identity,
+    account,
+    community,
+    requestJson: createRequestJson((input, init) => net.fetch(input as string, init)),
+    log,
+    homeServer: () => homeAccount.locate(),
+    onLinked: (url) => {
+      settings.update({ server: { url, autoAccount: true } });
+      community.ensureSocket();
+    },
+  });
   const social = new SocialService({ db: () => storage.db(), identity, dm, log });
   const backup = new BackupService({ db: () => storage.db() });
   // Stories disappear after a day.
@@ -380,6 +395,7 @@ async function start(): Promise<void> {
     storage,
     identity,
     account,
+    link,
     community,
     dm,
     social,
@@ -395,8 +411,9 @@ async function start(): Promise<void> {
     },
     hosting,
     homeAccount,
-    takeDeepLink: () => {
+    takeDeepLink: (kind) => {
       const link = pendingDeepLink;
+      if (!link || (kind && link.kind !== kind)) return null;
       pendingDeepLink = null;
       return link;
     },
@@ -439,6 +456,7 @@ async function start(): Promise<void> {
   broadcastAccountStatus(window.webContents, account, homeAccount);
   broadcastCommunityEvents(window.webContents, community);
   broadcastDmEvents(window.webContents, dm);
+  broadcastLinkStatus(window.webContents, link);
   broadcastSocialEvents(window.webContents, social);
   broadcastHostStatus(window.webContents, hosting);
   startMessageNotifications({ community, dm, settings: () => settings.get(), window });
