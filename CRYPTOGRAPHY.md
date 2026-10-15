@@ -200,9 +200,19 @@ of types are shown inline; everything else is saved only when the user chooses.
   voice channel, caps size and rate, and never stores them. It cannot decrypt,
   alter, reorder or replay frames; it sees who relays to whom, when, and frame
   sizes. Camera and screen sharing still need a direct connection.
-- Trust note: as with DTLS fingerprints today, a server colluding with another
-  community member who holds the community key could tamper with sealed call
-  setup; identity-bound call keys come with the protocol freeze (1.1).
+- **Identity-bound call setup (1.5.0).** Every community call signal is also
+  signed with the sender's identity key (XEdDSA) over
+  `"river-call-signal-v1" ‖ community ‖ channel ‖ sender ‖ recipient ‖ payload`.
+  The recipient checks it against the key libsignal holds for that person (from
+  direct messages), else the key pinned on their first signed signal, else the
+  identity key in their community profile, which is then pinned. So the DTLS
+  fingerprints and relay sender keys are bound to the person: a server
+  colluding with a member who holds the community key can no longer forge call
+  setup from someone else. Unsigned signals are accepted only from people who
+  have never sent a signed one (River before 1.5.0); after the first signed
+  signal they are refused, so the signature cannot be stripped. The first pin is
+  trust on first use, as for direct messages; comparing safety numbers settles
+  it.
 
 ## 9. What River will never do
 

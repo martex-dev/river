@@ -6,6 +6,15 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- **Calls in communities are bound to each person's identity key.** Call setup
+  (the connection details that protect a call's encryption) is now signed by the
+  sender's identity key as well as sealed with the community key, and checked
+  against the key River already trusts for that person. Before, the server
+  together with another member could in principle have tampered with it. People
+  on older River versions can still join calls until they update.
+
 ## [1.1.0] - 2026-10-15
 
 **River for Android.**

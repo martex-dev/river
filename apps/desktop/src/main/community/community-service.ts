@@ -64,6 +64,7 @@ import {
 import { layoutChanges, moveChannel as moveInLayout, sidebarGroups } from '../../shared/layout.ts';
 import { communityIconSchema, templateById, type TemplateId } from '../../shared/templates.ts';
 import { describeAudit } from './audit-text.ts';
+import { openSignal, signSignal, type SignalKeys } from './call-signal.ts';
 import type { ServerLocator } from './server-locator.ts';
 import type { PresenceTracker } from '../presence.ts';
 import { readPoll, type Poll } from '../../shared/poll.ts';
@@ -355,6 +356,35 @@ export class CommunityService {
   onServerEvent(listener: (e: ServerEvent) => void): () => void {
     this.rawListeners.add(listener);
     return () => this.rawListeners.delete(listener);
+  }
+
+  private signalMe(): string {
+    return this.deps.identity.get()?.riverId ?? '';
+  }
+
+  /** Keys for checking identity-bound call signals (call-signal.ts). */
+  private signalKeys(): SignalKeys {
+    const db = this.deps.db();
+    const read = (kind: string, id: string): Uint8Array | null => {
+      const row = db?.prepare('SELECT value FROM signal_store WHERE kind = ? AND id = ?').get(kind, id) as
+        { value: Uint8Array } | undefined;
+      return row ? new Uint8Array(row.value) : null;
+    };
+    return {
+      sessionKey: (riverId) => read('identity', riverId),
+      pinned: (riverId) => read('meta', `call-key:${riverId}`),
+      pin: (riverId, key) => {
+        db?.prepare('INSERT OR IGNORE INTO signal_store (kind, id, value) VALUES (?, ?, ?)').run(
+          'meta',
+          `call-key:${riverId}`,
+          Buffer.from(key),
+        );
+      },
+      profileKey: (riverId) => {
+        const key = this.profileKeys.get(riverId);
+        return key ? new Uint8Array(Buffer.from(key, 'base64')) : null;
+      },
+    };
   }
 
   /** The identity key a member published in a community profile (sealed with the community key). */
@@ -2692,7 +2722,11 @@ export class CommunityService {
   /** Call signalling (SDP / ICE) sealed with the community key, relayed by the server. */
   signal(to: string, channelId: string, payload: unknown): void {
     const communityId = this.communityOf(channelId);
-    const data = seal(this.requireKey(communityId), communityId, `signal:${channelId}`, payload);
+    const signer = this.deps.identity.signer();
+    const body = signer
+      ? signSignal({ communityId, channelId, from: signer.riverId, to }, payload, (m) => signer.sign(m))
+      : payload;
+    const data = seal(this.requireKey(communityId), communityId, `signal:${channelId}`, body);
     if (data.length > 30_000) throw new CommunityError('Signal too large');
     const event = { t: 'signal', to: z.uuid().parse(to), data };
     if (this.socketState === 'online' && this.socket?.readyState === WebSocket.OPEN) {
@@ -3167,8 +3201,14 @@ export class CommunityService {
         const ring = communityId ? this.keys.get(communityId) : undefined;
         if (!communityId || !ring) return;
         try {
-          const data = ring.open(communityId, `signal:${e.channelId}`, e.data);
-          this.emit({ t: 'signal', from: e.from, channelId: e.channelId, data });
+          const sealed = ring.open(communityId, `signal:${e.channelId}`, e.data);
+          const route = { communityId, channelId: e.channelId, from: e.from, to: this.signalMe() };
+          const opened = openSignal(route, sealed, this.signalKeys());
+          if (!opened.ok) {
+            this.deps.log.warn(`Dropped a call signal: ${opened.reason}`);
+            return;
+          }
+          this.emit({ t: 'signal', from: e.from, channelId: e.channelId, data: opened.payload });
         } catch {
           this.deps.log.warn('Dropped a call signal that failed authentication');
         }
