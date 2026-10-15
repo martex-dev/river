@@ -11,6 +11,7 @@ import {
   broadcastAccountStatus,
   broadcastCommunityEvents,
   broadcastDmEvents,
+  broadcastLinkStatus,
   broadcastSocialEvents,
   broadcastStorageStatus,
   registerIpc,
@@ -25,6 +26,7 @@ import { StorageService } from '../../desktop/src/main/storage/storage-service.t
 import type { OsKeystore } from '../../desktop/src/main/storage/key-file.ts';
 import { IdentityService } from '../../desktop/src/main/identity/identity-service.ts';
 import { AccountService } from '../../desktop/src/main/account/account-service.ts';
+import { LinkService } from '../../desktop/src/main/account/link-service.ts';
 import { createFetchBytes, createRequestBytes, createRequestJson } from '../../desktop/src/main/http.ts';
 import { runMainDiagnostics } from '../../desktop/src/main/diagnostics.ts';
 import { PresenceTracker } from '../../desktop/src/main/presence.ts';
@@ -185,6 +187,18 @@ async function start(): Promise<void> {
     log,
   });
   const dm = new DmService({ db: () => storage.db(), identity, account, community, log });
+  const link = new LinkService({
+    identity,
+    account,
+    community,
+    requestJson: createRequestJson(http),
+    log,
+    homeServer: () => homeAccount.locate(),
+    onLinked: (url) => {
+      settings.update({ server: { url, autoAccount: true } });
+      community.ensureSocket();
+    },
+  });
   const social = new SocialService({ db: () => storage.db(), identity, dm, log });
   const backup = new BackupService({ db: () => storage.db() });
   setInterval(
@@ -237,6 +251,7 @@ async function start(): Promise<void> {
     storage,
     identity,
     account,
+    link,
     community,
     dm,
     social,
@@ -250,8 +265,9 @@ async function start(): Promise<void> {
     selectScreen: () => undefined,
     hosting: noHosting,
     homeAccount,
-    takeDeepLink: () => {
+    takeDeepLink: (kind) => {
       const link = pendingDeepLink;
+      if (!link || (kind && link.kind !== kind)) return null;
       pendingDeepLink = null;
       return link;
     },
@@ -273,6 +289,7 @@ async function start(): Promise<void> {
   broadcastAccountStatus(target, account, homeAccount);
   broadcastCommunityEvents(target, community);
   broadcastDmEvents(target, dm);
+  broadcastLinkStatus(target, link);
   broadcastSocialEvents(target, social);
   // Notifications while River is in the background; tapping one brings it forward.
   const window = {

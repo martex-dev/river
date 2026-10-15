@@ -21,6 +21,8 @@ export const SERVER_CAPABILITIES = [
   'community-key-epochs',
   'voice-relay',
   'delete-account',
+  /** 1.3: PUT /v1/accounts/me/devices and the link mailbox (docs/architecture/decisions/0006). */
+  'linked-devices',
 ] as const;
 export type ServerCapability = (typeof SERVER_CAPABILITIES)[number];
 

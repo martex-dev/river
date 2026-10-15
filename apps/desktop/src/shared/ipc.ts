@@ -51,6 +51,14 @@ export const IPC = {
   accountSetUsername: 'river:account:set-username',
   accountDelete: 'river:account:delete',
   accountExport: 'river:account:export',
+  accountLinkStart: 'river:account:link-start',
+  accountLinkConfirm: 'river:account:link-confirm',
+  accountLinkJoin: 'river:account:link-join',
+  accountLinkCancel: 'river:account:link-cancel',
+  accountLinkStatus: 'river:account:link-status',
+  accountLinkChanged: 'river:account:link-changed',
+  accountDevices: 'river:account:devices',
+  accountRemoveDevice: 'river:account:remove-device',
   accountRedeemSignup: 'river:account:redeem-signup',
   accountStartOver: 'river:account:start-over',
   usersLookup: 'river:users:lookup',
@@ -107,6 +115,26 @@ export const EXTERNAL_LINKS = {
   tailscale: 'https://tailscale.com/download',
 } as const;
 export type ExternalLinkId = keyof typeof EXTERNAL_LINKS;
+
+/** A new device being linked to an existing account (1.3). */
+export type LinkProgress =
+  | { state: 'idle' }
+  /** A linked device shows this code (`code` for the QR / link, `shortCode` to type). */
+  | { state: 'offering'; code: string; shortCode: string; expiresAt: string }
+  /** A device used the code; the person confirms before it is added. */
+  | { state: 'request'; deviceName: string }
+  /** The new device sent its request and waits for the other device. */
+  | { state: 'joining' }
+  | { state: 'linked' }
+  | { state: 'failed'; message: string };
+
+/** One device of this account, from its signed device list. */
+export interface LinkedDevice {
+  deviceId: number;
+  addedAt: string;
+  /** The device you are using. */
+  current: boolean;
+}
 
 export interface AppInfo {
   version: string;
@@ -477,7 +505,8 @@ export interface RiverApi {
   app: {
     info(): Promise<AppInfo>;
     /** A River link opened from a browser ("Open in River") before the window could take it. */
-    takeDeepLink(): Promise<DeepLink | null>;
+    /** Takes the pending link (only if it is of `kind`, when given; others stay pending). */
+    takeDeepLink(kind?: DeepLink['kind']): Promise<DeepLink | null>;
     onDeepLink(listener: (link: DeepLink) => void): () => void;
     /** Colours of the window buttons area (Windows/Linux), following the theme. */
     setTitleBar(colors: { color: string; symbol: string }): Promise<void>;
@@ -541,6 +570,20 @@ export interface RiverApi {
     /** Save a readable copy of your data (1.0.23); false when the save dialog was cancelled. */
     exportData(): Promise<Result<boolean>>;
     onStatus(listener: (status: AccountStatus) => void): () => void;
+    /** Linked devices (1.3): one account on several devices. */
+    link: {
+      /** On a linked device: show a link code and wait for a new device to use it. */
+      start(): Promise<Result<LinkProgress>>;
+      /** On a linked device: add the device that used the code (after the person confirmed). */
+      confirm(): Promise<Result<{ deviceId: number }>>;
+      /** On a new device: use a link code (the river://link?… link, or the code alone on River's server). */
+      join(code: string, deviceName: string): Promise<Result<LinkProgress>>;
+      cancel(): Promise<void>;
+      status(): Promise<LinkProgress>;
+      onStatus(listener: (progress: LinkProgress) => void): () => void;
+    };
+    devices(): Promise<Result<LinkedDevice[]>>;
+    removeDevice(deviceId: number): Promise<Result<null>>;
   };
   /** Find people by @username to add them. */
   users: {
@@ -650,9 +693,9 @@ export interface HostStatus extends HostRuntime {
   legacy: 'none' | 'installed' | 'running';
 }
 
-/** A River link the operating system handed to River (river://open?link=…). */
+/** A River link the operating system handed to River (river://open?link=…, river://link?…). */
 export interface DeepLink {
-  kind: 'invite' | 'friend' | 'signup';
-  /** The https invite, friend or sign-up link itself. */
+  kind: 'invite' | 'friend' | 'signup' | 'device';
+  /** The https invite, friend or sign-up link itself; for 'device', the river://link?… link code. */
   link: string;
 }

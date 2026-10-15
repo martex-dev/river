@@ -3278,6 +3278,124 @@
     "required": ["categories", "channels"],
     "additionalProperties": false
   },
+  "linkHelloSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "authKey": {
+        "type": "string",
+        "maxLength": 87386,
+        "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+      },
+      "registrationId": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 16383
+      },
+      "linkKey": {
+        "type": "string",
+        "maxLength": 87386,
+        "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+      },
+      "deviceName": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      }
+    },
+    "required": ["authKey", "registrationId", "linkKey", "deviceName"],
+    "additionalProperties": false
+  },
+  "linkIdSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "string",
+    "pattern": "^[A-Za-z0-9_-]{22}$"
+  },
+  "linkMacSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "string",
+    "pattern": "^[A-Za-z0-9_-]{43}$"
+  },
+  "linkStateResponseSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "hello": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "authKey": {
+                "type": "string",
+                "maxLength": 87386,
+                "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+              },
+              "registrationId": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 16383
+              },
+              "linkKey": {
+                "type": "string",
+                "maxLength": 87386,
+                "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+              },
+              "deviceName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              }
+            },
+            "required": ["authKey", "registrationId", "linkKey", "deviceName"],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "mac": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "provision": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 349532
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "deviceId": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "expiresAt": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+      }
+    },
+    "required": ["hello", "mac", "provision", "deviceId", "expiresAt"]
+  },
   "mailboxResponseSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -3966,11 +4084,68 @@
     "required": ["profile"],
     "additionalProperties": false
   },
+  "provisionLinkRequestSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "deviceId": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 64
+      },
+      "provision": {
+        "type": "string",
+        "maxLength": 349530,
+        "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+      }
+    },
+    "required": ["deviceId", "provision"],
+    "additionalProperties": false
+  },
   "publicKeySchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "string",
     "maxLength": 87386,
     "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+  },
+  "putLinkHelloRequestSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "hello": {
+        "type": "object",
+        "properties": {
+          "authKey": {
+            "type": "string",
+            "maxLength": 87386,
+            "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+          },
+          "registrationId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16383
+          },
+          "linkKey": {
+            "type": "string",
+            "maxLength": 87386,
+            "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+          },
+          "deviceName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": ["authKey", "registrationId", "linkKey", "deviceName"],
+        "additionalProperties": false
+      },
+      "mac": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{43}$"
+      }
+    },
+    "required": ["hello", "mac"],
+    "additionalProperties": false
   },
   "reactionSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -5489,6 +5664,24 @@
       }
     },
     "required": ["meta"],
+    "additionalProperties": false
+  },
+  "updateDevicesRequestSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "deviceList": {
+        "type": "string",
+        "maxLength": 10927,
+        "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+      },
+      "deviceListSignature": {
+        "type": "string",
+        "maxLength": 87386,
+        "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+      }
+    },
+    "required": ["deviceList", "deviceListSignature"],
     "additionalProperties": false
   },
   "updateEmojiRequestSchema": {

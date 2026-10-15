@@ -139,6 +139,71 @@ export const registerResponseSchema = z.object({
 });
 export type RegisterResponse = z.infer<typeof registerResponseSchema>;
 
+// ---- Linked devices (1.3, capability "linked-devices") ---------------------------------------
+
+/**
+ * `PUT /v1/accounts/me/devices`: a new device list signed by the identity key. Its `version`
+ * must be higher than the stored one; the calling device must stay in it with the same auth key,
+ * and devices already listed keep their auth keys.
+ */
+export const updateDevicesRequestSchema = z
+  .object({
+    deviceList: base64Bytes(undefined, MAX_DEVICE_LIST_BYTES),
+    deviceListSignature: signatureSchema,
+  })
+  .strict();
+export type UpdateDevicesRequest = z.infer<typeof updateDevicesRequestSchema>;
+
+export const MAX_LINK_PROVISION_BYTES = 256 * 1024;
+/** A link mailbox: derived from the link secret, so only the two devices know it. */
+export const linkIdSchema = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
+/** HMAC-SHA256 under the link secret, base64url. */
+export const linkMacSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
+
+/**
+ * What a device that wants to be linked tells the device that links it (all public). It is
+ * authenticated with the link secret from the code the person entered (`mac`), so the server
+ * cannot swap in a device of its own.
+ */
+export const linkHelloSchema = z
+  .object({
+    /** The new device's authentication key. */
+    authKey: publicKeySchema,
+    registrationId: registrationIdSchema,
+    /** libsignal public key the provisioning message is sealed to (HPKE). */
+    linkKey: publicKeySchema,
+    /** A name for the device, shown when approving ("Pixel 9", "Windows PC"). */
+    deviceName: z.string().trim().min(1).max(64),
+  })
+  .strict();
+export type LinkHello = z.infer<typeof linkHelloSchema>;
+
+/** `PUT /v1/link/:id` (no account needed, once): the new device posts its hello. */
+export const putLinkHelloRequestSchema = z.object({ hello: linkHelloSchema, mac: linkMacSchema }).strict();
+
+/** `GET /v1/link/:id`: what the mailbox holds so far. */
+export const linkStateResponseSchema = z.object({
+  hello: linkHelloSchema.nullable(),
+  mac: linkMacSchema.nullable(),
+  /** base64 of libsignal HPKE ciphertext, or null while waiting. */
+  provision: z
+    .string()
+    .max(Math.ceil(MAX_LINK_PROVISION_BYTES / 3) * 4 + 4)
+    .nullable(),
+  /** The device ID the new device was given, once linked. */
+  deviceId: deviceIdSchema.nullable(),
+  expiresAt: z.iso.datetime(),
+});
+export type LinkState = z.infer<typeof linkStateResponseSchema>;
+
+/** `PUT /v1/link/:id/provision` (signed in, on the account the device was added to). */
+export const provisionLinkRequestSchema = z
+  .object({
+    deviceId: deviceIdSchema,
+    provision: base64Bytes(undefined, MAX_LINK_PROVISION_BYTES),
+  })
+  .strict();
+
 export const sessionRequestSchema = z
   .object({
     riverId: riverIdSchema,

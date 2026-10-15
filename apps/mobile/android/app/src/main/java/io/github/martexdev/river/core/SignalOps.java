@@ -97,6 +97,10 @@ final class SignalOps {
         } catch (InvalidKeyException e) {
           return false;
         }
+      case "sig.seal":
+        return s(new ECPublicKey(b(a.getString("pub"))).seal(b(a.getString("data")), b(a.getString("info")), b(a.getString("aad"))));
+      case "sig.open":
+        return s(new ECPrivateKey(b(a.getString("priv"))).open(b(a.getString("data")), b(a.getString("info")), b(a.getString("aad"))));
       case "sig.kemKeyPair":
         {
           KEMKeyPair pair = KEMKeyPair.generate(KEMKeyType.KYBER_1024);
