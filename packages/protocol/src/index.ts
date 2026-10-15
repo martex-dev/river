@@ -11,6 +11,19 @@ export const MIN_PROTOCOL_VERSION = 1;
 
 export const API_PREFIX = '/v1';
 
+/**
+ * Features of protocol v1 that a server may or may not have, in the order they shipped. Request
+ * schemas are strict, so a client sends a feature's new request fields only to a server that lists
+ * it here. Names are append-only: a capability is never renamed or reused for something else.
+ */
+export const SERVER_CAPABILITIES = [
+  'attachments',
+  'community-key-epochs',
+  'voice-relay',
+  'delete-account',
+] as const;
+export type ServerCapability = (typeof SERVER_CAPABILITIES)[number];
+
 /** Response of `GET /v1/version`. Contains nothing about users or the deployment. */
 export const versionResponseSchema = z.object({
   product: z.literal('river-server'),
@@ -19,8 +32,21 @@ export const versionResponseSchema = z.object({
     current: z.number().int().positive(),
     min: z.number().int().positive(),
   }),
+  /** Optional features this server supports (see SERVER_CAPABILITIES). Servers before 1.1 omit it. */
+  capabilities: z
+    .array(z.string().regex(/^[a-z0-9][a-z0-9-]{0,47}$/))
+    .max(64)
+    .default([]),
 });
 export type VersionResponse = z.infer<typeof versionResponseSchema>;
+
+/** True if the server advertises `capability`. Unknown capabilities of newer servers are ignored. */
+export function serverSupports(
+  info: Pick<VersionResponse, 'capabilities'>,
+  capability: ServerCapability,
+): boolean {
+  return info.capabilities.includes(capability);
+}
 
 /** Response of `GET /v1/health`. */
 export const healthResponseSchema = z.object({ status: z.literal('ok') });
