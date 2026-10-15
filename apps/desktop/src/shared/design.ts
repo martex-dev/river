@@ -75,12 +75,40 @@ export const designPrefsSchema = z.object({
   animatedBackground: z.boolean().default(false),
   // --- typography ---
   uiFont: z
-    .enum(['skin', 'inter', 'manrope', 'plex', 'exo', 'grotesk', 'hyperlegible', 'mono'])
+    .enum([
+      'skin',
+      'segoe',
+      'bahnschrift',
+      'grotesque',
+      'tahoma',
+      'inter',
+      'manrope',
+      'plex',
+      'exo',
+      'grotesk',
+      'hyperlegible',
+      'mono',
+    ])
     .default('skin'),
   displayFont: z
-    .enum(['skin', 'same', 'orbitron', 'playfair', 'grotesk', 'exo', 'vt323', 'plex'])
+    .enum([
+      'skin',
+      'same',
+      'segoe-display',
+      'sitka',
+      'bahnschrift',
+      'din-condensed',
+      'heavy',
+      'tahoma',
+      'orbitron',
+      'playfair',
+      'grotesk',
+      'exo',
+      'vt323',
+      'plex',
+    ])
     .default('skin'),
-  monoFont: z.enum(['skin', 'jetbrains', 'fira', 'plex-mono', 'vt323']).default('skin'),
+  monoFont: z.enum(['skin', 'cascadia', 'jetbrains', 'fira', 'plex-mono', 'vt323']).default('skin'),
   textWeight: unit(300, 600, 400),
   lineHeight: unit(1.2, 1.9, 1.45),
   letterSpacing: unit(-0.03, 0.08, 0),
@@ -143,11 +171,14 @@ export const designSettingsSchema = z.object({
   profiles: z.array(designProfileSchema).max(30),
   favorites: z.array(id).max(200),
   activeProfile: id.nullable(),
+  /** 1.0.46: the person picked a skin (River asks once, before anything else). */
+  chosen: z.boolean().default(false),
 });
 export type DesignSettings = z.infer<typeof designSettingsSchema>;
 
-export const DEFAULT_SKIN = 'river';
-export const DEFAULT_THEME = 'river-current';
+/** Shown only until the person chooses a skin (River asks first). */
+export const DEFAULT_SKIN = 'specter';
+export const DEFAULT_THEME = 'specter-specter';
 
 export const DEFAULT_DESIGN: DesignSettings = {
   skin: DEFAULT_SKIN,
@@ -157,6 +188,7 @@ export const DEFAULT_DESIGN: DesignSettings = {
   profiles: [],
   favorites: [],
   activeProfile: null,
+  chosen: false,
 };
 
 /** What an appearance export file contains (import validates against this). */

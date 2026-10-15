@@ -4,6 +4,7 @@ import { QuickSwitcher } from './components/QuickSwitcher.tsx';
 import { startNavHistory } from './nav-history.ts';
 import { useDesignEngine } from './appearance/use-design.ts';
 import { TryBar } from './appearance/TryBar.tsx';
+import { SkinGate } from './appearance/SkinGate.tsx';
 import { resolveLanguage, useT } from './i18n.ts';
 import { RiverMark } from './components/RiverMark.tsx';
 import { AdminIcon, LockIcon } from './components/Icons.tsx';
@@ -169,6 +170,16 @@ export function App(): ReactElement {
           onCreated={(id) => void identityCreated(id)}
           onFinished={finishOnboarding}
         />
+      </>
+    );
+  }
+
+  // 1.0.46: no built-in look — everyone picks a skin first (once).
+  if (settings && !settings.design.chosen) {
+    return (
+      <>
+        <div className="backdrop" aria-hidden="true" />
+        <SkinGate />
       </>
     );
   }

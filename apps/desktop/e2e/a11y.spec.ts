@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test, type ElectronApplication, type Page } from '@playwright/test';
 import { auditA11y } from './axe.ts';
-import { launchRiver, openCommunities, openHome, openSettings } from './launch.ts';
+import { chooseTheme, launchRiver, openCommunities, openHome, openSettings } from './launch.ts';
 
 // Automated accessibility audit (axe-core) of River's main screens.
 let app: ElectronApplication;
@@ -48,28 +48,25 @@ test('main screens have no serious accessibility problems', async () => {
   await page.keyboard.press('Escape');
 });
 
-test('screens stay accessible in very different themes (1.0.45)', async () => {
-  for (const theme of ['Pure White', 'Neon District', 'Paper', 'Phosphor Green', 'Swiss Typography']) {
-    await openSettings(page, 'Appearance');
-    await page.getByLabel('Search themes').fill(theme);
-    await page
-      .getByRole('article', { name: `${theme} theme` })
-      .getByRole('button', { name: 'Apply' })
-      .click();
-    await audit(`Appearance in ${theme}`);
+test('screens stay accessible in very different skins (1.0.46)', async () => {
+  for (const [skin, palette] of [
+    ['Paper', 'Ivory'],
+    ['Neon', 'Havoc'],
+    ['Terminal', 'Phosphor'],
+    ['Brutal', 'Concrete'],
+    ['Retro', 'Classic'],
+    ['Holo', 'Pearl'],
+  ] as const) {
+    await chooseTheme(page, skin, palette);
+    await audit(`Appearance in ${skin} · ${palette}`);
     await page.getByRole('button', { name: 'Close settings' }).click();
     await openHome(page, 'Friends');
-    await audit(`Friends in ${theme}`);
+    await audit(`Friends in ${skin} · ${palette}`);
     await openCommunities(page);
-    await audit(`Communities in ${theme}`);
+    await audit(`Communities in ${skin} · ${palette}`);
   }
-  // Back to the default look for the tests after this one.
-  await openSettings(page, 'Appearance');
-  await page.getByLabel('Search themes').fill('Deep Current');
-  await page
-    .getByRole('article', { name: 'Deep Current theme' })
-    .getByRole('button', { name: 'Apply' })
-    .click();
+  // Back to the starting look for the tests after this one.
+  await chooseTheme(page, 'Specter', 'Specter');
   await page.getByRole('button', { name: 'Close settings' }).click();
 });
 

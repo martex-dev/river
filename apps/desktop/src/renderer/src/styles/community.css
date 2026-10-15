@@ -788,7 +788,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--accent);
+  color: var(--accent-text);
   font: inherit;
   cursor: pointer;
 }
@@ -951,7 +951,7 @@
   padding-left: 22px;
 }
 .md-link {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: none;
   word-break: break-all;
 }
@@ -1428,7 +1428,7 @@
   width: 84px;
   height: 84px;
   border-radius: 28px;
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--surface-strong);
   border: 1px solid var(--border-strong);
 }
@@ -1689,7 +1689,7 @@
   font-size: 11.5px;
   word-break: break-all;
   user-select: text;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .create-channel {
   display: flex;
@@ -1968,7 +1968,7 @@ input.switch:disabled {
 }
 .role-row__main.has-overwrite::after {
   content: '•';
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .role-row__move {
   display: flex;
@@ -2668,7 +2668,7 @@ input.switch:disabled {
   border-radius: 8px;
   border: 1px solid var(--border-strong);
   background: rgb(var(--shade-rgb) / 0.6);
-  color: var(--accent);
+  color: var(--accent-text);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
@@ -2782,7 +2782,7 @@ input.switch:disabled {
   color: var(--text-faint);
 }
 .dm-status--read {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .dm-status--failed {
   color: var(--danger);
@@ -4092,7 +4092,7 @@ input.switch:disabled {
 }
 .reply-bar__ping.is-on {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* Who reacted (1.0.18) */
@@ -4188,7 +4188,7 @@ input.switch:disabled {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 12.5px;
   font-weight: 600;
 }
@@ -4871,7 +4871,7 @@ input.switch:disabled {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--accent);
+  color: var(--accent-text);
   font: inherit;
   font-weight: 700;
   text-align: left;

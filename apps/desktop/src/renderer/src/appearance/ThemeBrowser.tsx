@@ -1,8 +1,9 @@
-import { memo, useMemo, useState, type CSSProperties, type ReactElement } from 'react';
+import { memo, useMemo, type CSSProperties, type ReactElement } from 'react';
 import { DEFAULT_DESIGN_PREFS, type DesignSettings } from '../../../shared/design.ts';
-import { commitDesign, applyTheme, tryTheme } from './editor.ts';
-import { catalog, resolveDesign, type CatalogEntry } from './engine.ts';
-import { SKINS } from './skins.ts';
+import { applyTheme, tryTheme } from './editor.ts';
+import { resolveDesign } from './engine.ts';
+import { SKINS, type Skin } from './skins.ts';
+import { themeById, themesOf, type Theme } from './themes.ts';
 
 /** A miniature River drawn with one theme's real tokens, fonts and shapes. */
 export const ThemePreview = memo(function ThemePreview(props: {
@@ -31,6 +32,7 @@ export const ThemePreview = memo(function ThemePreview(props: {
       data-buttons={r.attrs.buttons}
       data-msg={r.attrs.msg}
       data-decor={r.attrs.decor}
+      data-frame={r.attrs.frame}
       aria-hidden="true"
     >
       <div className="tp__rail">
@@ -71,185 +73,153 @@ export const ThemePreview = memo(function ThemePreview(props: {
   );
 });
 
-type Filter = 'all' | 'expressive' | 'professional' | 'favorites' | 'mine';
+/** The skin a design uses (a custom theme counts as its base theme's skin). */
+export function skinOf(design: DesignSettings): string {
+  const custom = design.customThemes.find((c) => c.id === design.theme);
+  return themeById(custom?.base ?? design.theme)?.skin ?? design.skin;
+}
 
-export function ThemeBrowser(props: { design: DesignSettings }): ReactElement {
+/**
+ * Skins, then the chosen skin's palettes (1.0.46, after Specter's gallery). Picking a
+ * skin keeps the palette's position when it can, so "the third palette" stays third.
+ */
+export function ThemeBrowser(props: {
+  design: DesignSettings;
+  /** Called instead of applying (the first-run chooser applies on Continue). */
+  onPick?: (themeId: string) => void;
+  /** Preview the whole app on click instead of applying (theme browser "Try"). */
+  selectedTheme?: string;
+}): ReactElement {
   const { design } = props;
-  const [query, setQuery] = useState('');
-  const [skin, setSkin] = useState<string>('all');
-  const [filter, setFilter] = useState<Filter>('all');
-  const [mode, setMode] = useState<'any' | 'dark' | 'light'>('any');
-  const entries = useMemo(() => catalog(design.customThemes), [design.customThemes]);
-  const q = query.trim().toLowerCase();
-  const shown = entries.filter(
-    (e) =>
-      (skin === 'all' || e.skin.id === skin) &&
-      (mode === 'any' || e.theme.mode === mode) &&
-      (filter === 'all' ||
-        (filter === 'favorites' && design.favorites.includes(e.id)) ||
-        (filter === 'mine' && e.custom) ||
-        e.skin.direction === filter) &&
-      (!q || `${e.name} ${e.skin.name} ${e.description}`.toLowerCase().includes(q)),
+  const current = props.selectedTheme ?? design.theme;
+  // On the first-run chooser nothing is selected until the person picks.
+  const nothingYet = props.selectedTheme === '__none__';
+  const currentSkin = nothingYet
+    ? null
+    : (themeById(design.customThemes.find((c) => c.id === current)?.base ?? current)?.skin ?? skinOf(design));
+  const pick = (themeId: string): void =>
+    props.onPick ? props.onPick(themeId) : applyTheme(design, themeId);
+  const palettes = currentSkin ? themesOf(currentSkin) : [];
+  const position = Math.max(
+    0,
+    palettes.findIndex((t) => t.id === current),
   );
-  const toggleFavorite = (id: string): void => {
-    const favorites = design.favorites.includes(id)
-      ? design.favorites.filter((f) => f !== id)
-      : [...design.favorites, id];
-    commitDesign({ ...design, favorites });
-  };
+  const mine = design.customThemes.filter((c) => themeById(c.base)?.skin === currentSkin);
+  const skinName = SKINS.find((s) => s.id === currentSkin)?.name ?? '';
   return (
     <div className="design-browser">
-      <div className="design-browser__filters">
-        <input
-          className="search"
-          placeholder={`Search ${entries.length} themes`}
-          aria-label="Search themes"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <div className="seg" role="radiogroup" aria-label="Show">
-          {(
-            [
-              ['all', 'All'],
-              ['expressive', 'Expressive'],
-              ['professional', 'Professional'],
-              ['favorites', '★ Favourites'],
-              ['mine', 'Mine'],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              role="radio"
-              aria-checked={filter === id}
-              className={`seg__item ${filter === id ? 'is-active' : ''}`}
-              onClick={() => setFilter(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="seg" role="radiogroup" aria-label="Light or dark">
-          {(
-            [
-              ['any', 'Any'],
-              ['dark', 'Dark'],
-              ['light', 'Light'],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              role="radio"
-              aria-checked={mode === id}
-              className={`seg__item ${mode === id ? 'is-active' : ''}`}
-              onClick={() => setMode(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="design-skins" role="radiogroup" aria-label="Skin">
-        <button
-          role="radio"
-          aria-checked={skin === 'all'}
-          className={`design-skin ${skin === 'all' ? 'is-active' : ''}`}
-          onClick={() => setSkin('all')}
-        >
-          <strong>All skins</strong>
-          <span>{SKINS.length} design languages</span>
-        </button>
-        {SKINS.map((s) => (
-          <button
-            key={s.id}
-            role="radio"
-            aria-checked={skin === s.id}
-            className={`design-skin ${skin === s.id ? 'is-active' : ''}`}
-            onClick={() => setSkin(s.id)}
-            title={s.description}
-          >
-            <strong>{s.name}</strong>
-            <span>{s.tagline}</span>
-          </button>
+      <h3 className="design-section">Skins</h3>
+      <div className="skin-grid" role="radiogroup" aria-label="Skin">
+        {SKINS.map((skin) => (
+          <SkinCard
+            key={skin.id}
+            skin={skin}
+            design={design}
+            selected={skin.id === currentSkin}
+            paletteIndex={position}
+            onPick={pick}
+          />
         ))}
       </div>
-      {skin !== 'all' && (
-        <p className="muted small design-browser__about">{SKINS.find((s) => s.id === skin)?.description}</p>
-      )}
-      {shown.length === 0 ? (
-        <p className="muted design-browser__empty">No themes match. Clear the search or pick another skin.</p>
-      ) : (
-        <div className="design-grid">
-          {shown.map((e) => (
-            <ThemeCard
-              key={e.id}
-              entry={e}
-              design={design}
-              selected={design.theme === e.id}
-              favorite={design.favorites.includes(e.id)}
-              onFavorite={() => toggleFavorite(e.id)}
-            />
+      {currentSkin && <h3 className="design-section">{skinName} palettes</h3>}
+      {currentSkin && (
+        <div className="palette-row" role="radiogroup" aria-label={`${skinName} palettes`}>
+          {palettes.map((t) => (
+            <PaletteChip key={t.id} theme={t} selected={t.id === current} onPick={() => pick(t.id)} />
           ))}
+          {mine.map((c) => {
+            const base = themeById(c.base);
+            if (!base) return null;
+            return (
+              <PaletteChip
+                key={c.id}
+                theme={{
+                  ...base,
+                  id: c.id,
+                  name: c.name,
+                  accent: c.colors.accent ?? base.accent,
+                  accent2: c.colors.accent2 ?? base.accent2,
+                }}
+                selected={c.id === current}
+                mine
+                onPick={() => pick(c.id)}
+              />
+            );
+          })}
         </div>
+      )}
+      {!props.onPick && palettes.length > 0 && (
+        <p className="muted small">
+          Click a skin or palette to use it at once.{' '}
+          <button
+            className="btn btn--link btn--small"
+            onClick={() => tryTheme(design, palettes[(position + 1) % palettes.length]!.id)}
+          >
+            Try the next palette on the whole app
+          </button>
+        </p>
       )}
     </div>
   );
 }
 
-function ThemeCard(props: {
-  entry: CatalogEntry;
+function SkinCard(props: {
+  skin: Skin;
   design: DesignSettings;
   selected: boolean;
-  favorite: boolean;
-  onFavorite(): void;
+  paletteIndex: number;
+  onPick(themeId: string): void;
 }): ReactElement {
-  const { entry, design } = props;
+  const palettes = themesOf(props.skin.id);
+  const theme = palettes[Math.min(props.paletteIndex, palettes.length - 1)] ?? palettes[0]!;
   return (
-    <article
-      className={`theme-card ${props.selected ? 'is-selected' : ''}`}
-      aria-label={`${entry.name} theme`}
+    <button
+      role="radio"
+      aria-checked={props.selected}
+      aria-label={`${props.skin.name} skin`}
+      className={`skin-card ${props.selected ? 'is-selected' : ''}`}
+      onClick={() => props.onPick(theme.id)}
     >
-      <button
-        className="theme-card__preview"
-        onClick={() => applyTheme(design, entry.id)}
-        aria-label={`Use ${entry.name}`}
-        aria-pressed={props.selected}
-      >
-        <ThemePreview themeId={entry.id} design={design} />
-      </button>
-      <div className="theme-card__info">
-        <div className="theme-card__name">
-          <strong>{entry.name}</strong>
-          <span className="theme-card__skin">
-            {entry.skin.name}
-            {entry.custom ? ' · yours' : ''} · {entry.theme.mode}
+      <ThemePreview themeId={theme.id} design={props.design} />
+      <span className="skin-card__name">
+        {props.skin.name}
+        {props.selected && (
+          <span className="skin-card__check" aria-hidden="true">
+            ✓
           </span>
-        </div>
-        <button
-          className={`theme-card__fav ${props.favorite ? 'is-on' : ''}`}
-          aria-label={
-            props.favorite ? `Remove ${entry.name} from favourites` : `Add ${entry.name} to favourites`
-          }
-          aria-pressed={props.favorite}
-          onClick={props.onFavorite}
-        >
-          {props.favorite ? '★' : '☆'}
-        </button>
-      </div>
-      <p className="theme-card__desc">{entry.description}</p>
-      <div className="theme-card__actions">
-        {props.selected ? (
-          <span className="theme-card__current">✓ In use</span>
-        ) : (
-          <>
-            <button className="btn btn--ghost btn--small" onClick={() => tryTheme(design, entry.id)}>
-              Try
-            </button>
-            <button className="btn btn--primary btn--small" onClick={() => applyTheme(design, entry.id)}>
-              Apply
-            </button>
-          </>
         )}
-      </div>
-    </article>
+      </span>
+      <span className="skin-card__tagline">{props.skin.tagline}</span>
+    </button>
+  );
+}
+
+function PaletteChip(props: {
+  theme: Theme;
+  selected: boolean;
+  mine?: boolean;
+  onPick(): void;
+}): ReactElement {
+  const t = props.theme;
+  return (
+    <button
+      role="radio"
+      aria-checked={props.selected}
+      aria-label={`${t.name} palette${props.mine ? ' (yours)' : ''}`}
+      className={`palette-chip ${props.selected ? 'is-selected' : ''}`}
+      onClick={props.onPick}
+      title={`${t.name} · ${t.mode}`}
+    >
+      <span
+        className="palette-chip__swatch"
+        aria-hidden="true"
+        style={{
+          background: `linear-gradient(135deg, ${t.accent} 0 50%, ${t.accent2} 50% 100%)`,
+          borderColor: t.bg,
+        }}
+      />
+      {t.name}
+      {props.mine && <span className="muted small"> · yours</span>}
+    </button>
   );
 }

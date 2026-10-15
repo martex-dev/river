@@ -870,16 +870,16 @@ function Motion({ design }: { design: DesignSettings }): ReactElement {
 
 /** One-click starting points for common workflows. */
 const STARTERS: Array<{ name: string; theme: string; prefs: Partial<DesignPrefs>; text: string }> = [
-  { name: 'Daily work', theme: 'river-current', prefs: {}, text: 'River’s signature look.' },
+  { name: 'Daily work', theme: 'specter-specter', prefs: {}, text: 'River’s signature look.' },
   {
     name: 'Deep focus',
-    theme: 'minimal-graphite',
+    theme: 'specter-void',
     prefs: { focusMode: true, memberList: 'hide', chatWidth: 'readable', glow: 0 },
     text: 'Quiet graphite, no rail or member list.',
   },
   {
     name: 'Night session',
-    theme: 'river-riverbed',
+    theme: 'specter-ember',
     prefs: { saturation: 0.8, glow: 0.5, intensity: 0.8 },
     text: 'Warm and low-key for late hours.',
   },
@@ -897,13 +897,13 @@ const STARTERS: Array<{ name: string; theme: string; prefs: Partial<DesignPrefs>
   },
   {
     name: 'High contrast',
-    theme: 'accessible-high-contrast-dark',
+    theme: 'retro-contrast',
     prefs: { contrast: 1.4 },
     text: 'Maximum legibility.',
   },
   {
     name: 'Night city',
-    theme: 'cyberpunk-neon-district',
+    theme: 'neon-cyber',
     prefs: { glow: 1.3, pattern: 'scanlines' },
     text: 'Full cyberpunk, all lights on.',
   },
@@ -1152,7 +1152,7 @@ function Profiles({ design }: { design: DesignSettings }): ReactElement {
           className="btn btn--ghost btn--small"
           onClick={() => applyTheme({ ...design, prefs: DEFAULT_DESIGN_PREFS }, DEFAULT_DESIGN.theme)}
         >
-          Back to River’s default look
+          Back to Specter’s default look
         </button>
       </div>
       <p className="muted small">Resetting keeps your own themes and profiles.</p>

@@ -33,6 +33,8 @@
   --accent: #4fe3d1;
   --accent-2: #7d86ff;
   --accent-3: #66b4e8;
+  --accent-text: var(--accent);
+  --accent-2-text: var(--accent-2);
   --accent-ink: #031512;
   --accent-solid-ink: #031512;
   --accent-grad: linear-gradient(135deg, #4fe3d1 0%, #66b4e8 55%, #7d86ff 100%);

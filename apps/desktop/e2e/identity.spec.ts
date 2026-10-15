@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { TEST_NAME, launchRiver, openSettings } from './launch.ts';
+import { TEST_NAME, chooseFirstSkin, launchRiver, openSettings } from './launch.ts';
 
 const userData = mkdtempSync(join(tmpdir(), 'river-e2e-identity-'));
 test.afterAll(() => rmSync(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
@@ -40,6 +40,7 @@ test('first run creates an identity whose private key never reaches the UI', asy
   expect(second).toBe('refused');
 
   await page.getByRole('button', { name: 'Enter River' }).click();
+  await chooseFirstSkin(page);
   await expect(page.locator('.user-panel')).toContainText(TEST_NAME);
   await openSettings(page, 'Security');
   await expect(page.locator('.identity-card .fingerprint__hex')).toHaveAttribute(
