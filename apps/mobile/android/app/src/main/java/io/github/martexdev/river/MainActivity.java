@@ -103,7 +103,9 @@ public class MainActivity extends BridgeActivity implements CoreHost.Screen {
       return;
     }
     int notification = intent.getIntExtra(CoreHost.EXTRA_NOTIFICATION, 0);
-    if (notification > 0) core.notificationTapped(notification);
+    if (notification > 0) {
+      core.notificationTapped(notification, intent.getStringExtra(CoreHost.EXTRA_NOTIFICATION_TOKEN));
+    }
     Uri data = intent.getData();
     if (data != null && "river".equals(data.getScheme())) core.deepLink(data.toString());
   }

@@ -88,8 +88,10 @@ final class ShareReceiver {
   private static JSONObject readFile(ContentResolver resolver, Uri uri, long budget) {
     // Only content the sharing app granted us; never River's own files.
     if (!"content".equals(uri.getScheme())) return null;
-    if (BuildConfig.APPLICATION_ID.equals(uri.getAuthority())
-        || (uri.getAuthority() != null && uri.getAuthority().startsWith(BuildConfig.APPLICATION_ID + "."))) {
+    String authority = uri.getAuthority();
+    // "content://0@authority" (a user-ID prefix) still reaches the provider named after the "@".
+    if (authority == null || authority.contains("@")) return null;
+    if (authority.equals(BuildConfig.APPLICATION_ID) || authority.startsWith(BuildConfig.APPLICATION_ID + ".")) {
       return null;
     }
     String name = "shared file";

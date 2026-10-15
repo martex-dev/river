@@ -49,6 +49,10 @@ public final class CoreHost {
   private static final String CORE_URL = ORIGIN + "/assets/core/index.html";
   private static final String CHANNEL = "messages";
   public static final String EXTRA_NOTIFICATION = "river.notification";
+  /** A random secret per notification, so other apps cannot fake a tap on River's notifications. */
+  public static final String EXTRA_NOTIFICATION_TOKEN = "river.notification.token";
+  private final Map<Integer, String> notificationTokens = new HashMap<>();
+  private final java.security.SecureRandom random = new java.security.SecureRandom();
 
   private static CoreHost instance;
 
@@ -186,7 +190,12 @@ public final class CoreHost {
   }
 
   /** A notification River posted was tapped: tell the core, which opens the conversation. */
-  public void notificationTapped(int notification) {
+  public void notificationTapped(int notification, String token) {
+    String expected = notificationTokens.get(notification);
+    if (expected == null
+        || token == null
+        || !java.security.MessageDigest.isEqual(expected.getBytes(), token.getBytes())) return;
+    notificationTokens.remove(notification);
     Integer ask = notificationAsks.remove(notification);
     if (ask != null) answer(ask, (Object) "clicked");
   }
@@ -399,12 +408,17 @@ public final class CoreHost {
     }
     int n = nextNotification++;
     notificationAsks.put(n, ask);
+    byte[] secret = new byte[16];
+    random.nextBytes(secret);
+    String token = android.util.Base64.encodeToString(secret, android.util.Base64.NO_WRAP);
+    notificationTokens.put(n, token);
     Screen s = screen;
     Class<?> target = s != null ? s.activityClass() : RiverService.activityClass;
     Intent open =
         new Intent(context, target)
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            .putExtra(EXTRA_NOTIFICATION, n);
+            .putExtra(EXTRA_NOTIFICATION, n)
+            .putExtra(EXTRA_NOTIFICATION_TOKEN, token);
     PendingIntent tap =
         PendingIntent.getActivity(context, n, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     NotificationCompat.Builder b =
@@ -419,6 +433,7 @@ public final class CoreHost {
       NotificationManagerCompat.from(context).notify(n, b.build());
     } catch (SecurityException e) {
       notificationAsks.remove(n);
+      notificationTokens.remove(n);
       answer(ask, (Object) "denied");
     }
   }

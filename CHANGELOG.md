@@ -48,6 +48,12 @@ All notable changes to River are documented here. The format follows
   app to River, pick a conversation or channel, and it opens with them in the
   message box. Nothing is sent until you press Send.
 
+### Security
+
+- Android: other apps can no longer fake a tap on River's notifications (each
+  carries a random secret), and Share → River refuses any address that could
+  point back at River's own files.
+
 ### Fixed
 
 - Voice: a connection that silently stops answering during a call is noticed
