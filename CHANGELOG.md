@@ -6,6 +6,29 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**River for Android.**
+
+### Added
+
+- **River for Android** (Android 8.0+): the same River on your phone — the
+  desktop's own interface and client, so everything works the same way and
+  phones and computers talk to each other directly. Communities, channels,
+  voice, direct messages and calls, files, invites; "Open in River" links;
+  message notifications. Download `River-android.apk` from the release.
+- Phone layout: one pane at a time — the conversation, or the server and
+  channel list behind ☰; Back returns to the list.
+- On the phone, the same protections as the desktop: libsignal for direct
+  messages, sealed community content, the local database encrypted with
+  SQLCipher and its key held by the Android Keystore. River's data is excluded
+  from Android backups.
+
+### Changed
+
+- Servers accept requests from River's phone apps (CORS for River's own app
+  origins only; the API uses bearer tokens, never cookies).
+- The roadmap for Stage 2 now starts with Android (1.1.x), then phones day to
+  day (push, 1.2.x), one account on several devices (1.3.x) and iOS (1.4.x).
+
 ## [1.0.46] - 2026-10-15
 
 **Specter's skins, and you choose your look.**

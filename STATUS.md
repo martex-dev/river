@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-13 · Current version: **1.0.46** · Stage 1 complete · Next: Stage 2 (1.0.x stabilisation, 1.1 protocol freeze)_
+_Last updated: 2026-10-15 · Current version: **1.0.46** · Stage 1 complete · Stage 2 under way: 1.1 River for Android_
 
 ## Complete
 
@@ -60,6 +60,10 @@ _Last updated: 2026-10-13 · Current version: **1.0.46** · Stage 1 complete · 
   current version keeps running. Automatic rollback _after_ a successfully
   installed update that then fails to start is not implemented (TODO).
 - **macOS updates**: notify-and-download only until an Apple Developer ID exists.
+- **River for Android** (1.1.0, `apps/mobile`): built and tested on an emulator in CI
+  (accounts, communities, sealed messages, libsignal DMs, SQLCipher + Keystore).
+  Release APKs need the signing key (`scripts/release/create-android-key.py`).
+  Not yet: push when closed, multi-device (a phone is its own account), iOS.
 
 ## Broken / failing
 
@@ -82,4 +86,4 @@ _Last updated: 2026-10-13 · Current version: **1.0.46** · Stage 1 complete · 
 
 ## Next
 
-See [TODO.md](TODO.md). Stage 1 is complete with 1.0.0. Next: **1.0.x stabilisation**, then **1.1 — protocol freeze** and **1.2 — linked devices**. Public use needs a decision on a stable server address (see ROADMAP open decisions); until then people self-host or use the maintainer's tunnel.
+See [TODO.md](TODO.md). Stage 2 is under way: **1.1 — River for Android** (built; APK signing key pending), then **1.2 — phones day to day** (push), **1.3 — one account on several devices**, **1.4 — iOS** (needs the Apple decision).

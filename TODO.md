@@ -185,6 +185,23 @@ Each line is one PR; each version ships when its section is done.
 - [ ] Faster relayed-voice recovery after a server reconnect (field test: ~45 s gaps when every voice is relayed)
 - [ ] Re-send relay keys when a pair stays silent (field test: one pair never exchanged keys)
 
+## 1.1.x — River for Android (ADR 0005)
+
+### 1.1.0 — Android
+
+- [x] Client core runs outside Electron (shims over one native interface), tested against a real server and the desktop
+- [x] Android app: core in its own WebView; libsignal-android, SQLCipher, Android Keystore, notifications, deep links
+- [x] Phone layout (one pane at a time), River icons
+- [x] CI: APK build and emulator end-to-end test
+- [ ] Release signing key (maintainer runs `python scripts/release/create-android-key.py`)
+- [ ] Voice in the Android WebView verified on a real phone (microphone permission, audio routing)
+
+### 1.2.x — Phones, day to day
+
+- [ ] Content-free push (UnifiedPush, then FCM) and background reconnect
+- [ ] Share sheet, camera and photo picker, call audio routing, biometric lock
+- [ ] Touch: long-press message menu instead of hover actions
+
 ### After 1.0.x (not started; see ROADMAP Stage 2)
 
 - [ ] Bot accounts with a small client library (ADR 0004)

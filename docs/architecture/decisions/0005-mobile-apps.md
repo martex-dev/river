@@ -1,7 +1,8 @@
 # ADR 0005 — Mobile apps: one client core, native crypto underneath
 
-Status: proposed (2026-10-14). Needs the maintainer's go-ahead: it changes the
-mobile plan in ARCHITECTURE.md §13, and iOS distribution costs money.
+Status: **accepted for Android** (2026-10-15, the maintainer asked for "the
+easiest and fastest working way"). iOS follows the same design once the Apple
+decision is made (it costs money). Built in 1.1.0; see docs/mobile.
 
 ## Context
 
@@ -72,3 +73,16 @@ platform pieces native:
 | 4    | Voice in the WebView; DMs; files                                                      |
 | 5    | iOS shell with the same plugins (needs the Apple decision)                            |
 | 6    | Content-free push; background reconnect; parity checks → 2.0.0                        |
+
+## As built (1.1.0)
+
+- The client core runs in its **own WebView** (not in the UI's): the UI stays
+  untrusted exactly as Electron's renderer, and only the core's WebView has the
+  native interface.
+- The native interface is **synchronous** (an Android JavaScript interface),
+  because the desktop core uses synchronous SQLite and crypto. The shims in
+  `apps/mobile/core/shims` provide the node:crypto, node:fs, better-sqlite3,
+  Electron and libsignal APIs the core uses over it.
+- libsignal session operations run natively over per-call stores; River's
+  trust rules (TOFU, verified contacts) stay in the shared TypeScript.
+- Each phone is its own River account until multi-device linking (1.3.x).

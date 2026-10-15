@@ -244,17 +244,30 @@ signature, which the project does not yet have; until then macOS builds are
 ad-hoc signed and the app notifies and opens the download instead of
 installing silently. See [docs/deployment/updates.md](docs/deployment/updates.md).
 
-## 13. Mobile architecture (Stage 2, planned)
+## 13. Mobile architecture (Stage 2)
 
-- iOS: SwiftUI app + Notification Service Extension (decrypts push payload
-  locally); libsignal-swift; Keychain with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`;
-  Secure Enclave wraps the database key; Face ID/Touch ID app lock; CallKit.
-- Android: Jetpack Compose; libsignal-android; Android Keystore (StrongBox when
-  present) wraps the DB key; BiometricPrompt; FCM _and_ UnifiedPush; foreground
-  service for calls only; ConnectionService.
-- Pushes carry **no content** — only a wake-up hint; the app fetches and decrypts.
-- Both clients implement the same protocol and pass the shared test vectors in
-  `packages/protocol/test-vectors`.
+Decided in [ADR 0005](docs/architecture/decisions/0005-mobile-apps.md); details
+in [docs/mobile](docs/mobile/README.md).
+
+- **One client, three platforms.** The phone app runs the desktop's React UI
+  and the desktop's client core (`apps/desktop/src/main`), bundled for a phone
+  by `apps/mobile`. Node and Electron are replaced by small shims over one
+  synchronous native interface (`apps/mobile/core/native.ts`).
+- **The same split as Electron.** The UI runs in the app's WebView and is
+  untrusted; it only has `window.river`. The client core runs in a second,
+  private WebView that has the native interface and never shows anything.
+  Every UI call is validated by the same IPC layer as on the desktop.
+- **Native underneath (Android):** libsignal-android (the same libsignal version
+  as the desktop), SQLCipher 4 for the local database, the Android Keystore
+  wrapping its key, javax.crypto for AES/HMAC/SHA, Android notifications and
+  pickers. iOS will use libsignal Swift and the Keychain behind the same
+  interface.
+- **No Android backup** of River's data (it is useless without the Keystore and
+  would leak metadata); HTTPS only.
+- Pushes, when they come (1.2.x), carry **no content** — only a wake-up hint;
+  the app fetches and decrypts.
+- `tests/mobile` runs the phone's core bundle against a real server and the
+  desktop client; `tests/android` runs the APK on an Android emulator in CI.
 
 ## 14. GitHub and CI architecture
 
@@ -262,6 +275,7 @@ installing silently. See [docs/deployment/updates.md](docs/deployment/updates.md
 | ------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ci.yml`      | push, PR         | install, lint, typecheck, unit tests, build, Electron end-to-end smoke test, production dependency audit                                                        |
 | `codeql.yml`  | push, PR, weekly | CodeQL static analysis                                                                                                                                          |
+| `android.yml` | push, PR         | build the Android APKs; run them on an Android emulator against a real server and the desktop client                                                            |
 | `release.yml` | tag `v*`         | verify tag = version, test, build on Windows/macOS/Linux, SHA256SUMS, CycloneDX SBOM, sign manifest, publish GitHub Release (prerelease for `-beta`/`-nightly`) |
 | Dependabot    | weekly           | npm and Actions updates                                                                                                                                         |
 

@@ -83,7 +83,7 @@ final class SignalOps {
               .put("pub", s(pair.getPublicKey().serialize()));
         }
       case "sig.publicOf":
-        return s(new ECPrivateKey(b(a.getString("priv"))).getPublicKey().serialize());
+        return s(new ECPrivateKey(b(a.getString("priv"))).publicKey().serialize());
       case "sig.checkPublic":
         return s(new ECPublicKey(b(a.getString("pub"))).serialize());
       case "sig.checkPrivate":
