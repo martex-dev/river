@@ -6,6 +6,14 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-10-16
+
+### Added
+
+- **Device names.** Settings → Account → Devices shows each device by the name
+  typed when it was linked ("Alice's phone") instead of "Device 2". Names stay
+  on your devices and are shared between them end-to-end encrypted.
+
 ## [2.0.2] - 2026-10-16
 
 ### Added

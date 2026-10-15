@@ -140,6 +140,8 @@ export type LinkProgress =
 /** One device of this account, from its signed device list. */
 export interface LinkedDevice {
   deviceId: number;
+  /** The name typed when it was linked, if this device knows it. */
+  name: string | null;
   addedAt: string;
   /** The device you are using. */
   current: boolean;

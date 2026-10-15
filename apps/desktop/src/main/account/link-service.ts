@@ -331,6 +331,7 @@ export class LinkService {
       linkStateResponseSchema,
     );
     this.deps.log.info(`Linked device ${deviceId}`);
+    this.deps.account.setDeviceNames({ [deviceId]: hello.deviceName });
     this.stop();
     this.set({ state: 'linked' });
     return { deviceId };
@@ -340,8 +341,10 @@ export class LinkService {
   async devices(): Promise<LinkedDevice[]> {
     const list = await this.deps.account.deviceList();
     const me = this.deps.account.deviceId();
+    const names = this.deps.account.deviceNames();
     return list.devices.map((d) => ({
       deviceId: d.deviceId,
+      name: names[String(d.deviceId)] ?? null,
       addedAt: d.addedAt,
       current: d.deviceId === me,
     }));
@@ -477,6 +480,7 @@ export class LinkService {
             privateKey.fill(0);
           }
           await this.deps.account.adoptLinked(code.serverUrl, provision.deviceId, device);
+          this.deps.account.setDeviceNames({ [provision.deviceId]: deviceName });
           discard();
           this.deps.community.importKeys(provision.communityKeys);
           this.deps.log.info('This device is now linked');

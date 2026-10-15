@@ -159,6 +159,9 @@ describe('linked devices', { timeout: 60_000 }, () => {
     expect(phone.account.status()).toMatchObject({ state: 'registered', deviceId: 2 });
     const devices = await desktop.link.devices();
     expect(devices.map((d) => d.deviceId)).toEqual([1, 2]);
+    // The name typed on the phone shows on both devices.
+    expect(devices.find((d) => d.deviceId === 2)?.name).toBe('Alice’s phone');
+    expect((await phone.link.devices()).find((d) => d.current)?.name).toBe('Alice’s phone');
     expect(devices.find((d) => d.current)?.deviceId).toBe(1);
 
     // The phone is in the community and can read and write it.

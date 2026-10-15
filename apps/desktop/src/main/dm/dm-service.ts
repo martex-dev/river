@@ -80,6 +80,8 @@ const contentSchema = z.discriminatedUnion('t', [
         }),
       )
       .max(2000),
+    /** Names of this account's devices (2.0.3). */
+    devices: z.record(z.string(), z.string().max(64)).optional(),
   }),
   z.object({
     v: z.literal(1),
@@ -460,7 +462,11 @@ export class DmService {
     if (env.sender === this.me()) {
       if (content.t === 'sync') this.applySync(content.conv, content.message);
       else if (content.t === 'contactsReq') void this.shareContacts();
-      else if (content.t === 'contacts') this.applyContacts(content.contacts);
+      else if (content.t === 'contacts') {
+        this.applyContacts(content.contacts);
+        // Names this device does not have yet (its own name stays as typed here).
+        if (content.devices) this.deps.account.setDeviceNames(content.devices, true);
+      }
       return true;
     }
     // Device-to-device content is only ever accepted from this account's own devices.
@@ -875,7 +881,12 @@ export class DmService {
       name: r.name ? r.name.slice(0, 64) : null,
     }));
     try {
-      await this.sendContent(this.me(), { v: 1, t: 'contacts', contacts });
+      await this.sendContent(this.me(), {
+        v: 1,
+        t: 'contacts',
+        contacts,
+        devices: this.deps.account.deviceNames(),
+      });
     } catch (err) {
       this.deps.log.warn(`Your friends list was not copied to your other devices: ${(err as Error).message}`);
     }

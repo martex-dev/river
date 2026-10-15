@@ -183,7 +183,7 @@ Each line is one PR; each version ships when its section is done.
 - [x] All component styles on tokens (no theme colours hard-coded)
 - [ ] Contextual appearance (per community / activity)
 - [ ] Faster relayed-voice recovery after a server reconnect (field test: ~45 s gaps when every voice is relayed)
-- [ ] Re-send relay keys when a pair stays silent (field test: one pair never exchanged keys)
+- [x] Re-send relay keys when a pair stays silent (1.4.0)
 
 ## 1.1.x — River for Android (ADR 0005)
 
@@ -221,7 +221,7 @@ Each line is one PR; each version ships when its section is done.
 - [x] Calls with the screen off (Android "In a call" service), replies from notifications
 - [x] Share → River, biometric lock (Lock River), long-press menus, swipe between panes
 - [ ] Content-free push through UnifiedPush (optional, for people who run a distributor)
-- [ ] Call audio routing (speaker / earpiece / Bluetooth) on phones
+- [x] Speaker / earpiece on phones (2.0.1); Bluetooth follows the system
 
 ## Protocol freeze and security (1.5.x, released in 1.5.0)
 
@@ -256,8 +256,8 @@ contract. Version plan (see ROADMAP): Android 1.1.x, devices 1.2.x, iPhone
 - [x] Signed device-list updates on the server (versioned, keys never change), removal signs a device out
 - [x] Direct messages to every device; sent messages copied to the account's other devices
 - [x] Settings → Account → Devices; onboarding “link this device”
-- [ ] QR code for the link (phones scanning a computer's screen)
-- [ ] Device names in the device list (needs a sealed per-account record)
+- [x] QR code for the link (1.2.0)
+- [x] Device names in the device list, kept on the devices and shared between them (2.0.3)
 - [ ] Copy history to a new device (device-to-device transfer)
 
 ### After 1.0.x (not started; see ROADMAP Stage 2)
@@ -285,7 +285,7 @@ contract. Version plan (see ROADMAP): Android 1.1.x, devices 1.2.x, iPhone
 - [x] Server abuse limits: socket flood control, mailbox cap, storage quota
 - [x] Upgrade tests from every released local schema; accessibility audits (axe-core) in CI
 - [x] Pre-1.0 security review
-- [ ] Multi-device linking (moved to Stage 2, 1.2.x)
+- [x] Multi-device linking (1.2.0)
 
 ## 0.8.0 — Recovery and reliable calls
 
@@ -320,7 +320,7 @@ contract. Version plan (see ROADMAP): Android 1.1.x, devices 1.2.x, iPhone
 - [ ] TURN relay for strict networks; SFU for larger calls
 - [x] Kick/ban, roles UI, channel rename/delete, message edit/delete/reactions (0.3.0)
 - [x] Desktop notifications (privacy setting already exists), unread badges (0.3.0)
-- [ ] Direct messages and friends (libsignal 1:1 sessions)
+- [x] Direct messages and friends (libsignal 1:1 sessions, 0.5.0)
 - [ ] Global push-to-talk (outside the focused window) — needs a key-up capable hook
 - [x] Persist unread state across restarts; drag-and-drop channel ordering; categories (1.0.0)
 - [ ] Stable community address (named tunnel or hosted server) — needs a maintainer decision
@@ -336,7 +336,7 @@ contract. Version plan (see ROADMAP): Android 1.1.x, devices 1.2.x, iPhone
 ## 0.1.x — Account hardening (before 0.2.0)
 
 - [ ] Registration abuse controls: invite codes (`RIVER_REGISTRATION=invite`), per-account rate limits
-- [ ] `PUT /v1/devices/list` for list updates (monotonic version) — needed for device linking
+- [x] Device list updates with a monotonic version (`PUT /v1/accounts/me/devices`, 1.2.0)
 - [ ] Session refresh before expiry; reconnect on network change
 - [ ] Delete account (server-side) and leave server (client-side)
 
