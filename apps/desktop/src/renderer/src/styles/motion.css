@@ -22,9 +22,9 @@
   top: 0;
   padding: 12px 20px;
   border-radius: 14px;
-  border: 1px solid rgba(79, 227, 209, 0.45);
-  background: rgba(8, 14, 26, 0.92);
-  box-shadow: 0 20px 60px -20px rgba(79, 227, 209, 0.5);
+  border: 1px solid rgb(var(--accent-rgb) / 0.45);
+  background: rgb(var(--shade-rgb) / 0.92);
+  box-shadow: 0 20px 60px -20px rgb(var(--accent-rgb) / 0.5);
   color: var(--text);
   font-size: 18px;
   font-weight: 700;
@@ -95,7 +95,7 @@
   0% {
     box-shadow:
       inset 4px 0 0 #faa81a,
-      inset 0 0 0 999px rgba(250, 168, 26, 0.18);
+      inset 0 0 0 999px rgb(var(--warn-rgb) / 0.18);
   }
 }
 
@@ -150,7 +150,7 @@
     box-shadow:
       0 0 0 2px var(--bg-1),
       0 0 0 5px var(--ok),
-      0 0 14px 4px rgba(62, 224, 143, 0.35);
+      0 0 14px 4px rgb(var(--ok-rgb) / 0.35);
   }
 }
 

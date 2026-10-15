@@ -1,0 +1,105 @@
+name: Voice field test
+
+# A real-world voice call test (1.0.44): River clients on GitHub's machines join one voice
+# channel on a server somewhere else on the internet (normally the maintainer's hosting PC)
+# and stay for an hour, measuring every 15 s whether everyone is in the call and audible.
+# The host side runs on the hosting PC: see docs/deployment/voice-field-test.md.
+on:
+  workflow_dispatch:
+    inputs:
+      invite:
+        description: Invite link to the test community (a throwaway server, never a real one)
+        required: true
+      expected:
+        description: Everyone in the call, including the host
+        required: true
+        default: '16'
+      people:
+        description: River clients per machine
+        required: true
+        default: '3'
+      minutes:
+        description: How long to measure
+        required: true
+        default: '60'
+      relay:
+        description: Send every voice through the server (no direct connections)
+        required: true
+        default: '0'
+      shards:
+        description: Machines, as a JSON list of {tag, os}
+        required: true
+        default: '[{"tag":"linux-a","os":"ubuntu-latest"},{"tag":"linux-b","os":"ubuntu-latest"},{"tag":"linux-c","os":"ubuntu-latest"},{"tag":"win-a","os":"windows-latest"},{"tag":"win-b","os":"windows-latest"}]'
+
+permissions:
+  contents: read
+
+jobs:
+  guests:
+    name: Guests ${{ matrix.tag }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.shards) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Download the Electron binary (electron installs it lazily)
+        run: node node_modules/electron/install.js
+      - run: npm run build
+      - name: Allow Chromium sandbox on Ubuntu runners
+        if: runner.os == 'Linux'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Where this machine is
+        shell: bash
+        run: curl -fsS https://ipinfo.io/json | grep -E '"(city|region|country|org)"' || true
+      - name: Can this machine reach the server?
+        shell: bash
+        env:
+          INVITE: ${{ inputs.invite }}
+        run: |
+          origin=$(printf '%s' "$INVITE" | sed -E 's#^(https?://[^/]+).*#\1#')
+          for i in $(seq 1 12); do
+            if curl -fsS -m 10 -o /dev/null -w "try $i: HTTP %{http_code} in %{time_total}s via %{remote_ip}\n" "$origin/v1/health"; then exit 0; fi
+            echo "try $i: not reachable"; sleep 10
+          done
+          exit 1
+      - name: Join the call and measure (Linux)
+        if: runner.os == 'Linux'
+        working-directory: apps/desktop
+        run: xvfb-run --auto-servernum npx playwright test e2e/voice-field.spec.ts --reporter=list --retries=0
+        env:
+          RIVER_FIELD_ROLE: guest
+          RIVER_FIELD_INVITE: ${{ inputs.invite }}
+          RIVER_FIELD_EXPECTED: ${{ inputs.expected }}
+          RIVER_FIELD_PEOPLE: ${{ inputs.people }}
+          RIVER_FIELD_MINUTES: ${{ inputs.minutes }}
+          RIVER_FIELD_TAG: ${{ matrix.tag }}
+          RIVER_FIELD_RELAY: ${{ inputs.relay }}
+          RIVER_FIELD_REPORT: ${{ github.workspace }}/field-${{ matrix.tag }}.json
+      - name: Join the call and measure
+        if: runner.os != 'Linux'
+        working-directory: apps/desktop
+        run: npx playwright test e2e/voice-field.spec.ts --reporter=list --retries=0
+        env:
+          RIVER_FIELD_ROLE: guest
+          RIVER_FIELD_INVITE: ${{ inputs.invite }}
+          RIVER_FIELD_EXPECTED: ${{ inputs.expected }}
+          RIVER_FIELD_PEOPLE: ${{ inputs.people }}
+          RIVER_FIELD_MINUTES: ${{ inputs.minutes }}
+          RIVER_FIELD_TAG: ${{ matrix.tag }}
+          RIVER_FIELD_RELAY: ${{ inputs.relay }}
+          RIVER_FIELD_REPORT: ${{ github.workspace }}/field-${{ matrix.tag }}.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: field-${{ matrix.tag }}
+          path: field-${{ matrix.tag }}.json
+          if-no-files-found: warn
+          retention-days: 14

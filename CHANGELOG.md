@@ -14,6 +14,90 @@ All notable changes to River are documented here. The format follows
   words, safety numbers, a frozen signature) that the iOS and Android clients
   must reproduce. Tests fail on any drift. Rules: docs/protocol/stability.md.
 
+## [1.0.46] - 2026-10-15
+
+**Specter's skins, and you choose your look.**
+
+### Changed
+
+- **The skins are now Specter's** (martex-dev/specter): Specter, Neon, Aurora,
+  Terminal, Paper, Synthwave, Blueprint, Brutal, Retro, Holo and Glitch — each
+  with its six palettes — plus Luxury, Corporate and Nature: 14 skins, 84
+  palettes. Specter's typography (Segoe, Bahnschrift, Sitka, Arial Black,
+  Tahoma, Cascadia), Retro's bevels and caption bar, Brutal's hard shadows,
+  Holo's prism borders, Glitch's RGB split and notches, Blueprint's grid
+  paper, and floating panels in Aurora, Synthwave and Holo.
+- **No built-in look any more.** River's own default skin is gone: everyone
+  chooses a skin and palette first (once — existing users too), and can switch
+  or customise it any time in Settings → Appearance.
+- Settings → Appearance shows the skins as a gallery and the chosen skin's
+  palettes as chips, like Specter.
+- Palette accents fill buttons and highlights in their true colours; wherever
+  an accent colours text, a readable version is used.
+
+### Fixed
+
+- Buttons without a style used the browser's grey instead of the theme.
+
+## [1.0.45] - 2026-10-15
+
+**Make River yours: 14 skins, 107 themes, and a personalisation centre.**
+
+### Added
+
+- **Skins** — whole design languages, not colour swaps: River (signature),
+  Cyberpunk, Space Tech, Glass, Neon, Luxury, Minimal, Corporate, Industrial,
+  Terminal, Retro Future, Nature, Editorial and Accessible. Each has its own
+  typography, shapes (cut corners, hexagon avatars, sharp or pill buttons),
+  materials (glass, glow, flat), background pattern and message layout.
+- **107 themes** across them, light and dark — from Neon District and Outrun
+  to Enterprise Blue, Paper and High Contrast.
+- **Settings → Appearance**, rebuilt as a personalisation centre:
+  - a theme browser with live miniature previews, search, skin and style
+    filters, favourites, and **Try** (see the whole app, then Apply or Cancel);
+  - every colour editable, with contrast checks, saved as your own themes;
+  - typography (8 interface fonts, 7 heading fonts, 4 code fonts, weight, line
+    height, letter spacing, table numbers);
+  - layout (messages as classic, bubbles, cards, compact or terminal; your
+    messages left or right; picture shapes; navigation left or right; rail,
+    sidebar and member-list sizes; readable column; spacing; focus mode);
+  - components (button and tab styles, badges, scrollbars, rounding, borders,
+    icon size and stroke);
+  - effects (intensity, contrast, saturation, depth, glass, blur, glow,
+    gradients, shadows, ten patterns);
+  - backgrounds (gradient, aurora, mesh, or your own picture, dimmed and
+    blurred), motion speed and hover effects;
+  - **profiles**: save complete looks, switch in one click, seven starting
+    points, export and import (validated data, never code), reset.
+- The window buttons on Windows follow the theme; River remembers the look so
+  it never flashes the old one at startup.
+
+### Changed
+
+- The old single look is gone; River starts in River · Deep Current. Every
+  screen now draws from shared design tokens, and text stays readable (WCAG AA)
+  whatever theme or colours are chosen.
+
+## [1.0.44] - 2026-10-14
+
+**Big calls that stay clear: tested with 16 people for an hour, Bulgaria ↔ USA.**
+
+### Fixed
+
+- **Nobody goes silent in a call any more.** After a short server reconnect,
+  one person could stay shown as connected while some others could no longer
+  hear them for the rest of the call. Found by a real 16-person test across
+  the Atlantic; River now corrects such a pair within 2 seconds.
+
+### Added
+
+- A voice field test: real River clients on machines in another country join
+  one call through the internet and measure, every 15 seconds, whose voice they
+  actually hear. Result with 16 people for 65 minutes: nobody dropped, everyone
+  heard on average 14.95–15 of 15 others. See
+  docs/security/voice-field-test-2026-10-14.md.
+- ADR 0005: proposed plan for the phone apps.
+
 ## [1.0.43] - 2026-10-13
 
 **A permanent address for home hosting, and code signing on the way.**
@@ -1383,7 +1467,10 @@ automatic-update path that every later release will arrive through.
 - Windows builds are not Authenticode-signed: SmartScreen shows a warning on
   first install.
 
-[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.43...HEAD
+[Unreleased]: https://github.com/martex-dev/river/compare/v1.0.46...HEAD
+[1.0.46]: https://github.com/martex-dev/river/compare/v1.0.45...v1.0.46
+[1.0.45]: https://github.com/martex-dev/river/compare/v1.0.44...v1.0.45
+[1.0.44]: https://github.com/martex-dev/river/compare/v1.0.43...v1.0.44
 [1.0.43]: https://github.com/martex-dev/river/compare/v1.0.42...v1.0.43
 [1.0.42]: https://github.com/martex-dev/river/compare/v1.0.41...v1.0.42
 [1.0.41]: https://github.com/martex-dev/river/compare/v1.0.40...v1.0.41

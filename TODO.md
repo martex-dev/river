@@ -170,6 +170,21 @@ Each line is one PR; each version ships when its section is done.
 - [ ] Maintainer: install Tailscale on the hosting PC and sign in (then River switches by itself)
 - [ ] Maintainer: apply to SignPath Foundation; add SIGNPATH_API_TOKEN and SIGNPATH_ORGANIZATION_ID when accepted
 
+### 1.0.44 — Calls proven at scale
+
+- [x] Voice field test over the internet (host PC + GitHub machines in another country)
+- [x] Fix: stale relay after a server reconnect left a person unheard
+- [x] 16 people, 65 minutes, Bulgaria ↔ USA: nobody dropped, 14.95–15 of 15 heard on average
+
+### 1.0.45 — Skins, themes and personalisation
+
+- [x] Theme engine with design tokens; 14 skins, 107 themes; contrast guaranteed
+- [x] Appearance centre: browser with previews and try-on, colours, type, layout, components, effects, background, motion, profiles, import/export
+- [x] All component styles on tokens (no theme colours hard-coded)
+- [ ] Contextual appearance (per community / activity)
+- [ ] Faster relayed-voice recovery after a server reconnect (field test: ~45 s gaps when every voice is relayed)
+- [ ] Re-send relay keys when a pair stays silent (field test: one pair never exchanged keys)
+
 ## Stage 2 — 1.1 → 2.0.0 (started 2026-10-14)
 
 ### 1.1.x — Protocol freeze

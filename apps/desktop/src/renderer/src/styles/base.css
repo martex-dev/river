@@ -42,14 +42,14 @@ p {
 }
 
 ::selection {
-  background: rgba(79, 227, 209, 0.3);
+  background: rgb(var(--accent-rgb) / 0.3);
 }
 
 ::-webkit-scrollbar {
   width: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(140, 165, 255, 0.14);
+  background: rgb(var(--line-rgb) / 0.14);
   border-radius: 10px;
   border: 3px solid transparent;
   background-clip: content-box;

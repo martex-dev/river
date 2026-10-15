@@ -113,7 +113,7 @@
   color: var(--accent-ink);
 }
 .story-bubble__addicon {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .story-bubble__name {
   max-width: 76px;
@@ -131,7 +131,7 @@
   padding: 12px;
   border-radius: 10px;
   border: 1px solid var(--border-strong);
-  background: rgba(4, 8, 16, 0.6);
+  background: rgb(var(--shade-rgb) / 0.6);
   color: var(--text);
   font: inherit;
   resize: vertical;
@@ -146,7 +146,7 @@
   padding: 7px 10px;
   border-radius: 8px;
   border: 1px solid var(--border-strong);
-  background: rgba(4, 8, 16, 0.6);
+  background: rgb(var(--shade-rgb) / 0.6);
   color: var(--text);
   font: inherit;
   font-size: 13px;
@@ -280,7 +280,7 @@
   height: 3px;
   overflow: hidden;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.3);
+  background: rgb(var(--fg-rgb) / 0.3);
 }
 .story-viewer__fill {
   display: block;
@@ -362,7 +362,7 @@
   width: 100%;
   padding: 10px 14px;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: 1px solid rgb(var(--fg-rgb) / 0.4);
   background: rgba(0, 0, 0, 0.3);
   color: #fff;
   font: inherit;
@@ -390,7 +390,7 @@
   padding: 8px;
   border-radius: 8px;
   border: 1px solid var(--border-strong);
-  background: rgba(4, 8, 16, 0.6);
+  background: rgb(var(--shade-rgb) / 0.6);
   color: var(--text);
   font: inherit;
 }

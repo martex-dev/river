@@ -34,13 +34,13 @@ export async function launchRiver(
     },
   });
   const page = await app.firstWindow();
-  await page.waitForSelector('.workspace, .lock, .onboarding');
+  await page.waitForSelector('.workspace, .lock, .onboarding, .skin-gate');
   if (await page.locator('.lock').isVisible()) {
     const inputs = page.locator('.lock input[type=password]');
     const count = await inputs.count();
     for (let i = 0; i < count; i++) await inputs.nth(i).fill(TEST_PASSPHRASE);
     await page.locator('.lock button[type=submit]').click();
-    await page.waitForSelector('.workspace, .onboarding', { timeout: 30_000 });
+    await page.waitForSelector('.workspace, .onboarding, .skin-gate', { timeout: 30_000 });
   }
   if (options.completeOnboarding !== false && (await page.locator('.onboarding').isVisible())) {
     await page.getByRole('button', { name: 'Create my identity' }).click();
@@ -56,8 +56,9 @@ export async function launchRiver(
       await skip.click();
     }
     await page.getByRole('button', { name: 'Enter River' }).click({ timeout: 15_000 });
-    await page.waitForSelector('.workspace');
   }
+  // 1.0.46: River asks for a skin before anything else.
+  if (options.completeOnboarding !== false) await chooseFirstSkin(page);
   return { app, page };
 }
 
@@ -107,4 +108,21 @@ export async function openHome(page: Page, place?: string): Promise<void> {
     await page.getByRole('button', { name: 'Home', exact: true }).click();
   }
   if (place) await page.locator('.home-nav').getByRole('button', { name: place, exact: true }).click();
+}
+
+/** Passes River's first-run skin chooser (Specter · Specter) if it is showing. */
+export async function chooseFirstSkin(page: Page, skin = 'Specter', palette = 'Specter'): Promise<void> {
+  await page.waitForSelector('.workspace, .skin-gate', { timeout: 30_000 });
+  if (!(await page.locator('.skin-gate').isVisible())) return;
+  await page.getByRole('radio', { name: `${skin} skin` }).click();
+  await page.getByRole('radio', { name: `${palette} palette` }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.waitForSelector('.workspace', { timeout: 15_000 });
+}
+
+/** Settings → Appearance → a skin, then one of its palettes. */
+export async function chooseTheme(page: Page, skin: string, palette: string): Promise<void> {
+  await openSettings(page, 'Appearance');
+  await page.getByRole('radio', { name: `${skin} skin` }).click();
+  await page.getByRole('radio', { name: `${palette} palette` }).click();
 }

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test, type ElectronApplication, type Page } from '@playwright/test';
 import { auditA11y } from './axe.ts';
-import { launchRiver, openCommunities, openHome, openSettings } from './launch.ts';
+import { chooseTheme, launchRiver, openCommunities, openHome, openSettings } from './launch.ts';
 
 // Automated accessibility audit (axe-core) of River's main screens.
 let app: ElectronApplication;
@@ -46,6 +46,28 @@ test('main screens have no serious accessibility problems', async () => {
     await audit(`Settings → ${tab}`);
   }
   await page.keyboard.press('Escape');
+});
+
+test('screens stay accessible in very different skins (1.0.46)', async () => {
+  for (const [skin, palette] of [
+    ['Paper', 'Ivory'],
+    ['Neon', 'Havoc'],
+    ['Terminal', 'Phosphor'],
+    ['Brutal', 'Concrete'],
+    ['Retro', 'Classic'],
+    ['Holo', 'Pearl'],
+  ] as const) {
+    await chooseTheme(page, skin, palette);
+    await audit(`Appearance in ${skin} · ${palette}`);
+    await page.getByRole('button', { name: 'Close settings' }).click();
+    await openHome(page, 'Friends');
+    await audit(`Friends in ${skin} · ${palette}`);
+    await openCommunities(page);
+    await audit(`Communities in ${skin} · ${palette}`);
+  }
+  // Back to the starting look for the tests after this one.
+  await chooseTheme(page, 'Specter', 'Specter');
+  await page.getByRole('button', { name: 'Close settings' }).click();
 });
 
 test('the quick switcher and the shortcuts list are accessible', async () => {

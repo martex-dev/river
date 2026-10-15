@@ -76,7 +76,7 @@
   padding: 3px;
   border-radius: 10px;
   border: 1px solid var(--border-strong);
-  background: rgba(4, 8, 16, 0.6);
+  background: rgb(var(--shade-rgb) / 0.6);
 }
 .segmented__item {
   padding: 6px 12px;
@@ -194,7 +194,7 @@
   color: var(--text);
 }
 .friends__tab.is-active {
-  background: rgba(79, 227, 209, 0.12);
+  background: rgb(var(--accent-rgb) / 0.12);
   color: var(--text);
 }
 .friends__tab--add {

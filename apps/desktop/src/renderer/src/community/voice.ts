@@ -58,6 +58,8 @@ const RELAYED_RETRY_MS = 30_000;
 const MISSING_GRACE_MS = 10_000;
 /** A pair not connected directly after this long talks through the server meanwhile. */
 const RELAY_AFTER_MS = 6000;
+/** How often relayed pairs are checked for a direct connection that works again. */
+const RELAY_CHECK_MS = 2000;
 
 function newSid(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(9));
@@ -153,6 +155,7 @@ export class VoiceCall {
   private readonly analysers = new Map<string, Analyser>();
   private readonly lastLoud = new Map<string, number>();
   private speakingTimer: ReturnType<typeof setInterval> | null = null;
+  private relayCheckTimer: ReturnType<typeof setInterval> | null = null;
   /** River IDs (including our own) currently speaking. */
   speaking = new Set<string>();
   deafened = false;
@@ -305,6 +308,20 @@ export class VoiceCall {
       throw err;
     }
     this.speakingTimer = setInterval(() => this.measure(), 80);
+    this.relayCheckTimer = setInterval(() => this.checkRelays(), RELAY_CHECK_MS);
+  }
+
+  /**
+   * Someone still marked "via server" while the direct connection with them is
+   * up goes back to direct, and both sides are told. Signals that arrive late
+   * (after a server reconnect) can otherwise leave one side playing a relayed
+   * stream the other side no longer sends: a person you can see but not hear.
+   */
+  private checkRelays(): void {
+    if (this.closed) return;
+    for (const id of [...this.relayPeers]) {
+      if (this.peers.get(id)?.pc.connectionState === 'connected') this.disableRelay(id, true);
+    }
   }
 
   /** Whether our microphone is actually transmitting right now. */
@@ -619,6 +636,11 @@ export class VoiceCall {
       } catch {
         return;
       }
+      // A late request (we are already connected directly): stay direct and say so.
+      if (this.peers.get(from)?.pc.connectionState === 'connected') {
+        this.send(from, { type: 'relay-off' });
+        return;
+      }
       this.enableRelay(from);
       return;
     }
@@ -729,6 +751,7 @@ export class VoiceCall {
     if (this.closed) return;
     this.closed = true;
     if (this.speakingTimer) clearInterval(this.speakingTimer);
+    if (this.relayCheckTimer) clearInterval(this.relayCheckTimer);
     for (const t of this.timers) clearTimeout(t);
     this.timers.clear();
     for (const id of [...this.peers.keys()]) this.dropPeer(id);

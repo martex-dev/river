@@ -11,6 +11,8 @@ import { ExternalIcon } from '../components/Icons.tsx';
 import { Modal, XIcon } from '../community/ui/common.tsx';
 import { NotificationSettings, Profile, VoiceSettings } from '../community/ui/UserSettings.tsx';
 import { SecurityPage } from './SecurityPage.tsx';
+import { AppearanceCenter } from '../appearance/AppearanceCenter.tsx';
+import { TryBar } from '../appearance/TryBar.tsx';
 import { useCommunity } from '../community/store.ts';
 import { useRiver, type SettingsTab } from '../store.ts';
 import { play } from '../community/sound.ts';
@@ -120,7 +122,11 @@ export function SettingsOverlay(): ReactElement | null {
         </div>
       </nav>
       <section className="settings-overlay__body">
-        <div className="settings-overlay__content" key={tab}>
+        <div
+          className={`settings-overlay__content ${tab === 'appearance' ? 'settings-overlay__content--wide' : ''}`}
+          key={tab}
+        >
+          <TryBar inSettings />
           {!settings ? (
             <p className="muted">Loading…</p>
           ) : (
@@ -144,7 +150,7 @@ export function SettingsOverlay(): ReactElement | null {
               {tab === 'profile' && <Profile />}
               {tab === 'security' && <SecurityPage />}
               {tab === 'backup' && <BackupPanel />}
-              {tab === 'appearance' && <AppearancePanel settings={settings} />}
+              {tab === 'appearance' && <AppearanceCenter general={<AppearancePanel settings={settings} />} />}
               {tab === 'voice' && <VoiceSettings />}
               {tab === 'notifications' && (
                 <>
@@ -668,7 +674,7 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
   ];
   return (
     <div className="panel">
-      <h2 className="panel__title">{tr('Appearance')}</h2>
+      <h2 className="panel__title">{tr('General')}</h2>
       <label className="textfield language-field">
         <span className="field__label">{tr('Language')}</span>
         <select

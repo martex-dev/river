@@ -4,7 +4,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { launchRiver } from './launch.ts';
+import { chooseTheme, launchRiver, openSettings } from './launch.ts';
 
 // A tour of River's main screens with real content, saved as screenshots for design work
 // (RIVER_UI_TOUR=<folder>). Skipped otherwise.
@@ -148,4 +148,23 @@ test('tour', async () => {
   await ana.getByRole('button', { name: 'Close settings' }).click();
   await ana.getByRole('button', { name: 'In the trenches', exact: true }).click();
   await shot(ana, '08-back-in-community');
+
+  // Skins (1.0.46): the appearance centre, then River in a palette of every skin.
+  await openSettings(ana, 'Appearance');
+  await shot(ana, '09-appearance');
+  const looks = (
+    process.env.RIVER_UI_TOUR_THEMES ??
+    'Specter:Midnight,Neon:Cyber,Aurora:Borealis,Terminal:Phosphor,Paper:Ivory,Synthwave:Outrun,Blueprint:Cyanotype,Brutal:Concrete,Retro:Teal,Holo:Pearl,Glitch:VHS,Luxury:Midnight Gold,Corporate:Enterprise Blue,Nature:Northern Lights'
+  )
+    .split(',')
+    .filter(Boolean)
+    .map((x) => x.split(':') as [string, string]);
+  for (const [i, [skin, palette]] of looks.entries()) {
+    await chooseTheme(ana, skin, palette);
+    await ana.getByRole('button', { name: 'Close settings' }).click();
+    await shot(
+      ana,
+      `t${String(i + 1).padStart(2, '0')}-${`${skin}-${palette}`.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+    );
+  }
 });

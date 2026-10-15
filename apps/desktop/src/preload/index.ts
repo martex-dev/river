@@ -17,6 +17,7 @@ const api: RiverApi = {
   app: {
     info: () => ipcRenderer.invoke(IPC.appInfo),
     takeDeepLink: () => ipcRenderer.invoke(IPC.appTakeDeepLink),
+    setTitleBar: (colors) => ipcRenderer.invoke(IPC.appTitleBar, colors),
     onDeepLink: (listener) => {
       const handler = (_event: unknown, link: DeepLink): void => listener(link);
       ipcRenderer.on(IPC.appDeepLink, handler);
