@@ -68,6 +68,7 @@ async function person(
   riverId: string;
   sockets: FreezableSocket[];
   events: CommunityEvent[];
+  calls: boolean[];
 }> {
   const local = migrateDatabase(join(dir, `${name}.db`), newDatabaseKey(), CLIENT_MIGRATIONS).db;
   locals.push(local);
