@@ -21,6 +21,23 @@ All notable changes to River are documented here. The format follows
   messages, sealed community content, the local database encrypted with
   SQLCipher and its key held by the Android Keystore. River's data is excluded
   from Android backups.
+- **Protocol v1 is frozen.** `packages/protocol/schema/v1.json` holds
+  the JSON Schema of every wire message and `packages/protocol/vectors/identity-v1.json`
+  the cross-language test vectors (identity keys, fingerprints, verification
+  words, safety numbers, a frozen signature) that the iOS and Android clients
+  must reproduce. Tests fail on any drift. Rules: docs/protocol/stability.md.
+- **Format vectors for protocol v1:** `packages/protocol/vectors/formats-v1.json`
+  freezes the encrypted-attachment format, the recovery phrase and backup file,
+  and the exact bytes signed for device lists, registration, sessions and
+  account deletion. They are built independently of the library, so the code
+  is checked against the specification.
+- **Server capabilities:** `GET /v1/version` now lists `capabilities`
+  (`attachments`, `community-key-epochs`, `voice-relay`, `delete-account`) so
+  apps can tell whether a server supports a feature before sending new request
+  fields. Servers without the list are treated as supporting none.
+- **Realtime reference** (docs/protocol/realtime.md): the `/v1/ws` handshake,
+  every client and server event, rate limits, close codes and the binary voice
+  relay frame format.
 
 ### Changed
 
@@ -28,6 +45,11 @@ All notable changes to River are documented here. The format follows
   origins only; the API uses bearer tokens, never cookies).
 - The roadmap for Stage 2 now starts with Android (1.1.x), then phones day to
   day (push, 1.2.x), one account on several devices (1.3.x) and iOS (1.4.x).
+
+### Fixed
+
+- **Docs:** CRYPTOGRAPHY.md said groups use libsignal Sender Keys and were
+  "planned". Groups (0.6.0) use pairwise sessions; the document now says so.
 
 ## [1.0.46] - 2026-10-15
 

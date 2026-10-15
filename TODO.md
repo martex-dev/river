@@ -202,6 +202,21 @@ Each line is one PR; each version ships when its section is done.
 - [ ] Share sheet, camera and photo picker, call audio routing, biometric lock
 - [ ] Touch: long-press message menu instead of hover actions
 
+## Protocol freeze (ROADMAP 1.5.x, started early)
+
+The freeze work was done ahead of its slot because the phone apps need a fixed
+contract. It does not change the version plan: Android is 1.1.x, phones day to
+day 1.2.x, devices 1.3.x, iOS 1.4.x (see ROADMAP).
+
+- [x] JSON Schema of every wire message frozen as `packages/protocol/schema/v1.json`, drift fails CI
+- [x] Cross-language test vectors for identity, fingerprints, words, safety numbers, signatures
+- [x] Stability rules (docs/protocol/stability.md)
+- [x] Test vectors for attachments (Signal attachment format), backup format and device-list signing
+- [x] Message-level spec docs: realtime events and voice relay frames (docs/protocol/realtime.md); community key epochs, groups and call signalling are specified in CRYPTOGRAPHY.md §4–§8 and docs/protocol/messaging.md (groups are pairwise, not sender keys — fixed in the docs)
+- [x] Capability list in `GET /v1/version` so clients can feature-detect new optional request fields (request schemas are strict)
+- [ ] Identity-bound call keys: today a server colluding with a community member who holds the community key could tamper with sealed call setup (CRYPTOGRAPHY.md §8)
+- [ ] Release-key hardening steps (protected `release` environment with manual approval) — needs the maintainer
+
 ### After 1.0.x (not started; see ROADMAP Stage 2)
 
 - [ ] Bot accounts with a small client library (ADR 0004)

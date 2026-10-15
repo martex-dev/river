@@ -1,7 +1,13 @@
 import rateLimit from '@fastify/rate-limit';
 import type { Writable } from 'node:stream';
 import Fastify, { LogController, type FastifyInstance } from 'fastify';
-import { API_PREFIX, MIN_PROTOCOL_VERSION, PROTOCOL_VERSION, type ErrorResponse } from '@river/protocol';
+import {
+  API_PREFIX,
+  MIN_PROTOCOL_VERSION,
+  PROTOCOL_VERSION,
+  SERVER_CAPABILITIES,
+  type ErrorResponse,
+} from '@river/protocol';
 import type { ServerConfig } from './config.ts';
 import type { RiverDatabase } from './db/database.ts';
 import { registerAccountRoutes } from './routes/accounts.ts';
@@ -157,6 +163,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     product: 'river-server' as const,
     version: SERVER_VERSION,
     protocol: { current: PROTOCOL_VERSION, min: MIN_PROTOCOL_VERSION },
+    capabilities: [...SERVER_CAPABILITIES],
   }));
 
   const now = deps.now ?? (() => new Date());
