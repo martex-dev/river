@@ -246,7 +246,7 @@ describe('River for Android on an emulator', { timeout: 180_000 }, () => {
     await ui.screenshot({ path: join(shots, '3-direct-message.png') });
     // The community: choose it in the rail, then its channel.
     await ui.click('.phone-menu');
-    await ui.click('.community__server:not(.community__server--add)');
+    await ui.click('.community__server:not(.community__server--add):not(.rail-home)');
     await ui.waitForSelector('.channel__open', { timeout: 15_000 });
     await sleep(500);
     await ui.screenshot({ path: join(shots, '4-channels.png') });
