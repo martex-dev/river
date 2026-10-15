@@ -17,9 +17,14 @@ fails CI until it is made deliberately.
 
 ## Rules
 
-1. **Additive only within v1.** New optional fields, new endpoints and new
-   realtime event types are allowed. Clients must ignore fields and event types
-   they do not know; servers must ignore unknown optional request fields.
+1. **Additive only within v1.** New optional response fields, new endpoints and
+   new realtime event types are allowed. Clients must ignore response fields
+   and server event types they do not know (the desktop client drops an event
+   it cannot parse and logs a warning). **Request** schemas are strict today
+   (an unknown field is a 400), so a client may send a new optional request
+   field only to a server that advertises support for it in `GET /v1/version`;
+   until a capability list exists, new request fields ship with a server
+   release first and clients feature-detect from the server version.
 2. **Never changed within v1:** the meaning, type or requiredness of an existing
    field, an endpoint's path or method, an error code's meaning, any value in
    the test vectors, any cryptographic construction.

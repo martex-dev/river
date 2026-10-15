@@ -71,7 +71,7 @@ about. This prevents the server from silently adding an eavesdropping device.
   value (libsignal). The private key is stored only in the SQLCipher database
   and never crosses the main/renderer boundary (tested).
 
-## 4. Messaging (1:1 implemented in 0.5.0; groups planned)
+## 4. Messaging (1:1 implemented in 0.5.0; groups in 0.6.0, pairwise)
 
 - 1:1 sessions (implemented, 0.5.0): libsignal PQXDH (X25519 + ML-KEM-1024
   prekeys) + Double Ratchet, one session per (local device, remote device)
@@ -84,8 +84,13 @@ about. This prevents the server from silently adding an eavesdropping device.
   Wire details: [docs/protocol/messaging.md](docs/protocol/messaging.md).
 - Sealed sender (0.3.x): sender certificates issued by the server, signed with a
   server key whose public part is pinned per-server on first use.
-- Groups: libsignal Sender Keys; distribution messages travel over 1:1
-  sessions; membership change → new sender key.
+- Groups (implemented, 0.6.0): **pairwise** — each group message is encrypted
+  separately under the 1:1 libsignal session with every other member (fine for
+  the 32-person limit), so a removed member simply stops being encrypted to and
+  every message keeps Double Ratchet forward secrecy. libsignal Sender Keys
+  (one ciphertext per message, distribution over 1:1 sessions, new key on every
+  membership change) remain a later optimisation for larger groups. Wire
+  details: [docs/protocol/messaging.md](docs/protocol/messaging.md#groups).
 - Content padding to fixed buckets before encryption to blur length.
 
 ### 4a. Communities today (implemented, 0.2.0 / 0.3.0)

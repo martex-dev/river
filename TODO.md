@@ -193,7 +193,9 @@ Each line is one PR; each version ships when its section is done.
 - [x] Cross-language test vectors for identity, fingerprints, words, safety numbers, signatures
 - [x] Stability rules (docs/protocol/stability.md)
 - [x] Test vectors for attachments (Signal attachment format), backup format and device-list signing
-- [ ] Message-level spec docs: realtime events, community key epochs, group sender keys, calls signalling
+- [x] Message-level spec docs: realtime events and voice relay frames (docs/protocol/realtime.md); community key epochs, groups and call signalling are specified in CRYPTOGRAPHY.md §4–§8 and docs/protocol/messaging.md (groups are pairwise, not sender keys — fixed in the docs)
+- [ ] Identity-bound call keys: today a server colluding with a community member who holds the community key could tamper with sealed call setup (CRYPTOGRAPHY.md §8)
+- [ ] Capability list in `GET /v1/version` so clients can feature-detect new optional request fields (request schemas are strict)
 - [ ] Release-key hardening steps (protected `release` environment with manual approval) — needs the maintainer
 
 ### 1.2.x — Devices (multi-device linking, transfer, revocation)

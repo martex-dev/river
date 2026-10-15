@@ -18,6 +18,14 @@ All notable changes to River are documented here. The format follows
   and the exact bytes signed for device lists, registration, sessions and
   account deletion. They are built independently of the library, so the code
   is checked against the specification.
+- **Realtime reference** (docs/protocol/realtime.md): the `/v1/ws` handshake,
+  every client and server event, rate limits, close codes and the binary voice
+  relay frame format.
+
+### Fixed
+
+- **Docs:** CRYPTOGRAPHY.md said groups use libsignal Sender Keys and were
+  "planned". Groups (0.6.0) use pairwise sessions; the document now says so.
 
 ## [1.0.46] - 2026-10-15
 
