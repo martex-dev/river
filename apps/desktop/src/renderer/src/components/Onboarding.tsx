@@ -4,8 +4,9 @@ import { ArrowIcon, CheckIcon, LockIcon } from './Icons.tsx';
 import { RiverMark } from './RiverMark.tsx';
 import { IdentityFingerprint } from './IdentityFingerprint.tsx';
 import { RestoreForm } from './BackupPanel.tsx';
+import { LinkThisDevice } from './LinkDevice.tsx';
 
-type Step = 'welcome' | 'name' | 'creating' | 'username' | 'done' | 'restore';
+type Step = 'welcome' | 'name' | 'creating' | 'username' | 'done' | 'restore' | 'link';
 
 /** First run: create the user's cryptographic identity. No phone number, no e-mail. */
 export function Onboarding(props: {
@@ -111,10 +112,23 @@ export function Onboarding(props: {
             <button className="btn btn--primary lock__submit" onClick={() => setStep('name')}>
               Create my identity <ArrowIcon size={16} />
             </button>
+            <button className="btn btn--link" onClick={() => setStep('link')}>
+              I already use River — link this device
+            </button>
             <button className="btn btn--link" onClick={() => setStep('restore')}>
-              I already use River — restore from a backup
+              Restore from a backup
             </button>
           </>
+        )}
+
+        {step === 'link' && (
+          <LinkThisDevice
+            onBack={() => setStep('welcome')}
+            onLinked={(linked) => {
+              props.onCreated(linked);
+              props.onFinished();
+            }}
+          />
         )}
 
         {step === 'restore' && (

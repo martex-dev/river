@@ -3245,6 +3245,31 @@ export class CommunityService {
     this.loadKeys();
   }
 
+  /** Every community key this device holds, to hand to a newly linked device (1.3). */
+  exportKeys(): Array<{ communityId: string; epoch: number; key: string }> {
+    const db = this.deps.db();
+    if (!db) return [];
+    const rows = db.prepare('SELECT community_id, epoch, key FROM community_keys').all() as Array<{
+      community_id: string;
+      epoch: number;
+      key: Uint8Array;
+    }>;
+    return rows.map((r) => ({
+      communityId: r.community_id,
+      epoch: r.epoch,
+      key: Buffer.from(r.key).toString('base64'),
+    }));
+  }
+
+  /** Community keys from the device that linked this one (1.3). */
+  importKeys(keys: Array<{ communityId: string; epoch: number; key: string }>): void {
+    for (const k of keys) {
+      const key = Buffer.from(k.key, 'base64');
+      if (key.length !== 32) continue;
+      this.storeKey(k.communityId, key, k.epoch);
+    }
+  }
+
   /** Drops a community's keys after leaving or being removed. */
   /** After deleting the account: drop every community and its keys from this device. */
   forgetAll(): void {

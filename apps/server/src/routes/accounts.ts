@@ -5,8 +5,14 @@ import {
   challengeRequestSchema,
   deviceListMessage,
   parseDeviceList,
+  linkIdSchema,
+  provisionLinkRequestSchema,
+  putLinkHelloRequestSchema,
   registerRequestSchema,
   registrationMessage,
+  updateDevicesRequestSchema,
+  type LinkHello,
+  type LinkState,
   sessionMessage,
   sessionRequestSchema,
   setUsernameRequestSchema,
@@ -282,6 +288,194 @@ export function registerAccountRoutes(
       ),
     };
   });
+
+  // ---- linked devices (1.3, ADR 0006) ----------------------------------------------------------
+
+  /**
+   * A new device list, signed by the account's identity key: adds or removes devices. Replays of
+   * an older list are refused (its version must grow), the calling device must stay with the same
+   * key, and a listed device never changes its key (remove it and link it again instead).
+   */
+  app.put(
+    `${API_PREFIX}/accounts/me/devices`,
+    { ...sensitive, preHandler: requireSession },
+    async (request, reply) => {
+      const parsed = updateDevicesRequestSchema.safeParse(request.body);
+      if (!parsed.success) return fail(reply, 400, 'bad_request', 'Bad request');
+      const { riverId, deviceId } = request.session!;
+      const account = await db
+        .selectFrom('accounts')
+        .select(['identity_key', 'device_list_version'])
+        .where('river_id', '=', riverId)
+        .executeTakeFirstOrThrow();
+      const listBytes = b(parsed.data.deviceList);
+      if (
+        !verify(b(account.identity_key), deviceListMessage(listBytes), b(parsed.data.deviceListSignature))
+      ) {
+        return fail(reply, 400, 'bad_signature', 'The device list is not signed by this account');
+      }
+      let list;
+      try {
+        list = parseDeviceList(listBytes);
+      } catch {
+        return fail(reply, 400, 'bad_request', 'Malformed device list');
+      }
+      if (list.riverId !== riverId) {
+        return fail(reply, 400, 'bad_request', 'The device list is for another account');
+      }
+      if (list.version <= account.device_list_version) {
+        return fail(reply, 409, 'stale_device_list', 'A newer device list is already stored');
+      }
+      const current = await db
+        .selectFrom('devices')
+        .select(['device_id', 'auth_key'])
+        .where('river_id', '=', riverId)
+        .execute();
+      const me = current.find((d) => d.device_id === deviceId);
+      const mine = list.devices.find((d) => d.deviceId === deviceId);
+      if (!me || !mine || mine.authKey !== me.auth_key) {
+        return fail(reply, 400, 'bad_request', 'The device making the change must stay in the list');
+      }
+      for (const d of list.devices) {
+        const known = current.find((c) => c.device_id === d.deviceId);
+        if (known && known.auth_key !== d.authKey) {
+          return fail(reply, 400, 'bad_request', 'A listed device cannot change its key');
+        }
+      }
+      const kept = new Set(list.devices.map((d) => d.deviceId));
+      const removed = current.filter((c) => !kept.has(c.device_id)).map((c) => c.device_id);
+      const today = deps.now().toISOString().slice(0, 10);
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable('accounts')
+          .set({
+            device_list: parsed.data.deviceList,
+            device_list_signature: parsed.data.deviceListSignature,
+            device_list_version: list.version,
+          })
+          .where('river_id', '=', riverId)
+          .execute();
+        for (const d of list.devices) {
+          if (current.some((c) => c.device_id === d.deviceId)) continue;
+          await trx
+            .insertInto('devices')
+            .values({
+              river_id: riverId,
+              device_id: d.deviceId,
+              auth_key: d.authKey,
+              registration_id: d.registrationId,
+              created_on: today,
+            })
+            .execute();
+        }
+        if (removed.length) {
+          for (const table of [
+            'sessions',
+            'prekeys',
+            'signed_prekeys',
+            'kyber_prekeys',
+            'devices',
+          ] as const) {
+            await trx
+              .deleteFrom(table)
+              .where('river_id', '=', riverId)
+              .where('device_id', 'in', removed)
+              .execute();
+          }
+          await trx
+            .deleteFrom('mailbox')
+            .where('recipient', '=', riverId)
+            .where('recipient_device', 'in', removed)
+            .execute();
+        }
+      });
+      return { devices: list.devices.length, removed };
+    },
+  );
+
+  /**
+   * The link mailbox (ADR 0006). Its ID comes from the link secret the linked device shows, so
+   * only the two devices know it. The new device posts its hello (public keys, authenticated with
+   * the secret); the linked device reads it and posts the provisioning message sealed to the new
+   * device. Ten minutes, in memory, never written to disk; each part is written once.
+   */
+  interface PendingLink {
+    hello: LinkHello | null;
+    mac: string | null;
+    provision: string | null;
+    deviceId: number | null;
+    expires: number;
+  }
+  const links = new Map<string, PendingLink>();
+  const LINK_TTL_MS = 10 * 60 * 1000;
+  const MAX_LINKS = 1000;
+  const sweep = (): void => {
+    const t = deps.now().getTime();
+    for (const [id, l] of links) if (l.expires <= t) links.delete(id);
+  };
+  const linkState = (l: PendingLink): LinkState => ({
+    hello: l.hello,
+    mac: l.mac,
+    provision: l.provision,
+    deviceId: l.deviceId,
+    expiresAt: new Date(l.expires).toISOString(),
+  });
+  const notFound = (reply: FastifyReply): FastifyReply =>
+    fail(reply, 404, 'not_found', 'Nothing is waiting under this link code.');
+
+  app.put<{ Params: { id: string } }>(`${API_PREFIX}/link/:id`, sensitive, async (request, reply) => {
+    sweep();
+    const id = linkIdSchema.safeParse(request.params.id);
+    const parsed = putLinkHelloRequestSchema.safeParse(request.body);
+    if (!id.success || !parsed.success) return fail(reply, 400, 'bad_request', 'Bad request');
+    if (links.has(id.data)) return fail(reply, 409, 'link_in_use', 'This link code was already used.');
+    if (links.size >= MAX_LINKS) {
+      return fail(reply, 503, 'busy', 'Too many devices are being linked right now');
+    }
+    const l: PendingLink = {
+      hello: parsed.data.hello,
+      mac: parsed.data.mac,
+      provision: null,
+      deviceId: null,
+      expires: deps.now().getTime() + LINK_TTL_MS,
+    };
+    links.set(id.data, l);
+    return reply.code(201).send(linkState(l));
+  });
+
+  app.get<{ Params: { id: string } }>(`${API_PREFIX}/link/:id`, async (request, reply) => {
+    sweep();
+    const id = linkIdSchema.safeParse(request.params.id);
+    const l = id.success ? links.get(id.data) : undefined;
+    return l ? linkState(l) : notFound(reply);
+  });
+
+  app.put<{ Params: { id: string } }>(
+    `${API_PREFIX}/link/:id/provision`,
+    { ...sensitive, preHandler: requireSession },
+    async (request, reply) => {
+      sweep();
+      const id = linkIdSchema.safeParse(request.params.id);
+      const l = id.success ? links.get(id.data) : undefined;
+      if (!l?.hello) return notFound(reply);
+      const parsed = provisionLinkRequestSchema.safeParse(request.body);
+      if (!parsed.success) return fail(reply, 400, 'bad_request', 'Bad request');
+      if (l.provision !== null) return fail(reply, 409, 'already_linked', 'This device was already linked');
+      // The device must already be in this account's signed list, with the key from the hello.
+      const device = await db
+        .selectFrom('devices')
+        .select(['auth_key'])
+        .where('river_id', '=', request.session!.riverId)
+        .where('device_id', '=', parsed.data.deviceId)
+        .executeTakeFirst();
+      if (!device || device.auth_key !== l.hello.authKey) {
+        return fail(reply, 400, 'bad_request', 'Add the device to your device list first');
+      }
+      l.provision = parsed.data.provision;
+      l.deviceId = parsed.data.deviceId;
+      return linkState(l);
+    },
+  );
 }
 
 class SignupError extends Error {}

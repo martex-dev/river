@@ -47,6 +47,7 @@ import { UserFacingError, type AccountService } from './account/account-service.
 import { attachmentPointerSchema, type CommunityAction } from '../shared/community-actions.ts';
 import type { CommunityService } from './community/community-service.ts';
 import type { DmService } from './dm/dm-service.ts';
+import type { LinkService } from './account/link-service.ts';
 import type { SocialService } from './social/social-service.ts';
 import type { BackupService } from './backup/backup-service.ts';
 import { BackupError } from '@river/crypto';
@@ -67,6 +68,7 @@ export interface IpcDeps {
   storage: StorageService;
   identity: IdentityService;
   account: AccountService;
+  link: LinkService;
   community: CommunityService;
   dm: DmService;
   social: SocialService;
@@ -368,6 +370,20 @@ export function registerIpc(deps: IpcDeps): void {
   });
   handle(IPC.screenSelect, (_e, id) => deps.selectScreen(z.string().max(200).parse(id)));
   handle(IPC.accountStatus, () => accountView(deps.account, deps.homeAccount));
+  handle(IPC.accountLinkStart, () => result(() => deps.link.start()));
+  handle(IPC.accountLinkConfirm, () => result(() => deps.link.confirm()));
+  handle(IPC.accountLinkJoin, (_e, code, deviceName) =>
+    result(() => deps.link.join(z.string().max(2048).parse(code), deviceName)),
+  );
+  handle(IPC.accountLinkCancel, () => deps.link.cancel());
+  handle(IPC.accountLinkStatus, () => deps.link.status());
+  handle(IPC.accountDevices, () => result(() => deps.link.devices()));
+  handle(IPC.accountRemoveDevice, (_e, deviceId) =>
+    result(async () => {
+      await deps.link.remove(deviceId);
+      return null;
+    }),
+  );
   handle(IPC.accountConnect, () => deps.account.connect());
   handle(IPC.accountSetUsername, (_e, username) =>
     result(() => deps.account.setUsername(z.string().max(64).parse(username))),
@@ -543,6 +559,12 @@ export function broadcastAccountStatus(
     offAccount();
     offHome();
   };
+}
+
+export function broadcastLinkStatus(target: WebContents, link: LinkService): () => void {
+  return link.onChange((progress) => {
+    if (!target.isDestroyed()) target.send(IPC.accountLinkChanged, progress);
+  });
 }
 
 export function broadcastSocialEvents(target: WebContents, social: SocialService): () => void {

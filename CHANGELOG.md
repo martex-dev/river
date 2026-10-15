@@ -6,6 +6,19 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Linked devices — one account on your phone and your computer.** In
+  Settings → Account → Devices, choose _Link a new device_; on the new device
+  choose _I already use River — link this device_ and type the code. The new
+  device gets your account, your communities and your name, handed over
+  encrypted from device to device (the server cannot read it or slip in a
+  device of its own). Direct messages reach all your devices, and what you
+  send from one shows on the others. Remove a device any time; it is signed
+  out for good. History from before linking stays where it was.
+- Servers: `PUT /v1/accounts/me/devices` and the link mailbox (`/v1/link`),
+  advertised as the `linked-devices` capability.
+
 **River for Android.**
 
 ### Security
