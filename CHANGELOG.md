@@ -44,7 +44,7 @@ All notable changes to River are documented here. The format follows
   or a voice channel, an "In a call" notification keeps the microphone and the
   call running when you lock the phone or switch apps, with a Hang up button.
 
-- **Reply from the notification** (Android; macOS): answer a direct message
+- **Reply from the notification** (Android, iPhone, macOS): answer a direct message
   right from its notification, without opening River. The reply is sent
   end-to-end encrypted like any message.
 - **Share → River** (Android): share text, links, photos or files from any
