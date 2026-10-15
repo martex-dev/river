@@ -16,17 +16,6 @@ jobs:
   checks:
     name: Lint, typecheck, unit tests, audit
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        # Docker Hub rate-limits shared runners; this is the same official image, mirrored.
-        image: public.ecr.aws/docker/library/postgres:17-alpine
-        env:
-          POSTGRES_USER: river
-          POSTGRES_PASSWORD: river-ci-only
-          POSTGRES_DB: river
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U river" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       # Runs the server database suite against PostgreSQL as well as SQLite.
       RIVER_TEST_POSTGRES_URL: postgres://river:river-ci-only@localhost:5432/river
@@ -36,6 +25,20 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Start PostgreSQL
+        # Registries limit shared runners now and then: try the same official image from several mirrors.
+        run: |
+          for i in 1 2 3; do
+            for image in public.ecr.aws/docker/library/postgres:17-alpine mirror.gcr.io/library/postgres:17-alpine docker.io/library/postgres:17-alpine; do
+              if docker pull "$image"; then
+                docker run -d --name postgres -p 5432:5432 -e POSTGRES_USER=river -e POSTGRES_PASSWORD=river-ci-only -e POSTGRES_DB=river "$image"
+                for t in $(seq 1 30); do docker exec postgres pg_isready -h 127.0.0.1 -U river && exit 0; sleep 2; done
+                exit 1
+              fi
+            done
+            sleep $((i * 20))
+          done
+          exit 1
       - run: npm ci
       - run: npm run lint
       - run: npm run format:check
