@@ -65,8 +65,8 @@ final class DbOps {
             }
             // SQLCipher reads a key given as x'…' as the raw key, exactly as PRAGMA key does on the desktop.
             let hex = try a.bytes("key").map { String(format: "%02x", $0) }.joined()
-            let key = "x'\(hex)'"
-            rc = sqlite3_key(db, key, Int32(key.utf8.count))
+            // The first statement on the connection, as on the desktop (SQLCipher 4 defaults).
+            rc = sqlite3_exec(db, "PRAGMA key = \"x'\(hex)'\";", nil, nil, nil)
             if rc == SQLITE_OK { rc = sqlite3_exec(db, "SELECT count(*) FROM sqlite_master", nil, nil, nil) }
             guard rc == SQLITE_OK else {
                 let f = failure(db, rc)
