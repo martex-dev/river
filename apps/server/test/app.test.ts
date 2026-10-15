@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os';
 import { Writable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { errorResponseSchema, healthResponseSchema, versionResponseSchema } from '@river/protocol';
+import {
+  SERVER_CAPABILITIES,
+  errorResponseSchema,
+  healthResponseSchema,
+  serverSupports,
+  versionResponseSchema,
+} from '@river/protocol';
 import { buildApp, SERVER_VERSION } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { migrateToLatest, openDatabase, type RiverDatabase } from '../src/db/database.ts';
@@ -50,6 +56,15 @@ describe('River server HTTP API', () => {
     expect(body.version).toBe(SERVER_VERSION);
     expect(body.protocol.current).toBeGreaterThanOrEqual(body.protocol.min);
     expect(res.headers['x-river-protocol']).toBe(String(body.protocol.current));
+  });
+
+  it('GET /v1/version advertises the server capabilities', async () => {
+    const { app } = await start();
+    const body = versionResponseSchema.parse(
+      (await app.inject({ method: 'GET', url: '/v1/version' })).json(),
+    );
+    expect(body.capabilities).toEqual([...SERVER_CAPABILITIES]);
+    expect(serverSupports(body, 'voice-relay')).toBe(true);
   });
 
   it('sends security headers and never caches', async () => {

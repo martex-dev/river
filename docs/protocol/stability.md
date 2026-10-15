@@ -22,9 +22,9 @@ fails CI until it is made deliberately.
    and server event types they do not know (the desktop client drops an event
    it cannot parse and logs a warning). **Request** schemas are strict today
    (an unknown field is a 400), so a client may send a new optional request
-   field only to a server that advertises support for it in `GET /v1/version`;
-   until a capability list exists, new request fields ship with a server
-   release first and clients feature-detect from the server version.
+   field only to a server whose `GET /v1/version` lists the matching
+   `capabilities` entry (servers before 1.1 list none). Capability names are
+   append-only and never reused.
 2. **Never changed within v1:** the meaning, type or requiredness of an existing
    field, an endpoint's path or method, an error code's meaning, any value in
    the test vectors, any cryptographic construction.

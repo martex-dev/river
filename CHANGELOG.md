@@ -18,6 +18,10 @@ All notable changes to River are documented here. The format follows
   and the exact bytes signed for device lists, registration, sessions and
   account deletion. They are built independently of the library, so the code
   is checked against the specification.
+- **Server capabilities:** `GET /v1/version` now lists `capabilities`
+  (`attachments`, `community-key-epochs`, `voice-relay`, `delete-account`) so
+  apps can tell whether a server supports a feature before sending new request
+  fields. Servers without the list are treated as supporting none.
 - **Realtime reference** (docs/protocol/realtime.md): the `/v1/ws` handshake,
   every client and server event, rate limits, close codes and the binary voice
   relay frame format.
