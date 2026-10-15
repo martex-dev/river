@@ -1,12 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
-import {
-  decodeWire,
-  encodeWire,
-  type CoreInbound,
-  type CoreOutbound,
-} from '../../apps/mobile/shared/wire.ts';
+import { decodeWire, encodeWire } from '../../apps/mobile/shared/wire.ts';
 import type { NativeMethod } from '../../apps/mobile/core/native.ts';
 import { asyncMethods, createNodeNative, respond } from './node-native.ts';
 
@@ -45,7 +40,8 @@ export async function startPhone(bundle: string, root: string): Promise<Phone> {
   let nextId = 1;
   let fatal: string | null = null;
 
-  const deliver = (msg: CoreInbound): void => worker.postMessage({ receive: encodeWire(msg) });
+  const call = (name: 'invoke' | 'send' | 'answer' | 'lifecycle', ...args: unknown[]): void =>
+    worker.postMessage({ call: name, args });
   const answerNative = (json: string): void => {
     const encoded = new TextEncoder().encode(json);
     if (encoded.length > SHARED_BYTES) throw new Error('native result too large for the test bridge');
@@ -57,59 +53,67 @@ export async function startPhone(bundle: string, root: string): Promise<Phone> {
 
   const ready = new Promise<void>((resolve, reject) => {
     worker.on('error', reject);
-    worker.on('message', (msg: { native?: NativeMethod; args?: string; post?: string }) => {
-      if (msg.native) {
-        const method = msg.native;
-        nativeCalls.set(method, (nativeCalls.get(method) ?? 0) + 1);
-        const args = JSON.parse(msg.args ?? '{}') as unknown;
-        if (asyncMethods.has(method)) {
-          void native.async(method, args).then(
-            (v) => answerNative(JSON.stringify({ v: v ?? null })),
-            (err: Error & { code?: string }) =>
-              answerNative(JSON.stringify({ e: err.message, code: err.code })),
-          );
-        } else {
-          answerNative(respond(() => native.sync(method, args)));
-        }
-        return;
-      }
-      if (typeof msg.post !== 'string') return;
-      const m = decodeWire<CoreOutbound>(msg.post);
-      switch (m.t) {
-        case 'ready':
-          resolve();
-          break;
-        case 'reply': {
-          const r = replies.get(m.id);
-          replies.delete(m.id);
-          if (m.ok) r?.resolve(m.value);
-          else r?.reject(new Error(m.error));
-          break;
-        }
-        case 'event':
-          if (m.channel === 'core:fatal') {
-            fatal = String(m.args[0]);
-            reject(new Error(fatal));
+    worker.on(
+      'message',
+      (msg: { native?: NativeMethod; args?: string; header?: string; payload?: string }) => {
+        if (msg.native) {
+          const method = msg.native;
+          nativeCalls.set(method, (nativeCalls.get(method) ?? 0) + 1);
+          const args = JSON.parse(msg.args ?? '{}') as unknown;
+          if (asyncMethods.has(method)) {
+            void native.async(method, args).then(
+              (v) => answerNative(JSON.stringify({ v: v ?? null })),
+              (err: Error & { code?: string }) =>
+                answerNative(JSON.stringify({ e: err.message, code: err.code })),
+            );
+          } else {
+            answerNative(respond(() => native.sync(method, args)));
           }
-          events.push({ channel: m.channel, args: m.args });
-          for (const w of [...waiters]) w();
-          break;
-        case 'ask': {
-          asks.push({ kind: m.kind, args: m.args });
-          // What a person tapping through the Android dialogs would answer.
-          const value =
-            m.kind === 'messageBox'
-              ? { response: 0 }
-              : m.kind === 'saveFile'
-                ? { canceled: true }
-                : m.kind === 'notify'
-                  ? 'shown'
-                  : null;
-          deliver({ t: 'answer', id: m.id, ok: true, value });
-          break;
+          return;
         }
-      }
-    });
+        if (typeof msg.header !== 'string') return;
+        const header = JSON.parse(msg.header) as { t: string; id?: number; kind?: string };
+        const payload = msg.payload ?? '';
+        switch (header.t) {
+          case 'ready':
+            resolve();
+            break;
+          case 'reply': {
+            const body = decodeWire<{ ok: boolean; value?: unknown; error?: string }>(payload);
+            const r = replies.get(header.id!);
+            replies.delete(header.id!);
+            if (body.ok) r?.resolve(body.value);
+            else r?.reject(new Error(body.error));
+            break;
+          }
+          case 'event': {
+            const { channel, args } = decodeWire<{ channel: string; args: unknown[] }>(payload);
+            if (channel === 'core:fatal') {
+              fatal = String(args[0]);
+              reject(new Error(fatal));
+            }
+            events.push({ channel, args });
+            for (const w of [...waiters]) w();
+            break;
+          }
+          case 'ask': {
+            const kind = header.kind ?? '';
+            asks.push({ kind, args: decodeWire(payload) });
+            // What a person tapping through the Android dialogs would answer.
+            const value =
+              kind === 'messageBox'
+                ? { response: 0 }
+                : kind === 'saveFile'
+                  ? { canceled: true }
+                  : kind === 'notify'
+                    ? 'shown'
+                    : null;
+            call('answer', header.id, encodeWire({ ok: true, value }));
+            break;
+          }
+        }
+      },
+    );
   });
   await ready;
 
@@ -121,14 +125,14 @@ export async function startPhone(bundle: string, root: string): Promise<Phone> {
       const id = nextId++;
       return new Promise<T>((resolve, reject) => {
         replies.set(id, { resolve: resolve as (v: unknown) => void, reject });
-        deliver({ t: 'invoke', id, channel, args });
+        call('invoke', id, encodeWire({ channel, args }));
       });
     },
     send(channel, ...args) {
-      deliver({ t: 'send', channel, args });
+      call('send', encodeWire({ channel, args }));
     },
     lifecycle(s) {
-      deliver({ t: 'lifecycle', state: s });
+      call('lifecycle', s);
     },
     waitFor(channel, match = () => true, timeoutMs = 15_000) {
       return new Promise((resolve, reject) => {

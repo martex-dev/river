@@ -1,14 +1,27 @@
-import { decodeWire, encodeWire, type CoreInbound, type CoreOutbound } from '../shared/wire.ts';
+import { decodeWire, encodeWire } from '../shared/wire.ts';
 
 /**
- * The client core's side of the phone bridge. The app shell delivers UI calls
- * with `__riverCore.receive(json)` and takes the core's messages through
- * `RiverHost.post(json)`. Nothing else can reach the core: it runs in its own
- * WebView with no UI and no network access other than River servers.
+ * The client core's side of the phone bridge. Nothing else can reach the core:
+ * it runs in its own WebView with no UI.
+ *
+ * In (app shell → core), as calls on `globalThis.__riverCore`:
+ *   invoke(id, json)   a UI call; json = {channel, args}
+ *   send(json)         a UI fire-and-forget message; json = {channel, args}
+ *   answer(id, json)   the shell's answer to an ask; json = {ok, value?, error?}
+ *   lifecycle(state)   'foreground' | 'background'
+ *
+ * Out (core → app shell): `RiverHost.post(header, payload)`. The header is a
+ * small JSON object the shell reads; the payload goes on untouched:
+ *   {t:'ready'}               ''
+ *   {t:'reply', id}           {ok, value?, error?}  → resolves the UI's call
+ *   {t:'event'}               {channel, args}       → the UI's listeners
+ *   {t:'ask', id, kind}       args                  → native dialogs, links, files
+ *
+ * Payloads use the wire encoding (shared/wire.ts) so bytes survive.
  */
 
 interface ShellInterface {
-  post(json: string): void;
+  post(header: string, payload: string): void;
 }
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown;
@@ -17,7 +30,7 @@ type Listener = (event: unknown, ...args: unknown[]) => void;
 const handlers = new Map<string, Handler>();
 const listeners = new Map<string, Listener[]>();
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
-const lifecycle = new Set<(state: 'foreground' | 'background') => void>();
+const lifecycleListeners = new Set<(state: 'foreground' | 'background') => void>();
 let nextAsk = 1;
 
 function shell(): ShellInterface {
@@ -26,8 +39,15 @@ function shell(): ShellInterface {
   return s;
 }
 
-export function post(message: CoreOutbound): void {
-  shell().post(encodeWire(message));
+const post = (header: object, payload = ''): void => shell().post(JSON.stringify(header), payload);
+
+export function ready(): void {
+  post({ t: 'ready' });
+}
+
+/** Tells the UI something happened, as webContents.send does on the desktop. */
+export function emit(channel: string, args: unknown[]): void {
+  post({ t: 'event' }, encodeWire({ channel, args }));
 }
 
 /** The UI's frame, as Electron would describe it: River's own page, main frame. */
@@ -36,7 +56,7 @@ const uiContents = {
   id: 1,
   mainFrame: uiFrame,
   isDestroyed: (): boolean => false,
-  send: (channel: string, ...args: unknown[]): void => post({ t: 'event', channel, args }),
+  send: (channel: string, ...args: unknown[]): void => emit(channel, args),
 };
 const uiEvent = { sender: uiContents, senderFrame: uiFrame };
 
@@ -56,55 +76,71 @@ export function ask<T = unknown>(kind: string, args: unknown): Promise<T> {
   const id = nextAsk++;
   return new Promise<T>((resolve, reject) => {
     pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
-    post({ t: 'ask', id, kind, args });
+    post({ t: 'ask', id, kind }, encodeWire(args));
   });
 }
 
 export function onLifecycle(fn: (state: 'foreground' | 'background') => void): () => void {
-  lifecycle.add(fn);
-  return () => lifecycle.delete(fn);
+  lifecycleListeners.add(fn);
+  return () => lifecycleListeners.delete(fn);
 }
 
 const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
-async function invoke(id: number, channel: string, args: unknown[]): Promise<void> {
-  const handler = handlers.get(channel);
-  if (!handler) {
-    post({ t: 'reply', id, ok: false, error: `No handler registered for '${channel}'` });
-    return;
-  }
+function reply(id: number, body: { ok: boolean; value?: unknown; error?: string }): void {
+  let payload: string;
   try {
-    const value = await handler(uiEvent, ...args);
-    post({ t: 'reply', id, ok: true, value });
+    payload = encodeWire(body);
   } catch (err) {
-    post({ t: 'reply', id, ok: false, error: message(err) });
+    payload = encodeWire({ ok: false, error: `The reply could not be sent: ${message(err)}` });
+  }
+  post({ t: 'reply', id }, payload);
+}
+
+async function invoke(id: number, json: string): Promise<void> {
+  let channel = '';
+  try {
+    const call = decodeWire<{ channel: string; args: unknown[] }>(json);
+    channel = call.channel;
+    const handler = handlers.get(channel);
+    if (!handler) throw new Error(`No handler registered for '${channel}'`);
+    reply(id, { ok: true, value: await handler(uiEvent, ...(Array.isArray(call.args) ? call.args : [])) });
+  } catch (err) {
+    reply(id, { ok: false, error: message(err) });
   }
 }
 
-export function receive(json: string): void {
-  const msg = decodeWire<CoreInbound>(json);
-  switch (msg.t) {
-    case 'invoke':
-      void invoke(msg.id, msg.channel, msg.args);
-      break;
-    case 'send':
-      for (const l of listeners.get(msg.channel) ?? []) {
-        try {
-          l(uiEvent, ...msg.args);
-        } catch {
-          // a bad fire-and-forget message is dropped, as in Electron
-        }
-      }
-      break;
-    case 'answer': {
-      const p = pending.get(msg.id);
-      pending.delete(msg.id);
-      if (msg.ok) p?.resolve(msg.value);
-      else p?.reject(new Error(msg.error ?? 'failed'));
-      break;
-    }
-    case 'lifecycle':
-      for (const fn of lifecycle) fn(msg.state);
-      break;
+function send(json: string): void {
+  try {
+    const call = decodeWire<{ channel: string; args: unknown[] }>(json);
+    for (const l of listeners.get(call.channel) ?? [])
+      l(uiEvent, ...(Array.isArray(call.args) ? call.args : []));
+  } catch {
+    // a bad fire-and-forget message is dropped, as in Electron
   }
 }
+
+function answer(id: number, json: string): void {
+  const p = pending.get(id);
+  pending.delete(id);
+  if (!p) return;
+  try {
+    const a = decodeWire<{ ok: boolean; value?: unknown; error?: string }>(json);
+    if (a.ok) p.resolve(a.value);
+    else p.reject(new Error(a.error ?? 'failed'));
+  } catch (err) {
+    p.reject(err instanceof Error ? err : new Error(String(err)));
+  }
+}
+
+function lifecycle(state: string): void {
+  if (state !== 'foreground' && state !== 'background') return;
+  for (const fn of lifecycleListeners) fn(state);
+}
+
+export const inbound = {
+  invoke: (id: number, json: string): void => void invoke(id, json),
+  send,
+  answer,
+  lifecycle,
+};

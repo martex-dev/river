@@ -30,7 +30,7 @@ import { runMainDiagnostics } from '../../desktop/src/main/diagnostics.ts';
 import { PresenceTracker } from '../../desktop/src/main/presence.ts';
 import { ready as cryptoReady } from './shims/crypto.ts';
 import { native } from './native.ts';
-import { onLifecycle, post, receive, ui } from './host.ts';
+import { emit, inbound, onLifecycle, ready, ui } from './host.ts';
 
 /**
  * River's client core on a phone: the desktop's services (accounts,
@@ -276,14 +276,10 @@ async function start(): Promise<void> {
     settings: () => settings.get(),
     window: window as unknown as Parameters<typeof startMessageNotifications>[0]['window'],
   });
-  post({ t: 'ready' });
+  ready();
 }
 
-(globalThis as { __riverCore?: unknown }).__riverCore = { receive };
+(globalThis as { __riverCore?: unknown }).__riverCore = inbound;
 start().catch((err: unknown) => {
-  post({
-    t: 'event',
-    channel: 'core:fatal',
-    args: [err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err)],
-  });
+  emit('core:fatal', [err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err)]);
 });

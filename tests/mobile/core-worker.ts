@@ -27,17 +27,18 @@ delete (globalThis as { Buffer?: unknown }).Buffer;
 };
 
 (globalThis as Record<string, unknown>).RiverHost = {
-  post(json: string): void {
-    parentPort!.postMessage({ post: json });
+  post(header: string, payload: string): void {
+    parentPort!.postMessage({ header, payload });
   },
 };
 
-parentPort!.on('message', (msg: { receive?: string }) => {
-  if (typeof msg.receive === 'string') {
-    (globalThis as unknown as { __riverCore: { receive(json: string): void } }).__riverCore.receive(
-      msg.receive,
-    );
-  }
+type Inbound = { [K in 'invoke' | 'send' | 'answer' | 'lifecycle']: (...args: never[]) => void };
+
+// The shell's calls into the core, as Android's evaluateJavascript makes them.
+parentPort!.on('message', (msg: { call?: keyof Inbound; args?: unknown[] }) => {
+  if (!msg.call) return;
+  const core = (globalThis as unknown as { __riverCore: Inbound }).__riverCore;
+  (core[msg.call] as (...args: unknown[]) => void)(...(msg.args ?? []));
 });
 
 await import(pathToFileURL(bundle).href);

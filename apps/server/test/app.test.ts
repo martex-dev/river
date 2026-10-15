@@ -35,6 +35,42 @@ afterEach(async () => {
   database = undefined;
 });
 
+describe('cross-origin access for the phone apps', () => {
+  it('answers preflights and allows River app origins only', async () => {
+    const { app } = await start();
+    const pre = await app.inject({
+      method: 'OPTIONS',
+      url: '/v1/auth/challenge',
+      headers: { origin: 'https://appassets.androidplatform.net', 'access-control-request-method': 'POST' },
+    });
+    expect(pre.statusCode).toBe(204);
+    expect(pre.headers['access-control-allow-origin']).toBe('https://appassets.androidplatform.net');
+    expect(pre.headers['access-control-allow-headers']).toContain('authorization');
+    expect(pre.headers['access-control-allow-credentials']).toBeUndefined();
+
+    const get = await app.inject({
+      method: 'GET',
+      url: '/v1/version',
+      headers: { origin: 'https://appassets.androidplatform.net' },
+    });
+    expect(get.statusCode).toBe(200);
+    expect(get.headers['access-control-allow-origin']).toBe('https://appassets.androidplatform.net');
+
+    const other = await app.inject({
+      method: 'GET',
+      url: '/v1/version',
+      headers: { origin: 'https://evil.example' },
+    });
+    expect(other.headers['access-control-allow-origin']).toBeUndefined();
+    const otherPre = await app.inject({
+      method: 'OPTIONS',
+      url: '/v1/version',
+      headers: { origin: 'https://evil.example', 'access-control-request-method': 'GET' },
+    });
+    expect(otherPre.headers['access-control-allow-origin']).toBeUndefined();
+  });
+});
+
 describe('River server HTTP API', () => {
   it('GET /v1/health', async () => {
     const { app } = await start();

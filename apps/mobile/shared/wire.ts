@@ -47,16 +47,3 @@ export function decodeWire<T = unknown>(json: string): T {
     return v;
   }) as T;
 }
-
-/** Messages between the client core and the app shell. */
-export type CoreInbound =
-  | { t: 'invoke'; id: number; channel: string; args: unknown[] }
-  | { t: 'send'; channel: string; args: unknown[] }
-  | { t: 'answer'; id: number; ok: boolean; value?: unknown; error?: string }
-  | { t: 'lifecycle'; state: 'foreground' | 'background' };
-
-export type CoreOutbound =
-  | { t: 'ready' }
-  | { t: 'reply'; id: number; ok: boolean; value?: unknown; error?: string }
-  | { t: 'event'; channel: string; args: unknown[] }
-  | { t: 'ask'; id: number; kind: string; args: unknown };
