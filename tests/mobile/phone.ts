@@ -107,7 +107,9 @@ export async function startPhone(bundle: string, root: string): Promise<Phone> {
                   ? { canceled: true }
                   : kind === 'notify'
                     ? 'shown'
-                    : null;
+                    : kind === 'appLock'
+                      ? { available: true }
+                      : null;
             call('answer', header.id, encodeWire({ ok: true, value }));
             break;
           }

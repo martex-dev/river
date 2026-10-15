@@ -1,3 +1,4 @@
+import { isPhone } from '../../../../shared/platform.ts';
 import { tr } from '../../i18n.ts';
 import { SCREEN_QUALITIES, saveQuality, savedQuality, type ScreenQuality } from '../screen-quality.ts';
 import { StagePanel } from './Stage.tsx';
@@ -32,7 +33,7 @@ export function VoiceChannel(props: {
   me: string;
 }): ReactElement {
   const { community, channel, me } = props;
-  const phone = useRiver((r) => r.info?.platform === 'android');
+  const phone = useRiver((r) => isPhone(r.info?.platform));
   const s = useCommunity();
   useCommunity((x) => x.callVersion);
   const call = s.call;

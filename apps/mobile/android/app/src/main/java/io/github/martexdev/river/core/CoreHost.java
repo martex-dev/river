@@ -62,6 +62,7 @@ public final class CoreHost {
   private final ActivityResultLauncher<Intent> saveLauncher;
   private final ActivityResultLauncher<String> notificationPermission;
   private RiverNative nativeInterface;
+  private AppLock appLock;
   private WebView web;
   private boolean ready = false;
   private volatile Listener listener;
@@ -96,6 +97,10 @@ public final class CoreHost {
               afterPermission = null;
               if (next != null) next.run();
             });
+  }
+
+  public void setAppLock(AppLock lock) {
+    this.appLock = lock;
   }
 
   public void setListener(Listener listener) {
@@ -283,6 +288,12 @@ public final class CoreHost {
         case "notify":
           notify(id, a.optString("title", "River"), a.optString("body", ""));
           break;
+        case "appLock":
+          {
+            boolean available = appLock != null && appLock.setEnabled(a.optBoolean("enabled", false));
+            answer(id, json("available", available));
+            break;
+          }
         default:
           answerPayload(id, "{\"ok\":false,\"error\":\"not available on this phone\"}");
       }

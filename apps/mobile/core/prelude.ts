@@ -48,7 +48,7 @@ const g = globalThis as Record<string, unknown>;
 g.Buffer ??= Buffer;
 g.process ??= {
   env: {},
-  platform: 'android',
+  platform: /iPhone|iPad|iPod/.test(globalThis.navigator?.userAgent ?? '') ? 'ios' : 'android',
   arch: 'arm64',
   versions: {},
   nextTick: (fn: (...args: unknown[]) => void, ...args: unknown[]) => queueMicrotask(() => fn(...args)),

@@ -1,3 +1,4 @@
+import { isPhone } from '../../../shared/platform.ts';
 import type { ReactElement } from 'react';
 import type { ConversationView } from '../../../shared/dm.ts';
 import { useCommunity } from '../community/store.ts';
@@ -92,7 +93,7 @@ export function DmCallPanel({ conversation: c }: { conversation: ConversationVie
   const s = useCommunity();
   useCommunity((x) => x.callVersion);
   const me = useRiver((r) => r.identity);
-  const phone = useRiver((r) => r.info?.platform === 'android');
+  const phone = useRiver((r) => isPhone(r.info?.platform));
   const [picker, setPicker] = useState<ScreenSource[] | null>(null);
   const call = s.call;
   if (!active || active.peer !== c.riverId || !call) return null;

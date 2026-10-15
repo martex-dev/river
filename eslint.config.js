@@ -16,6 +16,9 @@ export default tseslint.config(
       // Copies of built bundles inside the Android project.
       'apps/mobile/android/app/src/main/assets/**',
       'apps/mobile/android/**/build/**',
+      'apps/mobile/ios/App/App/public/**',
+      'apps/mobile/ios/RiverNative/core/**',
+      'apps/mobile/ios/App/Pods/**',
     ],
   },
   js.configs.recommended,

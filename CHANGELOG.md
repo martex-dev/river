@@ -6,6 +6,22 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-15
+
+**River for iPhone.**
+
+### Added
+
+- **River for iPhone** (iOS 16+): the same River as on Android and computers —
+  the same interface and client, with libsignal, SQLCipher and the iOS
+  Keychain underneath. The release has `River-ios-unsigned.ipa`, which you
+  install with a free Apple ID through Sideloadly or AltStore (see
+  docs/mobile).
+- **Lock River** (phones, Settings → System): River asks for your fingerprint,
+  face or screen lock whenever it opens, and hides itself in the app switcher.
+- iPhone: a long press opens River's menus (messages, channels, members), as
+  right-click does on computers.
+
 ## [1.2.0] - 2026-10-15
 
 **One account on your phone and your computer.**

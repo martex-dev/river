@@ -1,0 +1,42 @@
+require_relative '../../../../node_modules/@capacitor/ios/scripts/pods_helpers'
+
+platform :ios, '16.0'
+use_frameworks!
+
+# libsignal's prebuilt library for iOS, pinned to the checksum Signal-iOS uses for v0.105.0.
+ENV['LIBSIGNAL_FFI_PREBUILD_CHECKSUM'] = '556a82414b545490085a0e21d94990788bdcbee4d769043f7889397872443faf'
+# Xcode 26 builds Swift modules explicitly and then cannot see libsignal's C module (SignalFfi).
+ENV['LIBSIGNAL_TESTING_DISABLE_EXPLICIT_MODULES'] = '1'
+
+# workaround to avoid Xcode caching of Pods that requires
+# Product -> Clean Build Folder after new Cordova plugins installed
+# Requires CocoaPods 1.6 or newer
+install! 'cocoapods', :disable_input_output_paths => true
+
+def capacitor_pods
+  pod 'Capacitor', :path => '../../../../node_modules/@capacitor/ios'
+  pod 'CapacitorCordova', :path => '../../../../node_modules/@capacitor/ios'
+
+end
+
+target 'App' do
+  capacitor_pods
+  # Same libsignal version as the desktop and Android.
+  pod 'LibSignalClient', git: 'https://github.com/signalapp/libsignal.git', tag: 'v0.105.0'
+  pod 'SQLCipher', '4.10.0'
+  pod 'RiverNative', :path => '../RiverNative'
+end
+
+post_install do |installer|
+  assertDeploymentTarget(installer)
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
+      config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
+      # libsignal_ffi.a contains BoringSSL's C++: the framework links the C++ standard library.
+      if target.name == 'LibSignalClient'
+        config.build_settings['OTHER_LDFLAGS'] = '$(inherited) -lc++'
+      end
+    end
+  end
+end
