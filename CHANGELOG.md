@@ -8,6 +8,17 @@ All notable changes to River are documented here. The format follows
 
 **River for Android.**
 
+### Security
+
+- **A sign-up link from outside River no longer creates an account by itself.**
+  "Open in River" (`river://open?link=…`) with a sign-up link used to register
+  the account straight away when the app had none yet, on whatever server the
+  link named, so a web page could choose your server. River now asks first:
+  "Create your account on <server>?", and does nothing until you confirm. Invite
+  and friend links already asked. Found in a review of the Android app's deep
+  link handling; the fix is in the shared interface, so it covers desktop and
+  phone.
+
 ### Added
 
 - **River for Android** (Android 8.0+): the same River on your phone — the
