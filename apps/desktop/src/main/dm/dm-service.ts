@@ -62,6 +62,22 @@ const contentSchema = z.discriminatedUnion('t', [
     conv: z.string().min(1).max(64),
     message: z.object(messageFields).strict(),
   }),
+  /** Linked devices: a device asks this account's other devices for the friends list. */
+  z.object({ v: z.literal(1), t: z.literal('contactsReq') }),
+  /** Linked devices: the friends list (accepted and blocked people) from another of our devices. */
+  z.object({
+    v: z.literal(1),
+    t: z.literal('contacts'),
+    contacts: z
+      .array(
+        z.object({
+          riverId: z.uuid(),
+          state: z.enum(['accepted', 'blocked']),
+          name: z.string().max(64).nullable(),
+        }),
+      )
+      .max(2000),
+  }),
   z.object({
     v: z.literal(1),
     t: z.literal('edit'),
@@ -396,6 +412,7 @@ export class DmService {
     await this.ensurePreKeys();
     await this.drainMailbox();
     await this.reintroduceIfNeeded();
+    await this.requestContacts();
   }
 
   private async drainMailbox(): Promise<void> {
@@ -436,9 +453,12 @@ export class DmService {
     }
     if (env.sender === this.me()) {
       if (content.t === 'sync') this.applySync(content.conv, content.message);
+      else if (content.t === 'contactsReq') void this.shareContacts();
+      else if (content.t === 'contacts') this.applyContacts(content.contacts);
       return true;
     }
-    if (content.t === 'sync') return true;
+    // Device-to-device content is only ever accepted from this account's own devices.
+    if (content.t === 'sync' || content.t === 'contactsReq' || content.t === 'contacts') return true;
     if (contact?.state === 'blocked') return true;
     const peer = env.sender;
     if (SOCIAL.has(content.t)) {
@@ -828,6 +848,64 @@ export class DmService {
       await this.sendContent(this.me(), { v: 1, t: 'sync', conv, message });
     } catch (err) {
       this.deps.log.warn(`A sent message was not copied to your other devices: ${(err as Error).message}`);
+    }
+  }
+
+  /** Sends the friends list to this account's other devices (linked devices). */
+  private async shareContacts(): Promise<void> {
+    if (!this.deps.account.hasOtherDevices()) return;
+    const rows = this.db()
+      .prepare(`SELECT river_id, state, name FROM contacts WHERE state IN ('accepted', 'blocked') LIMIT 2000`)
+      .all() as Array<{ river_id: string; state: 'accepted' | 'blocked'; name: string | null }>;
+    const contacts = rows.map((r) => ({
+      riverId: r.river_id,
+      state: r.state,
+      name: r.name ? r.name.slice(0, 64) : null,
+    }));
+    try {
+      await this.sendContent(this.me(), { v: 1, t: 'contacts', contacts });
+    } catch (err) {
+      this.deps.log.warn(`Your friends list was not copied to your other devices: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * The friends list from another of our devices: people we do not know yet are added, requests
+   * become friends, and blocks are applied. Nobody is unblocked or removed by a copy (a stale
+   * list must never undo a block).
+   */
+  private applyContacts(
+    contacts: Array<{ riverId: string; state: 'accepted' | 'blocked'; name: string | null }>,
+  ): void {
+    const me = this.me();
+    for (const c of contacts) {
+      if (c.riverId === me) continue;
+      const existing = this.contact(c.riverId);
+      if (c.state === 'blocked') {
+        if (!existing) this.upsertContact(c.riverId, 'blocked', c.name);
+        else this.db().prepare(`UPDATE contacts SET state = 'blocked' WHERE river_id = ?`).run(c.riverId);
+      } else if (!existing) {
+        this.upsertContact(c.riverId, 'accepted', c.name);
+      } else if (existing.state === 'request') {
+        this.db().prepare(`UPDATE contacts SET state = 'accepted' WHERE river_id = ?`).run(c.riverId);
+      }
+    }
+    this.setMeta('contactsSynced', me);
+    this.emitConversations();
+  }
+
+  private contactsRequested = false;
+
+  /** A device that has not had the friends list from its other devices yet asks for it, once a run. */
+  private async requestContacts(): Promise<void> {
+    if (this.contactsRequested || this.meta('contactsSynced') === this.me()) return;
+    if (!this.deps.account.hasOtherDevices()) return;
+    this.contactsRequested = true;
+    try {
+      await this.sendContent(this.me(), { v: 1, t: 'contactsReq' });
+    } catch (err) {
+      this.contactsRequested = false;
+      this.deps.log.warn(`Could not ask your other devices for your friends list: ${(err as Error).message}`);
     }
   }
 
@@ -1251,12 +1329,14 @@ export class DmService {
           this.emitConversations();
           // Sharing your profile is also how the other side learns you accepted.
           await this.shareProfile(act.peer).catch(() => undefined);
+          void this.shareContacts();
           return out(null);
         case 'block':
           await this.deps.community.api(`/blocks/${act.peer}`, 'PUT', {}, z.unknown());
           if (!this.contact(act.peer)) this.upsertContact(act.peer, 'blocked');
           this.db().prepare(`UPDATE contacts SET state = 'blocked' WHERE river_id = ?`).run(act.peer);
           this.emitConversations();
+          void this.shareContacts();
           return out(null);
         case 'unblock':
           await this.deps.community.api(`/blocks/${act.peer}`, 'DELETE', undefined, z.unknown());

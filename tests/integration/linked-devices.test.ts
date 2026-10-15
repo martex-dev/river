@@ -205,6 +205,50 @@ describe('linked devices', { timeout: 60_000 }, () => {
     expect(after).toMatchObject({ state: 'registered', connection: 'error' });
   });
 
+  it('a new device gets the friends list and blocks from the account’s other devices', async () => {
+    const desktop = install('ann-desktop');
+    const me = desktop.identity.create('Ann');
+    await desktop.account.register(SERVER);
+    await desktop.dm.sync();
+    const carol = install('carol');
+    const carolId = carol.identity.create('Carol').riverId;
+    await carol.account.register(SERVER);
+    await carol.dm.sync();
+    const mallory = install('mallory');
+    const malloryId = mallory.identity.create('Mallory').riverId;
+    await mallory.account.register(SERVER);
+    await mallory.dm.sync();
+    await desktop.dm.action({ a: 'open', peer: carolId, name: 'Carol' });
+    await desktop.dm.action({ a: 'block', peer: malloryId });
+    expect(desktop.dm.contactState(carolId)).toBe('accepted');
+
+    const offered = (await desktop.link.start()) as Extract<LinkProgress, { state: 'offering' }>;
+    const phone = install('ann-phone');
+    await phone.link.join(offered.code, 'Phone');
+    await until(() => desktop.link.status().state === 'request');
+    await desktop.link.confirm();
+    await until(() => phone.link.status().state === 'review');
+    await phone.link.accept();
+    await until(() => phone.link.status().state === 'linked');
+    expect(phone.identity.get()?.riverId).toBe(me.riverId);
+
+    // The phone asks; the desktop answers; the phone applies it.
+    await until(async () => {
+      await phone.dm.sync();
+      await desktop.dm.sync();
+      await phone.dm.sync();
+      return phone.dm.contactState(carolId) === 'accepted' ? true : null;
+    });
+    expect(phone.dm.contactState(malloryId)).toBe('blocked');
+
+    // Blocking later on one device reaches the other.
+    await phone.dm.action({ a: 'block', peer: carolId });
+    await until(async () => {
+      await desktop.dm.sync();
+      return desktop.dm.contactState(carolId) === 'blocked' ? true : null;
+    });
+  });
+
   it('ignores a device that does not have the code, and a code typed alone needs a known server', async () => {
     const desktop = install('carol-desktop');
     desktop.identity.create('Carol');
