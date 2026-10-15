@@ -7,6 +7,7 @@ import type { CommunityEvent } from '../../apps/desktop/src/shared/ipc.ts';
 // Desktop main-process code under test.
 import { AccountService } from '../../apps/desktop/src/main/account/account-service.ts';
 import { CommunityService } from '../../apps/desktop/src/main/community/community-service.ts';
+import { DmService } from '../../apps/desktop/src/main/dm/dm-service.ts';
 import { createRequestBytes, createRequestJson } from '../../apps/desktop/src/main/http.ts';
 import { IdentityService } from '../../apps/desktop/src/main/identity/identity-service.ts';
 import { nullLogger } from '../../apps/desktop/src/main/logger.ts';
@@ -69,6 +70,7 @@ async function person(
   sockets: FreezableSocket[];
   events: CommunityEvent[];
   calls: boolean[];
+  dm: () => Promise<DmService>;
 }> {
   const local = migrateDatabase(join(dir, `${name}.db`), newDatabaseKey(), CLIENT_MIGRATIONS).db;
   locals.push(local);
@@ -101,7 +103,12 @@ async function person(
   services.push(community);
   const events: CommunityEvent[] = [];
   community.onEvent((e) => events.push(e));
-  return { community, riverId: created.riverId, sockets, events, calls };
+  const dm = async (): Promise<DmService> => {
+    const service = new DmService({ db: () => local, identity, account, community, log: nullLogger });
+    await service.sync();
+    return service;
+  };
+  return { community, riverId: created.riverId, sockets, events, calls, dm };
 }
 
 const online = (c: CommunityService) => () => expect(c.connectionState()).toBe('online');
@@ -278,5 +285,36 @@ describe('voice survives dropped connections', () => {
     status = 'invisible';
     await bob.community.presenceChanged(false);
     await vi.waitFor(() => expect(bobAsSeen().online).toBe(false));
+  }, 20_000);
+
+  it('a 1:1 call that rings while the window is closed is shown when it opens, until it ends', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const aliceDm = await alice.dm();
+    const bobDm = await bob.dm();
+    alice.community.ensureSocket();
+    bob.community.ensureSocket();
+    await vi.waitFor(online(alice.community), { timeout: 5000 });
+    await vi.waitFor(online(bob.community), { timeout: 5000 });
+    await aliceDm.action({ a: 'open', peer: bob.riverId, name: 'Bob' });
+    await aliceDm.action({ a: 'send', peer: bob.riverId, text: 'call me' });
+    await bobDm.sync();
+    await bobDm.action({ a: 'accept', peer: alice.riverId });
+    await aliceDm.sync();
+
+    const callId = 'C'.repeat(22);
+    expect(await aliceDm.action({ a: 'pendingCall' })).toBeNull();
+    await bobDm.action({ a: 'call', peer: alice.riverId, callId, kind: 'invite', video: true });
+    await vi.waitFor(async () =>
+      expect(await aliceDm.action({ a: 'pendingCall' })).toMatchObject({
+        t: 'call',
+        peer: bob.riverId,
+        callId,
+        kind: 'invite',
+        video: true,
+      }),
+    );
+    await bobDm.action({ a: 'call', peer: alice.riverId, callId, kind: 'end' });
+    await vi.waitFor(async () => expect(await aliceDm.action({ a: 'pendingCall' })).toBeNull());
   }, 20_000);
 });
