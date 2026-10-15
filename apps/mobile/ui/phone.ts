@@ -7,11 +7,12 @@
  *   conversations. Choosing a channel, a conversation or a Home page opens it.
  *
  * Android's Back button returns from a conversation to the list (the list is
- * a history entry), then leaves the app. Nothing here changes the shared UI's
+ * a history entry), then leaves the app. Swiping right opens the list, left
+ * closes it (swipe.ts). Nothing here changes the shared UI's
  * behaviour; it only decides which pane is shown.
  */
 
-type Pane = 'nav' | 'main';
+import { swipeTarget, type Pane } from './swipe.ts';
 
 const root = document.documentElement;
 root.dataset.pane = 'main';
@@ -43,6 +44,50 @@ document.addEventListener(
   },
   true,
 );
+
+/** Touches that belong to something else: text fields, sliders, maps, things that scroll sideways. */
+function ownsHorizontalGesture(target: Element | null): boolean {
+  for (let el = target; el && el !== document.documentElement; el = el.parentElement) {
+    if (el.matches('input, textarea, select, video, [contenteditable="true"], [role="slider"]')) return true;
+    if (el.scrollWidth > el.clientWidth + 1) {
+      const overflow = getComputedStyle(el).overflowX;
+      if (overflow === 'auto' || overflow === 'scroll') return true;
+    }
+  }
+  return false;
+}
+
+// Swipe right for the list, left to go back to the conversation.
+let touch: { x: number; y: number; at: number } | null = null;
+document.addEventListener(
+  'touchstart',
+  (e) => {
+    const t = e.touches[0];
+    touch =
+      e.touches.length === 1 && t && !ownsHorizontalGesture(e.target as Element | null)
+        ? { x: t.clientX, y: t.clientY, at: Date.now() }
+        : null;
+  },
+  { passive: true },
+);
+document.addEventListener(
+  'touchend',
+  (e) => {
+    const t = e.changedTouches[0];
+    if (!touch || !t) return;
+    const pane = root.dataset.pane === 'nav' ? 'nav' : 'main';
+    const next = swipeTarget(
+      pane,
+      { x0: touch.x, y0: touch.y, x1: t.clientX, y1: t.clientY, ms: Date.now() - touch.at },
+      window.innerWidth,
+    );
+    touch = null;
+    // Not while a menu or dialog is open.
+    if (next && !document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) show(next);
+  },
+  { passive: true },
+);
+document.addEventListener('touchcancel', () => (touch = null), { passive: true });
 
 const menu = document.createElement('button');
 menu.className = 'phone-menu';

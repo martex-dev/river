@@ -6,6 +6,11 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Phones: swipe right on a conversation to open the server and channel list,
+  and left to go back, as in Discord.
+
 ## [1.2.0] - 2026-10-15
 
 **One account on your phone and your computer.**
