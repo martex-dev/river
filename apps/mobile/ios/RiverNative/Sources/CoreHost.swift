@@ -34,6 +34,7 @@ public final class CoreHost: NSObject {
 
     public func start(in controller: UIViewController) {
         guard web == nil else { return }
+        NSLog("[River] starting the client core")
         presenter = controller
         do {
             native = try RiverNativeInterface()
@@ -51,6 +52,21 @@ public final class CoreHost: NSObject {
         let bridge = """
             window.RiverNative = { call: function (m, a) { return prompt('\(CoreHost.promptPrefix)' + m, a); } };
             window.RiverHost = { post: function (h, p) { window.webkit.messageHandlers.riverHost.postMessage([h, p]); } };
+            window.addEventListener('error', function (e) {
+              window.RiverHost.post('{"t":"log"}', 'error: ' + e.message + ' @ ' + e.filename + ':' + e.lineno);
+            });
+            ['error', 'warn'].forEach(function (level) {
+              var original = console[level];
+              console[level] = function () {
+                try {
+                  window.RiverHost.post('{"t":"log"}', level + ': ' + Array.prototype.map.call(arguments, String).join(' '));
+                } catch (_) {}
+                return original.apply(console, arguments);
+              };
+            });
+            window.addEventListener('unhandledrejection', function (e) {
+              window.RiverHost.post('{"t":"log"}', 'unhandled: ' + (e.reason && e.reason.stack || e.reason));
+            });
             """
         config.userContentController.addUserScript(
             WKUserScript(source: bridge, injectionTime: .atDocumentStart, forMainFrameOnly: true))
@@ -140,6 +156,8 @@ public final class CoreHost: NSObject {
             listener?.coreEvent(payload: payload)
         case "ask":
             ask(id: (h["id"] as? NSNumber)?.intValue ?? 0, kind: h["kind"] as? String ?? "", payload: payload)
+        case "log":
+            NSLog("[River] core: %@", String(payload.prefix(2000)))
         default:
             break
         }
@@ -218,7 +236,7 @@ public final class CoreHost: NSObject {
     }
 
     private func fatal(_ details: String) {
-        NSLog("[River] the client core failed to start")
+        NSLog("[River] the client core failed to start: %@", String(details.prefix(2000)))
         DispatchQueue.main.async {
             let alert = UIAlertController(title: "River could not start", message: details, preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "OK", style: .default))
@@ -239,6 +257,24 @@ extension CoreHost: WKUIDelegate, WKNavigationDelegate {
         }
         let method = String(prompt.dropFirst(CoreHost.promptPrefix.count))
         completionHandler(native.call(method: method, argsJson: defaultText ?? "{}"))
+    }
+
+    public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        NSLog("[River] core page loaded")
+    }
+
+    public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        NSLog("[River] core page failed: %@", error.localizedDescription)
+    }
+
+    public func webView(
+        _ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error
+    ) {
+        NSLog("[River] core page failed to load: %@", error.localizedDescription)
+    }
+
+    public func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        NSLog("[River] the core's web process ended")
     }
 
     /// The core never navigates.
