@@ -191,6 +191,8 @@ export class LinkService {
   }
 
   private stop(): void {
+    this.pendingJoin?.discard();
+    this.pendingJoin = null;
     this.attempt++;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
@@ -362,6 +364,30 @@ export class LinkService {
   // ---- on the new device ---------------------------------------------------------------------
 
   /** Uses a link code from a device that is already linked. */
+  /** A received account waiting for "Is this you?" on the new device. */
+  private pendingJoin: { finish(): Promise<void>; discard(): void } | null = null;
+
+  /** On the new device: the person checked whose account it is and wants to link. */
+  async accept(): Promise<LinkProgress> {
+    const pending = this.pendingJoin;
+    if (!pending || this.progress.state !== 'review') {
+      throw new UserFacingError('There is nothing to link right now.');
+    }
+    this.pendingJoin = null;
+    try {
+      await pending.finish();
+    } catch (err) {
+      pending.discard();
+      this.stop();
+      this.set({
+        state: 'failed',
+        message: err instanceof UserFacingError ? err.message : 'Linking failed.',
+      });
+      throw err;
+    }
+    return this.progress;
+  }
+
   async join(rawCode: unknown, rawDeviceName: unknown): Promise<LinkProgress> {
     if (this.deps.identity.get() || this.deps.account.status().state !== 'none') {
       throw new UserFacingError('This device already has a River account.');
@@ -428,26 +454,43 @@ export class LinkService {
       if (provision.deviceId !== state.deviceId || provision.serverUrl !== code.serverUrl) {
         throw new UserFacingError('The link did not match. Start again.');
       }
-      const privateKey = unb64(provision.identityPrivateKey);
-      try {
-        this.deps.identity.adopt({
-          riverId: provision.riverId,
-          publicKey: unb64(provision.identityPublicKey),
-          privateKey,
-          registrationId,
-          displayName: provision.displayName,
-        });
-      } finally {
-        privateKey.fill(0);
-      }
-      await this.deps.account.adoptLinked(code.serverUrl, provision.deviceId, device);
-      device.privateKey.fill(0);
       linkKey.privateKey.fill(0);
-      this.deps.community.importKeys(provision.communityKeys);
-      this.deps.log.info('This device is now linked');
-      this.stop();
-      this.set({ state: 'linked' });
-      this.deps.onLinked(code.serverUrl);
+      // Show whose account this is before taking it on: a code someone else made (a web page
+      // opening river://link) would otherwise link this device into their account.
+      const discard = (): void => {
+        device.privateKey.fill(0);
+        provision.identityPrivateKey = '';
+      };
+      this.pendingJoin = {
+        discard,
+        finish: async () => {
+          const privateKey = unb64(provision.identityPrivateKey);
+          try {
+            this.deps.identity.adopt({
+              riverId: provision.riverId,
+              publicKey: unb64(provision.identityPublicKey),
+              privateKey,
+              registrationId,
+              displayName: provision.displayName,
+            });
+          } finally {
+            privateKey.fill(0);
+          }
+          await this.deps.account.adoptLinked(code.serverUrl, provision.deviceId, device);
+          discard();
+          this.deps.community.importKeys(provision.communityKeys);
+          this.deps.log.info('This device is now linked');
+          this.stop();
+          this.set({ state: 'linked' });
+          this.deps.onLinked(code.serverUrl);
+        },
+      };
+      this.set({
+        state: 'review',
+        displayName: provision.displayName ?? 'someone without a name',
+        riverId: provision.riverId,
+        server: new URL(code.serverUrl).host,
+      });
     };
     this.later(poll, attempt);
     return this.progress;
