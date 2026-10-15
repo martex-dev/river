@@ -336,17 +336,29 @@ async function start(): Promise<void> {
     indicator.hide();
     if (!window.isDestroyed()) window.webContents.send(IPC.communityEvent, { t: 'stopScreenShare' });
   });
+  // Remote assistance is consent-only (ADR 0007): only a screen picked in River's picker, and only
+  // after main itself asks — a question the window's (untrusted) page can neither fake nor skip.
   uiSession().setDisplayMediaRequestHandler((_request, callback) => {
-    void desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
-      const source =
-        sources.find((s) => s.id === chosenScreen) ?? sources.find((s) => s.id.startsWith('screen:'));
-      chosenScreen = null;
-      sharedDisplay = source?.id.startsWith('screen:') ? source.display_id || null : null;
-      if (source) {
-        callback({ video: source });
-        // The bar appears as soon as a screen is handed out, whatever the window reports later.
-        indicator.show(sharedDisplay, []);
-      } else callback({});
+    const picked = chosenScreen;
+    chosenScreen = null;
+    if (!picked) return callback({});
+    void desktopCapturer.getSources({ types: ['screen', 'window'] }).then(async (sources) => {
+      const source = sources.find((s) => s.id === picked);
+      if (!source) return callback({});
+      const { response } = await dialog.showMessageBox(window, {
+        type: 'question',
+        title: 'River — share your screen',
+        message: 'Share your screen?',
+        detail: `People in this call will see “${source.name}” until you press Stop sharing on the red bar at the top of that screen.`,
+        buttons: ['Share', 'Cancel'],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      if (response !== 0) return callback({});
+      sharedDisplay = source.id.startsWith('screen:') ? source.display_id || null : null;
+      callback({ video: source });
+      // The bar appears as soon as a screen is handed out, whatever the window reports later.
+      indicator.show(sharedDisplay, []);
     });
   });
   app.on('will-quit', () => storage.close());

@@ -78,6 +78,7 @@ export class ShareIndicator {
   private bar: BrowserWindow | null = null;
   private overlay: BrowserWindow | null = null;
   private lastPing = 0;
+  private names: readonly string[] = [];
 
   private readonly onStop: () => void;
 
@@ -88,6 +89,7 @@ export class ShareIndicator {
 
   /** Sharing started (or the viewers changed). `displayId` is the shared screen, if a whole screen. */
   show(displayId: string | null, names: readonly string[]): void {
+    this.names = names;
     const display = this.display(displayId);
     const area = display.workArea;
     if (!this.bar || this.bar.isDestroyed()) {
@@ -107,6 +109,15 @@ export class ShareIndicator {
         if (url === STOP_URL) this.onStop();
       });
       bar.once('ready-to-show', () => bar.showInactive());
+      // The bar must not vanish while sharing: if its page crashes or the window closes, bring it back.
+      const revive = (): void => {
+        if (this.bar !== bar) return;
+        this.bar = null;
+        if (!bar.isDestroyed()) bar.destroy();
+        this.show(displayId, this.names);
+      };
+      bar.webContents.on('render-process-gone', revive);
+      bar.on('closed', revive);
       this.bar = bar;
     }
     void this.bar.loadURL(barPage(names.slice(0, 8)));
@@ -144,8 +155,10 @@ export class ShareIndicator {
   }
 
   hide(): void {
-    if (this.bar && !this.bar.isDestroyed()) this.bar.destroy();
+    // Cleared first, so closing it here is not mistaken for a crash to recover from.
+    const bar = this.bar;
     this.bar = null;
+    if (bar && !bar.isDestroyed()) bar.destroy();
     this.closeOverlay();
   }
 

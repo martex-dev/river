@@ -14,6 +14,7 @@ All notable changes to River are documented here. The format follows
   cannot be hidden. People watching can point at something on your screen
   (Alt+click, or a click in fullscreen; in a 1:1 call just click), and you see
   a ring there. They can see and point; they cannot control your computer.
+  Every share asks "Share your screen?" in a system dialog first.
   Design: docs/architecture/decisions/0007-remote-assistance.md.
 
 ## [1.2.0] - 2026-10-15
