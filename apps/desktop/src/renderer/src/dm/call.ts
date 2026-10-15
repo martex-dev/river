@@ -126,6 +126,7 @@ async function begin(
     // If the two cannot connect directly, voice goes through the server, encrypted end to end.
     new WebCodecsRelay(me, (to, payload) => window.river.voice.relay(to, payload)),
   );
+  call.nameOf = (id) => useDm.getState().conversations.find((x) => x.riverId === id)?.name ?? 'Someone';
   call.muted = community.getState().selfMuted;
   call.deafened = community.getState().selfDeafened;
   community.setState({ call, callError: null });

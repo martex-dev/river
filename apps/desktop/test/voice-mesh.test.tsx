@@ -492,3 +492,48 @@ describe('voice mesh', () => {
     });
   });
 });
+
+describe('remote assistance (ADR 0007)', () => {
+  it('the sharer hears who can see the screen, and where viewers point', async () => {
+    const shareStatus = vi.fn();
+    const point = vi.fn();
+    (globalThis as { river?: unknown }).river = { voice: { shareStatus, point } };
+    const screenTrack = { stop: vi.fn(), contentHint: '', onended: null };
+    (navigator as unknown as { mediaDevices: Record<string, unknown> }).mediaDevices.getDisplayMedia =
+      async () => ({
+        getVideoTracks: () => [screenTrack],
+      });
+    try {
+      const [a, b] = ids(2);
+      const sharer = await joinCall(a!);
+      const viewer = await joinCall(b!);
+      sharer.nameOf = (id) => (id === b ? 'Bob' : id);
+      await runUntil(() => fullMesh([sharer, viewer]));
+
+      await sharer.setScreen(true);
+      expect(shareStatus).toHaveBeenLastCalledWith({ sharing: true, viewers: ['Bob'] });
+      await runUntil(() => viewer.remotes().find((r) => r.id === a)?.screenOn === true);
+
+      viewer.pointAt(a!, 0.25, 0.75);
+      await runUntil(() => point.mock.calls.length > 0);
+      expect(point).toHaveBeenCalledWith(0.25, 0.75);
+
+      // Rate-limited, and nothing once sharing stops.
+      viewer.pointAt(a!, 0.5, 0.5);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(point).toHaveBeenCalledTimes(1);
+      await sharer.setScreen(false);
+      expect(shareStatus).toHaveBeenLastCalledWith({ sharing: false, viewers: [] });
+      await vi.advanceTimersByTimeAsync(500);
+      (viewer as unknown as { send(to: string, s: unknown): void }).send(a!, {
+        type: 'point',
+        x: 0.1,
+        y: 0.1,
+      });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(point).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (globalThis as { river?: unknown }).river;
+    }
+  });
+});

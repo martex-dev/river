@@ -35,6 +35,8 @@ type Signal =
   | { type: 'restart'; sid?: string }
   /** What the sender is currently sending; receivers show tiles from this, not from track heuristics. */
   | { type: 'state'; camera: boolean; screen: boolean; muted: boolean; priority?: boolean }
+  /** Remote assistance (ADR 0007): "look here" on the screen you are sharing, as fractions. */
+  | { type: 'point'; x: number; y: number }
   /** "I can't reach you directly: here is my relay key; let's talk through the server" (1.0.17). */
   | { type: 'relay'; key: string }
   /** "We are connected directly again: stop relaying to me." */
@@ -150,8 +152,16 @@ interface Analyser {
   track: MediaStreamTrack;
 }
 
+/** At least this long between "look here" points from one viewer. */
+const POINT_EVERY_MS = 250;
+
 export class VoiceCall {
   readonly channelId: string;
+  /** Names for the "can see your screen" bar (set by the store; IDs until then). */
+  nameOf: (riverId: string) => string = (id) => id.slice(0, 8);
+  private lastShare = '';
+  private lastPointSent = 0;
+  private readonly lastPointFrom = new Map<string, number>();
   readonly me: string;
   private options: CallOptions;
   private audioCtx: AudioContext | null = null;
@@ -609,6 +619,7 @@ export class VoiceCall {
       }
     }
     this.participants = [...ids, ...[...this.missingSince.keys()].filter((id) => !ids.includes(id))];
+    this.syncShare();
     for (const id of ids) {
       if (id === this.me || this.peers.has(id)) continue;
       // The participant with the smaller ID makes the offer, so each pair negotiates once.
@@ -670,6 +681,17 @@ export class VoiceCall {
     if (signal.type === 'relay-off') {
       const peer = this.peers.get(from);
       if (peer?.pc.connectionState === 'connected') this.disableRelay(from, false);
+      return;
+    }
+    if (signal.type === 'point') {
+      // Only while we share a screen, only from someone in the call, at a bounded rate.
+      if (!this.local.screen || !this.participants.includes(from)) return;
+      const { x, y } = signal;
+      if (typeof x !== 'number' || typeof y !== 'number' || !(x >= 0 && x <= 1 && y >= 0 && y <= 1)) return;
+      const now = Date.now();
+      if (now - (this.lastPointFrom.get(from) ?? 0) < POINT_EVERY_MS) return;
+      this.lastPointFrom.set(from, now);
+      window.river?.voice.point?.(x, y);
       return;
     }
     if (signal.type === 'state') {
@@ -782,6 +804,7 @@ export class VoiceCall {
     this.relay?.close();
     this.relayPeers.clear();
     this.stopLocal();
+    this.syncShare();
     this.micProbe?.stop();
     this.micProbe = null;
     for (const a of this.analysers.values()) a.source.disconnect();
@@ -791,12 +814,35 @@ export class VoiceCall {
     this.onChange();
   }
 
+  /** Points at (x, y) on `peerId`'s shared screen; they see a ring there (remote assistance). */
+  pointAt(peerId: string, x: number, y: number): void {
+    if (this.closed || !this.view(peerId).screenOn) return;
+    const now = Date.now();
+    if (now - this.lastPointSent < POINT_EVERY_MS) return;
+    this.lastPointSent = now;
+    const clamp = (v: number): number => Math.min(1, Math.max(0, Math.round(v * 10_000) / 10_000));
+    this.send(peerId, { type: 'point', x: clamp(x), y: clamp(y) });
+  }
+
+  /** Tells main who can see our screen, so it shows the always-on-top bar with Stop (ADR 0007). */
+  private syncShare(): void {
+    const sharing = !this.closed && !!this.local.screen;
+    const viewers = sharing
+      ? this.participants.filter((id) => id !== this.me).map((id) => this.nameOf(id))
+      : [];
+    const key = JSON.stringify([sharing, viewers]);
+    if (key === this.lastShare) return;
+    this.lastShare = key;
+    window.river?.voice.shareStatus?.({ sharing, viewers });
+  }
+
   // ---- internals -------------------------------------------------------------------------------
 
   private async setSlot(slot: Slot, track: MediaStreamTrack | null): Promise<void> {
     this.local[slot]?.stop();
     this.local[slot] = track;
     if (slot === 'audio') this.relay?.setMic(track);
+    if (slot === 'screen') this.syncShare();
     const index = SLOTS.indexOf(slot);
     await Promise.all(
       [...this.peers.values()].map((p) => {

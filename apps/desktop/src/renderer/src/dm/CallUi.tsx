@@ -2,7 +2,7 @@ import { isPhone } from '../../../shared/platform.ts';
 import type { ReactElement } from 'react';
 import type { ConversationView } from '../../../shared/dm.ts';
 import { useCommunity } from '../community/store.ts';
-import { Video } from '../community/ui/Voice.tsx';
+import { pointOnVideo, Video } from '../community/ui/Voice.tsx';
 import {
   Avatar,
   CameraIcon,
@@ -124,6 +124,13 @@ export function DmCallPanel({ conversation: c }: { conversation: ConversationVie
         </div>
         <div
           className={`tile ${remote && call.speaking.has(c.riverId) ? 'is-speaking' : ''} ${remote?.screenOn ? 'tile--screen' : ''}`}
+          // Remote assistance: click their shared screen to point at something (they see a ring).
+          onClick={(e) => {
+            if (!remote?.screenOn) return;
+            const at = pointOnVideo(e);
+            if (at) call.pointAt(c.riverId, at.x, at.y);
+          }}
+          title={remote?.screenOn ? 'Click to point at something on their screen' : undefined}
         >
           {remote?.screenOn && remote.screen ? (
             <Video stream={remote.screen} />
