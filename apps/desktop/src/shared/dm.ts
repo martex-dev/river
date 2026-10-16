@@ -27,6 +27,10 @@ export interface ConversationView {
   verified: boolean;
   /** The contact's safety number changed since you last looked. */
   keyChanged: boolean;
+  /** Chat-list flags (2.1), kept on this device: pinned to the top, archived, marked unread. */
+  pinned?: boolean;
+  archived?: boolean;
+  markedUnread?: boolean;
 }
 
 export interface DirectMessageView {
@@ -125,6 +129,16 @@ export const dmActionSchema = z.discriminatedUnion('a', [
     .object({ a: z.literal('react'), peer: conv, id, emoji: z.string().min(1).max(32), on: z.boolean() })
     .strict(),
   z.object({ a: z.literal('read'), peer: conv }).strict(),
+  /** Pin, archive or mark a conversation unread (2.1); kept in this device's encrypted database. */
+  z
+    .object({
+      a: z.literal('chatFlags'),
+      peer: conv,
+      pinned: z.boolean().optional(),
+      archived: z.boolean().optional(),
+      markedUnread: z.boolean().optional(),
+    })
+    .strict(),
   z.object({ a: z.literal('typing'), peer: conv }).strict(),
   z.object({ a: z.literal('accept'), peer: conv }).strict(),
   z.object({ a: z.literal('block'), peer: riverId }).strict(),

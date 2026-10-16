@@ -1747,3 +1747,87 @@ html[data-density='compact'] .member {
 .share-sheet__target:focus-visible {
   background: var(--surface-hover, rgba(127, 127, 127, 0.12));
 }
+
+/* Chat list (2.1): filters, archive row, pins, marked-unread dot. */
+.chat-filters {
+  display: flex;
+  gap: 4px;
+  padding: 4px 8px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.chat-filters__tab {
+  flex: none;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--layer-1);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--dur, 0.15s),
+    color var(--dur, 0.15s);
+}
+.chat-filters__tab:hover {
+  color: var(--text);
+}
+.chat-filters__tab.is-active {
+  background: var(--accent-2);
+  color: #fff;
+}
+.dm-row__archive-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--layer-1);
+}
+.dm-row__pin {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.dm-row__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent-2);
+}
+
+/* Jump to the latest message in a conversation (2.1), Telegram-style. */
+.chat__jump-latest {
+  position: absolute;
+  right: 18px;
+  bottom: 96px;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--layer-2, var(--layer-1));
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.7);
+  animation: slide-up var(--dur) var(--ease-spring);
+}
+.chat__jump-latest:hover {
+  background: var(--accent-2);
+  color: #fff;
+}
+.chat__jump-count {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 9px;
+  background: var(--accent-2);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}

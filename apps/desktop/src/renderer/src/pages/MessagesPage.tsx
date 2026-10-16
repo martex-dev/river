@@ -131,8 +131,14 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
     }, 250);
     return () => window.clearTimeout(t);
   }, [query]);
+  const [filter, setFilter] = useState<ChatFilter>('all');
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const requests = filtered.filter((c) => c.state === 'request');
-  const chats = filtered.filter((c) => c.state !== 'request');
+  const archived = filtered.filter((c) => c.state !== 'request' && c.archived);
+  const archivedUnread = archived.reduce((n, c) => n + c.unread, 0);
+  const chats = filtered
+    .filter((c) => c.state !== 'request' && (archiveOpen ? c.archived : !c.archived))
+    .filter((c) => matchesFilter(c, filter));
   return (
     <div className="dms__list">
       <div className="home-sidebar__search">
@@ -185,12 +191,60 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
           </>
         )}
         <div className="channel-group__head home-sidebar__dm-head">
-          <span>Direct messages</span>
+          {archiveOpen ? (
+            <button className="btn btn--link" onClick={() => setArchiveOpen(false)}>
+              ← Archived chats
+            </button>
+          ) : (
+            <span>Direct messages</span>
+          )}
           <button className="icon-btn" aria-label="New message" title="New message" onClick={onNew}>
             <PlusIcon size={16} />
           </button>
         </div>
-        {chats.length === 0 && <p className="muted small dms__hint">No conversations yet.</p>}
+        {!archiveOpen && (
+          <div className="chat-filters" role="tablist" aria-label="Show">
+            {CHAT_FILTERS.map((f) => (
+              <button
+                key={f.id}
+                role="tab"
+                aria-selected={filter === f.id}
+                className={`chat-filters__tab ${filter === f.id ? 'is-active' : ''}`}
+                onClick={() => setFilter(f.id)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {!archiveOpen && archived.length > 0 && filter === 'all' && (
+          <button className="dm-row dm-row--archive" onClick={() => setArchiveOpen(true)}>
+            <span className="dm-row__archive-icon" aria-hidden="true">
+              🗄
+            </span>
+            <span className="dm-row__text">
+              <span className="dm-row__top">
+                <strong>Archived chats</strong>
+              </span>
+              <span className="dm-row__last muted small">
+                {archived
+                  .slice(0, 3)
+                  .map((c) => c.name)
+                  .join(', ')}
+              </span>
+            </span>
+            {archivedUnread > 0 && <span className="badge">{archivedUnread}</span>}
+          </button>
+        )}
+        {chats.length === 0 && (
+          <p className="muted small dms__hint">
+            {archiveOpen
+              ? 'No archived chats.'
+              : filter === 'all'
+                ? 'No conversations yet.'
+                : 'Nothing here.'}
+          </p>
+        )}
         {chats.map((c) => (
           <ConversationRow key={c.riverId} c={c} />
         ))}
@@ -205,47 +259,116 @@ function openDm(peer: string): void {
   useRiver.getState().navigate('messages');
 }
 
+type ChatFilter = 'all' | 'unread' | 'people' | 'groups';
+const CHAT_FILTERS: Array<{ id: ChatFilter; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'unread', label: 'Unread' },
+  { id: 'people', label: 'People' },
+  { id: 'groups', label: 'Groups' },
+];
+
+function matchesFilter(c: ConversationView, filter: ChatFilter): boolean {
+  if (filter === 'unread') return c.unread > 0 || !!c.markedUnread;
+  if (filter === 'people') return c.kind === 'direct';
+  if (filter === 'groups') return c.kind === 'group';
+  return true;
+}
+
+function chatFlags(
+  peer: string,
+  flags: { pinned?: boolean; archived?: boolean; markedUnread?: boolean },
+): void {
+  void window.river.dm.action({ a: 'chatFlags', peer, ...flags }).then((r) => {
+    if (!r.ok) useCommunity.getState().notify(r.message, 'error');
+  });
+}
+
 function ConversationRow({ c }: { c: ConversationView }): ReactElement {
   const dm = useDm();
   useDm((x) => x.typing[c.riverId]);
   const typing = isTyping(c.riverId);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   return (
-    <button
-      className={`dm-row ${dm.selected === c.riverId ? 'is-active' : ''} ${c.unread ? 'is-unread' : ''} ${c.state === 'blocked' ? 'is-blocked' : ''}`}
-      aria-current={dm.selected === c.riverId ? 'page' : undefined}
-      onClick={() => openDm(c.riverId)}
-    >
-      {c.kind === 'group' ? <GroupAvatar c={c} size={32} /> : <ConvAvatar c={c} size={32} />}
-      <span className="dm-row__text">
-        <span className="dm-row__top">
-          <strong>{c.name}</strong>
-          {c.verified && (
-            <span className="dm-row__verified" title="Verified">
-              ✓
-            </span>
-          )}
-          {c.last && <time className="muted small">{shortWhen(c.last.sentAt)}</time>}
+    <>
+      <button
+        className={`dm-row ${dm.selected === c.riverId ? 'is-active' : ''} ${c.unread || c.markedUnread ? 'is-unread' : ''} ${c.state === 'blocked' ? 'is-blocked' : ''}`}
+        aria-current={dm.selected === c.riverId ? 'page' : undefined}
+        onClick={() => openDm(c.riverId)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setMenu({ x: e.clientX, y: e.clientY });
+        }}
+      >
+        {c.kind === 'group' ? <GroupAvatar c={c} size={32} /> : <ConvAvatar c={c} size={32} />}
+        <span className="dm-row__text">
+          <span className="dm-row__top">
+            <strong>{c.name}</strong>
+            {c.verified && (
+              <span className="dm-row__verified" title="Verified">
+                ✓
+              </span>
+            )}
+            {c.last && <time className="muted small">{shortWhen(c.last.sentAt)}</time>}
+          </span>
+          <span className="dm-row__last muted small">
+            {typing ? (
+              <em>typing…</em>
+            ) : c.state === 'blocked' ? (
+              'Blocked'
+            ) : c.state === 'left' ? (
+              'You left this group'
+            ) : c.last ? (
+              `${c.last.mine ? 'You: ' : ''}${c.last.text}`
+            ) : (
+              'No messages yet'
+            )}
+          </span>
         </span>
-        <span className="dm-row__last muted small">
-          {typing ? (
-            <em>typing…</em>
-          ) : c.state === 'blocked' ? (
-            'Blocked'
-          ) : c.state === 'left' ? (
-            'You left this group'
-          ) : c.last ? (
-            `${c.last.mine ? 'You: ' : ''}${c.last.text}`
-          ) : (
-            'No messages yet'
-          )}
-        </span>
-      </span>
-      {c.unread > 0 && (
-        <span key={c.unread} className="badge badge--mention">
-          {c.unread}
-        </span>
+        {c.pinned && (
+          <span className="dm-row__pin" title="Pinned" aria-label="Pinned">
+            📌
+          </span>
+        )}
+        {c.unread > 0 ? (
+          <span key={c.unread} className="badge badge--mention">
+            {c.unread}
+          </span>
+        ) : (
+          c.markedUnread && <span className="dm-row__dot" aria-label="Marked unread" />
+        )}
+      </button>
+      {menu && (
+        <Popover x={menu.x} y={menu.y} onClose={() => setMenu(null)} className="menu">
+          <MenuItem
+            onClick={() => {
+              setMenu(null);
+              chatFlags(c.riverId, { pinned: !c.pinned });
+            }}
+          >
+            {c.pinned ? 'Unpin' : 'Pin to top'}
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              setMenu(null);
+              if (c.unread > 0 || c.markedUnread) {
+                chatFlags(c.riverId, { markedUnread: false });
+                void window.river.dm.action({ a: 'read', peer: c.riverId });
+              } else chatFlags(c.riverId, { markedUnread: true });
+            }}
+          >
+            {c.unread > 0 || c.markedUnread ? 'Mark as read' : 'Mark as unread'}
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              setMenu(null);
+              chatFlags(c.riverId, { archived: !c.archived });
+            }}
+          >
+            {c.archived ? 'Unarchive' : 'Archive'}
+          </MenuItem>
+        </Popover>
       )}
-    </button>
+    </>
   );
 }
 
@@ -279,10 +402,18 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
   const [iconPicker, setIconPicker] = useState<{ x: number; y: number } | null>(null);
   const [adding, setAdding] = useState(false);
 
+  // New messages scroll into view only when you are at the bottom (or sent them yourself);
+  // reading older messages is not interrupted. "Jump to latest" brings you back.
+  const [atBottom, setAtBottom] = useState(true);
+  const opened = useRef<string | null>(null);
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
+    if (!el) return;
+    const first = opened.current !== c.riverId;
+    opened.current = c.riverId;
+    if (first || atBottom || messages.at(-1)?.mine) el.scrollTop = el.scrollHeight;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, c.riverId]);
 
   useEffect(() => {
     const onFocus = (): void => void window.river.dm.action({ a: 'read', peer: c.riverId });
@@ -615,7 +746,14 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           </button>
         </div>
       )}
-      <div className="chat__messages" ref={scrollRef}>
+      <div
+        className="chat__messages"
+        ref={scrollRef}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+        }}
+      >
         <div className="chat__welcome">
           <ConvAvatar c={c} size={72} />
           <h2>{c.name}</h2>
@@ -658,6 +796,19 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           <CallNote key={call.id} call={call} />
         ))}
       </div>
+      {!atBottom && (
+        <button
+          className="chat__jump-latest"
+          aria-label="Jump to the latest message"
+          title="Jump to the latest message"
+          onClick={() => {
+            const el = scrollRef.current;
+            if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+          }}
+        >
+          ↓{c.unread > 0 && <span className="chat__jump-count">{c.unread}</span>}
+        </button>
+      )}
       {c.state === 'left' ? (
         <div className="chat__composer chat__composer--locked">
           <span className="muted">You are no longer in this group.</span>

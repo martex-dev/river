@@ -41,6 +41,15 @@ import type { LocalDatabase } from '../storage/database.ts';
 /** How long a call invite rings (the same as the window's ring timeout). */
 const RING_MS = 45_000;
 
+/** Pinned conversations at most (2.1). */
+const MAX_PINNED = 10;
+
+interface ChatPrefs {
+  pinnedAt?: string;
+  archived?: boolean;
+  unread?: boolean;
+}
+
 /** What travels inside the libsignal envelope. Everything here is untrusted input when received. */
 const msgId = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 const messageFields = {
@@ -1293,7 +1302,29 @@ export class DmService {
           this.applyReaction(row, this.me(), act.emoji, act.on);
           return out(null);
         }
+        case 'chatFlags': {
+          const prefs = this.chatPrefs();
+          const p = { ...prefs[act.peer] };
+          if (act.pinned === true && !p.pinnedAt) {
+            const pinned = Object.values(prefs).filter((x) => x.pinnedAt).length;
+            if (pinned >= MAX_PINNED) {
+              throw new CommunityError(`You can pin up to ${MAX_PINNED} conversations.`);
+            }
+            p.pinnedAt = new Date().toISOString();
+            p.archived = false;
+          }
+          if (act.pinned === false) delete p.pinnedAt;
+          if (act.archived !== undefined) {
+            p.archived = act.archived;
+            if (act.archived) delete p.pinnedAt;
+          }
+          if (act.markedUnread !== undefined) p.unread = act.markedUnread;
+          this.setChatPrefs({ ...prefs, [act.peer]: p });
+          this.emitConversations();
+          return out(null);
+        }
         case 'read': {
+          this.clearMarkedUnread(act.peer);
           if (isGroupId(act.peer)) {
             const g = this.group(act.peer);
             if (g) this.saveGroup({ ...g, last_read: new Date().toISOString() });
@@ -1621,7 +1652,37 @@ export class DmService {
     };
   }
 
+  /** Chat-list flags per conversation (2.1), in this device's encrypted database. */
+  private chatPrefs(): Record<string, ChatPrefs> {
+    try {
+      const raw = this.meta('chatPrefs');
+      const parsed: unknown = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, ChatPrefs>) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  private setChatPrefs(prefs: Record<string, ChatPrefs>): void {
+    const kept = Object.fromEntries(
+      Object.entries(prefs).filter(([, p]) => p.pinnedAt || p.archived || p.unread),
+    );
+    this.setMeta('chatPrefs', JSON.stringify(kept));
+  }
+
+  private clearMarkedUnread(peer: string): void {
+    const prefs = this.chatPrefs();
+    if (!prefs[peer]?.unread) return;
+    this.setChatPrefs({ ...prefs, [peer]: { ...prefs[peer], unread: false } });
+  }
+
   conversations(): ConversationView[] {
+    const prefs = this.chatPrefs();
+    const flags = (id: string): Pick<ConversationView, 'pinned' | 'archived' | 'markedUnread'> => ({
+      pinned: !!prefs[id]?.pinnedAt,
+      archived: !!prefs[id]?.archived,
+      markedUnread: !!prefs[id]?.unread,
+    });
     const contacts = this.db().prepare('SELECT * FROM contacts').all() as ContactRow[];
     const groups = this.db().prepare('SELECT * FROM dm_groups').all() as GroupRow[];
     const protocol = this.deps.identity.protocolIdentity() ? this.protocol() : null;
@@ -1654,6 +1715,7 @@ export class DmService {
         verified: false,
         keyChanged: false,
         awaitingReply: false,
+        ...flags(g.id),
       };
     });
     return [
@@ -1693,9 +1755,16 @@ export class DmService {
           verified: protocol?.isVerified(c.river_id) ?? false,
           keyChanged: c.key_changed === 1,
           awaitingReply: c.state === 'accepted' && c.heard_from === 0,
+          ...flags(c.river_id),
         };
       }),
-    ].sort((a, b) => (b.last?.sentAt ?? '').localeCompare(a.last?.sentAt ?? ''));
+    ].sort((a, b) => {
+      // Pinned conversations first, in the order they were pinned; then the most recent.
+      const pa = prefs[a.riverId]?.pinnedAt;
+      const pb = prefs[b.riverId]?.pinnedAt;
+      if (pa || pb) return !pa ? 1 : !pb ? -1 : pa.localeCompare(pb);
+      return (b.last?.sentAt ?? '').localeCompare(a.last?.sentAt ?? '');
+    });
   }
 
   private emitConversations(): void {
