@@ -4,6 +4,8 @@ import type { Settings } from '../shared/settings.ts';
 import type { CommunityService } from './community/community-service.ts';
 import type { DmService } from './dm/dm-service.ts';
 
+const MAX_KEPT = 100;
+
 /**
  * Desktop notifications for new community messages while River is not
  * focused. What a notification reveals follows Settings → Notifications →
@@ -16,6 +18,20 @@ export function startMessageNotifications(deps: {
   window: BrowserWindow;
 }): () => void {
   const { community, window } = deps;
+  /**
+   * Shown notifications are held until clicked or closed: on Windows one that nothing refers to
+   * can be garbage-collected while on screen, and clicking it then does nothing. The oldest go
+   * after a while, in case a close is never reported (Action Center).
+   */
+  const shown = new Set<Notification>();
+  const keep = (n: Notification): void => {
+    shown.add(n);
+    const release = (): void => void shown.delete(n);
+    // `on` with plain event names: the phone's stand-in Notification has no `once`.
+    const events = n as unknown as { on(event: string, listener: () => void): unknown };
+    for (const event of ['close', 'click', 'failed']) events.on(event, release);
+    if (shown.size > MAX_KEPT) shown.delete(shown.values().next().value!);
+  };
   const show = (
     title: string,
     body: string,
@@ -48,6 +64,7 @@ export function startMessageNotifications(deps: {
       window.focus();
       onClick();
     });
+    keep(notification);
     notification.show();
     if (mention) window.flashFrame(true);
   };
@@ -130,6 +147,7 @@ export function startMessageNotifications(deps: {
       window.focus();
       community.focusChannel(m.communityId, m.channelId);
     });
+    keep(notification);
     notification.show();
     if (m.mentionsMe) window.flashFrame(true);
   });
@@ -137,5 +155,6 @@ export function startMessageNotifications(deps: {
     offDm();
     offEvents();
     offCommunity();
+    shown.clear();
   };
 }
