@@ -19,6 +19,8 @@ import { play } from '../community/sound.ts';
 import { useCommunity } from '../community/store.ts';
 import {
   AttachmentList,
+  galleryOf,
+  GalleryContext,
   PendingFiles,
   pendingFrom,
   uploadAll,
@@ -67,6 +69,9 @@ function dayLabel(iso: string): string {
   if (d.toDateString() === new Date(Date.now() - 86_400_000).toDateString()) return 'Yesterday';
   return d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 }
+
+/** One shared empty list, so memos do not see a new array every render. */
+const NO_MESSAGES: never[] = [];
 
 export function MessagesPage(): ReactElement {
   const dm = useDm();
@@ -412,10 +417,12 @@ function ConversationRow({ c }: { c: ConversationView }): ReactElement {
 function Conversation(props: { conversation: ConversationView; onSafety(): void }): ReactElement {
   const c = props.conversation;
   const dm = useDm();
-  const messages = useDm((x) => x.messages[c.riverId]) ?? [];
+  const messages = useDm((x) => x.messages[c.riverId]) ?? NO_MESSAGES;
   const [showPins, setShowPins] = useState(false);
   const [searching, setSearching] = useState(false);
   const [timerOpen, setTimerOpen] = useState(false);
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const gallery = useMemo(() => galleryOf(messages.map((m) => m.attachments)), [messages]);
   const selection = useSelection();
   useEffect(() => () => useSelection.getState().clear(), [c.riverId]);
   // Calls with this person, from the local call history, shown between messages (1.0.29).
@@ -698,6 +705,14 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           >
             Delete conversation
           </MenuItem>
+          <MenuItem
+            onClick={() => {
+              setMenu(null);
+              setMediaOpen(true);
+            }}
+          >
+            Shared media, files and links
+          </MenuItem>
           {(c.kind === 'group' ? c.state !== 'left' : c.state === 'accepted') && (
             <MenuItem
               onClick={() => {
@@ -712,6 +727,11 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
         </Popover>
       )}
       {timerOpen && <TimerDialog conversation={c} onClose={() => setTimerOpen(false)} />}
+      {mediaOpen && (
+        <GalleryContext.Provider value={gallery}>
+          <SharedMedia messages={messages} onClose={() => setMediaOpen(false)} />
+        </GalleryContext.Provider>
+      )}
       {showPins && (
         <div className="pins dm-pins">
           <header className="pins__head">
@@ -820,65 +840,68 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
       {selection.peer === c.riverId && (
         <SelectionToolbar conversation={c} messages={messages} myName={myName} />
       )}
-      <div
-        className="chat__messages"
-        ref={scrollRef}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
-        }}
-      >
-        <div className="chat__welcome">
-          <ConvAvatar c={c} size={72} />
-          <h2>{c.name}</h2>
-          <p className="muted">
-            This is the beginning of your conversation with {c.name}. Messages are end-to-end encrypted.
-          </p>
+      <GalleryContext.Provider value={gallery}>
+        <div
+          className="chat__messages"
+          ref={scrollRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+          }}
+        >
+          <div className="chat__welcome">
+            <ConvAvatar c={c} size={72} />
+            <h2>{c.name}</h2>
+            <p className="muted">
+              This is the beginning of your conversation with {c.name}. Messages are end-to-end encrypted.
+            </p>
+          </div>
+          {messages.map((m, i) => {
+            const prev = messages[i - 1];
+            const newDay =
+              !prev || new Date(prev.sentAt).toDateString() !== new Date(m.sentAt).toDateString();
+            const grouped =
+              !newDay &&
+              !m.replyTo &&
+              prev !== undefined &&
+              prev.sender === m.sender &&
+              Date.parse(m.sentAt) - Date.parse(prev.sentAt) < GROUP_MS;
+            return (
+              <div key={m.id}>
+                {callsBetween(calls, prev?.sentAt ?? null, m.sentAt).map((call) => (
+                  <CallNote key={call.id} call={call} />
+                ))}
+                {newDay && (
+                  <div className="chat__day">
+                    <span>{dayLabel(m.sentAt)}</span>
+                  </div>
+                )}
+                {m.notice ? (
+                  <div className="chat__notice" role="note">
+                    ⏱ {m.mine ? 'You' : m.senderName}{' '}
+                    {m.notice.timer
+                      ? `set messages to disappear after ${timerLabel(m.notice.timer)}.`
+                      : 'turned off disappearing messages.'}
+                  </div>
+                ) : (
+                  <DmMessage
+                    m={m}
+                    grouped={grouped}
+                    conversation={c}
+                    myName={myName}
+                    myId={myId}
+                    replied={m.replyTo ? messages.find((x) => x.id === m.replyTo) : undefined}
+                    last={i === messages.length - 1}
+                  />
+                )}
+              </div>
+            );
+          })}
+          {callsBetween(calls, messages.at(-1)?.sentAt ?? null, null).map((call) => (
+            <CallNote key={call.id} call={call} />
+          ))}
         </div>
-        {messages.map((m, i) => {
-          const prev = messages[i - 1];
-          const newDay = !prev || new Date(prev.sentAt).toDateString() !== new Date(m.sentAt).toDateString();
-          const grouped =
-            !newDay &&
-            !m.replyTo &&
-            prev !== undefined &&
-            prev.sender === m.sender &&
-            Date.parse(m.sentAt) - Date.parse(prev.sentAt) < GROUP_MS;
-          return (
-            <div key={m.id}>
-              {callsBetween(calls, prev?.sentAt ?? null, m.sentAt).map((call) => (
-                <CallNote key={call.id} call={call} />
-              ))}
-              {newDay && (
-                <div className="chat__day">
-                  <span>{dayLabel(m.sentAt)}</span>
-                </div>
-              )}
-              {m.notice ? (
-                <div className="chat__notice" role="note">
-                  ⏱ {m.mine ? 'You' : m.senderName}{' '}
-                  {m.notice.timer
-                    ? `set messages to disappear after ${timerLabel(m.notice.timer)}.`
-                    : 'turned off disappearing messages.'}
-                </div>
-              ) : (
-                <DmMessage
-                  m={m}
-                  grouped={grouped}
-                  conversation={c}
-                  myName={myName}
-                  myId={myId}
-                  replied={m.replyTo ? messages.find((x) => x.id === m.replyTo) : undefined}
-                  last={i === messages.length - 1}
-                />
-              )}
-            </div>
-          );
-        })}
-        {callsBetween(calls, messages.at(-1)?.sentAt ?? null, null).map((call) => (
-          <CallNote key={call.id} call={call} />
-        ))}
-      </div>
+      </GalleryContext.Provider>
       {!atBottom && (
         <button
           className="chat__jump-latest"
@@ -1286,6 +1309,74 @@ function DmMessage(props: {
         </Popover>
       )}
     </div>
+  );
+}
+
+type MediaTab = 'photos' | 'videos' | 'files' | 'voice' | 'links';
+const LINK_RE = /https?:\/\/[^\s<>"')]+/g;
+
+/** Everything shared in this conversation, by kind (2.7), from the messages loaded here. */
+function SharedMedia(props: { messages: DirectMessageView[]; onClose(): void }): ReactElement {
+  const [tab, setTab] = useState<MediaTab>('photos');
+  const live = props.messages.filter((m) => !m.deleted);
+  const all = live.flatMap((m) => m.attachments.map((a) => ({ a, m })));
+  const photos = all.filter(({ a }) => a.mime.startsWith('image/'));
+  const videos = all.filter(({ a }) => a.mime.startsWith('video/'));
+  const voice = all.filter(({ a }) => a.mime.startsWith('audio/'));
+  const files = all.filter(({ a }) => !/^(image|video|audio)\//.test(a.mime));
+  const links = live.flatMap((m) => (m.text.match(LINK_RE) ?? []).map((url) => ({ url, m })));
+  const tabs: Array<[MediaTab, string, number]> = [
+    ['photos', 'Photos', photos.length],
+    ['videos', 'Videos', videos.length],
+    ['files', 'Files', files.length],
+    ['voice', 'Voice', voice.length],
+    ['links', 'Links', links.length],
+  ];
+  const list = { photos, videos, files, voice }[tab as 'photos'] ?? [];
+  return (
+    <Modal title="Shared in this conversation" onClose={props.onClose} wide>
+      <div className="shared-media__tabs" role="radiogroup" aria-label="Show">
+        {tabs.map(([id, label, n]) => (
+          <button
+            key={id}
+            role="radio"
+            aria-checked={tab === id}
+            className={`chip ${tab === id ? 'is-on' : ''}`}
+            onClick={() => setTab(id)}
+          >
+            {label} · {n}
+          </button>
+        ))}
+      </div>
+      {tab === 'links' ? (
+        links.length ? (
+          <ul className="shared-media__list">
+            {[...links].reverse().map(({ url, m }, i) => (
+              <li key={`${m.id}-${i}`}>
+                <button
+                  className="btn btn--link shared-media__link"
+                  onClick={() => void window.river.links.openUrl(url)}
+                >
+                  {url}
+                </button>
+                <span className="muted small"> · {shortWhen(m.sentAt)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted small">No links yet.</p>
+        )
+      ) : list.length ? (
+        <div className={tab === 'photos' ? 'shared-media__grid' : 'shared-media__list'}>
+          {[...list].reverse().map(({ a }) => (
+            <AttachmentList key={a.id} attachments={[a]} />
+          ))}
+        </div>
+      ) : (
+        <p className="muted small">Nothing here yet.</p>
+      )}
+      <p className="muted small">From the latest messages kept on this device.</p>
+    </Modal>
   );
 }
 

@@ -6,6 +6,20 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-10-16
+
+**Media.**
+
+### Added
+
+- **Move between pictures**: in the picture viewer, ‹ › buttons, the arrow keys,
+  or a sideways swipe on phones go to the previous or next picture in the
+  conversation; swipe down to close. A counter shows where you are.
+- **Video speed**: a 1× / 1.5× / 2× / 0.5× button on videos.
+- **Shared media** in direct messages and groups: the conversation menu →
+  "Shared media, files and links" lists photos, videos, files, voice messages
+  and links from the messages kept on this device.
+
 ## [2.6.0] - 2026-10-16
 
 **Privacy controls.**
