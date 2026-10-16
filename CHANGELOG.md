@@ -6,6 +6,39 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.10.12] - 2026-10-16
+
+**Bug sweep: a review of the whole program — server, phone apps, calls, voice, messages and layout.**
+
+### Security
+
+- Channel and category permission overwrites can only allow what the person
+  editing them holds there, and never Administrator.
+- Self-assignable roles cannot be given moderation permissions later, and are
+  checked again when a member picks them.
+- `RIVER_TRUST_PROXY=true` now trusts only a proxy on the same machine (the
+  River Host tunnel); a forged `X-Forwarded-For` no longer escapes per-address
+  limits. Proxies elsewhere are named by address or range.
+- A blocked sender is answered like for an account that does not exist, before
+  any other check, so the answer no longer reveals the block. Apps show
+  "That no longer exists" instead of pretending the message was sent.
+- Webhooks stop posting once their creator is removed or may no longer manage
+  the channel; wrong tokens no longer use up a webhook's rate limit; webhooks
+  are deleted with their channel (and orphans are removed).
+- Timed-out and pending members cannot join existing reactions; only members
+  who may rotate move a community's key epoch (rate limited).
+- Realtime connections end when their session expires or is revoked.
+
+- **Link previews** refuse every non-public IPv6 spelling (IPv4-mapped as
+  Node writes it, IPv4-compatible, NAT64, 6to4, site-local, documentation) and
+  connect only to the address that was checked, so DNS rebinding cannot reach
+  this computer or the local network.
+- **Screen sharing**: the window can no longer hide the "can see your screen"
+  bar while a screen River handed out may still be shared. The bar goes with
+  its own Stop, the call ending, or the window reloading or crashing.
+- **Passphrase**: pressing set up or unlock twice can no longer set up two
+  different keys (making the data unreadable) or open the data twice.
+
 ### Fixed
 
 - **Voice channels**: a second click on Join no longer starts a second call
@@ -34,28 +67,6 @@ All notable changes to River are documented here. The format follows
   side too; an answered call that cannot connect within 30 seconds ends with
   a notice instead of "Connecting…" forever; the screen picker and minimized
   view start fresh with each call.
-**Server audit fixes.**
-
-### Security
-
-- Channel and category permission overwrites can only allow what the person
-  editing them holds there, and never Administrator.
-- Self-assignable roles cannot be given moderation permissions later, and are
-  checked again when a member picks them.
-- `RIVER_TRUST_PROXY=true` now trusts only a proxy on the same machine (the
-  River Host tunnel); a forged `X-Forwarded-For` no longer escapes per-address
-  limits. Proxies elsewhere are named by address or range.
-- A blocked sender is answered like for an account that does not exist, before
-  any other check, so the answer no longer reveals the block. Apps show
-  "That no longer exists" instead of pretending the message was sent.
-- Webhooks stop posting once their creator is removed or may no longer manage
-  the channel; wrong tokens no longer use up a webhook's rate limit; webhooks
-  are deleted with their channel (and orphans are removed).
-- Timed-out and pending members cannot join existing reactions; only members
-  who may rotate move a community's key epoch (rate limited).
-- Realtime connections end when their session expires or is revoked.
-
-### Fixed
 
 - A linked device that never published keys no longer makes its account
   unreachable; one device's full mailbox drops only its copy.
@@ -94,20 +105,6 @@ All notable changes to River are documented here. The format follows
   forgotten.
 - **Phones**: a failed database commit reports its own error instead of a
   follow-up one.
-
-### Security
-
-- **Link previews** refuse every non-public IPv6 spelling (IPv4-mapped as
-  Node writes it, IPv4-compatible, NAT64, 6to4, site-local, documentation) and
-  connect only to the address that was checked, so DNS rebinding cannot reach
-  this computer or the local network.
-- **Screen sharing**: the window can no longer hide the "can see your screen"
-  bar while a screen River handed out may still be shared. The bar goes with
-  its own Stop, the call ending, or the window reloading or crashing.
-- **Passphrase**: pressing set up or unlock twice can no longer set up two
-  different keys (making the data unreadable) or open the data twice.
-
-### Fixed
 
 - One realtime connection at a time (startup, sign-up and waking up opened
   two, and the extra one's events arrived twice); a refused (expired) session
