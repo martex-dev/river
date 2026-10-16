@@ -34,6 +34,8 @@ import {
   type DmEvent,
   type FileView,
   type ScheduledView,
+  type ChatFolder,
+  MAX_FOLDERS,
   MAX_TIMER,
 } from '../../shared/dm.ts';
 import type { AccountService } from '../account/account-service.ts';
@@ -1170,6 +1172,28 @@ export class DmService {
       switch (act.a) {
         case 'myId':
           return out(this.me());
+        case 'folders':
+          return out(this.folderList());
+        case 'saveFolder': {
+          const list = this.folderList();
+          const peers = [...new Set(act.peers)];
+          if (act.id) {
+            const i = list.findIndex((f) => f.id === act.id);
+            if (i < 0) throw new CommunityError('That folder is gone.');
+            list[i] = { id: act.id, name: act.name, peers };
+          } else {
+            if (list.length >= MAX_FOLDERS)
+              throw new CommunityError(`You can have up to ${MAX_FOLDERS} folders.`);
+            list.push({ id: randomBytes(16).toString('base64url'), name: act.name, peers });
+          }
+          this.setMeta('folders', JSON.stringify(list));
+          return out(list);
+        }
+        case 'deleteFolder': {
+          const list = this.folderList().filter((f) => f.id !== act.id);
+          this.setMeta('folders', JSON.stringify(list));
+          return out(list);
+        }
         case 'noteToSelf': {
           const me = this.me();
           if (!this.contact(me)) this.upsertContact(me, 'accepted', NOTE_TO_SELF, null);
@@ -1950,6 +1974,26 @@ export class DmService {
   }
 
   /** Chat-list flags per conversation (2.1), in this device's encrypted database. */
+  /** Chat folders (2.10.8), in this device's encrypted database. */
+  private folderList(): ChatFolder[] {
+    try {
+      const raw: unknown = JSON.parse(this.meta('folders') ?? '[]');
+      if (!Array.isArray(raw)) return [];
+      return raw
+        .filter(
+          (f): f is ChatFolder =>
+            !!f &&
+            typeof f === 'object' &&
+            typeof (f as ChatFolder).id === 'string' &&
+            typeof (f as ChatFolder).name === 'string' &&
+            Array.isArray((f as ChatFolder).peers),
+        )
+        .slice(0, MAX_FOLDERS);
+    } catch {
+      return [];
+    }
+  }
+
   private chatPrefs(): Record<string, ChatPrefs> {
     try {
       const raw = this.meta('chatPrefs');

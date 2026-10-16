@@ -330,6 +330,22 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     expect(await alice.dm.action({ a: 'messages', peer: bob.riverId, since: at(690) })).toHaveLength(500);
   });
 
+  it('chat folders: kept on the device, edited, deleted, at most ten', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    expect(await alice.dm.action({ a: 'folders' })).toEqual([]);
+    let list = await alice.dm.action({ a: 'saveFolder', name: 'Family', peers: [bob.riverId, bob.riverId] });
+    expect(list).toEqual([{ id: expect.any(String), name: 'Family', peers: [bob.riverId] }]);
+    const id = list[0]!.id;
+    list = await alice.dm.action({ a: 'saveFolder', id, name: 'Fam', peers: [] });
+    expect(list).toEqual([{ id, name: 'Fam', peers: [] }]);
+    for (let i = 0; i < 9; i++) await alice.dm.action({ a: 'saveFolder', name: `F${i}`, peers: [] });
+    await expect(alice.dm.action({ a: 'saveFolder', name: 'Eleven', peers: [] })).rejects.toThrow(/up to 10/);
+    list = await alice.dm.action({ a: 'deleteFolder', id });
+    expect(list).toHaveLength(9);
+    expect(list.some((f) => f.id === id)).toBe(false);
+  });
+
   it('searches inside one conversation only', async () => {
     const alice = await person('Alice');
     const bob = await person('Bob');
