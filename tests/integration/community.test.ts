@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -53,6 +53,7 @@ const deadSocket = (): WebSocket => ({ send() {}, close() {}, readyState: 0 }) a
 async function person(
   name: string,
   createSocket: (url: string) => WebSocket = deadSocket,
+  blobDir?: string,
 ): Promise<{
   community: CommunityService;
   riverId: string;
@@ -80,6 +81,7 @@ async function person(
       requestBytes: createRequestBytes(injectFetch),
       log: nullLogger,
       createSocket,
+      ...(blobDir ? { blobDir: () => blobDir } : {}),
     });
   return { community: start(), riverId: created.riverId, restart: start, account };
 }
@@ -246,6 +248,43 @@ describe('polls', () => {
     expect(after).toMatchObject({ text: 'hello' });
     expect(after!.reactions.map((r) => r.emoji)).toEqual(['🔥']);
     void created;
+  });
+
+  it('downloads of the same file at once are counted once, and kept copies stay under their limit', async () => {
+    const copies = join(dir, 'alice-files');
+    const alice = await person('Alice', deadSocket, copies);
+    const created = await alice.community.create('Files');
+    void created;
+    const files = [];
+    for (let i = 0; i < 3; i++) {
+      files.push(
+        await alice.community.action({
+          a: 'upload',
+          name: `f${i}.bin`,
+          mime: 'application/octet-stream',
+          bytes: new Uint8Array(4000).fill(i),
+        }),
+      );
+    }
+    await Promise.all([
+      alice.community.downloadAttachment(files[0]!),
+      alice.community.downloadAttachment(files[0]!),
+      alice.community.downloadAttachment(files[0]!),
+    ]);
+    expect((alice.community as unknown as { cacheBytes: number }).cacheBytes).toBe(4000);
+
+    // Room for about two copies: keeping a third removes the one used longest ago.
+    alice.community.attachmentDiskCapBytes = 9000;
+    await new Promise((r) => setTimeout(r, 20));
+    await alice.community.prefetchAttachment(files[1]!);
+    await new Promise((r) => setTimeout(r, 20));
+    await alice.community.prefetchAttachment(files[2]!);
+    await alice.community.pruneAttachments();
+    expect(readdirSync(copies).sort()).toEqual([files[1]!.id, files[2]!.id].sort());
+
+    // Deleting the account removes every kept copy.
+    alice.community.forgetAll();
+    await vi.waitFor(() => expect(readdirSync(copies)).toEqual([]));
   });
 
   it('editing changes only the text: files, descriptions, the reply and its no-ping stay', async () => {

@@ -323,6 +323,8 @@ async function start(): Promise<void> {
   // Connect whenever local data becomes available (now, or after the user unlocks).
   const connectAll = async (): Promise<void> => {
     homeAccount.kick();
+    // Kept file copies stay under their size limit (the least recently used go first).
+    void community.pruneAttachments();
     await account.connect();
     community.ensureSocket();
   };

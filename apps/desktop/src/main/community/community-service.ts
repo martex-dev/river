@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { isHomeLink } from '../../shared/home-server.ts';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   API_PREFIX,
@@ -250,6 +250,12 @@ export class CommunityService {
   private readonly seen = new Set<string>();
   private readonly attachmentCache = new Map<string, Uint8Array>();
   private cacheBytes = 0;
+  /** The most this device keeps of encrypted file copies; the least recently used go first. */
+  attachmentDiskCapBytes = 2 * 1024 * 1024 * 1024;
+  /** Size of the kept copies as last counted (null: not counted yet), and when each was last used. */
+  private diskBytes: number | null = null;
+  private readonly diskUsed = new Map<string, number>();
+  private pruning: Promise<void> | null = null;
   private socket: WebSocket | null = null;
   private socketState: 'online' | 'offline' | 'connecting' = 'offline';
   /** A connection is being prepared (token, first refresh): never start a second one meanwhile. */
@@ -2649,6 +2655,12 @@ export class CommunityService {
       throw new CommunityError('This file failed its integrity check and was not opened.');
     }
     const copy = new Uint8Array(plain);
+    // Another download of the same file may have finished meanwhile: count it once.
+    const earlier = this.attachmentCache.get(pointer.id);
+    if (earlier) {
+      this.attachmentCache.delete(pointer.id);
+      this.cacheBytes -= earlier.byteLength;
+    }
     this.attachmentCache.set(pointer.id, copy);
     this.cacheBytes += copy.byteLength;
     for (const [id, bytes] of this.attachmentCache) {
@@ -2670,7 +2682,10 @@ export class CommunityService {
     const file = dir ? join(dir, pointer.id) : null;
     if (file) {
       const local = await readFile(file).catch(() => null);
-      if (local) return local;
+      if (local) {
+        this.diskUsed.set(pointer.id, Date.now());
+        return local;
+      }
     }
     const requestBytes = this.requireBytes();
     const url = `${this.server()}${API_PREFIX}/attachments/${pointer.id}`;
@@ -2682,10 +2697,49 @@ export class CommunityService {
     if (file && dir) {
       await mkdir(dir, { recursive: true }).catch(() => undefined);
       await writeFile(`${file}.part`, blob)
-        .then(() => rename(`${file}.part`, file))
+        .then(async () => {
+          await rename(`${file}.part`, file);
+          this.diskUsed.set(pointer.id, Date.now());
+          if (this.diskBytes !== null) this.diskBytes += blob.byteLength;
+          if (this.diskBytes === null || this.diskBytes > this.attachmentDiskCapBytes)
+            void this.pruneAttachments();
+        })
         .catch(() => undefined);
     }
     return blob;
+  }
+
+  /**
+   * Keeps the encrypted copies of files under attachmentDiskCapBytes, deleting the least
+   * recently used first (at start and whenever a new copy goes over). One run at a time.
+   */
+  pruneAttachments(): Promise<void> {
+    this.pruning ??= this.pruneNow().finally(() => {
+      this.pruning = null;
+    });
+    return this.pruning;
+  }
+
+  private async pruneNow(): Promise<void> {
+    const dir = this.deps.blobDir?.();
+    if (!dir) return;
+    const names = await readdir(dir).catch(() => [] as string[]);
+    const files: Array<{ name: string; size: number; used: number }> = [];
+    for (const name of names) {
+      if (!/^[A-Za-z0-9_-]{16,64}$/.test(name)) continue;
+      const info = await stat(join(dir, name)).catch(() => null);
+      if (!info) continue;
+      files.push({ name, size: info.size, used: Math.max(info.mtimeMs, this.diskUsed.get(name) ?? 0) });
+    }
+    let total = files.reduce((n, f) => n + f.size, 0);
+    files.sort((a, b) => a.used - b.used);
+    for (const f of files) {
+      if (total <= this.attachmentDiskCapBytes) break;
+      await rm(join(dir, f.name), { force: true }).catch(() => undefined);
+      this.diskUsed.delete(f.name);
+      total -= f.size;
+    }
+    this.diskBytes = total;
   }
 
   /** Deletes this device's encrypted copy of an attachment (its message disappeared, 2.4). */
@@ -2693,6 +2747,8 @@ export class CommunityService {
     const dir = this.deps.blobDir?.();
     if (!dir || !/^[A-Za-z0-9_-]{16,64}$/.test(id)) return;
     await rm(join(dir, id), { force: true }).catch(() => undefined);
+    this.diskUsed.delete(id);
+    this.diskBytes = null;
   }
 
   /**
@@ -3454,6 +3510,21 @@ export class CommunityService {
     }>)
       this.forget(row.id);
     this.stop();
+    // The account is gone: so are the copies of its files (and the keys that open them).
+    this.attachmentCache.clear();
+    this.cacheBytes = 0;
+    const dir = this.deps.blobDir?.();
+    if (dir) void this.clearAttachmentDir(dir);
+  }
+
+  private async clearAttachmentDir(dir: string): Promise<void> {
+    await this.pruning?.catch(() => undefined);
+    const names = await readdir(dir).catch(() => [] as string[]);
+    for (const name of names)
+      if (/^[A-Za-z0-9_-]{16,64}(\.part)?$/.test(name))
+        await rm(join(dir, name), { force: true }).catch(() => undefined);
+    this.diskUsed.clear();
+    this.diskBytes = 0;
   }
 
   private forget(id: string): void {
