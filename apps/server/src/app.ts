@@ -46,6 +46,8 @@ export interface AppDeps {
   fetch?: typeof fetch;
   /** How long a dropped member keeps their voice seat (tests shorten it). */
   voiceGraceMs?: number;
+  /** How often an open realtime connection's session is checked again (tests shorten it). */
+  sessionRecheckMs?: number;
 }
 
 function errorBody(code: string, message: string): ErrorResponse {
@@ -176,7 +178,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     onDevicesRemoved: (riverId, removed) => hub.disconnectDevices(riverId, removed),
   });
   app.addHook('onClose', async () => hub.close());
-  const ops = await registerCommunityRoutes(app, { config, database: deps.database, now, hub });
+  const ops = await registerCommunityRoutes(app, {
+    config,
+    database: deps.database,
+    now,
+    hub,
+    ...(deps.sessionRecheckMs !== undefined ? { sessionRecheckMs: deps.sessionRecheckMs } : {}),
+  });
   registerAdminRoutes(app, { config, database: deps.database, now, hub, ops });
   registerLandingRoutes(app);
   registerSelfRoutes(app, { database: deps.database, now, hub, ops });

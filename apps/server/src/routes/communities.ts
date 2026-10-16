@@ -60,6 +60,7 @@ import {
   updateCommunityRequestSchema,
   updateRoleRequestSchema,
   type ServerEvent,
+  type OverwriteWire,
   MAX_CALL_ROOM,
   RELAY_BURST,
   RELAY_FRAMES_PER_SECOND,
@@ -92,6 +93,8 @@ const HEARTBEAT_MS = 25_000;
 /** A member whose last connection dropped is announced offline only after this long. */
 const PRESENCE_GRACE_MS = 15_000;
 const SOCKET_BURST = 400;
+/** An open realtime connection's session is checked again this often (expiry, sign-out, suspension). */
+const SESSION_RECHECK_MS = 5 * 60_000;
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 const day = (d: Date): string => d.toISOString().slice(0, 10);
@@ -121,10 +124,18 @@ export interface CommunityOps {
 
 export async function registerCommunityRoutes(
   app: FastifyInstance,
-  deps: { config: ServerConfig; database: RiverDatabase; now: () => Date; hub: Hub },
+  deps: {
+    config: ServerConfig;
+    database: RiverDatabase;
+    now: () => Date;
+    hub: Hub;
+    /** How often an open realtime connection's session is checked again (tests shorten it). */
+    sessionRecheckMs?: number;
+  },
 ): Promise<CommunityOps> {
   const { db } = deps.database;
   const { hub } = deps;
+  const sessionRecheckMs = deps.sessionRecheckMs ?? SESSION_RECHECK_MS;
   await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
 
   const requireSession = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
@@ -258,6 +269,35 @@ export async function registerCommunityRoutes(
       riverId,
     );
     changed(model);
+  };
+
+  /**
+   * Channel and category overwrites may only allow what the actor holds there (`mine`) and never
+   * Administrator, or managing channels would be a way to hand out any permission. Bits a role's
+   * overwrite already allowed (`before`: an edit resends the unchanged ones) stay allowed.
+   */
+  const checkOverwrites = (
+    model: CommunityModel,
+    overwrites: readonly OverwriteWire[],
+    mine: number,
+    before: readonly OverwriteWire[] = [],
+  ): void => {
+    for (const o of overwrites) {
+      if (!model.role(o.roleId)) throw bad('Unknown role');
+      if (o.allow & Permission.ADMINISTRATOR) throw bad('Overwrites cannot grant Administrator');
+      const had = before.find((b) => b.roleId === o.roleId)?.allow ?? 0;
+      if ((o.allow & ~had & ~mine) !== 0) throw forbidden('You cannot grant permissions you do not have');
+    }
+  };
+
+  /** Ends everyone's seat in the given voice channels and tells them (channel or community deleted). */
+  const endVoice = (channelIds: Iterable<string>): void => {
+    for (const channelId of channelIds) {
+      for (const id of hub.participants(channelId)) {
+        hub.leaveVoice(id);
+        hub.sendTo([id], { t: 'voice.disconnect' });
+      }
+    }
   };
 
   // ---- communities ---------------------------------------------------------------------------
@@ -458,10 +498,18 @@ export async function registerCommunityRoutes(
     const req = parse(selfRolesRequestSchema, request.body);
     if (req.roles.some((id) => !model.selfRoles.includes(id)))
       throw forbidden('That role is not self-assignable');
+    // Checked again here: a role may have been given more permissions after it was offered.
+    for (const id of req.roles) {
+      const role = model.role(id);
+      if (!role || id === model.everyoneRoleId) throw bad('Unknown role');
+      if (role.permissions & SELF_ROLE_FORBIDDEN) throw forbidden('That role is not self-assignable');
+    }
     const current = model.member(me(request))!.roles;
     // Keep every role that is not self-assignable; set the self-assignable ones to the choice.
     const next = [...new Set([...current.filter((id) => !model.selfRoles.includes(id)), ...req.roles])];
+    const nowIso = deps.now().toISOString();
     await db.transaction().execute(async (trx) => {
+      // A temporary role still held keeps its end time; a run-out row is not carried over.
       const expiry = new Map(
         (
           await trx
@@ -469,8 +517,11 @@ export async function registerCommunityRoutes(
             .select(['role_id', 'expires_at'])
             .where('community_id', '=', model.id)
             .where('river_id', '=', me(request))
+            .where('expires_at', '>', nowIso)
             .execute()
-        ).map((r) => [r.role_id, r.expires_at ?? null]),
+        )
+          .filter((r) => current.includes(r.role_id))
+          .map((r) => [r.role_id, r.expires_at ?? null]),
       );
       await trx
         .deleteFrom('member_roles')
@@ -494,6 +545,8 @@ export async function registerCommunityRoutes(
   });
 
   const deleteCommunity = async (model: CommunityModel): Promise<void> => {
+    // Nobody stays in a voice channel of a community that no longer exists.
+    endVoice(hub.rooms(model.id).map((r) => r.channelId));
     for (const m of model.members)
       hub.sendTo([m.riverId], { t: 'removed', communityId: model.id, reason: 'deleted' });
     await db.deleteFrom('communities').where('id', '=', model.id).execute();
@@ -550,6 +603,13 @@ export async function registerCommunityRoutes(
       if (model.channels.length >= MAX_CHANNELS) throw bad('Too many channels');
       if (req.parentId && !model.category(req.parentId)) throw bad('Unknown category');
       const parentId = req.parentId ?? null;
+      // A new channel in a category may copy the category's overwrites.
+      checkOverwrites(
+        model,
+        req.overwrites ?? [],
+        parentId ? model.categoryPerms(me(request), parentId) : model.perms(me(request)),
+        parentId ? model.category(parentId)!.overwrites : [],
+      );
       const position = model.channels.length;
       try {
         await db.transaction().execute(async (trx) => {
@@ -597,6 +657,14 @@ export async function registerCommunityRoutes(
     if (!model.can(me(request), Permission.MANAGE_CHANNELS, channelId)) throw forbidden();
     const req = parse(updateChannelRequestSchema, request.body);
     if (req.parentId && !model.category(req.parentId)) throw bad('Unknown category');
+    if (req.overwrites) {
+      checkOverwrites(
+        model,
+        req.overwrites,
+        model.perms(me(request), channelId),
+        model.channel(channelId)!.overwrites,
+      );
+    }
     // Editing a channel's own permissions unsyncs it from its category; synced: true syncs it again.
     const synced = req.synced !== undefined ? req.synced : req.overwrites ? false : undefined;
     await db.transaction().execute(async (trx) => {
@@ -663,11 +731,12 @@ export async function registerCommunityRoutes(
     const { model, channelId } = await channelCommunity(request.params.id, me(request));
     if (!model.can(me(request), Permission.MANAGE_CHANNELS, channelId)) throw forbidden();
     if (model.channels.length <= 1) throw bad('A community needs at least one channel');
-    for (const id of hub.participants(channelId)) {
-      hub.leaveVoice(id);
-      hub.sendTo([id], { t: 'voice.disconnect' });
-    }
-    await db.deleteFrom('channels').where('id', '=', channelId).execute();
+    endVoice([channelId]);
+    await db.transaction().execute(async (trx) => {
+      // Its webhooks can never post again (their messages go with the channel).
+      await trx.deleteFrom('webhooks').where('channel_id', '=', channelId).execute();
+      await trx.deleteFrom('channels').where('id', '=', channelId).execute();
+    });
     await audit(model.id, me(request), 'channel.delete', channelId);
     changed(model);
     return { ok: true };
@@ -1305,7 +1374,12 @@ export async function registerCommunityRoutes(
   app.patch<{ Params: { id: string } }>(`${API_PREFIX}/categories/:id`, authed, async (request) => {
     const { model, categoryId } = await categoryCommunity(request.params.id, me(request));
     const req = parse(updateCategoryRequestSchema, request.body);
-    for (const o of req.overwrites ?? []) if (!model.role(o.roleId)) throw bad('Unknown role');
+    checkOverwrites(
+      model,
+      req.overwrites ?? [],
+      model.categoryPerms(me(request), categoryId),
+      model.category(categoryId)!.overwrites,
+    );
     await db.transaction().execute(async (trx) => {
       if (req.name !== undefined)
         await trx.updateTable('categories').set({ name: req.name }).where('id', '=', categoryId).execute();
@@ -1442,6 +1516,13 @@ export async function registerCommunityRoutes(
     }
     const req = parse(updateRoleRequestSchema, request.body);
     if (req.permissions !== undefined) checkGrant(model, me(request), req.permissions & ~role.permissions);
+    // A role members give themselves must stay harmless (see the onboarding settings).
+    if (
+      req.permissions !== undefined &&
+      model.selfRoles.includes(roleId) &&
+      (req.permissions & SELF_ROLE_FORBIDDEN) !== 0
+    )
+      throw bad('Roles members give themselves cannot moderate or manage anything');
     if (
       role.id === model.everyoneRoleId &&
       (req.name !== undefined || req.position !== undefined || req.color !== undefined)
@@ -1514,8 +1595,10 @@ export async function registerCommunityRoutes(
       if (target !== me(request) && !model.outranks(me(request), target) && model.ownerId !== me(request)) {
         throw forbidden('You can only change roles of members below you');
       }
+      const nowIso = deps.now().toISOString();
       await db.transaction().execute(async (trx) => {
-        // A temporary role that stays keeps its end time (1.0.30).
+        // A temporary role that stays keeps its end time (1.0.30). A role whose time ran out is
+        // not held any more: giving it again gives it for good, not with the old (past) end time.
         const expiry = new Map(
           (
             await trx
@@ -1523,8 +1606,11 @@ export async function registerCommunityRoutes(
               .select(['role_id', 'expires_at'])
               .where('community_id', '=', model.id)
               .where('river_id', '=', target)
+              .where('expires_at', '>', nowIso)
               .execute()
-          ).map((r) => [r.role_id, r.expires_at ?? null]),
+          )
+            .filter((r) => before.has(r.role_id))
+            .map((r) => [r.role_id, r.expires_at ?? null]),
         );
         await trx
           .deleteFrom('member_roles')
@@ -1858,6 +1944,16 @@ export async function registerCommunityRoutes(
       let model = (await loadCommunity(db, invite.community_id))!;
       if (!model.member(me(request))) {
         await db.transaction().execute(async (trx) => {
+          // Counted atomically: parallel joins cannot take more uses than the invite has.
+          const used = await trx
+            .updateTable('invites')
+            .set((eb) => ({ uses: eb('uses', '+', 1) }))
+            .where('code_hash', '=', invite.code_hash)
+            .where((eb) => eb('uses', '<', eb.ref('max_uses')))
+            .where('expires_at', '>', now.toISOString())
+            .executeTakeFirst();
+          if (Number(used.numUpdatedRows) !== 1)
+            throw new HttpError(404, 'invalid_invite', 'This invite is invalid or expired');
           await trx
             .insertInto('community_members')
             .values({
@@ -1869,11 +1965,6 @@ export async function registerCommunityRoutes(
               accepted: model.screening ? 0 : 1,
               invite_id: invite.id ?? null,
             })
-            .execute();
-          await trx
-            .updateTable('invites')
-            .set({ uses: invite.uses + 1 })
-            .where('code_hash', '=', invite.code_hash)
             .execute();
         });
         model = (await loadCommunity(db, invite.community_id))!;
@@ -1909,9 +2000,15 @@ export async function registerCommunityRoutes(
    */
   app.post<{ Params: { id: string } }>(
     `${API_PREFIX}/communities/:id/epoch`,
-    authed,
+    { ...authed, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const model = await community(request.params.id, me(request));
+      // Apps rotate only when the server asks for it (someone left or was removed); then any
+      // member who has accepted the rules may be the one. Otherwise only managers may move the key
+      // on, so members cannot keep the community re-keying.
+      if (model.pending(me(request))) throw forbidden('Accept the rules first');
+      if (!model.rotationNeeded && !model.can(me(request), Permission.MANAGE_COMMUNITY))
+        throw forbidden('The community key does not need replacing');
       const req = parse(rotateKeyRequestSchema, request.body);
       const res = await db
         .updateTable('communities')
@@ -2101,20 +2198,32 @@ export async function registerCommunityRoutes(
     },
   );
 
+  /**
+   * Posts per webhook per minute. Charged only once the token is verified, so nobody can use up a
+   * webhook's budget by sending bad requests to its (not secret) address. In memory only.
+   */
+  const WEBHOOK_POSTS_PER_MINUTE = 30;
+  const webhookPosts = new Map<string, { count: number; resetAt: number }>();
+  const takeWebhookTurn = (hookId: string): boolean => {
+    const now = Date.now();
+    if (webhookPosts.size > 10_000)
+      for (const [k, v] of webhookPosts) if (v.resetAt <= now) webhookPosts.delete(k);
+    const bucket = webhookPosts.get(hookId);
+    if (!bucket || bucket.resetAt <= now) {
+      webhookPosts.set(hookId, { count: 1, resetAt: now + 60_000 });
+      return true;
+    }
+    if (bucket.count >= WEBHOOK_POSTS_PER_MINUTE) return false;
+    bucket.count += 1;
+    return true;
+  };
+
   /** Outside services post here with the webhook's token; the body is already sealed. */
   app.post<{ Params: { id: string } }>(
     `${API_PREFIX}/webhooks/:id`,
-    {
-      config: {
-        // Per webhook, not per IP: a leaked address used from many machines still cannot flood a channel.
-        rateLimit: {
-          max: 30,
-          timeWindow: '1 minute',
-          keyGenerator: (req: FastifyRequest) =>
-            `webhook:${String((req.params as { id?: unknown }).id ?? '').slice(0, 64)}`,
-        },
-      },
-    },
+    // Per address for anything (wrong tokens included); per webhook below once the token checks out,
+    // so a leaked token used from many machines still cannot flood a channel.
+    { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const unauthorized = new HttpError(401, 'unauthorized', 'Unknown webhook or wrong token');
       const header = request.headers.authorization ?? '';
@@ -2128,9 +2237,19 @@ export async function registerCommunityRoutes(
       const given = Buffer.from(sha256(token), 'hex');
       const stored = Buffer.from(hook?.token_hash ?? '0'.repeat(64), 'hex');
       if (!hook || hook.revoked || !hook.token_hash || !timingSafeEqual(given, stored)) throw unauthorized;
+      if (!takeWebhookTurn(hook.id))
+        throw new HttpError(429, 'rate_limited', 'Too many requests. Try again shortly.');
       const model = await loadCommunity(db, hook.community_id);
       const ch = model?.channel(hook.channel_id);
       if (!model || !ch || ch.kind !== 'text' || ch.forum) throw notFound();
+      // Posts appear as the webhook's creator: they must still be a member who may manage this
+      // channel (not kicked, banned or demoted since), or the webhook is out of service.
+      if (!model.member(hook.created_by) || !model.can(hook.created_by, Permission.MANAGE_CHANNELS, ch.id))
+        throw new HttpError(
+          403,
+          'webhook_disabled',
+          'The person who made this webhook can no longer post here',
+        );
       const req = parse(webhookPostRequestSchema, request.body);
       try {
         await db
@@ -2326,7 +2445,11 @@ export async function registerCommunityRoutes(
         .where('message_id', '=', msg.id)
         .where('tag', '=', tag)
         .executeTakeFirst();
-      if (!existing && !model.can(me(request), Permission.ADD_REACTIONS, msg.channel_id)) throw forbidden();
+      // Joining a reaction that is already there needs no Add reactions (as elsewhere), but a
+      // timeout or not yet accepted rules stop that too: those take reacting away entirely.
+      const restricted = model.pending(me(request)) || model.timedOut(me(request));
+      if (!model.can(me(request), Permission.ADD_REACTIONS, msg.channel_id) && (!existing || restricted))
+        throw forbidden();
       const req = parse(reactRequestSchema, request.body);
       await db
         .insertInto('message_reactions')
@@ -2383,6 +2506,10 @@ export async function registerCommunityRoutes(
 
   app.get(`${API_PREFIX}/ws`, { websocket: true }, (socket) => {
     let riverId: string | null = null;
+    let closed = false;
+    /** The session this connection signed in with, re-checked now and then (it expires, or is revoked). */
+    let token: string | null = null;
+    let checkingSession = false;
     const hubSocket: HubSocket = {
       send: (d) => {
         if (socket.readyState !== socket.OPEN) return;
@@ -2415,6 +2542,24 @@ export async function registerCommunityRoutes(
       }
     }, HEARTBEAT_MS);
     heartbeat.unref?.();
+    // A connection lives no longer than its session: expired, signed out or suspended ends it.
+    const checkSession = (): void => {
+      if (!token || checkingSession || closed) return;
+      checkingSession = true;
+      void authenticate(db, token, deps.now())
+        .then((session) => {
+          if (!session && !closed) {
+            send({ t: 'error', code: 'unauthorized' });
+            socket.close(4401);
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          checkingSession = false;
+        });
+    };
+    const sessionTimer = setInterval(checkSession, sessionRecheckMs);
+    sessionTimer.unref?.();
 
     const handle = async (raw: Buffer): Promise<void> => {
       let event;
@@ -2427,12 +2572,16 @@ export async function registerCommunityRoutes(
       if (event.t === 'auth') {
         if (riverId) return;
         const session = await authenticate(db, event.token, deps.now());
+        // The connection may have closed while the session was looked up: a closed socket must
+        // never be added to the hub (it would never be removed and keep its account online).
+        if (closed || socket.readyState !== socket.OPEN) return;
         if (!session) {
           send({ t: 'error', code: 'unauthorized' });
           socket.close(4401);
           return;
         }
         clearTimeout(authTimer);
+        token = event.token;
         riverId = session.riverId;
         hubSocket.deviceId = session.deviceId;
         hub.setStatus(riverId, event.status ?? 'online');
@@ -2468,7 +2617,8 @@ export async function registerCommunityRoutes(
           return;
         case 'call.room':
           if (event.room === null) hub.leaveRoom(self);
-          else if (!hub.joinRoom(self, event.room, MAX_CALL_ROOM)) send({ t: 'error', code: 'room_full' });
+          else if (!hub.joinRoom(self, event.room, MAX_CALL_ROOM, hubSocket))
+            send({ t: 'error', code: 'room_full' });
           return;
         case 'voice.sound': {
           const channelId = hub.voiceChannelOf(self);
@@ -2528,7 +2678,9 @@ export async function registerCommunityRoutes(
             return send({ t: 'error', code: 'voice_full' });
           }
           const rejoin = hub.voiceChannelOf(self) === ch.id;
-          const { left } = hub.joinVoice(self, model.id, ch.id);
+          // This connection holds the seat: if it drops, the seat is held for the grace period even
+          // while the person's other devices stay connected.
+          const { left } = hub.joinVoice(self, model.id, ch.id, hubSocket);
           // Stages: the audience listens. Moderators (who may mute members) speak; others raise a hand.
           if (!rejoin) {
             const moderator = model.can(self, Permission.MUTE_MEMBERS, ch.id);
@@ -2653,6 +2805,7 @@ export async function registerCommunityRoutes(
       const out = Buffer.from(encodeRelayIn(sender, frame.payload));
       for (const to of new Set(frame.recipients)) if (hub.sharesCall(sender, to)) hub.sendBinaryTo(to, out);
     };
+    let queue: Promise<void> = Promise.resolve();
     socket.on('message', (raw: Buffer, isBinary: boolean) => {
       alive = true;
       if (isBinary) {
@@ -2667,12 +2820,16 @@ export async function registerCommunityRoutes(
         return;
       }
       tokens -= 1;
-      void handle(raw).catch(() => send({ t: 'error', code: 'internal' }));
+      // One event at a time per connection, in the order sent: a voice.join still waiting for the
+      // database must not finish after a voice.leave sent behind it.
+      queue = queue.then(() => handle(raw).catch(() => send({ t: 'error', code: 'internal' })));
     });
 
     socket.on('close', () => {
+      closed = true;
       clearTimeout(authTimer);
       clearInterval(heartbeat);
+      clearInterval(sessionTimer);
       if (!riverId) return;
       const gone = riverId;
       const { offline, held } = hub.remove(gone, hubSocket);
