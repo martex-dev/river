@@ -8,6 +8,8 @@ import { startDmCall } from '../dm/call.ts';
 import { GREETING, sendFriendRequest } from '../dm/friends.ts';
 import { useDm } from '../dm/store.ts';
 import { useRiver } from '../store.ts';
+import { QrCode } from '../components/QrCode.tsx';
+import { QrScanner } from '../components/QrScanner.tsx';
 
 type Tab = 'online' | 'all' | 'pending' | 'blocked' | 'add';
 
@@ -62,7 +64,7 @@ export function FriendsPage(): ReactElement {
     );
   }
 
-  const direct = dm.conversations.filter((c) => c.kind === 'direct');
+  const direct = dm.conversations.filter((c) => c.kind === 'direct' && !c.self);
   const friends = direct.filter((c) => c.state === 'accepted' && !c.awaitingReply);
   const lists: Record<Exclude<Tab, 'add'>, ConversationView[]> = {
     online: friends.filter((c) => presence(c.riverId).online),
@@ -298,7 +300,18 @@ function AddFriend(props: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showQr, setShowQr] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const myLink = friendLink(props.serverUrl, props.myId);
+
+  const request = async (riverId: string): Promise<void> => {
+    const ok = await sendFriendRequest(riverId, message.trim() || GREETING);
+    setBusy(false);
+    if (!ok) return setError('Could not send the request. Try again.');
+    notify('Friend request sent');
+    setHandle('');
+    props.onSent();
+  };
 
   const submit = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
@@ -327,12 +340,19 @@ function AddFriend(props: {
       }
       riverId = found.value.riverId;
     }
-    const ok = await sendFriendRequest(riverId, message.trim() || GREETING);
-    setBusy(false);
-    if (!ok) return setError('Could not send the request. Try again.');
-    notify('Friend request sent');
-    setHandle('');
-    props.onSent();
+    await request(riverId);
+  };
+
+  /** A friend's QR code (2.9): their friend link, then the request goes out at once. */
+  const scanned = (text: string): true | string => {
+    const link = parseFriend(text);
+    if (!link) return 'That QR code is not a River friend code.';
+    if (link.riverId === props.myId) return "That's your own code.";
+    setScanning(false);
+    setBusy(true);
+    setError(null);
+    void request(link.riverId);
+    return true;
   };
 
   return (
@@ -368,8 +388,19 @@ function AddFriend(props: {
           <button className="btn btn--primary" disabled={busy || handle.trim() === ''}>
             {busy ? 'Sending…' : 'Send friend request'}
           </button>
+          <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => setScanning(true)}>
+            📷 Scan QR code
+          </button>
         </div>
       </form>
+      {scanning && (
+        <QrScanner
+          title="Scan a friend's QR code"
+          hint="Point the camera at the QR code in their River: Friends → Add friend → Show QR code."
+          onResult={scanned}
+          onClose={() => setScanning(false)}
+        />
+      )}
       <div className="glass card">
         <h2 className="card__title">You are {props.myUsername ? `@${props.myUsername}` : 'on River'}</h2>
         <p className="muted small">
@@ -390,7 +421,16 @@ function AddFriend(props: {
           >
             {copied ? 'Copied ✓' : 'Copy friend link'}
           </button>
+          <button className="btn btn--ghost btn--small" onClick={() => setShowQr(!showQr)}>
+            {showQr ? 'Hide QR code' : 'Show QR code'}
+          </button>
         </div>
+        {showQr && (
+          <div className="friend-qr">
+            <QrCode value={myLink} size={200} label="Your friend link as a QR code" />
+            <p className="muted small">Your friend scans this in River to send you a friend request.</p>
+          </div>
+        )}
       </div>
     </div>
   );

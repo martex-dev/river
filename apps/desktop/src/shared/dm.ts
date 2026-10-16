@@ -33,6 +33,11 @@ export interface ConversationView {
   pinned?: boolean;
   archived?: boolean;
   markedUnread?: boolean;
+  /**
+   * Note to self (2.9): your own notes. Kept on this device and copied to your linked devices;
+   * nothing is sent to anyone else.
+   */
+  self?: boolean;
 }
 
 export interface DirectMessageView {
@@ -228,6 +233,8 @@ export const dmActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('myId') }).strict(),
+  /** Opens (and creates, the first time) the Note to self conversation (2.9). */
+  z.object({ a: z.literal('noteToSelf') }).strict(),
   /** Every file shared in conversations and posts on this device. */
   z.object({ a: z.literal('files') }).strict(),
   /** Records a finished, missed or declined call. */
@@ -291,6 +298,7 @@ interface DmResults {
   safetyNumber: { digits: string; verified: boolean; theirName: string };
   upload: AttachmentPointer;
   myId: string;
+  noteToSelf: ConversationView;
   createGroup: ConversationView;
   search: DirectMessageView[];
   files: FileView[];

@@ -36,7 +36,7 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>River can ask for Face ID when it opens (Settings → System → Lock River).</string>
 	<key>NSCameraUsageDescription</key>
-	<string>River uses the camera for video in calls.</string>
+	<string>River uses the camera for video in calls and to scan friend QR codes.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>River saves pictures you choose to keep.</string>
 	<key>UIBackgroundModes</key>
