@@ -279,6 +279,8 @@ interface Deps {
   account: AccountService;
   community: CommunityService;
   log: Logger;
+  /** Privacy choices (2.6): read receipts and typing indicators, both ways. Default: on. */
+  privacy?: () => { readReceipts: boolean; typing: boolean };
 }
 
 interface MessageRow {
@@ -661,6 +663,8 @@ export class DmService {
         return true;
       }
       case 'receipt': {
+        // Read receipts off: you do not see other people's either (delivered still shows).
+        if (content.kind === 'read' && !this.privacy().readReceipts) return true;
         const rank = { sending: 0, failed: 0, sent: 1, delivered: 2, read: 3 } as Record<string, number>;
         for (const id of content.ids) {
           const row = this.row(id);
@@ -678,6 +682,7 @@ export class DmService {
         return true;
       }
       case 'typing':
+        if (!this.privacy().typing) return true;
         if (groupId) this.emit({ t: 'typing', peer: conv, who: peer });
         else if (contact?.state === 'accepted') this.emit({ t: 'typing', peer });
         return true;
@@ -1459,7 +1464,7 @@ export class DmService {
             .prepare('UPDATE contacts SET last_read = ? WHERE river_id = ?')
             .run(new Date().toISOString(), act.peer);
           this.emitConversations();
-          if (unread.length && contact.state === 'accepted') {
+          if (unread.length && contact.state === 'accepted' && this.privacy().readReceipts) {
             void this.sendContent(act.peer, {
               v: 1,
               t: 'receipt',
@@ -1470,6 +1475,7 @@ export class DmService {
           return out(null);
         }
         case 'typing':
+          if (!this.privacy().typing) return out(null);
           if (isGroupId(act.peer)) {
             if (this.group(act.peer)?.state === 'accepted') {
               void this.deliver(act.peer, { v: 1, t: 'typing', groupId: act.peer }, true).catch(
@@ -1772,6 +1778,10 @@ export class DmService {
       sentAt: v.sentAt,
       mine: v.mine,
     };
+  }
+
+  private privacy(): { readReceipts: boolean; typing: boolean } {
+    return this.deps.privacy?.() ?? { readReceipts: true, typing: true };
   }
 
   /** Disappearing-message timers per conversation (2.4), in this device's encrypted database. */

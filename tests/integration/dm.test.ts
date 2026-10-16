@@ -41,7 +41,7 @@ const injectFetch: typeof fetch = async (input, init) => {
 };
 const deadSocket = (): WebSocket => ({ send() {}, close() {}, readyState: 0 }) as unknown as WebSocket;
 
-async function person(name: string) {
+async function person(name: string, privacy?: { readReceipts: boolean; typing: boolean }) {
   const local = migrateDatabase(join(dir, `${name}.db`), newDatabaseKey(), CLIENT_MIGRATIONS).db;
   locals.push(local);
   const identity = new IdentityService(() => local);
@@ -63,7 +63,14 @@ async function person(name: string) {
     log: nullLogger,
     createSocket: deadSocket,
   });
-  const dm = new DmService({ db: () => local, identity, account, community, log: nullLogger });
+  const dm = new DmService({
+    db: () => local,
+    identity,
+    account,
+    community,
+    log: nullLogger,
+    ...(privacy ? { privacy: () => privacy } : {}),
+  });
   const social = new SocialService({ db: () => local, identity, dm, log: nullLogger });
   const events: DmEvent[] = [];
   dm.onEvent((e) => events.push(e));
@@ -300,6 +307,29 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     const other = await alice.dm.action({ a: 'schedule', peer: bob.riverId, text: 'never', sendAt: at });
     await alice.dm.action({ a: 'cancelScheduled', id: other.id });
     expect(await alice.dm.sendDueScheduled(new Date(Date.now() + 7200_000))).toBe(0);
+  });
+
+  it('read receipts off: none are sent, and none are shown', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob', { readReceipts: false, typing: false });
+    await alice.dm.action({ a: 'open', peer: bob.riverId, name: 'Bob' });
+    await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'did you read this?' });
+    await bob.dm.sync();
+    await bob.dm.action({ a: 'accept', peer: alice.riverId });
+    await bob.dm.action({ a: 'read', peer: alice.riverId });
+    await alice.dm.sync();
+    const mine = (await alice.dm.action({ a: 'messages', peer: bob.riverId })).find((m) => m.mine)!;
+    expect(mine.status).not.toBe('read');
+
+    // Bob does not see Alice's read receipts either.
+    const reply = await bob.dm.action({ a: 'send', peer: alice.riverId, text: 'maybe' });
+    await alice.dm.sync();
+    await alice.dm.action({ a: 'read', peer: bob.riverId });
+    await bob.dm.sync();
+    const bobsView = (await bob.dm.action({ a: 'messages', peer: alice.riverId })).find(
+      (m) => m.id === reply.id,
+    )!;
+    expect(bobsView.status).not.toBe('read');
   });
 
   it('sends encrypted files in direct messages', async () => {

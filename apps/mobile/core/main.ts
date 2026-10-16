@@ -148,6 +148,16 @@ async function start(): Promise<void> {
   };
   settings.onChange(syncBackground);
   syncBackground();
+  // Settings → Privacy → Screen security (2.6, Android): no screenshots, blank in the app switcher.
+  let screenState: boolean | null = null;
+  const syncScreen = (): void => {
+    const on = settings.get().system.screenSecurity;
+    if (on === screenState || PLATFORM !== 'android') return;
+    screenState = on;
+    void ask('screenSecurity', { on }).catch(() => undefined);
+  };
+  settings.onChange(syncScreen);
+  syncScreen();
   const storage = new StorageService({
     dir: join(userData, 'data'),
     keystore,
@@ -225,7 +235,17 @@ async function start(): Promise<void> {
     },
     log,
   });
-  const dm = new DmService({ db: () => storage.db(), identity, account, community, log });
+  const dm = new DmService({
+    db: () => storage.db(),
+    identity,
+    account,
+    community,
+    log,
+    privacy: () => ({
+      readReceipts: settings.get().presence.readReceipts,
+      typing: settings.get().presence.typingIndicators,
+    }),
+  });
   const link = new LinkService({
     identity,
     account,

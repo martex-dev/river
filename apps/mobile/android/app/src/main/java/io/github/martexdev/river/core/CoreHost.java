@@ -402,6 +402,17 @@ public final class CoreHost {
             else answer(id, (Object) "ended");
             break;
           }
+        case "screenSecurity":
+          {
+            Screen s = screen;
+            if (s != null) {
+              android.view.Window w = s.activity().getWindow();
+              if (a.optBoolean("on", false)) w.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+              else w.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+            }
+            answer(id, (Object) null);
+            break;
+          }
         case "speaker":
           {
             speaker(a.optBoolean("on", false));

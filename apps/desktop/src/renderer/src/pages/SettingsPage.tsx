@@ -837,8 +837,34 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
   const updateSettings = useRiver((s) => s.updateSettings);
   const platform = useRiver((r) => r.info?.platform);
   const phone = isPhone(platform);
+  const linux = platform === 'linux';
   return (
     <div className="panel">
+      <h2 className="panel__title">Privacy</h2>
+      <Toggle
+        label="Read receipts"
+        hint="Let people see when you have read their direct messages. If you turn this off, you will not see when they read yours either."
+        checked={settings.presence.readReceipts}
+        onChange={(v) => void updateSettings({ presence: { readReceipts: v } })}
+      />
+      <Toggle
+        label="Typing indicators"
+        hint="Show “typing…” while you write. If you turn this off, you will not see others typing either."
+        checked={settings.presence.typingIndicators}
+        onChange={(v) => void updateSettings({ presence: { typingIndicators: v } })}
+      />
+      {!linux && platform !== 'ios' && (
+        <Toggle
+          label="Screen security"
+          hint={
+            phone
+              ? 'Block screenshots and screen recording of River, and show it blank in the app switcher.'
+              : 'Keep River out of screenshots and screen recordings (including screen sharing of this window).'
+          }
+          checked={settings.system.screenSecurity}
+          onChange={(v) => void updateSettings({ system: { screenSecurity: v } })}
+        />
+      )}
       <h2 className="panel__title">System</h2>
       {phone && platform === 'android' && (
         <Toggle
