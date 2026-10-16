@@ -10,6 +10,7 @@ import { decodeWire, encodeWire } from '../shared/wire.ts';
  *   answer(id, json)   the shell's answer to an ask; json = {ok, value?, error?}
  *   lifecycle(state)   'foreground' | 'background'
  *   deepLink(url)      a river://open?link=… URL the system handed to the app
+ *   uiGone()           the UI's WebView was destroyed (its calls and media ended with it)
  *
  * Out (core → app shell): `RiverHost.post(header, payload)`. The header is a
  * small JSON object the shell reads; the payload goes on untouched:
@@ -32,8 +33,12 @@ const handlers = new Map<string, Handler>();
 const listeners = new Map<string, Listener[]>();
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 const lifecycleListeners = new Set<(state: 'foreground' | 'background') => void>();
+const uiGoneListeners = new Set<() => void>();
+const invokeObservers = new Set<(channel: string, args: unknown[]) => void>();
 let deepLinkHandler: (url: string) => void = () => undefined;
 let nextAsk = 1;
+/** Whether a UI is attached: it has called since the shell last said it was gone. */
+let uiAttached = false;
 
 function shell(): ShellInterface {
   const s = (globalThis as { RiverHost?: ShellInterface }).RiverHost;
@@ -86,6 +91,23 @@ export function onDeepLink(fn: (url: string) => void): void {
   deepLinkHandler = fn;
 }
 
+/** The UI's WebView went away (the screen was closed while the core stays connected). */
+export function onUiGone(fn: () => void): () => void {
+  uiGoneListeners.add(fn);
+  return () => uiGoneListeners.delete(fn);
+}
+
+/** Whether a UI is there to take events (false before it first calls, and after it went away). */
+export function uiPresent(): boolean {
+  return uiAttached;
+}
+
+/** Sees every UI call before its handler runs (the call is still validated by the handler). */
+export function onInvoke(fn: (channel: string, args: unknown[]) => void): () => void {
+  invokeObservers.add(fn);
+  return () => invokeObservers.delete(fn);
+}
+
 export function onLifecycle(fn: (state: 'foreground' | 'background') => void): () => void {
   lifecycleListeners.add(fn);
   return () => lifecycleListeners.delete(fn);
@@ -105,16 +127,26 @@ function reply(id: number, body: { ok: boolean; value?: unknown; error?: string 
 
 async function invoke(id: number, json: string): Promise<void> {
   try {
+    uiAttached = true;
     const call = decodeWire<{ channel: string; args: unknown[] }>(json);
     const handler = handlers.get(call.channel);
     if (!handler) throw new Error(`No handler registered for '${call.channel}'`);
-    reply(id, { ok: true, value: await handler(uiEvent, ...(Array.isArray(call.args) ? call.args : [])) });
+    const args = Array.isArray(call.args) ? call.args : [];
+    for (const fn of invokeObservers) {
+      try {
+        fn(call.channel, args);
+      } catch {
+        // an observer never stops the call
+      }
+    }
+    reply(id, { ok: true, value: await handler(uiEvent, ...args) });
   } catch (err) {
     reply(id, { ok: false, error: message(err) });
   }
 }
 
 function send(json: string): void {
+  uiAttached = true;
   try {
     const call = decodeWire<{ channel: string; args: unknown[] }>(json);
     for (const l of listeners.get(call.channel) ?? [])
@@ -142,11 +174,17 @@ function lifecycle(state: string): void {
   for (const fn of lifecycleListeners) fn(state);
 }
 
+function uiGone(): void {
+  uiAttached = false;
+  for (const fn of uiGoneListeners) fn();
+}
+
 export const inbound = {
   invoke: (id: number, json: string): void => void invoke(id, json),
   send,
   answer,
   lifecycle,
+  uiGone,
   deepLink: (url: string): void => {
     if (typeof url === 'string') deepLinkHandler(url);
   },

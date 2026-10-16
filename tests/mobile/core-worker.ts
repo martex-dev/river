@@ -32,7 +32,7 @@ delete (globalThis as { Buffer?: unknown }).Buffer;
   },
 };
 
-type Inbound = { [K in 'invoke' | 'send' | 'answer' | 'lifecycle']: (...args: never[]) => void };
+type Inbound = { [K in 'invoke' | 'send' | 'answer' | 'lifecycle' | 'uiGone']: (...args: never[]) => void };
 
 // The shell's calls into the core, as Android's evaluateJavascript makes them.
 parentPort!.on('message', (msg: { call?: keyof Inbound; args?: unknown[] }) => {

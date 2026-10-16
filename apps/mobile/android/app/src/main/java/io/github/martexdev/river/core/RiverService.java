@@ -29,8 +29,11 @@ public final class RiverService extends Service {
   private static final String CHANNEL = "connection";
   private static final int NOTIFICATION = 0x52495645; // "RIVE"
 
-  /** The screen the permanent notification opens (set by MainActivity). */
-  public static Class<?> activityClass;
+  /**
+   * River's screen, which its notifications open. A constant: Android restarts this service
+   * (START_STICKY) in a new process where no screen has run yet.
+   */
+  public static final Class<?> ACTIVITY = io.github.martexdev.river.MainActivity.class;
 
   private static SharedPreferences prefs(Context context) {
     return context.getSharedPreferences("river-background", Context.MODE_PRIVATE);
@@ -66,10 +69,8 @@ public final class RiverService extends Service {
             .setContentText("New messages arrive while River is closed. Turn off in Settings → System.")
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_MIN);
-    if (activityClass != null) {
-      Intent open = new Intent(this, activityClass).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-      b.setContentIntent(PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE));
-    }
+    Intent open = new Intent(this, ACTIVITY).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+    b.setContentIntent(PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE));
     Notification notification = b.build();
     int type = Build.VERSION.SDK_INT >= 34 ? ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING : 0;
     ServiceCompat.startForeground(this, NOTIFICATION, notification, type);

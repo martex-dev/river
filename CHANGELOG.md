@@ -69,6 +69,32 @@ All notable changes to River are documented here. The format follows
   are handled in order per connection; a connection that closes while signing in
   is never kept; deleting a community ends its voice calls.
 
+- **Android Back** no longer closes River: it first closes what the interface
+  has open, and otherwise moves River to the background, still running.
+- **Android calls and the lock screen**: River shows over the lock screen only
+  while a call rings or lasts, not forever after one.
+- **Android, Stay connected**: notifications work after Android restarts
+  River's connection in the background; screen security is applied again when
+  River's screen reopens; closing River during a call ends the call (and tells
+  the other side) instead of leaving it silent; Hang up in the "In a call"
+  notification works without River's screen; stopping River ends the "In a
+  call" notification, the call audio and the screen-off sensor lock.
+- **Android notifications**: a reply from a notification can never reach the
+  wrong conversation after River restarted, and a reply that cannot be sent says
+  so; swiped-away notifications are forgotten; the notification permission is
+  asked while River is in front.
+- **Android robustness**: River recovers when Android ends one of its
+  WebViews to free memory instead of closing; dialogs always get an answer;
+  databases are closed when the core stops; reopening River from recent apps no
+  longer shares something again; Lock River hides River before Android takes
+  the recent-apps preview (Android 13+: no preview at all while it is on).
+- **iPhone and iPad**: an iPad is recognised as iOS; River restarts its core if
+  iOS ends it; "Save to Files" reports a cancelled save as not saved and deletes
+  the temporary copy when the sheet closes; swiped-away notifications are
+  forgotten.
+- **Phones**: a failed database commit reports its own error instead of a
+  follow-up one.
+
 ## [2.10.11] - 2026-10-16
 
 **Reply privately.**

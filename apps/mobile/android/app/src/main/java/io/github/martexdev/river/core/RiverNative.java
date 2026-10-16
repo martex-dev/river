@@ -22,6 +22,11 @@ public final class RiverNative {
     files = new FileOps(context);
   }
 
+  /** The core is gone: its databases are closed (not reachable from JavaScript). */
+  void close() {
+    db.closeAll();
+  }
+
   @JavascriptInterface
   public String call(String method, String argsJson) {
     try {
