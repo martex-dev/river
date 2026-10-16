@@ -1940,8 +1940,8 @@ html[data-density='compact'] .member {
   height: 38px;
   border: 0;
   border-radius: 50%;
-  background: var(--accent-2);
-  color: #fff;
+  background: var(--accent-grad);
+  color: var(--accent-ink);
   font-size: 16px;
   cursor: pointer;
 }
@@ -1962,8 +1962,8 @@ html[data-density='compact'] .member {
   height: 38px;
   border: 0;
   border-radius: 50%;
-  background: var(--accent-2);
-  color: #fff;
+  background: var(--accent-grad);
+  color: var(--accent-ink);
   font-size: 13px;
   cursor: pointer;
 }
