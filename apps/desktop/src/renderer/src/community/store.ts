@@ -19,6 +19,7 @@ import { play } from './sound.ts';
 import { VoiceCall } from './voice.ts';
 import { WebCodecsRelay } from './relay-audio.ts';
 import { forgetCall, rememberCall } from './rejoin.ts';
+import { resumeAudio } from './peer-audio.ts';
 
 export type Modal =
   | { kind: 'community-settings'; communityId: string; tab?: CommunityTab }
@@ -145,6 +146,19 @@ interface CommunityState {
 
 let toastTimer: number | undefined;
 
+/**
+ * The voice join underway, if any. Set synchronously when Join is pressed, so a
+ * second click while the first is still opening the microphone does nothing.
+ * Disconnect while joining marks it cancelled; it stays set until that join has
+ * finished unwinding, so a newer join never overlaps it.
+ */
+let joining: { cancelled: boolean } | null = null;
+/** Whether you were muted before deafening, so undeafening puts that back. */
+let mutedBeforeDeafen = false;
+
+/** "Load older" requests on their way, per channel. */
+const olderInFlight = new Map<string, Promise<number>>();
+
 /** The last text channel opened in each community, on this device (a convenience; may be unavailable). */
 function lastChannel(communityId: string): string | null {
   try {
@@ -251,17 +265,33 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     const res = await window.river.community.action({ a: 'reports', communityId });
     if (res.ok) set({ reports: { ...get().reports, [communityId]: res.value } });
   },
-  loadOlder: async (channelId) => {
-    const list = get().messages[channelId];
-    if (!list?.length || get().noMore[channelId]) return 0;
-    const res = await window.river.community.action({ a: 'history', channelId, before: list[0]!.sentAt });
-    if (!res.ok) return 0;
-    const older = (res.value as ChatMessage[]).filter((m) => !list.some((x) => x.id === m.id));
-    set({
-      messages: { ...get().messages, [channelId]: [...older, ...(get().messages[channelId] ?? [])] },
-      ...(older.length < 100 ? { noMore: { ...get().noMore, [channelId]: true } } : {}),
-    });
-    return older.length;
+  loadOlder: (channelId) => {
+    // One page at a time per channel: a second request (a quick double press, a jump looking
+    // further back) waits for the one on its way instead of adding the same page twice.
+    const pending = olderInFlight.get(channelId);
+    if (pending) return pending;
+    const run = async (): Promise<number> => {
+      const list = get().messages[channelId];
+      if (!list?.length || get().noMore[channelId]) return 0;
+      const oldest = list[0]!;
+      const res = await window.river.community.action({ a: 'history', channelId, before: oldest.sentAt });
+      if (!res.ok) return 0;
+      const page = res.value as ChatMessage[];
+      // Against the list as it is now (it may have changed while this page was decrypted).
+      const now = get().messages[channelId] ?? [];
+      const known = new Set(now.map((m) => m.id));
+      const older = page.filter((m) => !known.has(m.id));
+      set({
+        messages: { ...get().messages, [channelId]: [...older, ...now] },
+        // The end of the history: an empty page, or one that brought nothing new. (Messages that
+        // cannot be decrypted are dropped from a page, so a short page alone does not mean the end.)
+        ...(older.length === 0 ? { noMore: { ...get().noMore, [channelId]: true } } : {}),
+      });
+      return older.length;
+    };
+    const promise = run().finally(() => olderInFlight.delete(channelId));
+    olderInFlight.set(channelId, promise);
+    return promise;
   },
 
   load: async () => {
@@ -394,6 +424,16 @@ export const useCommunity = create<CommunityState>((set, get) => ({
             messages: { ...get().messages, [event.channelId]: list.filter((m) => m.id !== event.messageId) },
           });
         }
+        // A reply inside a thread goes from that thread's loaded replies too.
+        const threads = get().threads;
+        let changed = false;
+        const next: Record<string, ChatMessage[]> = {};
+        for (const [root, replies] of Object.entries(threads)) {
+          const kept = replies.filter((m) => m.id !== event.messageId);
+          if (kept.length !== replies.length) changed = true;
+          next[root] = kept;
+        }
+        if (changed) set({ threads: next });
         return;
       }
       case 'typing': {
@@ -651,10 +691,16 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     const c = get().communities.find((x) => x.channels.some((ch) => ch.id === channelId));
     if (c?.channels.find((ch) => ch.id === channelId)?.kind !== 'text') return;
     const res = await window.river.community.messages(channelId);
-    if (res.ok) set({ messages: { ...get().messages, [channelId]: res.value } });
+    if (!res.ok) return;
+    // The newest page replaces what was loaded, so older history can be loaded again.
+    const { [channelId]: _done, ...noMore } = get().noMore;
+    set({ messages: { ...get().messages, [channelId]: res.value }, noMore });
   },
 
   joinVoice: async (channelId, me) => {
+    if (joining) return;
+    // Still inside the click: wake the audio engine now (phones only allow it from a gesture).
+    resumeAudio();
     // Don't even try a full channel unless you may move members (the server checks too).
     const community = get().communities.find((c) => c.channels.some((ch) => ch.id === channelId));
     const target = community?.channels.find((ch) => ch.id === channelId);
@@ -670,65 +716,17 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       get().notify('That voice channel is full.', 'error');
       return;
     }
-    await get().call?.leave();
-    const voice = useRiver.getState().settings?.voice;
-    const iceServers = await window.river.voice.iceServers().catch(() => []);
-    let streaming = false;
-    const onChange = (): void => {
-      set({ callVersion: get().callVersion + 1 });
-      // Keep the server's LIVE badge right, including when the OS ends a share.
-      const now = !!get().call?.localTrack('screen');
-      if (now !== streaming) {
-        streaming = now;
-        sendVoiceState();
-      }
-    };
-    // People who cannot connect directly hear each other through the server (encrypted end to end).
-    const relay = new WebCodecsRelay(me, (to, payload) => window.river.voice.relay(to, payload));
-    const call = new VoiceCall(
-      channelId,
-      me,
-      onChange,
-      {
-        iceServers,
-        inputDeviceId: voice?.inputDeviceId ?? null,
-        noiseSuppression: voice?.noiseSuppression ?? true,
-        echoCancellation: voice?.echoCancellation ?? true,
-        pushToTalk: voice?.inputMode === 'push-to-talk',
-        sensitivity: voice?.sensitivity ?? null,
-      },
-      undefined,
-      relay,
-    );
-    call.muted = get().selfMuted;
-    call.deafened = get().selfDeafened;
-    call.nameOf = (id) => nameOfPerson(get().communities, id);
-    set({ call, callError: null });
+    const token = { cancelled: false };
+    joining = token;
     try {
-      await call.start();
-      if (!channelId.startsWith('dm:')) rememberCall(channelId);
-      play('selfJoin');
-      sendVoiceState();
-      // Your entrance sound for this community, if you picked one (1.0.26).
-      const community = get().communities.find((c) => c.channels.some((ch) => ch.id === channelId));
-      const entrance = community ? voice?.entranceSounds[community.id] : undefined;
-      if (entrance)
-        window.setTimeout(
-          () => void window.river.community.action({ a: 'playSound', soundId: entrance }),
-          1200,
-        );
-    } catch (err) {
-      set({
-        call: null,
-        callError:
-          (err as Error).name === 'NotAllowedError'
-            ? 'River could not use your microphone. Allow microphone access in your system settings.'
-            : (err as Error).message || 'Could not join the voice channel.',
-      });
+      await joinVoiceNow(channelId, me, token);
+    } finally {
+      if (joining === token) joining = null;
     }
   },
 
   leaveVoice: async () => {
+    if (joining) joining.cancelled = true;
     const call = get().call;
     set({ call: null, handRaised: false });
     forgetCall();
@@ -750,7 +748,9 @@ export const useCommunity = create<CommunityState>((set, get) => ({
 
   toggleDeafen: () => {
     const deafened = !get().selfDeafened;
-    set({ selfDeafened: deafened, selfMuted: deafened ? true : false });
+    // Deafening also mutes; undeafening unmutes only if you were not muted before.
+    if (deafened) mutedBeforeDeafen = get().selfMuted;
+    set({ selfDeafened: deafened, selfMuted: deafened ? true : mutedBeforeDeafen });
     get().call?.setDeafened(deafened);
     get().call?.setMuted(get().selfMuted);
     play(deafened ? 'deafen' : 'undeafen');
@@ -775,6 +775,75 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     return res.value;
   },
 }));
+
+/** The body of joinVoice, once the join is under way (see `joining`). */
+async function joinVoiceNow(channelId: string, me: string, token: { cancelled: boolean }): Promise<void> {
+  const get = useCommunity.getState;
+  const set = useCommunity.setState;
+  // Joining voice ends a 1:1 call properly (also one still starting): its panel, pill and "busy" go too.
+  const dm = await import('../dm/call.ts');
+  if (dm.useDmCall.getState().active || get().call?.channelId.startsWith('dm:')) await dm.endDmCall();
+  await get().call?.leave();
+  if (token.cancelled) return;
+  const voice = useRiver.getState().settings?.voice;
+  const iceServers = await window.river.voice.iceServers().catch(() => []);
+  if (token.cancelled) return;
+  let streaming = false;
+  const onChange = (): void => {
+    set({ callVersion: get().callVersion + 1 });
+    // Keep the server's LIVE badge right, including when the OS ends a share.
+    const now = !!get().call?.localTrack('screen');
+    if (now !== streaming) {
+      streaming = now;
+      sendVoiceState();
+    }
+  };
+  // People who cannot connect directly hear each other through the server (encrypted end to end).
+  const relay = new WebCodecsRelay(me, (to, payload) => window.river.voice.relay(to, payload));
+  const call = new VoiceCall(
+    channelId,
+    me,
+    onChange,
+    {
+      iceServers,
+      inputDeviceId: voice?.inputDeviceId ?? null,
+      noiseSuppression: voice?.noiseSuppression ?? true,
+      echoCancellation: voice?.echoCancellation ?? true,
+      pushToTalk: voice?.inputMode === 'push-to-talk',
+      sensitivity: voice?.sensitivity ?? null,
+    },
+    undefined,
+    relay,
+  );
+  call.muted = get().selfMuted;
+  call.deafened = get().selfDeafened;
+  call.nameOf = (id) => nameOfPerson(get().communities, id);
+  set({ call, callError: null });
+  try {
+    await call.start();
+  } catch (err) {
+    // Only this call's failure, and only while it is still the one shown.
+    if (get().call === call)
+      set({
+        call: null,
+        callError:
+          (err as Error).name === 'NotAllowedError'
+            ? 'River could not use your microphone. Allow microphone access in your system settings.'
+            : (err as Error).message || 'Could not join the voice channel.',
+      });
+    return;
+  }
+  // Disconnected (or replaced) while joining: start() released the microphone and did not join.
+  if (call.closed || get().call !== call) return;
+  if (!channelId.startsWith('dm:')) rememberCall(channelId);
+  play('selfJoin');
+  sendVoiceState();
+  // Your entrance sound for this community, if you picked one (1.0.26).
+  const community = get().communities.find((c) => c.channels.some((ch) => ch.id === channelId));
+  const entrance = community ? voice?.entranceSounds[community.id] : undefined;
+  if (entrance)
+    window.setTimeout(() => void window.river.community.action({ a: 'playSound', soundId: entrance }), 1200);
+}
 
 /** Tells the server our mute/deafen/streaming state so others see it. */
 export function sendVoiceState(): void {

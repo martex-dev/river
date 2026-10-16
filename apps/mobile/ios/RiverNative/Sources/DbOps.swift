@@ -52,6 +52,15 @@ final class DbOps {
         return s
     }
 
+    /// Closes every open database (a transaction left open by a core that died is rolled back).
+    func closeAll() {
+        for db in open.values {
+            if sqlite3_get_autocommit(db) == 0 { sqlite3_exec(db, "ROLLBACK", nil, nil, nil) }
+            sqlite3_close_v2(db)
+        }
+        open.removeAll()
+    }
+
     func call(_ method: String, _ a: [String: Any]) throws -> Any {
         switch method {
         case "db.open":

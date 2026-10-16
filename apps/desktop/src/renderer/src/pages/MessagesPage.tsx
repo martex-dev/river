@@ -1,6 +1,9 @@
 import type { CallView } from '../../../shared/dm.ts';
 import { VoiceRecorder } from '../components/VoiceMessage.tsx';
-import { haptic, useMessageGestures } from '../components/gestures.ts';
+import { fromOverlay, haptic, useMessageGestures } from '../components/gestures.ts';
+import { composing, enterSends } from '../components/keys.ts';
+import { isPhone } from '../../../shared/platform.ts';
+import { localDay, newSince } from '../components/unread.ts';
 import { CreatePollDialog, PollCard } from '../community/ui/Poll.tsx';
 import { firstLink, LinkCard } from '../community/ui/LinkCard.tsx';
 import { MyStickersButton } from '../community/ui/Stickers.tsx';
@@ -10,7 +13,7 @@ import { useSharedFiles, useSharedText } from '../components/ShareSheet.tsx';
 import { callNote, callsBetween } from '../dm/call-notes.ts';
 import { NotifyMenuSection } from '../community/ui/NotifyMenu.tsx';
 import { ForwardDialog } from '../community/ui/Forward.tsx';
-import { saveDraft, useDraft } from '../community/drafts.ts';
+import { readDraft, saveDraft, useDraft } from '../community/drafts.ts';
 import { quoteOf } from '../dm/quote.ts';
 import { clockTime } from '../time.ts';
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
@@ -29,9 +32,11 @@ import {
   AttachmentList,
   galleryOf,
   GalleryContext,
+  MAX_PENDING,
   PendingFiles,
   pendingFrom,
   uploadAll,
+  usePendingFiles,
   type PendingFile,
 } from '../community/ui/Attachments.tsx';
 import {
@@ -144,11 +149,16 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
   const filtered = dm.conversations.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()));
   const [results, setFound] = useState<DirectMessageView[]>([]);
   const found = query.trim().length >= 2 ? results : [];
+  // Answers can come back out of order: only the one for what is in the box now counts.
+  const asked = useRef('');
   useEffect(() => {
     const q = query.trim();
+    asked.current = q;
     if (q.length < 2) return;
     const t = window.setTimeout(() => {
-      void window.river.dm.action({ a: 'search', query: q }).then((r) => r.ok && setFound(r.value));
+      void window.river.dm.action({ a: 'search', query: q }).then((r) => {
+        if (r.ok && asked.current === q) setFound(r.value);
+      });
     }, 250);
     return () => window.clearTimeout(t);
   }, [query]);
@@ -373,7 +383,8 @@ function ContactSheet(props: {
 }): ReactElement {
   const { c } = props;
   const dm = useDm();
-  const activeCall = useDmCall((s) => s.active);
+  // One call at a time: none while one is on or ringing.
+  const callBusy = useDmCall((s) => !!s.active || !!s.incoming);
   const [bio, setBio] = useState('');
   useEffect(() => {
     void window.river.social.action({ a: 'profile', riverId: c.riverId }).then((r) => {
@@ -383,7 +394,8 @@ function ContactSheet(props: {
   const common = dm.conversations.filter(
     (g) => g.kind === 'group' && g.state !== 'left' && g.members.some((m) => m.riverId === c.riverId),
   );
-  const canCall = c.state === 'accepted' && !activeCall;
+  // Not before they accepted your request.
+  const canCall = c.state === 'accepted' && !c.awaitingReply && !callBusy;
   return (
     <Modal title="Profile" onClose={props.onClose}>
       <div className="contact-sheet">
@@ -720,11 +732,12 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
   const myId = dm.myId ?? '';
   const scrollRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  const [pending, setPending] = useState<PendingFile[]>([]);
+  // Files waiting to be sent stay with this conversation when you switch away and back.
+  const { pending, setPending, add } = usePendingFiles(`d:${c.riverId}`);
   const [dragging, setDragging] = useState(false);
   const notify = useCommunity((s) => s.notify);
   const setModal = useCommunity((s) => s.setModal);
-  const activeCall = useDmCall((s) => s.active);
+  const anyCall = useDmCall((s) => !!s.active || !!s.incoming);
   const [showMembers, setShowMembers] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [iconPicker, setIconPicker] = useState<{ x: number; y: number } | null>(null);
@@ -733,9 +746,10 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
   // New messages scroll into view only when you are at the bottom (or sent them yourself);
   // reading older messages is not interrupted. "Jump to latest" brings you back.
   const [atBottom, setAtBottom] = useState(true);
-  // How many messages there were when you scrolled up: the ones after it are new (2.10.1).
-  const [leftAt, setLeftAt] = useState<number | null>(null);
-  const missed = leftAt === null ? 0 : messages.slice(leftAt).filter((m) => !m.mine).length;
+  // The newest message when you scrolled up: the ones after it are new (2.10.1). A time, not a
+  // position, so older messages loaded above it (a jump back) do not count as new.
+  const [leftAt, setLeftAt] = useState<string | null>(null);
+  const missed = leftAt === null ? 0 : newSince(messages, leftAt);
   const opened = useRef<string | null>(null);
   useEffect(() => {
     const el = scrollRef.current;
@@ -753,9 +767,7 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
   }, [c.riverId]);
 
   const addFiles = (files: Iterable<File>): void => {
-    const next = [...pending, ...pendingFrom(files)];
-    if (next.length > 10) notify('You can attach up to 10 files to one message.', 'error');
-    setPending(next.slice(0, 10));
+    if (add(files) > 0) notify(`You can attach up to ${MAX_PENDING} files to one message.`, 'error');
   };
   // Shared from another app ("Share → River" on phones) into this conversation.
   useSharedFiles(`d:${c.riverId}`, addFiles);
@@ -844,13 +856,13 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           </button>
         )}
         <span className="chat__head-actions">
-          {c.kind === 'direct' && !c.self && c.state === 'accepted' && (
+          {c.kind === 'direct' && !c.self && c.state === 'accepted' && !c.awaitingReply && (
             <>
               <button
                 className="icon-btn"
                 aria-label="Start voice call"
                 title="Start voice call"
-                disabled={!!activeCall}
+                disabled={anyCall}
                 onClick={() => void startDmCall(c.riverId, false)}
               >
                 <PhoneIcon size={18} />
@@ -859,7 +871,7 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
                 className="icon-btn"
                 aria-label="Start video call"
                 title="Start video call"
-                disabled={!!activeCall}
+                disabled={anyCall}
                 onClick={() => void startDmCall(c.riverId, true)}
               >
                 <CameraIcon size={18} />
@@ -1122,9 +1134,10 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              void dm
-                .run({ a: 'renameGroup', peer: c.riverId, name: renaming.trim() })
-                .then(() => setRenaming(null));
+              // Stays open, with the name typed, if renaming did not work.
+              void dm.attempt({ a: 'renameGroup', peer: c.riverId, name: renaming.trim() }).then((ok) => {
+                if (ok) setRenaming(null);
+              });
             }}
           >
             <label className="textfield">
@@ -1151,8 +1164,7 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           action="Add"
           onClose={() => setAdding(false)}
           onPick={async (ids) => {
-            const ok = await dm.run({ a: 'addGroupMembers', peer: c.riverId, members: ids });
-            if (ok !== null) setAdding(false);
+            if (await dm.attempt({ a: 'addGroupMembers', peer: c.riverId, members: ids })) setAdding(false);
           }}
         />
       )}
@@ -1187,7 +1199,7 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
             const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
             setAtBottom(bottom);
             if (bottom) setLeftAt(null);
-            else if (leftAt === null) setLeftAt(messages.length);
+            else if (leftAt === null) setLeftAt(messages.at(-1)?.sentAt ?? '');
           }}
         >
           <div className="chat__welcome">
@@ -1414,7 +1426,9 @@ function DmMessage(props: {
       kind: 'confirm',
       title: forEveryone ? 'Delete for everyone' : 'Delete for me',
       body: forEveryone
-        ? `This message will be deleted on your devices and on ${c.name}'s.`
+        ? c.kind === 'group'
+          ? `This message will be deleted on your devices and for everyone in ${c.name}.`
+          : `This message will be deleted on your devices and on ${c.name}'s.`
         : 'This message will be deleted on this device only.',
       action: 'Delete',
       run: async () => {
@@ -1431,6 +1445,8 @@ function DmMessage(props: {
       {...touch}
       onClickCapture={(e) => {
         if (guardClick(e)) return;
+        // Clicks in a menu or dialog opened from this message are theirs.
+        if (fromOverlay(e)) return;
         // While selecting, a tap on a message selects it instead of doing anything else.
         if (!selecting || m.deleted) return;
         e.preventDefault();
@@ -1438,7 +1454,7 @@ function DmMessage(props: {
         useSelection.getState().toggle(m.id);
       }}
       onContextMenu={(e) => {
-        if (editing || m.deleted) return;
+        if (editing || m.deleted || fromOverlay(e)) return;
         const target = e.target as HTMLElement;
         if (target.closest('a, video, audio, input, textarea')) return;
         e.preventDefault();
@@ -2000,12 +2016,15 @@ function ConversationSearch(props: { peer: string; onClose(): void }): ReactElem
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<DirectMessageView[]>([]);
   const shown = query.trim().length >= 2 ? results : [];
+  // Answers can come back out of order: only the one for what is in the box now counts.
+  const asked = useRef('');
   useEffect(() => {
     const q = query.trim();
+    asked.current = q;
     if (q.length < 2) return;
     const t = window.setTimeout(() => {
       void window.river.dm.action({ a: 'search', query: q, peer: props.peer }).then((r) => {
-        if (r.ok) setResults(r.value);
+        if (r.ok && asked.current === q) setResults(r.value);
       });
     }, 200);
     return () => window.clearTimeout(t);
@@ -2065,7 +2084,7 @@ function ConversationSearch(props: { peer: string; onClose(): void }): ReactElem
         aria-label="Jump to a date"
         title="Jump to a date"
         value={date}
-        max={new Date().toISOString().slice(0, 10)}
+        max={localDay(new Date())}
         onChange={(e) => {
           setDate(e.target.value);
           if (e.target.value) void jumpToDate(e.target.value);
@@ -2110,7 +2129,7 @@ function DmEditBox({ m }: { m: DirectMessageView }): ReactElement {
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Escape') useDm.setState({ editing: null });
-          if (e.key === 'Enter' && !e.shiftKey) {
+          if (e.key === 'Enter' && !e.shiftKey && !composing(e)) {
             e.preventDefault();
             void save();
           }
@@ -2148,6 +2167,31 @@ ${shared}`
 
   const [later, setLater] = useState<{ x: number; y: number } | null>(null);
   const [scheduling, setScheduling] = useState(false);
+  const phone = useRiver((r) => isPhone(r.info?.platform));
+  // Whether the box is still there, for when a send fails later.
+  const draftKey = `d:${c.riverId}`;
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  /**
+   * A send that did not work gives its text back without losing anything typed since: into the
+   * box if it is empty, after what is there otherwise, or into the draft if the chat was closed.
+   * The reply it answered comes back too.
+   */
+  const restore = (value: string, reply: DirectMessageView | null): void => {
+    if (reply && mounted.current && !useDm.getState().replyTo) useDm.setState({ replyTo: reply });
+    if (!value) return;
+    if (!mounted.current) {
+      const now = readDraft(draftKey);
+      saveDraft(draftKey, now ? `${value}\n${now}` : value);
+      return;
+    }
+    setText((now) => (now.trim() ? `${value}\n${now}` : value));
+  };
   const send = async (options: { silent?: boolean; sendAt?: string } = {}): Promise<void> => {
     const value = text.trim();
     const files = props.pending;
@@ -2176,7 +2220,7 @@ ${shared}`
         sendAt: options.sendAt,
       });
       setUploading(null);
-      if (!queued) setText(value);
+      if (!queued) restore(value, replyTo);
       else {
         props.onPending([]);
         useCommunity.getState().notify(`Scheduled for ${new Date(options.sendAt).toLocaleString()}`);
@@ -2201,7 +2245,7 @@ ${shared}`
       ...(embed ? { embed } : {}),
     });
     setUploading(null);
-    if (!sent) setText(value);
+    if (!sent) restore(value, replyTo);
     else {
       play('send');
       props.onPending([]);
@@ -2234,7 +2278,7 @@ ${shared}`
     if (sent) {
       play('send');
       dm.handle({ t: 'message', message: sent, isNew: false, senderName: '' });
-    }
+    } else restore('', replyTo);
   };
 
   return (
@@ -2271,7 +2315,7 @@ ${shared}`
       {replyTo && (
         <div className="reply-bar">
           <span>
-            Replying to <strong>{replyTo.mine ? 'yourself' : c.name}</strong>
+            Replying to <strong>{replyTo.mine ? 'yourself' : replyTo.senderName || c.name}</strong>
           </span>
           <button
             className="icon-btn"
@@ -2347,13 +2391,16 @@ ${shared}`
           onKeyDown={(e) => {
             if (e.key === 'Escape' && replyTo) useDm.setState({ replyTo: null });
             if (e.key === 'ArrowUp' && text === '') {
-              const mine = [...(dm.messages[c.riverId] ?? [])].reverse().find((m) => m.mine && !m.deleted);
+              // Your last message with text to edit (not a timer notice, a file or a voice message).
+              const mine = [...(dm.messages[c.riverId] ?? [])]
+                .reverse()
+                .find((m) => m.mine && !m.deleted && !m.notice && m.text);
               if (mine) {
                 e.preventDefault();
                 useDm.setState({ editing: mine.id });
               }
             }
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (enterSends(e, phone)) {
               e.preventDefault();
               void send();
             }
@@ -2370,9 +2417,13 @@ ${shared}`
         {!text.trim() && props.pending.length === 0 && (
           <MyStickersButton disabled={!!uploading} onPick={(file) => void sendVoice(file)} />
         )}
-        {!text.trim() && props.pending.length === 0 ? (
-          <VoiceRecorder disabled={!!uploading} onRecorded={(file) => void sendVoice(file)} />
-        ) : (
+        {/* Always there, so typing (or a shared file arriving) never ends a recording. */}
+        <VoiceRecorder
+          disabled={!!uploading}
+          idleHidden={!!text.trim() || props.pending.length > 0}
+          onRecorded={(file) => void sendVoice(file)}
+        />
+        {(!!text.trim() || props.pending.length > 0) && (
           <button
             type="button"
             className="icon-btn"
@@ -2543,9 +2594,10 @@ function SafetyNumber({ peer, onClose }: { peer: string; onClose(): void }): Rea
             help="If their safety number changes later, River stops sending until you verify again."
             checked={data.verified}
             onChange={(v) => {
-              void dm
-                .run({ a: 'setVerified', peer, verified: v })
-                .then(() => setData({ ...data, verified: v }));
+              // Shows verified only once River has recorded it.
+              void dm.attempt({ a: 'setVerified', peer, verified: v }).then((ok) => {
+                if (ok) setData({ ...data, verified: v });
+              });
             }}
           />
         </div>

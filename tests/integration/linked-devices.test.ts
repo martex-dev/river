@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccountService } from '../../apps/desktop/src/main/account/account-service.ts';
 import {
   LinkService,
@@ -49,15 +49,17 @@ const injectFetch: typeof fetch = async (input, init) => {
 
 const deadSocket = (): WebSocket => ({ send() {}, close() {}, readyState: 0 }) as unknown as WebSocket;
 
-/** One install of River: its own local database and services. */
-function install(name: string) {
+/** One install of River: its own local database and services. `broken` requests fail (a network gone). */
+function install(name: string, broken: { when: (url: string) => boolean } = { when: () => false }) {
   const local = migrateDatabase(join(dir, `${name}.db`), newDatabaseKey(), CLIENT_MIGRATIONS).db;
   locals.push(local);
   const identity = new IdentityService(() => local);
+  const fetchHere: typeof fetch = (input, init) =>
+    broken.when(String(input)) ? Promise.reject(new TypeError('fetch failed')) : injectFetch(input, init);
   const account = new AccountService({
     db: () => local,
     identity,
-    requestJson: createRequestJson(injectFetch),
+    requestJson: createRequestJson(fetchHere),
     log: nullLogger,
   });
   const community = new CommunityService({
@@ -75,7 +77,7 @@ function install(name: string) {
     identity,
     account,
     community,
-    requestJson: createRequestJson(injectFetch),
+    requestJson: createRequestJson(fetchHere),
     log: nullLogger,
     onLinked: () => undefined,
   });
@@ -208,6 +210,44 @@ describe('linked devices', { timeout: 60_000 }, () => {
     expect(after).toMatchObject({ state: 'registered', connection: 'error' });
   });
 
+  it('a linked device that has not published its keys does not stop direct messages', async () => {
+    const desktop = install('dee-desktop');
+    const me = desktop.identity.create('Dee');
+    await desktop.account.register(SERVER);
+    await desktop.dm.sync();
+    const bob = install('bo');
+    const bobId = bob.identity.create('Bo').riverId;
+    await bob.account.register(SERVER);
+    await bob.dm.sync();
+
+    const offered = await desktop.link.start();
+    const { code } = offered as Extract<LinkProgress, { state: 'offering' }>;
+    const phone = install('dee-phone');
+    await phone.link.join(code, 'Dee’s phone');
+    await until(() => desktop.link.status().state === 'request');
+    await desktop.link.confirm();
+    await until(() => phone.link.status().state === 'review');
+    await phone.link.accept();
+    await until(() => phone.link.status().state === 'linked');
+    // The phone is in the device list but its keys never reached the server (e.g. it went
+    // offline right after linking): nobody can fetch them, so nobody can be asked to write to it.
+    for (const table of ['signed_prekeys', 'kyber_prekeys', 'prekeys'] as const)
+      await serverDb.db
+        .deleteFrom(table)
+        .where('river_id', '=', me.riverId)
+        .where('device_id', '=', 2)
+        .execute();
+
+    await bob.dm.action({ a: 'open', peer: me.riverId, name: 'Dee' });
+    await bob.dm.action({ a: 'send', peer: me.riverId, text: 'still reachable' });
+    const got = await until(async () => {
+      await desktop.dm.sync();
+      const messages = await desktop.dm.action({ a: 'messages', peer: bobId });
+      return messages.find((m) => m.text === 'still reachable');
+    });
+    expect(got.mine).toBe(false);
+  });
+
   it('a new device gets the friends list and blocks from the account’s other devices', async () => {
     const desktop = install('ann-desktop');
     const me = desktop.identity.create('Ann');
@@ -280,5 +320,69 @@ describe('linked devices', { timeout: 60_000 }, () => {
 
     const phone = install('carol-phone');
     await expect(phone.link.join(offered.shortCode, 'Phone')).rejects.toThrow(/whole link/);
+  });
+
+  it('a device whose account could not be sent is taken off the list again', async () => {
+    const broken = { when: (_url: string) => false };
+    const desktop = install('dan-desktop', broken);
+    desktop.identity.create('Dan');
+    await desktop.account.register(SERVER);
+    const offered = (await desktop.link.start()) as Extract<LinkProgress, { state: 'offering' }>;
+    const phone = install('dan-phone');
+    await phone.link.join(offered.code, 'Phone');
+    await until(() => desktop.link.status().state === 'request');
+    broken.when = (url) => url.includes('/provision');
+    await expect(desktop.link.confirm()).rejects.toThrow();
+    broken.when = () => false;
+    expect((await desktop.link.devices()).map((d) => d.deviceId)).toEqual([1]);
+    // The server's list says the same (no device nobody holds).
+    await desktop.account.connect();
+    expect(desktop.account.status()).toMatchObject({ devices: 1 });
+    phone.link.cancel();
+    desktop.link.cancel();
+  });
+
+  it('confirming after the code ran out adds no device', async () => {
+    const desktop = install('eve-desktop');
+    desktop.identity.create('Eve');
+    await desktop.account.register(SERVER);
+    const offered = (await desktop.link.start()) as Extract<LinkProgress, { state: 'offering' }>;
+    const phone = install('eve-phone');
+    await phone.link.join(offered.code, 'Phone');
+    await until(() => desktop.link.status().state === 'request');
+    const later = Date.now() + 11 * 60 * 1000;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(later);
+    try {
+      await expect(desktop.link.confirm()).rejects.toThrow(/expired/);
+    } finally {
+      clock.mockRestore();
+    }
+    expect(desktop.link.status().state).toBe('failed');
+    expect((await desktop.link.devices()).map((d) => d.deviceId)).toEqual([1]);
+    phone.link.cancel();
+  });
+
+  it('a new device whose sign-in fails is left without the identity, ready to try again', async () => {
+    const desktop = install('fay-desktop');
+    desktop.identity.create('Fay');
+    await desktop.account.register(SERVER);
+    const offered = (await desktop.link.start()) as Extract<LinkProgress, { state: 'offering' }>;
+    const broken = { when: (_url: string) => false };
+    const phone = install('fay-phone', broken);
+    await phone.link.join(offered.code, 'Phone');
+    await until(() => desktop.link.status().state === 'request');
+    await desktop.link.confirm();
+    await until(() => phone.link.status().state === 'review');
+    broken.when = (url) => url.includes('/auth/');
+    await expect(phone.link.accept()).rejects.toThrow();
+    expect(phone.link.status().state).toBe('failed');
+    expect(phone.identity.get()).toBeNull();
+    expect(phone.account.status().state).toBe('none');
+    // Not stuck: the device can take a new code.
+    broken.when = () => false;
+    const again = (await desktop.link.start()) as Extract<LinkProgress, { state: 'offering' }>;
+    expect((await phone.link.join(again.code, 'Phone')).state).toBe('joining');
+    phone.link.cancel();
+    desktop.link.cancel();
   });
 });

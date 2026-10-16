@@ -107,6 +107,18 @@ export class IdentityService {
   }
 
   /**
+   * Undoes adopt() when linking could not finish (the server step failed): without this the
+   * device kept an identity with no account and could neither link nor start over. Only an
+   * identity with no account on this device is removed.
+   */
+  discardAdopted(riverId: string): void {
+    const db = this.db();
+    if (!db) return;
+    if (db.prepare('SELECT 1 FROM account WHERE id = 1').get()) return;
+    db.prepare('DELETE FROM identity WHERE id = 1 AND river_id = ?').run(riverId);
+  }
+
+  /**
    * Main-process-only: the full identity for libsignal's identity-key store,
    * which needs the private key for session agreement. Never sent over IPC.
    */

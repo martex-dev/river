@@ -1,4 +1,6 @@
 import {
+  createContext,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -10,6 +12,8 @@ import {
   type SVGProps,
   type MouseEvent as ReactMouseEvent,
 } from 'react';
+import { createPortal } from 'react-dom';
+import { placeWithin, pushOverlay, safeInsets, visibleBox } from '../../components/overlays.ts';
 import type { CommunityView, MemberView } from '../../../../shared/ipc.ts';
 import { highlight, languageOf } from './highlight.ts';
 import {
@@ -204,6 +208,103 @@ export function Avatar(props: {
 
 // ---- modal ----------------------------------------------------------------------------------------
 
+/**
+ * Closes this overlay on Escape (or the phone's Back button) only while it is the topmost one
+ * (components/overlays.ts), so one key press never closes a dialog and the menu above it at once.
+ */
+export function useOverlayLayer(onClose: () => void): void {
+  const latest = useRef(onClose);
+  useEffect(() => {
+    latest.current = onClose;
+  });
+  useEffect(() => {
+    const layer = pushOverlay(() => latest.current());
+    return () => layer.remove();
+  }, []);
+}
+
+/**
+ * Dialogs, menus and pickers render into <body> (2.10.12): not inside a message, whose swipe
+ * transform would move them and whose touch gestures would also fire under them, and above
+ * everything else on screen (a full-screen call too). Open ones are registered here so a panel
+ * knows what was opened from inside it (a picker from a menu stays "inside" it).
+ */
+interface Layer {
+  parent: number | null;
+  kind: 'popover' | 'modal';
+  el(): HTMLElement | null;
+  close(): void;
+}
+const layers = new Map<number, Layer>();
+let layerIds = 0;
+const LayerParent = createContext<number | null>(null);
+
+function ancestorsOf(id: number | null): Set<number> {
+  const out = new Set<number>();
+  for (let at = id; at !== null && !out.has(at); at = layers.get(at)?.parent ?? null) out.add(at);
+  return out;
+}
+
+/** True when `target` is inside layer `id` or anything opened from it. */
+function insideLayer(id: number, target: Node): boolean {
+  for (const [other, layer] of layers) {
+    if ((other === id || ancestorsOf(layer.parent).has(id)) && layer.el()?.contains(target)) return true;
+  }
+  return false;
+}
+
+function useLayer(kind: Layer['kind'], el: () => HTMLElement | null, onClose: () => void): number {
+  const parent = useContext(LayerParent);
+  const [id] = useState(() => ++layerIds);
+  const latest = useRef(onClose);
+  useEffect(() => {
+    latest.current = onClose;
+  });
+  useLayoutEffect(() => {
+    if (kind === 'popover') {
+      // One menu at a time: opening one closes the others, except the ones it was opened from.
+      const keep = ancestorsOf(parent);
+      for (const [other, layer] of [...layers]) {
+        if (layer.kind === 'popover' && !keep.has(other)) layer.close();
+      }
+    }
+    layers.set(id, { parent, kind, el, close: () => latest.current() });
+    return () => {
+      layers.delete(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return id;
+}
+
+/** The control that was just clicked (to tell which button opened a popover). */
+let lastClick: { target: Element; at: number } | null = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener(
+    'click',
+    (e) => {
+      if (e.target instanceof Element) lastClick = { target: e.target, at: performance.now() };
+    },
+    true,
+  );
+}
+
+/** Swallows the click that follows a press on `el` (that press closed the popover `el` opens). */
+function swallowClickOn(el: Element): void {
+  const done = (): void => {
+    window.removeEventListener('click', stop, true);
+    window.clearTimeout(timer);
+  };
+  const stop = (e: MouseEvent): void => {
+    done();
+    if (!el.contains(e.target as Node)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  };
+  const timer = window.setTimeout(done, 800);
+  window.addEventListener('click', stop, true);
+}
+
 export function Modal(props: {
   title?: string;
   onClose(): void;
@@ -212,42 +313,47 @@ export function Modal(props: {
   full?: boolean;
   className?: string;
 }): ReactElement {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') props.onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [props]);
-  return (
-    <div
-      className="modal"
-      role="dialog"
-      aria-modal="true"
-      aria-label={props.title}
-      onMouseDown={props.onClose}
-    >
+  const ref = useRef<HTMLDivElement>(null);
+  useOverlayLayer(props.onClose);
+  const id = useLayer('modal', () => ref.current, props.onClose);
+  return createPortal(
+    <LayerParent.Provider value={id}>
       <div
-        className={`modal__card ${props.wide ? 'modal__card--wide' : ''} ${props.full ? 'modal__card--full' : ''} ${props.className ?? ''}`}
-        onMouseDown={(e) => e.stopPropagation()}
+        ref={ref}
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={props.title}
+        onMouseDown={props.onClose}
       >
-        {props.title && (
-          <header className="modal__head">
-            <h2>{props.title}</h2>
-            <button className="icon-btn" aria-label="Close" onClick={props.onClose}>
-              <XIcon />
-            </button>
-          </header>
-        )}
-        {props.children}
+        <div
+          className={`modal__card ${props.wide ? 'modal__card--wide' : ''} ${props.full ? 'modal__card--full' : ''} ${props.className ?? ''}`}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {props.title && (
+            <header className="modal__head">
+              <h2>{props.title}</h2>
+              <button className="icon-btn" aria-label="Close" onClick={props.onClose}>
+                <XIcon />
+              </button>
+            </header>
+          )}
+          {props.children}
+        </div>
       </div>
-    </div>
+    </LayerParent.Provider>,
+    document.body,
   );
 }
 
 // ---- popover / context menu ----------------------------------------------------------------------
 
-/** A floating panel at a screen position, kept on-screen, closed by outside click or Escape. */
+/**
+ * A floating panel at a screen position. It stays inside the visible screen (above the phone's
+ * keyboard, clear of the notch), scrolls when taller than that, and closes on Escape, a press
+ * outside it (pressing the button that opened it closes it too), scrolling what is under it, or
+ * another menu opening.
+ */
 export function Popover(props: {
   x: number;
   y: number;
@@ -256,35 +362,72 @@ export function Popover(props: {
   className?: string;
 }): ReactElement {
   const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ left: props.x, top: props.y });
+  const [pos, setPos] = useState<{ left: number; top: number; maxHeight?: number }>({
+    left: props.x,
+    top: props.y,
+  });
+  const latest = useRef(props.onClose);
+  useEffect(() => {
+    latest.current = props.onClose;
+  });
+  useOverlayLayer(props.onClose);
+  const id = useLayer('popover', () => ref.current, props.onClose);
+  // The button that opened this popover (clicked just now), if any.
+  const anchor = useRef<Element | null>(null);
   useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    setPos({
-      left: Math.max(8, Math.min(props.x, window.innerWidth - r.width - 8)),
-      top: Math.max(8, Math.min(props.y, window.innerHeight - r.height - 8)),
-    });
+    if (lastClick && performance.now() - lastClick.at < 300) {
+      anchor.current = lastClick.target.closest('button, [role="button"], a');
+    }
+  }, []);
+  useLayoutEffect(() => {
+    const place = (): void => {
+      const el = ref.current;
+      if (!el) return;
+      const view = visibleBox();
+      const insets = safeInsets();
+      // Measure at the tallest it may be, then place it.
+      el.style.maxHeight = `${placeWithin(0, 0, { width: 0, height: 0 }, view, insets).maxHeight}px`;
+      const r = el.getBoundingClientRect();
+      setPos(placeWithin(props.x, props.y, { width: r.width, height: r.height }, view, insets));
+    };
+    place();
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', place);
+    return () => vv?.removeEventListener('resize', place);
   }, [props.x, props.y]);
   useEffect(() => {
-    const onDown = (e: MouseEvent): void => {
-      if (!ref.current?.contains(e.target as Node)) props.onClose();
+    const openedAt = performance.now();
+    const onDown = (e: PointerEvent): void => {
+      const target = e.target as Node;
+      if (insideLayer(id, target)) return;
+      // A press on the button that opened it closes it, and that button's click must not reopen it.
+      if (anchor.current?.isConnected && anchor.current.contains(target)) swallowClickOn(anchor.current);
+      latest.current();
     };
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') props.onClose();
+    const onScroll = (e: Event): void => {
+      // Settling in (focus, layout) right after opening is not the reader scrolling away.
+      if (performance.now() - openedAt < 300) return;
+      const target = e.target;
+      if (target instanceof Node && target !== document && insideLayer(id, target)) return;
+      latest.current();
     };
-    const t = window.setTimeout(() => window.addEventListener('mousedown', onDown));
-    window.addEventListener('keydown', onKey);
+    const t = window.setTimeout(() => {
+      window.addEventListener('pointerdown', onDown, true);
+      window.addEventListener('scroll', onScroll, true);
+    });
     return () => {
       window.clearTimeout(t);
-      window.removeEventListener('mousedown', onDown);
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('scroll', onScroll, true);
     };
-  }, [props]);
-  return (
-    <div ref={ref} className={`popover ${props.className ?? ''}`} style={pos} role="menu">
-      {props.children}
-    </div>
+  }, [id]);
+  return createPortal(
+    <LayerParent.Provider value={id}>
+      <div ref={ref} className={`popover ${props.className ?? ''}`} style={pos} role="menu">
+        {props.children}
+      </div>
+    </LayerParent.Provider>,
+    document.body,
   );
 }
 

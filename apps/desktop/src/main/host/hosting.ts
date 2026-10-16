@@ -148,6 +148,8 @@ export class Hosting {
 
   /** At app start: resume hosting if it is on, and look for an older River Host. */
   async init(): Promise<void> {
+    // Keep the owner's connection pointed at their live local server (also after taking over below).
+    setInterval(() => this.syncOwnConnection(), 10_000).unref();
     await this.refreshLegacy();
     const legacy = findLegacyHost(this.deps.homeDir);
     if (
@@ -164,8 +166,6 @@ export class Hosting {
       killOrphanTunnel(this.root, this.deps.log);
       this.manager.start();
     }
-    // Keep the owner's connection pointed at their live local server.
-    setInterval(() => this.syncOwnConnection(), 10_000).unref();
     this.changed();
   }
 

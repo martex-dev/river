@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer';
+import { phonePlatform } from './platform.ts';
 
 /**
  * Node globals the shared client code expects, set before any of it loads.
@@ -48,7 +49,7 @@ const g = globalThis as Record<string, unknown>;
 g.Buffer ??= Buffer;
 g.process ??= {
   env: {},
-  platform: /iPhone|iPad|iPod/.test(globalThis.navigator?.userAgent ?? '') ? 'ios' : 'android',
+  platform: phonePlatform(),
   arch: 'arm64',
   versions: {},
   nextTick: (fn: (...args: unknown[]) => void, ...args: unknown[]) => queueMicrotask(() => fn(...args)),

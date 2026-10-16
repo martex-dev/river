@@ -17,9 +17,11 @@ import androidx.core.content.ContextCompat;
 
 /**
  * Settings → System → Lock River: River asks for the fingerprint, face or
- * screen lock whenever it comes to the front. A cover hides River until then
- * (also in the recent-apps preview). The setting lives in the app's private
- * preferences so the lock applies before the client core has started.
+ * screen lock whenever it comes to the front. A cover hides River until then,
+ * and goes up as soon as River leaves the front (before Android takes the
+ * recent-apps preview; on Android 13+ that preview is turned off while the
+ * lock is on). The setting lives in the app's private preferences so the lock
+ * applies before the client core has started.
  */
 public final class AppLock {
   private static final int AUTHENTICATORS =
@@ -29,11 +31,33 @@ public final class AppLock {
   private View cover;
   private boolean unlocked = false;
   private boolean prompting = false;
+  private Runnable onUnlock;
 
   public AppLock(AppCompatActivity activity) {
     this.activity = activity;
     this.prefs = prefsOf(activity);
     current = this;
+  }
+
+  /** Runs after each unlock (River's screen is usable again). */
+  public void onUnlocked(Runnable fn) {
+    onUnlock = fn;
+  }
+
+  /** The screen is going away: the lock lets go of it. */
+  public void detach() {
+    if (current == this) current = null;
+    onUnlock = null;
+  }
+
+  /** River is hidden behind the lock right now. */
+  public boolean covering() {
+    return cover != null;
+  }
+
+  /** Android 13+: no recent-apps preview of River while the lock is on. */
+  private void applyRecents() {
+    if (android.os.Build.VERSION.SDK_INT >= 33) activity.setRecentsScreenshotEnabled(!enabled());
   }
 
   private static SharedPreferences prefsOf(Context context) {
@@ -55,6 +79,7 @@ public final class AppLock {
     prefs.edit().putBoolean("enabled", enabled && can).apply();
     AppLock lock = current;
     if (lock != null) {
+      lock.applyRecents();
       if (!enabled || !can) {
         lock.unlocked = true;
         lock.hide();
@@ -73,9 +98,23 @@ public final class AppLock {
 
   /** Activity came to the front. */
   public void onResume() {
-    if (!enabled() || unlocked) return;
+    applyRecents();
+    if (!enabled() || unlocked) {
+      hide();
+      return;
+    }
     show();
     prompt();
+  }
+
+  /**
+   * Activity is leaving the front: cover it now, before the recent-apps preview is taken. A
+   * dialog in front (a permission prompt) only covers it; leaving River (onStop) locks it.
+   * In picture-in-picture the call stays visible.
+   */
+  public void onPause() {
+    if (!enabled() || activity.isInPictureInPictureMode()) return;
+    show();
   }
 
   /** Activity left the screen: lock again (and cover the recent-apps preview). */
@@ -98,6 +137,8 @@ public final class AppLock {
                 prompting = false;
                 unlocked = true;
                 hide();
+                Runnable next = onUnlock;
+                if (next != null) next.run();
               }
 
               @Override

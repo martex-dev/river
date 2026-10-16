@@ -1,4 +1,5 @@
 import { ask, handle, on, ui } from '../host.ts';
+import { expectExport } from '../exports.ts';
 import { native } from '../native.ts';
 
 /**
@@ -64,11 +65,19 @@ interface MessageOptions {
 const optionsOf = <T>(a: unknown, b: unknown): T => (b === undefined ? a : b) as T;
 
 export const dialog = {
-  /** The shell asks where to save (Android's document picker) and returns a path River may write to. */
+  /**
+   * The shell asks where to save (Android's document picker) and returns a path River may write
+   * to. On iOS the path is private and marked `export`: the file is offered once written.
+   */
   async showSaveDialog(a: unknown, b?: unknown): Promise<{ canceled: boolean; filePath?: string }> {
     const options = optionsOf<SaveOptions>(a, b);
     const name = (options.defaultPath ?? 'River file').split('/').pop() ?? 'River file';
-    return ask('saveFile', { name, filters: options.filters ?? [] });
+    const choice = await ask<{ canceled: boolean; filePath?: string; export?: boolean }>('saveFile', {
+      name,
+      filters: options.filters ?? [],
+    });
+    if (!choice.canceled && choice.filePath && choice.export === true) expectExport(choice.filePath);
+    return { canceled: choice.canceled, ...(choice.filePath ? { filePath: choice.filePath } : {}) };
   },
   async showMessageBox(a: unknown, b?: unknown): Promise<{ response: number }> {
     const options = optionsOf<MessageOptions>(a, b);

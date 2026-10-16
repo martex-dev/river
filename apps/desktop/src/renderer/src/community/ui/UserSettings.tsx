@@ -255,9 +255,16 @@ export function VoiceSettings(): ReactElement {
     let ctx: AudioContext | null = null;
     void (async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
+        const opened = await navigator.mediaDevices.getUserMedia({
           audio: voice?.inputDeviceId ? { deviceId: { exact: voice.inputDeviceId } } : true,
         });
+        // The test was stopped (or the device changed) while the microphone was opening:
+        // the cleanup below already ran, so release this one here.
+        if (stop) {
+          opened.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        stream = opened;
         ctx = new AudioContext();
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 512;
@@ -273,7 +280,7 @@ export function VoiceSettings(): ReactElement {
         };
         tick();
       } catch {
-        setLevel(null);
+        if (!stop) setLevel(null);
       }
     })();
     return () => {

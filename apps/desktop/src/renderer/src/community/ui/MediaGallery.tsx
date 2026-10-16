@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import type { ChatMessage } from '../../../../shared/ipc.ts';
 import { AttachmentList } from './Attachments.tsx';
 
@@ -13,10 +13,12 @@ export function mediaPosts(messages: ChatMessage[]): ChatMessage[] {
 /** A media channel's gallery (1.0.26): every picture and video, with who shared it. */
 export function MediaGallery(props: {
   messages: ChatMessage[];
-  onLoadOlder(): void;
+  onLoadOlder(): Promise<unknown> | void;
   more: boolean;
 }): ReactElement {
   const posts = mediaPosts(props.messages);
+  // One page at a time: pressing again while one loads does nothing.
+  const [loading, setLoading] = useState(false);
   return (
     <div className="media-gallery" aria-label="Gallery">
       {posts.length === 0 && (
@@ -39,8 +41,15 @@ export function MediaGallery(props: {
         ))}
       </div>
       {props.more && posts.length > 0 && (
-        <button className="btn btn--ghost btn--small media-gallery__more" onClick={props.onLoadOlder}>
-          Load older
+        <button
+          className="btn btn--ghost btn--small media-gallery__more"
+          disabled={loading}
+          onClick={() => {
+            setLoading(true);
+            void Promise.resolve(props.onLoadOlder()).finally(() => setLoading(false));
+          }}
+        >
+          {loading ? 'Decrypting…' : 'Load older'}
         </button>
       )}
     </div>

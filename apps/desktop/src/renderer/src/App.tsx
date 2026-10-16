@@ -93,17 +93,6 @@ export function App(): ReactElement {
     const offDm = window.river.dm.onEvent((e) =>
       e.t === 'call' ? handleCallEvent(e) : useDm.getState().handle(e),
     );
-    // Opened by an "Incoming call" notification: the call that is ringing shows at once.
-    void useDm
-      .getState()
-      .load()
-      .then(() => window.river.dm.action({ a: 'pendingCall' }))
-      .then((ringing) => {
-        if (ringing.ok && ringing.value) handleCallEvent(ringing.value);
-      })
-      .catch(() => undefined);
-    // The rail shows your communities on every page, not only after opening Communities.
-    void useCommunity.getState().load();
     const offSocial = window.river.social.onEvent(() => onSocialChanged());
     return () => {
       offUpdates();
@@ -115,6 +104,25 @@ export function App(): ReactElement {
       offSocial();
     };
   }, [load, setUpdate, setStorage, setAccount]);
+
+  // Conversations and communities load once the encrypted storage is open and you have an
+  // identity: on first run and after unlocking, not only at start (when neither exists yet).
+  const identityId = useRiver((r) => r.identity?.riverId ?? null);
+  const storageOpen = storage.state === 'open';
+  useEffect(() => {
+    if (!storageOpen || !identityId) return;
+    // Opened by an "Incoming call" notification: the call that is ringing shows at once.
+    void useDm
+      .getState()
+      .load()
+      .then(() => window.river.dm.action({ a: 'pendingCall' }))
+      .then((ringing) => {
+        if (ringing.ok && ringing.value) handleCallEvent(ringing.value);
+      })
+      .catch(() => undefined);
+    // The rail shows your communities on every page, not only after opening Communities.
+    void useCommunity.getState().load();
+  }, [storageOpen, identityId]);
 
   useEffect(() => startNavHistory(), []);
 

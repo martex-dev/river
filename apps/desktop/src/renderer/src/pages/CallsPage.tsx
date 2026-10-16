@@ -17,6 +17,8 @@ export function CallsPage(): ReactElement {
   const account = useRiver((r) => r.account);
   const navigate = useRiver((r) => r.navigate);
   const active = useDmCall((s) => s.active);
+  // One call at a time: none while one is on or ringing.
+  const busy = useDmCall((s) => !!s.active || !!s.incoming);
   const dm = useDm();
   const [calls, setCalls] = useState<CallView[] | null>(null);
 
@@ -30,7 +32,10 @@ export function CallsPage(): ReactElement {
     dm.select(peer);
     void startDmCall(peer, video);
   };
-  const friends = dm.conversations.filter((c) => c.kind === 'direct' && !c.self && c.state === 'accepted');
+  // Contacts who accepted (a request still waiting for their answer cannot be called yet).
+  const friends = dm.conversations.filter(
+    (c) => c.kind === 'direct' && !c.self && c.state === 'accepted' && !c.awaitingReply,
+  );
 
   return (
     <div className="page calls">
@@ -73,7 +78,7 @@ export function CallsPage(): ReactElement {
                 <button
                   className="icon-btn"
                   aria-label={`Call ${c.name}`}
-                  disabled={!!active}
+                  disabled={busy}
                   onClick={() => call(c.peer, false)}
                 >
                   📞
@@ -81,7 +86,7 @@ export function CallsPage(): ReactElement {
                 <button
                   className="icon-btn"
                   aria-label={`Video call ${c.name}`}
-                  disabled={!!active}
+                  disabled={busy}
                   onClick={() => call(c.peer, true)}
                 >
                   🎥
@@ -101,7 +106,7 @@ export function CallsPage(): ReactElement {
                 <button
                   className="icon-btn"
                   aria-label={`Call ${f.name}`}
-                  disabled={!!active}
+                  disabled={busy}
                   onClick={() => call(f.riverId, false)}
                 >
                   📞
@@ -109,7 +114,7 @@ export function CallsPage(): ReactElement {
                 <button
                   className="icon-btn"
                   aria-label={`Video call ${f.name}`}
-                  disabled={!!active}
+                  disabled={busy}
                   onClick={() => call(f.riverId, true)}
                 >
                   🎥

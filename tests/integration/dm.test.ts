@@ -1,9 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AccountService } from '../../apps/desktop/src/main/account/account-service.ts';
+import { LinkService } from '../../apps/desktop/src/main/account/link-service.ts';
 import { CommunityService } from '../../apps/desktop/src/main/community/community-service.ts';
 import { DmService } from '../../apps/desktop/src/main/dm/dm-service.ts';
 import { SocialService } from '../../apps/desktop/src/main/social/social-service.ts';
@@ -14,6 +16,7 @@ import { migrateDatabase, type LocalDatabase } from '../../apps/desktop/src/main
 import { newDatabaseKey } from '../../apps/desktop/src/main/storage/key-file.ts';
 import { CLIENT_MIGRATIONS } from '../../apps/desktop/src/main/storage/migrations.ts';
 import type { DmEvent } from '../../apps/desktop/src/shared/dm.ts';
+import type { LinkProgress } from '../../apps/desktop/src/shared/ipc.ts';
 import { tally, voteEmoji } from '../../apps/desktop/src/shared/poll.ts';
 import { buildApp } from '../../apps/server/src/app.ts';
 import { loadConfig } from '../../apps/server/src/config.ts';
@@ -42,7 +45,8 @@ const injectFetch: typeof fetch = async (input, init) => {
 };
 const deadSocket = (): WebSocket => ({ send() {}, close() {}, readyState: 0 }) as unknown as WebSocket;
 
-async function person(name: string, privacy?: { readReceipts: boolean; typing: boolean }) {
+/** One install of River (no identity yet): its own local database and services. */
+function install(name: string, privacy?: { readReceipts: boolean; typing: boolean }) {
   const local = migrateDatabase(join(dir, `${name}.db`), newDatabaseKey(), CLIENT_MIGRATIONS).db;
   locals.push(local);
   const identity = new IdentityService(() => local);
@@ -52,8 +56,6 @@ async function person(name: string, privacy?: { readReceipts: boolean; typing: b
     requestJson: createRequestJson(injectFetch),
     log: nullLogger,
   });
-  const me = identity.create(name);
-  await account.register(SERVER);
   const community = new CommunityService({
     db: () => local,
     account,
@@ -73,11 +75,60 @@ async function person(name: string, privacy?: { readReceipts: boolean; typing: b
     ...(privacy ? { privacy: () => privacy } : {}),
   });
   const social = new SocialService({ db: () => local, identity, dm, log: nullLogger });
+  const link = new LinkService({
+    identity,
+    account,
+    community,
+    requestJson: createRequestJson(injectFetch),
+    log: nullLogger,
+    onLinked: () => undefined,
+  });
   const events: DmEvent[] = [];
   dm.onEvent((e) => events.push(e));
-  await dm.sync();
-  return { riverId: me.riverId, dm, community, social, events, local };
+  return { identity, account, dm, community, social, link, events, local };
 }
+
+async function person(name: string, privacy?: { readReceipts: boolean; typing: boolean }) {
+  const x = install(name, privacy);
+  const me = x.identity.create(name);
+  await x.account.register(SERVER);
+  await x.dm.sync();
+  return { ...x, riverId: me.riverId };
+}
+type Person = Awaited<ReturnType<typeof person>>;
+
+async function until<T>(fn: () => Promise<T | undefined | null | false>, ms = 20_000): Promise<T> {
+  const end = Date.now() + ms;
+  for (;;) {
+    const v = await fn();
+    if (v) return v;
+    if (Date.now() > end) throw new Error('condition not met in time');
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
+/** Links another device to `primary`'s account (1.3), as the linked-devices tests do. */
+async function linkDevice(primary: Person, name: string): Promise<Person> {
+  const device = install(name);
+  const offered = (await primary.link.start()) as Extract<LinkProgress, { state: 'offering' }>;
+  await device.link.join(offered.code, name);
+  await until(async () => primary.link.status().state === 'request');
+  await primary.link.confirm();
+  await until(async () => device.link.status().state === 'review');
+  await device.link.accept();
+  await until(async () => device.link.status().state === 'linked');
+  await device.dm.sync();
+  return { ...device, riverId: primary.riverId };
+}
+
+/** Private DmService members some tests replace to simulate failures. */
+type Internals = {
+  apply(x: unknown): unknown;
+  sendContent(peer: string, content: unknown, ephemeral?: boolean): Promise<void>;
+  shareProfile(peer: string, groupId?: string): Promise<void>;
+  prepareSessions(peer: string, force?: boolean): Promise<unknown>;
+};
+const internals = (p: { dm: DmService }): Internals => p.dm as unknown as Internals;
 
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'river-dm-'));
@@ -494,19 +545,30 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'one' });
     await bob.dm.sync();
     await bob.dm.action({ a: 'block', peer: alice.riverId });
-    await expect(alice.dm.action({ a: 'send', peer: bob.riverId, text: 'two' })).resolves.toBeTruthy();
+    // Alice is answered as if Bob's account did not exist (the same as when she looks up his keys),
+    // so she cannot tell a block from a deleted account; nothing reaches Bob.
+    await expect(alice.dm.action({ a: 'send', peer: bob.riverId, text: 'two' })).rejects.toThrow(
+      /no longer exists/,
+    );
     await bob.dm.sync();
     expect((await bob.dm.action({ a: 'messages', peer: alice.riverId })).map((m) => m.text)).toEqual(['one']);
     // Nobody can open a conversation with themselves.
     const carol = await person('Carol');
     await expect(carol.dm.action({ a: 'open', peer: carol.riverId })).rejects.toThrow(/your own/);
     await bob.dm.action({ a: 'unblock', peer: alice.riverId });
+    // Unblocking restores what it was: a request stays a request (not a friend).
+    expect(bob.dm.contactState(alice.riverId)).toBe('request');
     await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'three' });
     await bob.dm.sync();
     expect((await bob.dm.action({ a: 'messages', peer: alice.riverId })).map((m) => m.text)).toEqual([
       'one',
       'three',
     ]);
+    // A friend who is blocked and unblocked is a friend again.
+    await bob.dm.action({ a: 'accept', peer: alice.riverId });
+    await bob.dm.action({ a: 'block', peer: alice.riverId });
+    await bob.dm.action({ a: 'unblock', peer: alice.riverId });
+    expect(bob.dm.contactState(alice.riverId)).toBe('accepted');
   });
 
   it('refuses keys that disagree with the identity key from a shared community', async () => {
@@ -621,6 +683,13 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     await alice.dm.sync();
     const aliceGroup = (await alice.dm.action({ a: 'conversations' })).find((c) => c.kind === 'group')!;
     expect(aliceGroup.members.map((m) => m.name)).toEqual(['Alice']);
+
+    // Added back after leaving: Bob decides whether to rejoin (a request, not straight back in).
+    await alice.dm.action({ a: 'addGroupMembers', peer: group.riverId, members: [bob.riverId] });
+    await bob.dm.sync();
+    expect((await bob.dm.action({ a: 'conversations' })).find((c) => c.kind === 'group')!.state).toBe(
+      'request',
+    );
   });
 
   it('social: posts, comments relayed by the author, stories with views, bios', async () => {
@@ -711,5 +780,364 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     expect((await bob.social.action({ a: 'feed' })).posts).toEqual([]);
     const mailbox = JSON.stringify(await serverDb.db.selectFrom('mailbox').selectAll().execute());
     for (const t of ['Made it', 'Congrats', 'sunrise', 'Climber']) expect(mailbox).not.toContain(t);
+  });
+});
+
+/** Two people who are friends (Alice wrote, Bob accepted). */
+async function friends(alice: Person, bob: Person): Promise<void> {
+  await alice.dm.action({ a: 'open', peer: bob.riverId, name: bob.identity.get()!.displayName! });
+  await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'hi' });
+  await bob.dm.sync();
+  await bob.dm.action({ a: 'accept', peer: alice.riverId });
+  await alice.dm.sync();
+}
+
+const messagesOf = async (p: Person, peer: string) => p.dm.action({ a: 'messages', peer });
+const conversationOf = async (p: Person, peer: string) =>
+  (await p.dm.action({ a: 'conversations' })).find((c) => c.riverId === peer);
+
+describe('direct messages: audit fixes', { timeout: 60_000 }, () => {
+  it('linked devices get groups, timers, disappearing copies, edits, reactions, pins, deletes and reads', async () => {
+    const alice = await person('Alice');
+    const phone = await linkDevice(alice, 'Alice-phone');
+    const bob = await person('Bob');
+    await friends(alice, bob);
+
+    // A group made on the desktop is on the phone too, and Bob's messages in it reach the phone.
+    const group = await alice.dm.action({ a: 'createGroup', name: 'Climb', members: [bob.riverId] });
+    const onPhone = await until(async () => {
+      await phone.dm.sync();
+      return conversationOf(phone, group.riverId);
+    });
+    expect(onPhone).toMatchObject({ name: 'Climb', state: 'accepted', isAdmin: true });
+    await bob.dm.sync();
+    await bob.dm.action({ a: 'send', peer: group.riverId, text: 'in!' });
+    await until(async () => {
+      await phone.dm.sync();
+      return (await messagesOf(phone, group.riverId)).some((m) => m.text === 'in!');
+    });
+
+    // The disappearing-messages timer set on the desktop applies on the phone; synced copies expire.
+    await alice.dm.action({ a: 'setTimer', peer: bob.riverId, seconds: 300 });
+    await until(async () => {
+      await phone.dm.sync();
+      return (await conversationOf(phone, bob.riverId))?.timer === 300;
+    });
+    const m = await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'vanishing' });
+    const copy = await until(async () => {
+      await phone.dm.sync();
+      return (await messagesOf(phone, bob.riverId)).find((x) => x.id === m.id);
+    });
+    expect(copy.mine).toBe(true);
+    expect(copy.expiresAt).toBeTruthy();
+    expect(phone.dm.sweepExpired(new Date(Date.now() + 301_000))).toBeGreaterThanOrEqual(1);
+
+    // Edits, reactions, pins and deletes for everyone made on the desktop show on the phone.
+    const n = await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'typo' });
+    await alice.dm.action({ a: 'setTimer', peer: bob.riverId, seconds: 0 });
+    await alice.dm.action({ a: 'edit', peer: bob.riverId, id: n.id, text: 'fixed' });
+    await alice.dm.action({ a: 'react', peer: bob.riverId, id: n.id, emoji: '🔥', on: true });
+    await alice.dm.action({ a: 'pin', peer: bob.riverId, id: n.id, pinned: true });
+    const edited = await until(async () => {
+      await phone.dm.sync();
+      const x = (await messagesOf(phone, bob.riverId)).find((y) => y.id === n.id);
+      return x?.pinned && x.reactions.length ? x : null;
+    });
+    expect(edited).toMatchObject({ text: 'fixed', pinned: true });
+    expect(edited.reactions).toEqual([{ emoji: '🔥', count: 1, mine: true, users: [alice.riverId] }]);
+    await alice.dm.action({ a: 'delete', peer: bob.riverId, id: n.id, forEveryone: true });
+    await until(async () => {
+      await phone.dm.sync();
+      return !(await messagesOf(phone, bob.riverId)).some((y) => y.id === n.id);
+    });
+
+    // Reading on the desktop clears the unread count on the phone.
+    await bob.dm.action({ a: 'send', peer: alice.riverId, text: 'read me' });
+    await alice.dm.sync();
+    await until(async () => {
+      await phone.dm.sync();
+      return (await conversationOf(phone, bob.riverId))?.unread === 1;
+    });
+    await alice.dm.action({ a: 'read', peer: bob.riverId });
+    await until(async () => {
+      await phone.dm.sync();
+      return (await conversationOf(phone, bob.riverId))?.unread === 0;
+    });
+  });
+
+  it('group messages that arrive before the group itself wait for it instead of being dropped', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    const group = await alice.dm.action({
+      a: 'createGroup',
+      name: 'Trip',
+      members: [bob.riverId, carol.riverId],
+    });
+    await bob.dm.sync();
+    await carol.dm.sync();
+    // As if the group's details had not reached Bob yet.
+    bob.local.prepare('DELETE FROM dm_groups').run();
+    await carol.dm.action({ a: 'send', peer: group.riverId, text: 'early bird' });
+    await bob.dm.sync();
+    expect((await bob.dm.action({ a: 'conversations' })).filter((c) => c.kind === 'group')).toEqual([]);
+    // The group's details arrive: the waiting message shows.
+    await alice.dm.action({ a: 'renameGroup', peer: group.riverId, name: 'Trip!' });
+    await bob.dm.sync();
+    expect((await messagesOf(bob, group.riverId)).map((x) => x.text)).toContain('early bird');
+  });
+
+  it('a decrypted message whose applying fails is kept and applied on the next sync', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const dm = internals(bob);
+    const apply = dm.apply.bind(bob.dm);
+    let fail = true;
+    dm.apply = (x) => {
+      if (fail && (x as { content: { t: string } }).content.t === 'msg') {
+        fail = false;
+        throw new Error('disk I/O error');
+      }
+      return apply(x);
+    };
+    await alice.dm.action({ a: 'open', peer: bob.riverId });
+    await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'do not lose me' });
+    await bob.dm.sync();
+    expect(fail).toBe(false);
+    expect(await messagesOf(bob, alice.riverId)).toEqual([]);
+    // Nothing is left on the server (the plaintext is kept on Bob's device instead)…
+    expect(await serverDb.db.selectFrom('mailbox').selectAll().execute()).toEqual([]);
+    // …and the next sync applies it.
+    await bob.dm.sync();
+    expect((await messagesOf(bob, alice.riverId)).map((x) => x.text)).toEqual(['do not lose me']);
+  });
+
+  it('scheduled messages: cancel while sending, no double send, one message per item with back-off', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await friends(alice, bob);
+    const at = new Date(Date.now() + 3600_000).toISOString();
+
+    // "Send now" twice at once goes out once.
+    const once = await alice.dm.action({ a: 'schedule', peer: bob.riverId, text: 'just once', sendAt: at });
+    await Promise.all([
+      alice.dm.action({ a: 'sendScheduledNow', id: once.id }),
+      alice.dm.action({ a: 'sendScheduledNow', id: once.id }),
+      alice.dm.sendDueScheduled(new Date(Date.now() + 7200_000)),
+    ]);
+    await bob.dm.sync();
+    expect((await messagesOf(bob, alice.riverId)).filter((x) => x.text === 'just once')).toHaveLength(1);
+
+    // Someone who is not on the server: every attempt fails.
+    const nobody = randomUUID();
+    const item = await alice.dm.action({ a: 'schedule', peer: nobody, text: 'into the void', sendAt: at });
+    await alice.dm.action({ a: 'sendScheduledNow', id: item.id });
+    expect(await alice.dm.action({ a: 'scheduled', peer: nobody })).toEqual([
+      expect.objectContaining({ id: item.id, failed: true }),
+    ]);
+    // Not retried at once (back-off); a later retry reuses the same message instead of adding one.
+    expect(await alice.dm.sendDueScheduled(new Date())).toBe(0);
+    await alice.dm.sendDueScheduled(new Date(Date.now() + 7200_000));
+    const copies = await messagesOf(alice, nobody);
+    expect(copies).toHaveLength(1);
+    expect(copies[0]).toMatchObject({ text: 'into the void', status: 'failed' });
+
+    // Cancelled while it is being sent: a failed attempt does not bring it back.
+    const sending = alice.dm.action({ a: 'sendScheduledNow', id: item.id });
+    await alice.dm.action({ a: 'cancelScheduled', id: item.id });
+    await sending;
+    expect(await alice.dm.action({ a: 'scheduled', peer: nobody })).toEqual([]);
+  });
+
+  it('messages left sending by a crash show as failed when River starts again', async () => {
+    const alice = await person('Alice');
+    alice.local
+      .prepare(
+        `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions) VALUES (?, ?, ?, ?, ?, 'sending', '{}')`,
+      )
+      .run('S'.repeat(22), randomUUID(), alice.riverId, '{"text":"stuck"}', new Date().toISOString());
+    const again = new DmService({
+      db: () => alice.local,
+      identity: alice.identity,
+      account: alice.account,
+      community: alice.community,
+      log: nullLogger,
+    });
+    const peer = (alice.local.prepare('SELECT peer FROM dm_messages').get() as { peer: string }).peer;
+    expect((await again.action({ a: 'messages', peer }))[0]).toMatchObject({
+      text: 'stuck',
+      status: 'failed',
+    });
+  });
+
+  it('unread counts use when a message arrived, not the time its sender claims', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await friends(alice, bob);
+    await bob.dm.action({ a: 'read', peer: alice.riverId });
+    await new Promise((r) => setTimeout(r, 5));
+    // Alice's app claims the message was written an hour ago (a wrong clock, or a late delivery).
+    await internals(alice).sendContent(bob.riverId, {
+      v: 1,
+      t: 'msg',
+      id: 'B'.repeat(22),
+      text: 'backdated',
+      sentAt: new Date(Date.now() - 3600_000).toISOString(),
+    });
+    await bob.dm.sync();
+    expect(await conversationOf(bob, alice.riverId)).toMatchObject({ unread: 1 });
+    // Ordering still follows the sender's time.
+    expect((await messagesOf(bob, alice.riverId)).map((x) => x.text)).toEqual(['backdated', 'hi']);
+    await bob.dm.action({ a: 'read', peer: alice.riverId });
+    expect(await conversationOf(bob, alice.riverId)).toMatchObject({ unread: 0 });
+  });
+
+  it('removing a conversation forgets its pin, timer and folders; stale pins do not count', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await friends(alice, bob);
+    // Ten pins left behind by conversations that no longer exist.
+    for (let i = 0; i < 10; i++) await alice.dm.action({ a: 'chatFlags', peer: randomUUID(), pinned: true });
+    await alice.dm.action({ a: 'chatFlags', peer: bob.riverId, pinned: true });
+    await alice.dm.action({ a: 'setTimer', peer: bob.riverId, seconds: 30 });
+    await alice.dm.action({ a: 'saveFolder', name: 'Family', peers: [bob.riverId] });
+    expect(await conversationOf(alice, bob.riverId)).toMatchObject({ pinned: true, timer: 30 });
+
+    await alice.dm.action({ a: 'removeConversation', peer: bob.riverId });
+    expect((await alice.dm.action({ a: 'folders' }))[0]!.peers).toEqual([]);
+    await alice.dm.action({ a: 'open', peer: bob.riverId });
+    expect(await conversationOf(alice, bob.riverId)).toMatchObject({ pinned: false, timer: 0 });
+  });
+
+  it('edits refresh the chat list preview; search matches file names, not file keys', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await friends(alice, bob);
+    const m = await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'see you at 5' });
+    await bob.dm.sync();
+    alice.events.length = 0;
+    await alice.dm.action({ a: 'edit', peer: bob.riverId, id: m.id, text: 'see you at 6' });
+    const lastList = (p: Person) =>
+      p.events
+        .filter((e) => e.t === 'conversations')
+        .at(-1)
+        ?.conversations.find((c) => c.kind === 'direct');
+    expect(lastList(alice)?.last?.text).toBe('see you at 6');
+    bob.events.length = 0;
+    await bob.dm.sync();
+    expect(lastList(bob)?.last?.text).toBe('see you at 6');
+
+    const pointer = await alice.dm.action({
+      a: 'upload',
+      name: 'holiday-plan.pdf',
+      mime: 'application/pdf',
+      bytes: new TextEncoder().encode('plan'),
+    });
+    await alice.dm.action({ a: 'send', peer: bob.riverId, text: '', attachments: [pointer] });
+    expect((await alice.dm.action({ a: 'search', query: 'holiday' })).length).toBe(1);
+    // A piece of the file's secret key is not a match.
+    const keyBits = pointer.key.replace(/[^A-Za-z0-9]/g, '').slice(0, 8);
+    expect(await alice.dm.action({ a: 'search', query: keyBits })).toEqual([]);
+  });
+
+  it('groups: an add does not undo a leave that happened meanwhile; partial delivery is recorded', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    const dave = await person('Dave');
+    const group = await alice.dm.action({
+      a: 'createGroup',
+      name: 'Band',
+      members: [bob.riverId, carol.riverId],
+    });
+    await bob.dm.sync();
+    await bob.dm.action({ a: 'leaveGroup', peer: group.riverId });
+    // Bob's leave is applied while Alice's add waits for Dave's keys.
+    const dm = internals(alice);
+    const prepare = dm.prepareSessions.bind(alice.dm);
+    dm.prepareSessions = async (peer, force) => {
+      if (peer === dave.riverId) {
+        dm.prepareSessions = prepare;
+        await alice.dm.sync();
+      }
+      return prepare(peer, force);
+    };
+    await alice.dm.action({ a: 'addGroupMembers', peer: group.riverId, members: [dave.riverId] });
+    expect((await conversationOf(alice, group.riverId))!.members.map((m) => m.riverId).sort()).toEqual(
+      [alice.riverId, carol.riverId, dave.riverId].sort(),
+    );
+
+    // Carol cannot be reached and sharing Alice's profile with Dave fails: Dave still gets the
+    // message, and the message records who did not.
+    const send = dm.sendContent.bind(alice.dm);
+    const share = dm.shareProfile.bind(alice.dm);
+    dm.sendContent = (peer, content, ephemeral) =>
+      peer === carol.riverId ? Promise.reject(new Error('offline')) : send(peer, content, ephemeral);
+    dm.shareProfile = (peer, groupId) =>
+      peer === dave.riverId ? Promise.reject(new Error('offline')) : share(peer, groupId);
+    const sent = await alice.dm.action({ a: 'send', peer: group.riverId, text: 'rehearsal at 8' });
+    expect(sent).toMatchObject({ status: 'sent', undeliveredTo: [carol.riverId] });
+    await dave.dm.sync();
+    expect((await messagesOf(dave, group.riverId)).map((x) => x.text)).toContain('rehearsal at 8');
+  });
+
+  it('after a restore, people met only in groups get a group profile, not a message request', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    await friends(alice, bob);
+    await alice.dm.action({ a: 'createGroup', name: 'Crew', members: [bob.riverId, carol.riverId] });
+    await carol.dm.sync();
+    // As on a restored device: nothing is remembered about whom we told what.
+    alice.local.prepare(`DELETE FROM signal_store WHERE kind = 'meta' AND id LIKE 'dm:profileSent:%'`).run();
+    alice.dm.afterRestore();
+    const pending = () =>
+      alice.local.prepare(`SELECT 1 FROM signal_store WHERE kind = 'meta' AND id = 'dm:reintroduce'`).get();
+    expect(pending()).toBeTruthy();
+    await alice.dm.sync();
+    expect(pending()).toBeUndefined();
+    await carol.dm.sync();
+    expect((await carol.dm.action({ a: 'conversations' })).filter((c) => c.kind === 'direct')).toEqual([]);
+  });
+});
+
+describe('social: blocks and comments', { timeout: 60_000 }, () => {
+  it('blocking removes their posts; your comment survives a snapshot made before it arrived', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await friends(alice, bob);
+    const post = await alice.social.action({
+      a: 'post',
+      kind: 'post',
+      text: 'New song',
+      attachments: [],
+      audience: 'friends',
+    });
+    await alice.social.action({
+      a: 'post',
+      kind: 'story',
+      text: 'studio',
+      attachments: [],
+      audience: 'friends',
+    });
+    await bob.dm.sync();
+    await bob.social.action({ a: 'comment', postId: post.id, text: 'Love it' });
+    // Alice relays before Bob's comment reached her: Bob keeps his comment.
+    await alice.social.relay(post.id);
+    await bob.dm.sync();
+    const comments = async () =>
+      (await bob.social.action({ a: 'feed' })).posts[0]!.comments.map((c) => c.text);
+    expect(await comments()).toEqual(['Love it']);
+    // Once relayed it is there once.
+    await alice.dm.sync();
+    await alice.social.relay(post.id);
+    await bob.dm.sync();
+    expect(await comments()).toEqual(['Love it']);
+
+    await bob.dm.action({ a: 'block', peer: alice.riverId });
+    const feed = await bob.social.action({ a: 'feed' });
+    expect(feed.posts).toEqual([]);
+    expect(feed.stories).toEqual([]);
+    expect(bob.local.prepare('SELECT COUNT(*) AS n FROM posts').get()).toEqual({ n: 0 });
   });
 });

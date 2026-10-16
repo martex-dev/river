@@ -4,24 +4,49 @@
  * - "main": the conversation (or page) fills the screen. The ☰ button at the
  *   top left opens the list.
  * - "nav": the server rail with the channel list, or Home's list of
- *   conversations. Choosing a channel, a conversation or a Home page opens it.
+ *   conversations. Choosing a channel, a conversation or a Home page opens it,
+ *   and so does River opening one by itself (a notification, an accepted call,
+ *   the quick switcher, a shared file).
  *
- * Android's Back button returns from a conversation to the list (the list is
- * a history entry), then leaves the app. Swiping right opens the list, left
- * closes it (swipe.ts). Nothing here changes the shared UI's
- * behaviour; it only decides which pane is shown.
+ * Android's Back button asks `window.__riverBack()` (shell.ts): it closes the
+ * topmost menu or dialog, then returns from a conversation to the list, then
+ * leaves the app. Swiping right opens the list, left closes it (swipe.ts).
+ * Nothing here changes the shared UI's behaviour; it only decides which pane is
+ * shown.
  */
 
+import { closeTopOverlay } from '../../desktop/src/renderer/src/components/overlays.ts';
+import { useCommunity } from '../../desktop/src/renderer/src/community/store.ts';
+import { useDm } from '../../desktop/src/renderer/src/dm/store.ts';
+import { useRiver } from '../../desktop/src/renderer/src/store.ts';
+import { handleBack, HoldTap, isTextField, keyboardInset, OVERLAYS } from './shell.ts';
 import { swipeTarget, type Pane } from './swipe.ts';
+
+declare global {
+  interface Window {
+    /**
+     * Android's Back button: MainActivity evaluates this and takes "true" as handled (anything
+     * else puts River in the background). Back sends no popstate, so this switches panes itself.
+     */
+    __riverBack?: () => boolean;
+    /** Set to 'ios' by the iOS app at document start; undefined on Android. */
+    __riverPlatform?: string;
+  }
+}
 
 const root = document.documentElement;
 root.dataset.pane = 'main';
-if (/iPhone|iPad|iPod/.test(navigator.userAgent)) root.dataset.platform = 'ios';
+// The iOS app says so before River loads (an iPad reports a Mac's user agent); else the user agent.
+if (window.__riverPlatform === 'ios' || /iPhone|iPad|iPod/.test(navigator.userAgent)) {
+  root.dataset.platform = 'ios';
+}
+
+const currentPane = (): Pane => (root.dataset.pane === 'nav' ? 'nav' : 'main');
 
 function show(pane: Pane): void {
   if (root.dataset.pane === pane) return;
   root.dataset.pane = pane;
-  // Opening the list adds a history entry, so Back closes it again.
+  // Opening the list adds a history entry, so a history Back closes it again.
   if (pane === 'nav') history.pushState({ riverPane: 'nav' }, '');
   else if ((history.state as { riverPane?: string } | null)?.riverPane === 'nav') history.back();
 }
@@ -30,31 +55,24 @@ window.addEventListener('popstate', () => {
   root.dataset.pane = (history.state as { riverPane?: string } | null)?.riverPane === 'nav' ? 'nav' : 'main';
 });
 
-// Choosing something in the list opens it.
-const OPENS = ['.channel__open', '.dm-row', '.home-nav__item', '.community__server', '.rail-home'].join(',');
-document.addEventListener(
-  'click',
-  (e) => {
-    if (root.dataset.pane !== 'nav') return;
-    const target = e.target as Element | null;
-    const hit = target?.closest(OPENS);
-    if (!hit) return;
-    // Servers and Home switch what the list shows; channels, conversations and pages open.
-    if (hit.matches('.community__server, .rail-home')) return;
-    setTimeout(() => show('main'), 0);
-  },
-  true,
-);
+window.__riverBack = () => {
+  try {
+    return handleBack({ closeTopOverlay, doc: document, pane: currentPane(), showList: () => show('nav') });
+  } catch {
+    // Never trap Back: if anything went wrong, let Android handle it.
+    return false;
+  }
+};
 
 /**
  * Long-press opens River's menus (messages, channels, members…), which listen
  * for "contextmenu". Android's WebView sends it on a long press; iOS does not,
  * so River sends it there itself, and the tap that ends the press is ignored.
  */
+const holdTap = new HoldTap();
 if (root.dataset.platform === 'ios') {
   let timer: number | undefined;
   let start: { x: number; y: number; target: EventTarget | null } | null = null;
-  let swallowClick = false;
   const cancel = (): void => {
     if (timer !== undefined) window.clearTimeout(timer);
     timer = undefined;
@@ -63,14 +81,17 @@ if (root.dataset.platform === 'ios') {
   document.addEventListener(
     'touchstart',
     (e) => {
-      if (e.touches.length !== 1) return cancel();
+      cancel();
+      holdTap.start();
+      // Text fields keep iOS's own long press (selecting, the loupe).
+      if (e.touches.length !== 1 || isTextField(e.target)) return;
       const t = e.touches[0]!;
       start = { x: t.clientX, y: t.clientY, target: e.target };
       timer = window.setTimeout(() => {
         if (!start) return;
         const { x, y, target } = start;
         cancel();
-        swallowClick = true;
+        holdTap.held();
         target?.dispatchEvent(
           new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y }),
         );
@@ -86,19 +107,67 @@ if (root.dataset.platform === 'ios') {
     },
     { passive: true },
   );
-  document.addEventListener('touchend', cancel, { passive: true });
-  document.addEventListener('touchcancel', cancel, { passive: true });
+  const end = (): void => {
+    cancel();
+    holdTap.end(Date.now());
+  };
+  document.addEventListener('touchend', end, { passive: true });
+  document.addEventListener('touchcancel', end, { passive: true });
   document.addEventListener(
     'click',
     (e) => {
-      if (!swallowClick) return;
-      swallowClick = false;
+      if (!holdTap.swallow(Date.now())) return;
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation();
     },
     true,
   );
 }
+
+// Choosing something in the list opens it. Registered after the iPhone tap guard above, so the
+// tap that ends a long press (which opened the row's menu) does not open the row too.
+const OPENS = ['.channel__open', '.dm-row', '.home-nav__item', '.community__server', '.rail-home'].join(',');
+/** Until then, River's own selection changes are the list switching what it shows (a server, Home). */
+let listSwitchUntil = 0;
+document.addEventListener(
+  'click',
+  (e) => {
+    if (root.dataset.pane !== 'nav' || e.defaultPrevented) return;
+    const target = e.target as Element | null;
+    const hit = target?.closest(OPENS);
+    if (!hit) return;
+    // Servers and Home switch what the list shows; channels, conversations and pages open.
+    if (hit.matches('.community__server, .rail-home')) {
+      listSwitchUntil = Date.now() + 600;
+      return;
+    }
+    setTimeout(() => show('main'), 0);
+  },
+  true,
+);
+
+/** River opening something by itself (notification, call, switcher, share sheet) shows it. */
+function openedByRiver(): void {
+  if (root.dataset.pane !== 'nav' || Date.now() < listSwitchUntil) return;
+  show('main');
+}
+useRiver.subscribe((s, prev) => {
+  if (s.section !== prev.section) openedByRiver();
+});
+useDm.subscribe((s, prev) => {
+  if (s.selected && s.selected !== prev.selected) openedByRiver();
+});
+// Picture-in-picture shows the call from the conversation pane; the list would leave it black.
+new MutationObserver(() => {
+  if (root.dataset.pip === 'on') show('main');
+}).observe(root, { attributes: true, attributeFilter: ['data-pip'] });
+useCommunity.subscribe((s, prev) => {
+  if (
+    (s.selectedChannel && s.selectedChannel !== prev.selectedChannel) ||
+    (s.openThread && s.openThread !== prev.openThread)
+  )
+    openedByRiver();
+});
 
 /** Touches that belong to something else: text fields, sliders, maps, things that scroll sideways. */
 function ownsHorizontalGesture(target: Element | null): boolean {
@@ -130,19 +199,36 @@ document.addEventListener(
   (e) => {
     const t = e.changedTouches[0];
     if (!touch || !t) return;
-    const pane = root.dataset.pane === 'nav' ? 'nav' : 'main';
     const next = swipeTarget(
-      pane,
+      currentPane(),
       { x0: touch.x, y0: touch.y, x1: t.clientX, y1: t.clientY, ms: Date.now() - touch.at },
       window.innerWidth,
     );
     touch = null;
-    // Not while a menu or dialog is open.
-    if (next && !document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) show(next);
+    // Not while a menu, dialog, picture or full-screen call is open.
+    if (next && !document.querySelector(OVERLAYS)) show(next);
   },
   { passive: true },
 );
 document.addEventListener('touchcancel', () => (touch = null), { passive: true });
+
+/**
+ * The keyboard: where it only covers the page (iPhone), --kb is how much of the bottom it covers,
+ * so the message box, menus and dialogs stay above it (phone.css). Where it resizes the page
+ * (Android) --kb stays 0.
+ */
+const vv = window.visualViewport;
+function updateKeyboard(): void {
+  const kb = keyboardInset(window.innerHeight, vv);
+  root.style.setProperty('--kb', `${kb}px`);
+  if (kb > 0) root.dataset.keyboard = 'open';
+  else delete root.dataset.keyboard;
+  // iOS pans the page to show the focused field; with the page made shorter, undo that pan.
+  if (kb > 0 && vv && vv.offsetTop > 0 && root.dataset.platform === 'ios') window.scrollTo(0, 0);
+}
+vv?.addEventListener('resize', updateKeyboard);
+vv?.addEventListener('scroll', updateKeyboard);
+updateKeyboard();
 
 const menu = document.createElement('button');
 menu.className = 'phone-menu';

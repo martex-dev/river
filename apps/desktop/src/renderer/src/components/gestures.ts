@@ -50,6 +50,27 @@ interface Options {
 /** Two taps this close in time (ms) and place (px) are a double tap. */
 const DOUBLE_TAP_MS = 300;
 const DOUBLE_TAP_PX = 30;
+/** The tap that ends a hold arrives within this long (ms) after the hold, if at all. */
+const HOLD_CLICK_MS = 800;
+
+/** Menus, dialogs and the image viewer opened from a message: touches there are theirs, not the message's. */
+const OVERLAY = '.popover, .modal, .lightbox, [role="dialog"], [role="alertdialog"], [role="menu"]';
+/** Controls inside a message: tapping them twice is not a double tap on the message. */
+const CONTROL = 'button, a, [role="button"], input, textarea, select, label, summary';
+
+/**
+ * True for an event that React delivers to a message but that happened in something opened from
+ * it: a menu or dialog rendered elsewhere in the page (a portal) or nested inside it.
+ */
+export function fromOverlay(e: { target: EventTarget | null; currentTarget: EventTarget | null }): boolean {
+  const target = e.target as Node | null;
+  const current = e.currentTarget as Node | null;
+  if (!target || !current) return false;
+  if (!current.contains(target)) return true;
+  const el = target instanceof Element ? target : target.parentElement;
+  const overlay = el?.closest(OVERLAY);
+  return !!overlay && overlay !== current && current.contains(overlay);
+}
 
 interface Handlers {
   onTouchStart(e: TouchEvent<HTMLElement>): void;
@@ -70,8 +91,12 @@ export function useMessageGestures(options: Options): Handlers {
     armed: boolean;
     timer: ReturnType<typeof setTimeout> | null;
     at: number;
+    /** Started on a control (a reaction, a link): never part of a double tap. */
+    control: boolean;
   } | null>(null);
   const heldAt = useRef(0);
+  /** The click that ends a hold is still to come (only that one click is swallowed). */
+  const swallowClick = useRef(false);
   const lastTap = useRef<{ at: number; x: number; y: number } | null>(null);
   const latest = useRef(options);
   useEffect(() => {
@@ -91,11 +116,15 @@ export function useMessageGestures(options: Options): Handlers {
 
   return {
     onTouchStart(e) {
+      // A new touch: whatever the last hold left behind is over.
+      swallowClick.current = false;
       const t = e.touches[0];
       if (latest.current.disabled || !t || e.touches.length !== 1) return reset(null);
+      // A menu, dialog or picture opened from this message handles its own touches.
+      if (fromOverlay(e)) return reset(null);
       const target = e.target as HTMLElement;
       // Controls inside a message (players, links, inputs) keep their own touch handling.
-      if (target.closest('input, textarea, audio, video, [role="slider"]')) return;
+      if (target.closest('input, textarea, audio, video, [role="slider"]')) return reset(null);
       const x = t.clientX;
       const y = t.clientY;
       const timer = latest.current.onHold
@@ -104,11 +133,20 @@ export function useMessageGestures(options: Options): Handlers {
             if (!s || s.mode !== 'undecided') return;
             s.timer = null;
             heldAt.current = Date.now();
+            swallowClick.current = true;
             haptic('select');
             latest.current.onHold?.(x, y);
           }, HOLD_MS)
         : null;
-      state.current = { x, y, mode: 'undecided', armed: false, timer, at: Date.now() };
+      state.current = {
+        x,
+        y,
+        mode: 'undecided',
+        armed: false,
+        timer,
+        at: Date.now(),
+        control: !!target.closest(CONTROL),
+      };
     },
     onTouchMove(e) {
       const s = state.current;
@@ -141,6 +179,11 @@ export function useMessageGestures(options: Options): Handlers {
       // A tap (not a hold, scroll or swipe): two in a row are a double tap.
       const now = Date.now();
       if (!s || s.mode !== 'undecided' || heldAt.current >= s.at || !latest.current.onDoubleTap) return;
+      // Tapping a reaction, a link or a button twice is using it twice, not a double tap.
+      if (s.control) {
+        lastTap.current = null;
+        return;
+      }
       const prev = lastTap.current;
       if (prev && now - prev.at < DOUBLE_TAP_MS && Math.hypot(s.x - prev.x, s.y - prev.y) < DOUBLE_TAP_PX) {
         lastTap.current = null;
@@ -158,7 +201,11 @@ export function useMessageGestures(options: Options): Handlers {
       }
     },
     onClickCapture(e) {
-      if (Date.now() - heldAt.current >= 800) return false;
+      // Only the one click that ends a hold, and only right after it: the next tap (on the menu
+      // the hold opened, say) is a real one.
+      if (!swallowClick.current) return false;
+      swallowClick.current = false;
+      if (Date.now() - heldAt.current >= HOLD_CLICK_MS) return false;
       e.preventDefault();
       e.stopPropagation();
       return true;

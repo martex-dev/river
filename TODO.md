@@ -29,6 +29,11 @@ Audit and plan: [docs/product/telegram-parity.md](docs/product/telegram-parity.m
 - [x] 2.10.9 Contact profiles
 - [x] 2.10.10 Stickers in direct messages
 - [x] 2.10.11 Reply privately to group messages
+- [x] 2.10.12 Bug sweep: seven audits (server, DM logic, main process, voice and calls, phone native, messaging UI, phone layout), all fixes released together
+- [ ] Idempotent channel resend: `send` takes the outbox id so a reply lost while going offline cannot post twice (needs server de-duplication)
+- [ ] Channel history: main returns `hasMore` so pages of undecryptable messages do not end the history early (the renderer guesses today)
+- [ ] Decide: bind River IDs to identity keys so an ID cannot be registered first on another server (architecture decision for the maintainer)
+- [ ] Check on real phones: Android Back, picture-in-picture, proximity, lock-screen calls, Stay connected notifications, iPhone core recovery (native code first compiled in CI)
 - [ ] Picture-in-picture for calls on iPhone (needs AVPictureInPictureController with a video call source)
 - [ ] Check the message box stays above the keyboard on Android 15+ (edge-to-edge) on a real phone
 - [ ] More interface languages (English and Bulgarian today)

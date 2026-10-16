@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { Selectable, Transaction } from 'kysely';
 import { verify } from '@river/crypto';
 import {
   API_PREFIX,
@@ -14,6 +15,7 @@ import { authenticate } from '../accounts/auth-store.ts';
 import type { Hub } from '../communities/hub.ts';
 import type { ServerConfig } from '../config.ts';
 import type { RiverDatabase } from '../db/database.ts';
+import type { Database } from '../db/schema.ts';
 import { HttpError } from '../http-error.ts';
 
 /** Undelivered envelopes are kept this long, then deleted. */
@@ -76,14 +78,27 @@ export function registerMessagingRoutes(
       for (const k of signed) {
         if (!verify(identityKey, b(k.publicKey), b(k.signature))) throw bad('A prekey signature is invalid');
       }
-      const counts = await db
-        .selectFrom('prekeys')
-        .select((eb) => eb.fn.countAll<number>().as('n'))
-        .where('river_id', '=', riverId)
-        .where('device_id', '=', deviceId)
-        .executeTakeFirst();
-      if (!req.replaceAll && Number(counts?.n ?? 0) + req.preKeys.length > MAX_ONE_TIME_PREKEYS) {
-        throw bad('Too many prekeys');
+      if (!req.replaceAll) {
+        // One-time keys of both kinds count against the cap, so neither table can be filled up.
+        const counts = await db
+          .selectFrom('prekeys')
+          .select((eb) => eb.fn.countAll<number>().as('n'))
+          .where('river_id', '=', riverId)
+          .where('device_id', '=', deviceId)
+          .executeTakeFirst();
+        const kyberCounts = await db
+          .selectFrom('kyber_prekeys')
+          .select((eb) => eb.fn.countAll<number>().as('n'))
+          .where('river_id', '=', riverId)
+          .where('device_id', '=', deviceId)
+          .where('last_resort', '=', 0)
+          .executeTakeFirst();
+        if (
+          Number(counts?.n ?? 0) + req.preKeys.length > MAX_ONE_TIME_PREKEYS ||
+          Number(kyberCounts?.n ?? 0) + req.kyberPreKeys.length > MAX_ONE_TIME_PREKEYS
+        ) {
+          throw bad('Too many prekeys');
+        }
       }
       await db.transaction().execute(async (trx) => {
         if (req.replaceAll) {
@@ -120,11 +135,27 @@ export function registerMessagingRoutes(
           .where('device_id', '=', deviceId)
           .where('last_resort', '=', 1)
           .execute();
-        const kyber = [
-          { ...req.kyberLastResort, last: 1 },
-          ...req.kyberPreKeys.map((k) => ({ ...k, last: 0 })),
-        ];
-        for (const k of kyber) {
+        // The last-resort key must always be stored: if its ID matches a stored one-time key,
+        // that row becomes the last-resort key (the device's store now holds this key under that ID).
+        await trx
+          .insertInto('kyber_prekeys')
+          .values({
+            river_id: riverId,
+            device_id: deviceId,
+            key_id: req.kyberLastResort.id,
+            public_key: req.kyberLastResort.publicKey,
+            signature: req.kyberLastResort.signature,
+            last_resort: 1,
+          })
+          .onConflict((oc) =>
+            oc.columns(['river_id', 'device_id', 'key_id']).doUpdateSet({
+              public_key: req.kyberLastResort.publicKey,
+              signature: req.kyberLastResort.signature,
+              last_resort: 1,
+            }),
+          )
+          .execute();
+        for (const k of req.kyberPreKeys) {
           await trx
             .insertInto('kyber_prekeys')
             .values({
@@ -133,7 +164,7 @@ export function registerMessagingRoutes(
               key_id: k.id,
               public_key: k.publicKey,
               signature: k.signature,
-              last_resort: k.last,
+              last_resort: 0,
             })
             .onConflict((oc) => oc.columns(['river_id', 'device_id', 'key_id']).doNothing())
             .execute();
@@ -163,6 +194,76 @@ export function registerMessagingRoutes(
     };
     return { preKeys: await count('prekeys'), kyberPreKeys: await count('kyber_prekeys') };
   });
+
+  const postgres = deps.database.dialect === 'postgres';
+  /** Atomically takes (deletes and returns) the lowest one-time key of a device, if any is left. */
+  async function claimOneTime(
+    trx: Transaction<Database>,
+    table: 'prekeys',
+    riverId: string,
+    deviceId: number,
+  ): Promise<Selectable<Database['prekeys']> | undefined>;
+  async function claimOneTime(
+    trx: Transaction<Database>,
+    table: 'kyber_prekeys',
+    riverId: string,
+    deviceId: number,
+  ): Promise<Selectable<Database['kyber_prekeys']> | undefined>;
+  async function claimOneTime(
+    trx: Transaction<Database>,
+    table: 'prekeys' | 'kyber_prekeys',
+    riverId: string,
+    deviceId: number,
+  ): Promise<Selectable<Database['prekeys']> | Selectable<Database['kyber_prekeys']> | undefined> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (table === 'prekeys') {
+        let pick = trx
+          .selectFrom('prekeys')
+          .select('key_id')
+          .where('river_id', '=', riverId)
+          .where('device_id', '=', deviceId)
+          .orderBy('key_id')
+          .limit(1);
+        if (postgres) pick = pick.forUpdate().skipLocked();
+        const row = await trx
+          .deleteFrom('prekeys')
+          .where('river_id', '=', riverId)
+          .where('device_id', '=', deviceId)
+          .where('key_id', '=', pick)
+          .returningAll()
+          .executeTakeFirst();
+        if (row) return row;
+      } else {
+        let pick = trx
+          .selectFrom('kyber_prekeys')
+          .select('key_id')
+          .where('river_id', '=', riverId)
+          .where('device_id', '=', deviceId)
+          .where('last_resort', '=', 0)
+          .orderBy('key_id')
+          .limit(1);
+        if (postgres) pick = pick.forUpdate().skipLocked();
+        const row = await trx
+          .deleteFrom('kyber_prekeys')
+          .where('river_id', '=', riverId)
+          .where('device_id', '=', deviceId)
+          .where('last_resort', '=', 0)
+          .where('key_id', '=', pick)
+          .returningAll()
+          .executeTakeFirst();
+        if (row) return row;
+      }
+      // Nothing claimed: none left, or another fetch committed the candidate first; look again.
+      let left = trx
+        .selectFrom(table)
+        .select('key_id')
+        .where('river_id', '=', riverId)
+        .where('device_id', '=', deviceId);
+      if (table === 'kyber_prekeys') left = left.where('last_resort', '=', 0);
+      if (!(await left.limit(1).executeTakeFirst())) return undefined;
+    }
+    return undefined;
+  }
 
   const isBlocked = async (owner: string, other: string): Promise<boolean> =>
     !!(await db
@@ -202,32 +303,11 @@ export function registerMessagingRoutes(
             .where('device_id', '=', d.device_id)
             .executeTakeFirst();
           if (!signed) return null;
-          const pre = await trx
-            .selectFrom('prekeys')
-            .selectAll()
-            .where('river_id', '=', target)
-            .where('device_id', '=', d.device_id)
-            .orderBy('key_id')
-            .limit(1)
-            .executeTakeFirst();
-          if (pre) {
-            await trx
-              .deleteFrom('prekeys')
-              .where('river_id', '=', target)
-              .where('device_id', '=', d.device_id)
-              .where('key_id', '=', pre.key_id)
-              .execute();
-          }
+          // Each one-time key is claimed with DELETE … RETURNING, so two concurrent fetches can
+          // never both hand out the same key (on PostgreSQL the candidate row is locked, skipping
+          // rows another fetch already holds; SQLite runs one write transaction at a time).
           const kyber =
-            (await trx
-              .selectFrom('kyber_prekeys')
-              .selectAll()
-              .where('river_id', '=', target)
-              .where('device_id', '=', d.device_id)
-              .where('last_resort', '=', 0)
-              .orderBy('key_id')
-              .limit(1)
-              .executeTakeFirst()) ??
+            (await claimOneTime(trx, 'kyber_prekeys', target, d.device_id)) ??
             (await trx
               .selectFrom('kyber_prekeys')
               .selectAll()
@@ -236,14 +316,7 @@ export function registerMessagingRoutes(
               .where('last_resort', '=', 1)
               .executeTakeFirst());
           if (!kyber) return null;
-          if (kyber.last_resort === 0) {
-            await trx
-              .deleteFrom('kyber_prekeys')
-              .where('river_id', '=', target)
-              .where('device_id', '=', d.device_id)
-              .where('key_id', '=', kyber.key_id)
-              .execute();
-          }
+          const pre = await claimOneTime(trx, 'prekeys', target, d.device_id);
           return {
             deviceId: d.device_id,
             registrationId: d.registration_id,
@@ -274,19 +347,48 @@ export function registerMessagingRoutes(
       const me = request.session!;
       const target = parse(riverIdSchema, request.params.riverId);
       const req = parse(sendDirectRequestSchema, request.body);
+      const notFound = new HttpError(404, 'not_found', 'No River account with that ID on this server');
+      // A blocked sender is answered exactly like for an account that does not exist, before any
+      // other check: a device mismatch (409) or a full mailbox (429) would otherwise reveal the block.
+      if (target !== me.riverId && (await isBlocked(target, me.riverId))) throw notFound;
       const devices = await db
         .selectFrom('devices')
-        .select(['device_id', 'registration_id'])
-        .where('river_id', '=', target)
+        .select((eb) => [
+          'devices.device_id',
+          'devices.registration_id',
+          // Same rule as GET /keys/:riverId: a device is reachable once it has published its keys.
+          eb
+            .and([
+              eb.exists(
+                eb
+                  .selectFrom('signed_prekeys')
+                  .select('signed_prekeys.key_id')
+                  .whereRef('signed_prekeys.river_id', '=', 'devices.river_id')
+                  .whereRef('signed_prekeys.device_id', '=', 'devices.device_id'),
+              ),
+              eb.exists(
+                eb
+                  .selectFrom('kyber_prekeys')
+                  .select('kyber_prekeys.key_id')
+                  .whereRef('kyber_prekeys.river_id', '=', 'devices.river_id')
+                  .whereRef('kyber_prekeys.device_id', '=', 'devices.device_id'),
+              ),
+            ])
+            .as('reachable'),
+        ])
+        .where('devices.river_id', '=', target)
         .execute();
-      if (!devices.length)
-        throw new HttpError(404, 'not_found', 'No River account with that ID on this server');
-      // Every device must get a copy (except the sending device when writing to yourself).
-      const expected = devices.filter((d) => !(target === me.riverId && d.device_id === me.deviceId));
+      if (!devices.length) throw notFound;
+      // Every device that published keys must get a copy (except the sending device when writing
+      // to yourself). A device that never published keys cannot be written to by anyone who uses
+      // GET /keys, so it is not required (that would make the account unreachable); a copy for it
+      // is still accepted.
+      const allowed = devices.filter((d) => !(target === me.riverId && d.device_id === me.deviceId));
+      const required = allowed.filter((d) => Boolean(d.reachable));
       const sentTo = new Map(req.messages.map((m) => [m.deviceId, m]));
-      const missing = expected.filter((d) => !sentTo.has(d.device_id)).map((d) => d.device_id);
-      const extra = [...sentTo.keys()].filter((id) => !expected.some((d) => d.device_id === id));
-      const stale = expected
+      const missing = required.filter((d) => !sentTo.has(d.device_id)).map((d) => d.device_id);
+      const extra = [...sentTo.keys()].filter((id) => !allowed.some((d) => d.device_id === id));
+      const stale = allowed
         .filter(
           (d) => sentTo.has(d.device_id) && sentTo.get(d.device_id)!.registrationId !== d.registration_id,
         )
@@ -299,11 +401,11 @@ export function registerMessagingRoutes(
           stale,
         });
       }
-      // Blocked senders are not told; their messages are silently dropped.
-      if (target !== me.riverId && (await isBlocked(target, me.riverId)))
-        return reply.code(202).send({ ok: true });
+      let messages = req.messages;
       if (!req.ephemeral) {
-        // A device that never collects its mail cannot be used to fill the server's disk.
+        // A device that never collects its mail cannot be used to fill the server's disk. Its copy
+        // is dropped; the person's other devices still get theirs.
+        const full = new Set<number>();
         for (const m of req.messages) {
           const queued = await db
             .selectFrom('mailbox')
@@ -311,17 +413,19 @@ export function registerMessagingRoutes(
             .where('recipient', '=', target)
             .where('recipient_device', '=', m.deviceId)
             .executeTakeFirst();
-          if (Number(queued?.n ?? 0) >= deps.config.mailboxLimit) {
-            throw new HttpError(
-              429,
-              'mailbox_full',
-              'This person has too many undelivered messages. Try later.',
-            );
-          }
+          if (Number(queued?.n ?? 0) >= deps.config.mailboxLimit) full.add(m.deviceId);
+        }
+        messages = req.messages.filter((m) => !full.has(m.deviceId));
+        if (!messages.length) {
+          throw new HttpError(
+            429,
+            'mailbox_full',
+            'This person has too many undelivered messages. Try later.',
+          );
         }
       }
       const receivedAt = deps.now().toISOString();
-      const envelopes: EnvelopeWire[] = req.messages.map((m) => ({
+      const envelopes: EnvelopeWire[] = messages.map((m) => ({
         id: randomBytes(16).toString('base64url'),
         sender: me.riverId,
         senderDevice: me.deviceId,

@@ -30,6 +30,7 @@ import * as m0023 from './migrations/0023_community_art.ts';
 import * as m0024 from './migrations/0024_role_expiry.ts';
 import * as m0025 from './migrations/0025_invite_tracking.ts';
 import * as m0026 from './migrations/0026_webhooks.ts';
+import * as m0027 from './migrations/0027_audit_cleanup.ts';
 import type { Database } from './schema.ts';
 
 export type Dialect = 'sqlite' | 'postgres';
@@ -76,6 +77,7 @@ export const MIGRATIONS: Record<string, Migration> = {
   '0024_role_expiry': m0024,
   '0025_invite_tracking': m0025,
   '0026_webhooks': m0026,
+  '0027_audit_cleanup': m0027,
 };
 
 /**

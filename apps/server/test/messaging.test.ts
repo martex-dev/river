@@ -159,7 +159,7 @@ describe('direct messages', () => {
     expect(extra.json()).toMatchObject({ extra: [2] });
   });
 
-  it('blocks: the blocked person sees "not found" and their messages are silently dropped', async () => {
+  it('blocks: the blocked person sees "not found" everywhere and their messages are dropped', async () => {
     ({ app, database } = await startServer());
     const alice = await client(app);
     const bob = await client(app);
@@ -178,7 +178,26 @@ describe('direct messages', () => {
       headers: auth(alice.token),
       payload: { messages: [{ deviceId: 1, registrationId: bob.identity.registrationId, type: 2, body }] },
     });
-    expect(res.statusCode).toBe(202);
+    // Answered exactly like a missing account, before the device check: a deliberately wrong
+    // device set (which a real recipient answers with 409) must not reveal the block either.
+    expect(res.statusCode).toBe(404);
+    const probe = await app.inject({
+      method: 'POST',
+      url: `/v1/messages/${bob.riverId}`,
+      headers: auth(alice.token),
+      payload: { messages: [{ deviceId: 7, registrationId: 1, type: 2, body }] },
+    });
+    expect(probe.statusCode).toBe(404);
+    expect(probe.json()).toEqual(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/v1/messages/00000000-0000-4000-8000-000000000000',
+          headers: auth(alice.token),
+          payload: { messages: [{ deviceId: 7, registrationId: 1, type: 2, body }] },
+        })
+      ).json(),
+    );
     expect(
       (await app.inject({ method: 'GET', url: '/v1/messages', headers: auth(bob.token) })).json().envelopes,
     ).toEqual([]);

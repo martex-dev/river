@@ -98,7 +98,27 @@ final class DbOps {
     return new JSONObject().put("columns", columns).put("rows", rows);
   }
 
-  Object call(String method, JSONObject a) throws Exception {
+  /**
+   * Closes every open database (the core stopped or its WebView was replaced). Synchronized
+   * with {@link #call}: the core's calls arrive on the WebView's JavaBridge thread.
+   */
+  synchronized void closeAll() {
+    for (SQLiteDatabase db : open.values()) {
+      try {
+        if (db.inTransaction()) db.endTransaction();
+      } catch (RuntimeException ignored) {
+        // closing anyway
+      }
+      try {
+        db.close();
+      } catch (RuntimeException ignored) {
+        // already closed
+      }
+    }
+    open.clear();
+  }
+
+  synchronized Object call(String method, JSONObject a) throws Exception {
     try {
       switch (method) {
         case "db.open":

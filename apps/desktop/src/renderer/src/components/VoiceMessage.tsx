@@ -38,10 +38,16 @@ export function formatDuration(seconds: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** The mic button; while recording, a bar with the timer, cancel and send. */
+/**
+ * The mic button; while recording, a bar with the timer, cancel and send. Keep it mounted while
+ * the composer is open and pass `idleHidden` when the mic should not show (text typed, files
+ * waiting): a recording in progress then carries on instead of being thrown away (2.10.12).
+ */
 export function VoiceRecorder(props: {
   onRecorded(file: File): void;
   disabled?: boolean;
+  /** Hide the mic button (not a recording in progress). */
+  idleHidden?: boolean;
 }): ReactElement | null {
   const [recording, setRecording] = useState<{ startedAt: number } | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -49,6 +55,14 @@ export function VoiceRecorder(props: {
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const keep = useRef(false);
+  /** Asking for the microphone right now (a second press must not open it twice). */
+  const starting = useRef(false);
+  const mounted = useRef(true);
+  // The newest callback: a reply chosen while recording goes with the recording.
+  const onRecorded = useRef(props.onRecorded);
+  useEffect(() => {
+    onRecorded.current = props.onRecorded;
+  });
 
   useEffect(() => {
     if (!recording) return;
@@ -59,24 +73,47 @@ export function VoiceRecorder(props: {
     return () => window.clearInterval(t);
   }, [recording]);
 
-  useEffect(() => () => stop(false), []);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      stop(false);
+    };
+  }, []);
 
   if (!canRecordVoice()) return null;
 
   async function start(): Promise<void> {
+    if (starting.current || recorder.current) return;
     setError(null);
     const format = recordingFormat();
     if (!format) return;
+    starting.current = true;
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
     } catch {
-      setError('River needs your microphone to record. Allow it in your system settings.');
+      starting.current = false;
+      if (mounted.current)
+        setError('River needs your microphone to record. Allow it in your system settings.');
       return;
     }
-    const r = new MediaRecorder(stream, { mimeType: format.mime, audioBitsPerSecond: 32_000 });
+    starting.current = false;
+    // Gone while the system asked for the microphone (chat closed): turn the microphone off again.
+    if (!mounted.current) {
+      for (const t of stream.getTracks()) t.stop();
+      return;
+    }
+    let r: MediaRecorder;
+    try {
+      r = new MediaRecorder(stream, { mimeType: format.mime, audioBitsPerSecond: 32_000 });
+    } catch {
+      for (const t of stream.getTracks()) t.stop();
+      setError('River could not record on this device.');
+      return;
+    }
     chunks.current = [];
     keep.current = false;
     const startedAt = Date.now();
@@ -86,13 +123,21 @@ export function VoiceRecorder(props: {
     r.onstop = () => {
       for (const t of stream.getTracks()) t.stop();
       recorder.current = null;
-      setRecording(null);
+      if (mounted.current) setRecording(null);
       const seconds = Math.round((Date.now() - startedAt) / 1000);
       if (!keep.current || seconds < 1 || !chunks.current.length) return;
       const blob = new Blob(chunks.current, { type: format.type });
-      props.onRecorded(new File([blob], `${VOICE_PREFIX}-${seconds}s.${format.ext}`, { type: format.type }));
+      onRecorded.current(
+        new File([blob], `${VOICE_PREFIX}-${seconds}s.${format.ext}`, { type: format.type }),
+      );
     };
-    r.start(1000);
+    try {
+      r.start(1000);
+    } catch {
+      for (const t of stream.getTracks()) t.stop();
+      setError('River could not record on this device.');
+      return;
+    }
     haptic('select');
     recorder.current = r;
     setNow(startedAt);
@@ -124,6 +169,7 @@ export function VoiceRecorder(props: {
       </div>
     );
   }
+  if (props.idleHidden) return null;
   return (
     <>
       <button

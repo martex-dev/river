@@ -111,31 +111,54 @@ export class StorageService {
     return this.status;
   }
 
+  /**
+   * A passphrase is being set up or checked (key derivation takes a moment). Taken before the
+   * first await, so a second submit cannot run alongside: a second setup would overwrite the
+   * key file with another key (the data opened with the first one unreadable for good), and a
+   * second unlock would open the database twice.
+   */
+  private busy = false;
+
+  isBusy(): boolean {
+    return this.busy;
+  }
+
   /** First run without an OS keystore: protect the database key with a passphrase. */
   async setupPassphrase(passphrase: string): Promise<StorageStatus> {
-    if (this.status.state !== 'setup-required') throw new Error('Passphrase setup is not expected now');
+    if (this.busy || this.status.state !== 'setup-required')
+      throw new Error('Passphrase setup is not expected now');
+    this.busy = true;
     const key = newDatabaseKey();
     try {
-      this.writeKeyFile(await sealWithPassphrase(key, passphrase));
+      const sealed = await sealWithPassphrase(key, passphrase);
+      if (this.status.state !== 'setup-required') throw new Error('Passphrase setup is not expected now');
+      this.writeKeyFile(sealed);
       this.open(key, 'passphrase');
     } finally {
       key.fill(0);
+      this.busy = false;
     }
     return this.status;
   }
 
   /** Throws WrongPassphraseError on a wrong passphrase. */
   async unlock(passphrase: string): Promise<StorageStatus> {
-    if (this.status.state !== 'locked') throw new Error('River is not locked');
+    if (this.busy || this.status.state !== 'locked') throw new Error('River is not locked');
     const keyFile = this.readKeyFile();
     if (keyFile === null || keyFile === 'corrupt' || keyFile.protection !== 'passphrase') {
       throw new Error('Key file changed unexpectedly');
     }
-    const key = await openWithPassphrase(keyFile, passphrase);
+    this.busy = true;
     try {
-      this.open(key, 'passphrase');
+      const key = await openWithPassphrase(keyFile, passphrase);
+      try {
+        if (this.status.state !== 'locked' || this.database) throw new Error('River is not locked');
+        this.open(key, 'passphrase');
+      } finally {
+        key.fill(0);
+      }
     } finally {
-      key.fill(0);
+      this.busy = false;
     }
     return this.status;
   }

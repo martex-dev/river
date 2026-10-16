@@ -265,6 +265,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       replyTo: id.optional(),
       threadId: id.optional(),
       attachments: z.array(attachmentPointerSchema).max(10).optional(),
+      /** A reply that should not notify the person replied to: kept across restarts. */
+      noPing: z.boolean().optional(),
       createdAt: z.iso.datetime(),
     })
     .strict(),
@@ -726,5 +728,6 @@ export interface SavedOutgoing {
   replyTo?: string;
   threadId?: string;
   attachments?: AttachmentPointer[];
+  noPing?: boolean;
   createdAt: string;
 }

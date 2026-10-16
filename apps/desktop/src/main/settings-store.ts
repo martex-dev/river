@@ -4,6 +4,7 @@ import {
   DEFAULT_SETTINGS,
   SETTINGS_SECTIONS,
   applySettingsPatch,
+  pruneUnknownKeys,
   settingsPatchSchema,
   settingsSchema,
   upgradeSettings,
@@ -50,14 +51,20 @@ export class SettingsStore {
   private load(): Settings {
     if (!existsSync(this.path)) return structuredClone(DEFAULT_SETTINGS);
     try {
-      // Files written by older Rivers lack newer sections; fill them in before validating.
-      const raw: unknown = upgradeSettings(JSON.parse(readFileSync(this.path, 'utf8')));
+      // Files written by older Rivers lack newer sections; fill them in before validating. Keys
+      // this River does not know (a newer River wrote them) are dropped, not fatal.
+      const raw: unknown = pruneUnknownKeys(
+        settingsSchema,
+        upgradeSettings(JSON.parse(readFileSync(this.path, 'utf8'))),
+      );
       const result = settingsSchema.safeParse(raw);
       if (result.success) return result.data;
       // Keep sections that are still valid instead of discarding everything.
       const merged = this.salvage(raw);
       this.log.warn('Settings file failed validation; recovered valid sections and kept a backup');
       this.backupInvalid();
+      // Save what was recovered: otherwise the next start finds no file and uses defaults.
+      this.saveQuietly(merged);
       return merged;
     } catch {
       this.log.warn('Settings file unreadable; using defaults and keeping a backup');
@@ -86,10 +93,18 @@ export class SettingsStore {
     }
   }
 
-  private save(): void {
+  private save(settings: Settings = this.current): void {
     mkdirSync(dirname(this.path), { recursive: true });
     const tmp = `${this.path}.tmp`;
-    writeFileSync(tmp, JSON.stringify(this.current, null, 2), { mode: 0o600 });
+    writeFileSync(tmp, JSON.stringify(settings, null, 2), { mode: 0o600 });
     renameSync(tmp, this.path);
+  }
+
+  private saveQuietly(settings: Settings): void {
+    try {
+      this.save(settings);
+    } catch {
+      this.log.warn('Could not save recovered settings');
+    }
   }
 }

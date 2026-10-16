@@ -4,8 +4,8 @@ import { friendLink, parseFriend } from '../../../shared/invite-link.ts';
 import { play } from '../community/sound.ts';
 import { useCommunity } from '../community/store.ts';
 import { Avatar } from '../community/ui/common.tsx';
-import { startDmCall } from '../dm/call.ts';
-import { GREETING, sendFriendRequest } from '../dm/friends.ts';
+import { startDmCall, useDmCall } from '../dm/call.ts';
+import { addFriend, GREETING } from '../dm/friends.ts';
 import { useDm } from '../dm/store.ts';
 import { useRiver } from '../store.ts';
 import { QrCode } from '../components/QrCode.tsx';
@@ -184,6 +184,8 @@ function FriendRow(props: {
   const { c, presence } = props;
   const dm = useDm();
   const navigate = useRiver((r) => r.navigate);
+  // One call at a time: no new call while one is on or ringing.
+  const callBusy = useDmCall((s) => !!s.active || !!s.incoming);
   const open = (): void => {
     navigate('messages');
     dm.select(c.riverId);
@@ -247,6 +249,7 @@ function FriendRow(props: {
               className="icon-btn"
               aria-label={`Call ${c.name}`}
               title="Voice call"
+              disabled={callBusy}
               onClick={() => {
                 open();
                 void startDmCall(c.riverId, false);
@@ -305,11 +308,16 @@ function AddFriend(props: {
   const myLink = friendLink(props.serverUrl, props.myId);
 
   const request = async (riverId: string): Promise<void> => {
-    const ok = await sendFriendRequest(riverId, message.trim() || GREETING);
+    const result = await addFriend(riverId, message.trim() || GREETING);
     setBusy(false);
-    if (!ok) return setError('Could not send the request. Try again.');
-    notify('Friend request sent');
+    if (result === 'failed') return setError('Could not send the request. Try again.');
     setHandle('');
+    if (result === 'friend') {
+      const name = useDm.getState().conversations.find((c) => c.riverId === riverId)?.name;
+      notify(`${name ?? 'This person'} is already your friend — here is your chat.`);
+      return;
+    }
+    notify('Friend request sent');
     props.onSent();
   };
 

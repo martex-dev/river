@@ -9,6 +9,8 @@ import WebKit
 public protocol CoreListener: AnyObject {
     func coreReply(id: Int, payload: String)
     func coreEvent(payload: String)
+    /// The core's page was reloaded (its web process ended): calls still waiting get no reply.
+    func coreRestarted()
 }
 
 /// Runs River's client core in its own, invisible WKWebView: the only one with
@@ -22,12 +24,24 @@ public protocol CoreListener: AnyObject {
 public final class CoreHost: NSObject {
     public static let shared = CoreHost()
 
+    /// Set in both WebViews before any script runs: an iPad's WebView reports a Mac user agent.
+    public static let platformScript = "window.__riverPlatform = 'ios';"
     private static let promptPrefix = "river-native:"
+    private static let coreURL = URL(string: "capacitor://localhost/core/index.html")!
+    /// Notifications whose answer the core still waits for; older ones are answered "dismissed".
+    private static let maxPendingNotifications = 32
     private var web: WKWebView?
     private var native: RiverNativeInterface?
     private var ready = false
     private var queue: [String] = []
     private var notificationAsks: [String: Int] = [:]
+    /// Notification identifiers in the order they were posted (oldest first).
+    private var notificationOrder: [String] = []
+    /// Which page of the core is running: an answer that comes later only goes to the one that asked.
+    private var generation = 0
+    private var crashes: [Date] = []
+    /// "Save to Files" sheets that are open, and the export each offers.
+    private var exportPickers: [ObjectIdentifier: (generation: Int, id: Int, url: URL)] = [:]
     /** In a call on the earpiece the screen turns off at your ear (2.10.2). */
     private var inCall = false
     private var earpiece = false
@@ -51,14 +65,12 @@ public final class CoreHost: NSObject {
             fatal("River could not open its storage: \(error)")
             return
         }
-        native?.files.onExported = { [weak self] url in
-            DispatchQueue.main.async { self?.export(url) }
-        }
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
         // The core is served at capacitor://localhost/core/: an origin River's servers already allow.
         config.setURLSchemeHandler(CoreFiles(), forURLScheme: "capacitor")
         let bridge = """
+            \(CoreHost.platformScript)
             window.RiverNative = { call: function (m, a) { return prompt('\(CoreHost.promptPrefix)' + m, a); } };
             window.RiverHost = { post: function (h, p) { window.webkit.messageHandlers.riverHost.postMessage([h, p]); } };
             window.addEventListener('error', function (e) {
@@ -89,15 +101,46 @@ public final class CoreHost: NSObject {
         #endif
         controller.view.addSubview(view)
         web = view
-        view.load(URLRequest(url: URL(string: "capacitor://localhost/core/index.html")!))
-        UNUserNotificationCenter.current().delegate = self
-        let center = NotificationCenter.default
-        center.addObserver(self, selector: #selector(foreground), name: UIApplication.didBecomeActiveNotification, object: nil)
-        center.addObserver(self, selector: #selector(background), name: UIApplication.willResignActiveNotification, object: nil)
+        view.load(URLRequest(url: CoreHost.coreURL))
+        let center = UNUserNotificationCenter.current()
+        center.delegate = self
+        center.setNotificationCategories(CoreHost.categories())
+        let events = NotificationCenter.default
+        events.addObserver(self, selector: #selector(foreground), name: UIApplication.didBecomeActiveNotification, object: nil)
+        events.addObserver(self, selector: #selector(background), name: UIApplication.willResignActiveNotification, object: nil)
+        // The core starts in the background; River may already be in front.
+        if UIApplication.shared.applicationState == .active { foreground() }
     }
 
     @objc private func foreground() { run("__riverCore.lifecycle('foreground')") }
     @objc private func background() { run("__riverCore.lifecycle('background')") }
+
+    /// The core's web process ended (a crash, or iOS reclaiming memory): load a new core.
+    private func restartAfterCrash() {
+        guard let web = web else { return }
+        generation += 1
+        ready = false
+        queue = []
+        // The old page's databases may hold a transaction open: close them before the new page opens.
+        native?.closeDatabases()
+        // Its notifications answered asks of the old page; the new page's asks start again at 1.
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: notificationOrder)
+        notificationAsks = [:]
+        notificationOrder = []
+        inCall = false
+        earpiece = false
+        updateProximity()
+        listener?.coreRestarted()
+        let now = Date()
+        crashes = crashes.filter { now.timeIntervalSince($0) < 60 } + [now]
+        if crashes.count > 3 {
+            fatal("River's core stopped several times in a row. Close River and open it again.")
+            return
+        }
+        // The new page asks for its settings again (app lock, …) as it starts.
+        web.load(URLRequest(url: CoreHost.coreURL))
+        if UIApplication.shared.applicationState == .active { foreground() }
+    }
 
     // MARK: UI → core
 
@@ -126,6 +169,14 @@ public final class CoreHost: NSObject {
     private func answer(_ id: Int, value: Any?) {
         let payload = Json.encode(["ok": true, "value": value ?? NSNull()] as [String: Any])
         run("__riverCore.answer(\(id), \(quote(payload)))")
+    }
+
+    /// An answer that comes later (a dialog, a sheet): only for the page of the core that asked.
+    private func answer(_ id: Int, value: Any?, generation gen: Int) {
+        DispatchQueue.main.async {
+            guard gen == self.generation else { return }
+            self.answer(id, value: value)
+        }
     }
 
     private func answerError(_ id: Int, _ message: String) {
@@ -186,12 +237,16 @@ public final class CoreHost: NSObject {
             UIPasteboard.general.string = a["text"] as? String ?? ""
             answer(id, value: nil)
         case "saveFile":
+            // A private path to write to. Once written, the core asks "exportFile": iOS's "Save
+            // to Files" sheet offers it, and that sheet's answer is whether it was saved.
             let name = a["name"] as? String ?? "River file"
             guard let path = native?.files.exportTarget(name: name) else {
                 answer(id, value: ["canceled": true] as [String: Any])
                 return
             }
-            answer(id, value: ["canceled": false, "filePath": path] as [String: Any])
+            answer(id, value: ["canceled": false, "filePath": path, "export": true] as [String: Any])
+        case "exportFile":
+            exportFile(id: id, path: a["path"] as? String ?? "")
         case "notify":
             notify(
                 id: id, title: a["title"] as? String ?? "River", body: a["body"] as? String ?? "",
@@ -228,6 +283,7 @@ public final class CoreHost: NSObject {
     }
 
     private func messageBox(id: Int, _ a: [String: Any]) {
+        let gen = generation
         let buttons = (a["buttons"] as? [String] ?? ["OK"]).prefix(3)
         let cancelId = (a["cancelId"] as? NSNumber)?.intValue ?? -1
         let detail = a["detail"] as? String ?? ""
@@ -236,47 +292,110 @@ public final class CoreHost: NSObject {
         for (i, title) in buttons.enumerated() {
             alert.addAction(
                 UIAlertAction(title: title, style: i == cancelId ? .cancel : .default) { [weak self] _ in
-                    self?.answer(id, value: ["response": i] as [String: Any])
+                    self?.answer(id, value: ["response": i] as [String: Any], generation: gen)
                 })
         }
-        top()?.present(alert, animated: true)
+        guard let top = top() else {
+            // No screen to ask on: the safe answer is "cancel".
+            answer(id, value: ["response": cancelId < 0 ? max(0, buttons.count - 1) : cancelId] as [String: Any])
+            return
+        }
+        top.present(alert, animated: true)
     }
+
+    // MARK: notifications
 
     private static let replyCategory = "river.reply"
+    private static let plainCategory = "river.plain"
     private static let replyAction = "river.reply.text"
 
+    /// Every River notification has a category that reports being swiped away (customDismissAction).
+    private static func categories() -> Set<UNNotificationCategory> {
+        // Reply from the notification: the text goes to the core, which sends it encrypted.
+        let action = UNTextInputNotificationAction(
+            identifier: replyAction, title: "Reply", options: [],
+            textInputButtonTitle: "Send", textInputPlaceholder: "Reply")
+        return [
+            UNNotificationCategory(
+                identifier: replyCategory, actions: [action], intentIdentifiers: [], options: [.customDismissAction]),
+            UNNotificationCategory(
+                identifier: plainCategory, actions: [], intentIdentifiers: [], options: [.customDismissAction]),
+        ]
+    }
+
     private func notify(id: Int, title: String, body: String, reply: Bool, call: Bool) {
+        let gen = generation
         let center = UNUserNotificationCenter.current()
-        if reply {
-            // Reply from the notification: the text goes to the core, which sends it encrypted.
-            let action = UNTextInputNotificationAction(
-                identifier: CoreHost.replyAction, title: "Reply", options: [],
-                textInputButtonTitle: "Send", textInputPlaceholder: "Reply")
-            center.setNotificationCategories([
-                UNNotificationCategory(
-                    identifier: CoreHost.replyCategory, actions: [action], intentIdentifiers: [], options: [])
-            ])
-        }
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-            guard granted else {
-                self.answer(id, value: "denied")
-                return
+            DispatchQueue.main.async {
+                guard gen == self.generation else { return }
+                guard granted else {
+                    self.answer(id, value: "denied")
+                    return
+                }
+                let content = UNMutableNotificationContent()
+                content.title = title
+                content.body = body
+                content.categoryIdentifier = reply ? CoreHost.replyCategory : CoreHost.plainCategory
+                // An incoming call makes a sound; other notifications stay quiet, as on computers.
+                if call { content.sound = .default }
+                let identifier = UUID().uuidString
+                // Only so many notifications wait for an answer; the oldest stops waiting.
+                while self.notificationOrder.count >= CoreHost.maxPendingNotifications {
+                    let oldest = self.notificationOrder.removeFirst()
+                    if let ask = self.notificationAsks.removeValue(forKey: oldest) {
+                        self.answer(ask, value: "dismissed")
+                    }
+                }
+                self.notificationAsks[identifier] = id
+                self.notificationOrder.append(identifier)
+                center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
             }
-            let content = UNMutableNotificationContent()
-            content.title = title
-            content.body = body
-            if reply { content.categoryIdentifier = CoreHost.replyCategory }
-            // An incoming call makes a sound; other notifications stay quiet, as on computers.
-            if call { content.sound = .default }
-            let identifier = UUID().uuidString
-            DispatchQueue.main.async { self.notificationAsks[identifier] = id }
-            center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
         }
     }
 
-    private func export(_ url: URL) {
+    /// The core's ask for a notification, which no longer waits.
+    private func takeNotification(_ identifier: String) -> Int? {
+        notificationOrder.removeAll { $0 == identifier }
+        return notificationAsks.removeValue(forKey: identifier)
+    }
+
+    /// A reply that could not be sent (River's core no longer waits for it): say so.
+    private func replyFailed() {
+        let content = UNMutableNotificationContent()
+        content.title = "Reply not sent"
+        content.body = "Open River to send it."
+        content.categoryIdentifier = CoreHost.plainCategory
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+    }
+
+    // MARK: saving files
+
+    private func exportFile(id: Int, path: String) {
+        let gen = generation
+        guard let files = native?.files, let url = files.takeExport(path: path) else {
+            answer(id, value: ["saved": false] as [String: Any])
+            return
+        }
+        guard let top = top() else {
+            files.discardExport(url)
+            answer(id, value: ["saved": false] as [String: Any])
+            return
+        }
         let picker = UIDocumentPickerViewController(forExporting: [url], asCopy: true)
-        top()?.present(picker, animated: true)
+        picker.delegate = self
+        exportPickers[ObjectIdentifier(picker)] = (generation: gen, id: id, url: url)
+        top.present(picker, animated: true)
+        // Swiped down instead of Cancel: answered as cancelled too.
+        picker.presentationController?.delegate = self
+    }
+
+    private func exportClosed(_ picker: UIViewController, saved: Bool) {
+        guard let e = exportPickers.removeValue(forKey: ObjectIdentifier(picker)) else { return }
+        // The plaintext copy in Caches goes as soon as the sheet closes.
+        native?.files.discardExport(e.url)
+        answer(e.id, value: ["saved": saved] as [String: Any], generation: e.generation)
     }
 
     private func top() -> UIViewController? {
@@ -292,6 +411,20 @@ public final class CoreHost: NSObject {
             alert.addAction(UIAlertAction(title: "OK", style: .default))
             self.top()?.present(alert, animated: true)
         }
+    }
+}
+
+extension CoreHost: UIDocumentPickerDelegate, UIAdaptivePresentationControllerDelegate {
+    public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        exportClosed(controller, saved: !urls.isEmpty)
+    }
+
+    public func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        exportClosed(controller, saved: false)
+    }
+
+    public func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        exportClosed(presentationController.presentedViewController, saved: false)
     }
 }
 
@@ -324,7 +457,9 @@ extension CoreHost: WKUIDelegate, WKNavigationDelegate {
     }
 
     public func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        NSLog("[River] the core's web process ended")
+        guard webView === web else { return }
+        NSLog("[River] the core's web process ended: starting it again")
+        restartAfterCrash()
     }
 
     /// The core never navigates.
@@ -342,16 +477,25 @@ extension CoreHost: UNUserNotificationCenterDelegate {
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        if let id = notificationAsks.removeValue(forKey: response.notification.request.identifier) {
-            if let text = (response as? UNTextInputNotificationResponse)?.userText
-                .trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty
-            {
-                answer(id, value: ["reply": String(text.prefix(4000))] as [String: Any])
-            } else {
-                answer(id, value: "clicked")
+        let identifier = response.notification.request.identifier
+        let text = (response as? UNTextInputNotificationResponse)?.userText
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let dismissed = response.actionIdentifier == UNNotificationDismissActionIdentifier
+        DispatchQueue.main.async {
+            if let id = self.takeNotification(identifier) {
+                if dismissed {
+                    self.answer(id, value: "dismissed")
+                } else if !text.isEmpty {
+                    self.answer(id, value: ["reply": String(text.prefix(4000))] as [String: Any])
+                } else {
+                    self.answer(id, value: "clicked")
+                }
+            } else if !text.isEmpty {
+                // The core that posted it is gone: the reply is not dropped without a word.
+                self.replyFailed()
             }
+            completionHandler()
         }
-        completionHandler()
     }
 
     public func userNotificationCenter(

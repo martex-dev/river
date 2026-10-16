@@ -33,6 +33,13 @@ export class Hub {
   private readonly callRooms = new Map<string, Set<string>>();
   private readonly roomOf = new Map<string, string>();
   private readonly roomTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /**
+   * The connection that joined the voice channel / call room. Seats belong to an account, but it
+   * is one device that is in the call: when that connection drops, the seat goes into its grace
+   * period even if the account's other devices stay connected.
+   */
+  private readonly voiceSocket = new Map<string, HubSocket>();
+  private readonly roomSocket = new Map<string, HubSocket>();
 
   constructor(options: HubOptions = {}) {
     this.graceMs = options.voiceGraceMs ?? VOICE_GRACE_MS;
@@ -78,27 +85,42 @@ export class Hub {
   ): { offline: boolean; held: { channelId: string; communityId: string } | null } {
     const set = this.sockets.get(riverId);
     set?.delete(socket);
-    if (set && set.size > 0) return { offline: false, held: null };
+    if (set && set.size > 0) {
+      // Other devices are still connected; only the seats this connection held are let go.
+      if (this.roomSocket.get(riverId) === socket) this.holdRoom(riverId, socket);
+      const held = this.voiceSocket.get(riverId) === socket ? this.holdSeat(riverId, socket) : null;
+      return { offline: false, held };
+    }
     this.sockets.delete(riverId);
     this.holdRoom(riverId);
     return { offline: true, held: this.holdSeat(riverId) };
   }
 
   /** Joins a private call room (leaving any other); false if it is full. */
-  joinRoom(riverId: string, room: string, max: number): boolean {
+  joinRoom(riverId: string, room: string, max: number, socket?: HubSocket): boolean {
     this.clearRoomTimer(riverId);
-    if (this.roomOf.get(riverId) === room) return true;
+    if (this.roomOf.get(riverId) === room) {
+      this.setOwner(this.roomSocket, riverId, socket);
+      return true;
+    }
     const members = this.callRooms.get(room) ?? new Set<string>();
     if (members.size >= max) return false;
     this.leaveRoom(riverId);
     members.add(riverId);
     this.callRooms.set(room, members);
     this.roomOf.set(riverId, room);
+    this.setOwner(this.roomSocket, riverId, socket);
     return true;
+  }
+
+  private setOwner(map: Map<string, HubSocket>, riverId: string, socket: HubSocket | undefined): void {
+    if (socket) map.set(riverId, socket);
+    else map.delete(riverId);
   }
 
   leaveRoom(riverId: string): void {
     this.clearRoomTimer(riverId);
+    this.roomSocket.delete(riverId);
     const room = this.roomOf.get(riverId);
     if (!room) return;
     this.roomOf.delete(riverId);
@@ -107,13 +129,17 @@ export class Hub {
     if (members && members.size === 0) this.callRooms.delete(room);
   }
 
-  /** A dropped connection keeps its call room for the grace period (the call itself is peer to peer). */
-  private holdRoom(riverId: string): void {
+  /**
+   * A dropped connection keeps its call room for the grace period (the call itself is peer to
+   * peer). `socket`: the connection that was in the room, while the account has others online.
+   */
+  private holdRoom(riverId: string, socket?: HubSocket): void {
     if (!this.roomOf.has(riverId)) return;
     this.clearRoomTimer(riverId);
     const t = setTimeout(() => {
       this.roomTimers.delete(riverId);
-      if (!this.isOnline(riverId)) this.leaveRoom(riverId);
+      const stillGone = socket ? this.roomSocket.get(riverId) === socket : false;
+      if (!this.isOnline(riverId) || stillGone) this.leaveRoom(riverId);
     }, this.graceMs);
     t.unref?.();
     this.roomTimers.set(riverId, t);
@@ -134,8 +160,11 @@ export class Hub {
     return !!room && this.roomOf.get(b) === room;
   }
 
-  /** Keeps a voice seat (marked reconnecting) until rejoin or the grace period ends. */
-  private holdSeat(riverId: string): { channelId: string; communityId: string } | null {
+  /**
+   * Keeps a voice seat (marked reconnecting) until rejoin or the grace period ends. `socket`: the
+   * connection that was in the call, when the account still has other connections.
+   */
+  private holdSeat(riverId: string, socket?: HubSocket): { channelId: string; communityId: string } | null {
     const channelId = this.voiceOf.get(riverId);
     const room = channelId ? this.voice.get(channelId) : undefined;
     if (!channelId || !room) return null;
@@ -143,7 +172,9 @@ export class Hub {
     this.clearGrace(riverId);
     const timer = setTimeout(() => {
       this.graceTimers.delete(riverId);
-      if (this.isOnline(riverId) && !this.stateOf(riverId).reconnecting) return;
+      // Rejoined in time (from any device): the seat stays.
+      const rejoined = socket ? this.voiceSocket.get(riverId) !== socket : this.isOnline(riverId);
+      if (rejoined && !this.stateOf(riverId).reconnecting) return;
       if (this.voiceOf.get(riverId) !== channelId) return;
       const left = this.leaveVoice(riverId);
       if (left) this.onSeatExpired?.(left);
@@ -201,12 +232,14 @@ export class Hub {
     riverId: string,
     communityId: string,
     channelId: string,
+    socket?: HubSocket,
   ): { left: { channelId: string; communityId: string } | null } {
     const left = this.voiceOf.get(riverId) === channelId ? null : this.leaveVoice(riverId);
     let room = this.voice.get(channelId);
     if (!room) this.voice.set(channelId, (room = { communityId, members: new Set() }));
     room.members.add(riverId);
     this.voiceOf.set(riverId, channelId);
+    this.setOwner(this.voiceSocket, riverId, socket);
     this.clearGrace(riverId);
     const { reconnecting: _back, ...state } = this.states.get(riverId) ?? DEFAULT_STATE;
     this.states.set(riverId, state);
@@ -216,6 +249,7 @@ export class Hub {
   leaveVoice(riverId: string): { channelId: string; communityId: string } | null {
     const channelId = this.voiceOf.get(riverId);
     this.clearGrace(riverId);
+    this.voiceSocket.delete(riverId);
     if (!channelId) return null;
     this.voiceOf.delete(riverId);
     const room = this.voice.get(channelId);

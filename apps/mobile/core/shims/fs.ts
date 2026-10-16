@@ -1,3 +1,4 @@
+import { finishExport } from '../exports.ts';
 import { native, NativeError } from '../native.ts';
 
 /**
@@ -136,7 +137,11 @@ export function createReadStream(): never {
 
 export const promises = {
   readFile: later(readFileSync as (path: string, options?: Encoding) => Buffer | string),
-  writeFile: later(writeFileSync),
+  // A file saved through the iOS "Save to Files" sheet is offered once written (exports.ts).
+  writeFile: async (path: string, data: Data, options?: Encoding): Promise<void> => {
+    writeFileSync(path, data, options);
+    await finishExport(path);
+  },
   appendFile: later(appendFileSync),
   mkdir: later(mkdirSync),
   rename: later(renameSync),

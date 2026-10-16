@@ -307,22 +307,46 @@ export class VoiceCall {
     }
   }
 
+  /**
+   * Opens the microphone and joins. If the call is left meanwhile (Disconnect or
+   * Hang up while the microphone prompt or the join is pending), this returns
+   * without joining and with the microphone released: check `closed` afterwards.
+   * On failure everything opened so far is released before the error is thrown.
+   */
   async start(): Promise<void> {
-    this.local.audio = await this.microphone();
-    if (this.relay?.available) {
-      try {
-        await this.relay.start(this.local.audio);
-      } catch (err) {
-        console.warn('voice relay unavailable', err);
-        this.relay = null;
-      }
-    } else this.relay = null;
-    this.applyMic();
-    this.probe(this.local.audio);
+    if (this.closed) return;
     try {
+      const mic = await this.microphone();
+      if (this.closed) {
+        mic?.stop();
+        return;
+      }
+      this.local.audio = mic;
+      if (this.relay?.available) {
+        try {
+          await this.relay.start(mic);
+        } catch (err) {
+          console.warn('voice relay unavailable', err);
+          this.relay = null;
+        }
+        if (this.closed) {
+          // leave() already ran while the relay was starting: release what it opened since.
+          this.relay?.close();
+          this.stopLocal();
+          return;
+        }
+      } else this.relay = null;
+      this.applyMic();
+      this.probe(this.local.audio);
       await this.transport.join();
+      if (this.closed) {
+        // Left while joining: leave() may have reached the server before the join did.
+        await this.transport.leave().catch(() => undefined);
+        return;
+      }
     } catch (err) {
-      this.stopLocal();
+      if (this.closed) return;
+      this.shutdown();
       throw err;
     }
     this.speakingTimer = setInterval(() => this.measure(), 80);
@@ -434,7 +458,12 @@ export class VoiceCall {
     this.options = { ...this.options, ...next };
     if ((deviceChanged || processingChanged) && !this.closed) {
       const track = await this.microphone();
+      if (this.closed) {
+        track?.stop();
+        return;
+      }
       await this.setSlot('audio', track);
+      if (this.closed) return;
       this.probe(track);
     }
     this.applyMic();
@@ -501,17 +530,22 @@ export class VoiceCall {
     if (existing?.track === track) return;
     existing?.source.disconnect();
     this.analysers.delete(id);
-    if (!track) return;
-    try {
-      this.audioCtx ??= new AudioContext();
-      const source = this.audioCtx.createMediaStreamSource(new MediaStream([track]));
-      const node = this.audioCtx.createAnalyser();
-      node.fftSize = 512;
-      source.connect(node);
-      this.analysers.set(id, { node, source, track });
-    } catch {
-      // No audio context available: no speaking indicators.
+    if (track) {
+      try {
+        this.audioCtx ??= new AudioContext();
+        const source = this.audioCtx.createMediaStreamSource(new MediaStream([track]));
+        const node = this.audioCtx.createAnalyser();
+        node.fftSize = 512;
+        source.connect(node);
+        this.analysers.set(id, { node, source, track });
+        return;
+      } catch {
+        // No audio context available: no speaking indicators.
+      }
     }
+    // Nothing measures this person any more: they are not speaking (no stuck ring, no ducking).
+    this.lastLoud.delete(id);
+    if (this.speaking.delete(id)) this.onChange();
   }
 
   private measure(): void {
@@ -794,6 +828,13 @@ export class VoiceCall {
 
   async leave(): Promise<void> {
     if (this.closed) return;
+    this.shutdown();
+    await this.transport.leave().catch(() => undefined);
+    this.onChange();
+  }
+
+  /** Stops everything local: timers, connections, relay, microphone, camera, screen, meters. */
+  private shutdown(): void {
     this.closed = true;
     if (this.speakingTimer) clearInterval(this.speakingTimer);
     if (this.relayCheckTimer) clearInterval(this.relayCheckTimer);
@@ -810,8 +851,9 @@ export class VoiceCall {
     for (const a of this.analysers.values()) a.source.disconnect();
     this.analysers.clear();
     void this.audioCtx?.close().catch(() => undefined);
-    await this.transport.leave().catch(() => undefined);
-    this.onChange();
+    this.audioCtx = null;
+    this.speaking.clear();
+    this.lastLoud.clear();
   }
 
   /** Points at (x, y) on `peerId`'s shared screen; they see a ring there (remote assistance). */
@@ -839,6 +881,11 @@ export class VoiceCall {
   // ---- internals -------------------------------------------------------------------------------
 
   private async setSlot(slot: Slot, track: MediaStreamTrack | null): Promise<void> {
+    // The call ended while the camera, screen or microphone was opening: release it, send nothing.
+    if (this.closed) {
+      track?.stop();
+      return;
+    }
     this.local[slot]?.stop();
     this.local[slot] = track;
     if (slot === 'audio') this.relay?.setMic(track);
@@ -1040,7 +1087,9 @@ export class VoiceCall {
       type: 'state',
       camera: !!this.local.camera,
       screen: !!this.local.screen,
-      muted: !this.transmitting,
+      // What the person chose (or a moderator imposed), not the voice-activity gate or push-to-talk:
+      // a gated voice is silent anyway, and people talking would otherwise look muted to others.
+      muted: this.muted || this.deafened || this.serverMuted || this.serverDeafened,
       ...(this.priority ? { priority: true } : {}),
     };
   }

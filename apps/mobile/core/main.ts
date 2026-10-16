@@ -32,7 +32,19 @@ import { runMainDiagnostics } from '../../desktop/src/main/diagnostics.ts';
 import { PresenceTracker } from '../../desktop/src/main/presence.ts';
 import { ready as cryptoReady } from './shims/crypto.ts';
 import { native } from './native.ts';
-import { ask, emit, inbound, onDeepLink, onLifecycle, ready, ui } from './host.ts';
+import {
+  ask,
+  emit,
+  inbound,
+  onDeepLink,
+  onInvoke,
+  onLifecycle,
+  onUiGone,
+  ready,
+  ui,
+  uiPresent,
+} from './host.ts';
+import { phonePlatform } from './platform.ts';
 import { parseDeepLink } from '../../desktop/src/main/deep-link.ts';
 import { IPC, type DeepLink } from '../../desktop/src/shared/ipc.ts';
 
@@ -102,9 +114,16 @@ const noHosting: IpcDeps['hosting'] = {
   },
 } as unknown as IpcDeps['hosting'];
 
-/** Android or iOS: the same core runs on both. */
-const PLATFORM = /iPhone|iPad|iPod/.test(navigator.userAgent) ? 'ios' : 'android';
-let foreground = true;
+/** Android or iOS: the same core runs on both (the iOS shell says so; iPads look like Macs). */
+const PLATFORM = phonePlatform();
+/**
+ * Whether River's screen is in front. The core starts in the background: Android can start it
+ * with no screen at all (Stay connected), and the shell reports the foreground once the screen
+ * is up. Until then notifications show, rather than being taken as seen.
+ */
+let foreground = false;
+/** How long an incoming call rings (as dm-service's RING_MS). */
+const RING_MS = 45_000;
 /** A River link opened from a browser that the UI has not taken yet (the UI asks when it is ready). */
 let pendingDeepLink: DeepLink | null = null;
 onDeepLink((url) => {
@@ -202,17 +221,65 @@ async function start(): Promise<void> {
     presence,
     // Android: an "In a call" foreground service keeps the call running with the screen off; its
     // Hang up button answers the open ask.
-    onCallChange: (inCall) => {
+    onCallChange: (active) => {
+      inCall = active;
+      if (!active) activeCall = null;
       // iPhone: only the call's state, for the proximity sensor (screen off at your ear).
-      if (PLATFORM === 'ios') void ask('callState', { active: inCall }).catch(() => undefined);
-      if (PLATFORM !== 'android') return;
-      void ask<string>('call', { active: inCall }).then(
-        (how) => {
-          if (how === 'hangup') community.hangUp();
-        },
-        () => undefined,
-      );
+      if (PLATFORM === 'ios') void ask('callState', { active }).catch(() => undefined);
+      if (PLATFORM === 'android') {
+        void ask<string>('call', { active }).then(
+          (how) => {
+            if (how !== 'hangup') return;
+            // The UI ends the call itself (it tells the other side); without a UI the core does.
+            if (uiPresent()) community.hangUp();
+            else leaveCall();
+          },
+          () => undefined,
+        );
+      }
+      // The call is on: its ringing is over. Asked after "call", so the shell already knows the
+      // call is on and keeps it over the lock screen.
+      if (active) ringOver();
     },
+  });
+  // ---- calls without a screen (Android, Stay connected) ----
+  let inCall = false;
+  /** The 1:1 call the UI started or accepted, so the core can end it if the UI goes away. */
+  let activeCall: { peer: string; callId: string } | null = null;
+  /**
+   * The UI's WebView carries a call's media: when it is gone (River's screen closed while the
+   * core stays connected), the call cannot go on. Leave the voice channel or the call's relay
+   * room and tell the other side, rather than staying "in a call" with no sound.
+   */
+  const leaveCall = (): void => {
+    const call = activeCall;
+    activeCall = null;
+    if (call)
+      void dm.action({ a: 'call', peer: call.peer, callId: call.callId, kind: 'end' }).catch(() => undefined);
+    if (!inCall) return;
+    community.voiceLeave();
+    community.callRoom(null);
+  };
+  onUiGone(leaveCall);
+  /** An incoming call ringing now: the Android shell shows River over the lock screen meanwhile. */
+  let ringing: string | null = null;
+  let ringTimer: ReturnType<typeof setTimeout> | undefined;
+  const ringOver = (callId?: string): void => {
+    if (ringing === null || (callId !== undefined && callId !== ringing)) return;
+    ringing = null;
+    clearTimeout(ringTimer);
+    if (PLATFORM === 'android') void ask('ringing', { on: false }).catch(() => undefined);
+  };
+  onInvoke((channel, args) => {
+    if (channel !== IPC.dmAction) return;
+    const a = args[0] as { a?: unknown; kind?: unknown; peer?: unknown; callId?: unknown } | null | undefined;
+    if (!a || a.a !== 'call' || typeof a.peer !== 'string' || typeof a.callId !== 'string') return;
+    if (a.kind === 'invite' || a.kind === 'accept') activeCall = { peer: a.peer, callId: a.callId };
+    else if (a.kind === 'end' || a.kind === 'decline' || a.kind === 'busy') {
+      if (activeCall?.callId === a.callId) activeCall = null;
+      // Declined here: River no longer shows over the lock screen.
+      ringOver(a.callId);
+    }
   });
   let lastCustom = JSON.stringify(presence.custom());
   presence.onChange(() => {
@@ -259,6 +326,18 @@ async function start(): Promise<void> {
       settings.update({ server: { url, autoAccount: true } });
       community.ensureSocket();
     },
+  });
+  dm.onEvent((e) => {
+    if (e.t !== 'call') return;
+    if (e.kind === 'invite') {
+      ringing = e.callId;
+      clearTimeout(ringTimer);
+      ringTimer = setTimeout(() => ringOver(), RING_MS);
+    } else if (e.kind !== 'signal') {
+      // The caller gave up, or the other side ended the call.
+      if (e.kind !== 'accept' && activeCall?.callId === e.callId) activeCall = null;
+      ringOver(e.callId);
+    }
   });
   const social = new SocialService({ db: () => storage.db(), identity, dm, log });
   const backup = new BackupService({ db: () => storage.db() });

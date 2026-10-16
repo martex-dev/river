@@ -18,6 +18,8 @@ export interface Phone {
   nativeCalls: Map<string, number>;
   waitFor(channel: string, match?: (args: unknown[]) => boolean, timeoutMs?: number): Promise<unknown[]>;
   lifecycle(state: 'foreground' | 'background'): void;
+  /** The shell says the UI's WebView was destroyed (River's screen closed, the core stays). */
+  uiGone(): void;
   stop(): Promise<void>;
 }
 
@@ -40,7 +42,7 @@ export async function startPhone(bundle: string, root: string): Promise<Phone> {
   let nextId = 1;
   let fatal: string | null = null;
 
-  const call = (name: 'invoke' | 'send' | 'answer' | 'lifecycle', ...args: unknown[]): void =>
+  const call = (name: 'invoke' | 'send' | 'answer' | 'lifecycle' | 'uiGone', ...args: unknown[]): void =>
     worker.postMessage({ call: name, args });
   const answerNative = (json: string): void => {
     const encoded = new TextEncoder().encode(json);
@@ -135,6 +137,9 @@ export async function startPhone(bundle: string, root: string): Promise<Phone> {
     },
     lifecycle(s) {
       call('lifecycle', s);
+    },
+    uiGone() {
+      call('uiGone');
     },
     waitFor(channel, match = () => true, timeoutMs = 15_000) {
       return new Promise((resolve, reject) => {

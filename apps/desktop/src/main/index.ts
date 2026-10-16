@@ -35,6 +35,7 @@ import { DEEP_LINK_SCHEME, deepLinkInArgs, parseDeepLink } from './deep-link.ts'
 import { HomeAccount } from './home-server.ts';
 import { HOME_SERVER } from '../shared/home-server.ts';
 import { createFileLogger } from './logger.ts';
+import { pinnedPreviewDeps } from './link-preview-net.ts';
 import {
   APP_ORIGIN,
   guardWebContents,
@@ -212,7 +213,12 @@ async function start(): Promise<void> {
     log,
     locator,
     presence,
+    // A call that ends takes any screen share in it along (the bar goes with it).
+    onCallChange: (inCall) => {
+      if (!inCall) callEnded();
+    },
   });
+  let callEnded: () => void = () => undefined;
   // Hosting runs from sign-in, whether or not the user has unlocked their own River data.
   const hosting = new Hosting({
     userData: app.getPath('userData'),
@@ -317,6 +323,8 @@ async function start(): Promise<void> {
   // Connect whenever local data becomes available (now, or after the user unlocks).
   const connectAll = async (): Promise<void> => {
     homeAccount.kick();
+    // Kept file copies stay under their size limit (the least recently used go first).
+    void community.pruneAttachments();
     await account.connect();
     community.ensureSocket();
   };
@@ -342,8 +350,20 @@ async function start(): Promise<void> {
   let chosenScreen: string | null = null;
   /** The display being shared, when a whole screen is (pointing maps onto it). */
   let sharedDisplay: string | null = null;
-  const indicator = new ShareIndicator(() => {
+  /**
+   * A screen main handed to the window that may still be captured. Main cannot see the
+   * stream end, and the window's word is not proof (ADR 0007), so the bar stays until its
+   * own Stop, the call ends, or the window's page goes away (crash, reload, navigation).
+   */
+  let captureGranted = false;
+  const endShare = (): void => {
+    captureGranted = false;
+    sharedDisplay = null;
     indicator.hide();
+  };
+  callEnded = endShare;
+  const indicator = new ShareIndicator(() => {
+    endShare();
     if (!window.isDestroyed()) window.webContents.send(IPC.communityEvent, { t: 'stopScreenShare' });
   });
   // Remote assistance is consent-only (ADR 0007): only a screen picked in River's picker, and only
@@ -352,24 +372,38 @@ async function start(): Promise<void> {
     const picked = chosenScreen;
     chosenScreen = null;
     if (!picked) return callback({});
-    void desktopCapturer.getSources({ types: ['screen', 'window'] }).then(async (sources) => {
-      const source = sources.find((s) => s.id === picked);
-      if (!source) return callback({});
-      const { response } = await dialog.showMessageBox(window, {
-        type: 'question',
-        title: 'River — share your screen',
-        message: 'Share your screen?',
-        detail: `People in this call will see “${source.name}” until you press Stop sharing on the red bar at the top of that screen.`,
-        buttons: ['Share', 'Cancel'],
-        defaultId: 0,
-        cancelId: 1,
+    // Always answered exactly once: a failure while asking means "no", never a hanging request.
+    let answered = false;
+    const answer = (streams: Parameters<typeof callback>[0]): void => {
+      if (answered) return;
+      answered = true;
+      callback(streams);
+    };
+    void desktopCapturer
+      .getSources({ types: ['screen', 'window'] })
+      .then(async (sources) => {
+        const source = sources.find((s) => s.id === picked);
+        if (!source || window.isDestroyed()) return answer({});
+        const { response } = await dialog.showMessageBox(window, {
+          type: 'question',
+          title: 'River — share your screen',
+          message: 'Share your screen?',
+          detail: `People in this call will see “${source.name}” until you press Stop sharing on the red bar at the top of that screen.`,
+          buttons: ['Share', 'Cancel'],
+          defaultId: 0,
+          cancelId: 1,
+        });
+        if (response !== 0) return answer({});
+        sharedDisplay = source.id.startsWith('screen:') ? source.display_id || null : null;
+        captureGranted = true;
+        answer({ video: source });
+        // The bar appears as soon as a screen is handed out, whatever the window reports later.
+        indicator.show(sharedDisplay, []);
+      })
+      .catch((err: unknown) => {
+        log.warn(`screen share request failed: ${(err as Error)?.message ?? String(err)}`);
+        answer({});
       });
-      if (response !== 0) return callback({});
-      sharedDisplay = source.id.startsWith('screen:') ? source.display_id || null : null;
-      callback({ video: source });
-      // The bar appears as soon as a screen is handed out, whatever the window reports later.
-      indicator.show(sharedDisplay, []);
-    });
   });
   app.on('will-quit', () => storage.close());
 
@@ -425,6 +459,7 @@ async function start(): Promise<void> {
     updatesDisabledReason,
     devServerUrl,
     fetchBytes: serverFetch,
+    previewDeps: pinnedPreviewDeps,
     storage,
     identity,
     account,
@@ -445,7 +480,9 @@ async function start(): Promise<void> {
     share: {
       status: (sharing, viewers) => {
         if (sharing) indicator.show(sharedDisplay, viewers);
-        else indicator.hide();
+        // The window saying it stopped cannot hide the bar of a screen main handed out:
+        // that takes the bar's own Stop, the call ending, or the page going away.
+        else if (!captureGranted) indicator.hide();
       },
       point: (x, y) => indicator.ping(x, y),
     },
@@ -474,6 +511,12 @@ async function start(): Promise<void> {
   });
 
   const window = createWindow();
+  // The page that held a shared screen is gone (crashed, reloaded, navigated): so is the capture.
+  window.webContents.on('render-process-gone', endShare);
+  window.webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument) endShare();
+  });
+  window.webContents.once('destroyed', endShare);
   // Running for a while with a window up counts as a healthy start.
   window.once('ready-to-show', () => setTimeout(() => health.markHealthy(), HEALTHY_AFTER_MS));
   watchWindow(window, log, process.argv.includes('--hidden'));
@@ -510,7 +553,12 @@ async function start(): Promise<void> {
   if (updates) {
     const service = updates;
     broadcastUpdateStatus(window.webContents, service);
+    // Only a change to the update settings (turning automatic checks on, a new channel) checks now.
+    let lastUpdates = JSON.stringify(settings.get().updates);
     settings.onChange((s) => {
+      const updatesNow = JSON.stringify(s.updates);
+      if (updatesNow === lastUpdates) return;
+      lastUpdates = updatesNow;
       service.applyPreferences();
       if (s.updates.autoCheck && service.getStatus().state === 'up-to-date') void service.check();
     });
@@ -614,6 +662,10 @@ async function start(): Promise<void> {
     refreshTray();
   });
   tray.on('click', show);
+  // macOS: clicking River in the Dock brings back a window closed to the tray.
+  app.on('activate', () => {
+    if (!window.isDestroyed()) show();
+  });
   window.on('close', (event) => {
     if (quitting || !settings.get().system.closeToTray) return;
     event.preventDefault();

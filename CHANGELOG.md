@@ -6,6 +6,158 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.10.12] - 2026-10-16
+
+**Bug sweep: a review of the whole program — server, phone apps, calls, voice, messages and layout.**
+
+### Security
+
+- Channel and category permission overwrites can only allow what the person
+  editing them holds there, and never Administrator.
+- Self-assignable roles cannot be given moderation permissions later, and are
+  checked again when a member picks them.
+- `RIVER_TRUST_PROXY=true` now trusts only a proxy on the same machine (the
+  River Host tunnel); a forged `X-Forwarded-For` no longer escapes per-address
+  limits. Proxies elsewhere are named by address or range.
+- A blocked sender is answered like for an account that does not exist, before
+  any other check, so the answer no longer reveals the block. Apps show
+  "That no longer exists" instead of pretending the message was sent.
+- Webhooks stop posting once their creator is removed or may no longer manage
+  the channel; wrong tokens no longer use up a webhook's rate limit; webhooks
+  are deleted with their channel (and orphans are removed).
+- Timed-out and pending members cannot join existing reactions; only members
+  who may rotate move a community's key epoch (rate limited).
+- Realtime connections end when their session expires or is revoked.
+
+- **Link previews** refuse every non-public IPv6 spelling (IPv4-mapped as
+  Node writes it, IPv4-compatible, NAT64, 6to4, site-local, documentation) and
+  connect only to the address that was checked, so DNS rebinding cannot reach
+  this computer or the local network.
+- **Screen sharing**: the window can no longer hide the "can see your screen"
+  bar while a screen River handed out may still be shared. The bar goes with
+  its own Stop, the call ending, or the window reloading or crashing.
+- **Passphrase**: pressing set up or unlock twice can no longer set up two
+  different keys (making the data unreadable) or open the data twice.
+
+### Fixed
+
+- **Voice channels**: a second click on Join no longer starts a second call
+  that kept the first microphone open; Disconnect while River is still opening
+  the microphone or joining now really leaves (microphone off, nothing joined);
+  a camera or screen that finishes opening after you left is stopped at once.
+- People using voice activity no longer look **muted** to others while quiet,
+  and their speaking ring shows again; a speaking ring no longer sticks after
+  someone's voice stops.
+- **Undeafen** keeps you muted if you were muted before deafening.
+- The **microphone test** in Settings → Voice no longer leaves the microphone
+  on when stopped before it finished opening.
+- **Push-to-talk** no longer swallows its key (` by default) while you type in
+  a text field; keys that type nothing (F-keys, Ctrl) still talk while typing.
+- Joining a voice channel during a 1:1 call now ends that call properly (no
+  stuck call pill, no "busy" answers to every new call); starting a 1:1 call
+  from a voice channel no longer offers "Rejoin" for it later.
+- **Phones**: voices played above 100 % (the phone default) are no longer
+  silent while the audio engine is asleep; River wakes it from the Join,
+  Call or Accept tap and plays voices directly until it runs.
+- **1:1 calls**: hanging up while River is opening the microphone sends no
+  invite and turns the microphone off; a double click starts one call; an
+  unanswered incoming call is logged as missed (with the right voice/video
+  type) when it stops ringing; answering without microphone access declines
+  the call and logs it; a call the caller ends while you answer ends on your
+  side too; an answered call that cannot connect within 30 seconds ends with
+  a notice instead of "Connecting…" forever; the screen picker and minimized
+  view start fresh with each call.
+
+- A linked device that never published keys no longer makes its account
+  unreachable; one device's full mailbox drops only its copy.
+- One-time prekeys are claimed atomically (no key handed out twice on
+  PostgreSQL); Kyber one-time prekeys are capped; a last-resort Kyber key whose
+  ID matches a one-time key is stored instead of dropped.
+- Device-list updates, invite use counts and the storage quota are now safe
+  against concurrent requests; re-giving a role ignores an expired end time.
+- Voice seats and call rooms belong to the connection that joined: a crashed
+  desktop leaves the call even while the phone stays connected. Realtime events
+  are handled in order per connection; a connection that closes while signing in
+  is never kept; deleting a community ends its voice calls.
+
+- **Android Back** no longer closes River: it first closes what the interface
+  has open, and otherwise moves River to the background, still running.
+- **Android calls and the lock screen**: River shows over the lock screen only
+  while a call rings or lasts, not forever after one.
+- **Android, Stay connected**: notifications work after Android restarts
+  River's connection in the background; screen security is applied again when
+  River's screen reopens; closing River during a call ends the call (and tells
+  the other side) instead of leaving it silent; Hang up in the "In a call"
+  notification works without River's screen; stopping River ends the "In a
+  call" notification, the call audio and the screen-off sensor lock.
+- **Android notifications**: a reply from a notification can never reach the
+  wrong conversation after River restarted, and a reply that cannot be sent says
+  so; swiped-away notifications are forgotten; the notification permission is
+  asked while River is in front.
+- **Android robustness**: River recovers when Android ends one of its
+  WebViews to free memory instead of closing; dialogs always get an answer;
+  databases are closed when the core stops; reopening River from recent apps no
+  longer shares something again; Lock River hides River before Android takes
+  the recent-apps preview (Android 13+: no preview at all while it is on).
+- **iPhone and iPad**: an iPad is recognised as iOS; River restarts its core if
+  iOS ends it; "Save to Files" reports a cancelled save as not saved and deletes
+  the temporary copy when the sheet closes; swiped-away notifications are
+  forgotten.
+- **Phones**: a failed database commit reports its own error instead of a
+  follow-up one.
+
+- One realtime connection at a time (startup, sign-up and waking up opened
+  two, and the extra one's events arrived twice); a refused (expired) session
+  signs in again instead of retrying the dead one forever; a connection that
+  never becomes ready is replaced after 20 seconds.
+- **Set up again** and creating a first community after deleting the account
+  work again for accounts on River's server.
+- Linking a device: a failed sign-in on the new device no longer leaves it
+  stuck with an identity and no account; the linked device refuses an expired
+  code and takes a device it could not provision off the list again.
+- A damaged settings file's recovered settings are saved (they were lost on
+  the next start), and unknown settings no longer reset their whole section.
+- Editing a message changes only its text: files, picture descriptions, the
+  reply (and its no-ping), tags, previews and stickers stay, also for thread
+  messages and older ones; an edit River cannot base on the original is
+  refused. Saving an older or thread message works.
+- Kept copies of received files stay under 2 GB (least recently used go first)
+  and are deleted with the account; downloads of the same file at once are
+  counted once.
+- Notifications stay clickable on Windows; the Dock icon reopens River on
+  macOS; settings changes no longer start an update check each time; a failed
+  screen-share request is answered instead of hanging; the hosting PC keeps
+  following its own server after taking over from River Host.
+
+- **Phones**: Android's Back closes the topmost menu or dialog, shrinks a
+  full-screen call, then goes from a conversation to the list. River opening
+  a chat by itself (a notification, an accepted call, the quick switcher, a
+  shared file) now shows it instead of leaving the list on screen. ☰ no longer
+  covers dialogs or the call's ⌄; the member list can be closed again;
+  Settings, the image viewer, toasts and full-screen dialogs keep clear of the
+  notch and the gesture bar; menus stay above the iPhone keyboard and scroll
+  when long; swiping a chat to open the list works again.
+- **Touch**: menus, pickers and the image viewer open above the message, so a
+  swipe in the viewer no longer also replies and a tap in a menu no longer
+  toggles ❤️ or gets lost after a long press; double taps on reactions and
+  links are left alone; the hover toolbar no longer sticks after a tap.
+- **Message boxes**: on phones Return makes a new line (Send sends); Enter
+  never sends while an input method is composing. Typing during a voice
+  recording no longer throws it away, and the microphone is never left on.
+  A failed send gives its text and reply back without overwriting what you
+  typed since; files waiting to be sent stay when you switch chats.
+- **Direct messages**: no call buttons for requests not yet accepted, or while
+  a call rings; "Add people", renaming a group and "Mark as verified" show
+  success only when it worked; "Jump to latest" counts only new messages;
+  re-opening the open chat keeps your reply; the date picker allows today in
+  your time zone; adding an existing friend opens your chat.
+- **Channels**: older history no longer duplicates or stops early, and can be
+  loaded again after switching channels; failed thread replies can be
+  discarded; deleted thread replies disappear; threads open only once created;
+  /nick and edits report failures and keep your text; decrypted pictures are
+  kept within a memory budget; Escape closes only the topmost menu or dialog,
+  and pressing a menu's button closes it.
+
 ## [2.10.11] - 2026-10-16
 
 **Reply privately.**

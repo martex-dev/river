@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { Transaction } from 'kysely';
 import { verify } from '@river/crypto';
 import {
   API_PREFIX,
@@ -25,6 +26,7 @@ import {
 import type { ServerConfig } from '../config.ts';
 import { purgeSignups, sha256, signupMode, usernameFree } from '../accounts/usernames.ts';
 import type { RiverDatabase } from '../db/database.ts';
+import type { Database } from '../db/schema.ts';
 import {
   authenticate,
   consumeChallenge,
@@ -48,6 +50,17 @@ const day = (d: Date): string => d.toISOString().slice(0, 10);
 function fail(reply: FastifyReply, status: number, code: string, message: string): FastifyReply {
   const body: ErrorResponse = { error: { code, message } };
   return reply.code(status).send(body);
+}
+
+/** A refusal decided inside a transaction (which is then rolled back). */
+class Refusal extends Error {
+  readonly status: number;
+  readonly code: string;
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
 }
 
 /** Accounts and device authentication routes (protocol v1). */
@@ -320,7 +333,7 @@ export function registerAccountRoutes(
       ) {
         return fail(reply, 400, 'bad_signature', 'The device list is not signed by this account');
       }
-      let list;
+      let list: ReturnType<typeof parseDeviceList>;
       try {
         list = parseDeviceList(listBytes);
       } catch {
@@ -332,35 +345,58 @@ export function registerAccountRoutes(
       if (list.version <= account.device_list_version) {
         return fail(reply, 409, 'stale_device_list', 'A newer device list is already stored');
       }
-      const current = await db
-        .selectFrom('devices')
-        .select(['device_id', 'auth_key'])
-        .where('river_id', '=', riverId)
-        .execute();
-      const me = current.find((d) => d.device_id === deviceId);
-      const mine = list.devices.find((d) => d.deviceId === deviceId);
-      if (!me || !mine || mine.authKey !== me.auth_key) {
-        return fail(reply, 400, 'bad_request', 'The device making the change must stay in the list');
-      }
-      for (const d of list.devices) {
-        const known = current.find((c) => c.device_id === d.deviceId);
-        if (known && known.auth_key !== d.authKey) {
-          return fail(reply, 400, 'bad_request', 'A listed device cannot change its key');
-        }
-      }
-      const kept = new Set(list.devices.map((d) => d.deviceId));
-      const removed = current.filter((c) => !kept.has(c.device_id)).map((c) => c.device_id);
       const today = deps.now().toISOString().slice(0, 10);
-      await db.transaction().execute(async (trx) => {
-        await trx
-          .updateTable('accounts')
-          .set({
-            device_list: parsed.data.deviceList,
-            device_list_signature: parsed.data.deviceListSignature,
-            device_list_version: list.version,
-          })
-          .where('river_id', '=', riverId)
-          .execute();
+      let removed: number[];
+      try {
+        removed = await db.transaction().execute(async (trx) => {
+          // Compare-and-set on the version first: it also locks the account row (PostgreSQL), so
+          // concurrent updates are applied one after another and an older list never overwrites
+          // a newer one. The device checks below then see the devices as they are now.
+          const updated = await trx
+            .updateTable('accounts')
+            .set({
+              device_list: parsed.data.deviceList,
+              device_list_signature: parsed.data.deviceListSignature,
+              device_list_version: list.version,
+            })
+            .where('river_id', '=', riverId)
+            .where('device_list_version', '<', list.version)
+            .executeTakeFirst();
+          if (Number(updated.numUpdatedRows) !== 1)
+            throw new Refusal(409, 'stale_device_list', 'A newer device list is already stored');
+          const current = await trx
+            .selectFrom('devices')
+            .select(['device_id', 'auth_key'])
+            .where('river_id', '=', riverId)
+            .execute();
+          const me = current.find((d) => d.device_id === deviceId);
+          const mine = list.devices.find((d) => d.deviceId === deviceId);
+          if (!me || !mine || mine.authKey !== me.auth_key) {
+            throw new Refusal(400, 'bad_request', 'The device making the change must stay in the list');
+          }
+          for (const d of list.devices) {
+            const known = current.find((c) => c.device_id === d.deviceId);
+            if (known && known.auth_key !== d.authKey) {
+              throw new Refusal(400, 'bad_request', 'A listed device cannot change its key');
+            }
+          }
+          const kept = new Set(list.devices.map((d) => d.deviceId));
+          const gone = current.filter((c) => !kept.has(c.device_id)).map((c) => c.device_id);
+          await applyDeviceList(trx, current, gone);
+          return gone;
+        });
+      } catch (err) {
+        if (err instanceof Refusal) return fail(reply, err.status, err.code, err.message);
+        throw err;
+      }
+      if (removed.length) deps.onDevicesRemoved?.(riverId, removed);
+      return { devices: list.devices.length, removed };
+
+      async function applyDeviceList(
+        trx: Transaction<Database>,
+        current: Array<{ device_id: number }>,
+        removed: number[],
+      ): Promise<void> {
         for (const d of list.devices) {
           if (current.some((c) => c.device_id === d.deviceId)) continue;
           await trx
@@ -394,9 +430,7 @@ export function registerAccountRoutes(
             .where('recipient_device', 'in', removed)
             .execute();
         }
-      });
-      if (removed.length) deps.onDevicesRemoved?.(riverId, removed);
-      return { devices: list.devices.length, removed };
+      }
     },
   );
 

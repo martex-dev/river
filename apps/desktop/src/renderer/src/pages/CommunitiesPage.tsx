@@ -16,6 +16,7 @@ import { StartScreen } from '../community/ui/StartScreen.tsx';
 import { ThreadPanel } from '../community/ui/Thread.tsx';
 import { useCommunity } from '../community/store.ts';
 import { play } from '../community/sound.ts';
+import { pttKeyIsTyping } from '../community/ptt.ts';
 import { ChannelSidebar } from '../community/ui/Sidebar.tsx';
 import { TextChannel } from '../community/ui/Chat.tsx';
 import { CommunitySettings } from '../community/ui/CommunitySettings.tsx';
@@ -244,7 +245,8 @@ export function VoiceHotkeys(): null {
           return;
         }
       }
-      if (e.code === pttKey && s.call?.pushToTalk && !e.repeat) {
+      // Typing the push-to-talk character (` by default) into a text field types it; it does not talk.
+      if (e.code === pttKey && s.call?.pushToTalk && !e.repeat && !pttKeyIsTyping(e)) {
         e.preventDefault();
         if (!s.call.pttActive) play('pttOn');
         s.call.setPushToTalkActive(true);
