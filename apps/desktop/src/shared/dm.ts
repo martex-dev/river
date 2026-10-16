@@ -53,8 +53,22 @@ export interface DirectMessageView {
   reactions: Array<{ emoji: string; count: number; mine: boolean; users: string[] }>;
   /** When this device deletes the message (disappearing messages, 2.4). */
   expiresAt?: string | null;
+  /** Sent without sound (2.5). */
+  silent?: boolean;
   /** A notice in the conversation instead of a message, e.g. the disappearing-messages timer. */
   notice?: { timer: number } | null;
+}
+
+/** A message waiting on this device to be sent later (2.5). */
+export interface ScheduledView {
+  id: string;
+  peer: string;
+  text: string;
+  attachments: AttachmentPointer[];
+  sendAt: string;
+  silent: boolean;
+  /** The last attempt failed (the device was offline); it is tried again. */
+  failed: boolean;
 }
 
 export interface FileView {
@@ -85,6 +99,8 @@ export type DmEvent =
   | { t: 'remove'; peer: string; id: string }
   | { t: 'typing'; peer: string; who?: string }
   | { t: 'focus'; peer: string }
+  /** The list of messages waiting to be sent later changed (2.5). */
+  | { t: 'scheduled' }
   | {
       t: 'call';
       peer: string;
@@ -139,9 +155,27 @@ export const dmActionSchema = z.discriminatedUnion('a', [
       text: z.string().max(4000),
       replyTo: id.optional(),
       attachments: z.array(attachmentPointerSchema).max(10).optional(),
+      /** Send without sound: the other side gets no notification (2.5). */
+      silent: z.boolean().optional(),
     })
     .strict()
     .refine((v) => v.text.trim().length > 0 || (v.attachments?.length ?? 0) > 0, 'empty'),
+  /** Send later (2.5): kept encrypted on this device and sent at `sendAt` while it is online. */
+  z
+    .object({
+      a: z.literal('schedule'),
+      peer: conv,
+      text: z.string().max(4000),
+      replyTo: id.optional(),
+      attachments: z.array(attachmentPointerSchema).max(10).optional(),
+      silent: z.boolean().optional(),
+      sendAt: z.iso.datetime(),
+    })
+    .strict()
+    .refine((v) => v.text.trim().length > 0 || (v.attachments?.length ?? 0) > 0, 'empty'),
+  z.object({ a: z.literal('scheduled'), peer: conv }).strict(),
+  z.object({ a: z.literal('cancelScheduled'), id }).strict(),
+  z.object({ a: z.literal('sendScheduledNow'), id }).strict(),
   z
     .object({
       a: z.literal('edit'),
@@ -261,6 +295,8 @@ interface DmResults {
   search: DirectMessageView[];
   files: FileView[];
   calls: CallView[];
+  schedule: ScheduledView;
+  scheduled: ScheduledView[];
   pendingCall: Extract<DmEvent, { t: 'call' }> | null;
 }
 

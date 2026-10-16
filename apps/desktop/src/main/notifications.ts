@@ -72,6 +72,8 @@ export function startMessageNotifications(deps: {
     const prefs = deps.settings().notifications;
     if (!prefs.desktop) return;
     const m = event.message;
+    // Sent without sound (2.5).
+    if (m.silent) return;
     // A conversation you muted stays quiet (1.0.26).
     if (isMuted(prefs, m.peer)) return;
     const title = prefs.preview === 'none' ? 'River' : event.senderName;

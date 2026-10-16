@@ -30,6 +30,7 @@ import {
   type DmActionResult,
   type DmEvent,
   type FileView,
+  type ScheduledView,
   MAX_TIMER,
 } from '../../shared/dm.ts';
 import type { AccountService } from '../account/account-service.ts';
@@ -41,6 +42,30 @@ import type { LocalDatabase } from '../storage/database.ts';
 
 /** How long a call invite rings (the same as the window's ring timeout). */
 const RING_MS = 45_000;
+
+/** A message waiting on this device to be sent later (2.5). */
+interface ScheduledItem {
+  id: string;
+  peer: string;
+  text: string;
+  replyTo?: string;
+  attachments: AttachmentPointer[];
+  sendAt: string;
+  silent: boolean;
+  failed: boolean;
+}
+
+function scheduledView(x: ScheduledItem): ScheduledView {
+  return {
+    id: x.id,
+    peer: x.peer,
+    text: x.text,
+    attachments: x.attachments,
+    sendAt: x.sendAt,
+    silent: x.silent,
+    failed: x.failed,
+  };
+}
 
 /** Pinned conversations at most (2.1). */
 const MAX_PINNED = 10;
@@ -62,6 +87,8 @@ const messageFields = {
   groupId: msgId.optional(),
   /** Disappearing messages (2.4): delete after this many seconds. */
   expiresIn: z.number().int().min(1).max(MAX_TIMER).optional(),
+  /** Sent without sound (2.5): no notification. */
+  silent: z.boolean().optional(),
 };
 
 const contentSchema = z.discriminatedUnion('t', [
@@ -303,6 +330,8 @@ export class DmService {
     const sweep = setInterval(() => {
       try {
         this.sweepExpired();
+        if (this.deps.account.status().state === 'registered')
+          void this.sendDueScheduled().catch(() => undefined);
       } catch {
         // storage not open yet (locked): next time
       }
@@ -578,6 +607,7 @@ export class DmService {
               text: content.text,
               replyTo: content.replyTo,
               attachments: content.attachments,
+              ...(content.silent ? { silent: true } : {}),
             }),
             sentAt,
             expiresAt,
@@ -1252,6 +1282,7 @@ export class DmService {
               sentAt,
               ...(group ? { groupId: group.id } : {}),
               ...(ttl ? { expiresIn: ttl } : {}),
+              ...(act.silent ? { silent: true } : {}),
             });
             this.db()
               .prepare(`UPDATE dm_messages SET status = 'sent' WHERE id = ? AND status = 'sending'`)
@@ -1335,6 +1366,41 @@ export class DmService {
             ...(isGroupId(act.peer) ? { groupId: act.peer } : {}),
           });
           this.applyReaction(row, this.me(), act.emoji, act.on);
+          return out(null);
+        }
+        case 'schedule': {
+          const when = Date.parse(act.sendAt);
+          if (when < Date.now() + 30_000)
+            throw new CommunityError('Choose a time at least a minute from now.');
+          if (when > Date.now() + 366 * 86_400_000) throw new CommunityError('Choose a time within a year.');
+          const list = this.scheduledList();
+          if (list.length >= 100) throw new CommunityError('You have 100 messages waiting already.');
+          const item: ScheduledItem = {
+            id: randomBytes(16).toString('base64url'),
+            peer: act.peer,
+            text: act.text,
+            ...(act.replyTo ? { replyTo: act.replyTo } : {}),
+            attachments: act.attachments ?? [],
+            sendAt: new Date(when).toISOString(),
+            silent: act.silent === true,
+            failed: false,
+          };
+          this.setScheduled([...list, item]);
+          return out(scheduledView(item));
+        }
+        case 'scheduled':
+          return out(
+            this.scheduledList()
+              .filter((x) => x.peer === act.peer)
+              .sort((a, b) => a.sendAt.localeCompare(b.sendAt))
+              .map(scheduledView),
+          );
+        case 'cancelScheduled':
+          this.setScheduled(this.scheduledList().filter((x) => x.id !== act.id));
+          return out(null);
+        case 'sendScheduledNow': {
+          const item = this.scheduledList().find((x) => x.id === act.id);
+          if (item) await this.sendScheduled(item);
           return out(null);
         }
         case 'setTimer': {
@@ -1661,6 +1727,7 @@ export class DmService {
       attachments?: AttachmentPointer[];
       pinned?: unknown;
       notice?: { timer?: unknown };
+      silent?: unknown;
     };
     const me = this.me();
     const reactions = JSON.parse(r.reactions) as Record<string, string[]>;
@@ -1686,6 +1753,7 @@ export class DmService {
         users,
       })),
       expiresAt: r.expires_at ?? null,
+      silent: body.silent === true,
       notice: body.notice && typeof body.notice.timer === 'number' ? { timer: body.notice.timer } : null,
     };
   }
@@ -1737,6 +1805,53 @@ export class DmService {
       .run(id, conv, by, JSON.stringify({ text: '', notice: { timer: seconds } }), new Date().toISOString());
     this.emitMessage(id, true);
     this.emitConversations();
+  }
+
+  private scheduledList(): ScheduledItem[] {
+    try {
+      const raw = this.meta('scheduled');
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? (parsed as ScheduledItem[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private setScheduled(list: ScheduledItem[]): void {
+    this.setMeta('scheduled', JSON.stringify(list));
+    this.emit({ t: 'scheduled' });
+  }
+
+  private sendingScheduled = false;
+
+  private async sendScheduled(item: ScheduledItem): Promise<void> {
+    // Taken off the list first, so a slow send is never sent twice.
+    this.setScheduled(this.scheduledList().filter((x) => x.id !== item.id));
+    try {
+      await this.action({
+        a: 'send',
+        peer: item.peer,
+        text: item.text,
+        ...(item.replyTo ? { replyTo: item.replyTo } : {}),
+        ...(item.attachments.length ? { attachments: item.attachments } : {}),
+        ...(item.silent ? { silent: true } : {}),
+      });
+    } catch {
+      this.setScheduled([...this.scheduledList(), { ...item, failed: true }]);
+    }
+  }
+
+  /** Sends scheduled messages whose time has come (2.5). */
+  async sendDueScheduled(now = new Date()): Promise<number> {
+    if (this.sendingScheduled) return 0;
+    this.sendingScheduled = true;
+    try {
+      const due = this.scheduledList().filter((x) => Date.parse(x.sendAt) <= now.getTime());
+      for (const item of due) await this.sendScheduled(item);
+      return due.length;
+    } finally {
+      this.sendingScheduled = false;
+    }
   }
 
   /** Deletes this device's copies of messages whose time is up (2.4). Returns how many. */

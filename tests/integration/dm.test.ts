@@ -263,6 +263,45 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     expect(kept.expiresAt).toBeNull();
   });
 
+  it('send without sound, and messages scheduled on this device go out on time', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await alice.dm.action({ a: 'open', peer: bob.riverId, name: 'Bob' });
+    await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'quiet one', silent: true });
+    await bob.dm.sync();
+    const quiet = (await bob.dm.action({ a: 'messages', peer: alice.riverId })).find(
+      (m) => m.text === 'quiet one',
+    );
+    expect(quiet?.silent).toBe(true);
+
+    await expect(
+      alice.dm.action({
+        a: 'schedule',
+        peer: bob.riverId,
+        text: 'too soon',
+        sendAt: new Date().toISOString(),
+      }),
+    ).rejects.toThrow(/a minute/);
+    const at = new Date(Date.now() + 3600_000).toISOString();
+    const queued = await alice.dm.action({ a: 'schedule', peer: bob.riverId, text: 'later', sendAt: at });
+    expect(queued).toMatchObject({ text: 'later', failed: false });
+    expect(await alice.dm.action({ a: 'scheduled', peer: bob.riverId })).toHaveLength(1);
+    // Not due yet: nothing goes out. At the time: sent once, and the list is empty.
+    expect(await alice.dm.sendDueScheduled(new Date())).toBe(0);
+    expect(await alice.dm.sendDueScheduled(new Date(Date.now() + 3601_000))).toBe(1);
+    expect(await alice.dm.action({ a: 'scheduled', peer: bob.riverId })).toHaveLength(0);
+    await bob.dm.sync();
+    const later = (await bob.dm.action({ a: 'messages', peer: alice.riverId })).filter(
+      (m) => m.text === 'later',
+    );
+    expect(later).toHaveLength(1);
+
+    // Cancelled ones never go out.
+    const other = await alice.dm.action({ a: 'schedule', peer: bob.riverId, text: 'never', sendAt: at });
+    await alice.dm.action({ a: 'cancelScheduled', id: other.id });
+    expect(await alice.dm.sendDueScheduled(new Date(Date.now() + 7200_000))).toBe(0);
+  });
+
   it('sends encrypted files in direct messages', async () => {
     const alice = await person('Alice');
     const bob = await person('Bob');
