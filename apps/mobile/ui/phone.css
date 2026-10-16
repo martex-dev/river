@@ -37,8 +37,26 @@ html[data-pane='nav'] .phone-menu {
 html:not([data-platform='android']):not([data-platform='ios']) .phone-menu,
 body:has(.skin-gate) .phone-menu,
 body:has(.onboarding) .phone-menu,
-body:has(.lock) .phone-menu {
+body:has(.lock) .phone-menu,
+/* Dialogs, menus, pictures, Settings, stories and a full-screen call cover ☰ (it sits right on the
+   call's ⌄ otherwise). */
+body:has(.modal, .popover, .lightbox, .settings-overlay, .story-viewer, .switcher-backdrop) .phone-menu,
+body:has(.incoming-call, .dm-call--full) .phone-menu {
   display: none;
+}
+
+/* The keyboard (iPhone: --kb, from phone.ts): the page ends above it, and so do dialogs. */
+html:is([data-platform='android'], [data-platform='ios'])[data-keyboard='open'] body {
+  padding-bottom: var(--kb, 0px);
+}
+html:is([data-platform='android'], [data-platform='ios']) .modal:not(:has(> .modal__card--full)) {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: max(env(safe-area-inset-bottom), var(--kb, 0px));
+}
+html:is([data-platform='android'], [data-platform='ios']) .modal__card:not(.modal__card--full) {
+  max-height: calc(
+    100dvh - env(safe-area-inset-top) - max(env(safe-area-inset-bottom), var(--kb, 0px)) - 24px
+  );
 }
 
 /* ---------- The list ---------- */
@@ -94,6 +112,11 @@ html:is([data-platform='android'], [data-platform='ios']) .thread-panel {
   max-width: none;
   border-left: 0;
   background: var(--layer-1);
+}
+/* The member list starts below the channel's header, so its 👥 button still closes it. */
+html:is([data-platform='android'], [data-platform='ios']) .community__members {
+  top: calc(env(safe-area-inset-top) + var(--titlebar-h) + 53px);
+  border-top: 1px solid var(--border);
 }
 
 /* ---------- Settings ---------- */

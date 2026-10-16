@@ -291,7 +291,9 @@ html[data-platform='darwin'] .titlebar {
 /* ---------- Settings ---------- */
 .settings-overlay {
   position: fixed;
-  inset: var(--titlebar-h) 0 0 0;
+  /* Below the title bar, clear of a phone's notch and gesture bar (all 0 on computers). */
+  inset: calc(env(safe-area-inset-top) + var(--titlebar-h)) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
   z-index: 35;
   display: grid;
   grid-template-columns: minmax(232px, 1fr) minmax(0, 2.2fr);
