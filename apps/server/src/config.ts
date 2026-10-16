@@ -4,6 +4,10 @@ const bool = z
   .enum(['true', 'false', '1', '0', 'yes', 'no'])
   .transform((v) => v === 'true' || v === '1' || v === 'yes');
 
+/** One trusted proxy: a preset name, an IPv4 or IPv6 address, optionally with a /prefix. */
+const PROXY = String.raw`(?:loopback|linklocal|uniquelocal|\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?|[0-9A-Fa-f]*:[0-9A-Fa-f:.]*(?:/\d{1,3})?)`;
+const TRUSTED_PROXIES = new RegExp(String.raw`^\s*${PROXY}(?:\s*,\s*${PROXY})*\s*$`);
+
 export const databaseUrlSchema = z
   .string()
   .min(1)
@@ -18,8 +22,14 @@ const envSchema = z.object({
   RIVER_PORT: z.coerce.number().int().min(0).max(65535).default(8787),
   RIVER_DATABASE_URL: databaseUrlSchema.default('sqlite:./data/river.sqlite'),
   RIVER_LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'silent']).default('info'),
-  /** Set only when running behind a reverse proxy you control; otherwise client IPs could be spoofed. */
-  RIVER_TRUST_PROXY: bool.default(false),
+  /**
+   * Set only when running behind a reverse proxy you control; otherwise client IPs could be spoofed.
+   * true trusts a proxy on this machine (loopback) only; a comma-separated list of addresses or
+   * CIDR ranges (e.g. 172.18.0.0/16) names the proxies to trust instead.
+   */
+  RIVER_TRUST_PROXY: z
+    .union([bool, z.string().max(500).regex(TRUSTED_PROXIES, 'true, false or proxy addresses / ranges')])
+    .default(false),
   /** Requests per minute per client before 429. Counted in memory only; never stored. */
   RIVER_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(100_000).default(300),
   /** 'open': anyone may create an account; 'closed': no new accounts. */
@@ -58,7 +68,11 @@ export interface ServerConfig {
   port: number;
   databaseUrl: string;
   logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'silent';
-  trustProxy: boolean;
+  /**
+   * Which proxies' X-Forwarded-For is believed: false (none), or Fastify's comma-separated list
+   * of trusted addresses / ranges. Never "every hop": a client could then spoof its address.
+   */
+  trustProxy: false | string;
   rateLimitPerMinute: number;
   publicUrl: string | undefined;
   registration: 'open' | 'closed';
@@ -95,7 +109,17 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     port: e.RIVER_PORT,
     databaseUrl: e.RIVER_DATABASE_URL,
     logLevel: e.RIVER_LOG_LEVEL,
-    trustProxy: e.RIVER_TRUST_PROXY,
+    // A tunnel or proxy on this machine (Tailscale Funnel, River Host) connects from loopback and
+    // appends the real client address; only that last hop is believed, so a forged
+    // X-Forwarded-For sent by the client itself is ignored.
+    trustProxy:
+      e.RIVER_TRUST_PROXY === true
+        ? 'loopback'
+        : e.RIVER_TRUST_PROXY === false
+          ? false
+          : e.RIVER_TRUST_PROXY.split(',')
+              .map((s) => s.trim())
+              .join(','),
     rateLimitPerMinute: e.RIVER_RATE_LIMIT_PER_MINUTE,
     publicUrl: e.RIVER_PUBLIC_URL,
     registration: e.RIVER_REGISTRATION,
