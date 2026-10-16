@@ -86,6 +86,8 @@ export const IPC = {
   screenSelect: 'river:voice:screen-select',
   /** Phones: play calls through the loudspeaker (true) or the earpiece. */
   voiceSpeaker: 'river:voice:speaker',
+  /** Phones: a short vibration (2.8). */
+  appHaptic: 'river:app:haptic',
   screenShareStatus: 'river:voice:share-status',
   screenPoint: 'river:voice:point',
   communityEvent: 'river:community:event',
@@ -527,6 +529,8 @@ export interface RiverApi {
     onShare(listener: (content: SharedContent) => void): () => void;
     /** Colours of the window buttons area (Windows/Linux), following the theme. */
     setTitleBar(colors: { color: string; symbol: string }): Promise<void>;
+    /** Phones: a short vibration, following the phone's own haptics setting. Nothing on computers. */
+    haptic(kind: 'tap' | 'select' | 'success' | 'warning'): void;
   };
   settings: { get(): Promise<Settings>; update(patch: SettingsPatch): Promise<Settings> };
   updates: {
