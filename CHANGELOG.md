@@ -6,6 +6,20 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.10.0] - 2026-10-16
+
+**Calls: picture-in-picture.**
+
+### Added
+
+- **Android**: during a call, going home or switching apps keeps the call in a
+  small window on top (Android 12 and later do it by themselves; 8 to 11 when
+  you press Home). The window shows their video with yours in the corner, or
+  their picture in a voice call. Tap it to come back.
+- **Computers**: a ⧉ button in video calls keeps their video in a small
+  always-on-top window while you use other apps.
+- iPhone does not have picture-in-picture for calls yet.
+
 ## [2.9.0] - 2026-10-16
 
 **People.**

@@ -81,6 +81,47 @@ public class MainActivity extends BridgeActivity implements CoreHost.Screen {
     return MainActivity.class;
   }
 
+  // ---- picture-in-picture during calls (2.10) ----
+
+  private boolean pipAllowed;
+
+  private boolean pipSupported() {
+    return getPackageManager().hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE);
+  }
+
+  private android.app.PictureInPictureParams pipParams(boolean auto) {
+    android.app.PictureInPictureParams.Builder b =
+        new android.app.PictureInPictureParams.Builder().setAspectRatio(new android.util.Rational(3, 4));
+    if (android.os.Build.VERSION.SDK_INT >= 31) b.setAutoEnterEnabled(auto).setSeamlessResizeEnabled(false);
+    return b.build();
+  }
+
+  @Override
+  public void pip(boolean allowed) {
+    pipAllowed = allowed;
+    // Android 12+ moves the call into a small window by itself when River is left.
+    if (pipSupported() && android.os.Build.VERSION.SDK_INT >= 31) setPictureInPictureParams(pipParams(allowed));
+  }
+
+  @Override
+  protected void onUserLeaveHint() {
+    super.onUserLeaveHint();
+    // Android 8 to 11: going home during a call keeps it in a small window.
+    if (pipAllowed && pipSupported() && android.os.Build.VERSION.SDK_INT < 31) {
+      try {
+        enterPictureInPictureMode(pipParams(false));
+      } catch (IllegalStateException ignored) {
+        // not allowed right now: the call goes on in the background as before
+      }
+    }
+  }
+
+  @Override
+  public void onPictureInPictureModeChanged(boolean inPip, android.content.res.Configuration config) {
+    super.onPictureInPictureModeChanged(inPip, config);
+    shareToUi("{\"channel\":\"river:app:pip\",\"args\":[" + inPip + "]}");
+  }
+
   // ---- lifecycle ----
 
   @Override

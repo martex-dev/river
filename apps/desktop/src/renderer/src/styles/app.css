@@ -2210,3 +2210,52 @@ html[data-density='compact'] .member {
   background: var(--accent-grad);
   color: var(--accent-ink);
 }
+
+/* Calls in picture-in-picture on Android (2.10): only the call, full window. */
+[data-pip='on'] body * {
+  visibility: hidden;
+}
+[data-pip='on'] .dm-call,
+[data-pip='on'] .dm-call * {
+  visibility: visible;
+}
+[data-pip='on'] .dm-call {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background: #000;
+}
+[data-pip='on'] .dm-call__status,
+[data-pip='on'] .dm-call .voice__controls,
+[data-pip='on'] .dm-call .tile__label {
+  display: none;
+}
+[data-pip='on'] .dm-call__stage {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+[data-pip='on'] .dm-call__stage .tile[data-remote] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+[data-pip='on'] .dm-call__stage .tile:not([data-remote]) {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 2;
+  width: 32%;
+  height: auto;
+  aspect-ratio: 3 / 4;
+}
+[data-pip='on'] .dm-call__stage video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

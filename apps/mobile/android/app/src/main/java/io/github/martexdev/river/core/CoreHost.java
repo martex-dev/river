@@ -78,6 +78,9 @@ public final class CoreHost {
 
     /** The activity River's notifications open. */
     Class<?> activityClass();
+
+    /** While a call is on, leaving River shows it in picture-in-picture (2.10). */
+    default void pip(boolean allowed) {}
   }
 
   public static synchronized CoreHost get(Context context) {
@@ -400,6 +403,13 @@ public final class CoreHost {
             callAudio(active);
             if (active) callAsk = id;
             else answer(id, (Object) "ended");
+            break;
+          }
+        case "pip":
+          {
+            Screen s = screen;
+            if (s != null) s.pip(a.optBoolean("on", false));
+            answer(id, (Object) null);
             break;
           }
         case "haptic":
