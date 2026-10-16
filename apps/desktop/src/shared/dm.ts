@@ -69,6 +69,8 @@ export interface DirectMessageView {
   embed?: z.infer<typeof linkEmbedSchema> | null;
   /** A notice in the conversation instead of a message, e.g. the disappearing-messages timer. */
   notice?: { timer: number } | null;
+  /** Group members your message could not be delivered to (everyone else got it). */
+  undeliveredTo?: string[];
 }
 
 /** A message waiting on this device to be sent later (2.5). */
