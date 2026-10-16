@@ -1,4 +1,5 @@
 import { FavoriteStar } from './Favorites.tsx';
+import { isVoiceMessage, VoiceNote } from '../../components/VoiceMessage.tsx';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { AttachmentPointer } from '../../../../shared/community-actions.ts';
 import { MAX_ATTACHMENT_BYTES } from '../../../../shared/community-actions.ts';
@@ -161,9 +162,12 @@ function ImageAttachment({
 }
 
 function MediaAttachment({ pointer }: { pointer: AttachmentPointer }): ReactElement {
-  const [load, setLoad] = useState(false);
+  const voice = isVoiceMessage(pointer.name, pointer.mime);
+  // Voice messages are small and meant to be played at once: decrypted right away.
+  const [load, setLoad] = useState(voice);
   const { url, error } = useDecrypted(pointer, load);
   const video = INLINE_VIDEO.has(pointer.mime);
+  if (voice && url) return <VoiceNote url={url} name={pointer.name} />;
   return (
     <div className={`attachment-media ${video ? 'attachment-media--video' : ''}`}>
       {url ? (

@@ -1,4 +1,5 @@
 import type { CallView } from '../../../shared/dm.ts';
+import { VoiceRecorder } from '../components/VoiceMessage.tsx';
 import { create } from 'zustand';
 import { useSharedFiles, useSharedText } from '../components/ShareSheet.tsx';
 import { callNote, callsBetween } from '../dm/call-notes.ts';
@@ -1452,6 +1453,34 @@ ${shared}`
     }
   };
 
+  // A recorded voice message is sent at once, encrypted like any file (2.3).
+  const sendVoice = async (file: File): Promise<void> => {
+    if (uploading) return;
+    const files = pendingFrom([file]);
+    setUploading({ done: 0, total: 1 });
+    let attachments;
+    try {
+      attachments = await uploadAll(files, (done) => setUploading({ done, total: 1 }), 'dm');
+    } catch (err) {
+      setUploading(null);
+      useCommunity.getState().notify((err as Error).message || 'Upload failed.', 'error');
+      return;
+    }
+    useDm.setState({ replyTo: null });
+    const sent = await dm.run({
+      a: 'send',
+      peer: c.riverId,
+      text: '',
+      ...(replyTo ? { replyTo: replyTo.id } : {}),
+      attachments,
+    });
+    setUploading(null);
+    if (sent) {
+      play('send');
+      dm.handle({ t: 'message', message: sent, isNew: false, senderName: '' });
+    }
+  };
+
   return (
     <div className="chat__composer-wrap">
       {replyTo && (
@@ -1553,6 +1582,9 @@ ${shared}`
         >
           <SmileIcon size={20} />
         </button>
+        {!text.trim() && props.pending.length === 0 && (
+          <VoiceRecorder disabled={!!uploading} onRecorded={(file) => void sendVoice(file)} />
+        )}
         <button
           className="btn btn--primary"
           disabled={(!text.trim() && !props.pending.length) || !!uploading}
