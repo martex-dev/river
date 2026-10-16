@@ -2277,3 +2277,24 @@ html[data-density='compact'] .member {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
+
+/* Albums (2.10.3): pictures sent together share one grid. */
+.attachment-album {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 3px;
+  width: min(100%, 400px);
+  overflow: hidden;
+  border-radius: 12px;
+}
+.attachment-album--5 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.attachment-album .attachment-image-wrap.is-wide {
+  grid-column: span 2;
+}
+.attachment-album .attachment-image {
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}

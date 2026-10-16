@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { galleryOf } from '../src/renderer/src/community/ui/Attachments.tsx';
+import { albumTile, galleryOf } from '../src/renderer/src/community/ui/Attachments.tsx';
 import type { AttachmentPointer } from '../src/shared/community-actions.ts';
 
 const file = (id: string, mime: string): AttachmentPointer => ({
@@ -20,5 +20,11 @@ describe('image gallery', () => {
     ]);
     // SVG is never shown inline (it can carry scripts), so it is not in the viewer either.
     expect(gallery.map((a) => a.id)).toEqual(['a', 'd']);
+  });
+
+  it('lays out albums: the first of three pictures is wide, every other one square', () => {
+    expect([0, 1, 2].map((i) => albumTile(3, i))).toEqual([2, 1, 1]);
+    expect([0, 1].map((i) => albumTile(2, i))).toEqual([1, 1]);
+    expect([0, 1, 2, 3].map((i) => albumTile(4, i))).toEqual([1, 1, 1, 1]);
   });
 });
