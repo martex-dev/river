@@ -14,7 +14,9 @@ services:
     environment:
       RIVER_LOG_LEVEL: info
       # RIVER_PUBLIC_URL: https://river.example.org
-      # RIVER_TRUST_PROXY: 'true'   # only when behind your own reverse proxy
+      # Only behind your own reverse proxy, named by the address it connects from (inside the
+      # container a proxy on the host appears as the bridge gateway); 'true' means loopback only.
+      # RIVER_TRUST_PROXY: '172.16.0.0/12'
     volumes:
       - river-data:/data
     tmpfs:

@@ -126,6 +126,19 @@ export class CommunityModel {
   }
 
   perms(riverId: string, channelId?: string): number {
+    return this.permsWith(riverId, channelId ? this.channel(channelId)?.overwrites : undefined, channelId);
+  }
+
+  /** Permissions in a category (with its own overwrites, as channels synced to it get them). */
+  categoryPerms(riverId: string, categoryId: string): number {
+    return this.permsWith(riverId, this.category(categoryId)?.overwrites);
+  }
+
+  private permsWith(
+    riverId: string,
+    overwrites: readonly OverwriteWire[] | undefined,
+    channelId?: string,
+  ): number {
     const m = this.member(riverId);
     if (!m) return 0;
     const perms = computePermissions({
@@ -133,7 +146,7 @@ export class CommunityModel {
       everyoneRoleId: this.everyoneRoleId,
       roles: this.roles,
       member: { riverId, roles: m.roles },
-      overwrites: channelId ? this.channel(channelId)?.overwrites : undefined,
+      overwrites,
     });
     // Until a new member accepts the rules of a screened community, they can only look around.
     if (this.pending(riverId) && !(perms & Permission.ADMINISTRATOR)) return perms & Permission.VIEW_CHANNELS;

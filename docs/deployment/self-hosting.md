@@ -43,6 +43,13 @@ RIVER_DATABASE_URL=sqlite:/var/lib/river/river.sqlite npm start -w @river/server
 
 Invalid values stop the server at start-up with a list of every problem.
 
+`RIVER_TRUST_PROXY=true` trusts only a proxy or tunnel on the same machine
+(loopback), such as Tailscale Funnel or Caddy on the host: the client address is
+the one it appends. Name a proxy elsewhere (another container or host) by
+address or range instead, e.g. `RIVER_TRUST_PROXY=172.18.0.0/16`. River never
+trusts every hop, or clients could pick their own address and escape the
+per-address limits.
+
 ## TLS and reverse proxy
 
 Expose River only over HTTPS. Example with Caddy (automatic certificates):

@@ -494,7 +494,11 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'one' });
     await bob.dm.sync();
     await bob.dm.action({ a: 'block', peer: alice.riverId });
-    await expect(alice.dm.action({ a: 'send', peer: bob.riverId, text: 'two' })).resolves.toBeTruthy();
+    // Alice is answered as if Bob's account did not exist (the same as when she looks up his keys),
+    // so she cannot tell a block from a deleted account; nothing reaches Bob.
+    await expect(alice.dm.action({ a: 'send', peer: bob.riverId, text: 'two' })).rejects.toThrow(
+      /no longer exists/,
+    );
     await bob.dm.sync();
     expect((await bob.dm.action({ a: 'messages', peer: alice.riverId })).map((m) => m.text)).toEqual(['one']);
     // Nobody can open a conversation with themselves.

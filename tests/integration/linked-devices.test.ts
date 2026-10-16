@@ -208,6 +208,44 @@ describe('linked devices', { timeout: 60_000 }, () => {
     expect(after).toMatchObject({ state: 'registered', connection: 'error' });
   });
 
+  it('a linked device that has not published its keys does not stop direct messages', async () => {
+    const desktop = install('dee-desktop');
+    const me = desktop.identity.create('Dee');
+    await desktop.account.register(SERVER);
+    await desktop.dm.sync();
+    const bob = install('bo');
+    const bobId = bob.identity.create('Bo').riverId;
+    await bob.account.register(SERVER);
+    await bob.dm.sync();
+
+    const offered = await desktop.link.start();
+    const { code } = offered as Extract<LinkProgress, { state: 'offering' }>;
+    const phone = install('dee-phone');
+    await phone.link.join(code, 'Dee’s phone');
+    await until(() => desktop.link.status().state === 'request');
+    await desktop.link.confirm();
+    await until(() => phone.link.status().state === 'review');
+    await phone.link.accept();
+    await until(() => phone.link.status().state === 'linked');
+    // The phone is in the device list but its keys never reached the server (e.g. it went
+    // offline right after linking): nobody can fetch them, so nobody can be asked to write to it.
+    for (const table of ['signed_prekeys', 'kyber_prekeys', 'prekeys'] as const)
+      await serverDb.db
+        .deleteFrom(table)
+        .where('river_id', '=', me.riverId)
+        .where('device_id', '=', 2)
+        .execute();
+
+    await bob.dm.action({ a: 'open', peer: me.riverId, name: 'Dee' });
+    await bob.dm.action({ a: 'send', peer: me.riverId, text: 'still reachable' });
+    const got = await until(async () => {
+      await desktop.dm.sync();
+      const messages = await desktop.dm.action({ a: 'messages', peer: bobId });
+      return messages.find((m) => m.text === 'still reachable');
+    });
+    expect(got.mine).toBe(false);
+  });
+
   it('a new device gets the friends list and blocks from the account’s other devices', async () => {
     const desktop = install('ann-desktop');
     const me = desktop.identity.create('Ann');

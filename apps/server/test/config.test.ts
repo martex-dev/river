@@ -23,7 +23,8 @@ describe('loadConfig', () => {
     expect(c.host).toBe('0.0.0.0');
     expect(c.port).toBe(9000);
     expect(c.databaseUrl).toBe('postgres://river@db/river');
-    expect(c.trustProxy).toBe(true);
+    // "true" trusts only a proxy on this machine (the tunnel), never every hop.
+    expect(c.trustProxy).toBe('loopback');
     expect(c.publicUrl).toBe('https://river.example.org');
   });
 
@@ -50,5 +51,11 @@ describe('loadConfig', () => {
 
   it('rejects ambiguous booleans', () => {
     expect(() => loadConfig({ RIVER_TRUST_PROXY: 'maybe' })).toThrow(ConfigError);
+  });
+
+  it('accepts a list of trusted proxy addresses instead of true', () => {
+    expect(loadConfig({ RIVER_TRUST_PROXY: '172.18.0.0/16, ::1' }).trustProxy).toBe('172.18.0.0/16,::1');
+    expect(loadConfig({ RIVER_TRUST_PROXY: 'no' }).trustProxy).toBe(false);
+    expect(() => loadConfig({ RIVER_TRUST_PROXY: 'cafe' })).toThrow(ConfigError);
   });
 });

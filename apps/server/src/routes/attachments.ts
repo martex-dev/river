@@ -62,33 +62,54 @@ export async function registerAttachmentRoutes(
       if (body.length < MIN_BLOB || (body.length - 48) % 16 !== 0) {
         throw new HttpError(400, 'bad_request', 'That is not an encrypted River attachment');
       }
-      const used = await db
-        .selectFrom('attachments')
-        .select((eb) => eb.fn.sum<number>('size').as('total'))
-        .where('uploader', '=', request.session!.riverId)
-        .executeTakeFirst();
-      if (Number(used?.total ?? 0) + body.length > deps.config.attachmentQuotaBytes) {
-        throw new HttpError(413, 'quota_exceeded', 'You have reached your storage limit on this server');
-      }
+      const uploader = request.session!.riverId;
       const id = randomBytes(16).toString('base64url');
       const tmp = `${fileOf(id)}.part`;
       await writeFile(tmp, body, { flag: 'wx' });
-      await rename(tmp, fileOf(id));
-      await db
-        .insertInto('attachments')
-        .values({
-          id,
-          uploader: request.session!.riverId,
-          size: body.length,
-          created_at: deps.now().toISOString(),
-          message_id: null,
-          // Direct-message files: the recipient may be offline as long as the mailbox keeps mail.
-          retain_until:
-            request.query.retain === 'dm'
-              ? new Date(deps.now().getTime() + DM_RETAIN_MS).toISOString()
-              : null,
-        })
-        .execute();
+      // The quota check and the insert happen in one transaction. On PostgreSQL the uploader's
+      // account row is locked first, so parallel uploads by one person are counted one after
+      // another; SQLite runs one write transaction at a time. The sum uses attachments_by_uploader.
+      let fits = false;
+      try {
+        fits = await db.transaction().execute(async (trx) => {
+          if (deps.database.dialect === 'postgres') {
+            await trx
+              .selectFrom('accounts')
+              .select('river_id')
+              .where('river_id', '=', uploader)
+              .forUpdate()
+              .execute();
+          }
+          const used = await trx
+            .selectFrom('attachments')
+            .select((eb) => eb.fn.sum<number>('size').as('total'))
+            .where('uploader', '=', uploader)
+            .executeTakeFirst();
+          if (Number(used?.total ?? 0) + body.length > deps.config.attachmentQuotaBytes) return false;
+          await trx
+            .insertInto('attachments')
+            .values({
+              id,
+              uploader,
+              size: body.length,
+              created_at: deps.now().toISOString(),
+              message_id: null,
+              // Direct-message files: the recipient may be offline as long as the mailbox keeps mail.
+              retain_until:
+                request.query.retain === 'dm'
+                  ? new Date(deps.now().getTime() + DM_RETAIN_MS).toISOString()
+                  : null,
+            })
+            .execute();
+          return true;
+        });
+        if (fits) await rename(tmp, fileOf(id));
+      } finally {
+        if (!fits) await rm(tmp, { force: true });
+      }
+      if (!fits) {
+        throw new HttpError(413, 'quota_exceeded', 'You have reached your storage limit on this server');
+      }
       return reply.code(201).send({ id });
     },
   );
