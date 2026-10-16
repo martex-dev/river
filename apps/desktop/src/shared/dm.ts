@@ -180,7 +180,14 @@ export const dmActionSchema = z.discriminatedUnion('a', [
     .strict(),
   z.object({ a: z.literal('calls') }).strict(),
   /** Searches all conversations on this device. */
-  z.object({ a: z.literal('search'), query: z.string().trim().min(2).max(100) }).strict(),
+  z
+    .object({
+      a: z.literal('search'),
+      query: z.string().trim().min(2).max(100),
+      /** Only this conversation (2.2). */
+      peer: conv.optional(),
+    })
+    .strict(),
   z
     .object({
       a: z.literal('createGroup'),

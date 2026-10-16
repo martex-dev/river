@@ -1160,11 +1160,12 @@ export class DmService {
           const rows = this.db()
             .prepare(
               `SELECT * FROM dm_messages
-               WHERE deleted = 0 AND (json_extract(body, '$.text') LIKE ? ESCAPE '!'
+               WHERE deleted = 0 AND (? IS NULL OR peer = ?)
+                 AND (json_extract(body, '$.text') LIKE ? ESCAPE '!'
                  OR json_extract(body, '$.attachments') LIKE ? ESCAPE '!')
                ORDER BY sent_at DESC LIMIT 100`,
             )
-            .all(like, like) as MessageRow[];
+            .all(act.peer ?? null, act.peer ?? null, like, like) as MessageRow[];
           return out(rows.map((r) => this.view(r)));
         }
         case 'conversations':

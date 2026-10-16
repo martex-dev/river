@@ -208,6 +208,20 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     expect(convs.find((c) => c.name === 'Carol')).toMatchObject({ markedUnread: false });
   });
 
+  it('searches inside one conversation only', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    await alice.dm.action({ a: 'open', peer: bob.riverId, name: 'Bob' });
+    await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'pizza tonight?' });
+    await alice.dm.action({ a: 'open', peer: carol.riverId, name: 'Carol' });
+    await alice.dm.action({ a: 'send', peer: carol.riverId, text: 'pizza is great' });
+    const everywhere = await alice.dm.action({ a: 'search', query: 'pizza' });
+    expect(everywhere).toHaveLength(2);
+    const withBob = await alice.dm.action({ a: 'search', query: 'pizza', peer: bob.riverId });
+    expect(withBob.map((m) => m.text)).toEqual(['pizza tonight?']);
+  });
+
   it('sends encrypted files in direct messages', async () => {
     const alice = await person('Alice');
     const bob = await person('Bob');

@@ -1831,3 +1831,81 @@ html[data-density='compact'] .member {
   font-size: 11px;
   font-weight: 700;
 }
+
+/* Message selection and search in a conversation (2.2). */
+.msg.is-selected {
+  background: color-mix(in srgb, var(--accent-2) 16%, transparent);
+}
+.msg[aria-selected] {
+  cursor: pointer;
+}
+.msg.is-flash {
+  animation: msg-flash 1.6s ease-out;
+}
+@keyframes msg-flash {
+  0%,
+  30% {
+    background: color-mix(in srgb, var(--accent-2) 28%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--layer-1);
+}
+.selection-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.conv-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.conv-search .search {
+  flex: 1;
+}
+.conv-search__results {
+  position: absolute;
+  top: 100%;
+  left: 14px;
+  right: 14px;
+  z-index: 20;
+  max-height: 50vh;
+  margin: 4px 0 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-m, 10px);
+  background: var(--layer-2, var(--layer-1));
+  box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.7);
+}
+.conv-search__result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.conv-search__result:hover {
+  background: var(--layer-1);
+}
