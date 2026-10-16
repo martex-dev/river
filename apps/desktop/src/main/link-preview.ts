@@ -1,5 +1,9 @@
 import { lookup } from 'node:dns/promises';
+import type { LookupAddress, LookupOptions } from 'node:dns';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
+import { Readable } from 'node:stream';
 
 /**
  * Link previews (1.0.23), made by the sender only and only when they turned
@@ -8,7 +12,9 @@ import { isIP } from 'node:net';
  * message. People reading it never contact the site.
  *
  * Only public http(s) addresses are fetched (no LAN or localhost), at most
- * 512 KB of HTML, three redirects and a few seconds.
+ * 512 KB of HTML, three redirects and a few seconds. The address is checked
+ * again when the connection is made, so DNS cannot change its answer between
+ * the check and the request.
  */
 export interface LinkPreview {
   url: string;
@@ -20,38 +26,92 @@ export interface LinkPreview {
 const MAX_HTML = 512 * 1024;
 const MAX_REDIRECTS = 3;
 
-/** True for loopback, private, link-local, carrier-grade NAT and other non-public addresses. */
+function v4Private(a: number, b: number, c: number): boolean {
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 0 && (c === 0 || c === 2)) ||
+    (a === 192 && b === 88 && c === 99) ||
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) ||
+    (a === 203 && b === 0 && c === 113) ||
+    a >= 224
+  );
+}
+
+/** The eight 16-bit groups of an IPv6 address (any spelling Node accepts), or null. */
+export function expandIPv6(raw: string): number[] | null {
+  let s = raw.toLowerCase();
+  const zone = s.indexOf('%');
+  if (zone >= 0) s = s.slice(0, zone);
+  if (isIP(s) !== 6) return null;
+  // A dotted IPv4 tail (::ffff:1.2.3.4) becomes two groups.
+  const dotted = /(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(s);
+  if (dotted) {
+    const [a, b, c, d] = dotted.slice(1).map(Number) as [number, number, number, number];
+    s = s.slice(0, dotted.index) + `${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const halves = s.split('::');
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  const fill = halves.length === 2 ? 8 - head.length - tail.length : 0;
+  if (fill < 0) return null;
+  const groups = [...head, ...Array<string>(fill).fill('0'), ...tail].map((g) => parseInt(g, 16));
+  return groups.length === 8 && groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 0xffff)
+    ? groups
+    : null;
+}
+
+/** The IPv4 address carried in the last 32 bits of IPv6 groups g6, g7. */
+const embedded = (g6: number, g7: number): boolean => v4Private(g6 >> 8, g6 & 0xff, g7 >> 8);
+
+/**
+ * True for loopback, private, link-local, carrier-grade NAT, documentation,
+ * multicast and other non-public addresses — including IPv4 addresses hidden
+ * inside IPv6 ones (mapped, compatible, NAT64, 6to4), however they are spelled.
+ * Anything that is not an IP address counts as private.
+ */
 export function isPrivateAddress(ip: string): boolean {
-  const v = isIP(ip);
-  if (v === 4) {
-    const [a, b] = ip.split('.').map(Number) as [number, number];
-    return (
-      a === 0 ||
-      a === 10 ||
-      a === 127 ||
-      (a === 100 && b >= 64 && b <= 127) ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      a >= 224
-    );
+  if (isIP(ip) === 4) {
+    const [a, b, c] = ip.split('.').map(Number) as [number, number, number];
+    return v4Private(a, b, c);
   }
-  if (v === 6) {
-    const s = ip.toLowerCase();
-    if (s === '::1' || s === '::') return true;
-    if (
-      s.startsWith('fc') ||
-      s.startsWith('fd') ||
-      s.startsWith('fe8') ||
-      s.startsWith('fe9') ||
-      s.startsWith('fea') ||
-      s.startsWith('feb')
-    )
-      return true;
-    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(s);
-    return mapped ? isPrivateAddress(mapped[1]!) : false;
-  }
-  return true;
+  const g = expandIPv6(ip);
+  if (!g) return true;
+  const [g0, g1, g2, g3, g4, g5, g6, g7] = g as [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
+  const zero = (...xs: number[]): boolean => xs.every((x) => x === 0);
+  // ::/96 — unspecified, loopback and the deprecated IPv4-compatible form (::7f00:1): never public.
+  if (zero(g0, g1, g2, g3, g4, g5)) return true;
+  // ::ffff:a.b.c.d (mapped) and ::ffff:0:a.b.c.d (translated).
+  if (zero(g0, g1, g2, g3, g4) && g5 === 0xffff) return embedded(g6, g7);
+  if (zero(g0, g1, g2, g3) && g4 === 0xffff && g5 === 0) return embedded(g6, g7);
+  // NAT64: 64:ff9b::/96 carries an IPv4 address; 64:ff9b:1::/48 is for local use.
+  if (g0 === 0x64 && g1 === 0xff9b) return g2 === 1 || !zero(g2, g3, g4, g5) || embedded(g6, g7);
+  // 100::/64 discard-only.
+  if (g0 === 0x100 && zero(g1, g2, g3)) return true;
+  // 2001::/23 IETF special purpose (Teredo, ORCHID, benchmarking …) and 2001:db8::/32 documentation.
+  if (g0 === 0x2001 && (g1 < 0x200 || g1 === 0xdb8)) return true;
+  // 6to4: 2002:a.b.c.d::/48.
+  if (g0 === 0x2002) return v4Private(g1 >> 8, g1 & 0xff, g2 >> 8);
+  // 3fff::/20 documentation.
+  if (g0 === 0x3fff && g1 < 0x1000) return true;
+  // fc00::/7 unique local, fe80::/10 link-local, fec0::/10 site-local, ff00::/8 multicast.
+  return g0 >= 0xfc00;
 }
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -101,8 +161,86 @@ export interface PreviewDeps {
   timeoutMs?: number;
 }
 
+type LookupCallback = (
+  err: NodeJS.ErrnoException | null,
+  address: string | LookupAddress[],
+  family?: number,
+) => void;
+
+/**
+ * A DNS lookup for sockets that refuses to connect anywhere non-public: every
+ * address the name resolves to is checked, at connection time. Checking first
+ * and letting the request resolve the name again would let a rebinding DNS
+ * server answer "public" to the check and "127.0.0.1" to the connection.
+ */
+export function publicOnlyLookup(
+  hostname: string,
+  options: LookupOptions | number | undefined,
+  callback: LookupCallback,
+  resolve: (host: string) => Promise<LookupAddress[]> = (host) => lookup(host, { all: true }),
+): void {
+  const all = typeof options === 'object' && options !== null && options.all === true;
+  const asked = typeof options === 'number' ? options : (options?.family ?? 0);
+  const family = asked === 'IPv4' ? 4 : asked === 'IPv6' ? 6 : asked;
+  resolve(hostname).then(
+    (found) => {
+      const usable = found.filter((a) => family === 0 || a.family === family);
+      if (!usable.length || found.some((a) => isPrivateAddress(a.address))) {
+        const err: NodeJS.ErrnoException = new Error(
+          `Refusing to connect to ${hostname}: not a public address`,
+        );
+        err.code = 'ENOTFOUND';
+        callback(err, all ? [] : '', 0);
+        return;
+      }
+      if (all) callback(null, usable);
+      else callback(null, usable[0]!.address, usable[0]!.family);
+    },
+    (err: NodeJS.ErrnoException) => callback(err, all ? [] : '', 0),
+  );
+}
+
+const NULL_BODY = new Set([101, 103, 204, 205, 304]);
+
+/**
+ * fetch() for previews over node:http(s), connecting only to the addresses
+ * publicOnlyLookup approved (no redirects followed here; no proxy).
+ */
+export const pinnedFetch: typeof fetch = (input, init) =>
+  new Promise<Response>((done, fail) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    const request = (url.protocol === 'https:' ? httpsRequest : httpRequest)(
+      url,
+      {
+        method: 'GET',
+        headers: {
+          ...Object.fromEntries(new Headers(init?.headers).entries()),
+          'accept-encoding': 'identity',
+        },
+        lookup: publicOnlyLookup as never,
+        ...(init?.signal ? { signal: init.signal } : {}),
+      },
+      (res) => {
+        const headers = new Headers();
+        const raw = res.rawHeaders;
+        for (let i = 0; i + 1 < raw.length; i += 2) headers.append(raw[i]!, raw[i + 1]!);
+        const status = res.statusCode ?? 0;
+        try {
+          const body = NULL_BODY.has(status) ? null : (Readable.toWeb(res) as ReadableStream<Uint8Array>);
+          if (!body) res.resume();
+          done(new Response(body, { status, headers }));
+        } catch (err) {
+          res.destroy();
+          fail(err as Error);
+        }
+      },
+    );
+    request.on('error', fail);
+    request.end();
+  });
+
 export const defaultPreviewDeps: PreviewDeps = {
-  fetch: (input, init) => fetch(input, init),
+  fetch: pinnedFetch,
   resolve: async (host) => (await lookup(host, { all: true })).map((r) => r.address),
 };
 
@@ -114,7 +252,7 @@ async function publicUrl(raw: string, deps: PreviewDeps): Promise<URL | null> {
     return null;
   }
   if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username || url.password) return null;
-  const host = url.hostname.replace(/^\[|\]$/g, '');
+  const host = url.hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '');
   if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return null;
   const addresses = isIP(host) ? [host] : await deps.resolve(host).catch(() => []);
   if (!addresses.length || addresses.some(isPrivateAddress)) return null;
