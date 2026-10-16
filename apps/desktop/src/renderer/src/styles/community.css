@@ -5538,3 +5538,13 @@ input.switch:disabled {
   margin-right: 4px;
   accent-color: var(--accent);
 }
+
+.dm-call__volume {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 140px;
+}
+.dm-call__volume .slider {
+  flex: 1;
+}

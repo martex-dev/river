@@ -11,6 +11,8 @@ import {
   type KeybindAction,
 } from '../../../../shared/keybinds.ts';
 import { levelOf } from '../voice-gate.ts';
+import { isPhone } from '../../../../shared/platform.ts';
+import { PHONE_OUTPUT_VOLUME } from '../peer-audio.ts';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { useRiver } from '../../store.ts';
 import { SOUND_GROUPS, play, type SoundGroup, type SoundName } from '../sound.ts';
@@ -216,6 +218,7 @@ export function VoiceSettings(): ReactElement {
   const settings = useRiver((r) => r.settings);
   const update = useRiver((r) => r.updateSettings);
   const call = useCommunity((x) => x.call);
+  const phone = useRiver((r) => isPhone(r.info?.platform));
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [capturing, setCapturing] = useState(false);
   const [level, setLevel] = useState<number | null>(null);
@@ -406,6 +409,32 @@ export function VoiceSettings(): ReactElement {
           <p className="muted small">Push to talk works while the River window is focused.</p>
         </div>
       )}
+      <label className="sensitivity__slider">
+        <span className="field__label">
+          Voice volume · {Math.round((voice.outputVolume ?? (phone ? PHONE_OUTPUT_VOLUME : 1)) * 100)}%
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={200}
+          step={5}
+          value={Math.round((voice.outputVolume ?? (phone ? PHONE_OUTPUT_VOLUME : 1)) * 100)}
+          aria-valuetext={`${Math.round((voice.outputVolume ?? (phone ? PHONE_OUTPUT_VOLUME : 1)) * 100)}%`}
+          onChange={(e) => apply({ outputVolume: Number(e.target.value) / 100 })}
+        />
+        <span className="muted small">
+          How loud everyone sounds in calls and voice channels. Above 100% River boosts the sound and keeps it
+          from distorting.
+          {voice.outputVolume !== null && (
+            <>
+              {' '}
+              <button type="button" className="btn btn--link" onClick={() => apply({ outputVolume: null })}>
+                Reset
+              </button>
+            </>
+          )}
+        </span>
+      </label>
       <label className="sensitivity__slider">
         <span className="field__label">Soundboard volume</span>
         <input

@@ -1,4 +1,5 @@
 import { isPhone } from '../../../../shared/platform.ts';
+import { boost, effectiveGain, PHONE_OUTPUT_VOLUME, setBoostOutput, type BoostChain } from '../peer-audio.ts';
 import { tr } from '../../i18n.ts';
 import { SCREEN_QUALITIES, saveQuality, savedQuality, type ScreenQuality } from '../screen-quality.ts';
 import { StagePanel } from './Stage.tsx';
@@ -542,10 +543,14 @@ function PeerAudio({
   duck: number;
 }): ReactElement {
   const ref = useRef<HTMLAudioElement>(null);
+  const chain = useRef<BoostChain | null>(null);
   const voiceSettings = useRiver((r) => r.settings?.voice);
+  const phone = useRiver((r) => isPhone(r.info?.platform));
   const volume = voiceSettings?.userVolumes[peer.id] ?? 1;
+  const outputVolume = voiceSettings?.outputVolume ?? (phone ? PHONE_OUTPUT_VOLUME : 1);
   const output = voiceSettings?.outputDeviceId ?? null;
   const track = peer.audio?.getAudioTracks()[0] ?? null;
+  const gain = effectiveGain(volume, outputVolume, duck);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -554,13 +559,33 @@ function PeerAudio({
       el.srcObject = track ? new MediaStream([track]) : null;
       if (track) void el.play().catch(() => undefined);
     }
-    el.volume = Math.min(1, volume) * duck;
-    el.muted = deafened || volume === 0;
+    // Above 100 % the voice goes through the boost (peer-audio.ts); the element stays attached
+    // (muted) because Chromium only feeds a remote stream to Web Audio while one plays it.
+    if (track && !deafened && gain > 1.001) {
+      if (chain.current?.track !== track) {
+        chain.current?.close();
+        chain.current = boost(track, gain);
+      } else chain.current.setGain(gain);
+    } else {
+      chain.current?.close();
+      chain.current = null;
+    }
+    const boosted = chain.current !== null;
+    el.volume = boosted ? 1 : Math.min(1, gain);
+    el.muted = deafened || gain === 0 || boosted;
+    setBoostOutput(output);
     const sink = el as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void>; sinkId?: string };
     if (sink.setSinkId && (sink.sinkId ?? '') !== (output ?? '')) {
       void sink.setSinkId(output ?? '').catch(() => undefined);
     }
   });
+  useEffect(
+    () => () => {
+      chain.current?.close();
+      chain.current = null;
+    },
+    [],
+  );
   return <audio ref={ref} autoPlay data-peer={peer.id} />;
 }
 

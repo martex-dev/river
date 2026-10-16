@@ -6,6 +6,26 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.0.4] - 2026-10-16
+
+**Louder, clearer voice.**
+
+### Added
+
+- **Voice volume up to 200 %.** Settings → Voice has a Voice volume slider for
+  everyone you hear, and each person's volume (in voice channels and now in 1:1
+  calls too) goes up to 200 %. Above 100 % River boosts the sound through a
+  limiter, so it gets louder without distorting.
+- Phones play voices louder by default (160 %); change it in Settings → Voice.
+
+### Fixed
+
+- Android: during a call the volume buttons now change the call's volume, and
+  the phone's audio returns to normal when the call ends.
+- Per-person volume above 100 % was accepted but never applied.
+- docs/product/telegram-parity.md: what River has compared with Telegram and
+  Signal, and the plan for 2.1–2.10.
+
 ## [2.0.3] - 2026-10-16
 
 ### Added
