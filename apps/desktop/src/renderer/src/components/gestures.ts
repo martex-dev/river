@@ -42,8 +42,14 @@ interface Options {
   onReply?: () => void;
   /** Absent: no menu on hold. */
   onHold?: (x: number, y: number) => void;
+  /** Two quick taps (2.10.1): a quick reaction on messages. */
+  onDoubleTap?: () => void;
   disabled?: boolean;
 }
+
+/** Two taps this close in time (ms) and place (px) are a double tap. */
+const DOUBLE_TAP_MS = 300;
+const DOUBLE_TAP_PX = 30;
 
 interface Handlers {
   onTouchStart(e: TouchEvent<HTMLElement>): void;
@@ -52,6 +58,8 @@ interface Handlers {
   onTouchCancel(e: TouchEvent<HTMLElement>): void;
   /** Swallows the system long-press menu right after our own hold menu opened (Android). */
   onContextMenuCapture(e: { preventDefault(): void; stopPropagation(): void }): void;
+  /** Swallows the tap that ends a hold, so holding never also opens what was held. True: swallowed. */
+  onClickCapture(e: { preventDefault(): void; stopPropagation(): void }): boolean;
 }
 
 export function useMessageGestures(options: Options): Handlers {
@@ -61,8 +69,10 @@ export function useMessageGestures(options: Options): Handlers {
     mode: 'undecided' | 'scroll' | 'swipe';
     armed: boolean;
     timer: ReturnType<typeof setTimeout> | null;
+    at: number;
   } | null>(null);
   const heldAt = useRef(0);
+  const lastTap = useRef<{ at: number; x: number; y: number } | null>(null);
   const latest = useRef(options);
   useEffect(() => {
     latest.current = options;
@@ -98,7 +108,7 @@ export function useMessageGestures(options: Options): Handlers {
             latest.current.onHold?.(x, y);
           }, HOLD_MS)
         : null;
-      state.current = { x, y, mode: 'undecided', armed: false, timer };
+      state.current = { x, y, mode: 'undecided', armed: false, timer, at: Date.now() };
     },
     onTouchMove(e) {
       const s = state.current;
@@ -128,6 +138,15 @@ export function useMessageGestures(options: Options): Handlers {
       const reply = s?.mode === 'swipe' && s.armed;
       reset(e.currentTarget);
       if (reply) latest.current.onReply?.();
+      // A tap (not a hold, scroll or swipe): two in a row are a double tap.
+      const now = Date.now();
+      if (!s || s.mode !== 'undecided' || heldAt.current >= s.at || !latest.current.onDoubleTap) return;
+      const prev = lastTap.current;
+      if (prev && now - prev.at < DOUBLE_TAP_MS && Math.hypot(s.x - prev.x, s.y - prev.y) < DOUBLE_TAP_PX) {
+        lastTap.current = null;
+        haptic('tap');
+        latest.current.onDoubleTap();
+      } else lastTap.current = { at: now, x: s.x, y: s.y };
     },
     onTouchCancel(e) {
       reset(e.currentTarget);
@@ -137,6 +156,12 @@ export function useMessageGestures(options: Options): Handlers {
         e.preventDefault();
         e.stopPropagation();
       }
+    },
+    onClickCapture(e) {
+      if (Date.now() - heldAt.current >= 800) return false;
+      e.preventDefault();
+      e.stopPropagation();
+      return true;
     },
   };
 }

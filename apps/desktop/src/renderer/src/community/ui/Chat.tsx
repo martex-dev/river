@@ -111,6 +111,9 @@ export function TextChannel(props: {
     if (text) setSpoken(text);
   }, [channel.id, newest]);
   const [atBottom, setAtBottom] = useState(true);
+  // Messages that came in after you scrolled up (2.10.1), counted on "Jump to present".
+  const [leftAt, setLeftAt] = useState<number | null>(null);
+  const missed = leftAt === null ? 0 : messages.slice(leftAt).filter((m) => !m.mine).length;
   const [loadingOlder, setLoadingOlder] = useState(false);
   const myName = memberOf(community, me)?.name ?? null;
   const names = useMemo(() => community.members.map((m) => m.name), [community.members]);
@@ -330,6 +333,8 @@ export function TextChannel(props: {
             const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
             scrollMemory.set(channel.id, fromBottom);
             setAtBottom(fromBottom < 40);
+            if (fromBottom < 40) setLeftAt(null);
+            else if (leftAt === null) setLeftAt(messages.length);
           }}
         >
           {messages.length >= 100 && !s.noMore[channel.id] && (
@@ -416,6 +421,7 @@ export function TextChannel(props: {
           }}
         >
           Jump to present
+          {missed > 0 && <span className="chat__jump-count">{missed}</span>}
         </button>
       )}
       <SelectionBar channelId={channel.id} />
@@ -543,13 +549,23 @@ function MessageView(props: {
         }
       : {}),
     onHold: (x, y) => setMenu({ x, y }),
+    ...(canReact
+      ? {
+          onDoubleTap: () => {
+            const heart = reactions.find((r) => r.emoji === '❤️');
+            react('❤️', !heart?.mine);
+          },
+        }
+      : {}),
   });
+  const { onClickCapture: guardClick, ...touch } = gestures;
   return (
     <div
       id={`msg-${m.id}`}
-      {...gestures}
+      {...touch}
       className={`msg ${props.grouped ? 'msg--grouped' : ''} ${m.mine ? 'msg--mine' : ''} ${m.mentionsMe ? 'msg--mention' : ''} ${editing ? 'is-editing' : ''} ${selecting ? 'is-selecting' : ''} ${selected ? 'is-selected' : ''}`}
       onClickCapture={(e) => {
+        if (guardClick(e)) return;
         if (!selecting) return;
         e.preventDefault();
         e.stopPropagation();

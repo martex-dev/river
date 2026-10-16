@@ -351,9 +351,12 @@ function ConversationRow({ c }: { c: ConversationView }): ReactElement {
   useDm((x) => x.typing[c.riverId]);
   const typing = isTyping(c.riverId);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const { onClickCapture: guardClick, ...hold } = useMessageGestures({ onHold: (x, y) => setMenu({ x, y }) });
   return (
     <>
       <button
+        {...hold}
+        onClickCapture={guardClick}
         className={`dm-row ${dm.selected === c.riverId ? 'is-active' : ''} ${c.unread || c.markedUnread ? 'is-unread' : ''} ${c.state === 'blocked' ? 'is-blocked' : ''}`}
         aria-current={dm.selected === c.riverId ? 'page' : undefined}
         onClick={() => openDm(c.riverId)}
@@ -474,6 +477,9 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
   // New messages scroll into view only when you are at the bottom (or sent them yourself);
   // reading older messages is not interrupted. "Jump to latest" brings you back.
   const [atBottom, setAtBottom] = useState(true);
+  // How many messages there were when you scrolled up: the ones after it are new (2.10.1).
+  const [leftAt, setLeftAt] = useState<number | null>(null);
+  const missed = leftAt === null ? 0 : messages.slice(leftAt).filter((m) => !m.mine).length;
   const opened = useRef<string | null>(null);
   useEffect(() => {
     const el = scrollRef.current;
@@ -874,7 +880,10 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           ref={scrollRef}
           onScroll={(e) => {
             const el = e.currentTarget;
-            setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+            const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+            setAtBottom(bottom);
+            if (bottom) setLeftAt(null);
+            else if (leftAt === null) setLeftAt(messages.length);
           }}
         >
           <div className="chat__welcome">
@@ -940,7 +949,7 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
             if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
           }}
         >
-          ↓{c.unread > 0 && <span className="chat__jump-count">{c.unread}</span>}
+          ↓{(missed || c.unread) > 0 && <span className="chat__jump-count">{missed || c.unread}</span>}
         </button>
       )}
       {c.state === 'left' ? (
@@ -1040,6 +1049,9 @@ function CallNote({ call }: { call: CallView }): ReactElement {
   );
 }
 
+/** Double-tap a message for this reaction (2.10.1). */
+const QUICK_REACTION = '❤️';
+
 function DmMessage(props: {
   m: DirectMessageView;
   grouped: boolean;
@@ -1083,7 +1095,16 @@ function DmMessage(props: {
         }
       : {}),
     onHold: (x, y) => setMenu({ x, y }),
+    ...(canReply
+      ? {
+          onDoubleTap: () => {
+            const heart = m.reactions.find((r) => r.emoji === QUICK_REACTION);
+            react(QUICK_REACTION, !heart?.mine);
+          },
+        }
+      : {}),
   });
+  const { onClickCapture: guardClick, ...touch } = gestures;
   const remove = (forEveryone: boolean): void => {
     useCommunity.getState().setModal({
       kind: 'confirm',
@@ -1103,8 +1124,9 @@ function DmMessage(props: {
       id={`dm-${m.id}`}
       className={`msg ${props.grouped ? 'msg--grouped' : ''} ${m.mine ? 'msg--mine' : ''} ${editing ? 'is-editing' : ''} ${selected ? 'is-selected' : ''}`}
       aria-selected={selecting ? selected : undefined}
-      {...gestures}
+      {...touch}
       onClickCapture={(e) => {
+        if (guardClick(e)) return;
         // While selecting, a tap on a message selects it instead of doing anything else.
         if (!selecting || m.deleted) return;
         e.preventDefault();
