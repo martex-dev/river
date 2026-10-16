@@ -19,13 +19,19 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function Message(props: { onReply?: () => void; onHold?: (x: number, y: number) => void }) {
-  const gestures = useMessageGestures({
+function Message(props: {
+  onReply?: () => void;
+  onHold?: (x: number, y: number) => void;
+  onDoubleTap?: () => void;
+  onClick?: () => void;
+}) {
+  const { onClickCapture, ...gestures } = useMessageGestures({
     ...(props.onReply ? { onReply: props.onReply } : {}),
     ...(props.onHold ? { onHold: props.onHold } : {}),
+    ...(props.onDoubleTap ? { onDoubleTap: props.onDoubleTap } : {}),
   });
   return (
-    <div data-testid="msg" {...gestures}>
+    <div data-testid="msg" {...gestures} onClickCapture={onClickCapture} onClick={props.onClick}>
       hello
     </div>
   );
@@ -96,5 +102,41 @@ describe('message gestures', () => {
     fireEvent.touchMove(el, at(50, 120));
     act(() => void vi.advanceTimersByTime(HOLD_MS + 10));
     expect(onHold).not.toHaveBeenCalled();
+  });
+
+  it('react to two quick taps in one place, not to taps far apart in time or place', () => {
+    vi.useFakeTimers();
+    const onDoubleTap = vi.fn();
+    render(<Message onDoubleTap={onDoubleTap} />);
+    const el = screen.getByTestId('msg');
+    const tap = (x: number, y: number) => {
+      fireEvent.touchStart(el, at(x, y));
+      fireEvent.touchEnd(el, at(x, y));
+    };
+    tap(100, 100);
+    vi.advanceTimersByTime(120);
+    tap(104, 102);
+    expect(onDoubleTap).toHaveBeenCalledOnce();
+    tap(100, 100);
+    vi.advanceTimersByTime(600);
+    tap(100, 100);
+    tap(100, 100);
+    vi.advanceTimersByTime(100);
+    tap(200, 300);
+    expect(onDoubleTap).toHaveBeenCalledTimes(2);
+  });
+
+  it('swallow the tap that ends a hold', () => {
+    vi.useFakeTimers();
+    const onClick = vi.fn();
+    render(<Message onHold={() => undefined} onClick={onClick} />);
+    const el = screen.getByTestId('msg');
+    fireEvent.click(el);
+    expect(onClick).toHaveBeenCalledOnce();
+    fireEvent.touchStart(el, at(10, 10));
+    act(() => void vi.advanceTimersByTime(HOLD_MS + 10));
+    fireEvent.touchEnd(el, at(10, 10));
+    fireEvent.click(el);
+    expect(onClick).toHaveBeenCalledOnce();
   });
 });

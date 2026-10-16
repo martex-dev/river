@@ -2259,3 +2259,15 @@ html[data-density='compact'] .member {
   height: 100%;
   object-fit: cover;
 }
+
+/* Polish (2.10.1): no system callout when holding a chat; a count on "Jump to present". */
+@media (pointer: coarse) {
+  .dm-row {
+    -webkit-touch-callout: none;
+  }
+}
+.chat__jump .chat__jump-count {
+  position: static;
+  display: inline-block;
+  margin-left: 6px;
+}

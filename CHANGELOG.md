@@ -6,6 +6,24 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.10.1] - 2026-10-16
+
+**Polish: touch.**
+
+### Added
+
+- **Double-tap a message** on a phone to react with ❤️ (double-tap again to take
+  it back), in direct messages, groups and channels.
+- **Hold a chat** in the list for its menu (Pin, Mark unread, Archive) on every
+  phone, including iPhone.
+- The **jump to latest** buttons count the messages that came in while you were
+  reading older ones, in direct messages and channels.
+
+### Fixed
+
+- Letting go after holding a message no longer also opens the picture or link
+  that was held.
+
 ## [2.10.0] - 2026-10-16
 
 **Calls: picture-in-picture.**
