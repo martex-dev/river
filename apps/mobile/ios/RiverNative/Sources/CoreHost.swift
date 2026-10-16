@@ -28,6 +28,14 @@ public final class CoreHost: NSObject {
     private var ready = false
     private var queue: [String] = []
     private var notificationAsks: [String: Int] = [:]
+    /** In a call on the earpiece the screen turns off at your ear (2.10.2). */
+    private var inCall = false
+    private var earpiece = false
+
+    private func updateProximity() {
+        let on = inCall && earpiece
+        DispatchQueue.main.async { UIDevice.current.isProximityMonitoringEnabled = on }
+    }
     public weak var listener: CoreListener?
     private weak var presenter: UIViewController?
 
@@ -188,7 +196,14 @@ public final class CoreHost: NSObject {
             notify(
                 id: id, title: a["title"] as? String ?? "River", body: a["body"] as? String ?? "",
                 reply: (a["reply"] as? Bool) ?? false, call: (a["call"] as? Bool) ?? false)
+        case "callState":
+            inCall = (a["active"] as? Bool) == true
+            if !inCall { earpiece = false }
+            updateProximity()
+            answer(id, value: nil)
         case "speaker":
+            earpiece = (a["on"] as? Bool) != true
+            updateProximity()
             let session = AVAudioSession.sharedInstance()
             let port: AVAudioSession.PortOverride = (a["on"] as? Bool) == true ? .speaker : AVAudioSession.PortOverride.none
             try? session.overrideOutputAudioPort(port)

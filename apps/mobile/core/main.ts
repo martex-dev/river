@@ -203,6 +203,8 @@ async function start(): Promise<void> {
     // Android: an "In a call" foreground service keeps the call running with the screen off; its
     // Hang up button answers the open ask.
     onCallChange: (inCall) => {
+      // iPhone: only the call's state, for the proximity sensor (screen off at your ear).
+      if (PLATFORM === 'ios') void ask('callState', { active: inCall }).catch(() => undefined);
       if (PLATFORM !== 'android') return;
       void ask<string>('call', { active: inCall }).then(
         (how) => {

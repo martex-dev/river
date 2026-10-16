@@ -224,6 +224,9 @@ public final class CoreHost {
    * does not use); afterwards the phone's audio goes back to normal.
    */
   private void callAudio(boolean active) {
+    inCall = active;
+    if (!active) earpiece = false;
+    updateProximity();
     Screen s = screen;
     if (s != null) {
       s.activity()
@@ -241,8 +244,38 @@ public final class CoreHost {
     am.setMode(android.media.AudioManager.MODE_NORMAL);
   }
 
+  // ---- the screen goes dark at your ear (2.10.2), as in any phone call ----
+
+  private boolean inCall;
+  /** River put the call on the earpiece (not the loudspeaker, not headphones' default). */
+  private boolean earpiece;
+  private android.os.PowerManager.WakeLock proximity;
+
+  private void updateProximity() {
+    try {
+      if (inCall && earpiece) {
+        if (proximity == null) {
+          android.os.PowerManager pm =
+              (android.os.PowerManager) context.getSystemService(Context.POWER_SERVICE);
+          if (pm == null
+              || !pm.isWakeLockLevelSupported(android.os.PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK)) return;
+          proximity =
+              pm.newWakeLock(android.os.PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "river:call-proximity");
+          proximity.setReferenceCounted(false);
+        }
+        if (!proximity.isHeld()) proximity.acquire(4 * 60 * 60 * 1000L);
+      } else if (proximity != null && proximity.isHeld()) {
+        proximity.release(android.os.PowerManager.RELEASE_FLAG_WAIT_FOR_NO_PROXIMITY);
+      }
+    } catch (RuntimeException e) {
+      // no proximity sensor here: the screen just stays on
+    }
+  }
+
   /** Calls through the loudspeaker or the earpiece. */
   private void speaker(boolean on) {
+    earpiece = !on;
+    updateProximity();
     android.media.AudioManager am =
         (android.media.AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
     if (am == null) return;

@@ -18,6 +18,17 @@ import { acceptDmCall, declineDmCall, endDmCall, useDmCall } from './call.ts';
 import { useDm } from './store.ts';
 import type { ScreenSource } from '../../../shared/ipc.ts';
 import { useEffect, useState } from 'react';
+import { callClock } from './call-clock.ts';
+
+/** The running time of a call, ticking every second. */
+function CallTimer(props: { since: number }): ReactElement {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return <span className="call-timer">{callClock((now - props.since) / 1000)}</span>;
+}
 
 export function IncomingCall(): ReactElement | null {
   const incoming = useDmCall((s) => s.incoming);
@@ -109,6 +120,12 @@ export function CallPill(): ReactElement | null {
     >
       <span className="call-pill__dot" /> {active.state === 'ringing' ? 'Calling' : 'In call with'}{' '}
       {name ?? '…'}
+      {active.connectedAt && (
+        <>
+          {' · '}
+          <CallTimer since={active.connectedAt} />
+        </>
+      )}
     </button>
   );
 }
@@ -179,7 +196,15 @@ export function DmCallPanel({ conversation: c }: { conversation: ConversationVie
           </span>
         </div>
       </div>
-      <div className="dm-call__status muted small">{status}</div>
+      <div className="dm-call__status muted small">
+        {active.connectedAt && (
+          <>
+            <CallTimer since={active.connectedAt} />
+            {' · '}
+          </>
+        )}
+        {status}
+      </div>
       <div className="voice__controls">
         <button
           className={`round-btn ${s.selfMuted ? 'round-btn--off' : ''}`}

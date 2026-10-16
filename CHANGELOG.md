@@ -6,6 +6,18 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.10.2] - 2026-10-16
+
+**Polish: calls like a phone call.**
+
+### Added
+
+- **Screen off at your ear**: in a call on the earpiece, holding the phone to
+  your ear turns the screen off (Android and iPhone), so your cheek does not
+  press buttons. On the loudspeaker the screen stays on.
+- **Call timer**: calls show how long they have been going (0:42), in the call
+  and in the "In call with…" bar.
+
 ## [2.10.1] - 2026-10-16
 
 **Polish: touch.**
