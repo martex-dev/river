@@ -111,12 +111,50 @@ export class HomeAccount {
     return () => this.listeners.delete(listener);
   }
 
-  /** Makes sure an account exists; throws HomeServerUnavailable if it cannot be made now. */
-  ensure(): Promise<void> {
-    this.running ??= this.attempt().finally(() => {
-      this.running = null;
-    });
+  /**
+   * Makes sure an account exists; throws HomeServerUnavailable if it cannot be made now.
+   * `force`: the person asked for it (Set up again, creating or joining a community), so a
+   * server saved in settings does not stop it — callers check that server is River's first
+   * (isHomeServer), because River saves the home server's address there once it made the account.
+   */
+  ensure(options: { force?: boolean } = {}): Promise<void> {
+    if (!options.force) {
+      this.running ??= this.track(this.attempt(false));
+      return this.running;
+    }
+    // After any attempt already running (which may have stopped at the saved server), try once more.
+    const before = this.running?.catch(() => undefined);
+    this.running = this.track(
+      (async () => {
+        await before;
+        await this.attempt(true);
+      })(),
+    );
     return this.running;
+  }
+
+  private track(attempt: Promise<void>): Promise<void> {
+    const tracked: Promise<void> = attempt.finally(() => {
+      if (this.running === tracked) this.running = null;
+    });
+    return tracked;
+  }
+
+  /** The server at `url` is River's own (checked against its identity, not its address). */
+  async isHomeServer(url: string): Promise<boolean> {
+    if (!this.deps.enabled) return false;
+    if (this.deps.hostedHere() === url) return true;
+    const home = this.deps.server ?? HOME_SERVER;
+    try {
+      const info = await this.deps.requestJson(
+        `${url.replace(/\/+$/, '')}${API_PREFIX}/instance`,
+        { method: 'GET' },
+        instanceResponseSchema,
+      );
+      return info.id === home.instanceId && info.publicKey === home.publicKey;
+    } catch {
+      return false;
+    }
   }
 
   private retryMs = RETRY_MIN_MS;
@@ -140,22 +178,22 @@ export class HomeAccount {
     );
   }
 
-  private needed(): boolean {
+  private needed(force = false): boolean {
     return (
       this.deps.enabled &&
       this.deps.ready() &&
       this.deps.account.status().state === 'none' &&
-      !this.deps.chosenServer()
+      (force || !this.deps.chosenServer())
     );
   }
 
-  private async attempt(): Promise<void> {
+  private async attempt(force = false): Promise<void> {
     if (!this.deps.enabled) {
       throw new UserFacingError(
         'This development build does not use River’s server. Choose “Use a different server”.',
       );
     }
-    if (!this.needed()) return;
+    if (!this.needed(force)) return;
     try {
       const url = await locateHomeServer(this.deps);
       await this.deps.account.register(url);

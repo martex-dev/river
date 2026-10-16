@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -53,6 +53,7 @@ const deadSocket = (): WebSocket => ({ send() {}, close() {}, readyState: 0 }) a
 async function person(
   name: string,
   createSocket: (url: string) => WebSocket = deadSocket,
+  blobDir?: string,
 ): Promise<{
   community: CommunityService;
   riverId: string;
@@ -80,6 +81,7 @@ async function person(
       requestBytes: createRequestBytes(injectFetch),
       log: nullLogger,
       createSocket,
+      ...(blobDir ? { blobDir: () => blobDir } : {}),
     });
   return { community: start(), riverId: created.riverId, restart: start, account };
 }
@@ -246,6 +248,115 @@ describe('polls', () => {
     expect(after).toMatchObject({ text: 'hello' });
     expect(after!.reactions.map((r) => r.emoji)).toEqual(['🔥']);
     void created;
+  });
+
+  it('downloads of the same file at once are counted once, and kept copies stay under their limit', async () => {
+    const copies = join(dir, 'alice-files');
+    const alice = await person('Alice', deadSocket, copies);
+    const created = await alice.community.create('Files');
+    void created;
+    const files = [];
+    for (let i = 0; i < 3; i++) {
+      files.push(
+        await alice.community.action({
+          a: 'upload',
+          name: `f${i}.bin`,
+          mime: 'application/octet-stream',
+          bytes: new Uint8Array(4000).fill(i),
+        }),
+      );
+    }
+    await Promise.all([
+      alice.community.downloadAttachment(files[0]!),
+      alice.community.downloadAttachment(files[0]!),
+      alice.community.downloadAttachment(files[0]!),
+    ]);
+    expect((alice.community as unknown as { cacheBytes: number }).cacheBytes).toBe(4000);
+
+    // Room for about two copies: keeping a third removes the one used longest ago.
+    alice.community.attachmentDiskCapBytes = 9000;
+    await new Promise((r) => setTimeout(r, 20));
+    await alice.community.prefetchAttachment(files[1]!);
+    await new Promise((r) => setTimeout(r, 20));
+    await alice.community.prefetchAttachment(files[2]!);
+    await alice.community.pruneAttachments();
+    expect(readdirSync(copies).sort()).toEqual([files[1]!.id, files[2]!.id].sort());
+
+    // Deleting the account removes every kept copy.
+    alice.community.forgetAll();
+    await vi.waitFor(() => expect(readdirSync(copies)).toEqual([]));
+  });
+
+  it('editing changes only the text: files, descriptions, the reply and its no-ping stay', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Edit Keeps');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.kind === 'text')!;
+    const question = await bob.community.send(general.id, 'which chart?');
+    await alice.community.refresh();
+    await alice.community.messages(general.id);
+    const chart = await alice.community.action({
+      a: 'upload',
+      name: 'chart.png',
+      mime: 'image/png',
+      bytes: new Uint8Array([1, 2, 3]),
+    });
+    const sent = await alice.community.action({
+      a: 'send',
+      channelId: general.id,
+      text: 'this one',
+      replyTo: question.id,
+      noPing: true,
+      attachments: [chart],
+      alts: { [chart.id]: 'A bar chart' },
+    });
+    await alice.community.action({ a: 'edit', channelId: general.id, messageId: sent.id, text: 'this one!' });
+    await bob.community.messages(general.id); // Bob knows his question is his
+    const seen = (await bob.community.messages(general.id)).find((m) => m.id === sent.id)!;
+    expect(seen).toMatchObject({
+      text: 'this one!',
+      replyTo: question.id,
+      attachments: [chart],
+      alts: { [chart.id]: 'A bar chart' },
+      mentionsMe: false,
+    });
+    expect(seen.editedAt).not.toBeNull();
+  });
+
+  it('an edit River cannot base on the original is refused, never destroying the message', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Edit Threads');
+    const general = created.channels.find((c) => c.kind === 'text')!;
+    const root = await alice.community.send(general.id, 'root');
+    await alice.community.action({ a: 'createThread', channelId: general.id, messageId: root.id, name: 'T' });
+    const file = await alice.community.action({
+      a: 'upload',
+      name: 'notes.txt',
+      mime: 'text/plain',
+      bytes: new Uint8Array([9, 9]),
+    });
+    const inThread = await alice.community.action({
+      a: 'send',
+      channelId: general.id,
+      text: 'in the thread',
+      threadId: root.id,
+      attachments: [file],
+    });
+    // After a restart, the thread message has not been opened yet (it is in no channel page).
+    const later = alice.restart();
+    await later.refresh();
+    await expect(
+      later.action({ a: 'edit', channelId: general.id, messageId: inThread.id, text: 'changed' }),
+    ).rejects.toThrow(/could not find that message/);
+    // Once the thread is open, the edit works and keeps the file.
+    await later.action({ a: 'threadMessages', channelId: general.id, messageId: root.id });
+    await later.action({ a: 'edit', channelId: general.id, messageId: inThread.id, text: 'changed' });
+    const [reply] = await later.action({ a: 'threadMessages', channelId: general.id, messageId: root.id });
+    expect(reply).toMatchObject({ text: 'changed', attachments: [file] });
+    // Saving a thread message works too.
+    await later.action({ a: 'saveMessage', channelId: general.id, messageId: inThread.id, on: true });
+    expect((await later.action({ a: 'savedMessages' })).map((m) => m.text)).toEqual(['changed']);
   });
 });
 

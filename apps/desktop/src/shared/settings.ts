@@ -296,6 +296,47 @@ export function upgradeSettings(raw: unknown): unknown {
   return out;
 }
 
+/**
+ * Removes keys a schema does not know, at every depth, leaving everything else for the schema to
+ * check. A settings file may hold keys this River does not know (written by a newer version, or
+ * one that dropped a setting); with nested .strict() objects one such key used to throw away its
+ * whole section on load. Patches from the renderer stay strict (settingsPatchSchema).
+ */
+export function pruneUnknownKeys(schema: z.ZodType, value: unknown): unknown {
+  const def = (schema as unknown as { _zod: { def: Record<string, unknown> & { type: string } } })._zod.def;
+  switch (def.type) {
+    case 'optional':
+    case 'nullable':
+    case 'default':
+    case 'prefault':
+    case 'readonly':
+    case 'catch':
+      return pruneUnknownKeys(def.innerType as z.ZodType, value);
+    case 'pipe':
+      return pruneUnknownKeys(def.in as z.ZodType, value);
+    case 'object': {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+      const shape = def.shape as Record<string, z.ZodType>;
+      const out: Record<string, unknown> = {};
+      for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+        if (Object.hasOwn(shape, key)) out[key] = pruneUnknownKeys(shape[key]!, inner);
+      }
+      return out;
+    }
+    case 'array':
+      return Array.isArray(value) ? value.map((v) => pruneUnknownKeys(def.element as z.ZodType, v)) : value;
+    case 'record': {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+      const out: Record<string, unknown> = {};
+      for (const [key, inner] of Object.entries(value as Record<string, unknown>))
+        out[key] = pruneUnknownKeys(def.valueType as z.ZodType, inner);
+      return out;
+    }
+    default:
+      return value;
+  }
+}
+
 /** A partial update: each section may be omitted or partially specified. Unknown keys are rejected. */
 export const settingsPatchSchema = z
   .object({

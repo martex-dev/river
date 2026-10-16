@@ -281,6 +281,12 @@ export class LinkService {
     const offer = this.offer;
     const hello = offer?.hello;
     if (!offer || !hello) throw new UserFacingError('No device is waiting to be linked.');
+    // The server forgets the mailbox when the code runs out: linking now would add a device
+    // that never receives the account.
+    if (Date.now() > offer.expires) {
+      this.fail('The link code expired. Start again.');
+      throw new UserFacingError('The link code expired. Start again.');
+    }
     const list = await this.deps.account.deviceList();
     if (list.devices.length >= MAX_DEVICES) {
       throw new UserFacingError(`An account can have ${MAX_DEVICES} devices. Remove one first.`);
@@ -290,21 +296,8 @@ export class LinkService {
     const used = new Set(list.devices.map((d) => d.deviceId));
     let deviceId = 2;
     while (used.has(deviceId)) deviceId++;
-    const next: DeviceList = {
-      ...list,
-      version: list.version + 1,
-      devices: [
-        ...list.devices,
-        {
-          deviceId,
-          authKey: hello.authKey,
-          registrationId: hello.registrationId,
-          addedAt: new Date().toISOString(),
-        },
-      ],
-    };
-    await this.deps.account.publishDeviceList(next);
 
+    // Everything that can fail locally happens before the device list changes.
     const identity = this.deps.identity.protocolIdentity();
     if (!identity) throw new UserFacingError('Unlock River first.');
     const provision: Provision = {
@@ -319,17 +312,43 @@ export class LinkService {
     };
     identity.privateKey.fill(0);
     const plaintext = Buffer.from(JSON.stringify(provision), 'utf8');
+    provision.identityPrivateKey = '';
     const sealed = sealTo(unb64(hello.linkKey), plaintext, INFO, provisionAad(offer.secret, offer.id));
     plaintext.fill(0);
-    await this.deps.requestJson(
-      `${offer.serverUrl}${API_PREFIX}/link/${offer.id}/provision`,
-      {
-        method: 'PUT',
-        token: this.deps.account.sessionToken() ?? undefined,
-        body: { deviceId, provision: b64(sealed) },
-      },
-      linkStateResponseSchema,
-    );
+
+    const next: DeviceList = {
+      ...list,
+      version: list.version + 1,
+      devices: [
+        ...list.devices,
+        {
+          deviceId,
+          authKey: hello.authKey,
+          registrationId: hello.registrationId,
+          addedAt: new Date().toISOString(),
+        },
+      ],
+    };
+    await this.deps.account.publishDeviceList(next);
+    try {
+      await this.deps.requestJson(
+        `${offer.serverUrl}${API_PREFIX}/link/${offer.id}/provision`,
+        {
+          method: 'PUT',
+          token: this.deps.account.sessionToken() ?? undefined,
+          body: { deviceId, provision: b64(sealed) },
+        },
+        linkStateResponseSchema,
+      );
+    } catch (err) {
+      // The new device never got the account: take it off the list again (a newer version), so
+      // no device that nobody holds stays on the account.
+      this.deps.log.warn(`Linking device ${deviceId} failed; removing it from the device list`);
+      await this.deps.account
+        .publishDeviceList({ ...next, version: next.version + 1, devices: list.devices })
+        .catch(() => this.deps.log.error(`Could not remove unlinked device ${deviceId} from the list`));
+      throw err;
+    }
     this.deps.log.info(`Linked device ${deviceId}`);
     this.deps.account.setDeviceNames({ [deviceId]: hello.deviceName });
     this.stop();
@@ -479,7 +498,14 @@ export class LinkService {
           } finally {
             privateKey.fill(0);
           }
-          await this.deps.account.adoptLinked(code.serverUrl, provision.deviceId, device);
+          try {
+            await this.deps.account.adoptLinked(code.serverUrl, provision.deviceId, device);
+          } catch (err) {
+            // Signing in failed: take the identity back off, so the device can try again (or
+            // start fresh) instead of having an identity with no account.
+            this.deps.identity.discardAdopted(provision.riverId);
+            throw err;
+          }
           this.deps.account.setDeviceNames({ [provision.deviceId]: deviceName });
           discard();
           this.deps.community.importKeys(provision.communityKeys);

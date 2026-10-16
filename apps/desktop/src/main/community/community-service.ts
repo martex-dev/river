@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { isHomeLink } from '../../shared/home-server.ts';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   API_PREFIX,
@@ -197,6 +197,9 @@ function explain(err: unknown): never {
  */
 /** Call setup held while offline: at most this many, and only this fresh when sent. */
 const PENDING_SIGNALS_MAX = 400;
+/** Messages remembered for edits and saves, and how far back to look for one not seen yet. */
+const RECENT_MESSAGES = 3000;
+const FIND_MESSAGE_PAGES = 5;
 const PENDING_SIGNAL_TTL_MS = 30_000;
 
 /** Forum tags from decrypted data: short, unique strings only (1.0.22). */
@@ -224,6 +227,11 @@ export class CommunityService {
   private readonly webhookKeys = new Map<string, { name: string; key: Buffer }>();
   /** Who sent recent messages, so a reply to one of yours counts as a mention. */
   private readonly messageSenders = new Map<string, string>();
+  /**
+   * Messages opened recently (oldest first), from any page or thread: edits and saves find
+   * them here. Your own also keep their sealed body, so an edit changes only the text.
+   */
+  private readonly recent = new Map<string, { chat: ChatMessage; sealed?: string }>();
   private keyChannel: { send(peer: string, message: KeyMessage): Promise<void> } | null = null;
   private readonly rotating = new Set<string>();
   private readonly keyRequests = new Map<string, number>();
@@ -242,8 +250,21 @@ export class CommunityService {
   private readonly seen = new Set<string>();
   private readonly attachmentCache = new Map<string, Uint8Array>();
   private cacheBytes = 0;
+  /** The most this device keeps of encrypted file copies; the least recently used go first. */
+  attachmentDiskCapBytes = 2 * 1024 * 1024 * 1024;
+  /** Size of the kept copies as last counted (null: not counted yet), and when each was last used. */
+  private diskBytes: number | null = null;
+  private readonly diskUsed = new Map<string, number>();
+  private pruning: Promise<void> | null = null;
   private socket: WebSocket | null = null;
   private socketState: 'online' | 'offline' | 'connecting' = 'offline';
+  /** A connection is being prepared (token, first refresh): never start a second one meanwhile. */
+  private opening = false;
+  /** Bumped by stop(): an open still in flight from before then gives up. */
+  private socketGeneration = 0;
+  private connectTimer: NodeJS.Timeout | null = null;
+  /** How long a new connection may take to be ready before River gives up on it (tests shorten it). */
+  connectTimeoutMs = 20_000;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
   private backoff = 1000;
@@ -1060,7 +1081,7 @@ export class CommunityService {
           if (typeof alt === 'string' && alt.trim()) alts[a.id] = alt.slice(0, 1000);
         }
       }
-      return {
+      const chat: ChatMessage = {
         id: m.id,
         communityId,
         channelId: m.channelId,
@@ -1112,6 +1133,10 @@ export class CommunityService {
             }
           : null,
       };
+      this.recent.delete(m.id);
+      this.recent.set(m.id, chat.mine ? { chat, sealed: m.body } : { chat });
+      if (this.recent.size > RECENT_MESSAGES) this.recent.delete(this.recent.keys().next().value!);
+      return chat;
     } catch {
       return null;
     }
@@ -2099,15 +2124,25 @@ export class CommunityService {
       }
       case 'edit': {
         const communityId = this.communityOf(act.channelId);
-        const existing = await this.findMessage(act.channelId, act.messageId);
-        if (existing?.poll) throw new CommunityError('Polls cannot be edited.');
-        // Seal with the message's own key: its reactions are tagged with it and must keep matching.
-        const key = this.messageKeys.get(act.messageId) ?? this.requireKey(communityId);
-        const body = seal(key, communityId, `message:${act.channelId}`, {
-          text: act.text,
-          ...(existing?.replyTo ? { replyTo: existing.replyTo } : {}),
-          ...(existing?.attachments.length ? { attachments: existing.attachments } : {}),
-        });
+        const original = await this.findMessage(act.channelId, act.messageId);
+        const ring = this.keys.get(communityId);
+        // Never re-seal from what is shown: an edit made without the original body would drop
+        // its files, reply, descriptions, tags, preview and sticker (and ping again).
+        if (!original?.sealed || !original.chat.mine || !ring)
+          throw new CommunityError('River could not find that message to edit. Scroll to it and try again.');
+        if (original.chat.poll) throw new CommunityError('Polls cannot be edited.');
+        // The message's own key: its reactions are tagged with it and must keep matching.
+        const opened = ring.openWith<Record<string, unknown>>(
+          communityId,
+          `message:${act.channelId}`,
+          original.sealed,
+        );
+        const next: Record<string, unknown> = { ...opened.value, text: act.text };
+        // A link preview only stays while its link is still in the text.
+        const embedUrl = (next.embed as { url?: unknown } | undefined)?.url;
+        if (next.embed !== undefined && !(typeof embedUrl === 'string' && act.text.includes(embedUrl)))
+          delete next.embed;
+        const body = seal(opened.key, communityId, `message:${act.channelId}`, next);
         await this.call(`/messages/${act.messageId}`, 'PATCH', { body }, z.unknown());
         break;
       }
@@ -2382,7 +2417,7 @@ export class CommunityService {
           this.db().prepare('DELETE FROM saved_messages WHERE message_id = ?').run(act.messageId);
           break;
         }
-        const m = await this.findMessage(act.channelId, act.messageId);
+        const m = (await this.findMessage(act.channelId, act.messageId))?.chat;
         if (!m) throw new CommunityError('That message is no longer here.');
         this.db()
           .prepare(
@@ -2620,6 +2655,12 @@ export class CommunityService {
       throw new CommunityError('This file failed its integrity check and was not opened.');
     }
     const copy = new Uint8Array(plain);
+    // Another download of the same file may have finished meanwhile: count it once.
+    const earlier = this.attachmentCache.get(pointer.id);
+    if (earlier) {
+      this.attachmentCache.delete(pointer.id);
+      this.cacheBytes -= earlier.byteLength;
+    }
     this.attachmentCache.set(pointer.id, copy);
     this.cacheBytes += copy.byteLength;
     for (const [id, bytes] of this.attachmentCache) {
@@ -2641,7 +2682,10 @@ export class CommunityService {
     const file = dir ? join(dir, pointer.id) : null;
     if (file) {
       const local = await readFile(file).catch(() => null);
-      if (local) return local;
+      if (local) {
+        this.diskUsed.set(pointer.id, Date.now());
+        return local;
+      }
     }
     const requestBytes = this.requireBytes();
     const url = `${this.server()}${API_PREFIX}/attachments/${pointer.id}`;
@@ -2653,10 +2697,49 @@ export class CommunityService {
     if (file && dir) {
       await mkdir(dir, { recursive: true }).catch(() => undefined);
       await writeFile(`${file}.part`, blob)
-        .then(() => rename(`${file}.part`, file))
+        .then(async () => {
+          await rename(`${file}.part`, file);
+          this.diskUsed.set(pointer.id, Date.now());
+          if (this.diskBytes !== null) this.diskBytes += blob.byteLength;
+          if (this.diskBytes === null || this.diskBytes > this.attachmentDiskCapBytes)
+            void this.pruneAttachments();
+        })
         .catch(() => undefined);
     }
     return blob;
+  }
+
+  /**
+   * Keeps the encrypted copies of files under attachmentDiskCapBytes, deleting the least
+   * recently used first (at start and whenever a new copy goes over). One run at a time.
+   */
+  pruneAttachments(): Promise<void> {
+    this.pruning ??= this.pruneNow().finally(() => {
+      this.pruning = null;
+    });
+    return this.pruning;
+  }
+
+  private async pruneNow(): Promise<void> {
+    const dir = this.deps.blobDir?.();
+    if (!dir) return;
+    const names = await readdir(dir).catch(() => [] as string[]);
+    const files: Array<{ name: string; size: number; used: number }> = [];
+    for (const name of names) {
+      if (!/^[A-Za-z0-9_-]{16,64}$/.test(name)) continue;
+      const info = await stat(join(dir, name)).catch(() => null);
+      if (!info) continue;
+      files.push({ name, size: info.size, used: Math.max(info.mtimeMs, this.diskUsed.get(name) ?? 0) });
+    }
+    let total = files.reduce((n, f) => n + f.size, 0);
+    files.sort((a, b) => a.used - b.used);
+    for (const f of files) {
+      if (total <= this.attachmentDiskCapBytes) break;
+      await rm(join(dir, f.name), { force: true }).catch(() => undefined);
+      this.diskUsed.delete(f.name);
+      total -= f.size;
+    }
+    this.diskBytes = total;
   }
 
   /** Deletes this device's encrypted copy of an attachment (its message disappeared, 2.4). */
@@ -2664,6 +2747,8 @@ export class CommunityService {
     const dir = this.deps.blobDir?.();
     if (!dir || !/^[A-Za-z0-9_-]{16,64}$/.test(id)) return;
     await rm(join(dir, id), { force: true }).catch(() => undefined);
+    this.diskUsed.delete(id);
+    this.diskBytes = null;
   }
 
   /**
@@ -2698,8 +2783,27 @@ export class CommunityService {
     return this.deps.requestBytes;
   }
 
-  private async findMessage(channelId: string, messageId: string): Promise<ChatMessage | undefined> {
-    return (await this.messages(channelId)).find((m) => m.id === messageId);
+  /**
+   * A message by ID: one opened in this session (any page, any thread), or else from the
+   * channel's recent history (a few pages back).
+   */
+  private async findMessage(
+    channelId: string,
+    messageId: string,
+  ): Promise<{ chat: ChatMessage; sealed?: string } | undefined> {
+    const seen = (): { chat: ChatMessage; sealed?: string } | undefined => {
+      const hit = this.recent.get(messageId);
+      return hit && hit.chat.channelId === channelId ? hit : undefined;
+    };
+    if (seen()) return seen();
+    let before: string | undefined;
+    for (let page = 0; page < FIND_MESSAGE_PAGES; page++) {
+      const list = await this.messages(channelId, before);
+      if (seen()) return seen();
+      if (!list.length || list[0]!.sentAt === before) return undefined;
+      before = list[0]!.sentAt;
+    }
+    return undefined;
   }
 
   /** A voice join is waiting for the server's answer. */
@@ -2977,18 +3081,38 @@ export class CommunityService {
 
   // ---- Realtime --------------------------------------------------------------------------------
 
-  /** Starts (or keeps) the realtime connection when an account exists. */
+  /** Starts (or keeps) the realtime connection when an account exists. One at a time. */
   ensureSocket(): void {
-    if (this.socket || this.deps.account.status().state !== 'registered') return;
-    void this.openSocket();
+    if (this.socket || this.opening || this.deps.account.status().state !== 'registered') return;
+    this.opening = true;
+    const generation = this.socketGeneration;
+    void this.openSocket(generation).finally(() => {
+      if (this.socketGeneration === generation) this.opening = false;
+    });
   }
 
   stop(): void {
+    // An open still waiting for its token gives up when it gets it.
+    this.socketGeneration += 1;
+    this.opening = false;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
+    this.retryAt = null;
+    this.clearConnectTimer();
     this.stopHeartbeat();
-    this.socket?.close();
+    const socket = this.socket;
     this.socket = null;
+    try {
+      socket?.close();
+    } catch {
+      // already closing
+    }
+    this.setSocketState('offline');
+  }
+
+  private clearConnectTimer(): void {
+    if (this.connectTimer) clearTimeout(this.connectTimer);
+    this.connectTimer = null;
   }
 
   /** Pings keep tunnels from closing an idle connection and find dead ones fast. */
@@ -3025,6 +3149,7 @@ export class CommunityService {
   private dropSocket(socket: WebSocket): void {
     if (this.socket !== socket) return;
     this.socket = null;
+    this.clearConnectTimer();
     this.stopHeartbeat();
     this.voice.clear();
     this.voiceStates.clear();
@@ -3036,7 +3161,7 @@ export class CommunityService {
     this.scheduleReconnect(); // announces "offline" with the time of the next attempt
   }
 
-  private async openSocket(): Promise<void> {
+  private async openSocket(generation: number): Promise<void> {
     this.setSocketState('connecting');
     let token: string;
     let url: string;
@@ -3045,19 +3170,37 @@ export class CommunityService {
       token = await this.token();
       if (this.communities.length === 0) await this.refresh().catch(() => undefined);
     } catch {
-      this.scheduleReconnect();
+      if (generation === this.socketGeneration) this.scheduleReconnect();
+      return;
+    }
+    // Stopped (or signed out) while waiting: this open is no longer wanted.
+    if (generation !== this.socketGeneration || this.socket) return;
+    if (this.deps.account.status().state !== 'registered') {
+      this.setSocketState('offline');
       return;
     }
     const socket = (this.deps.createSocket ?? ((u: string) => new WebSocket(u)))(url);
     this.socket = socket;
+    // A connection that never becomes ready (a black-holed network) is dropped and tried again.
+    this.clearConnectTimer();
+    this.connectTimer = setTimeout(() => {
+      this.connectTimer = null;
+      if (this.socket !== socket || this.socketState === 'online') return;
+      this.deps.log.warn('Realtime connection did not become ready in time; reconnecting');
+      this.dropSocket(socket);
+    }, this.connectTimeoutMs);
+    this.connectTimer.unref?.();
     socket.onopen = () => {
+      if (this.socket !== socket) return;
       const status = this.deps.presence?.status();
       socket.send(JSON.stringify({ t: 'auth', token, ...(status ? { status } : {}) }));
       this.startHeartbeat(socket);
     };
     socket.binaryType = 'arraybuffer';
     socket.onmessage = (msg) => {
-      if (this.socket === socket) this.lastHeard = Date.now();
+      // A connection this service already let go of says nothing any more.
+      if (this.socket !== socket) return;
+      this.lastHeard = Date.now();
       if (msg.data instanceof ArrayBuffer) {
         const frame = decodeRelayIn(new Uint8Array(msg.data));
         if (frame) for (const l of this.relayListeners) l(frame.sender, frame.payload);
@@ -3069,8 +3212,19 @@ export class CommunityService {
         this.deps.log.warn('Ignored malformed realtime event');
       }
     };
-    socket.onclose = () => this.dropSocket(socket);
+    socket.onclose = (event) => {
+      if (this.socket !== socket) return;
+      // 4401: the server no longer accepts this session (expired, or the device was removed).
+      if ((event as CloseEvent | undefined)?.code === 4401) this.sessionRefused();
+      this.dropSocket(socket);
+    };
     socket.onerror = () => socket.close();
+  }
+
+  /** The server refused our session token: sign in again before the next attempt, never reuse it. */
+  private sessionRefused(): void {
+    this.deps.log.warn('Realtime connection refused the session; signing in again');
+    this.deps.account.dropSession();
   }
 
   private scheduleReconnect(): void {
@@ -3107,7 +3261,7 @@ export class CommunityService {
    */
   reconnectNow(): void {
     if (this.deps.account.status().state !== 'registered') return;
-    if (this.socket && this.socketState !== 'offline') return;
+    if (this.opening || (this.socket && this.socketState !== 'offline')) return;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.retryAt = null;
@@ -3119,6 +3273,7 @@ export class CommunityService {
     for (const l of this.rawListeners) l(e);
     switch (e.t) {
       case 'ready':
+        this.clearConnectTimer();
         this.backoff = 1000;
         this.offlineSince = null;
         this.setSocketState('online');
@@ -3214,6 +3369,11 @@ export class CommunityService {
         this.emit({ t: 'voiceDisconnect', ...(e.moveTo ? { moveTo: e.moveTo } : {}) });
         return;
       case 'error':
+        if (e.code === 'unauthorized') {
+          this.sessionRefused();
+          if (this.socket) this.dropSocket(this.socket);
+          return;
+        }
         if (e.code === 'voice_full') this.emit({ t: 'voiceRefused', reason: 'full' });
         // Servers before 1.0.8 refused a voice join with a plain "forbidden": only count it as one while a
         // join is waiting; otherwise it answers something else (a moderation action, a sound) and must not
@@ -3350,6 +3510,21 @@ export class CommunityService {
     }>)
       this.forget(row.id);
     this.stop();
+    // The account is gone: so are the copies of its files (and the keys that open them).
+    this.attachmentCache.clear();
+    this.cacheBytes = 0;
+    const dir = this.deps.blobDir?.();
+    if (dir) void this.clearAttachmentDir(dir);
+  }
+
+  private async clearAttachmentDir(dir: string): Promise<void> {
+    await this.pruning?.catch(() => undefined);
+    const names = await readdir(dir).catch(() => [] as string[]);
+    for (const name of names)
+      if (/^[A-Za-z0-9_-]{16,64}(\.part)?$/.test(name))
+        await rm(join(dir, name), { force: true }).catch(() => undefined);
+    this.diskUsed.clear();
+    this.diskBytes = 0;
   }
 
   private forget(id: string): void {
@@ -3357,6 +3532,7 @@ export class CommunityService {
     this.deps.db()?.prepare('DELETE FROM communities WHERE id = ?').run(id);
     this.keys.delete(id);
     this.wires.delete(id);
+    for (const [messageId, r] of this.recent) if (r.chat.communityId === id) this.recent.delete(messageId);
     this.communities = this.communities.filter((c) => c.id !== id);
     this.emit({ t: 'communities', communities: this.communities });
   }

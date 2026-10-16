@@ -1,5 +1,5 @@
 import { linkWarnings } from './link-warnings.ts';
-import { fetchPreview } from './link-preview.ts';
+import { fetchPreview, type PreviewDeps } from './link-preview.ts';
 import { buildExport } from './data-export.ts';
 import { writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
@@ -83,10 +83,12 @@ export interface IpcDeps {
   haptic?: (kind: 'tap' | 'select' | 'success' | 'warning') => void;
   /** Android: allow picture-in-picture while a call is on (absent elsewhere). */
   pip?: (on: boolean) => void;
+  /** How link previews reach the network (desktop only: phones make no previews). */
+  previewDeps?: PreviewDeps;
   /** The "can see your screen" bar and pointing (desktop only; ADR 0007). */
   share?: { status(sharing: boolean, viewers: string[]): void; point(x: number, y: number): void };
   /** Creates the account on River's home server by itself. */
-  homeAccount: Pick<HomeAccount, 'ensure' | 'kick' | 'isWaiting' | 'enabled' | 'locate'>;
+  homeAccount: Pick<HomeAccount, 'ensure' | 'kick' | 'isWaiting' | 'enabled' | 'locate' | 'isHomeServer'>;
   /** Settings → System → Connection check. */
   diagnostics(): Promise<DiagnosticCheck[]>;
   openLogs(): Promise<void>;
@@ -238,6 +240,21 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.communityList, (_e, mode) =>
     mode === 'connection-only' ? deps.community.connectionState() : result(() => deps.community.refresh()),
   );
+  /**
+   * An account for something the person asked for (Set up again, a first community): on
+   * River's server when that is the one they were using (River saves its address once it
+   * made the account there) or none was chosen, otherwise on the server they chose.
+   */
+  const accountOn = async (server: string | null): Promise<void> => {
+    if (deps.account.status().state !== 'none') return;
+    if (!server || (await deps.homeAccount.isHomeServer(server))) {
+      await deps.homeAccount.ensure({ force: true });
+      if (deps.account.status().state === 'none')
+        throw new UserFacingError('River could not set up your account. Try again in a moment.');
+      return;
+    }
+    await deps.account.register(server);
+  };
   handle(IPC.communityCreate, (_e, name, rawOptions) =>
     result(async () => {
       const options = createCommunityOptionsSchema.parse(rawOptions ?? {});
@@ -248,7 +265,7 @@ export function registerIpc(deps: IpcDeps): void {
           deps.settings.update({ server: { url: options.serverUrl } });
           await deps.account.register(options.serverUrl);
         } else {
-          await deps.homeAccount.ensure();
+          await accountOn(deps.settings.get().server.url);
         }
       }
       return deps.community.create(name, options.template);
@@ -259,7 +276,7 @@ export function registerIpc(deps: IpcDeps): void {
       deps.community.join(link, async (serverUrl) => {
         // A permanent link names River's server, wherever it is today.
         if (isHomeLink(serverUrl)) {
-          await deps.homeAccount.ensure();
+          await deps.homeAccount.ensure({ force: true });
           return;
         }
         try {
@@ -269,7 +286,7 @@ export function registerIpc(deps: IpcDeps): void {
           // The link's address may be an old one of River's server (its host PC restarted):
           // create the account on River's server instead, where the invite code still works.
           if (!(err instanceof UserFacingError && err.unreachable) || !deps.homeAccount.enabled()) throw err;
-          await deps.homeAccount.ensure();
+          await deps.homeAccount.ensure({ force: true });
         }
       }),
     ),
@@ -442,8 +459,7 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.accountStartOver, () =>
     result(async () => {
       const previous = deps.account.forgetMissing();
-      if (deps.homeAccount.enabled()) await deps.homeAccount.ensure();
-      else await deps.account.register(previous);
+      await accountOn(previous);
       deps.community.stop();
       deps.community.ensureSocket();
       return deps.account.status();
@@ -491,8 +507,8 @@ export function registerIpc(deps: IpcDeps): void {
     // Only for people who turned previews on, and only for links they are sending.
     if (!deps.settings.get().appearance.linkPreviews) return null;
     const url = safeExternalUrl(raw);
-    if (!url) return null;
-    return fetchPreview(url.toString()).catch(() => null);
+    if (!url || !deps.previewDeps) return null;
+    return fetchPreview(url.toString(), deps.previewDeps).catch(() => null);
   });
   handle(IPC.usersLookup, (_e, username) =>
     result(() => deps.account.lookupUser(z.string().max(64).parse(username))),
@@ -517,7 +533,9 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.identitySetName, (_e, displayName) => deps.identity.setDisplayName(displayName));
   handle(IPC.storageSetup, async (_e, raw): Promise<PassphraseResult> => {
     const passphrase = passphraseSchema.parse(raw);
-    if (deps.storage.getStatus().state !== 'setup-required') return { ok: false, reason: 'not-expected' };
+    // Pressed twice: the first one is still setting up.
+    if (deps.storage.isBusy() || deps.storage.getStatus().state !== 'setup-required')
+      return { ok: false, reason: 'not-expected' };
     if (passphrase.length < MIN_PASSPHRASE_LENGTH) return { ok: false, reason: 'too-short' };
     await deps.storage.setupPassphrase(passphrase);
     return { ok: true };
@@ -525,7 +543,8 @@ export function registerIpc(deps: IpcDeps): void {
   let failedUnlocks = 0;
   handle(IPC.storageUnlock, async (_e, raw): Promise<PassphraseResult> => {
     const passphrase = passphraseSchema.parse(raw);
-    if (deps.storage.getStatus().state !== 'locked') return { ok: false, reason: 'not-expected' };
+    if (deps.storage.isBusy() || deps.storage.getStatus().state !== 'locked')
+      return { ok: false, reason: 'not-expected' };
     try {
       await deps.storage.unlock(passphrase);
       failedUnlocks = 0;

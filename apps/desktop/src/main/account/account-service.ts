@@ -103,6 +103,14 @@ export class AccountService {
     return this.token;
   }
 
+  /**
+   * The server refused the session token (it expired, or this device was removed): forget it,
+   * so the next use signs in again instead of offering the dead token forever.
+   */
+  dropSession(): void {
+    this.token = null;
+  }
+
   async register(rawServerUrl: unknown, signupCode?: string): Promise<AccountStatus> {
     const db = this.deps.db();
     const signer = this.deps.identity.signer();

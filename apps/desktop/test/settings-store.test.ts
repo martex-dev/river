@@ -57,6 +57,52 @@ describe('SettingsStore', () => {
     expect(readdirSync(dir).some((n) => n.startsWith('settings.json.invalid-'))).toBe(true);
   });
 
+  it('saves what it recovered, so the next start keeps it', () => {
+    writeFileSync(
+      file,
+      JSON.stringify({
+        schemaVersion: 1,
+        updates: { channel: 'beta', autoCheck: false, autoDownload: true, installOnQuit: true },
+        appearance: 'broken',
+      }),
+    );
+    new SettingsStore(file, nullLogger);
+    expect(existsSync(file)).toBe(true);
+    const next = new SettingsStore(file, nullLogger).get();
+    expect(next.updates).toMatchObject({ channel: 'beta', autoCheck: false });
+  });
+
+  it('drops keys it does not know instead of whole sections (a newer River wrote them)', () => {
+    const written = structuredClone(DEFAULT_SETTINGS) as unknown as Record<string, Record<string, unknown>>;
+    written.notifications = {
+      ...written.notifications,
+      preview: 'sender',
+      soundGroups: { ...(written.notifications!.soundGroups as object), newGroup: false },
+      quietHours: { enabled: true, start: '23:00', end: '07:00', weekendsOnly: true },
+      futureSetting: 1,
+    };
+    written.voice = {
+      ...written.voice,
+      pushToTalkKey: 'KeyV',
+      keybinds: { ...(written.voice!.keybinds as object), toggleVideoBlur: 'Ctrl+B' },
+    };
+    written.newSection = { anything: true };
+    writeFileSync(file, JSON.stringify(written));
+    const s = new SettingsStore(file, nullLogger).get();
+    expect(s.notifications.preview).toBe('sender');
+    expect(s.notifications.quietHours).toEqual({ enabled: true, start: '23:00', end: '07:00' });
+    expect(s.notifications.soundGroups).toEqual(DEFAULT_SETTINGS.notifications.soundGroups);
+    expect(s.voice.pushToTalkKey).toBe('KeyV');
+    expect(s.voice.keybinds).toEqual(DEFAULT_SETTINGS.voice.keybinds);
+    // Nothing was wrong with the file: no backup.
+    expect(readdirSync(dir).some((n) => n.includes('.invalid-'))).toBe(false);
+    // Patches from the window stay strict.
+    const store = new SettingsStore(file, nullLogger);
+    expect(() =>
+      store.update({ notifications: { quietHours: { enabled: true, start: '23:00', end: '07:00', x: 1 } } }),
+    ).toThrow();
+  });
+
   it('survives unreadable JSON', () => {
     writeFileSync(file, '{ not json');
     expect(new SettingsStore(file, nullLogger).get()).toEqual(DEFAULT_SETTINGS);
