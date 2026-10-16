@@ -6,10 +6,9 @@ import {
   fetchPreview,
   isPrivateAddress,
   parsePreview,
-  pinnedFetch,
-  publicOnlyLookup,
   type PreviewDeps,
 } from '../src/main/link-preview.ts';
+import { pinnedFetch, publicOnlyLookup } from '../src/main/link-preview-net.ts';
 
 const page = (head: string): string => `<!doctype html><html><head>${head}</head><body>x</body></html>`;
 

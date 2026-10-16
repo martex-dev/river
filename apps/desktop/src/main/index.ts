@@ -35,6 +35,7 @@ import { DEEP_LINK_SCHEME, deepLinkInArgs, parseDeepLink } from './deep-link.ts'
 import { HomeAccount } from './home-server.ts';
 import { HOME_SERVER } from '../shared/home-server.ts';
 import { createFileLogger } from './logger.ts';
+import { pinnedPreviewDeps } from './link-preview-net.ts';
 import {
   APP_ORIGIN,
   guardWebContents,
@@ -456,6 +457,7 @@ async function start(): Promise<void> {
     updatesDisabledReason,
     devServerUrl,
     fetchBytes: serverFetch,
+    previewDeps: pinnedPreviewDeps,
     storage,
     identity,
     account,

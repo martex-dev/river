@@ -1,5 +1,5 @@
 import { linkWarnings } from './link-warnings.ts';
-import { fetchPreview } from './link-preview.ts';
+import { fetchPreview, type PreviewDeps } from './link-preview.ts';
 import { buildExport } from './data-export.ts';
 import { writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
@@ -83,6 +83,8 @@ export interface IpcDeps {
   haptic?: (kind: 'tap' | 'select' | 'success' | 'warning') => void;
   /** Android: allow picture-in-picture while a call is on (absent elsewhere). */
   pip?: (on: boolean) => void;
+  /** How link previews reach the network (desktop only: phones make no previews). */
+  previewDeps?: PreviewDeps;
   /** The "can see your screen" bar and pointing (desktop only; ADR 0007). */
   share?: { status(sharing: boolean, viewers: string[]): void; point(x: number, y: number): void };
   /** Creates the account on River's home server by itself. */
@@ -491,8 +493,8 @@ export function registerIpc(deps: IpcDeps): void {
     // Only for people who turned previews on, and only for links they are sending.
     if (!deps.settings.get().appearance.linkPreviews) return null;
     const url = safeExternalUrl(raw);
-    if (!url) return null;
-    return fetchPreview(url.toString()).catch(() => null);
+    if (!url || !deps.previewDeps) return null;
+    return fetchPreview(url.toString(), deps.previewDeps).catch(() => null);
   });
   handle(IPC.usersLookup, (_e, username) =>
     result(() => deps.account.lookupUser(z.string().max(64).parse(username))),
