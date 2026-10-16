@@ -22,13 +22,13 @@ long-press menus and swipe between panes.
 
 Drafts (memory only, on purpose), stickers
 (communities only), saved messages (bookmarks, plus Note to self since 2.9),
-contact profile (popover), languages (English and Bulgarian).
+languages (English and Bulgarian).
 
 Finished since the audit: mark unread and pinned chats (2.1), copy text,
 multi-select and search in a conversation (2.2), shared media per chat (2.7),
 polls in direct messages and groups (2.10.4), album grids (2.10.3), link
 previews in direct messages (2.10.6, opt-in), jump to date in direct
-messages (2.10.7), chat folders (2.10.8),
+messages (2.10.7), chat folders (2.10.8), contact profiles (2.10.9),
 per-person volume (2.0.4).
 
 ## Plan

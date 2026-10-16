@@ -2444,3 +2444,78 @@ html[data-density='compact'] .member {
   padding: 4px 2px;
   cursor: pointer;
 }
+
+/* Contact profile (2.10.9). */
+.chat__head-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px 6px 2px 2px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.chat__head-who:hover {
+  background: var(--layer-1);
+}
+.chat__head-who strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.contact-sheet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  text-align: center;
+}
+.contact-sheet__name {
+  margin: 4px 0 0;
+  font-size: 20px;
+}
+.contact-sheet__bio {
+  max-width: 420px;
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+}
+.contact-sheet__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.contact-sheet__action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 68px;
+  padding: 10px 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--layer-1);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.contact-sheet__action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.contact-sheet__groups {
+  margin: 4px 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.contact-sheet__id {
+  overflow-wrap: anywhere;
+  text-align: left;
+}

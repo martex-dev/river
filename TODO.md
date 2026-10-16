@@ -3,6 +3,35 @@
 Ordered by priority. The top unchecked item is the next thing to build.
 Milestone definitions: [ROADMAP.md](ROADMAP.md).
 
+## 2.x — Telegram, Signal and phone-call parity (maintainer request, 2026-10-16)
+
+Audit and plan: [docs/product/telegram-parity.md](docs/product/telegram-parity.md). One release per line.
+
+- [x] 2.0.4 Louder, clearer voice (up to 200 % with a limiter; louder on phones; volume buttons)
+- [x] 2.1.0 Chat list: pin, archive, mark unread, filters, jump to latest
+- [x] 2.2.0 Message actions: copy, select several, search in a conversation
+- [x] 2.3.0 Voice messages with playback speed
+- [x] 2.4.0 Disappearing messages
+- [x] 2.5.0 Scheduled messages, send without sound
+- [x] 2.6.0 Privacy: read receipts, typing indicators, screen security
+- [x] 2.7.0 Media: swipe between pictures, video speed, shared media per chat
+- [x] 2.8.0 Phone feel: swipe to reply, hold for the menu, haptics
+- [x] 2.9.0 People: friend QR codes, Note to self
+- [x] 2.10.0 Picture-in-picture calls (Android, computers)
+- [x] 2.10.1 Double-tap to react, hold chats, new-message counts
+- [x] 2.10.2 Screen off at your ear, call timer
+- [x] 2.10.3 Album grids
+- [x] 2.10.4 Polls in direct messages and groups
+- [x] 2.10.5 Full-screen calls on phones
+- [x] 2.10.6 Link previews in direct messages (opt-in, made by the sender)
+- [x] 2.10.7 Jump to a date; open older search results
+- [x] 2.10.8 Chat folders
+- [x] 2.10.9 Contact profiles
+- [ ] Picture-in-picture for calls on iPhone (needs AVPictureInPictureController with a video call source)
+- [ ] Check the message box stays above the keyboard on Android 15+ (edge-to-edge) on a real phone
+- [ ] Stickers in direct messages (today they belong to communities)
+- [ ] More interface languages (English and Bulgarian today)
+
 ## 1.0.0 — Stage 1 release
 
 - [x] Channel categories (encrypted names), drag-and-drop ordering of channels and categories, collapsible categories
