@@ -6,6 +6,43 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- **Link previews** refuse every non-public IPv6 spelling (IPv4-mapped as
+  Node writes it, IPv4-compatible, NAT64, 6to4, site-local, documentation) and
+  connect only to the address that was checked, so DNS rebinding cannot reach
+  this computer or the local network.
+- **Screen sharing**: the window can no longer hide the "can see your screen"
+  bar while a screen River handed out may still be shared. The bar goes with
+  its own Stop, the call ending, or the window reloading or crashing.
+- **Passphrase**: pressing set up or unlock twice can no longer set up two
+  different keys (making the data unreadable) or open the data twice.
+
+### Fixed
+
+- One realtime connection at a time (startup, sign-up and waking up opened
+  two, and the extra one's events arrived twice); a refused (expired) session
+  signs in again instead of retrying the dead one forever; a connection that
+  never becomes ready is replaced after 20 seconds.
+- **Set up again** and creating a first community after deleting the account
+  work again for accounts on River's server.
+- Linking a device: a failed sign-in on the new device no longer leaves it
+  stuck with an identity and no account; the linked device refuses an expired
+  code and takes a device it could not provision off the list again.
+- A damaged settings file's recovered settings are saved (they were lost on
+  the next start), and unknown settings no longer reset their whole section.
+- Editing a message changes only its text: files, picture descriptions, the
+  reply (and its no-ping), tags, previews and stickers stay, also for thread
+  messages and older ones; an edit River cannot base on the original is
+  refused. Saving an older or thread message works.
+- Kept copies of received files stay under 2 GB (least recently used go first)
+  and are deleted with the account; downloads of the same file at once are
+  counted once.
+- Notifications stay clickable on Windows; the Dock icon reopens River on
+  macOS; settings changes no longer start an update check each time; a failed
+  screen-share request is answered instead of hanging; the hosting PC keeps
+  following its own server after taking over from River Host.
+
 ## [2.10.11] - 2026-10-16
 
 **Reply privately.**
