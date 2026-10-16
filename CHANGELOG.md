@@ -6,6 +6,17 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.10.3] - 2026-10-16
+
+**Polish: albums.**
+
+### Changed
+
+- Pictures sent together in one message show as an **album**: a tidy grid
+  (two side by side, three with a wide first one, four in a square, five or
+  more in rows of three) instead of a row of different sizes. Tap any of them
+  to open the viewer and swipe through.
+
 ## [2.10.2] - 2026-10-16
 
 **Polish: calls like a phone call.**

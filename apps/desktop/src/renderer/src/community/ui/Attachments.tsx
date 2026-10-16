@@ -107,10 +107,26 @@ export function AttachmentList({
   const [open, setOpen] = useState<AttachmentPointer | null>(null);
   const shared = useContext(GalleryContext);
   const gallery = shared && open && shared.some((a) => a.id === open.id) ? shared : galleryOf([attachments]);
+  // Two or more pictures in one message are an album (2.10.3): a grid, like Telegram.
+  const images = attachments.filter((a) => INLINE_IMAGE.has(a.mime));
+  const album = images.length >= 2 ? images : [];
   return (
     <div className="attachments">
+      {album.length > 0 && (
+        <div className={`attachment-album attachment-album--${Math.min(album.length, 5)}`}>
+          {album.map((a, i) => (
+            <ImageAttachment
+              key={a.id}
+              pointer={a}
+              alt={alts?.[a.id]}
+              tile={albumTile(album.length, i)}
+              onOpen={() => setOpen(a)}
+            />
+          ))}
+        </div>
+      )}
       {attachments.map((a) =>
-        INLINE_IMAGE.has(a.mime) ? (
+        album.includes(a) ? null : INLINE_IMAGE.has(a.mime) ? (
           <ImageAttachment key={a.id} pointer={a} alt={alts?.[a.id]} onOpen={() => setOpen(a)} />
         ) : INLINE_VIDEO.has(a.mime) || INLINE_AUDIO.has(a.mime) ? (
           <MediaAttachment key={a.id} pointer={a} />
@@ -131,23 +147,31 @@ export function AttachmentList({
   );
 }
 
+/** The shape of picture `i` of `n` in an album grid: the first of three is wide, the rest square. */
+export function albumTile(n: number, i: number): number {
+  return n === 3 && i === 0 ? 2 : 1;
+}
+
 function ImageAttachment({
   pointer,
   alt,
+  tile,
   onOpen,
 }: {
   pointer: AttachmentPointer;
   alt?: string;
+  /** In an album: fills its grid cell at this aspect ratio. */
+  tile?: number;
   onOpen(): void;
 }): ReactElement {
   const [ref, visible] = useVisible();
   const [manual, setManual] = useState(false);
   const { url, error } = useDecrypted(pointer, (visible && pointer.size <= AUTO_LOAD_BYTES) || manual);
-  const ratio = pointer.width && pointer.height ? pointer.width / pointer.height : 4 / 3;
-  const width = Math.max(64, Math.min(400, pointer.width ?? 400, 300 * ratio));
+  const ratio = tile ?? (pointer.width && pointer.height ? pointer.width / pointer.height : 4 / 3);
+  const width = tile ? '100%' : Math.max(64, Math.min(400, pointer.width ?? 400, 300 * ratio));
   return (
     // The star sits beside the picture (not inside its button), so controls are never nested.
-    <div className="attachment-image-wrap" style={{ width }}>
+    <div className={`attachment-image-wrap ${tile === 2 ? 'is-wide' : ''}`} style={{ width }}>
       <div
         ref={ref}
         className="attachment-image"
