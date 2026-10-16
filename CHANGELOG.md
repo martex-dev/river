@@ -6,6 +6,20 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-10-16
+
+**Send later, send quietly.**
+
+### Added
+
+- **Send without sound**: ⏰ next to the message box → the other side gets the
+  message without a notification.
+- **Scheduled messages**: ⏰ → Schedule message… (in 1 hour, in 3 hours,
+  tomorrow 9:00, or any time). A bar in the conversation lists what is waiting,
+  with Send now and Cancel. River keeps scheduled messages encrypted on your
+  device and sends them on time while it is on and online — River's server never
+  holds them.
+
 ## [2.4.0] - 2026-10-16
 
 **Disappearing messages.**

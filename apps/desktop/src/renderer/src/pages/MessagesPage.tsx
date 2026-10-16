@@ -13,6 +13,7 @@ import {
   timerLabel,
   type ConversationView,
   type DirectMessageView,
+  type ScheduledView,
 } from '../../../shared/dm.ts';
 import { play } from '../community/sound.ts';
 import { useCommunity } from '../community/store.ts';
@@ -814,6 +815,7 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           </button>
         </div>
       )}
+      <ScheduledBar peer={c.riverId} />
       {searching && <ConversationSearch peer={c.riverId} onClose={() => setSearching(false)} />}
       {selection.peer === c.riverId && (
         <SelectionToolbar conversation={c} messages={messages} myName={myName} />
@@ -1287,6 +1289,118 @@ function DmMessage(props: {
   );
 }
 
+/** Pick when to send (2.5). */
+function ScheduleDialog(props: {
+  onClose(): void;
+  onSchedule(sendAt: string, silent: boolean): void;
+}): ReactElement {
+  const local = (d: Date): string => {
+    const pad = (n: number): string => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  // The time the dialog opened; choices are relative to it (the core checks again on schedule).
+  const [opened] = useState(() => Date.now());
+  const [when, setWhen] = useState(() => local(new Date(opened + 3600_000)));
+  const [silent, setSilent] = useState(false);
+  const at = new Date(when);
+  const valid = !Number.isNaN(at.getTime()) && at.getTime() > opened + 30_000;
+  const quick = (label: string, d: Date) => (
+    <button key={label} type="button" className="chip" onClick={() => setWhen(local(d))}>
+      {label}
+    </button>
+  );
+  const tomorrow9 = new Date(opened);
+  tomorrow9.setDate(tomorrow9.getDate() + 1);
+  tomorrow9.setHours(9, 0, 0, 0);
+  return (
+    <Modal title="Schedule message" onClose={props.onClose}>
+      <div className="schedule-quick">
+        {quick('In 1 hour', new Date(opened + 3600_000))}
+        {quick('In 3 hours', new Date(opened + 3 * 3600_000))}
+        {quick('Tomorrow 9:00', tomorrow9)}
+      </div>
+      <label className="textfield">
+        <span className="field__label">Send at</span>
+        <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
+      </label>
+      <Toggle checked={silent} onChange={setSilent} label="Send without sound" />
+      <p className="muted small">
+        River keeps the message encrypted on this device and sends it at that time — this device has to be on
+        and online then. River's server never holds it.
+      </p>
+      <div className="button-row">
+        <button className="btn btn--ghost" onClick={props.onClose}>
+          Cancel
+        </button>
+        <button
+          className="btn btn--primary"
+          disabled={!valid}
+          onClick={() => props.onSchedule(at.toISOString(), silent)}
+        >
+          Schedule
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/** Messages waiting on this device to be sent later in this conversation (2.5). */
+function ScheduledBar(props: { peer: string }): ReactElement | null {
+  const [items, setItems] = useState<ScheduledView[]>([]);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const load = (): void =>
+      void window.river.dm.action({ a: 'scheduled', peer: props.peer }).then((r) => {
+        if (r.ok) setItems(r.value);
+      });
+    load();
+    return window.river.dm.onEvent((e) => {
+      if (e.t === 'scheduled') load();
+    });
+  }, [props.peer]);
+  if (!items.length) return null;
+  return (
+    <>
+      <button className="scheduled-bar" onClick={() => setOpen(true)}>
+        🕓 {items.length} scheduled {items.length === 1 ? 'message' : 'messages'} · next{' '}
+        {new Date(items[0]!.sendAt).toLocaleString()}
+      </button>
+      {open && (
+        <Modal title="Scheduled messages" onClose={() => setOpen(false)}>
+          <ul className="scheduled-list">
+            {items.map((x) => (
+              <li key={x.id} className="scheduled-item">
+                <span className="scheduled-item__text">
+                  <strong>{new Date(x.sendAt).toLocaleString()}</strong>
+                  {x.silent && <span className="muted small"> · without sound</span>}
+                  {x.failed && (
+                    <span className="field__error small"> · not sent yet (offline), trying again</span>
+                  )}
+                  <span className="muted small">{x.text || x.attachments.map((a) => a.name).join(', ')}</span>
+                </span>
+                <span className="button-row">
+                  <button
+                    className="btn btn--ghost btn--small"
+                    onClick={() => void window.river.dm.action({ a: 'sendScheduledNow', id: x.id })}
+                  >
+                    Send now
+                  </button>
+                  <button
+                    className="btn btn--danger btn--small"
+                    onClick={() => void window.river.dm.action({ a: 'cancelScheduled', id: x.id })}
+                  >
+                    Cancel
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Modal>
+      )}
+    </>
+  );
+}
+
 /** Choose how long new messages in this conversation stay (2.4). */
 function TimerDialog(props: { conversation: ConversationView; onClose(): void }): ReactElement {
   const c = props.conversation;
@@ -1500,7 +1614,9 @@ ${shared}`
   useDm((x) => x.typing[c.riverId]);
   const replyTo = dm.replyTo && dm.replyTo.peer === c.riverId ? dm.replyTo : null;
 
-  const send = async (): Promise<void> => {
+  const [later, setLater] = useState<{ x: number; y: number } | null>(null);
+  const [scheduling, setScheduling] = useState(false);
+  const send = async (options: { silent?: boolean; sendAt?: string } = {}): Promise<void> => {
     const value = text.trim();
     const files = props.pending;
     if ((!value && !files.length) || uploading) return;
@@ -1517,12 +1633,31 @@ ${shared}`
     }
     setText('');
     useDm.setState({ replyTo: null });
+    if (options.sendAt) {
+      const queued = await dm.run({
+        a: 'schedule',
+        peer: c.riverId,
+        text: value,
+        ...(replyTo ? { replyTo: replyTo.id } : {}),
+        ...(attachments ? { attachments } : {}),
+        ...(options.silent ? { silent: true } : {}),
+        sendAt: options.sendAt,
+      });
+      setUploading(null);
+      if (!queued) setText(value);
+      else {
+        props.onPending([]);
+        useCommunity.getState().notify(`Scheduled for ${new Date(options.sendAt).toLocaleString()}`);
+      }
+      return;
+    }
     const sent = await dm.run({
       a: 'send',
       peer: c.riverId,
       text: value,
       ...(replyTo ? { replyTo: replyTo.id } : {}),
       ...(attachments ? { attachments } : {}),
+      ...(options.silent ? { silent: true } : {}),
     });
     setUploading(null);
     if (!sent) setText(value);
@@ -1563,6 +1698,35 @@ ${shared}`
 
   return (
     <div className="chat__composer-wrap">
+      {later && (
+        <Popover x={later.x} y={later.y} onClose={() => setLater(null)} className="menu">
+          <MenuItem
+            onClick={() => {
+              setLater(null);
+              void send({ silent: true });
+            }}
+          >
+            🔕 Send without sound
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              setLater(null);
+              setScheduling(true);
+            }}
+          >
+            🕓 Schedule message…
+          </MenuItem>
+        </Popover>
+      )}
+      {scheduling && (
+        <ScheduleDialog
+          onClose={() => setScheduling(false)}
+          onSchedule={(sendAt, silent) => {
+            setScheduling(false);
+            void send({ sendAt, silent });
+          }}
+        />
+      )}
       {replyTo && (
         <div className="reply-bar">
           <span>
@@ -1662,8 +1826,18 @@ ${shared}`
         >
           <SmileIcon size={20} />
         </button>
-        {!text.trim() && props.pending.length === 0 && (
+        {!text.trim() && props.pending.length === 0 ? (
           <VoiceRecorder disabled={!!uploading} onRecorded={(file) => void sendVoice(file)} />
+        ) : (
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Send later or without sound"
+            title="Send later or without sound"
+            onClick={(e) => setLater({ x: e.clientX - 200, y: e.clientY - 110 })}
+          >
+            ⏰
+          </button>
         )}
         <button
           className="btn btn--primary"
