@@ -17,6 +17,8 @@ import type { LocalDatabase } from '../storage/database.ts';
 
 const STORY_MS = 24 * 60 * 60 * 1000;
 const RELAY_DELAY_MS = 1500;
+/** How long a comment of ours survives the author's snapshots while they have not relayed it. */
+const PENDING_COMMENT_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface PostRow {
   id: string;
@@ -55,6 +57,38 @@ export class SocialService {
         deps.log.warn(`Ignored a social update: ${(err as Error).message}`);
       }
     });
+    // Blocking someone removes their posts and stories from this device.
+    deps.dm.onBlocked((riverId) => {
+      const n = this.db().prepare('DELETE FROM posts WHERE author = ?').run(riverId).changes;
+      if (n) this.changed();
+    });
+  }
+
+  /** Comments we sent on others' posts that their author has not relayed back yet. */
+  private pendingComments(): Record<string, { postId: string; at: number }> {
+    try {
+      const row = this.db().prepare("SELECT value FROM meta WHERE key = 'social_pending_comments'").get() as
+        { value: string } | undefined;
+      const parsed: unknown = row ? JSON.parse(row.value) : {};
+      return parsed && typeof parsed === 'object'
+        ? (parsed as Record<string, { postId: string; at: number }>)
+        : {};
+    } catch {
+      return {};
+    }
+  }
+
+  private setPendingComments(pending: Record<string, { postId: string; at: number }>): void {
+    // A comment the author never relays is not kept forever.
+    const cutoff = Date.now() - PENDING_COMMENT_MS;
+    const kept = Object.fromEntries(
+      Object.entries(pending)
+        .filter(([, p]) => p.at > cutoff)
+        .slice(-500),
+    );
+    this.db()
+      .prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('social_pending_comments', ?)")
+      .run(JSON.stringify(kept));
   }
 
   onEvent(listener: (e: SocialEvent) => void): () => void {
@@ -151,7 +185,19 @@ export class SocialService {
         const post = this.row(c.postId);
         if (!post || post.author !== peer) return;
         const db = this.db();
-        db.prepare('DELETE FROM post_comments WHERE post_id = ?').run(c.postId);
+        // Our own comments the author has not relayed yet stay (the snapshot predates them).
+        const pending = this.pendingComments();
+        const relayed = new Set(c.comments.map((cm) => cm.id));
+        const before = Object.keys(pending).length;
+        for (const id of Object.keys(pending)) if (relayed.has(id)) delete pending[id];
+        const waiting = Object.entries(pending)
+          .filter(([, p]) => p.postId === c.postId)
+          .map(([id]) => id);
+        db.prepare(
+          `DELETE FROM post_comments WHERE post_id = ?
+             AND NOT (author = ? AND id IN (SELECT value FROM json_each(?)))`,
+        ).run(c.postId, me, JSON.stringify(waiting));
+        if (Object.keys(pending).length !== before) this.setPendingComments(pending);
         for (const cm of c.comments) {
           db.prepare(
             'INSERT OR IGNORE INTO post_comments (id, post_id, author, author_name, text, created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -343,6 +389,10 @@ export class SocialService {
         this.changed();
         if (post.author === me) this.scheduleRelay(post.id);
         else {
+          this.setPendingComments({
+            ...this.pendingComments(),
+            [commentId]: { postId: post.id, at: Date.now() },
+          });
           await this.deps.dm.sendSocial(post.author, {
             v: 1,
             t: 'postComment',
@@ -399,14 +449,19 @@ export class SocialService {
   feed(): FeedView {
     this.expireStories();
     const me = this.me();
+    // Never anything from people you blocked (older copies included).
+    const shown = (r: PostRow): boolean =>
+      r.author === me || this.deps.dm.contactState(r.author) !== 'blocked';
     const posts = (
       this.db()
         .prepare(`SELECT * FROM posts WHERE kind = 'post' ORDER BY created_at DESC LIMIT 300`)
         .all() as PostRow[]
-    ).map((r) => this.view(r));
-    const storyRows = this.db()
-      .prepare(`SELECT * FROM posts WHERE kind = 'story' ORDER BY created_at ASC`)
-      .all() as PostRow[];
+    )
+      .filter(shown)
+      .map((r) => this.view(r));
+    const storyRows = (
+      this.db().prepare(`SELECT * FROM posts WHERE kind = 'story' ORDER BY created_at ASC`).all() as PostRow[]
+    ).filter(shown);
     const byAuthor = new Map<string, PostView[]>();
     for (const r of storyRows) {
       const list = byAuthor.get(r.author) ?? [];

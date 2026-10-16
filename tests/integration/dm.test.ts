@@ -1096,3 +1096,44 @@ describe('direct messages: audit fixes', { timeout: 60_000 }, () => {
     expect((await carol.dm.action({ a: 'conversations' })).filter((c) => c.kind === 'direct')).toEqual([]);
   });
 });
+
+describe('social: blocks and comments', { timeout: 60_000 }, () => {
+  it('blocking removes their posts; your comment survives a snapshot made before it arrived', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await friends(alice, bob);
+    const post = await alice.social.action({
+      a: 'post',
+      kind: 'post',
+      text: 'New song',
+      attachments: [],
+      audience: 'friends',
+    });
+    await alice.social.action({
+      a: 'post',
+      kind: 'story',
+      text: 'studio',
+      attachments: [],
+      audience: 'friends',
+    });
+    await bob.dm.sync();
+    await bob.social.action({ a: 'comment', postId: post.id, text: 'Love it' });
+    // Alice relays before Bob's comment reached her: Bob keeps his comment.
+    await alice.social.relay(post.id);
+    await bob.dm.sync();
+    const comments = async () =>
+      (await bob.social.action({ a: 'feed' })).posts[0]!.comments.map((c) => c.text);
+    expect(await comments()).toEqual(['Love it']);
+    // Once relayed it is there once.
+    await alice.dm.sync();
+    await alice.social.relay(post.id);
+    await bob.dm.sync();
+    expect(await comments()).toEqual(['Love it']);
+
+    await bob.dm.action({ a: 'block', peer: alice.riverId });
+    const feed = await bob.social.action({ a: 'feed' });
+    expect(feed.posts).toEqual([]);
+    expect(feed.stories).toEqual([]);
+    expect(bob.local.prepare('SELECT COUNT(*) AS n FROM posts').get()).toEqual({ n: 0 });
+  });
+});
