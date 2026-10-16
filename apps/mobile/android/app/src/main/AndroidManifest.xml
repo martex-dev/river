@@ -84,6 +84,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- In a call at your ear the screen turns off (proximity sensor), as in any phone call. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Message notifications (Android 13+ asks first). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Stay connected (optional): a visible foreground service for messages. -->

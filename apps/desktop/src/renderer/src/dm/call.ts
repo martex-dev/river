@@ -21,6 +21,8 @@ interface DmCallState {
     callId: string;
     video: boolean;
     state: 'ringing' | 'connecting' | 'connected';
+    /** When the call first connected (ms), for the call timer. */
+    connectedAt?: number;
   } | null;
 }
 
@@ -111,8 +113,9 @@ async function begin(
       if (connected && !wasConnected && active?.callId === callId) {
         wasConnected = true;
         play('callConnected');
-        if (current) current.connectedAt = Date.now();
-        useDmCall.setState({ active: { ...active, state: 'connected' } });
+        const now = Date.now();
+        if (current) current.connectedAt = now;
+        useDmCall.setState({ active: { ...active, state: 'connected', connectedAt: now } });
       }
     },
     {

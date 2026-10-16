@@ -2271,3 +2271,9 @@ html[data-density='compact'] .member {
   display: inline-block;
   margin-left: 6px;
 }
+
+/* Call timer (2.10.2). */
+.call-timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
