@@ -10,7 +10,8 @@ import { useSharedFiles, useSharedText } from '../components/ShareSheet.tsx';
 import { callNote, callsBetween } from '../dm/call-notes.ts';
 import { NotifyMenuSection } from '../community/ui/NotifyMenu.tsx';
 import { ForwardDialog } from '../community/ui/Forward.tsx';
-import { useDraft } from '../community/drafts.ts';
+import { saveDraft, useDraft } from '../community/drafts.ts';
+import { quoteOf } from '../dm/quote.ts';
 import { clockTime } from '../time.ts';
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import {
@@ -550,6 +551,17 @@ function FolderDialog(props: {
       </div>
     </Modal>
   );
+}
+
+/** From a group message to a direct message with its sender, quoting it (2.10.11). */
+async function replyPrivately(m: DirectMessageView, group: string): Promise<void> {
+  const dm = useDm.getState();
+  if (!dm.conversations.some((x) => x.riverId === m.sender)) {
+    const opened = await dm.run({ a: 'open', peer: m.sender, name: m.senderName });
+    if (!opened) return;
+  }
+  saveDraft(`d:${m.sender}`, quoteOf(m.text, `A message in ${group}`));
+  openDm(m.sender);
 }
 
 /** Copies text and says so (or says why not). */
@@ -1635,6 +1647,16 @@ function DmMessage(props: {
               }}
             >
               Forward
+            </MenuItem>
+          )}
+          {c.kind === 'group' && !m.mine && !m.deleted && (
+            <MenuItem
+              onClick={() => {
+                setMenu(null);
+                void replyPrivately(m, c.name);
+              }}
+            >
+              Reply privately
             </MenuItem>
           )}
           {c.state === 'accepted' && (

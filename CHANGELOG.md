@@ -6,6 +6,16 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.10.11] - 2026-10-16
+
+**Reply privately.**
+
+### Added
+
+- **Reply privately** to a group message (its menu): River opens a direct
+  message with the person who wrote it, with their words quoted in the message
+  box, ready for your answer.
+
 ## [2.10.10] - 2026-10-16
 
 **Stickers in direct messages.**
