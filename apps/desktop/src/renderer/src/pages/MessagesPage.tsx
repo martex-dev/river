@@ -203,12 +203,12 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
           </button>
         </div>
         {!archiveOpen && (
-          <div className="chat-filters" role="tablist" aria-label="Show">
+          <div className="chat-filters" role="radiogroup" aria-label="Show conversations">
             {CHAT_FILTERS.map((f) => (
               <button
                 key={f.id}
-                role="tab"
-                aria-selected={filter === f.id}
+                role="radio"
+                aria-checked={filter === f.id}
                 className={`chat-filters__tab ${filter === f.id ? 'is-active' : ''}`}
                 onClick={() => setFilter(f.id)}
               >
