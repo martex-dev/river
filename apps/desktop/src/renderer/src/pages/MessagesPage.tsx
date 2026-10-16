@@ -1716,15 +1716,40 @@ function ConversationSearch(props: { peer: string; onClose(): void }): ReactElem
     }, 200);
     return () => window.clearTimeout(t);
   }, [query, props.peer]);
-  const jump = (id: string): void => {
-    const el = document.getElementById(`dm-${id}`);
-    if (!el) {
-      useCommunity.getState().notify('That message is older than the ones shown here.', 'error');
-      return;
-    }
+  const [date, setDate] = useState('');
+  const flash = (el: HTMLElement): void => {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     el.classList.add('is-flash');
     window.setTimeout(() => el.classList.remove('is-flash'), 1600);
+  };
+  /** Waits (briefly) for a message to be on screen after loading older ones. */
+  const whenShown = (id: string, tries = 20): void => {
+    const el = document.getElementById(`dm-${id}`);
+    if (el) return flash(el);
+    if (tries > 0) window.requestAnimationFrame(() => whenShown(id, tries - 1));
+  };
+  const jump = (m: DirectMessageView): void => {
+    const el = document.getElementById(`dm-${m.id}`);
+    if (el) return flash(el);
+    // Older than what is shown: load back to it first (2.10.7).
+    void useDm
+      .getState()
+      .loadSince(props.peer, m.sentAt)
+      .then(() => whenShown(m.id));
+  };
+  /** Jump to the first message on or after a day (2.10.7). */
+  const jumpToDate = async (day: string): Promise<void> => {
+    const start = new Date(`${day}T00:00:00`);
+    if (Number.isNaN(start.getTime())) return;
+    await useDm.getState().loadSince(props.peer, start.toISOString());
+    const first = (useDm.getState().messages[props.peer] ?? []).find(
+      (m) => Date.parse(m.sentAt) >= start.getTime() && !m.notice,
+    );
+    if (!first) {
+      useCommunity.getState().notify('No messages from that day on.');
+      return;
+    }
+    whenShown(first.id);
   };
   return (
     <div className="conv-search">
@@ -1737,7 +1762,19 @@ function ConversationSearch(props: { peer: string; onClose(): void }): ReactElem
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Escape') props.onClose();
-          if (e.key === 'Enter' && shown[0]) jump(shown[0].id);
+          if (e.key === 'Enter' && shown[0]) jump(shown[0]);
+        }}
+      />
+      <input
+        type="date"
+        className="conv-search__date"
+        aria-label="Jump to a date"
+        title="Jump to a date"
+        value={date}
+        max={new Date().toISOString().slice(0, 10)}
+        onChange={(e) => {
+          setDate(e.target.value);
+          if (e.target.value) void jumpToDate(e.target.value);
         }}
       />
       <button className="icon-btn" aria-label="Close search" onClick={props.onClose}>
@@ -1748,7 +1785,7 @@ function ConversationSearch(props: { peer: string; onClose(): void }): ReactElem
           {shown.length === 0 && <li className="muted small">No messages found.</li>}
           {shown.map((m) => (
             <li key={m.id}>
-              <button className="conv-search__result" onClick={() => jump(m.id)}>
+              <button className="conv-search__result" onClick={() => jump(m)}>
                 <span className="muted small">{shortWhen(m.sentAt)}</span>
                 <span className="conv-search__text">
                   <Highlight text={m.text} query={query} max={140} />

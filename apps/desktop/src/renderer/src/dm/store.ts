@@ -31,6 +31,8 @@ interface DmState {
   load(): Promise<void>;
   handle(e: DmEvent): void;
   select(peer: string | null): void;
+  /** Loads the conversation back to `since` (ISO time), for jumping to older messages (2.10.7). */
+  loadSince(peer: string, since: string): Promise<void>;
   /** Runs an action; shows the error as a toast and returns null on failure. */
   run<A extends DmAction>(action: A): Promise<DmActionResult<A> | null>;
   open(peer: string, name?: string): Promise<boolean>;
@@ -124,6 +126,11 @@ export const useDm = create<DmState>((set, get) => ({
         get().select(e.peer);
         return;
     }
+  },
+
+  loadSince: async (peer, since) => {
+    const res = await window.river.dm.action({ a: 'messages', peer, since });
+    if (res.ok) set({ messages: { ...get().messages, [peer]: res.value } });
   },
 
   select: (peer) => {

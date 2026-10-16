@@ -6,6 +6,21 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.10.7] - 2026-10-16
+
+**Jump to a date.**
+
+### Added
+
+- **Jump to a date** in direct messages and groups: 🔍 in the conversation →
+  pick a day, and River goes to the first message from that day on.
+
+### Fixed
+
+- Search results older than the latest 500 messages in a conversation now open
+  too: River loads the conversation back to that message instead of saying it
+  is too old.
+
 ## [2.10.6] - 2026-10-16
 
 **Link previews in direct messages.**

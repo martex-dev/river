@@ -152,7 +152,14 @@ export function timerLabel(seconds: number): string {
 
 export const dmActionSchema = z.discriminatedUnion('a', [
   z.object({ a: z.literal('conversations') }).strict(),
-  z.object({ a: z.literal('messages'), peer: conv }).strict(),
+  z
+    .object({
+      a: z.literal('messages'),
+      peer: conv,
+      /** Also every message since this time (2.10.7: jump to a date or an older search result). */
+      since: z.iso.datetime().optional(),
+    })
+    .strict(),
   z
     .object({
       a: z.literal('open'),
