@@ -6,6 +6,20 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-10-16
+
+**Privacy controls.**
+
+### Added
+
+- Settings → System → **Privacy**:
+  - **Read receipts** on or off. Off: people do not see when you read their
+    messages, and you do not see when they read yours.
+  - **Typing indicators** on or off, the same both ways.
+  - **Screen security** (Android, Windows, macOS): blocks screenshots and screen
+    recordings of River; on Android it also shows River blank in the app
+    switcher.
+
 ## [2.5.0] - 2026-10-16
 
 **Send later, send quietly.**

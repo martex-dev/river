@@ -156,6 +156,8 @@ export const settingsSchema = z.object({
     appLock: z.boolean(),
     /** Added in 1.4.0 (Android): keep the connection while River is closed (a visible service). */
     background: z.boolean(),
+    /** Added in 2.6.0: block screenshots and screen recording of River (Android, Windows, macOS). */
+    screenSecurity: z.boolean(),
   }),
   /** Added in 1.0.11: communities hosted by this PC, from inside River. */
   hosting: z.object({
@@ -192,6 +194,10 @@ export const settingsSchema = z.object({
     customEmoji: z.string().max(16),
     /** When the custom status clears itself (ISO time), or null for never. */
     customUntil: z.string().max(40).nullable(),
+    /** Added in 2.6.0: send read receipts (off: you also do not see other people's). */
+    readReceipts: z.boolean(),
+    /** Added in 2.6.0: show "typing…" (off: you also do not see other people typing). */
+    typingIndicators: z.boolean(),
   }),
 });
 
@@ -238,10 +244,24 @@ export const DEFAULT_SETTINGS: Settings = {
     leaveAloneMinutes: 0,
     entranceSounds: {},
   },
-  system: { startAtLogin: false, closeToTray: true, appLock: false, background: false },
+  system: {
+    startAtLogin: false,
+    closeToTray: true,
+    appLock: false,
+    background: false,
+    screenSecurity: false,
+  },
   hosting: { enabled: false, keepAwake: true },
   rail: { order: [], folders: [] },
-  presence: { status: 'online', autoIdle: true, customText: '', customEmoji: '', customUntil: null },
+  presence: {
+    status: 'online',
+    autoIdle: true,
+    customText: '',
+    customEmoji: '',
+    customUntil: null,
+    readReceipts: true,
+    typingIndicators: true,
+  },
 };
 
 export const SETTINGS_SECTIONS = [

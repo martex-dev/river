@@ -281,7 +281,17 @@ async function start(): Promise<void> {
     },
     log,
   });
-  const dm = new DmService({ db: () => storage.db(), identity, account, community, log });
+  const dm = new DmService({
+    db: () => storage.db(),
+    identity,
+    account,
+    community,
+    log,
+    privacy: () => ({
+      readReceipts: settings.get().presence.readReceipts,
+      typing: settings.get().presence.typingIndicators,
+    }),
+  });
   // Linked devices (1.3): this device can join an account, or add another device to it.
   const link = new LinkService({
     identity,
@@ -473,6 +483,12 @@ async function start(): Promise<void> {
   };
   window.webContents.on('did-finish-load', applyZoom);
   settings.onChange(applyZoom);
+  // Settings → Privacy → Screen security (2.6): Windows and macOS keep River out of screenshots.
+  const applyScreenSecurity = (): void => {
+    if (!window.isDestroyed()) window.setContentProtection(settings.get().system.screenSecurity);
+  };
+  applyScreenSecurity();
+  settings.onChange(applyScreenSecurity);
   app.on('child-process-gone', (_e, details) => {
     if (details.type !== 'GPU' || details.reason === 'clean-exit') return;
     log.warn(`graphics process stopped (${details.reason})`);
