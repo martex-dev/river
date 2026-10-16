@@ -70,17 +70,23 @@ export const useOutbox = create<OutboxState>((set, get) => {
       return;
     }
     patch(localId, { status: 'sending', error: undefined });
-    const res = (await window.river.community.action({
-      a: 'send',
-      channelId: item.channelId,
-      text: item.text,
-      ...(item.replyTo ? { replyTo: item.replyTo } : {}),
-      ...(item.replyTo && item.noPing ? { noPing: true } : {}),
-      ...(item.attachments ? { attachments: item.attachments } : {}),
-      ...(item.alts && Object.keys(item.alts).length ? { alts: item.alts } : {}),
-      ...(item.embed ? { embed: item.embed } : {}),
-      ...(item.threadId ? { threadId: item.threadId } : {}),
-    })) as Result<ChatMessage>;
+    let res: Result<ChatMessage>;
+    try {
+      res = (await window.river.community.action({
+        a: 'send',
+        channelId: item.channelId,
+        text: item.text,
+        ...(item.replyTo ? { replyTo: item.replyTo } : {}),
+        ...(item.replyTo && item.noPing ? { noPing: true } : {}),
+        ...(item.attachments ? { attachments: item.attachments } : {}),
+        ...(item.alts && Object.keys(item.alts).length ? { alts: item.alts } : {}),
+        ...(item.embed ? { embed: item.embed } : {}),
+        ...(item.threadId ? { threadId: item.threadId } : {}),
+      })) as Result<ChatMessage>;
+    } catch (err) {
+      // The request itself broke (River's own channel to its core): never leave it "Sending…".
+      res = { ok: false, message: (err as Error)?.message || 'River could not send this message.' };
+    }
     if (res.ok) {
       set({ items: get().items.filter((i) => i.localId !== localId) });
       forget(localId);

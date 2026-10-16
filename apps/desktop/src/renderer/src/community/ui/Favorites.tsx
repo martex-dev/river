@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import type { AttachmentPointer, FavoriteMediaView } from '../../../../shared/community-actions.ts';
 import { create } from 'zustand';
+import { BlobUrlCache } from '../blob-cache.ts';
 import { useCommunity } from '../store.ts';
 import { Popover } from './common.tsx';
 
@@ -32,25 +33,29 @@ export const useFavorites = create<FavoritesState>((set, get) => ({
   },
 }));
 
-const urls = new Map<string, string>();
+/** Decrypted favourites: one decryption per picture however many show it, never revoked while shown. */
+const urls = new BlobUrlCache({ maxEntries: 120, maxBytes: 150 * 1024 * 1024 });
 
 function useFavoriteUrl(id: string): string | null {
   const [url, setUrl] = useState(() => urls.get(id) ?? null);
   useEffect(() => {
     if (url) return;
     let alive = true;
-    void window.river.community.action({ a: 'favoriteMediaBytes', id }).then((res) => {
-      if (!res.ok || !alive) return;
-      const list = useFavorites.getState().list;
-      const mime = list?.find((f) => f.id === id)?.mime ?? 'image/gif';
-      const made = URL.createObjectURL(new Blob([res.value as BlobPart], { type: mime }));
-      urls.set(id, made);
-      setUrl(made);
-    });
+    urls
+      .load(id, async () => {
+        const res = await window.river.community.action({ a: 'favoriteMediaBytes', id });
+        if (!res.ok) throw new Error(res.message);
+        const list = useFavorites.getState().list;
+        const mime = list?.find((f) => f.id === id)?.mime ?? 'image/gif';
+        return new Blob([res.value as BlobPart], { type: mime });
+      })
+      .then((made) => alive && setUrl(made))
+      .catch(() => undefined);
     return () => {
       alive = false;
     };
   }, [id, url]);
+  useEffect(() => (url ? urls.retain(id) : undefined), [url, id]);
   return url;
 }
 

@@ -132,6 +132,35 @@ All notable changes to River are documented here. The format follows
   screen-share request is answered instead of hanging; the hosting PC keeps
   following its own server after taking over from River Host.
 
+- **Phones**: Android's Back closes the topmost menu or dialog, shrinks a
+  full-screen call, then goes from a conversation to the list. River opening
+  a chat by itself (a notification, an accepted call, the quick switcher, a
+  shared file) now shows it instead of leaving the list on screen. ☰ no longer
+  covers dialogs or the call's ⌄; the member list can be closed again;
+  Settings, the image viewer, toasts and full-screen dialogs keep clear of the
+  notch and the gesture bar; menus stay above the iPhone keyboard and scroll
+  when long; swiping a chat to open the list works again.
+- **Touch**: menus, pickers and the image viewer open above the message, so a
+  swipe in the viewer no longer also replies and a tap in a menu no longer
+  toggles ❤️ or gets lost after a long press; double taps on reactions and
+  links are left alone; the hover toolbar no longer sticks after a tap.
+- **Message boxes**: on phones Return makes a new line (Send sends); Enter
+  never sends while an input method is composing. Typing during a voice
+  recording no longer throws it away, and the microphone is never left on.
+  A failed send gives its text and reply back without overwriting what you
+  typed since; files waiting to be sent stay when you switch chats.
+- **Direct messages**: no call buttons for requests not yet accepted, or while
+  a call rings; "Add people", renaming a group and "Mark as verified" show
+  success only when it worked; "Jump to latest" counts only new messages;
+  re-opening the open chat keeps your reply; the date picker allows today in
+  your time zone; adding an existing friend opens your chat.
+- **Channels**: older history no longer duplicates or stops early, and can be
+  loaded again after switching channels; failed thread replies can be
+  discarded; deleted thread replies disappear; threads open only once created;
+  /nick and edits report failures and keep your text; decrypted pictures are
+  kept within a memory budget; Escape closes only the topmost menu or dialog,
+  and pressing a menu's button closes it.
+
 ## [2.10.11] - 2026-10-16
 
 **Reply privately.**

@@ -2,7 +2,11 @@ import { findFiltered } from '../../../../shared/word-filter.ts';
 import { VoiceRecorder } from '../../components/VoiceMessage.tsx';
 import { firstLink, LinkCard } from './LinkCard.tsx';
 export { firstLink } from './LinkCard.tsx';
-import { useMessageGestures } from '../../components/gestures.ts';
+import { fromOverlay, useMessageGestures } from '../../components/gestures.ts';
+import { composing, enterSends } from '../../components/keys.ts';
+import { newSince } from '../../components/unread.ts';
+import { isPhone } from '../../../../shared/platform.ts';
+import { attempt } from '../attempt.ts';
 import { useSharedFiles, useSharedText } from '../../components/ShareSheet.tsx';
 import { tr } from '../../i18n.ts';
 import { MediaGallery } from './MediaGallery.tsx';
@@ -41,12 +45,14 @@ import { play } from '../sound.ts';
 import { typingNames, useCommunity } from '../store.ts';
 import {
   AttachmentList,
+  MAX_PENDING,
   PendingFiles,
   UploadCancelled,
   pendingFrom,
   galleryOf,
   GalleryContext,
   uploadAll,
+  usePendingFiles,
   type PendingFile,
 } from './Attachments.tsx';
 import {
@@ -113,9 +119,10 @@ export function TextChannel(props: {
     if (text) setSpoken(text);
   }, [channel.id, newest]);
   const [atBottom, setAtBottom] = useState(true);
-  // Messages that came in after you scrolled up (2.10.1), counted on "Jump to present".
-  const [leftAt, setLeftAt] = useState<number | null>(null);
-  const missed = leftAt === null ? 0 : messages.slice(leftAt).filter((m) => !m.mine).length;
+  // Messages that came in after you scrolled up (2.10.1), counted on "Jump to present": after the
+  // newest one shown then (a time, so older pages loaded above never count as new).
+  const [leftAt, setLeftAt] = useState<string | null>(null);
+  const missed = leftAt === null ? 0 : newSince(messages, leftAt);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const myName = memberOf(community, me)?.name ?? null;
   const names = useMemo(() => community.members.map((m) => m.name), [community.members]);
@@ -123,16 +130,15 @@ export function TextChannel(props: {
   const outgoing = useOutbox(
     useShallow((o) => o.items.filter((i) => i.channelId === channel.id && !i.threadId)),
   );
-  const [pending, setPending] = useState<PendingFile[]>([]);
+  // Files waiting to be sent stay with this channel when you switch away and back.
+  const { pending, setPending, add } = usePendingFiles(`c:${channel.id}`);
   const [dragging, setDragging] = useState(false);
   // Media channels open as a gallery (1.0.26); the chat is one click away.
   const [view, setView] = useState<'chat' | 'gallery'>(channel.media ? 'gallery' : 'chat');
   const canAttach = can(channel.permissions, Permission.ATTACH_FILES | Permission.SEND_MESSAGES);
   const addFiles = (files: Iterable<File>): void => {
     if (!canAttach) return s.notify('You cannot attach files in this channel.', 'error');
-    const next = [...pending, ...pendingFrom(files)];
-    if (next.length > 10) s.notify('You can attach up to 10 files to one message.', 'error');
-    setPending(next.slice(0, 10));
+    if (add(files) > 0) s.notify(`You can attach up to ${MAX_PENDING} files to one message.`, 'error');
   };
   // Shared from another app ("Share → River" on phones) into this channel.
   useSharedFiles(`c:${channel.id}`, addFiles);
@@ -316,7 +322,7 @@ export function TextChannel(props: {
         <MediaGallery
           messages={messages}
           more={messages.length >= 100 && !s.noMore[channel.id]}
-          onLoadOlder={() => void s.loadOlder(channel.id)}
+          onLoadOlder={() => s.loadOlder(channel.id)}
         />
       )}
       <GalleryContext.Provider value={gallery}>
@@ -336,7 +342,7 @@ export function TextChannel(props: {
             scrollMemory.set(channel.id, fromBottom);
             setAtBottom(fromBottom < 40);
             if (fromBottom < 40) setLeftAt(null);
-            else if (leftAt === null) setLeftAt(messages.length);
+            else if (leftAt === null) setLeftAt(messages.at(-1)?.sentAt ?? '');
           }}
         >
           {messages.length >= 100 && !s.noMore[channel.id] && (
@@ -561,6 +567,15 @@ function MessageView(props: {
       : {}),
   });
   const { onClickCapture: guardClick, ...touch } = gestures;
+  /** Starts a thread on this message and opens it — only once it exists. */
+  const createThread = (): void => {
+    const name = (m.text.split('\n')[0] ?? '').slice(0, 40).trim() || 'Thread';
+    void attempt({ a: 'createThread', channelId: channel.id, messageId: m.id, name }).then((ok) => {
+      if (!ok) return;
+      setFollowing(m.id, true);
+      void s.showThread(channel.id, m.id);
+    });
+  };
   return (
     <div
       id={`msg-${m.id}`}
@@ -568,14 +583,15 @@ function MessageView(props: {
       className={`msg ${props.grouped ? 'msg--grouped' : ''} ${m.mine ? 'msg--mine' : ''} ${m.mentionsMe ? 'msg--mention' : ''} ${editing ? 'is-editing' : ''} ${selecting ? 'is-selecting' : ''} ${selected ? 'is-selected' : ''}`}
       onClickCapture={(e) => {
         if (guardClick(e)) return;
-        if (!selecting) return;
+        // Clicks in a menu or dialog opened from this message are theirs.
+        if (!selecting || fromOverlay(e)) return;
         e.preventDefault();
         e.stopPropagation();
         toggleSelected();
       }}
       onContextMenu={(e) => {
-        // Keep the browser's own menu for selected text (copy).
-        if (window.getSelection()?.toString()) return;
+        // Menus opened from this message handle their own; the browser's own menu stays for selected text (copy).
+        if (fromOverlay(e) || window.getSelection()?.toString()) return;
         e.preventDefault();
         setMenu({ x: e.clientX, y: e.clientY });
       }}
@@ -787,11 +803,7 @@ function MessageView(props: {
               title={m.thread ? 'Open thread' : 'Create thread'}
               onClick={() => {
                 if (m.thread) return void s.showThread(channel.id, m.id);
-                const name = (m.text.split('\n')[0] ?? '').slice(0, 40).trim() || 'Thread';
-                void s.run({ a: 'createThread', channelId: channel.id, messageId: m.id, name }).then(() => {
-                  setFollowing(m.id, true);
-                  s.showThread(channel.id, m.id);
-                });
+                createThread();
               }}
             >
               🧵
@@ -860,11 +872,7 @@ function MessageView(props: {
               onClick={() => {
                 setMenu(null);
                 if (m.thread) return void s.showThread(channel.id, m.id);
-                const name = (m.text.split('\n')[0] ?? '').slice(0, 40).trim() || 'Thread';
-                void s.run({ a: 'createThread', channelId: channel.id, messageId: m.id, name }).then(() => {
-                  setFollowing(m.id, true);
-                  s.showThread(channel.id, m.id);
-                });
+                createThread();
               }}
             >
               {m.thread ? 'Open thread' : 'Create thread'}
@@ -1052,13 +1060,15 @@ function MessageView(props: {
 
 function EditBox({ message }: { message: ChatMessage }): ReactElement {
   const [text, setText] = useState(message.text);
-  const s = useCommunity();
   const save = async (): Promise<void> => {
     const value = text.trim();
     if (!value) return;
-    if (value !== message.text) {
-      await s.run({ a: 'edit', channelId: message.channelId, messageId: message.id, text: value });
-    }
+    // Not saved (offline, not allowed): keep editing, with the text as typed.
+    if (
+      value !== message.text &&
+      !(await attempt({ a: 'edit', channelId: message.channelId, messageId: message.id, text: value }))
+    )
+      return;
     useCommunity.setState({ editing: null });
   };
   return (
@@ -1072,7 +1082,7 @@ function EditBox({ message }: { message: ChatMessage }): ReactElement {
         onFocus={(e) => e.currentTarget.setSelectionRange(text.length, text.length)}
         onKeyDown={(e) => {
           if (e.key === 'Escape') useCommunity.setState({ editing: null });
-          if (e.key === 'Enter' && !e.shiftKey) {
+          if (e.key === 'Enter' && !e.shiftKey && !composing(e)) {
             e.preventDefault();
             void save();
           }
@@ -1138,6 +1148,7 @@ ${shared}`
   useCommunity((x) => x.typing[channel.id]);
   const typers = typingNames(channel.id, community, me);
   const canSend = can(channel.permissions, Permission.SEND_MESSAGES);
+  const phone = useRiver((r) => isPhone(r.info?.platform));
   const replyTo = s.replyTo && s.replyTo.channelId === channel.id ? s.replyTo : null;
   const replyPing = !replyTo || pingOffFor !== replyTo.id;
 
@@ -1209,16 +1220,19 @@ ${shared}`
       case 'poll':
         setPolling(true);
         return done();
-      case 'nick':
-        await s.run({
+      case 'nick': {
+        const ok = await attempt({
           a: 'setNickname',
           communityId: community.id,
           nickname: cmd.arg ? cmd.arg.slice(0, 64) : null,
         });
+        // Failed: the error is shown and the command stays in the box.
+        if (!ok) return true;
         s.notify(
           cmd.arg ? `Your nickname here is now ${cmd.arg.slice(0, 64)}.` : 'Back to your River name here.',
         );
         return done();
+      }
       case 'status':
         await useRiver.getState().updateSettings({
           presence: { customText: cmd.arg.slice(0, 128), customEmoji: '', customUntil: null },
@@ -1331,7 +1345,7 @@ ${shared}`
       : null;
     // Answering means you have caught up.
     if (useCommunity.getState().divider?.channelId === channel.id) useCommunity.setState({ divider: null });
-    for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
+    // Sent: their previews are freed as they leave the box.
     props.onPendingChange([]);
     // The outbox shows it as sending, waits if offline and keeps it with Retry if it fails.
     useOutbox.getState().send({
@@ -1573,7 +1587,7 @@ ${shared}`
                 setMentionIndex((mentionIndex + d + suggestions.length) % suggestions.length);
                 return;
               }
-              if (e.key === 'Tab' || e.key === 'Enter') {
+              if (e.key === 'Tab' || (e.key === 'Enter' && !composing(e))) {
                 e.preventDefault();
                 complete(suggestions[Math.min(mentionIndex, suggestions.length - 1)]!);
                 return;
@@ -1581,13 +1595,16 @@ ${shared}`
             }
             if (e.key === 'Escape' && replyTo) useCommunity.setState({ replyTo: null });
             if (e.key === 'ArrowUp' && text === '') {
-              const mine = [...(s.messages[channel.id] ?? [])].reverse().find((m) => m.mine && !m.poll);
+              // Your last message with text to edit (not a poll, a sticker or only files).
+              const mine = [...(s.messages[channel.id] ?? [])]
+                .reverse()
+                .find((m) => m.mine && !m.poll && !m.sticker && m.text);
               if (mine) {
                 e.preventDefault();
                 useCommunity.setState({ editing: mine.id });
               }
             }
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (enterSends(e, phone)) {
               e.preventDefault();
               void send();
             }
@@ -1602,8 +1619,13 @@ ${shared}`
         >
           <SmileIcon size={20} />
         </button>
-        {mayAttach && text.trim() === '' && props.pending.length === 0 && (
-          <VoiceRecorder disabled={!!uploading} onRecorded={(file) => void sendVoice(file)} />
+        {/* Always there, so typing (or a shared file arriving) never ends a recording. */}
+        {mayAttach && (
+          <VoiceRecorder
+            disabled={!!uploading}
+            idleHidden={text.trim() !== '' || props.pending.length > 0}
+            onRecorded={(file) => void sendVoice(file)}
+          />
         )}
         <button
           className="btn btn--primary"

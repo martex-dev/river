@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPortal } from 'react-dom';
 import {
+  fromOverlay,
   gestureOf,
   HOLD_MS,
   SWIPE_REPLY_PX,
@@ -124,6 +126,65 @@ describe('message gestures', () => {
     vi.advanceTimersByTime(100);
     tap(200, 300);
     expect(onDoubleTap).toHaveBeenCalledTimes(2);
+  });
+
+  it('swallow only the tap that ends a hold, not the next one (on the menu it opened)', () => {
+    vi.useFakeTimers();
+    const onClick = vi.fn();
+    render(<Message onHold={() => undefined} onClick={onClick} />);
+    const el = screen.getByTestId('msg');
+    fireEvent.touchStart(el, at(10, 10));
+    act(() => void vi.advanceTimersByTime(HOLD_MS + 10));
+    fireEvent.touchEnd(el, at(10, 10));
+    // No click came with that hold; the next tap is a real one.
+    fireEvent.touchStart(el, at(10, 10));
+    fireEvent.touchEnd(el, at(10, 10));
+    fireEvent.click(el);
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('do not take two taps on a reaction or link as a double tap on the message', () => {
+    vi.useFakeTimers();
+    const onDoubleTap = vi.fn();
+    function WithButton() {
+      const { onClickCapture, ...gestures } = useMessageGestures({ onDoubleTap });
+      return (
+        <div data-testid="msg" {...gestures} onClickCapture={onClickCapture}>
+          <button>❤️ 2</button>
+        </div>
+      );
+    }
+    render(<WithButton />);
+    const button = screen.getByText('❤️ 2');
+    for (let i = 0; i < 2; i++) {
+      fireEvent.touchStart(button, at(20, 20));
+      fireEvent.touchEnd(button, at(20, 20));
+    }
+    expect(onDoubleTap).not.toHaveBeenCalled();
+  });
+
+  it('leave touches in a menu or picture opened from the message alone', () => {
+    vi.useFakeTimers();
+    const onHold = vi.fn();
+    const onReply = vi.fn();
+    function WithPortal() {
+      const { onClickCapture, ...gestures } = useMessageGestures({ onHold, onReply });
+      return (
+        <div data-testid="msg" {...gestures} onClickCapture={onClickCapture}>
+          hello
+          {createPortal(<div data-testid="viewer">picture</div>, document.body)}
+        </div>
+      );
+    }
+    render(<WithPortal />);
+    const viewer = screen.getByTestId('viewer');
+    fireEvent.touchStart(viewer, at(200, 100));
+    fireEvent.touchMove(viewer, at(100, 102));
+    fireEvent.touchEnd(viewer, at(100, 102));
+    act(() => void vi.advanceTimersByTime(HOLD_MS + 10));
+    expect(onReply).not.toHaveBeenCalled();
+    expect(onHold).not.toHaveBeenCalled();
+    expect(fromOverlay({ target: viewer, currentTarget: screen.getByTestId('msg') })).toBe(true);
   });
 
   it('swallow the tap that ends a hold', () => {

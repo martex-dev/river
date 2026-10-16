@@ -154,7 +154,13 @@ html[data-platform='darwin'] .topbar {
   flex: 1;
   overflow-y: auto;
   padding: 8px 28px 40px;
-  animation: page-in var(--dur) var(--ease-out);
+  /* Fade only: a transform here would carry the fixed panels inside (a full-screen call) along. */
+  animation: content-in var(--dur) var(--ease-out);
+}
+@keyframes content-in {
+  from {
+    opacity: 0;
+  }
 }
 @keyframes page-in {
   from {
@@ -2161,7 +2167,8 @@ html[data-density='compact'] .member {
   content: '↩';
   position: absolute;
   top: 50%;
-  right: -44px;
+  /* Inside the message (its right padding), so a message never makes the list wider (2.10.12). */
+  right: 16px;
   display: grid;
   place-items: center;
   width: 30px;
@@ -2307,6 +2314,10 @@ html[data-density='compact'] .member {
   border: 0;
   background: radial-gradient(circle at 50% 30%, #1b2440, #05080f 70%);
   animation: none;
+}
+/* Toasts stay above a full-screen call (dialogs and menus render above the whole app). */
+body:has(.dm-call--full) .river-toast {
+  z-index: 900;
 }
 .dm-call--full .dm-call__stage {
   position: absolute;

@@ -35,6 +35,11 @@ interface DmState {
   loadSince(peer: string, since: string): Promise<void>;
   /** Runs an action; shows the error as a toast and returns null on failure. */
   run<A extends DmAction>(action: A): Promise<DmActionResult<A> | null>;
+  /**
+   * Runs an action that has no result (rename, verify, add members…): true when it worked, else
+   * the error is shown as a toast. (run() returns null for these whether or not they worked.)
+   */
+  attempt(action: DmAction): Promise<boolean>;
   open(peer: string, name?: string): Promise<boolean>;
 }
 
@@ -134,6 +139,8 @@ export const useDm = create<DmState>((set, get) => ({
   },
 
   select: (peer) => {
+    // Already open: keep the reply being written and the history loaded (a jump back in time).
+    if (peer === get().selected) return;
     set({ selected: peer, replyTo: null, editing: null });
     if (!peer) return;
     void window.river.dm.action({ a: 'messages', peer }).then((res) => {
@@ -149,6 +156,12 @@ export const useDm = create<DmState>((set, get) => ({
       return null;
     }
     return res.value;
+  },
+
+  attempt: async (action) => {
+    const res = await window.river.dm.action(action);
+    if (!res.ok) useCommunity.getState().notify(res.message, 'error');
+    return res.ok;
   },
 
   open: async (peer, name) => {

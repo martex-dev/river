@@ -1,11 +1,21 @@
 import { FavoriteStar } from './Favorites.tsx';
 import { isStickerFile } from './Stickers.tsx';
 import { isVoiceMessage, VoiceNote } from '../../components/VoiceMessage.tsx';
-import { useContext, createContext, useEffect, useRef, useState, type ReactElement } from 'react';
+import {
+  useCallback,
+  useContext,
+  createContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactElement,
+} from 'react';
+import { createPortal } from 'react-dom';
 import type { AttachmentPointer } from '../../../../shared/community-actions.ts';
 import { MAX_ATTACHMENT_BYTES } from '../../../../shared/community-actions.ts';
+import { BlobUrlCache } from '../blob-cache.ts';
 import { useCommunity } from '../store.ts';
-import { XIcon } from './common.tsx';
+import { useOverlayLayer, XIcon } from './common.tsx';
 
 /** Types River shows inline. Everything else is offered as a file to save — never opened automatically. */
 const INLINE_IMAGE = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif']);
@@ -26,21 +36,22 @@ export function formatBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/** Decrypted object URLs for this session, so scrolling back does not re-download. */
-const urls = new Map<string, string>();
+/**
+ * Decrypted object URLs for this session, so scrolling back does not re-download: at most 200
+ * files / 300 MB, the least recently used revoked first, never one on screen.
+ */
+const urls = new BlobUrlCache({ maxEntries: 200, maxBytes: 300 * 1024 * 1024 });
 
-export async function decryptToUrl(pointer: AttachmentPointer): Promise<string> {
-  const existing = urls.get(pointer.id);
-  if (existing) return existing;
-  const res = await window.river.community.action({ a: 'download', pointer });
-  if (!res.ok) throw new Error(res.message);
-  const type =
-    INLINE_IMAGE.has(pointer.mime) || INLINE_VIDEO.has(pointer.mime) || INLINE_AUDIO.has(pointer.mime)
-      ? pointer.mime
-      : 'application/octet-stream';
-  const url = URL.createObjectURL(new Blob([res.value as Uint8Array<ArrayBuffer>], { type }));
-  urls.set(pointer.id, url);
-  return url;
+export function decryptToUrl(pointer: AttachmentPointer): Promise<string> {
+  return urls.load(pointer.id, async () => {
+    const res = await window.river.community.action({ a: 'download', pointer });
+    if (!res.ok) throw new Error(res.message);
+    const type =
+      INLINE_IMAGE.has(pointer.mime) || INLINE_VIDEO.has(pointer.mime) || INLINE_AUDIO.has(pointer.mime)
+        ? pointer.mime
+        : 'application/octet-stream';
+    return new Blob([res.value as Uint8Array<ArrayBuffer>], { type });
+  });
 }
 
 function useDecrypted(
@@ -61,6 +72,8 @@ function useDecrypted(
       live = false;
     };
   }, [enabled, pointer, state.url]);
+  // While shown, the URL is never revoked.
+  useEffect(() => (state.url ? urls.retain(pointer.id) : undefined), [state.url, pointer.id]);
   return state;
 }
 
@@ -346,10 +359,11 @@ function Lightbox({
       return next;
     });
   };
+  // Escape (and the phone's Back button) closes the viewer, before whatever it was opened from.
+  useOverlayLayer(onClose);
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose();
-      else if (e.key === 'ArrowLeft' && prev) onNavigate?.(prev);
+      if (e.key === 'ArrowLeft' && prev) onNavigate?.(prev);
       else if (e.key === 'ArrowRight' && next) onNavigate?.(next);
       else if (e.key === '+' || e.key === '=') zoom(1);
       else if (e.key === '-') zoom(-1);
@@ -384,7 +398,8 @@ function Lightbox({
       useCommunity.getState().notify('River could not copy this image.', 'error');
     }
   };
-  return (
+  // Rendered into <body>, not inside the message: the message's swipe and taps stay out of it.
+  return createPortal(
     <div
       className="lightbox"
       role="dialog"
@@ -493,7 +508,8 @@ function Lightbox({
           }}
         />
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -513,6 +529,53 @@ export function pendingFrom(files: Iterable<File>): PendingFile[] {
     file,
     preview: INLINE_IMAGE.has(file.type) ? URL.createObjectURL(file) : null,
   }));
+}
+
+/** Frees the previews of files that are no longer waiting to be sent. */
+export function dropPreviews(files: Iterable<PendingFile>): void {
+  for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
+}
+
+/** At most this many files go with one message. */
+export const MAX_PENDING = 10;
+
+/** Files waiting to be sent, per channel or conversation, while River is open (like drafts). */
+const pendingStore = new Map<string, PendingFile[]>();
+
+/**
+ * The files waiting in one channel's or conversation's message box. They stay when you switch
+ * away and back (2.10.12); a file removed, sent or over the limit has its preview freed.
+ * `add` returns how many did not fit.
+ */
+export function usePendingFiles(key: string): {
+  pending: PendingFile[];
+  setPending(next: PendingFile[]): void;
+  add(files: Iterable<File>): number;
+} {
+  const [pending, setState] = useState<PendingFile[]>(() => pendingStore.get(key) ?? []);
+  const current = useRef(pending);
+  const setPending = useCallback(
+    (next: PendingFile[]): void => {
+      const kept = new Set(next.map((p) => p.key));
+      dropPreviews(current.current.filter((p) => !kept.has(p.key)));
+      current.current = next;
+      if (next.length) pendingStore.set(key, next);
+      else pendingStore.delete(key);
+      setState(next);
+    },
+    [key],
+  );
+  const add = useCallback(
+    (files: Iterable<File>): number => {
+      const next = [...current.current, ...pendingFrom(files)];
+      const over = next.slice(MAX_PENDING);
+      dropPreviews(over);
+      setPending(next.slice(0, MAX_PENDING));
+      return over.length;
+    },
+    [setPending],
+  );
+  return { pending, setPending, add };
 }
 
 /** Reads a chosen file and, for images, measures it and makes a tiny blurred preview. */
