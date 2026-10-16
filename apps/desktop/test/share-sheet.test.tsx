@@ -22,8 +22,22 @@ beforeEach(() => {
   };
   useDm.setState({
     conversations: [
-      { riverId: 'alice-id', kind: 'direct', members: [], isAdmin: false, name: 'Alice' } as never,
-      { riverId: 'bob-id', kind: 'direct', members: [], isAdmin: false, name: 'Bob' } as never,
+      {
+        riverId: 'alice-id',
+        kind: 'direct',
+        members: [],
+        isAdmin: false,
+        name: 'Alice',
+        state: 'accepted',
+      } as never,
+      {
+        riverId: 'bob-id',
+        kind: 'direct',
+        members: [],
+        isAdmin: false,
+        name: 'Bob',
+        state: 'accepted',
+      } as never,
     ],
   });
 });
@@ -78,5 +92,20 @@ describe('Share → River', () => {
     expect(screen.getByText(/Sharing text/)).toBeTruthy();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(useShare.getState().incoming).toBeNull();
+  });
+
+  it('offers only conversations you can write in', () => {
+    useDm.setState({
+      conversations: [
+        { riverId: 'a', kind: 'direct', members: [], name: 'Friend', state: 'accepted' } as never,
+        { riverId: 'b', kind: 'direct', members: [], name: 'Stranger', state: 'request' } as never,
+        { riverId: 'c', kind: 'direct', members: [], name: 'Blocked one', state: 'blocked' } as never,
+        { riverId: 'g', kind: 'group', members: [], name: 'Old group', state: 'left' } as never,
+      ],
+    });
+    render(<ShareSheet />);
+    act(() => shareListener!({ text: 'hi', files: [] }));
+    expect(screen.getByText('Friend')).toBeTruthy();
+    for (const name of ['Stranger', 'Blocked one', 'Old group']) expect(screen.queryByText(name)).toBeNull();
   });
 });
