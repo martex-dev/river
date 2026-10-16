@@ -272,6 +272,36 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     ).rejects.toThrow();
   });
 
+  it('link previews made by the sender travel sealed; a preview for another link is dropped', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await alice.dm.action({ a: 'open', peer: bob.riverId, name: 'Bob' });
+    const embed = {
+      url: 'https://example.org/a',
+      title: 'Example',
+      description: 'A page',
+      site: 'example.org',
+    };
+    const sent = await alice.dm.action({
+      a: 'send',
+      peer: bob.riverId,
+      text: 'look https://example.org/a',
+      embed,
+    });
+    expect(sent.embed).toEqual(embed);
+    const other = await alice.dm.action({
+      a: 'send',
+      peer: bob.riverId,
+      text: 'no link here',
+      embed,
+    });
+    expect(other.embed).toBeNull();
+    await bob.dm.sync();
+    const got = await bob.dm.action({ a: 'messages', peer: alice.riverId });
+    expect(got.find((m) => m.id === sent.id)?.embed).toEqual(embed);
+    expect(got.find((m) => m.id === other.id)?.embed).toBeNull();
+  });
+
   it('searches inside one conversation only', async () => {
     const alice = await person('Alice');
     const bob = await person('Bob');

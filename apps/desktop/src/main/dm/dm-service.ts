@@ -20,6 +20,7 @@ import { z } from 'zod';
 import {
   attachmentPointerSchema,
   avatarSchema,
+  linkEmbedSchema,
   pollInputSchema,
   type AttachmentPointer,
 } from '../../shared/community-actions.ts';
@@ -93,6 +94,8 @@ const messageFields = {
   silent: z.boolean().optional(),
   /** A poll (2.10.4). */
   poll: pollInputSchema.optional(),
+  /** The sender's link preview (2.10.6). */
+  embed: linkEmbedSchema.optional(),
 };
 
 const contentSchema = z.discriminatedUnion('t', [
@@ -618,6 +621,7 @@ export class DmService {
               attachments: content.attachments,
               ...(content.silent ? { silent: true } : {}),
               ...(content.poll ? { poll: content.poll } : {}),
+              ...(content.embed ? { embed: content.embed } : {}),
             }),
             sentAt,
             expiresAt,
@@ -1043,6 +1047,7 @@ export class DmService {
           replyTo: message.replyTo,
           attachments: message.attachments,
           ...(message.poll ? { poll: message.poll } : {}),
+          ...(message.embed ? { embed: message.embed } : {}),
         }),
         message.sentAt,
       );
@@ -1298,6 +1303,7 @@ export class DmService {
             replyTo: act.replyTo,
             attachments: act.attachments,
             ...(act.poll ? { poll: act.poll } : {}),
+            ...(act.embed ? { embed: act.embed } : {}),
           };
           const ttl = this.timerOf(act.peer);
           const expiresAt = ttl ? new Date(Date.parse(sentAt) + ttl * 1000).toISOString() : null;
@@ -1321,6 +1327,7 @@ export class DmService {
               ...(ttl ? { expiresIn: ttl } : {}),
               ...(act.silent ? { silent: true } : {}),
               ...(act.poll ? { poll: act.poll } : {}),
+              ...(act.embed ? { embed: act.embed } : {}),
             });
             this.db()
               .prepare(`UPDATE dm_messages SET status = 'sent' WHERE id = ? AND status = 'sending'`)
@@ -1334,6 +1341,7 @@ export class DmService {
               ...(group ? { groupId: group.id } : {}),
               ...(ttl ? { expiresIn: ttl } : {}),
               ...(act.poll ? { poll: act.poll } : {}),
+              ...(act.embed ? { embed: act.embed } : {}),
             });
           } catch (err) {
             this.db().prepare(`UPDATE dm_messages SET status = 'failed' WHERE id = ?`).run(id);
@@ -1774,6 +1782,7 @@ export class DmService {
       notice?: { timer?: unknown };
       silent?: unknown;
       poll?: unknown;
+      embed?: unknown;
     };
     const me = this.me();
     const reactions = JSON.parse(r.reactions) as Record<string, string[]>;
@@ -1801,8 +1810,15 @@ export class DmService {
       expiresAt: r.expires_at ?? null,
       silent: body.silent === true,
       poll: r.deleted ? null : readPoll(body.poll),
+      embed: r.deleted ? null : this.embedOf(body.embed, String(body.text ?? '')),
       notice: body.notice && typeof body.notice.timer === 'number' ? { timer: body.notice.timer } : null,
     };
+  }
+
+  /** A preview only for a link that is really in the message. */
+  private embedOf(raw: unknown, text: string): DirectMessageView['embed'] {
+    const e = linkEmbedSchema.safeParse(raw);
+    return e.success && text.includes(e.data.url) ? e.data : null;
   }
 
   private lastOf(conv: string): ConversationView['last'] {

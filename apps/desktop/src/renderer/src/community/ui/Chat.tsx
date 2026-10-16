@@ -1,5 +1,7 @@
 import { findFiltered } from '../../../../shared/word-filter.ts';
 import { VoiceRecorder } from '../../components/VoiceMessage.tsx';
+import { firstLink, LinkCard } from './LinkCard.tsx';
+export { firstLink } from './LinkCard.tsx';
 import { useMessageGestures } from '../../components/gestures.ts';
 import { useSharedFiles, useSharedText } from '../../components/ShareSheet.tsx';
 import { tr } from '../../i18n.ts';
@@ -30,7 +32,7 @@ import {
   type ReactElement,
 } from 'react';
 import { Permission } from '@river/protocol/permissions';
-import type { ChannelView, ChatMessage, CommunityView, LinkEmbed } from '../../../../shared/ipc.ts';
+import type { ChannelView, ChatMessage, CommunityView } from '../../../../shared/ipc.ts';
 import { useShallow } from 'zustand/react/shallow';
 import { announcement } from '../announce.ts';
 import { useOutbox, type Outgoing } from '../outbox.ts';
@@ -1816,26 +1818,6 @@ function SearchPanel(props: { community: CommunityView; onJump(id: string): void
           </span>
         </button>
       ))}
-    </div>
-  );
-}
-
-/** The first web link in a message, outside `code` (for a link preview). */
-export function firstLink(text: string): string | null {
-  const plain = text.replace(/```[\s\S]*?```/g, ' ').replace(/`[^`]*`/g, ' ');
-  const m = /https?:\/\/[^\s<>()]+[^\s<>().,!?:;'"]/.exec(plain);
-  return m ? m[0] : null;
-}
-
-/** A sender-made link preview (1.0.23): opening it asks first, like any link. */
-function LinkCard({ embed }: { embed: LinkEmbed }): ReactElement {
-  return (
-    <div className="link-card">
-      <span className="link-card__site muted small">{embed.site}</span>
-      <button className="link-card__title" onClick={() => void window.river.links.openUrl(embed.url)}>
-        {embed.title}
-      </button>
-      {embed.description && <span className="link-card__text small">{embed.description}</span>}
     </div>
   );
 }

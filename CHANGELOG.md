@@ -6,6 +6,17 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.10.6] - 2026-10-16
+
+**Link previews in direct messages.**
+
+### Added
+
+- With **link previews** turned on (Settings → Appearance), links you send in
+  direct messages and groups get a preview card, as in channels. Your own
+  device makes the preview and seals it in the encrypted message; the people
+  you write to never fetch anything, and River's server never sees the link.
+
 ## [2.10.5] - 2026-10-16
 
 **Polish: full-screen calls on phones.**

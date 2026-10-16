@@ -2,6 +2,7 @@ import type { CallView } from '../../../shared/dm.ts';
 import { VoiceRecorder } from '../components/VoiceMessage.tsx';
 import { haptic, useMessageGestures } from '../components/gestures.ts';
 import { CreatePollDialog, PollCard } from '../community/ui/Poll.tsx';
+import { firstLink, LinkCard } from '../community/ui/LinkCard.tsx';
 import { isVote } from '../../../shared/poll.ts';
 import { create } from 'zustand';
 import { useSharedFiles, useSharedText } from '../components/ShareSheet.tsx';
@@ -1223,6 +1224,7 @@ function DmMessage(props: {
             </div>
           )}
           {!m.deleted && !m.mine && m.text && <InviteCard text={m.text} />}
+          {m.embed && <LinkCard embed={m.embed} />}
           {m.poll && (
             <PollCard
               poll={m.poll}
@@ -1850,6 +1852,14 @@ ${shared}`
       }
       return;
     }
+    // A link preview, only if you turned them on (made here, sealed in the message), within a moment.
+    const link = useRiver.getState().settings?.appearance.linkPreviews ? firstLink(value) : null;
+    const embed = link
+      ? await Promise.race([
+          window.river.links.preview(link).catch(() => null),
+          new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 3000)),
+        ])
+      : null;
     const sent = await dm.run({
       a: 'send',
       peer: c.riverId,
@@ -1857,6 +1867,7 @@ ${shared}`
       ...(replyTo ? { replyTo: replyTo.id } : {}),
       ...(attachments ? { attachments } : {}),
       ...(options.silent ? { silent: true } : {}),
+      ...(embed ? { embed } : {}),
     });
     setUploading(null);
     if (!sent) setText(value);
