@@ -6,6 +6,41 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**Server audit fixes.**
+
+### Security
+
+- Channel and category permission overwrites can only allow what the person
+  editing them holds there, and never Administrator.
+- Self-assignable roles cannot be given moderation permissions later, and are
+  checked again when a member picks them.
+- `RIVER_TRUST_PROXY=true` now trusts only a proxy on the same machine (the
+  River Host tunnel); a forged `X-Forwarded-For` no longer escapes per-address
+  limits. Proxies elsewhere are named by address or range.
+- A blocked sender is answered like for an account that does not exist, before
+  any other check, so the answer no longer reveals the block. Apps show
+  "That no longer exists" instead of pretending the message was sent.
+- Webhooks stop posting once their creator is removed or may no longer manage
+  the channel; wrong tokens no longer use up a webhook's rate limit; webhooks
+  are deleted with their channel (and orphans are removed).
+- Timed-out and pending members cannot join existing reactions; only members
+  who may rotate move a community's key epoch (rate limited).
+- Realtime connections end when their session expires or is revoked.
+
+### Fixed
+
+- A linked device that never published keys no longer makes its account
+  unreachable; one device's full mailbox drops only its copy.
+- One-time prekeys are claimed atomically (no key handed out twice on
+  PostgreSQL); Kyber one-time prekeys are capped; a last-resort Kyber key whose
+  ID matches a one-time key is stored instead of dropped.
+- Device-list updates, invite use counts and the storage quota are now safe
+  against concurrent requests; re-giving a role ignores an expired end time.
+- Voice seats and call rooms belong to the connection that joined: a crashed
+  desktop leaves the call even while the phone stays connected. Realtime events
+  are handled in order per connection; a connection that closes while signing in
+  is never kept; deleting a community ends its voice calls.
+
 ## [2.10.11] - 2026-10-16
 
 **Reply privately.**
