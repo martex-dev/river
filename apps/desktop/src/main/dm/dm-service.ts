@@ -58,7 +58,15 @@ interface ScheduledItem {
   sendAt: string;
   silent: boolean;
   failed: boolean;
+  /** One message (and ID) per scheduled item, reused by every retry. */
+  messageId?: string;
+  /** Failed attempts so far, and when to try again (back-off). */
+  tries?: number;
+  retryAt?: string;
 }
+
+/** Waits between retries of a scheduled message that failed: 30 s, 1 min, 2 min … at most 1 h. */
+const scheduledBackoff = (tries: number): number => Math.min(30_000 * 2 ** Math.max(0, tries - 1), 3_600_000);
 
 function scheduledView(x: ScheduledItem): ScheduledView {
   return {
@@ -112,6 +120,23 @@ const contentSchema = z.discriminatedUnion('t', [
     /** The conversation: a person's River ID or a group ID. */
     conv: z.string().min(1).max(64),
     message: z.object(messageFields).strict(),
+  }),
+  /**
+   * Linked devices: an edit, delete for everyone, reaction, pin, timer change or read made on
+   * another of this account's devices. Accepted only from this account's own devices.
+   */
+  z.object({
+    v: z.literal(1),
+    t: z.literal('syncOp'),
+    conv: z.string().min(1).max(64),
+    op: z.discriminatedUnion('t', [
+      z.object({ t: z.literal('edit'), id: msgId, text: z.string().min(1).max(4000) }),
+      z.object({ t: z.literal('delete'), id: msgId }),
+      z.object({ t: z.literal('react'), id: msgId, emoji: z.string().min(1).max(32), on: z.boolean() }),
+      z.object({ t: z.literal('pin'), id: msgId, pinned: z.boolean() }),
+      z.object({ t: z.literal('timer'), seconds: z.number().int().min(0).max(MAX_TIMER) }),
+      z.object({ t: z.literal('read'), at: z.iso.datetime() }),
+    ]),
   }),
   /** Disappearing messages timer for this conversation (2.4); 0 turns it off. */
   z.object({
@@ -261,6 +286,28 @@ export type SocialContent = Extract<
 >;
 const SOCIAL = new Set(['post', 'postDelete', 'postReact', 'postComment', 'postActivity', 'storySeen']);
 type Content = z.infer<typeof contentSchema>;
+type SyncOp = Extract<Content, { t: 'syncOp' }>['op'];
+type SendAct = Extract<z.infer<typeof dmActionSchema>, { a: 'send' }>;
+
+/**
+ * A decrypted message that was not applied yet. libsignal never decrypts a message twice, so the
+ * plaintext is kept (in this device's encrypted database) until it is applied.
+ */
+interface Inbound {
+  sender: string;
+  receivedAt: string;
+  content: Content;
+  /** Group traffic for a group this device does not know yet: applied once its details arrive. */
+  waitGroup?: string;
+  /** When it was kept, and how often applying it failed. */
+  keptAt: number;
+  tries: number;
+}
+const INBOX_MAX_WAITING = 500;
+const INBOX_WAIT_MS = 7 * 86_400_000;
+const INBOX_MAX_TRIES = 5;
+/** Decrypted messages kept in memory while storage is unavailable (their envelopes stay on the server). */
+const UNDELIVERED_MAX = 1000;
 
 const MAX_GROUP = 32;
 const isGroupId = (id: string): boolean => /^[A-Za-z0-9_-]{22}$/.test(id);
@@ -306,6 +353,8 @@ interface MessageRow {
   status: string;
   reactions: string;
   expires_at?: string | null;
+  /** When this device stored it (local clock); unread counts use it, ordering uses sent_at. */
+  received_at?: string | null;
 }
 
 interface ContactRow {
@@ -333,8 +382,17 @@ export class DmService {
   private readonly listeners = new Set<(e: DmEvent) => void>();
   private draining = false;
   private socialHandler: ((peer: string, content: SocialContent) => void) | null = null;
-  /** Set after restoring a backup: contacts need new sessions with us. */
+  /** Set after restoring a backup: contacts need new sessions with us (also kept in meta). */
   private reintroduce = false;
+  private reintroducing = false;
+  /** Called when someone is blocked here or on another of our devices (SocialService drops their posts). */
+  private readonly blockListeners = new Set<(riverId: string) => void>();
+  /** Databases whose leftover 'sending' messages (from a crash) were already marked failed. */
+  private readonly recovered = new WeakSet<LocalDatabase>();
+  /** Decrypted messages that could not be applied or kept while storage was unavailable. */
+  private readonly undelivered = new Map<string, Inbound>();
+  /** Scheduled messages being sent right now, and whether they were cancelled meanwhile. */
+  private readonly scheduledInFlight = new Map<string, { cancelled: boolean }>();
 
   constructor(deps: Deps) {
     this.deps = deps;
@@ -380,6 +438,15 @@ export class DmService {
   private db(): LocalDatabase {
     const db = this.deps.db();
     if (!db) throw new CommunityError('River is locked.');
+    if (!this.recovered.has(db)) {
+      this.recovered.add(db);
+      // Messages still 'sending' when River last stopped were never confirmed: show them as failed.
+      try {
+        db.prepare(`UPDATE dm_messages SET status = 'failed' WHERE status = 'sending'`).run();
+      } catch (err) {
+        this.deps.log.warn(`Could not check for unsent messages: ${(err as Error).message}`);
+      }
+    }
     return db;
   }
 
@@ -499,6 +566,8 @@ export class DmService {
     if (this.draining) return;
     this.draining = true;
     try {
+      // Messages decrypted earlier whose applying failed get another go first.
+      await this.serial(async () => this.retryKept());
       for (let page = 0; page < 50; page++) {
         const box = await this.deps.community.api('/messages', 'GET', undefined, mailboxResponseSchema);
         const done: string[] = [];
@@ -522,41 +591,205 @@ export class DmService {
   /** Decrypts and applies one envelope. Returns true when it can be acknowledged (deleted from the server). */
   private async receive(env: EnvelopeWire): Promise<boolean> {
     if (env.recipientDevice !== this.deviceId()) return false;
-    const contact = this.contact(env.sender);
-    let content: Content;
-    try {
-      const plain = await this.protocol().decrypt(env.sender, env.senderDevice, env);
-      content = contentSchema.parse(JSON.parse(new TextDecoder().decode(plain)));
-    } catch (err) {
-      this.deps.log.warn(`Dropped a direct message that could not be decrypted (${(err as Error).name})`);
-      return true;
-    }
-    if (env.sender === this.me()) {
-      if (content.t === 'sync') this.applySync(content.conv, content.message);
-      else if (content.t === 'contactsReq') void this.shareContacts();
-      else if (content.t === 'contacts') {
-        this.applyContacts(content.contacts);
-        // Names this device does not have yet (its own name stays as typed here).
-        if (content.devices) this.deps.account.setDeviceNames(content.devices, true);
+    // Decrypted before, but storage was unavailable to apply or keep it: libsignal will not decrypt
+    // the same message twice, so use the plaintext kept in memory.
+    let inbound = this.undelivered.get(env.id);
+    if (!inbound) {
+      let content: Content;
+      try {
+        const plain = await this.protocol().decrypt(env.sender, env.senderDevice, env);
+        content = contentSchema.parse(JSON.parse(new TextDecoder().decode(plain)));
+      } catch (err) {
+        this.deps.log.warn(`Dropped a direct message that could not be decrypted (${(err as Error).name})`);
+        return true;
       }
-      return true;
+      inbound = { sender: env.sender, receivedAt: env.receivedAt, content, keptAt: Date.now(), tries: 0 };
+    }
+    return this.process(env.id, inbound);
+  }
+
+  /**
+   * Applies a decrypted message. The ratchet has already moved on, so a message whose applying
+   * fails is never just dropped: it is kept in this device's encrypted database (and the envelope
+   * acknowledged) and applied again on the next sync. If even keeping it fails (storage locked or
+   * unavailable), the plaintext stays in memory and the envelope stays on the server, so its next
+   * delivery uses the plaintext instead of failing to decrypt.
+   */
+  private process(id: string, inbound: Inbound): boolean {
+    let waitGroup: string | null;
+    try {
+      waitGroup = this.apply(inbound);
+    } catch (err) {
+      this.deps.log.warn(`A direct message could not be applied yet: ${(err as Error).message}`);
+      try {
+        this.keep(id, { ...inbound, tries: inbound.tries + 1 });
+        this.undelivered.delete(id);
+        return true;
+      } catch {
+        if (this.undelivered.size < UNDELIVERED_MAX || this.undelivered.has(id)) {
+          this.undelivered.set(id, inbound);
+          return false;
+        }
+        return true;
+      }
+    }
+    this.undelivered.delete(id);
+    if (waitGroup) {
+      // Group traffic that arrived before the group's details: keep it for a while (bounded).
+      try {
+        if (this.keptCount() < INBOX_MAX_WAITING) this.keep(id, { ...inbound, waitGroup });
+      } catch (err) {
+        this.deps.log.warn(`A group message could not be kept: ${(err as Error).message}`);
+      }
+    }
+    return true;
+  }
+
+  private keep(id: string, inbound: Inbound): void {
+    this.setMeta(`inbox:${id}`, JSON.stringify(inbound));
+  }
+
+  private unkeep(id: string): void {
+    this.storage().delete('meta', `dm:inbox:${id}`);
+  }
+
+  private keptCount(): number {
+    return (
+      this.db()
+        .prepare(`SELECT COUNT(*) AS n FROM signal_store WHERE kind = 'meta' AND id LIKE 'dm:inbox:%'`)
+        .get() as { n: number }
+    ).n;
+  }
+
+  /** Kept messages, oldest first (unreadable entries are removed). */
+  private kept(): Array<[string, Inbound]> {
+    const rows = this.db()
+      .prepare(`SELECT id, value FROM signal_store WHERE kind = 'meta' AND id LIKE 'dm:inbox:%'`)
+      .all() as Array<{ id: string; value: Uint8Array }>;
+    const out: Array<[string, Inbound]> = [];
+    for (const r of rows) {
+      const id = r.id.slice('dm:inbox:'.length);
+      try {
+        const raw = JSON.parse(Buffer.from(r.value).toString('utf8')) as Inbound;
+        out.push([
+          id,
+          {
+            sender: z.uuid().parse(raw.sender),
+            receivedAt: z.iso.datetime().parse(raw.receivedAt),
+            content: contentSchema.parse(raw.content),
+            ...(raw.waitGroup ? { waitGroup: msgId.parse(raw.waitGroup) } : {}),
+            keptAt: Number(raw.keptAt) || 0,
+            tries: Number(raw.tries) || 0,
+          },
+        ]);
+      } catch {
+        this.unkeep(id);
+      }
+    }
+    return out.sort((a, b) => a[1].keptAt - b[1].keptAt);
+  }
+
+  /** Applies kept messages again (all of them, or those waiting for one group that just arrived). */
+  private retryKept(onlyGroup?: string): void {
+    let list: Array<[string, Inbound]>;
+    try {
+      list = this.kept();
+    } catch {
+      return;
+    }
+    for (const [id, x] of list) {
+      if (onlyGroup && x.waitGroup !== onlyGroup) continue;
+      try {
+        // Already applied meanwhile (a group that arrived replayed what waited for it).
+        if (!this.meta(`inbox:${id}`)) continue;
+        if (x.waitGroup && !this.group(x.waitGroup)) {
+          if (Date.now() - x.keptAt > INBOX_WAIT_MS) this.unkeep(id);
+          continue;
+        }
+        const { waitGroup: _w, ...rest } = x;
+        // Unlink first: applying a group's details replays what waited for it (no double apply).
+        this.unkeep(id);
+        try {
+          const wait = this.apply(rest);
+          if (wait) this.keep(id, { ...rest, waitGroup: wait });
+        } catch (err) {
+          if (x.tries + 1 < INBOX_MAX_TRIES) this.keep(id, { ...x, tries: x.tries + 1 });
+          else this.deps.log.warn(`Dropped a direct message that kept failing: ${(err as Error).message}`);
+        }
+      } catch {
+        return; // storage went away: next time
+      }
+    }
+  }
+
+  /**
+   * Applies one decrypted message. Returns a group ID when it is traffic for a group this device
+   * does not know yet (it is then kept until the group's details arrive), otherwise null.
+   */
+  private apply(inbound: Inbound): string | null {
+    const { content, sender: peer } = inbound;
+    const me = this.me();
+    if (peer === me) {
+      switch (content.t) {
+        case 'sync':
+          return this.applySync(content.conv, content.message);
+        case 'syncOp':
+          return this.applySyncOp(content.conv, content.op);
+        case 'contactsReq':
+          void this.shareContacts();
+          return null;
+        case 'contacts':
+          this.applyContacts(content.contacts);
+          // Names this device does not have yet (its own name stays as typed here).
+          if (content.devices) this.deps.account.setDeviceNames(content.devices, true);
+          return null;
+        case 'group':
+          // A group this account created or changed (as its admin) on another device.
+          this.applyGroupUpdate(me, content);
+          return null;
+        case 'groupLeave': {
+          // We left (or removed) the group on another device.
+          const g = this.group(content.groupId);
+          if (g && g.state !== 'left') {
+            this.saveGroup({
+              ...g,
+              state: 'left',
+              members: JSON.stringify(this.list(g.members).filter((m) => m !== me)),
+              admins: JSON.stringify(this.list(g.admins).filter((m) => m !== me)),
+            });
+            this.emitConversations();
+          }
+          return null;
+        }
+        default:
+          return null;
+      }
     }
     // Device-to-device content is only ever accepted from this account's own devices.
-    if (content.t === 'sync' || content.t === 'contactsReq' || content.t === 'contacts') return true;
-    if (contact?.state === 'blocked') return true;
-    const peer = env.sender;
+    if (
+      content.t === 'sync' ||
+      content.t === 'syncOp' ||
+      content.t === 'contactsReq' ||
+      content.t === 'contacts'
+    )
+      return null;
+    const contact = this.contact(peer);
+    if (contact?.state === 'blocked') return null;
     if (SOCIAL.has(content.t)) {
       this.socialHandler?.(peer, content as SocialContent);
-      return true;
+      return null;
     }
     if (content.t === 'ckey' || content.t === 'ckeyReq') {
       // Community key exchange between members; not a conversation.
       const { v: _v, ...message } = content;
       void this.deps.community.handleKeyMessage(peer, message).catch(() => undefined);
-      return true;
+      return null;
     }
     const now = new Date();
-    if (content.t === 'group') return this.applyGroupUpdate(peer, content);
+    if (content.t === 'group') {
+      this.applyGroupUpdate(peer, content);
+      return null;
+    }
     if (content.t === 'groupLeave') {
       const g = this.group(content.groupId);
       if (g) {
@@ -567,11 +800,12 @@ export class DmService {
         });
         this.emitConversations();
       }
-      return true;
+      return null;
     }
     if (content.t === 'profile' && content.groupId) {
       const g = this.group(content.groupId);
-      if (g && this.list(g.members).includes(peer)) {
+      if (!g) return content.groupId;
+      if (this.list(g.members).includes(peer)) {
         const profiles = JSON.parse(g.profiles) as Record<
           string,
           { name: string | null; avatar: string | null }
@@ -583,35 +817,37 @@ export class DmService {
         this.saveGroup({ ...g, profiles: JSON.stringify(profiles) });
         this.emitConversations();
       }
-      return true;
+      return null;
     }
     // Group traffic is accepted only from current members of a group we are in.
     const groupId = 'groupId' in content ? content.groupId : undefined;
     let conv = peer;
     if (groupId) {
       const g = this.group(groupId);
-      if (!g || g.state === 'left' || !this.list(g.members).includes(peer)) return true;
+      // Not known yet (its details may still be on the way): wait for them, except typing.
+      if (!g) return content.t === 'typing' ? null : groupId;
+      if (g.state === 'left' || !this.list(g.members).includes(peer)) return null;
       conv = groupId;
     }
     switch (content.t) {
       case 'msg': {
         if (!groupId && !contact) this.upsertContact(peer, 'request');
         const claimed = Date.parse(content.sentAt);
-        const received = Date.parse(env.receivedAt);
+        const received = Date.parse(inbound.receivedAt);
         // A sender's clock may be wrong or lying: keep timestamps near when the server got it.
         const sentAt = new Date(
           Math.min(Math.max(claimed, received - 30 * 86_400_000), received + 60_000) || now.getTime(),
         ).toISOString();
         const exists = this.db().prepare('SELECT 1 FROM dm_messages WHERE id = ?').get(content.id);
-        if (exists) return true;
-        // A disappearing message's time starts when it reaches this device.
-        const expiresAt = content.expiresIn
-          ? new Date(now.getTime() + content.expiresIn * 1000).toISOString()
-          : null;
+        if (exists) return null;
+        // A disappearing message's time starts when it reaches this device; this device's own
+        // timer for the conversation applies too (the longer of the two).
+        const ttl = Math.max(this.timerOf(conv), content.expiresIn ?? 0);
+        const expiresAt = ttl ? new Date(now.getTime() + ttl * 1000).toISOString() : null;
         this.db()
           .prepare(
-            `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions, expires_at)
-             VALUES (?, ?, ?, ?, ?, 'received', '{}', ?)`,
+            `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions, expires_at, received_at)
+             VALUES (?, ?, ?, ?, ?, 'received', '{}', ?, ?)`,
           )
           .run(
             content.id,
@@ -627,6 +863,7 @@ export class DmService {
             }),
             sentAt,
             expiresAt,
+            now.toISOString(),
           );
         this.db().prepare('UPDATE contacts SET heard_from = 1 WHERE river_id = ?').run(peer);
         this.emitMessage(content.id, true);
@@ -640,23 +877,17 @@ export class DmService {
             () => undefined,
           );
         }
-        return true;
+        return null;
       }
       case 'edit': {
         const row = this.row(content.id);
-        if (row && row.peer === conv && row.sender === peer && !row.deleted) {
-          const body = JSON.parse(row.body) as Record<string, unknown>;
-          this.db()
-            .prepare('UPDATE dm_messages SET body = ?, edited_at = ? WHERE id = ?')
-            .run(JSON.stringify({ ...body, text: content.text }), now.toISOString(), content.id);
-          this.emitMessage(content.id, false);
-        }
-        return true;
+        if (row && row.peer === conv && row.sender === peer && !row.deleted) this.editRow(row, content.text);
+        return null;
       }
       case 'pin': {
         const row = this.row(content.id);
         if (row && row.peer === conv && !row.deleted) this.setPinned(row, content.pinned);
-        return true;
+        return null;
       }
       case 'delete': {
         const row = this.row(content.id);
@@ -669,41 +900,41 @@ export class DmService {
           this.emitMessage(content.id, false);
           this.emitConversations();
         }
-        return true;
+        return null;
       }
       case 'react': {
         const row = this.row(content.id);
         if (row && row.peer === conv) this.applyReaction(row, peer, content.emoji, content.on);
-        return true;
+        return null;
       }
       case 'receipt': {
         // Read receipts off: you do not see other people's either (delivered still shows).
-        if (content.kind === 'read' && !this.privacy().readReceipts) return true;
+        if (content.kind === 'read' && !this.privacy().readReceipts) return null;
         const rank = { sending: 0, failed: 0, sent: 1, delivered: 2, read: 3 } as Record<string, number>;
         for (const id of content.ids) {
           const row = this.row(id);
-          if (!row || row.peer !== peer || row.sender !== this.me()) continue;
+          if (!row || row.peer !== peer || row.sender !== me) continue;
           if ((rank[content.kind] ?? 0) > (rank[row.status] ?? 0)) {
             this.db().prepare('UPDATE dm_messages SET status = ? WHERE id = ?').run(content.kind, id);
             this.emitMessage(id, false);
           }
         }
-        return true;
+        return null;
       }
       case 'timer': {
-        if (!groupId && contact?.state !== 'accepted') return true;
+        if (!groupId && contact?.state !== 'accepted') return null;
         this.applyTimer(conv, content.seconds, peer);
-        return true;
+        return null;
       }
       case 'typing':
-        if (!this.privacy().typing) return true;
+        if (!this.privacy().typing) return null;
         if (groupId) this.emit({ t: 'typing', peer: conv, who: peer });
         else if (contact?.state === 'accepted') this.emit({ t: 'typing', peer });
-        return true;
+        return null;
       case 'call': {
         // Only accepted contacts can ring you; call setup is never stored.
-        if (contact?.state !== 'accepted') return true;
-        if (content.data !== undefined && JSON.stringify(content.data).length > 30_000) return true;
+        if (contact?.state !== 'accepted') return null;
+        if (content.data !== undefined && JSON.stringify(content.data).length > 30_000) return null;
         const event = {
           t: 'call' as const,
           peer,
@@ -716,7 +947,7 @@ export class DmService {
         if (content.kind === 'invite') this.ringing = { event, at: Date.now() };
         else if (this.ringing?.event.callId === content.callId) this.ringing = null;
         this.emit(event);
-        return true;
+        return null;
       }
       case 'profile': {
         if (!contact) this.upsertContact(peer, 'request');
@@ -732,34 +963,83 @@ export class DmService {
             peer,
           );
         this.emitConversations();
-        return true;
+        return null;
       }
       default:
-        return true;
+        return null;
     }
   }
 
   /**
    * After a restore our old sessions are gone (they are never in backups), so
    * message every contact once: our new PreKey message gives them a fresh
-   * session with us, and their later messages decrypt again.
+   * session with us, and their later messages decrypt again. Remembered in
+   * this device's database until everyone has been reached.
    */
   afterRestore(): void {
     this.protocolCache = null;
     this.reintroduce = true;
+    try {
+      this.setMeta('reintroduce', JSON.stringify({ targets: this.reintroductionTargets(), tries: 0 }));
+    } catch {
+      // storage unavailable: the in-memory flag covers this run
+    }
+  }
+
+  /** Friends get our profile; people we share only groups with get a group-scoped one (no request). */
+  private reintroductionTargets(): Array<{ peer: string; groupId?: string }> {
+    const me = this.me();
+    const friends = new Set(this.friends());
+    const targets: Array<{ peer: string; groupId?: string }> = [...friends].map((peer) => ({ peer }));
+    const reached = new Set(friends);
+    for (const g of this.db()
+      .prepare(`SELECT id, members FROM dm_groups WHERE state != 'left'`)
+      .all() as Array<{
+      id: string;
+      members: string;
+    }>) {
+      for (const m of this.list(g.members)) {
+        if (m === me || reached.has(m)) continue;
+        reached.add(m);
+        targets.push({ peer: m, groupId: g.id });
+      }
+    }
+    return targets;
   }
 
   private async reintroduceIfNeeded(): Promise<void> {
-    if (!this.reintroduce) return;
-    this.reintroduce = false;
-    const peers = new Set<string>(this.friends());
-    for (const g of this.db().prepare(`SELECT members FROM dm_groups WHERE state != 'left'`).all() as Array<{
-      members: string;
-    }>) {
-      for (const m of this.list(g.members)) peers.add(m);
+    if (this.reintroducing) return;
+    type Saved = { targets: Array<{ peer: string; groupId?: string }>; tries: number };
+    const saved = ((): Saved | null => {
+      try {
+        const raw = this.meta('reintroduce');
+        const parsed = raw ? (JSON.parse(raw) as Saved) : null;
+        return parsed && Array.isArray(parsed.targets) ? parsed : null;
+      } catch {
+        return null;
+      }
+    })();
+    if (!saved && !this.reintroduce) return;
+    this.reintroducing = true;
+    try {
+      const targets = saved?.targets ?? this.reintroductionTargets();
+      this.reintroduce = false;
+      const failed: Array<{ peer: string; groupId?: string }> = [];
+      for (const t of targets) {
+        try {
+          await this.shareProfile(t.peer, t.groupId);
+        } catch {
+          failed.push(t);
+        }
+      }
+      // People we could not reach are tried again on the next sync (for a while).
+      const tries = (saved?.tries ?? 0) + 1;
+      if (failed.length && tries < 20)
+        this.setMeta('reintroduce', JSON.stringify({ targets: failed, tries }));
+      else this.storage().delete('meta', 'dm:reintroduce');
+    } finally {
+      this.reintroducing = false;
     }
-    peers.delete(this.me());
-    for (const peer of peers) await this.shareProfile(peer).catch(() => undefined);
   }
 
   // ---- used by SocialService ----------------------------------------------------------------------
@@ -837,29 +1117,35 @@ export class DmService {
       .run({ ...g, icon: g.icon ?? null });
   }
 
-  /** Group state from an admin (or a new group that includes us). */
+  /**
+   * Group state from an admin (or a new group that includes us), or from another of our own
+   * devices (sender = us) for a group we created or changed there.
+   */
   private applyGroupUpdate(
     sender: string,
     update: { groupId: string; name: string; members: string[]; admins: string[]; icon?: string | null },
-  ): boolean {
+  ): void {
     const me = this.me();
+    const mine = sender === me;
     const members = [...new Set(update.members)].slice(0, MAX_GROUP);
     const admins = [...new Set(update.admins)].filter((a) => members.includes(a) || a === sender);
     const existing = this.group(update.groupId);
     if (existing) {
-      if (!this.list(existing.admins).includes(sender)) return true;
+      if (!this.list(existing.admins).includes(sender)) return;
       const stillIn = members.includes(me);
+      // Added back after leaving: you choose whether to rejoin (a request, not straight back in).
+      const rejoin = existing.state === 'left' ? 'request' : existing.state;
       this.saveGroup({
         ...existing,
         icon: update.icon ?? null,
         name: update.name.slice(0, 64),
         members: JSON.stringify(members),
         admins: JSON.stringify(admins),
-        state: stillIn ? (existing.state === 'left' ? 'accepted' : existing.state) : 'left',
+        state: !stillIn ? 'left' : mine ? 'accepted' : rejoin,
       });
     } else {
-      if (!members.includes(me) || !members.includes(sender) || !admins.includes(sender)) return true;
-      if (this.contact(sender)?.state === 'blocked') return true;
+      if (!members.includes(me) || !members.includes(sender) || !admins.includes(sender)) return;
+      if (!mine && this.contact(sender)?.state === 'blocked') return;
       this.saveGroup({
         id: update.groupId,
         icon: update.icon ?? null,
@@ -867,23 +1153,28 @@ export class DmService {
         members: JSON.stringify(members),
         admins: JSON.stringify(admins),
         profiles: '{}',
-        // Groups started by people you have accepted open directly; others are requests.
-        state: this.contact(sender)?.state === 'accepted' ? 'accepted' : 'request',
+        // Groups started on our other devices or by people you have accepted open directly;
+        // others are requests.
+        state: mine || this.contact(sender)?.state === 'accepted' ? 'accepted' : 'request',
         created_at: new Date().toISOString(),
         last_read: null,
       });
+      // Messages that arrived before the group's details can be shown now.
+      this.retryKept(update.groupId);
     }
     this.emitConversations();
-    return true;
   }
 
-  /** Sends to a person, or to every other member of a group (pairwise libsignal sessions). */
-  private async deliver(conv: string, content: Content, ephemeral = false): Promise<void> {
+  /**
+   * Sends to a person, or to every other member of a group (pairwise libsignal sessions).
+   * Returns the group members it could not be delivered to (the others got it).
+   */
+  private async deliver(conv: string, content: Content, ephemeral = false): Promise<string[]> {
     // Note to self (2.9): stays on this device; new notes reach linked devices as a sync.
-    if (conv === this.me()) return;
+    if (conv === this.me()) return [];
     if (!isGroupId(conv)) {
       await this.sendContent(conv, content, ephemeral);
-      return;
+      return [];
     }
     const g = this.group(conv);
     if (!g || g.state === 'left') throw new CommunityError('You are not in this group.');
@@ -891,8 +1182,13 @@ export class DmService {
     const failed: string[] = [];
     const others = this.list(g.members).filter((m) => m !== me);
     for (const m of others) {
+      // Our group-scoped profile is a nicety: the message still goes if sharing it fails.
+      if (!ephemeral) {
+        await this.shareProfile(m, conv).catch((err: unknown) =>
+          this.deps.log.warn(`Group profile not shared: ${(err as Error).message}`),
+        );
+      }
       try {
-        if (!ephemeral) await this.shareProfile(m, conv);
         await this.sendContent(m, content, ephemeral);
       } catch {
         failed.push(m);
@@ -901,6 +1197,7 @@ export class DmService {
     if (others.length && failed.length === others.length && !ephemeral) {
       throw new CommunityError('The message could not be delivered to anyone in the group.');
     }
+    return failed;
   }
 
   private async sendGroupState(g: GroupRow, extraRecipients: string[] = []): Promise<void> {
@@ -915,6 +1212,8 @@ export class DmService {
       admins: this.list(g.admins),
       ...(g.icon ? { icon: g.icon } : {}),
     };
+    // Our other devices first, so they know the group before anyone in it answers.
+    await this.toMyDevices(content, 'A group change');
     for (const m of recipients) {
       // The group must exist on their side before our group-scoped profile arrives.
       await this.sendContent(m, content).catch((err: unknown) =>
@@ -948,17 +1247,27 @@ export class DmService {
 
   // ---- sending ---------------------------------------------------------------------------------
 
+  /** Sends content to this account's other devices (if it has any); failures are only logged. */
+  private async toMyDevices(content: Content, what: string): Promise<void> {
+    if (!this.deps.account.hasOtherDevices()) return;
+    try {
+      await this.sendContent(this.me(), content);
+    } catch (err) {
+      this.deps.log.warn(`${what} was not copied to your other devices: ${(err as Error).message}`);
+    }
+  }
+
   /** Copies a message we sent to this account's other devices (if it has any). */
   private async syncToMyDevices(
     conv: string,
     message: z.infer<z.ZodObject<typeof messageFields>>,
   ): Promise<void> {
-    if (!this.deps.account.hasOtherDevices()) return;
-    try {
-      await this.sendContent(this.me(), { v: 1, t: 'sync', conv, message });
-    } catch (err) {
-      this.deps.log.warn(`A sent message was not copied to your other devices: ${(err as Error).message}`);
-    }
+    await this.toMyDevices({ v: 1, t: 'sync', conv, message }, 'A sent message');
+  }
+
+  /** Copies an edit, delete, reaction, pin, timer or read to this account's other devices. */
+  private syncOp(conv: string, op: SyncOp): void {
+    void this.toMyDevices({ v: 1, t: 'syncOp', conv, op }, 'A change');
   }
 
   /** Sends the friends list to this account's other devices (linked devices). */
@@ -1001,7 +1310,8 @@ export class DmService {
       const existing = this.contact(c.riverId);
       if (c.state === 'blocked') {
         if (!existing) this.upsertContact(c.riverId, 'blocked', c.name);
-        else this.db().prepare(`UPDATE contacts SET state = 'blocked' WHERE river_id = ?`).run(c.riverId);
+        else if (existing.state !== 'blocked') this.setBlocked(c.riverId, existing.state);
+        if (existing?.state !== 'blocked') this.notifyBlocked(c.riverId);
       } else if (!existing) {
         this.upsertContact(c.riverId, 'accepted', c.name);
       } else if (existing.state === 'request') {
@@ -1027,18 +1337,46 @@ export class DmService {
     }
   }
 
+  /** Blocks someone here, remembering their state before so unblocking can restore it. */
+  private setBlocked(riverId: string, before: ContactRow['state']): void {
+    if (before !== 'blocked') this.setMeta(`unblockTo:${riverId}`, before);
+    this.db().prepare(`UPDATE contacts SET state = 'blocked' WHERE river_id = ?`).run(riverId);
+  }
+
+  /** Someone was blocked (here or on another of our devices): their posts and stories go too. */
+  onBlocked(listener: (riverId: string) => void): () => void {
+    this.blockListeners.add(listener);
+    return () => this.blockListeners.delete(listener);
+  }
+
+  private notifyBlocked(riverId: string): void {
+    for (const l of this.blockListeners) {
+      try {
+        l(riverId);
+      } catch (err) {
+        this.deps.log.warn(`Could not clear a blocked person's posts: ${(err as Error).message}`);
+      }
+    }
+  }
+
   /** A message this account sent from another device: show it as ours. */
-  private applySync(conv: string, message: z.infer<z.ZodObject<typeof messageFields>>): void {
-    if (this.db().prepare('SELECT 1 FROM dm_messages WHERE id = ?').get(message.id)) return;
+  private applySync(conv: string, message: z.infer<z.ZodObject<typeof messageFields>>): string | null {
+    if (this.db().prepare('SELECT 1 FROM dm_messages WHERE id = ?').get(message.id)) return null;
     if (isGroupId(conv)) {
       const g = this.group(conv);
-      if (!g || g.state === 'left') return;
+      if (!g) return conv;
+      if (g.state === 'left') return null;
     } else if (!this.contact(conv)) {
       this.upsertContact(conv, 'accepted');
     }
+    // Disappearing messages: the time starts when the copy reaches this device.
+    const now = new Date();
+    const ttl = Math.max(this.timerOf(conv), message.expiresIn ?? 0);
+    const expiresAt = ttl ? new Date(now.getTime() + ttl * 1000).toISOString() : null;
     this.db()
       .prepare(
-        `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions) VALUES (?, ?, ?, ?, ?, 'sent', '{}')`,
+        `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions, expires_at, received_at)
+         VALUES (?, ?, ?, ?, ?, 'sent', '{}', ?, ?)`,
       )
       .run(
         message.id,
@@ -1052,9 +1390,74 @@ export class DmService {
           ...(message.embed ? { embed: message.embed } : {}),
         }),
         message.sentAt,
+        expiresAt,
+        now.toISOString(),
       );
     this.emitMessage(message.id, false);
     this.emitConversations();
+    return null;
+  }
+
+  /**
+   * A change this account made on another device. The same rules as for everyone else apply:
+   * only our own messages are edited or deleted, and only in the conversation they are in.
+   */
+  private applySyncOp(conv: string, op: SyncOp): string | null {
+    const me = this.me();
+    if (isGroupId(conv)) {
+      const g = this.group(conv);
+      if (!g) return conv;
+      if (g.state === 'left' && op.t !== 'read') return null;
+    }
+    switch (op.t) {
+      case 'edit': {
+        const row = this.row(op.id);
+        if (row && row.peer === conv && row.sender === me && !row.deleted) this.editRow(row, op.text);
+        return null;
+      }
+      case 'delete': {
+        // Deleted for everyone on another device: that device removed its copy, so does this one.
+        const row = this.row(op.id);
+        if (row && row.peer === conv && row.sender === me) {
+          this.db().prepare('DELETE FROM dm_messages WHERE id = ?').run(op.id);
+          this.emit({ t: 'remove', peer: conv, id: op.id });
+          this.emitConversations();
+        }
+        return null;
+      }
+      case 'react': {
+        const row = this.row(op.id);
+        if (row && row.peer === conv) this.applyReaction(row, me, op.emoji, op.on);
+        return null;
+      }
+      case 'pin': {
+        const row = this.row(op.id);
+        if (row && row.peer === conv && !row.deleted) this.setPinned(row, op.pinned);
+        return null;
+      }
+      case 'timer':
+        if (isGroupId(conv) || this.contact(conv)?.state === 'accepted')
+          this.applyTimer(conv, op.seconds, me);
+        return null;
+      case 'read':
+        this.markRead(conv, op.at);
+        return null;
+    }
+  }
+
+  /** Moves a conversation's read marker forward to `at` (never back); returns whether it moved. */
+  private markRead(conv: string, at: string): boolean {
+    this.clearMarkedUnread(conv);
+    const table = isGroupId(conv) ? 'dm_groups' : 'contacts';
+    const key = isGroupId(conv) ? 'id' : 'river_id';
+    const moved =
+      this.db()
+        .prepare(
+          `UPDATE ${table} SET last_read = ? WHERE ${key} = ? AND (last_read IS NULL OR last_read < ?)`,
+        )
+        .run(at, conv, at).changes > 0;
+    this.emitConversations();
+    return moved;
   }
 
   /** Verifies a key bundle and starts sessions with devices we have none with. */
@@ -1283,7 +1686,8 @@ export class DmService {
               `SELECT * FROM dm_messages
                WHERE deleted = 0 AND (? IS NULL OR peer = ?)
                  AND (json_extract(body, '$.text') LIKE ? ESCAPE '!'
-                 OR json_extract(body, '$.attachments') LIKE ? ESCAPE '!')
+                 OR EXISTS (SELECT 1 FROM json_each(body, '$.attachments') AS a
+                            WHERE json_extract(a.value, '$.name') LIKE ? ESCAPE '!'))
                ORDER BY sent_at DESC LIMIT 100`,
             )
             .all(act.peer ?? null, act.peer ?? null, like, like) as MessageRow[];
@@ -1317,73 +1721,8 @@ export class DmService {
           this.emitConversations();
           return out(this.conversations().find((c) => c.riverId === act.peer)!);
         }
-        case 'send': {
-          const group = isGroupId(act.peer) ? this.group(act.peer) : undefined;
-          if (isGroupId(act.peer)) {
-            if (!group || group.state === 'left') throw new CommunityError('You are not in this group.');
-            if (group.state === 'request') this.saveGroup({ ...group, state: 'accepted' });
-          } else {
-            const contact = this.contact(act.peer);
-            if (contact?.state === 'blocked')
-              throw new CommunityError('Unblock this person to message them.');
-            if (!contact || contact.state === 'request') this.upsertContact(act.peer, 'accepted');
-          }
-          const id = randomBytes(16).toString('base64url');
-          const sentAt = new Date().toISOString();
-          const body = {
-            text: act.text,
-            replyTo: act.replyTo,
-            attachments: act.attachments,
-            ...(act.poll ? { poll: act.poll } : {}),
-            ...(act.embed ? { embed: act.embed } : {}),
-          };
-          const ttl = this.timerOf(act.peer);
-          const expiresAt = ttl ? new Date(Date.parse(sentAt) + ttl * 1000).toISOString() : null;
-          this.db()
-            .prepare(
-              `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions, expires_at) VALUES (?, ?, ?, ?, ?, 'sending', '{}', ?)`,
-            )
-            .run(id, act.peer, this.me(), JSON.stringify(body), sentAt, expiresAt);
-          this.emitMessage(id, false);
-          try {
-            if (!group) await this.shareProfile(act.peer);
-            await this.deliver(act.peer, {
-              v: 1,
-              t: 'msg',
-              id,
-              text: act.text,
-              ...(act.replyTo ? { replyTo: act.replyTo } : {}),
-              ...(act.attachments?.length ? { attachments: act.attachments } : {}),
-              sentAt,
-              ...(group ? { groupId: group.id } : {}),
-              ...(ttl ? { expiresIn: ttl } : {}),
-              ...(act.silent ? { silent: true } : {}),
-              ...(act.poll ? { poll: act.poll } : {}),
-              ...(act.embed ? { embed: act.embed } : {}),
-            });
-            this.db()
-              .prepare(`UPDATE dm_messages SET status = 'sent' WHERE id = ? AND status = 'sending'`)
-              .run(id);
-            void this.syncToMyDevices(act.peer, {
-              id,
-              text: act.text,
-              ...(act.replyTo ? { replyTo: act.replyTo } : {}),
-              ...(act.attachments?.length ? { attachments: act.attachments } : {}),
-              sentAt,
-              ...(group ? { groupId: group.id } : {}),
-              ...(ttl ? { expiresIn: ttl } : {}),
-              ...(act.poll ? { poll: act.poll } : {}),
-              ...(act.embed ? { embed: act.embed } : {}),
-            });
-          } catch (err) {
-            this.db().prepare(`UPDATE dm_messages SET status = 'failed' WHERE id = ?`).run(id);
-            this.emitMessage(id, false);
-            throw err;
-          }
-          this.emitMessage(id, false);
-          this.emitConversations();
-          return out(this.view(this.row(id)!));
-        }
+        case 'send':
+          return out(await this.sendMessage(act));
         case 'edit': {
           const row = this.row(act.id);
           if (!row || row.sender !== this.me() || row.peer !== act.peer)
@@ -1395,11 +1734,8 @@ export class DmService {
             text: act.text,
             ...(isGroupId(act.peer) ? { groupId: act.peer } : {}),
           });
-          const body = JSON.parse(row.body) as Record<string, unknown>;
-          this.db()
-            .prepare('UPDATE dm_messages SET body = ?, edited_at = ? WHERE id = ?')
-            .run(JSON.stringify({ ...body, text: act.text }), new Date().toISOString(), act.id);
-          this.emitMessage(act.id, false);
+          this.editRow(row, act.text);
+          this.syncOp(act.peer, { t: 'edit', id: act.id, text: act.text });
           return out(null);
         }
         case 'pin': {
@@ -1413,6 +1749,7 @@ export class DmService {
             ...(isGroupId(act.peer) ? { groupId: act.peer } : {}),
           });
           this.setPinned(row, act.pinned);
+          this.syncOp(act.peer, { t: 'pin', id: act.id, pinned: act.pinned });
           return out(null);
         }
         case 'delete': {
@@ -1427,6 +1764,7 @@ export class DmService {
               id: act.id,
               ...(isGroupId(act.peer) ? { groupId: act.peer } : {}),
             });
+            this.syncOp(act.peer, { t: 'delete', id: act.id });
           }
           this.db().prepare('DELETE FROM dm_messages WHERE id = ?').run(act.id);
           this.emit({ t: 'remove', peer: act.peer, id: act.id });
@@ -1445,6 +1783,7 @@ export class DmService {
             ...(isGroupId(act.peer) ? { groupId: act.peer } : {}),
           });
           this.applyReaction(row, this.me(), act.emoji, act.on);
+          this.syncOp(act.peer, { t: 'react', id: act.id, emoji: act.emoji, on: act.on });
           return out(null);
         }
         case 'schedule': {
@@ -1474,14 +1813,16 @@ export class DmService {
               .sort((a, b) => a.sendAt.localeCompare(b.sendAt))
               .map(scheduledView),
           );
-        case 'cancelScheduled':
+        case 'cancelScheduled': {
+          // Being sent right now: if that attempt fails, it is not put back.
+          const flight = this.scheduledInFlight.get(act.id);
+          if (flight) flight.cancelled = true;
           this.setScheduled(this.scheduledList().filter((x) => x.id !== act.id));
           return out(null);
-        case 'sendScheduledNow': {
-          const item = this.scheduledList().find((x) => x.id === act.id);
-          if (item) await this.sendScheduled(item);
-          return out(null);
         }
+        case 'sendScheduledNow':
+          await this.sendScheduled(act.id);
+          return out(null);
         case 'setTimer': {
           if (isGroupId(act.peer)) {
             const g = this.group(act.peer);
@@ -1496,13 +1837,16 @@ export class DmService {
             ...(isGroupId(act.peer) ? { groupId: act.peer } : {}),
           });
           this.applyTimer(act.peer, act.seconds, this.me());
+          this.syncOp(act.peer, { t: 'timer', seconds: act.seconds });
           return out(null);
         }
         case 'chatFlags': {
           const prefs = this.chatPrefs();
           const p = { ...prefs[act.peer] };
           if (act.pinned === true && !p.pinnedAt) {
-            const pinned = Object.values(prefs).filter((x) => x.pinnedAt).length;
+            // Only conversations that still exist count (a removed one may have left a pin behind).
+            const existing = this.conversationIds();
+            const pinned = Object.entries(prefs).filter(([id, x]) => x.pinnedAt && existing.has(id)).length;
             if (pinned >= MAX_PINNED) {
               throw new CommunityError(`You can pin up to ${MAX_PINNED} conversations.`);
             }
@@ -1520,25 +1864,27 @@ export class DmService {
           return out(null);
         }
         case 'read': {
-          this.clearMarkedUnread(act.peer);
-          if (isGroupId(act.peer)) {
-            const g = this.group(act.peer);
-            if (g) this.saveGroup({ ...g, last_read: new Date().toISOString() });
-            this.emitConversations();
+          const now = new Date().toISOString();
+          const group = isGroupId(act.peer) ? this.group(act.peer) : undefined;
+          const contact = group ? undefined : this.contact(act.peer);
+          if (!group && !contact) {
+            this.clearMarkedUnread(act.peer);
             return out(null);
           }
-          const contact = this.contact(act.peer);
-          if (!contact) return out(null);
+          // Unread means arrived on this device after you last read (not the sender's claimed time).
           const unread = this.db()
             .prepare(
-              `SELECT id FROM dm_messages WHERE peer = ? AND sender = ? AND sent_at > ? AND deleted = 0`,
+              `SELECT id FROM dm_messages WHERE peer = ? AND sender ${group ? '!=' : '='} ?
+                 AND COALESCE(received_at, sent_at) > ? AND deleted = 0 ORDER BY sent_at`,
             )
-            .all(act.peer, act.peer, contact.last_read ?? '') as Array<{ id: string }>;
-          this.db()
-            .prepare('UPDATE contacts SET last_read = ? WHERE river_id = ?')
-            .run(new Date().toISOString(), act.peer);
-          this.emitConversations();
+            .all(act.peer, group ? this.me() : act.peer, (group ?? contact)?.last_read ?? '') as Array<{
+            id: string;
+          }>;
+          this.markRead(act.peer, now);
+          // Your other devices mark it read too.
+          if (unread.length && act.peer !== this.me()) this.syncOp(act.peer, { t: 'read', at: now });
           if (
+            contact &&
             unread.length &&
             contact.state === 'accepted' &&
             act.peer !== this.me() &&
@@ -1587,18 +1933,33 @@ export class DmService {
           await this.shareProfile(act.peer).catch(() => undefined);
           void this.shareContacts();
           return out(null);
-        case 'block':
+        case 'block': {
           await this.deps.community.api(`/blocks/${act.peer}`, 'PUT', {}, z.unknown());
-          if (!this.contact(act.peer)) this.upsertContact(act.peer, 'blocked');
-          this.db().prepare(`UPDATE contacts SET state = 'blocked' WHERE river_id = ?`).run(act.peer);
+          const before = this.contact(act.peer);
+          if (!before) this.upsertContact(act.peer, 'blocked');
+          else this.setBlocked(act.peer, before.state);
           this.emitConversations();
+          if (before?.state !== 'blocked') this.notifyBlocked(act.peer);
           void this.shareContacts();
           return out(null);
-        case 'unblock':
+        }
+        case 'unblock': {
           await this.deps.community.api(`/blocks/${act.peer}`, 'DELETE', undefined, z.unknown());
-          this.db().prepare(`UPDATE contacts SET state = 'accepted' WHERE river_id = ?`).run(act.peer);
+          if (this.contact(act.peer)?.state === 'blocked') {
+            // Back to what it was before the block: a request stays a request. Blocks from before
+            // this was remembered: a friend if you ever wrote to them, otherwise a request.
+            const saved = this.meta(`unblockTo:${act.peer}`);
+            const wrote = !!this.db()
+              .prepare('SELECT 1 FROM dm_messages WHERE peer = ? AND sender = ? LIMIT 1')
+              .get(act.peer, this.me());
+            const state =
+              saved === 'accepted' || saved === 'request' ? saved : wrote ? 'accepted' : 'request';
+            this.db().prepare('UPDATE contacts SET state = ? WHERE river_id = ?').run(state, act.peer);
+          }
+          this.storage().delete('meta', `dm:unblockTo:${act.peer}`);
           this.emitConversations();
           return out(null);
+        }
         case 'removeConversation':
           if (isGroupId(act.peer)) {
             const g = this.group(act.peer);
@@ -1606,14 +1967,17 @@ export class DmService {
               await this.deliver(act.peer, { v: 1, t: 'groupLeave', groupId: act.peer }).catch(
                 () => undefined,
               );
+              void this.toMyDevices({ v: 1, t: 'groupLeave', groupId: act.peer }, 'Leaving a group');
             }
             this.db().prepare('DELETE FROM dm_messages WHERE peer = ?').run(act.peer);
             this.db().prepare('DELETE FROM dm_groups WHERE id = ?').run(act.peer);
+            this.forgetConversation(act.peer);
             this.emitConversations();
             return out(null);
           }
           this.db().prepare('DELETE FROM dm_messages WHERE peer = ?').run(act.peer);
           this.db().prepare(`DELETE FROM contacts WHERE river_id = ? AND state != 'blocked'`).run(act.peer);
+          this.forgetConversation(act.peer);
           this.emitConversations();
           return out(null);
         case 'pendingCall': {
@@ -1685,14 +2049,20 @@ export class DmService {
         case 'renameGroup':
         case 'addGroupMembers':
         case 'removeGroupMember': {
-          const g = this.group(act.peer);
-          if (!g || !this.list(g.admins).includes(this.me())) {
-            throw new CommunityError('Only group admins can change the group.');
-          }
-          let members = this.list(g.members);
+          const isAdmin = (x: GroupRow | undefined): x is GroupRow =>
+            !!x && x.state !== 'left' && this.list(x.admins).includes(this.me());
+          let g = this.group(act.peer);
+          if (!isAdmin(g)) throw new CommunityError('Only group admins can change the group.');
           let removed: string[] = [];
           if (act.a === 'addGroupMembers') {
-            for (const m of act.members) if (!members.includes(m)) await this.prepareSessions(m);
+            const before = this.list(g.members);
+            for (const m of act.members) if (!before.includes(m)) await this.prepareSessions(m);
+            // The group may have changed while we waited (someone left): start from what it is now.
+            g = this.group(act.peer);
+            if (!isAdmin(g)) throw new CommunityError('Only group admins can change the group.');
+          }
+          let members = this.list(g.members);
+          if (act.a === 'addGroupMembers') {
             members = [...new Set([...members, ...act.members])];
             if (members.length > MAX_GROUP)
               throw new CommunityError(`Groups can have up to ${MAX_GROUP} people.`);
@@ -1717,12 +2087,15 @@ export class DmService {
           const g = this.group(act.peer);
           if (!g || g.state === 'left') return out(null);
           await this.deliver(act.peer, { v: 1, t: 'groupLeave', groupId: act.peer }).catch(() => undefined);
+          void this.toMyDevices({ v: 1, t: 'groupLeave', groupId: act.peer }, 'Leaving a group');
           const me = this.me();
+          // Read again: the group may have changed while the goodbyes were sent.
+          const latest = this.group(act.peer) ?? g;
           this.saveGroup({
-            ...g,
+            ...latest,
             state: 'left',
-            members: JSON.stringify(this.list(g.members).filter((m) => m !== me)),
-            admins: JSON.stringify(this.list(g.admins).filter((m) => m !== me)),
+            members: JSON.stringify(this.list(latest.members).filter((m) => m !== me)),
+            admins: JSON.stringify(this.list(latest.admins).filter((m) => m !== me)),
           });
           this.emitConversations();
           return out(null);
@@ -1748,6 +2121,108 @@ export class DmService {
       if (err instanceof SafetyNumberChangedError) throw new CommunityError(err.message);
       throw err;
     }
+  }
+
+  /**
+   * Sends a message. `reuseId` (scheduled messages) retries the same message: its earlier failed
+   * copy is reused instead of adding another one, and receivers ignore a copy they already have.
+   */
+  private async sendMessage(act: SendAct, reuseId?: string): Promise<DirectMessageView> {
+    const group = isGroupId(act.peer) ? this.group(act.peer) : undefined;
+    if (isGroupId(act.peer)) {
+      if (!group || group.state === 'left') throw new CommunityError('You are not in this group.');
+      if (group.state === 'request') this.saveGroup({ ...group, state: 'accepted' });
+    } else {
+      const contact = this.contact(act.peer);
+      if (contact?.state === 'blocked') throw new CommunityError('Unblock this person to message them.');
+      if (!contact || contact.state === 'request') this.upsertContact(act.peer, 'accepted');
+    }
+    const me = this.me();
+    const earlier = reuseId ? this.row(reuseId) : undefined;
+    const reuse = !!earlier && earlier.sender === me && earlier.peer === act.peer;
+    const id = reuseId && (!earlier || reuse) ? reuseId : randomBytes(16).toString('base64url');
+    const sentAt = new Date().toISOString();
+    const body = {
+      text: act.text,
+      replyTo: act.replyTo,
+      attachments: act.attachments,
+      ...(act.poll ? { poll: act.poll } : {}),
+      ...(act.embed ? { embed: act.embed } : {}),
+    };
+    const ttl = this.timerOf(act.peer);
+    const expiresAt = ttl ? new Date(Date.parse(sentAt) + ttl * 1000).toISOString() : null;
+    if (reuse) {
+      this.db()
+        .prepare(
+          `UPDATE dm_messages SET body = ?, sent_at = ?, received_at = ?, status = 'sending', expires_at = ?
+           WHERE id = ?`,
+        )
+        .run(JSON.stringify(body), sentAt, sentAt, expiresAt, id);
+    } else {
+      this.db()
+        .prepare(
+          `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions, expires_at, received_at)
+           VALUES (?, ?, ?, ?, ?, 'sending', '{}', ?, ?)`,
+        )
+        .run(id, act.peer, me, JSON.stringify(body), sentAt, expiresAt, sentAt);
+    }
+    this.emitMessage(id, false);
+    try {
+      if (!group) await this.shareProfile(act.peer);
+      const undelivered = await this.deliver(act.peer, {
+        v: 1,
+        t: 'msg',
+        id,
+        text: act.text,
+        ...(act.replyTo ? { replyTo: act.replyTo } : {}),
+        ...(act.attachments?.length ? { attachments: act.attachments } : {}),
+        sentAt,
+        ...(group ? { groupId: group.id } : {}),
+        ...(ttl ? { expiresIn: ttl } : {}),
+        ...(act.silent ? { silent: true } : {}),
+        ...(act.poll ? { poll: act.poll } : {}),
+        ...(act.embed ? { embed: act.embed } : {}),
+      });
+      if (undelivered.length) {
+        // Some group members did not get it (the others did): recorded on the message.
+        this.deps.log.warn(`A group message was not delivered to ${undelivered.length} member(s)`);
+        this.db()
+          .prepare('UPDATE dm_messages SET body = ? WHERE id = ?')
+          .run(JSON.stringify({ ...body, undelivered }), id);
+      }
+      this.db().prepare(`UPDATE dm_messages SET status = 'sent' WHERE id = ? AND status = 'sending'`).run(id);
+      void this.syncToMyDevices(act.peer, {
+        id,
+        text: act.text,
+        ...(act.replyTo ? { replyTo: act.replyTo } : {}),
+        ...(act.attachments?.length ? { attachments: act.attachments } : {}),
+        sentAt,
+        ...(group ? { groupId: group.id } : {}),
+        ...(ttl ? { expiresIn: ttl } : {}),
+        ...(act.poll ? { poll: act.poll } : {}),
+        ...(act.embed ? { embed: act.embed } : {}),
+      });
+    } catch (err) {
+      this.db().prepare(`UPDATE dm_messages SET status = 'failed' WHERE id = ?`).run(id);
+      this.emitMessage(id, false);
+      throw err;
+    }
+    this.emitMessage(id, false);
+    this.emitConversations();
+    return this.view(this.row(id)!);
+  }
+
+  /** Changes a message's text (an edit by its author) and refreshes the chat list if it is the latest. */
+  private editRow(row: MessageRow, text: string): void {
+    const body = JSON.parse(row.body) as Record<string, unknown>;
+    this.db()
+      .prepare('UPDATE dm_messages SET body = ?, edited_at = ? WHERE id = ?')
+      .run(JSON.stringify({ ...body, text }), new Date().toISOString(), row.id);
+    this.emitMessage(row.id, false);
+    const latest = this.db()
+      .prepare('SELECT id FROM dm_messages WHERE peer = ? ORDER BY sent_at DESC LIMIT 1')
+      .get(row.peer) as { id: string } | undefined;
+    if (latest?.id === row.id) this.emitConversations();
   }
 
   // ---- local state -----------------------------------------------------------------------------
@@ -1815,9 +2290,13 @@ export class DmService {
       silent?: unknown;
       poll?: unknown;
       embed?: unknown;
+      undelivered?: unknown;
     };
     const me = this.me();
     const reactions = JSON.parse(r.reactions) as Record<string, string[]>;
+    const undelivered = Array.isArray(body.undelivered)
+      ? body.undelivered.filter((x): x is string => typeof x === 'string')
+      : [];
     const group = isGroupId(r.peer) ? this.group(r.peer) : undefined;
     return {
       id: r.id,
@@ -1844,6 +2323,7 @@ export class DmService {
       poll: r.deleted ? null : readPoll(body.poll),
       embed: r.deleted ? null : this.embedOf(body.embed, String(body.text ?? '')),
       notice: body.notice && typeof body.notice.timer === 'number' ? { timer: body.notice.timer } : null,
+      ...(undelivered.length && r.sender === me ? { undeliveredTo: undelivered } : {}),
     };
   }
 
@@ -1897,11 +2377,13 @@ export class DmService {
     else delete timers[conv];
     this.setMeta('timers', JSON.stringify(timers));
     const id = randomBytes(16).toString('base64url');
+    const now = new Date().toISOString();
     this.db()
       .prepare(
-        `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions) VALUES (?, ?, ?, ?, ?, 'received', '{}')`,
+        `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions, received_at)
+         VALUES (?, ?, ?, ?, ?, 'received', '{}', ?)`,
       )
-      .run(id, conv, by, JSON.stringify({ text: '', notice: { timer: seconds } }), new Date().toISOString());
+      .run(id, conv, by, JSON.stringify({ text: '', notice: { timer: seconds } }), now, now);
     this.emitMessage(id, true);
     this.emitConversations();
   }
@@ -1923,36 +2405,116 @@ export class DmService {
 
   private sendingScheduled = false;
 
-  private async sendScheduled(item: ScheduledItem): Promise<void> {
-    // Taken off the list first, so a slow send is never sent twice.
-    this.setScheduled(this.scheduledList().filter((x) => x.id !== item.id));
+  /**
+   * Sends one scheduled message now. It is taken off the list before anything is awaited, so a
+   * cancelled item, or one already being sent (the timer and "send now" at once), is never sent
+   * (again). A failed attempt puts it back with a back-off, unless it was cancelled meanwhile;
+   * every attempt reuses the same message, so retries never add more failed copies.
+   */
+  private async sendScheduled(id: string): Promise<boolean> {
+    const list = this.scheduledList();
+    const item = list.find((x) => x.id === id);
+    if (!item || this.scheduledInFlight.has(id)) return false;
+    this.setScheduled(list.filter((x) => x.id !== id));
+    const flight = { cancelled: false };
+    this.scheduledInFlight.set(id, flight);
+    const messageId =
+      item.messageId && msgId.safeParse(item.messageId).success
+        ? item.messageId
+        : randomBytes(16).toString('base64url');
     try {
-      await this.action({
+      const act = dmActionSchema.parse({
         a: 'send',
         peer: item.peer,
         text: item.text,
         ...(item.replyTo ? { replyTo: item.replyTo } : {}),
         ...(item.attachments.length ? { attachments: item.attachments } : {}),
         ...(item.silent ? { silent: true } : {}),
-      });
-    } catch {
-      this.setScheduled([...this.scheduledList(), { ...item, failed: true }]);
+      }) as SendAct;
+      await this.sendMessage(act, messageId);
+      return true;
+    } catch (err) {
+      this.deps.log.warn(`A scheduled message was not sent: ${(err as Error).message}`);
+      if (!flight.cancelled) {
+        const tries = (item.tries ?? 0) + 1;
+        try {
+          this.setScheduled([
+            ...this.scheduledList(),
+            {
+              ...item,
+              failed: true,
+              messageId,
+              tries,
+              retryAt: new Date(Date.now() + scheduledBackoff(tries)).toISOString(),
+            },
+          ]);
+        } catch {
+          // storage unavailable
+        }
+      }
+      return false;
+    } finally {
+      this.scheduledInFlight.delete(id);
     }
   }
 
-  /** Sends scheduled messages whose time has come (2.5). */
+  /** Sends scheduled messages whose time (or next retry) has come (2.5). Returns how many went out. */
   async sendDueScheduled(now = new Date()): Promise<number> {
     if (this.sendingScheduled) return 0;
     this.sendingScheduled = true;
     try {
-      const due = this.scheduledList().filter((x) => Date.parse(x.sendAt) <= now.getTime());
-      for (const item of due) await this.sendScheduled(item);
-      return due.length;
+      const due = this.scheduledList().filter((x) => Date.parse(x.retryAt ?? x.sendAt) <= now.getTime());
+      let sent = 0;
+      for (const item of due) if (await this.sendScheduled(item.id)) sent++;
+      return sent;
     } finally {
       this.sendingScheduled = false;
     }
   }
 
+  /** Everything kept about a conversation that was removed: its flags, timer, folders and schedule. */
+  private forgetConversation(peer: string): void {
+    const prefs = this.chatPrefs();
+    if (prefs[peer]) {
+      delete prefs[peer];
+      this.setChatPrefs(prefs);
+    }
+    const timers = this.timers();
+    if (peer in timers) {
+      delete timers[peer];
+      this.setMeta('timers', JSON.stringify(timers));
+    }
+    const folders = this.folderList();
+    if (folders.some((f) => f.peers.includes(peer))) {
+      this.setMeta(
+        'folders',
+        JSON.stringify(folders.map((f) => ({ ...f, peers: f.peers.filter((p) => p !== peer) }))),
+      );
+    }
+    const scheduled = this.scheduledList();
+    if (scheduled.some((x) => x.peer === peer)) {
+      for (const x of scheduled) {
+        if (x.peer === peer) {
+          const flight = this.scheduledInFlight.get(x.id);
+          if (flight) flight.cancelled = true;
+        }
+      }
+      this.setScheduled(scheduled.filter((x) => x.peer !== peer));
+    }
+  }
+
+  /** IDs of the conversations that exist (people and groups). */
+  private conversationIds(): Set<string> {
+    return new Set(
+      (
+        this.db()
+          .prepare('SELECT river_id AS id FROM contacts UNION SELECT id FROM dm_groups')
+          .all() as Array<{
+          id: string;
+        }>
+      ).map((r) => r.id),
+    );
+  }
   /** Deletes this device's copies of messages whose time is up (2.4). Returns how many. */
   sweepExpired(now = new Date()): number {
     const db = this.db();
@@ -2034,7 +2596,7 @@ export class DmService {
       const unread = (
         this.db()
           .prepare(
-            'SELECT COUNT(*) AS n FROM dm_messages WHERE peer = ? AND sender != ? AND sent_at > ? AND deleted = 0',
+            'SELECT COUNT(*) AS n FROM dm_messages WHERE peer = ? AND sender != ? AND COALESCE(received_at, sent_at) > ? AND deleted = 0',
           )
           .get(g.id, me, g.last_read ?? '') as { n: number }
       ).n;
@@ -2069,7 +2631,7 @@ export class DmService {
         const unread = (
           this.db()
             .prepare(
-              'SELECT COUNT(*) AS n FROM dm_messages WHERE peer = ? AND sender = ? AND sent_at > ? AND deleted = 0',
+              'SELECT COUNT(*) AS n FROM dm_messages WHERE peer = ? AND sender = ? AND COALESCE(received_at, sent_at) > ? AND deleted = 0',
             )
             .get(c.river_id, c.river_id, c.last_read ?? '') as { n: number }
         ).n;

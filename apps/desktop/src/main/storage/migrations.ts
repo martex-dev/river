@@ -377,4 +377,16 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 23,
+    name: '0023_dm_received_at',
+    up(db) {
+      // When this device stored each direct message (its own clock). Unread counts and read
+      // receipts use it: the sender's claimed time can be backdated or arrive late.
+      db.exec(`
+        ALTER TABLE dm_messages ADD COLUMN received_at TEXT;
+        UPDATE dm_messages SET received_at = sent_at;
+      `);
+    },
+  },
 ];
