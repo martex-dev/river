@@ -56,7 +56,6 @@ export function VoiceRecorder(props: {
       if ((Date.now() - recording.startedAt) / 1000 >= MAX_SECONDS) stop(true);
     }, 250);
     return () => window.clearInterval(t);
-     
   }, [recording]);
 
   useEffect(() => () => stop(false), []);
