@@ -229,6 +229,30 @@ describe('StorageService', () => {
     second.close();
   }, 20_000);
 
+  it('a passphrase submitted twice sets up one key and opens the data once', async () => {
+    const keystore = fakeKeystore(false);
+    const first = service(keystore);
+    first.start();
+    const opened: string[] = [];
+    first.onStatus((s) => opened.push(s.state));
+    const a = first.setupPassphrase('correct horse battery staple');
+    // The second press (maybe with a different passphrase) must not replace the key being set up.
+    await expect(first.setupPassphrase('another passphrase entirely')).rejects.toThrow(/not expected/);
+    await a;
+    expect(first.isBusy()).toBe(false);
+    expect(opened).toEqual(['open']);
+    first.close();
+
+    const second = service(keystore);
+    second.start();
+    second.onStatus((s) => opened.push(s.state));
+    const u = second.unlock('correct horse battery staple');
+    await expect(second.unlock('correct horse battery staple')).rejects.toThrow(/not locked/);
+    await u;
+    expect(opened).toEqual(['open', 'open']);
+    second.close();
+  }, 30_000);
+
   it('reports a locked keyring instead of overwriting data', () => {
     const keystore = fakeKeystore();
     const first = service(keystore);

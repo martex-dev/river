@@ -533,7 +533,9 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.identitySetName, (_e, displayName) => deps.identity.setDisplayName(displayName));
   handle(IPC.storageSetup, async (_e, raw): Promise<PassphraseResult> => {
     const passphrase = passphraseSchema.parse(raw);
-    if (deps.storage.getStatus().state !== 'setup-required') return { ok: false, reason: 'not-expected' };
+    // Pressed twice: the first one is still setting up.
+    if (deps.storage.isBusy() || deps.storage.getStatus().state !== 'setup-required')
+      return { ok: false, reason: 'not-expected' };
     if (passphrase.length < MIN_PASSPHRASE_LENGTH) return { ok: false, reason: 'too-short' };
     await deps.storage.setupPassphrase(passphrase);
     return { ok: true };
@@ -541,7 +543,8 @@ export function registerIpc(deps: IpcDeps): void {
   let failedUnlocks = 0;
   handle(IPC.storageUnlock, async (_e, raw): Promise<PassphraseResult> => {
     const passphrase = passphraseSchema.parse(raw);
-    if (deps.storage.getStatus().state !== 'locked') return { ok: false, reason: 'not-expected' };
+    if (deps.storage.isBusy() || deps.storage.getStatus().state !== 'locked')
+      return { ok: false, reason: 'not-expected' };
     try {
       await deps.storage.unlock(passphrase);
       failedUnlocks = 0;
