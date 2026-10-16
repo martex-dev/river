@@ -6,6 +6,17 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.10.9] - 2026-10-16
+
+**Contact profiles.**
+
+### Added
+
+- Tap a person's name at the top of a chat for their **profile**: a big
+  picture, their bio, whether you verified them, Call, Video, Search and Media
+  buttons, the groups you are both in, their River ID (tap to copy), the safety
+  number, and Block.
+
 ## [2.10.8] - 2026-10-16
 
 **Chat folders.**

@@ -361,6 +361,120 @@ const useSelection = create<{
   clear: () => set({ peer: null, ids: [] }),
 }));
 
+/** A person's profile from their chat (2.10.9): picture, bio, groups in common and actions. */
+function ContactSheet(props: {
+  c: ConversationView;
+  onClose(): void;
+  onSafety(): void;
+  onMedia(): void;
+  onSearch(): void;
+}): ReactElement {
+  const { c } = props;
+  const dm = useDm();
+  const activeCall = useDmCall((s) => s.active);
+  const [bio, setBio] = useState('');
+  useEffect(() => {
+    void window.river.social.action({ a: 'profile', riverId: c.riverId }).then((r) => {
+      if (r.ok) setBio((r.value as { bio?: string }).bio ?? '');
+    });
+  }, [c.riverId]);
+  const common = dm.conversations.filter(
+    (g) => g.kind === 'group' && g.state !== 'left' && g.members.some((m) => m.riverId === c.riverId),
+  );
+  const canCall = c.state === 'accepted' && !activeCall;
+  return (
+    <Modal title="Profile" onClose={props.onClose}>
+      <div className="contact-sheet">
+        <ConvAvatar c={c} size={96} />
+        <h2 className="contact-sheet__name">{c.name}</h2>
+        <span className={`chip dm-lock ${c.verified ? 'is-verified' : ''}`}>
+          {c.verified ? '✓ Verified' : '🔒 End-to-end encrypted'}
+        </span>
+        {bio && <p className="contact-sheet__bio">{bio}</p>}
+        <div className="contact-sheet__actions">
+          <button
+            className="contact-sheet__action"
+            disabled={!canCall}
+            onClick={() => {
+              props.onClose();
+              void startDmCall(c.riverId, false);
+            }}
+          >
+            <PhoneIcon size={20} />
+            <span>Call</span>
+          </button>
+          <button
+            className="contact-sheet__action"
+            disabled={!canCall}
+            onClick={() => {
+              props.onClose();
+              void startDmCall(c.riverId, true);
+            }}
+          >
+            <CameraIcon size={20} />
+            <span>Video</span>
+          </button>
+          <button className="contact-sheet__action" onClick={props.onSearch}>
+            <span aria-hidden="true">🔍</span>
+            <span>Search</span>
+          </button>
+          <button className="contact-sheet__action" onClick={props.onMedia}>
+            <span aria-hidden="true">🖼</span>
+            <span>Media</span>
+          </button>
+        </div>
+      </div>
+      {common.length > 0 && (
+        <>
+          <div className="field__label">Groups in common · {common.length}</div>
+          <ul className="contact-sheet__groups">
+            {common.map((g) => (
+              <li key={g.riverId}>
+                <button
+                  className="dm-row"
+                  onClick={() => {
+                    props.onClose();
+                    openDm(g.riverId);
+                  }}
+                >
+                  <GroupAvatar c={g} size={28} />
+                  <span className="dm-row__text">
+                    <strong>{g.name}</strong>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <div className="field__label">River ID</div>
+      <button className="btn btn--link contact-sheet__id mono small" onClick={() => copyText(c.riverId)}>
+        {c.riverId}
+      </button>
+      <div className="button-row">
+        <button className="btn btn--ghost" onClick={props.onSafety}>
+          View safety number
+        </button>
+        {c.state === 'blocked' ? (
+          <button className="btn btn--ghost" onClick={() => void dm.run({ a: 'unblock', peer: c.riverId })}>
+            Unblock
+          </button>
+        ) : (
+          <button
+            className="btn btn--ghost btn--danger-text"
+            onClick={() => {
+              props.onClose();
+              void dm.run({ a: 'block', peer: c.riverId });
+            }}
+          >
+            Block
+          </button>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 /** Make or change a chat folder (2.10.8): a name and the chats in it. */
 function FolderDialog(props: {
   folder: ChatFolder | null;
@@ -571,6 +685,7 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
   const messages = useDm((x) => x.messages[c.riverId]) ?? NO_MESSAGES;
   const [showPins, setShowPins] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [timerOpen, setTimerOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [polling, setPolling] = useState(false);
@@ -670,8 +785,22 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
         </div>
       )}
       <header className="chat__head">
-        {c.kind === 'group' ? <GroupAvatar c={c} size={28} /> : <ConvAvatar c={c} size={28} />}
-        <strong>{c.name}</strong>
+        {c.kind === 'group' || c.self ? (
+          <>
+            {c.kind === 'group' ? <GroupAvatar c={c} size={28} /> : <ConvAvatar c={c} size={28} />}
+            <strong>{c.name}</strong>
+          </>
+        ) : (
+          <button
+            className="chat__head-who"
+            title={`Profile of ${c.name}`}
+            aria-label={`Profile of ${c.name}`}
+            onClick={() => setProfileOpen(true)}
+          >
+            <ConvAvatar c={c} size={28} />
+            <strong>{c.name}</strong>
+          </button>
+        )}
         {c.kind === 'group' ? (
           <button className="chip dm-lock" onClick={() => setShowMembers(!showMembers)} title="Group members">
             👥 {c.members.length} members
@@ -899,6 +1028,24 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
         </Popover>
       )}
       {timerOpen && <TimerDialog conversation={c} onClose={() => setTimerOpen(false)} />}
+      {profileOpen && (
+        <ContactSheet
+          c={c}
+          onClose={() => setProfileOpen(false)}
+          onSafety={() => {
+            setProfileOpen(false);
+            props.onSafety();
+          }}
+          onMedia={() => {
+            setProfileOpen(false);
+            setMediaOpen(true);
+          }}
+          onSearch={() => {
+            setProfileOpen(false);
+            setSearching(true);
+          }}
+        />
+      )}
       {polling && (
         <CreatePollDialog
           onSend={(poll, text) => dm.run({ a: 'send', peer: c.riverId, text, poll })}

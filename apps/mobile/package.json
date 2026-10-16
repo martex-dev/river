@@ -1,6 +1,6 @@
 {
   "name": "@river/mobile",
-  "version": "2.10.8",
+  "version": "2.10.9",
   "private": true,
   "description": "River for Android (and later iOS): the desktop's UI and client core in a Capacitor app, with libsignal, SQLCipher and the Android Keystore underneath.",
   "license": "AGPL-3.0-only",
