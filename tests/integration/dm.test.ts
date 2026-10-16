@@ -181,6 +181,33 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     expect(convs[0]!.state).toBe('accepted');
   });
 
+  it('chat list: pin to top, archive, mark unread (kept on the device)', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    await alice.dm.action({ a: 'open', peer: bob.riverId, name: 'Bob' });
+    await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'older' });
+    await alice.dm.action({ a: 'open', peer: carol.riverId, name: 'Carol' });
+    await alice.dm.action({ a: 'send', peer: carol.riverId, text: 'newer' });
+    const order = async () => (await alice.dm.action({ a: 'conversations' })).map((c) => c.name);
+    expect(await order()).toEqual(['Carol', 'Bob']);
+
+    await alice.dm.action({ a: 'chatFlags', peer: bob.riverId, pinned: true });
+    expect(await order()).toEqual(['Bob', 'Carol']);
+    const pinnedBob = (await alice.dm.action({ a: 'conversations' }))[0]!;
+    expect(pinnedBob).toMatchObject({ pinned: true, archived: false });
+
+    // Archiving unpins; marking unread is cleared by reading.
+    await alice.dm.action({ a: 'chatFlags', peer: bob.riverId, archived: true });
+    await alice.dm.action({ a: 'chatFlags', peer: carol.riverId, markedUnread: true });
+    let convs = await alice.dm.action({ a: 'conversations' });
+    expect(convs.find((c) => c.name === 'Bob')).toMatchObject({ pinned: false, archived: true });
+    expect(convs.find((c) => c.name === 'Carol')).toMatchObject({ markedUnread: true });
+    await alice.dm.action({ a: 'read', peer: carol.riverId });
+    convs = await alice.dm.action({ a: 'conversations' });
+    expect(convs.find((c) => c.name === 'Carol')).toMatchObject({ markedUnread: false });
+  });
+
   it('sends encrypted files in direct messages', async () => {
     const alice = await person('Alice');
     const bob = await person('Bob');

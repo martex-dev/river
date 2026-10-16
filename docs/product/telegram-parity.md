@@ -30,19 +30,19 @@ volume (fixed in 2.0.4).
 
 ## Plan
 
-| Version | Theme                 | Contents                                                                                                                                   |
-| ------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| 2.0.4   | Louder, clearer voice | Voice volume up to 200 % with a limiter, louder default on phones, per-person volume in 1:1 calls, Android volume buttons control the call |
-| 2.1     | Chat list             | Pin chats, archive, mark unread, filters (Unread, People, Groups), jump to latest in conversations                                         |
-| 2.2     | Message actions       | Copy text, select several messages, search in a conversation                                                                               |
-| 2.3     | Voice messages        | Record, send, play, playback speed                                                                                                         |
-| 2.4     | Disappearing messages | Per-chat timer, enforced on both sides                                                                                                     |
-| 2.5     | Send later            | Scheduled messages, send silently                                                                                                          |
-| 2.6     | Privacy controls      | Read receipts and typing indicator toggles; screen security on Android                                                                     |
-| 2.7     | Media                 | Shared media per conversation, swipe between pictures, video speed                                                                         |
-| 2.8     | Phone feel            | Swipe to reply, haptics                                                                                                                    |
-| 2.9     | People                | Add by QR code, a "Note to self" conversation                                                                                              |
-| 2.10    | Calls                 | Picture-in-picture for video calls                                                                                                         |
+| Version  | Theme                 | Contents                                                                                                                                   |
+| -------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2.0.4 ✅ | Louder, clearer voice | Voice volume up to 200 % with a limiter, louder default on phones, per-person volume in 1:1 calls, Android volume buttons control the call |
+| 2.1 ✅   | Chat list             | Pin chats, archive, mark unread, filters (Unread, People, Groups), jump to latest in conversations                                         |
+| 2.2      | Message actions       | Copy text, select several messages, search in a conversation                                                                               |
+| 2.3      | Voice messages        | Record, send, play, playback speed                                                                                                         |
+| 2.4      | Disappearing messages | Per-chat timer, enforced on both sides                                                                                                     |
+| 2.5      | Send later            | Scheduled messages, send silently                                                                                                          |
+| 2.6      | Privacy controls      | Read receipts and typing indicator toggles; screen security on Android                                                                     |
+| 2.7      | Media                 | Shared media per conversation, swipe between pictures, video speed                                                                         |
+| 2.8      | Phone feel            | Swipe to reply, haptics                                                                                                                    |
+| 2.9      | People                | Add by QR code, a "Note to self" conversation                                                                                              |
+| 2.10     | Calls                 | Picture-in-picture for video calls                                                                                                         |
 
 After 2.10: 2.10.x polish releases.
 

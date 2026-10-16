@@ -6,6 +6,25 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-16
+
+**A chat list like Telegram's.**
+
+### Added
+
+- **Pin conversations** to the top of the list (up to 10), **archive** them
+  into an "Archived chats" row (which shows its unread count), and **mark as
+  unread / read** — right-click a conversation, or long-press on a phone. These
+  stay on your device, in its encrypted database.
+- **Filters** above the list: All, Unread, People, Groups.
+- **Jump to the latest message** in conversations: a round ↓ button with the
+  unread count appears when you scroll up.
+
+### Fixed
+
+- A new message no longer yanks you to the bottom while you are reading older
+  messages in a conversation.
+
 ## [2.0.4] - 2026-10-16
 
 **Louder, clearer voice.**
