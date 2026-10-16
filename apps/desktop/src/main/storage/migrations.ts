@@ -366,4 +366,15 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 22,
+    name: '0022_disappearing_messages',
+    up(db) {
+      // Disappearing messages (2.4): when this device deletes its copy of a message.
+      db.exec(`
+        ALTER TABLE dm_messages ADD COLUMN expires_at TEXT;
+        CREATE INDEX dm_messages_expiry ON dm_messages (expires_at) WHERE expires_at IS NOT NULL;
+      `);
+    },
+  },
 ];

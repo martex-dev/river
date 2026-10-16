@@ -1988,3 +1988,39 @@ html[data-density='compact'] .member {
   font-weight: 700;
   cursor: pointer;
 }
+
+/* Disappearing messages (2.4). */
+.chat__notice {
+  align-self: center;
+  margin: 10px auto;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--layer-1);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+.msg__expires {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.timer-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.timer-choice {
+  padding: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.timer-choice.is-active {
+  border-color: var(--accent-2);
+  background: color-mix(in srgb, var(--accent-2) 18%, transparent);
+  font-weight: 700;
+}

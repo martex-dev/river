@@ -27,6 +27,8 @@ export interface ConversationView {
   verified: boolean;
   /** The contact's safety number changed since you last looked. */
   keyChanged: boolean;
+  /** Disappearing messages timer in seconds (0 = off), 2.4. */
+  timer?: number;
   /** Chat-list flags (2.1), kept on this device: pinned to the top, archived, marked unread. */
   pinned?: boolean;
   archived?: boolean;
@@ -49,6 +51,10 @@ export interface DirectMessageView {
   pinned?: boolean;
   status: 'sending' | 'sent' | 'delivered' | 'read' | 'failed' | 'received';
   reactions: Array<{ emoji: string; count: number; mine: boolean; users: string[] }>;
+  /** When this device deletes the message (disappearing messages, 2.4). */
+  expiresAt?: string | null;
+  /** A notice in the conversation instead of a message, e.g. the disappearing-messages timer. */
+  notice?: { timer: number } | null;
 }
 
 export interface FileView {
@@ -93,6 +99,29 @@ const riverId = z.uuid();
 /** A conversation: a person's River ID or a group ID. */
 const conv = z.union([riverId, id]);
 
+/** Disappearing messages: the longest timer (4 weeks), and the choices offered. */
+export const MAX_TIMER = 28 * 86_400;
+export const TIMER_CHOICES = [0, 30, 300, 3600, 28_800, 86_400, 604_800, MAX_TIMER] as const;
+
+/** "30 seconds", "1 hour", "1 week"… */
+export function timerLabel(seconds: number): string {
+  if (!seconds) return 'Off';
+  const units: Array<[number, string]> = [
+    [604_800, 'week'],
+    [86_400, 'day'],
+    [3600, 'hour'],
+    [60, 'minute'],
+    [1, 'second'],
+  ];
+  for (const [size, name] of units) {
+    if (seconds % size === 0) {
+      const n = seconds / size;
+      return `${n} ${name}${n === 1 ? '' : 's'}`;
+    }
+  }
+  return `${seconds} seconds`;
+}
+
 export const dmActionSchema = z.discriminatedUnion('a', [
   z.object({ a: z.literal('conversations') }).strict(),
   z.object({ a: z.literal('messages'), peer: conv }).strict(),
@@ -129,6 +158,10 @@ export const dmActionSchema = z.discriminatedUnion('a', [
     .object({ a: z.literal('react'), peer: conv, id, emoji: z.string().min(1).max(32), on: z.boolean() })
     .strict(),
   z.object({ a: z.literal('read'), peer: conv }).strict(),
+  /** Disappearing messages (2.4): every new message in this conversation is deleted after `seconds`. */
+  z
+    .object({ a: z.literal('setTimer'), peer: conv, seconds: z.number().int().min(0).max(MAX_TIMER) })
+    .strict(),
   /** Pin, archive or mark a conversation unread (2.1); kept in this device's encrypted database. */
   z
     .object({
