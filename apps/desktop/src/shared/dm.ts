@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   attachmentPointerSchema,
   MAX_ATTACHMENT_BYTES,
+  linkEmbedSchema,
   pollInputSchema,
   type AttachmentPointer,
 } from './community-actions.ts';
@@ -64,6 +65,8 @@ export interface DirectMessageView {
   silent?: boolean;
   /** A poll (2.10.4); votes are encrypted reactions, as in channels. */
   poll?: Poll | null;
+  /** A link preview made by the sender's app (2.10.6); readers never fetch anything. */
+  embed?: z.infer<typeof linkEmbedSchema> | null;
   /** A notice in the conversation instead of a message, e.g. the disappearing-messages timer. */
   notice?: { timer: number } | null;
 }
@@ -168,6 +171,8 @@ export const dmActionSchema = z.discriminatedUnion('a', [
       silent: z.boolean().optional(),
       /** Make this message a poll (2.10.4); `text` is shown by apps without polls. */
       poll: pollInputSchema.optional(),
+      /** A link preview made on this device, if you turned previews on (2.10.6). */
+      embed: linkEmbedSchema.optional(),
     })
     .strict()
     .refine((v) => v.text.trim().length > 0 || (v.attachments?.length ?? 0) > 0, 'empty'),
