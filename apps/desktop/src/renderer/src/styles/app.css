@@ -1775,8 +1775,8 @@ html[data-density='compact'] .member {
   color: var(--text);
 }
 .chat-filters__tab.is-active {
-  background: var(--accent-2);
-  color: #fff;
+  background: var(--accent-grad);
+  color: var(--accent-ink);
 }
 .dm-row__archive-icon {
   display: grid;
@@ -1816,8 +1816,8 @@ html[data-density='compact'] .member {
   animation: slide-up var(--dur) var(--ease-spring);
 }
 .chat__jump-latest:hover {
-  background: var(--accent-2);
-  color: #fff;
+  background: var(--accent-grad);
+  color: var(--accent-ink);
 }
 .chat__jump-count {
   position: absolute;
@@ -1826,8 +1826,8 @@ html[data-density='compact'] .member {
   min-width: 18px;
   padding: 1px 5px;
   border-radius: 9px;
-  background: var(--accent-2);
-  color: #fff;
+  background: var(--accent-grad);
+  color: var(--accent-ink);
   font-size: 11px;
   font-weight: 700;
 }
