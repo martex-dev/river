@@ -197,6 +197,9 @@ function explain(err: unknown): never {
  */
 /** Call setup held while offline: at most this many, and only this fresh when sent. */
 const PENDING_SIGNALS_MAX = 400;
+/** Messages remembered for edits and saves, and how far back to look for one not seen yet. */
+const RECENT_MESSAGES = 3000;
+const FIND_MESSAGE_PAGES = 5;
 const PENDING_SIGNAL_TTL_MS = 30_000;
 
 /** Forum tags from decrypted data: short, unique strings only (1.0.22). */
@@ -224,6 +227,11 @@ export class CommunityService {
   private readonly webhookKeys = new Map<string, { name: string; key: Buffer }>();
   /** Who sent recent messages, so a reply to one of yours counts as a mention. */
   private readonly messageSenders = new Map<string, string>();
+  /**
+   * Messages opened recently (oldest first), from any page or thread: edits and saves find
+   * them here. Your own also keep their sealed body, so an edit changes only the text.
+   */
+  private readonly recent = new Map<string, { chat: ChatMessage; sealed?: string }>();
   private keyChannel: { send(peer: string, message: KeyMessage): Promise<void> } | null = null;
   private readonly rotating = new Set<string>();
   private readonly keyRequests = new Map<string, number>();
@@ -1067,7 +1075,7 @@ export class CommunityService {
           if (typeof alt === 'string' && alt.trim()) alts[a.id] = alt.slice(0, 1000);
         }
       }
-      return {
+      const chat: ChatMessage = {
         id: m.id,
         communityId,
         channelId: m.channelId,
@@ -1119,6 +1127,10 @@ export class CommunityService {
             }
           : null,
       };
+      this.recent.delete(m.id);
+      this.recent.set(m.id, chat.mine ? { chat, sealed: m.body } : { chat });
+      if (this.recent.size > RECENT_MESSAGES) this.recent.delete(this.recent.keys().next().value!);
+      return chat;
     } catch {
       return null;
     }
@@ -2106,15 +2118,25 @@ export class CommunityService {
       }
       case 'edit': {
         const communityId = this.communityOf(act.channelId);
-        const existing = await this.findMessage(act.channelId, act.messageId);
-        if (existing?.poll) throw new CommunityError('Polls cannot be edited.');
-        // Seal with the message's own key: its reactions are tagged with it and must keep matching.
-        const key = this.messageKeys.get(act.messageId) ?? this.requireKey(communityId);
-        const body = seal(key, communityId, `message:${act.channelId}`, {
-          text: act.text,
-          ...(existing?.replyTo ? { replyTo: existing.replyTo } : {}),
-          ...(existing?.attachments.length ? { attachments: existing.attachments } : {}),
-        });
+        const original = await this.findMessage(act.channelId, act.messageId);
+        const ring = this.keys.get(communityId);
+        // Never re-seal from what is shown: an edit made without the original body would drop
+        // its files, reply, descriptions, tags, preview and sticker (and ping again).
+        if (!original?.sealed || !original.chat.mine || !ring)
+          throw new CommunityError('River could not find that message to edit. Scroll to it and try again.');
+        if (original.chat.poll) throw new CommunityError('Polls cannot be edited.');
+        // The message's own key: its reactions are tagged with it and must keep matching.
+        const opened = ring.openWith<Record<string, unknown>>(
+          communityId,
+          `message:${act.channelId}`,
+          original.sealed,
+        );
+        const next: Record<string, unknown> = { ...opened.value, text: act.text };
+        // A link preview only stays while its link is still in the text.
+        const embedUrl = (next.embed as { url?: unknown } | undefined)?.url;
+        if (next.embed !== undefined && !(typeof embedUrl === 'string' && act.text.includes(embedUrl)))
+          delete next.embed;
+        const body = seal(opened.key, communityId, `message:${act.channelId}`, next);
         await this.call(`/messages/${act.messageId}`, 'PATCH', { body }, z.unknown());
         break;
       }
@@ -2389,7 +2411,7 @@ export class CommunityService {
           this.db().prepare('DELETE FROM saved_messages WHERE message_id = ?').run(act.messageId);
           break;
         }
-        const m = await this.findMessage(act.channelId, act.messageId);
+        const m = (await this.findMessage(act.channelId, act.messageId))?.chat;
         if (!m) throw new CommunityError('That message is no longer here.');
         this.db()
           .prepare(
@@ -2705,8 +2727,27 @@ export class CommunityService {
     return this.deps.requestBytes;
   }
 
-  private async findMessage(channelId: string, messageId: string): Promise<ChatMessage | undefined> {
-    return (await this.messages(channelId)).find((m) => m.id === messageId);
+  /**
+   * A message by ID: one opened in this session (any page, any thread), or else from the
+   * channel's recent history (a few pages back).
+   */
+  private async findMessage(
+    channelId: string,
+    messageId: string,
+  ): Promise<{ chat: ChatMessage; sealed?: string } | undefined> {
+    const seen = (): { chat: ChatMessage; sealed?: string } | undefined => {
+      const hit = this.recent.get(messageId);
+      return hit && hit.chat.channelId === channelId ? hit : undefined;
+    };
+    if (seen()) return seen();
+    let before: string | undefined;
+    for (let page = 0; page < FIND_MESSAGE_PAGES; page++) {
+      const list = await this.messages(channelId, before);
+      if (seen()) return seen();
+      if (!list.length || list[0]!.sentAt === before) return undefined;
+      before = list[0]!.sentAt;
+    }
+    return undefined;
   }
 
   /** A voice join is waiting for the server's answer. */
@@ -3420,6 +3461,7 @@ export class CommunityService {
     this.deps.db()?.prepare('DELETE FROM communities WHERE id = ?').run(id);
     this.keys.delete(id);
     this.wires.delete(id);
+    for (const [messageId, r] of this.recent) if (r.chat.communityId === id) this.recent.delete(messageId);
     this.communities = this.communities.filter((c) => c.id !== id);
     this.emit({ t: 'communities', communities: this.communities });
   }

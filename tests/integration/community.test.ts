@@ -247,6 +247,78 @@ describe('polls', () => {
     expect(after!.reactions.map((r) => r.emoji)).toEqual(['🔥']);
     void created;
   });
+
+  it('editing changes only the text: files, descriptions, the reply and its no-ping stay', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Edit Keeps');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.kind === 'text')!;
+    const question = await bob.community.send(general.id, 'which chart?');
+    await alice.community.refresh();
+    await alice.community.messages(general.id);
+    const chart = await alice.community.action({
+      a: 'upload',
+      name: 'chart.png',
+      mime: 'image/png',
+      bytes: new Uint8Array([1, 2, 3]),
+    });
+    const sent = await alice.community.action({
+      a: 'send',
+      channelId: general.id,
+      text: 'this one',
+      replyTo: question.id,
+      noPing: true,
+      attachments: [chart],
+      alts: { [chart.id]: 'A bar chart' },
+    });
+    await alice.community.action({ a: 'edit', channelId: general.id, messageId: sent.id, text: 'this one!' });
+    await bob.community.messages(general.id); // Bob knows his question is his
+    const seen = (await bob.community.messages(general.id)).find((m) => m.id === sent.id)!;
+    expect(seen).toMatchObject({
+      text: 'this one!',
+      replyTo: question.id,
+      attachments: [chart],
+      alts: { [chart.id]: 'A bar chart' },
+      mentionsMe: false,
+    });
+    expect(seen.editedAt).not.toBeNull();
+  });
+
+  it('an edit River cannot base on the original is refused, never destroying the message', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Edit Threads');
+    const general = created.channels.find((c) => c.kind === 'text')!;
+    const root = await alice.community.send(general.id, 'root');
+    await alice.community.action({ a: 'createThread', channelId: general.id, messageId: root.id, name: 'T' });
+    const file = await alice.community.action({
+      a: 'upload',
+      name: 'notes.txt',
+      mime: 'text/plain',
+      bytes: new Uint8Array([9, 9]),
+    });
+    const inThread = await alice.community.action({
+      a: 'send',
+      channelId: general.id,
+      text: 'in the thread',
+      threadId: root.id,
+      attachments: [file],
+    });
+    // After a restart, the thread message has not been opened yet (it is in no channel page).
+    const later = alice.restart();
+    await later.refresh();
+    await expect(
+      later.action({ a: 'edit', channelId: general.id, messageId: inThread.id, text: 'changed' }),
+    ).rejects.toThrow(/could not find that message/);
+    // Once the thread is open, the edit works and keeps the file.
+    await later.action({ a: 'threadMessages', channelId: general.id, messageId: root.id });
+    await later.action({ a: 'edit', channelId: general.id, messageId: inThread.id, text: 'changed' });
+    const [reply] = await later.action({ a: 'threadMessages', channelId: general.id, messageId: root.id });
+    expect(reply).toMatchObject({ text: 'changed', attachments: [file] });
+    // Saving a thread message works too.
+    await later.action({ a: 'saveMessage', channelId: general.id, messageId: inThread.id, on: true });
+    expect((await later.action({ a: 'savedMessages' })).map((m) => m.text)).toEqual(['changed']);
+  });
 });
 
 describe('deleting your account', () => {
