@@ -6,6 +6,18 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.10.5] - 2026-10-16
+
+**Polish: full-screen calls on phones.**
+
+### Changed
+
+- On phones, calls **fill the screen** like a phone or Instagram call: their
+  video (or a big picture of them in a voice call) behind everything, your
+  camera in a small corner window, the name, timer and status at the top and
+  large buttons at the bottom. **⌄** goes back to the conversation with the
+  call still on; **Full screen** brings it back.
+
 ## [2.10.4] - 2026-10-16
 
 **Polls everywhere.**

@@ -137,6 +137,9 @@ export function DmCallPanel({ conversation: c }: { conversation: ConversationVie
   const me = useRiver((r) => r.identity);
   const phone = useRiver((r) => isPhone(r.info?.platform));
   const [picker, setPicker] = useState<ScreenSource[] | null>(null);
+  // Phones (2.10.5): the call fills the screen like a phone call; ⌄ shrinks it into the chat.
+  const [minimized, setMinimized] = useState(false);
+  const full = phone && !minimized;
   const call = s.call;
   if (!active || active.peer !== c.riverId || !call) return null;
   const remote = call.remotes()[0];
@@ -149,9 +152,24 @@ export function DmCallPanel({ conversation: c }: { conversation: ConversationVie
           ? 'Connecting…'
           : 'Connected · encrypted directly between your devices';
   return (
-    <div className="dm-call">
+    <div className={`dm-call ${full ? 'dm-call--full' : ''}`}>
+      {full && (
+        <div className="dm-call__top">
+          <button
+            className="dm-call__min"
+            aria-label="Back to the conversation"
+            title="Back to the conversation"
+            onClick={() => setMinimized(true)}
+          >
+            ⌄
+          </button>
+          <strong className="dm-call__name">{c.name}</strong>
+        </div>
+      )}
       <div className="dm-call__stage">
-        <div className={`tile ${call.speaking.has(me?.riverId ?? '') ? 'is-speaking' : ''}`}>
+        <div
+          className={`tile ${call.speaking.has(me?.riverId ?? '') ? 'is-speaking' : ''} ${call.localTrack('screen') || call.localTrack('camera') ? '' : 'tile--avatar'}`}
+        >
           {call.localTrack('screen') ? (
             <Video track={call.localTrack('screen')} />
           ) : call.localTrack('camera') ? (
@@ -185,7 +203,7 @@ export function DmCallPanel({ conversation: c }: { conversation: ConversationVie
                 id={c.riverId}
                 name={c.name}
                 avatar={c.avatar}
-                size={72}
+                size={full ? 128 : 72}
                 speaking={call.speaking.has(c.riverId)}
               />
             </div>
@@ -204,6 +222,14 @@ export function DmCallPanel({ conversation: c }: { conversation: ConversationVie
           </>
         )}
         {status}
+        {phone && minimized && (
+          <>
+            {' · '}
+            <button className="btn btn--link" onClick={() => setMinimized(false)}>
+              Full screen
+            </button>
+          </>
+        )}
       </div>
       <div className="voice__controls">
         <button
