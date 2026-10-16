@@ -1,6 +1,6 @@
 import { FavoriteStar } from './Favorites.tsx';
 import { isVoiceMessage, VoiceNote } from '../../components/VoiceMessage.tsx';
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { useContext, createContext, useEffect, useRef, useState, type ReactElement } from 'react';
 import type { AttachmentPointer } from '../../../../shared/community-actions.ts';
 import { MAX_ATTACHMENT_BYTES } from '../../../../shared/community-actions.ts';
 import { useCommunity } from '../store.ts';
@@ -85,6 +85,18 @@ export async function saveAttachment(pointer: AttachmentPointer): Promise<void> 
   else if (res.value) useCommunity.getState().notify(`Saved ${pointer.name}`);
 }
 
+/**
+ * The pictures of the conversation being shown, oldest first (2.7): the image viewer moves
+ * between them. Message lists provide it; elsewhere a message's own pictures are used.
+ */
+export const GalleryContext = createContext<AttachmentPointer[] | null>(null);
+
+export function galleryOf(lists: Iterable<AttachmentPointer[]>): AttachmentPointer[] {
+  const out: AttachmentPointer[] = [];
+  for (const list of lists) for (const a of list) if (INLINE_IMAGE.has(a.mime)) out.push(a);
+  return out;
+}
+
 export function AttachmentList({
   attachments,
   alts,
@@ -93,6 +105,8 @@ export function AttachmentList({
   alts?: Record<string, string>;
 }): ReactElement {
   const [open, setOpen] = useState<AttachmentPointer | null>(null);
+  const shared = useContext(GalleryContext);
+  const gallery = shared && open && shared.some((a) => a.id === open.id) ? shared : galleryOf([attachments]);
   return (
     <div className="attachments">
       {attachments.map((a) =>
@@ -104,7 +118,15 @@ export function AttachmentList({
           <FileCard key={a.id} pointer={a} />
         ),
       )}
-      {open && <Lightbox pointer={open} onClose={() => setOpen(null)} />}
+      {open && (
+        <Lightbox
+          key={open.id}
+          pointer={open}
+          gallery={gallery}
+          onNavigate={setOpen}
+          onClose={() => setOpen(null)}
+        />
+      )}
     </div>
   );
 }
@@ -172,7 +194,7 @@ function MediaAttachment({ pointer }: { pointer: AttachmentPointer }): ReactElem
     <div className={`attachment-media ${video ? 'attachment-media--video' : ''}`}>
       {url ? (
         video ? (
-          <video src={url} controls playsInline aria-label={pointer.name} />
+          <SpeedVideo url={url} name={pointer.name} />
         ) : (
           <audio src={url} controls aria-label={pointer.name} />
         )
@@ -190,6 +212,32 @@ function MediaAttachment({ pointer }: { pointer: AttachmentPointer }): ReactElem
       )}
       <button className="btn btn--link attachment-media__save" onClick={() => void saveAttachment(pointer)}>
         Save
+      </button>
+    </div>
+  );
+}
+
+const VIDEO_SPEEDS = [1, 1.5, 2, 0.5] as const;
+
+/** A video with a playback-speed button (2.7). */
+function SpeedVideo({ url, name }: { url: string; name: string }): ReactElement {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [speed, setSpeed] = useState<(typeof VIDEO_SPEEDS)[number]>(1);
+  return (
+    <div className="speed-video">
+      <video ref={ref} src={url} controls playsInline aria-label={name} />
+      <button
+        type="button"
+        className="speed-video__speed"
+        aria-label={`Playback speed ${speed}×`}
+        title="Playback speed"
+        onClick={() => {
+          const n = VIDEO_SPEEDS[(VIDEO_SPEEDS.indexOf(speed) + 1) % VIDEO_SPEEDS.length]!;
+          setSpeed(n);
+          if (ref.current) ref.current.playbackRate = n;
+        }}
+      >
+        {speed}×
       </button>
     </div>
   );
@@ -241,8 +289,23 @@ export function stepZoom(scale: number, direction: 1 | -1): number {
   return Math.min(8, Math.max(1, next));
 }
 
-function Lightbox({ pointer, onClose }: { pointer: AttachmentPointer; onClose(): void }): ReactElement {
-  const url = urls.get(pointer.id);
+function Lightbox({
+  pointer,
+  gallery = [],
+  onNavigate,
+  onClose,
+}: {
+  pointer: AttachmentPointer;
+  gallery?: AttachmentPointer[];
+  onNavigate?(next: AttachmentPointer): void;
+  onClose(): void;
+}): ReactElement {
+  // Pictures you move to may not be loaded yet: decrypted here when needed.
+  const { url } = useDecrypted(pointer, true);
+  const index = gallery.findIndex((a) => a.id === pointer.id);
+  const prev = index > 0 ? gallery[index - 1] : undefined;
+  const next = index >= 0 && index < gallery.length - 1 ? gallery[index + 1] : undefined;
+  const swipe = useRef<{ x: number; y: number } | null>(null);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [copied, setCopied] = useState(false);
@@ -257,6 +320,8 @@ function Lightbox({ pointer, onClose }: { pointer: AttachmentPointer; onClose():
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowLeft' && prev) onNavigate?.(prev);
+      else if (e.key === 'ArrowRight' && next) onNavigate?.(next);
       else if (e.key === '+' || e.key === '=') zoom(1);
       else if (e.key === '-') zoom(-1);
       else if (e.key === '0') {
@@ -266,7 +331,7 @@ function Lightbox({ pointer, onClose }: { pointer: AttachmentPointer; onClose():
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, onNavigate, prev, next]);
   const copy = async (): Promise<void> => {
     if (!url) return;
     try {
@@ -291,7 +356,60 @@ function Lightbox({ pointer, onClose }: { pointer: AttachmentPointer; onClose():
     }
   };
   return (
-    <div className="lightbox" role="dialog" aria-label={pointer.name} onClick={onClose}>
+    <div
+      className="lightbox"
+      role="dialog"
+      aria-label={pointer.name}
+      onClick={onClose}
+      onTouchStart={(e) => {
+        const t = e.touches[0];
+        swipe.current = scale <= 1 && t && e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null;
+      }}
+      onTouchEnd={(e) => {
+        const s = swipe.current;
+        const t = e.changedTouches[0];
+        swipe.current = null;
+        if (!s || !t) return;
+        const dx = t.clientX - s.x;
+        const dy = t.clientY - s.y;
+        // Sideways: next or previous picture; down: close, like a photo app.
+        if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) {
+          const to = dx < 0 ? next : prev;
+          if (to) onNavigate?.(to);
+        } else if (dy > 120 && Math.abs(dy) > 2 * Math.abs(dx)) onClose();
+      }}
+    >
+      {gallery.length > 1 && index >= 0 && (
+        <>
+          <span className="lightbox__count" aria-live="polite">
+            {index + 1} / {gallery.length}
+          </span>
+          {prev && (
+            <button
+              className="lightbox__nav lightbox__nav--prev"
+              aria-label="Previous picture"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigate?.(prev);
+              }}
+            >
+              ‹
+            </button>
+          )}
+          {next && (
+            <button
+              className="lightbox__nav lightbox__nav--next"
+              aria-label="Next picture"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigate?.(next);
+              }}
+            >
+              ›
+            </button>
+          )}
+        </>
+      )}
       <div className="lightbox__bar" onClick={(e) => e.stopPropagation()}>
         <span>{pointer.name}</span>
         <span className="muted small">{formatBytes(pointer.size)}</span>

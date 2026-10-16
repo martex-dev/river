@@ -41,6 +41,8 @@ import {
   PendingFiles,
   UploadCancelled,
   pendingFrom,
+  galleryOf,
+  GalleryContext,
   uploadAll,
   type PendingFile,
 } from './Attachments.tsx';
@@ -83,6 +85,9 @@ function dayLabel(iso: string): string {
   return d.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 }
 
+/** One shared empty list, so memos do not see a new array every render. */
+const NO_MESSAGES: never[] = [];
+
 export function TextChannel(props: {
   community: CommunityView;
   channel: ChannelView;
@@ -90,7 +95,8 @@ export function TextChannel(props: {
 }): ReactElement {
   const { community, channel, me } = props;
   const s = useCommunity();
-  const messages = useCommunity((x) => x.messages[channel.id]) ?? [];
+  const messages = useCommunity((x) => x.messages[channel.id]) ?? NO_MESSAGES;
+  const gallery = useMemo(() => galleryOf(messages.map((m) => m.attachments)), [messages]);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Screen readers hear new messages from others as they arrive (1.0.38).
   const [spoken, setSpoken] = useState('');
@@ -307,96 +313,99 @@ export function TextChannel(props: {
           onLoadOlder={() => void s.loadOlder(channel.id)}
         />
       )}
-      <div
-        className="chat__messages"
-        hidden={view === 'gallery'}
-        ref={scrollRef}
-        onMouseDown={() => {
-          // On narrow windows the member list is an overlay: clicking the chat closes it.
-          if (window.innerWidth < 1100 && useCommunity.getState().showMembers) {
-            useCommunity.setState({ showMembers: false });
-          }
-        }}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-          scrollMemory.set(channel.id, fromBottom);
-          setAtBottom(fromBottom < 40);
-        }}
-      >
-        {messages.length >= 100 && !s.noMore[channel.id] && (
-          <div className="chat__older">
-            <button
-              className="btn btn--ghost btn--small"
-              disabled={loadingOlder}
-              onClick={() => {
-                const el = scrollRef.current;
-                const before = el ? el.scrollHeight - el.scrollTop : 0;
-                setLoadingOlder(true);
-                void s.loadOlder(channel.id).finally(() => {
-                  setLoadingOlder(false);
-                  // Keep the reader's place after older messages appear above.
-                  requestAnimationFrame(() => {
-                    if (el) el.scrollTop = el.scrollHeight - before;
+      <GalleryContext.Provider value={gallery}>
+        <div
+          className="chat__messages"
+          hidden={view === 'gallery'}
+          ref={scrollRef}
+          onMouseDown={() => {
+            // On narrow windows the member list is an overlay: clicking the chat closes it.
+            if (window.innerWidth < 1100 && useCommunity.getState().showMembers) {
+              useCommunity.setState({ showMembers: false });
+            }
+          }}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+            scrollMemory.set(channel.id, fromBottom);
+            setAtBottom(fromBottom < 40);
+          }}
+        >
+          {messages.length >= 100 && !s.noMore[channel.id] && (
+            <div className="chat__older">
+              <button
+                className="btn btn--ghost btn--small"
+                disabled={loadingOlder}
+                onClick={() => {
+                  const el = scrollRef.current;
+                  const before = el ? el.scrollHeight - el.scrollTop : 0;
+                  setLoadingOlder(true);
+                  void s.loadOlder(channel.id).finally(() => {
+                    setLoadingOlder(false);
+                    // Keep the reader's place after older messages appear above.
+                    requestAnimationFrame(() => {
+                      if (el) el.scrollTop = el.scrollHeight - before;
+                    });
                   });
-                });
-              }}
-            >
-              {loadingOlder ? 'Decrypting…' : 'Load older messages'}
-            </button>
-          </div>
-        )}
-        <div className="chat__welcome" hidden={messages.length >= 100 && !s.noMore[channel.id]}>
-          <div className="chat__welcome-icon">
-            <HashIcon size={34} />
-          </div>
-          <h2>Welcome to #{channel.name}!</h2>
-          <p className="muted">
-            This is the start of the #{channel.name} channel.{channel.topic ? ` ${channel.topic}` : ''}
-          </p>
-          {messages.length === 0 && <WelcomeActions community={community} channel={channel} />}
-        </div>
-        {messages.map((m, i) => {
-          const prev = messages[i - 1];
-          const newDay = !prev || new Date(prev.sentAt).toDateString() !== new Date(m.sentAt).toDateString();
-          const grouped =
-            !newDay &&
-            !m.replyTo &&
-            prev !== undefined &&
-            prev.sender === m.sender &&
-            prev.webhook === m.webhook &&
-            Date.parse(m.sentAt) - Date.parse(prev.sentAt) < GROUP_MS;
-          return (
-            <div key={m.id}>
-              {newDay && (
-                <div className="chat__day">
-                  <span>{dayLabel(m.sentAt)}</span>
-                </div>
-              )}
-              {m.id === firstNew?.id && (
-                <div className="chat__new" role="separator" aria-label="New messages">
-                  <span>New</span>
-                </div>
-              )}
-              <Message
-                message={m}
-                grouped={grouped}
-                community={community}
-                channel={channel}
-                me={me}
-                myName={myName}
-                names={names}
-                refs={refs}
-                replied={m.replyTo ? messages.find((x) => x.id === m.replyTo) : undefined}
-                onJump={jumpTo}
-              />
+                }}
+              >
+                {loadingOlder ? 'Decrypting…' : 'Load older messages'}
+              </button>
             </div>
-          );
-        })}
-        {outgoing.map((o) => (
-          <OutgoingMessage key={o.localId} item={o} community={community} me={me} />
-        ))}
-      </div>
+          )}
+          <div className="chat__welcome" hidden={messages.length >= 100 && !s.noMore[channel.id]}>
+            <div className="chat__welcome-icon">
+              <HashIcon size={34} />
+            </div>
+            <h2>Welcome to #{channel.name}!</h2>
+            <p className="muted">
+              This is the start of the #{channel.name} channel.{channel.topic ? ` ${channel.topic}` : ''}
+            </p>
+            {messages.length === 0 && <WelcomeActions community={community} channel={channel} />}
+          </div>
+          {messages.map((m, i) => {
+            const prev = messages[i - 1];
+            const newDay =
+              !prev || new Date(prev.sentAt).toDateString() !== new Date(m.sentAt).toDateString();
+            const grouped =
+              !newDay &&
+              !m.replyTo &&
+              prev !== undefined &&
+              prev.sender === m.sender &&
+              prev.webhook === m.webhook &&
+              Date.parse(m.sentAt) - Date.parse(prev.sentAt) < GROUP_MS;
+            return (
+              <div key={m.id}>
+                {newDay && (
+                  <div className="chat__day">
+                    <span>{dayLabel(m.sentAt)}</span>
+                  </div>
+                )}
+                {m.id === firstNew?.id && (
+                  <div className="chat__new" role="separator" aria-label="New messages">
+                    <span>New</span>
+                  </div>
+                )}
+                <Message
+                  message={m}
+                  grouped={grouped}
+                  community={community}
+                  channel={channel}
+                  me={me}
+                  myName={myName}
+                  names={names}
+                  refs={refs}
+                  replied={m.replyTo ? messages.find((x) => x.id === m.replyTo) : undefined}
+                  onJump={jumpTo}
+                />
+              </div>
+            );
+          })}
+          {outgoing.map((o) => (
+            <OutgoingMessage key={o.localId} item={o} community={community} me={me} />
+          ))}
+        </div>
+      </GalleryContext.Provider>
       {!atBottom && (
         <button
           className="chat__jump"
