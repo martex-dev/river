@@ -17,7 +17,7 @@ import { useRiver } from '../store.ts';
 import { acceptDmCall, declineDmCall, endDmCall, useDmCall } from './call.ts';
 import { useDm } from './store.ts';
 import type { ScreenSource } from '../../../shared/ipc.ts';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export function IncomingCall(): ReactElement | null {
   const incoming = useDmCall((s) => s.incoming);
@@ -68,6 +68,31 @@ export function IncomingCall(): ReactElement | null {
 }
 
 /** A small pill while a call runs and its conversation is not on screen. */
+/**
+ * Android (2.10): while a call is on, leaving River keeps the call in a small window, showing
+ * the call (River opens the conversation so the window shows the call, not another page).
+ */
+export function CallPip(): null {
+  const peer = useDmCall((s) => s.active?.peer ?? null);
+  useEffect(() => {
+    window.river.voice.setPip(!!peer);
+    return () => window.river.voice.setPip(false);
+  }, [peer]);
+  useEffect(
+    () =>
+      window.river.app.onPip((on) => {
+        document.documentElement.dataset.pip = on ? 'on' : 'off';
+        const p = useDmCall.getState().active?.peer;
+        if (on && p) {
+          useDm.getState().select(p);
+          useRiver.getState().navigate('messages');
+        }
+      }),
+    [],
+  );
+  return null;
+}
+
 export function CallPill(): ReactElement | null {
   const active = useDmCall((s) => s.active);
   const section = useRiver((r) => r.section);
@@ -123,6 +148,7 @@ export function DmCallPanel({ conversation: c }: { conversation: ConversationVie
           </span>
         </div>
         <div
+          data-remote=""
           className={`tile ${remote && call.speaking.has(c.riverId) ? 'is-speaking' : ''} ${remote?.screenOn ? 'tile--screen' : ''}`}
           // Remote assistance: click their shared screen to point at something (they see a ring).
           onClick={(e) => {
@@ -180,6 +206,24 @@ export function DmCallPanel({ conversation: c }: { conversation: ConversationVie
         >
           <CameraIcon />
         </button>
+        {!phone && document.pictureInPictureEnabled && (remote?.cameraOn || remote?.screenOn) && (
+          <button
+            className="round-btn"
+            aria-label="Picture in picture"
+            title="Keep their video in a small window on top"
+            onClick={() => {
+              if (document.pictureInPictureElement)
+                void document.exitPictureInPicture().catch(() => undefined);
+              else
+                void document
+                  .querySelector<HTMLVideoElement>('.dm-call [data-remote] video')
+                  ?.requestPictureInPicture()
+                  .catch(() => s.notify('Picture in picture is not available here.', 'error'));
+            }}
+          >
+            ⧉
+          </button>
+        )}
         {/* Video calls start on the loudspeaker, voice calls at the ear, as on any phone. */}
         {phone && <SpeakerButton initial={active.video} />}
         <TheirVolume peer={c.riverId} name={c.name} />

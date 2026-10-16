@@ -88,6 +88,10 @@ export const IPC = {
   voiceSpeaker: 'river:voice:speaker',
   /** Phones: a short vibration (2.8). */
   appHaptic: 'river:app:haptic',
+  /** Android: a call may continue in picture-in-picture when River is left (2.10). */
+  voicePip: 'river:voice:pip',
+  /** Android: River went into (true) or out of (false) picture-in-picture. */
+  appPip: 'river:app:pip',
   screenShareStatus: 'river:voice:share-status',
   screenPoint: 'river:voice:point',
   communityEvent: 'river:community:event',
@@ -531,6 +535,8 @@ export interface RiverApi {
     setTitleBar(colors: { color: string; symbol: string }): Promise<void>;
     /** Phones: a short vibration, following the phone's own haptics setting. Nothing on computers. */
     haptic(kind: 'tap' | 'select' | 'success' | 'warning'): void;
+    /** Android: River went into or out of picture-in-picture (2.10). Never fires on computers. */
+    onPip(listener: (on: boolean) => void): () => void;
   };
   settings: { get(): Promise<Settings>; update(patch: SettingsPatch): Promise<Settings> };
   updates: {
@@ -661,6 +667,8 @@ export interface RiverApi {
     selectScreen(sourceId: string): Promise<void>;
     /** Phones: calls through the loudspeaker (true) or the earpiece (false). Nothing on computers. */
     setSpeaker(on: boolean): Promise<void>;
+    /** Android: while a call is on, leaving River shows it in picture-in-picture (2.10). */
+    setPip(on: boolean): void;
     /**
      * Remote assistance (ADR 0007): this app is sharing its screen (or stopped) with these people.
      * Main shows the always-on-top "can see your screen" bar with Stop, outside River's window.

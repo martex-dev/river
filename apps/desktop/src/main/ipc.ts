@@ -81,6 +81,8 @@ export interface IpcDeps {
   speaker?: (on: boolean) => void;
   /** Phones: a short vibration (absent on computers). */
   haptic?: (kind: 'tap' | 'select' | 'success' | 'warning') => void;
+  /** Android: allow picture-in-picture while a call is on (absent elsewhere). */
+  pip?: (on: boolean) => void;
   /** The "can see your screen" bar and pointing (desktop only; ADR 0007). */
   share?: { status(sharing: boolean, viewers: string[]): void; point(x: number, y: number): void };
   /** Creates the account on River's home server by itself. */
@@ -396,6 +398,14 @@ export function registerIpc(deps: IpcDeps): void {
     try {
       assertTrustedSender(event as unknown as IpcMainInvokeEvent, deps.devServerUrl);
       deps.haptic?.(hapticKind.parse(kind));
+    } catch {
+      // invalid or untrusted: dropped
+    }
+  });
+  ipcMain.on(IPC.voicePip, (event, on: unknown) => {
+    try {
+      assertTrustedSender(event as unknown as IpcMainInvokeEvent, deps.devServerUrl);
+      deps.pip?.(z.boolean().parse(on));
     } catch {
       // invalid or untrusted: dropped
     }

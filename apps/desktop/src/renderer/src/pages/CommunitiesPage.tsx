@@ -37,7 +37,7 @@ import { EventsDialog } from '../community/ui/Events.tsx';
 import { Permission } from '@river/protocol/permissions';
 import type { CommunityView } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
-import { CallPill, IncomingCall } from '../dm/CallUi.tsx';
+import { CallPill, CallPip, IncomingCall } from '../dm/CallUi.tsx';
 
 export function CommunitiesPage(): ReactElement {
   const s = useCommunity();
@@ -135,6 +135,7 @@ export function Overlays(): ReactElement {
       <NetworkWatcher />
       <IncomingCall />
       <CallPill />
+      <CallPip />
     </>
   );
 }

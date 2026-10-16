@@ -324,6 +324,9 @@ async function start(): Promise<void> {
     selectScreen: () => undefined,
     speaker: (on) => void ask('speaker', { on }).catch(() => undefined),
     haptic: (kind) => void ask('haptic', { kind }).catch(() => undefined),
+    pip: (on) => {
+      if (PLATFORM === 'android') void ask('pip', { on }).catch(() => undefined);
+    },
     hosting: noHosting,
     homeAccount,
     takeDeepLink: (kind) => {

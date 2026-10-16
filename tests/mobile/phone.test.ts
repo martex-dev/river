@@ -128,6 +128,20 @@ describe('River for Android: client core', { timeout: 60_000 }, () => {
     expect(await p.invoke(IPC.hostStatus)).toMatchObject({ state: 'off', enabled: false });
   });
 
+  it('passes haptics and picture-in-picture to the phone, and drops anything malformed', async () => {
+    const p = await phone('Feel');
+    p.send(IPC.appHaptic, 'select');
+    p.send(IPC.appHaptic, 'boom');
+    p.send(IPC.voicePip, 'yes');
+    p.send(IPC.voicePip, true);
+    const deadline = Date.now() + 5000;
+    while (!p.asks.some((a) => a.kind === 'pip') && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    expect(p.asks.filter((a) => a.kind === 'haptic').map((a) => a.args)).toEqual([{ kind: 'select' }]);
+    expect(p.asks.filter((a) => a.kind === 'pip').map((a) => a.args)).toEqual([{ on: true }]);
+  });
+
   it('joins a desktop community by invite and exchanges sealed messages both ways', async () => {
     const alice = await desktop('Alice');
     const created = await alice.community.create('Phones welcome');
