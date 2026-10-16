@@ -2298,3 +2298,105 @@ html[data-density='compact'] .member {
   border: 0;
   border-radius: 0;
 }
+
+/* Phones (2.10.5): calls fill the screen, like a phone or Instagram call. */
+.dm-call--full {
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  border: 0;
+  background: radial-gradient(circle at 50% 30%, #1b2440, #05080f 70%);
+  animation: none;
+}
+.dm-call--full .dm-call__stage {
+  position: absolute;
+  inset: 0;
+  display: block;
+  height: auto;
+  padding: 0;
+}
+.dm-call--full .tile[data-remote] {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.dm-call--full .tile:not([data-remote]) {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 76px);
+  right: 12px;
+  z-index: 2;
+  width: 28%;
+  max-width: 140px;
+  height: auto;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+.dm-call--full .tile--avatar:not([data-remote]),
+.dm-call--full .tile__label {
+  display: none;
+}
+.dm-call--full .tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.dm-call--full .dm-call__top {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  padding: calc(env(safe-area-inset-top) + 14px) 60px 34px;
+  background: linear-gradient(rgba(0, 0, 0, 0.55), transparent);
+  color: #fff;
+}
+.dm-call--full .dm-call__name {
+  font-size: 19px;
+}
+.dm-call--full .dm-call__min {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 6px);
+  left: 10px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+}
+.dm-call--full .dm-call__status {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 42px);
+  right: 0;
+  left: 0;
+  z-index: 3;
+  padding: 0 16px;
+  color: rgba(255, 255, 255, 0.8);
+}
+.dm-call--full .voice__controls {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  padding: 28px 16px calc(env(safe-area-inset-bottom) + 24px);
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.65));
+}
+.dm-call--full .round-btn {
+  width: 58px;
+  height: 58px;
+}
