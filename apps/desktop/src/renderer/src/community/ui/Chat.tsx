@@ -1,4 +1,5 @@
 import { findFiltered } from '../../../../shared/word-filter.ts';
+import { VoiceRecorder } from '../../components/VoiceMessage.tsx';
 import { useSharedFiles, useSharedText } from '../../components/ShareSheet.tsx';
 import { tr } from '../../i18n.ts';
 import { MediaGallery } from './MediaGallery.tsx';
@@ -1303,6 +1304,33 @@ ${shared}`
     });
   };
 
+  // A recorded voice message is sent at once, encrypted like any file (2.3).
+  const mayAttach = can(channel.permissions, Permission.ATTACH_FILES | Permission.SEND_MESSAGES);
+  const sendVoice = async (file: File): Promise<void> => {
+    if (uploading) return;
+    setUploading({ done: 0, total: 1 });
+    let attachments;
+    try {
+      attachments = await uploadAll(
+        pendingFrom([file]),
+        (done) => setUploading({ done, total: 1 }),
+        'community',
+      );
+    } catch (err) {
+      setUploading(null);
+      s.notify((err as Error).message || 'Upload failed.', 'error');
+      return;
+    }
+    setUploading(null);
+    useCommunity.setState({ replyTo: null });
+    useOutbox.getState().send({
+      channelId: channel.id,
+      text: '',
+      ...(replyTo ? { replyTo: replyTo.id } : {}),
+      attachments,
+    });
+  };
+
   if (!canSend) {
     const timeout = community.members.find((m) => m.riverId === me)?.timeoutUntil;
     return (
@@ -1533,6 +1561,9 @@ ${shared}`
         >
           <SmileIcon size={20} />
         </button>
+        {mayAttach && text.trim() === '' && props.pending.length === 0 && (
+          <VoiceRecorder disabled={!!uploading} onRecorded={(file) => void sendVoice(file)} />
+        )}
         <button
           className="btn btn--primary"
           disabled={(text.trim() === '' && props.pending.length === 0) || !!uploading}

@@ -6,6 +6,18 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-10-16
+
+**Voice messages.**
+
+### Added
+
+- **Record and send voice messages** in conversations and channels: tap the
+  🎤 next to the message box (it shows while the box is empty), talk, then ➤ to
+  send or ✕ to cancel. They are encrypted on your device like any file.
+- **A voice-message player**: play/pause, drag to any point, the length, and
+  playback speed 1×, 1.5× or 2×.
+
 ## [2.2.0] - 2026-10-16
 
 **Message actions in conversations.**
