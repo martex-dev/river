@@ -1,4 +1,5 @@
 import type { CallView } from '../../../shared/dm.ts';
+import { create } from 'zustand';
 import { useSharedFiles, useSharedText } from '../components/ShareSheet.tsx';
 import { callNote, callsBetween } from '../dm/call-notes.ts';
 import { NotifyMenuSection } from '../community/ui/NotifyMenu.tsx';
@@ -259,6 +260,35 @@ function openDm(peer: string): void {
   useRiver.getState().navigate('messages');
 }
 
+/** Selecting several messages in one conversation (2.2). */
+const useSelection = create<{
+  peer: string | null;
+  ids: string[];
+  start(peer: string, id: string): void;
+  toggle(id: string): void;
+  clear(): void;
+}>((set, get) => ({
+  peer: null,
+  ids: [],
+  start: (peer, id) => set({ peer, ids: [id] }),
+  toggle: (id) => {
+    const ids = get().ids.includes(id) ? get().ids.filter((x) => x !== id) : [...get().ids, id];
+    set(ids.length ? { ids } : { peer: null, ids: [] });
+  },
+  clear: () => set({ peer: null, ids: [] }),
+}));
+
+/** Copies text and says so (or says why not). */
+function copyText(text: string): void {
+  void navigator.clipboard
+    ?.writeText(text)
+    .then(() => {
+      play('success');
+      useCommunity.getState().notify('Copied');
+    })
+    .catch(() => useCommunity.getState().notify('River could not copy that.', 'error'));
+}
+
 type ChatFilter = 'all' | 'unread' | 'people' | 'groups';
 const CHAT_FILTERS: Array<{ id: ChatFilter; label: string }> = [
   { id: 'all', label: 'All' },
@@ -377,6 +407,9 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
   const dm = useDm();
   const messages = useDm((x) => x.messages[c.riverId]) ?? [];
   const [showPins, setShowPins] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const selection = useSelection();
+  useEffect(() => () => useSelection.getState().clear(), [c.riverId]);
   // Calls with this person, from the local call history, shown between messages (1.0.29).
   const [calls, setCalls] = useState<CallView[]>([]);
   // Re-read after a call with this person starts or ends, and when a call was missed.
@@ -505,6 +538,14 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
               </button>
             </>
           )}
+          <button
+            className={`icon-btn ${searching ? 'is-on' : ''}`}
+            aria-label="Search in this conversation"
+            title="Search in this conversation"
+            onClick={() => setSearching(!searching)}
+          >
+            🔍
+          </button>
           <button
             className={`icon-btn ${showPins ? 'is-on' : ''}`}
             aria-label="Pinned messages"
@@ -746,6 +787,10 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           </button>
         </div>
       )}
+      {searching && <ConversationSearch peer={c.riverId} onClose={() => setSearching(false)} />}
+      {selection.peer === c.riverId && (
+        <SelectionToolbar conversation={c} messages={messages} myName={myName} />
+      )}
       <div
         className="chat__messages"
         ref={scrollRef}
@@ -910,6 +955,9 @@ function DmMessage(props: {
   const editing = useDm((x) => x.editing === m.id);
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   const [forwarding, setForwarding] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const selecting = useSelection((s) => s.peer === c.riverId);
+  const selected = useSelection((s) => s.peer === c.riverId && s.ids.includes(m.id));
   const name = m.mine ? props.myName : c.kind === 'group' ? m.senderName : c.name;
   const senderAvatar = m.mine
     ? null
@@ -937,7 +985,22 @@ function DmMessage(props: {
   return (
     <div
       id={`dm-${m.id}`}
-      className={`msg ${props.grouped ? 'msg--grouped' : ''} ${m.mine ? 'msg--mine' : ''} ${editing ? 'is-editing' : ''}`}
+      className={`msg ${props.grouped ? 'msg--grouped' : ''} ${m.mine ? 'msg--mine' : ''} ${editing ? 'is-editing' : ''} ${selected ? 'is-selected' : ''}`}
+      aria-selected={selecting ? selected : undefined}
+      onClickCapture={(e) => {
+        // While selecting, a tap on a message selects it instead of doing anything else.
+        if (!selecting || m.deleted) return;
+        e.preventDefault();
+        e.stopPropagation();
+        useSelection.getState().toggle(m.id);
+      }}
+      onContextMenu={(e) => {
+        if (editing || m.deleted) return;
+        const target = e.target as HTMLElement;
+        if (target.closest('a, video, audio, input, textarea')) return;
+        e.preventDefault();
+        setMenu({ x: e.clientX, y: e.clientY });
+      }}
     >
       {m.replyTo && (
         <div className="msg__reply">
@@ -1088,6 +1151,216 @@ function DmMessage(props: {
       )}
       {forwarding && (
         <ForwardDialog text={m.text} from={{ name, channel: '' }} onClose={() => setForwarding(false)} />
+      )}
+      {menu && (
+        <Popover x={menu.x} y={menu.y} onClose={() => setMenu(null)} className="menu">
+          {c.state === 'accepted' && (
+            <MenuItem
+              icon={<ReplyIcon size={15} />}
+              onClick={() => {
+                setMenu(null);
+                useDm.setState({ replyTo: m });
+              }}
+            >
+              Reply
+            </MenuItem>
+          )}
+          {m.text && (
+            <MenuItem
+              onClick={() => {
+                setMenu(null);
+                copyText(m.text);
+              }}
+            >
+              Copy text
+            </MenuItem>
+          )}
+          {m.text && (
+            <MenuItem
+              onClick={() => {
+                setMenu(null);
+                setForwarding(true);
+              }}
+            >
+              Forward
+            </MenuItem>
+          )}
+          {c.state === 'accepted' && (
+            <MenuItem
+              onClick={() => {
+                setMenu(null);
+                void dm.run({ a: 'pin', peer: c.riverId, id: m.id, pinned: !m.pinned });
+              }}
+            >
+              {m.pinned ? 'Unpin' : 'Pin'}
+            </MenuItem>
+          )}
+          {m.mine && c.state === 'accepted' && (
+            <MenuItem
+              icon={<EditIcon size={15} />}
+              onClick={() => {
+                setMenu(null);
+                useDm.setState({ editing: m.id });
+              }}
+            >
+              Edit
+            </MenuItem>
+          )}
+          <MenuItem
+            onClick={() => {
+              setMenu(null);
+              useSelection.getState().start(c.riverId, m.id);
+            }}
+          >
+            Select
+          </MenuItem>
+          <MenuItem
+            danger
+            icon={<TrashIcon size={15} />}
+            onClick={() => {
+              setMenu(null);
+              remove(false);
+            }}
+          >
+            Delete for me
+          </MenuItem>
+          {m.mine && (
+            <MenuItem
+              danger
+              icon={<TrashIcon size={15} />}
+              onClick={() => {
+                setMenu(null);
+                remove(true);
+              }}
+            >
+              Delete for everyone
+            </MenuItem>
+          )}
+        </Popover>
+      )}
+    </div>
+  );
+}
+
+/** The bar shown while messages are selected: copy, forward, delete, done (2.2). */
+function SelectionToolbar(props: {
+  conversation: ConversationView;
+  messages: DirectMessageView[];
+  myName: string;
+}): ReactElement {
+  const ids = useSelection((s) => s.ids);
+  const [forwarding, setForwarding] = useState(false);
+  const chosen = props.messages.filter((m) => ids.includes(m.id) && !m.deleted);
+  const text = chosen
+    .filter((m) => m.text)
+    .map((m) => `${m.mine ? props.myName : m.senderName}: ${m.text}`)
+    .join('\n');
+  const c = props.conversation;
+  return (
+    <div className="selection-bar" role="toolbar" aria-label="Selected messages">
+      <strong>{ids.length} selected</strong>
+      <span className="selection-bar__actions">
+        <button className="btn btn--ghost btn--small" disabled={!text} onClick={() => copyText(text)}>
+          Copy
+        </button>
+        <button className="btn btn--ghost btn--small" disabled={!text} onClick={() => setForwarding(true)}>
+          Forward
+        </button>
+        <button
+          className="btn btn--danger btn--small"
+          onClick={() =>
+            useCommunity.getState().setModal({
+              kind: 'confirm',
+              title: `Delete ${chosen.length} ${chosen.length === 1 ? 'message' : 'messages'} for me`,
+              body: 'They are deleted on this device only.',
+              action: 'Delete',
+              run: async () => {
+                for (const m of chosen) {
+                  await window.river.dm.action({
+                    a: 'delete',
+                    peer: c.riverId,
+                    id: m.id,
+                    forEveryone: false,
+                  });
+                }
+                useSelection.getState().clear();
+              },
+            })
+          }
+        >
+          Delete
+        </button>
+        <button className="btn btn--primary btn--small" onClick={() => useSelection.getState().clear()}>
+          Done
+        </button>
+      </span>
+      {forwarding && (
+        <ForwardDialog
+          text={text}
+          from={{ name: c.name, channel: '' }}
+          onClose={() => setForwarding(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Search inside one conversation; a result jumps to its message (2.2). */
+function ConversationSearch(props: { peer: string; onClose(): void }): ReactElement {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<DirectMessageView[]>([]);
+  const shown = query.trim().length >= 2 ? results : [];
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) return;
+    const t = window.setTimeout(() => {
+      void window.river.dm.action({ a: 'search', query: q, peer: props.peer }).then((r) => {
+        if (r.ok) setResults(r.value);
+      });
+    }, 200);
+    return () => window.clearTimeout(t);
+  }, [query, props.peer]);
+  const jump = (id: string): void => {
+    const el = document.getElementById(`dm-${id}`);
+    if (!el) {
+      useCommunity.getState().notify('That message is older than the ones shown here.', 'error');
+      return;
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('is-flash');
+    window.setTimeout(() => el.classList.remove('is-flash'), 1600);
+  };
+  return (
+    <div className="conv-search">
+      <input
+        className="search"
+        autoFocus
+        placeholder="Search in this conversation"
+        aria-label="Search in this conversation"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') props.onClose();
+          if (e.key === 'Enter' && shown[0]) jump(shown[0].id);
+        }}
+      />
+      <button className="icon-btn" aria-label="Close search" onClick={props.onClose}>
+        <XIcon size={16} />
+      </button>
+      {query.trim().length >= 2 && (
+        <ul className="conv-search__results">
+          {shown.length === 0 && <li className="muted small">No messages found.</li>}
+          {shown.map((m) => (
+            <li key={m.id}>
+              <button className="conv-search__result" onClick={() => jump(m.id)}>
+                <span className="muted small">{shortWhen(m.sentAt)}</span>
+                <span className="conv-search__text">
+                  <Highlight text={m.text} query={query} max={140} />
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

@@ -6,6 +6,18 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-16
+
+**Message actions in conversations.**
+
+### Added
+
+- **A menu on every message** — right-click, or long-press on a phone: Reply,
+  Copy text, Forward, Pin, Edit, Select, Delete for me, Delete for everyone.
+- **Select several messages** to copy, forward or delete them together.
+- **Search inside a conversation** (🔍 in its header); a result jumps to the
+  message and highlights it.
+
 ## [2.1.0] - 2026-10-16
 
 **A chat list like Telegram's.**
