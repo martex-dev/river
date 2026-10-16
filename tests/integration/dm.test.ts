@@ -14,6 +14,7 @@ import { migrateDatabase, type LocalDatabase } from '../../apps/desktop/src/main
 import { newDatabaseKey } from '../../apps/desktop/src/main/storage/key-file.ts';
 import { CLIENT_MIGRATIONS } from '../../apps/desktop/src/main/storage/migrations.ts';
 import type { DmEvent } from '../../apps/desktop/src/shared/dm.ts';
+import { tally, voteEmoji } from '../../apps/desktop/src/shared/poll.ts';
 import { buildApp } from '../../apps/server/src/app.ts';
 import { loadConfig } from '../../apps/server/src/config.ts';
 import { migrateToLatest, openDatabase, type RiverDatabase } from '../../apps/server/src/db/database.ts';
@@ -236,6 +237,39 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     // Bob got nothing.
     await bob.dm.sync();
     expect(bob.events.filter((e) => e.t === 'message')).toHaveLength(0);
+  });
+
+  it('polls in direct messages: encrypted question, votes as reactions, one choice', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await alice.dm.action({ a: 'open', peer: bob.riverId, name: 'Bob' });
+    await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'hi' });
+    await bob.dm.sync();
+    await bob.dm.action({ a: 'accept', peer: alice.riverId });
+    await alice.dm.sync();
+    const poll = {
+      question: 'Pizza or sushi?',
+      options: ['Pizza', 'Sushi'],
+      multi: false,
+      endsAt: new Date(Date.now() + 3600_000).toISOString(),
+    };
+    const sent = await alice.dm.action({ a: 'send', peer: bob.riverId, text: '📊 Pizza or sushi?', poll });
+    expect(sent.poll).toEqual(poll);
+    await bob.dm.sync();
+    const got = (await bob.dm.action({ a: 'messages', peer: alice.riverId })).find((m) => m.id === sent.id)!;
+    expect(got.poll).toEqual(poll);
+    await bob.dm.action({ a: 'react', peer: alice.riverId, id: sent.id, emoji: voteEmoji(1), on: true });
+    await alice.dm.sync();
+    const seen = (await alice.dm.action({ a: 'messages', peer: bob.riverId })).find((m) => m.id === sent.id)!;
+    expect(tally(seen.poll!, seen.reactions, alice.riverId)).toMatchObject({
+      counts: [0, 1],
+      voters: 1,
+      mine: [],
+    });
+    // A malformed poll is refused before anything is sent.
+    await expect(
+      alice.dm.action({ a: 'send', peer: bob.riverId, text: 'x', poll: { ...poll, options: ['only one'] } }),
+    ).rejects.toThrow();
   });
 
   it('searches inside one conversation only', async () => {

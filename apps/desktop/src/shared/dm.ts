@@ -2,8 +2,10 @@ import { z } from 'zod';
 import {
   attachmentPointerSchema,
   MAX_ATTACHMENT_BYTES,
+  pollInputSchema,
   type AttachmentPointer,
 } from './community-actions.ts';
+import type { Poll } from './poll.ts';
 
 /** Direct messages as the renderer sees them (decrypted in main). */
 
@@ -60,6 +62,8 @@ export interface DirectMessageView {
   expiresAt?: string | null;
   /** Sent without sound (2.5). */
   silent?: boolean;
+  /** A poll (2.10.4); votes are encrypted reactions, as in channels. */
+  poll?: Poll | null;
   /** A notice in the conversation instead of a message, e.g. the disappearing-messages timer. */
   notice?: { timer: number } | null;
 }
@@ -162,6 +166,8 @@ export const dmActionSchema = z.discriminatedUnion('a', [
       attachments: z.array(attachmentPointerSchema).max(10).optional(),
       /** Send without sound: the other side gets no notification (2.5). */
       silent: z.boolean().optional(),
+      /** Make this message a poll (2.10.4); `text` is shown by apps without polls. */
+      poll: pollInputSchema.optional(),
     })
     .strict()
     .refine((v) => v.text.trim().length > 0 || (v.attachments?.length ?? 0) > 0, 'empty'),

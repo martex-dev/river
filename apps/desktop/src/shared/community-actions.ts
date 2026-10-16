@@ -76,6 +76,22 @@ export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
  * Everything needed to fetch and decrypt one attachment. It travels only
  * inside end-to-end encrypted message bodies.
  */
+/** A poll as sent (1.0.18 in channels, 2.10.4 in direct messages and groups). */
+export const pollInputSchema = z
+  .object({
+    question: z.string().trim().min(1).max(POLL_LIMITS.question),
+    options: z
+      .array(z.string().trim().min(1).max(POLL_LIMITS.option))
+      .min(POLL_LIMITS.minOptions)
+      .max(POLL_LIMITS.maxOptions),
+    multi: z.boolean(),
+    endsAt: z
+      .string()
+      .max(40)
+      .refine((v) => !Number.isNaN(Date.parse(v))),
+  })
+  .strict();
+
 export const attachmentPointerSchema = z
   .object({
     id,
@@ -357,21 +373,7 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       /** A reply that should not notify the person replied to (1.0.18). */
       noPing: z.boolean().optional(),
       /** Make this message a poll (1.0.18); `text` is the question. */
-      poll: z
-        .object({
-          question: z.string().trim().min(1).max(POLL_LIMITS.question),
-          options: z
-            .array(z.string().trim().min(1).max(POLL_LIMITS.option))
-            .min(POLL_LIMITS.minOptions)
-            .max(POLL_LIMITS.maxOptions),
-          multi: z.boolean(),
-          endsAt: z
-            .string()
-            .max(40)
-            .refine((v) => !Number.isNaN(Date.parse(v))),
-        })
-        .strict()
-        .optional(),
+      poll: pollInputSchema.optional(),
     })
     .strict()
     .refine((v) => v.text.trim().length > 0 || (v.attachments?.length ?? 0) > 0 || !!v.sticker, 'empty'),
