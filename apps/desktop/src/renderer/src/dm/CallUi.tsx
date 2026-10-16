@@ -2,6 +2,7 @@ import { isPhone } from '../../../shared/platform.ts';
 import type { ReactElement } from 'react';
 import type { ConversationView } from '../../../shared/dm.ts';
 import { useCommunity } from '../community/store.ts';
+import type { VoiceCall } from '../community/voice.ts';
 import { pointOnVideo, SpeakerButton, Video } from '../community/ui/Voice.tsx';
 import {
   Avatar,
@@ -132,6 +133,21 @@ export function CallPill(): ReactElement | null {
 
 export function DmCallPanel({ conversation: c }: { conversation: ConversationView }): ReactElement | null {
   const active = useDmCall((s) => s.active);
+  const call = useCommunity((x) => x.call);
+  // Only this conversation's own call (not a voice channel, not a call that is still being set up).
+  if (!active || active.peer !== c.riverId || !call || call.channelId !== `dm:${c.riverId}`) return null;
+  // Keyed by call: the screen picker and the minimized view start fresh with every call.
+  return <CallPanel key={active.callId} conversation={c} call={call} />;
+}
+
+function CallPanel({
+  conversation: c,
+  call,
+}: {
+  conversation: ConversationView;
+  call: VoiceCall;
+}): ReactElement | null {
+  const active = useDmCall((s) => s.active);
   const s = useCommunity();
   useCommunity((x) => x.callVersion);
   const me = useRiver((r) => r.identity);
@@ -140,8 +156,7 @@ export function DmCallPanel({ conversation: c }: { conversation: ConversationVie
   // Phones (2.10.5): the call fills the screen like a phone call; ⌄ shrinks it into the chat.
   const [minimized, setMinimized] = useState(false);
   const full = phone && !minimized;
-  const call = s.call;
-  if (!active || active.peer !== c.riverId || !call) return null;
+  if (!active) return null;
   const remote = call.remotes()[0];
   const status =
     active.state === 'ringing'

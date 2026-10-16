@@ -1,5 +1,13 @@
 import { isPhone } from '../../../../shared/platform.ts';
-import { boost, effectiveGain, PHONE_OUTPUT_VOLUME, setBoostOutput, type BoostChain } from '../peer-audio.ts';
+import {
+  boost,
+  boostReady,
+  effectiveGain,
+  onAudioStateChange,
+  PHONE_OUTPUT_VOLUME,
+  setBoostOutput,
+  type BoostChain,
+} from '../peer-audio.ts';
 import { tr } from '../../i18n.ts';
 import { SCREEN_QUALITIES, saveQuality, savedQuality, type ScreenQuality } from '../screen-quality.ts';
 import { StagePanel } from './Stage.tsx';
@@ -551,6 +559,9 @@ function PeerAudio({
   const output = voiceSettings?.outputDeviceId ?? null;
   const track = peer.audio?.getAudioTracks()[0] ?? null;
   const gain = effectiveGain(volume, outputVolume, duck);
+  // Re-run below when the audio engine starts or stops running (boost on, or back to the element).
+  const [, setEngine] = useState(0);
+  useEffect(() => onAudioStateChange(() => setEngine((n) => n + 1)), []);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -561,7 +572,8 @@ function PeerAudio({
     }
     // Above 100 % the voice goes through the boost (peer-audio.ts); the element stays attached
     // (muted) because Chromium only feeds a remote stream to Web Audio while one plays it.
-    if (track && !deafened && gain > 1.001) {
+    // While the audio engine is not running (suspended on iOS), the element plays it instead.
+    if (track && !deafened && gain > 1.001 && boostReady()) {
       if (chain.current?.track !== track) {
         chain.current?.close();
         chain.current = boost(track, gain);
