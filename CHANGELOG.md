@@ -6,6 +6,35 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Voice channels**: a second click on Join no longer starts a second call
+  that kept the first microphone open; Disconnect while River is still opening
+  the microphone or joining now really leaves (microphone off, nothing joined);
+  a camera or screen that finishes opening after you left is stopped at once.
+- People using voice activity no longer look **muted** to others while quiet,
+  and their speaking ring shows again; a speaking ring no longer sticks after
+  someone's voice stops.
+- **Undeafen** keeps you muted if you were muted before deafening.
+- The **microphone test** in Settings → Voice no longer leaves the microphone
+  on when stopped before it finished opening.
+- **Push-to-talk** no longer swallows its key (` by default) while you type in
+  a text field; keys that type nothing (F-keys, Ctrl) still talk while typing.
+- Joining a voice channel during a 1:1 call now ends that call properly (no
+  stuck call pill, no "busy" answers to every new call); starting a 1:1 call
+  from a voice channel no longer offers "Rejoin" for it later.
+- **Phones**: voices played above 100 % (the phone default) are no longer
+  silent while the audio engine is asleep; River wakes it from the Join,
+  Call or Accept tap and plays voices directly until it runs.
+- **1:1 calls**: hanging up while River is opening the microphone sends no
+  invite and turns the microphone off; a double click starts one call; an
+  unanswered incoming call is logged as missed (with the right voice/video
+  type) when it stops ringing; answering without microphone access declines
+  the call and logs it; a call the caller ends while you answer ends on your
+  side too; an answered call that cannot connect within 30 seconds ends with
+  a notice instead of "Connecting…" forever; the screen picker and minimized
+  view start fresh with each call.
+
 ## [2.10.11] - 2026-10-16
 
 **Reply privately.**
