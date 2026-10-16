@@ -30,7 +30,7 @@ export function CallsPage(): ReactElement {
     dm.select(peer);
     void startDmCall(peer, video);
   };
-  const friends = dm.conversations.filter((c) => c.kind === 'direct' && c.state === 'accepted');
+  const friends = dm.conversations.filter((c) => c.kind === 'direct' && !c.self && c.state === 'accepted');
 
   return (
     <div className="page calls">

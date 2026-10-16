@@ -231,6 +231,26 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
             ))}
           </div>
         )}
+        {!archiveOpen && filter === 'all' && !dm.conversations.some((c) => c.self) && (
+          <button
+            className="dm-row dm-row--archive"
+            onClick={() =>
+              void dm.run({ a: 'noteToSelf' }).then((c) => {
+                if (c) openDm(c.riverId);
+              })
+            }
+          >
+            <span className="dm-row__archive-icon" aria-hidden="true">
+              🔖
+            </span>
+            <span className="dm-row__text">
+              <span className="dm-row__top">
+                <strong>Note to self</strong>
+              </span>
+              <span className="dm-row__last muted small">Notes, links and files for yourself</span>
+            </span>
+          </button>
+        )}
         {!archiveOpen && archived.length > 0 && filter === 'all' && (
           <button className="dm-row dm-row--archive" onClick={() => setArchiveOpen(true)}>
             <span className="dm-row__archive-icon" aria-hidden="true">
@@ -522,6 +542,13 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           <button className="chip dm-lock" onClick={() => setShowMembers(!showMembers)} title="Group members">
             👥 {c.members.length} members
           </button>
+        ) : c.self ? (
+          <span
+            className="chip dm-lock"
+            title="Your notes are kept on this device and copied to your linked devices"
+          >
+            🔒 Only you
+          </span>
         ) : (
           <button
             className={`chip dm-lock ${c.verified ? 'is-verified' : ''}`}
@@ -541,7 +568,7 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           </button>
         )}
         <span className="chat__head-actions">
-          {c.kind === 'direct' && c.state === 'accepted' && (
+          {c.kind === 'direct' && !c.self && c.state === 'accepted' && (
             <>
               <button
                 className="icon-btn"
@@ -654,7 +681,7 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
                 </MenuItem>
               )}
             </>
-          ) : (
+          ) : c.self ? null : (
             <>
               <MenuItem
                 onClick={() => {
@@ -676,7 +703,7 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
               </MenuItem>
             </>
           )}
-          {c.kind === 'group' ? null : c.state === 'blocked' ? (
+          {c.kind === 'group' || c.self ? null : c.state === 'blocked' ? (
             <MenuItem
               onClick={() => {
                 setMenu(null);
@@ -979,6 +1006,16 @@ const STATUS_LABEL: Record<DirectMessageView['status'], string> = {
 
 /** A conversation's picture: a group's emoji, else the person's avatar. */
 function ConvAvatar({ c, size }: { c: ConversationView; size: number }): ReactElement {
+  if (c.self)
+    return (
+      <span
+        className="group-icon group-icon--self"
+        style={{ width: size, height: size, fontSize: size * 0.55 }}
+        aria-hidden="true"
+      >
+        🔖
+      </span>
+    );
   if (c.icon)
     return (
       <span

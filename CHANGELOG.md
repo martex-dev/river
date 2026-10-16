@@ -6,6 +6,21 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-10-16
+
+**People.**
+
+### Added
+
+- **Add friends by QR code**: Friends → Add friend → **Show QR code** shows
+  your friend code; **📷 Scan QR code** reads a friend's code with the camera
+  and sends them a request. Camera pictures are decoded on the device and
+  thrown away.
+- **Note to self**: a conversation with yourself for notes, links and files
+  (at the top of Direct messages). It is kept on this device, new notes are
+  copied to your linked devices, and nothing is sent to anyone else. You do
+  not show up as your own friend.
+
 ## [2.8.0] - 2026-10-16
 
 **Phone feel.**

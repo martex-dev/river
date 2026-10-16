@@ -215,6 +215,29 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     expect(convs.find((c) => c.name === 'Carol')).toMatchObject({ markedUnread: false });
   });
 
+  it('note to self: your own notes, never sent to anyone, not a friend', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await alice.dm.action({ a: 'open', peer: bob.riverId, name: 'Bob' });
+    const note = await alice.dm.action({ a: 'noteToSelf' });
+    expect(note).toMatchObject({ riverId: alice.riverId, self: true, name: 'Note to self', unread: 0 });
+    // Opening it again does not make a second one.
+    await alice.dm.action({ a: 'noteToSelf' });
+    const sent = await alice.dm.action({ a: 'send', peer: alice.riverId, text: 'buy milk' });
+    expect(sent).toMatchObject({ mine: true, status: 'sent', text: 'buy milk' });
+    await alice.dm.action({ a: 'read', peer: alice.riverId });
+    const convs = await alice.dm.action({ a: 'conversations' });
+    expect(convs.filter((c) => c.self)).toHaveLength(1);
+    expect(convs.find((c) => c.self)).toMatchObject({ unread: 0, last: { text: 'buy milk', mine: true } });
+    expect(alice.dm.friends()).toEqual([bob.riverId]);
+    await expect(
+      alice.dm.action({ a: 'call', peer: alice.riverId, callId: 'A'.repeat(22), kind: 'invite' }),
+    ).rejects.toThrow();
+    // Bob got nothing.
+    await bob.dm.sync();
+    expect(bob.events.filter((e) => e.t === 'message')).toHaveLength(0);
+  });
+
   it('searches inside one conversation only', async () => {
     const alice = await person('Alice');
     const bob = await person('Bob');

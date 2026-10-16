@@ -273,6 +273,9 @@ const PREKEY_TARGET = 100;
 const PREKEY_LOW = 25;
 const SIGNED_ROTATE_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** The name of your own notes conversation (2.9). */
+const NOTE_TO_SELF = 'Note to self';
+
 interface Deps {
   db: () => LocalDatabase | null;
   identity: IdentityService;
@@ -766,7 +769,9 @@ export class DmService {
       this.db().prepare(`SELECT river_id FROM contacts WHERE state = 'accepted'`).all() as Array<{
         river_id: string;
       }>
-    ).map((r) => r.river_id);
+    )
+      .map((r) => r.river_id)
+      .filter((id) => id !== this.me());
   }
 
   contactState(riverId: string): 'accepted' | 'request' | 'blocked' | null {
@@ -863,6 +868,8 @@ export class DmService {
 
   /** Sends to a person, or to every other member of a group (pairwise libsignal sessions). */
   private async deliver(conv: string, content: Content, ephemeral = false): Promise<void> {
+    // Note to self (2.9): stays on this device; new notes reach linked devices as a sync.
+    if (conv === this.me()) return;
     if (!isGroupId(conv)) {
       await this.sendContent(conv, content, ephemeral);
       return;
@@ -949,11 +956,14 @@ export class DmService {
     const rows = this.db()
       .prepare(`SELECT river_id, state, name FROM contacts WHERE state IN ('accepted', 'blocked') LIMIT 2000`)
       .all() as Array<{ river_id: string; state: 'accepted' | 'blocked'; name: string | null }>;
-    const contacts = rows.map((r) => ({
-      riverId: r.river_id,
-      state: r.state,
-      name: r.name ? r.name.slice(0, 64) : null,
-    }));
+    const me = this.me();
+    const contacts = rows
+      .filter((r) => r.river_id !== me)
+      .map((r) => ({
+        riverId: r.river_id,
+        state: r.state,
+        name: r.name ? r.name.slice(0, 64) : null,
+      }));
     try {
       await this.sendContent(this.me(), {
         v: 1,
@@ -1118,6 +1128,7 @@ export class DmService {
 
   /** Shares our name and avatar with a contact whenever they changed since we last told them. */
   private async shareProfile(peer: string, groupId?: string): Promise<void> {
+    if (peer === this.me()) return;
     const name = this.deps.identity.get()?.displayName ?? null;
     const avatar = this.deps.community.profile().avatar;
     const bio = this.myBio();
@@ -1144,6 +1155,12 @@ export class DmService {
       switch (act.a) {
         case 'myId':
           return out(this.me());
+        case 'noteToSelf': {
+          const me = this.me();
+          if (!this.contact(me)) this.upsertContact(me, 'accepted', NOTE_TO_SELF, null);
+          this.emitConversations();
+          return out(this.conversations().find((c) => c.riverId === me)!);
+        }
         case 'files': {
           const files: FileView[] = [];
           const convs = new Map(this.conversations().map((c) => [c.riverId, c.name]));
@@ -1464,7 +1481,12 @@ export class DmService {
             .prepare('UPDATE contacts SET last_read = ? WHERE river_id = ?')
             .run(new Date().toISOString(), act.peer);
           this.emitConversations();
-          if (unread.length && contact.state === 'accepted' && this.privacy().readReceipts) {
+          if (
+            unread.length &&
+            contact.state === 'accepted' &&
+            act.peer !== this.me() &&
+            this.privacy().readReceipts
+          ) {
             void this.sendContent(act.peer, {
               v: 1,
               t: 'receipt',
@@ -1482,7 +1504,7 @@ export class DmService {
                 () => undefined,
               );
             }
-          } else if (this.contact(act.peer)?.state === 'accepted') {
+          } else if (act.peer !== this.me() && this.contact(act.peer)?.state === 'accepted') {
             void this.sendContent(act.peer, { v: 1, t: 'typing' }, true).catch(() => undefined);
           }
           return out(null);
@@ -1649,7 +1671,7 @@ export class DmService {
           return out(null);
         }
         case 'call':
-          if (this.contact(act.peer)?.state !== 'accepted')
+          if (act.peer === this.me() || this.contact(act.peer)?.state !== 'accepted')
             throw new CommunityError('You can only call your contacts.');
           await this.sendContent(
             act.peer,
@@ -1966,12 +1988,14 @@ export class DmService {
         ).n;
         const known = this.deps.community.knownProfile(c.river_id);
         const lastView = last ? this.view(last) : null;
+        const self = c.river_id === me;
         return {
           riverId: c.river_id,
           kind: 'direct' as const,
           members: [],
           isAdmin: false,
-          name: c.name ?? known?.name ?? `River ${c.river_id.slice(0, 8)}`,
+          ...(self ? { self: true } : {}),
+          name: self ? NOTE_TO_SELF : (c.name ?? known?.name ?? `River ${c.river_id.slice(0, 8)}`),
           avatar: c.avatar ?? known?.avatar ?? null,
           state: c.state,
           last: lastView
@@ -1986,10 +2010,10 @@ export class DmService {
                 mine: lastView.mine,
               }
             : null,
-          unread,
-          verified: protocol?.isVerified(c.river_id) ?? false,
-          keyChanged: c.key_changed === 1,
-          awaitingReply: c.state === 'accepted' && c.heard_from === 0,
+          unread: self ? 0 : unread,
+          verified: !self && (protocol?.isVerified(c.river_id) ?? false),
+          keyChanged: !self && c.key_changed === 1,
+          awaitingReply: !self && c.state === 'accepted' && c.heard_from === 0,
           ...flags(c.river_id),
         };
       }),

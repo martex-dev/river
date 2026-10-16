@@ -41,7 +41,7 @@ volume (fixed in 2.0.4).
 | 2.6 ✅   | Privacy controls      | Read receipts and typing indicator toggles; screen security on Android                                                                     |
 | 2.7 ✅   | Media                 | Shared media per conversation, swipe between pictures, video speed                                                                         |
 | 2.8 ✅   | Phone feel            | Swipe to reply, haptics                                                                                                                    |
-| 2.9      | People                | Add by QR code, a "Note to self" conversation                                                                                              |
+| 2.9 ✅   | People                | Add by QR code, a "Note to self" conversation                                                                                              |
 | 2.10     | Calls                 | Picture-in-picture for video calls                                                                                                         |
 
 After 2.10: 2.10.x polish releases.
