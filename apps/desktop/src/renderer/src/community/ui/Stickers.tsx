@@ -63,6 +63,104 @@ export function StickerImage({ id }: { id: string }): ReactElement {
   );
 }
 
+/** A sticker sent in a direct message (2.10.10) is a picture file named `sticker-…`. */
+export const STICKER_PREFIX = 'sticker-';
+
+export function isStickerFile(name: string, mime: string): boolean {
+  return name.startsWith(STICKER_PREFIX) && mime.startsWith('image/');
+}
+
+/** A sticker's picture (a data URL) as a file to send. */
+export function stickerFile(name: string, image: string): File | null {
+  const m = /^data:(image\/(?:png|webp|gif|jpeg));base64,([A-Za-z0-9+/]+=*)$/.exec(image);
+  if (!m) return null;
+  const bin = atob(m[2]!);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const ext = m[1]!.slice('image/'.length).replace('jpeg', 'jpg');
+  const safe = name.replace(/[^\w-]+/g, '_').slice(0, 40) || 'sticker';
+  return new File([bytes], `${STICKER_PREFIX}${safe}.${ext}`, { type: m[1]! });
+}
+
+/**
+ * Stickers in direct messages and groups (2.10.10): the stickers of all your communities. The one
+ * you pick is sent as an encrypted picture.
+ */
+export function MyStickersButton(props: { disabled?: boolean; onPick(file: File): void }): ReactElement {
+  const s = useCommunity();
+  const communities = useCommunity((x) => x.communities);
+  const all = useCommunity((x) => x.stickers);
+  const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
+  const [query, setQuery] = useState('');
+  useEffect(() => {
+    if (!open) return;
+    for (const c of communities) if (!all[c.id]) void s.loadStickers(c.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const q = query.trim().toLowerCase();
+  const groups = communities
+    .map((c) => ({ c, list: (all[c.id] ?? []).filter((x) => x.name.toLowerCase().includes(q)) }))
+    .filter((g) => g.list.length > 0);
+  return (
+    <>
+      <button
+        type="button"
+        className="icon-btn"
+        aria-label="Stickers"
+        title="Stickers"
+        disabled={props.disabled}
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          setOpen(open ? null : { x: r.left - 260, y: r.top - 340 });
+        }}
+      >
+        <span aria-hidden="true">🗒️</span>
+      </button>
+      {open && (
+        <Popover x={open.x} y={open.y} onClose={() => setOpen(null)} className="sticker-picker">
+          <input
+            className="emoji-picker__search"
+            autoFocus
+            placeholder="Search stickers"
+            aria-label="Search stickers"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {groups.length === 0 && (
+            <p className="muted small">
+              {communities.length === 0
+                ? 'Stickers come from your communities. Join or make one to add stickers.'
+                : 'No stickers yet. Community admins add them in community settings → Stickers.'}
+            </p>
+          )}
+          {groups.map(({ c, list }) => (
+            <div key={c.id}>
+              <div className="sticker-picker__group muted small">{c.name}</div>
+              <div className="sticker-picker__grid">
+                {list.map((x) => (
+                  <button
+                    key={x.id}
+                    className="sticker-picker__item"
+                    title={x.name}
+                    aria-label={`Send sticker ${x.name}`}
+                    onClick={() => {
+                      setOpen(null);
+                      const file = stickerFile(x.name, x.image);
+                      if (file) props.onPick(file);
+                    }}
+                  >
+                    <img src={x.image} alt="" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </Popover>
+      )}
+    </>
+  );
+}
+
 /** The composer's sticker button and picker. */
 export function StickerButton({
   community,

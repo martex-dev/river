@@ -3,6 +3,7 @@ import { VoiceRecorder } from '../components/VoiceMessage.tsx';
 import { haptic, useMessageGestures } from '../components/gestures.ts';
 import { CreatePollDialog, PollCard } from '../community/ui/Poll.tsx';
 import { firstLink, LinkCard } from '../community/ui/LinkCard.tsx';
+import { MyStickersButton } from '../community/ui/Stickers.tsx';
 import { isVote } from '../../../shared/poll.ts';
 import { create } from 'zustand';
 import { useSharedFiles, useSharedText } from '../components/ShareSheet.tsx';
@@ -2344,6 +2345,9 @@ ${shared}`
         >
           <SmileIcon size={20} />
         </button>
+        {!text.trim() && props.pending.length === 0 && (
+          <MyStickersButton disabled={!!uploading} onPick={(file) => void sendVoice(file)} />
+        )}
         {!text.trim() && props.pending.length === 0 ? (
           <VoiceRecorder disabled={!!uploading} onRecorded={(file) => void sendVoice(file)} />
         ) : (

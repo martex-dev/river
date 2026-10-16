@@ -2519,3 +2519,17 @@ html[data-density='compact'] .member {
   overflow-wrap: anywhere;
   text-align: left;
 }
+
+/* Stickers in direct messages (2.10.10). */
+.attachment-image.attachment-image--sticker {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.attachment-image--sticker img {
+  object-fit: contain;
+}
+.sticker-picker__group {
+  margin: 8px 2px 4px;
+  font-weight: 600;
+}
