@@ -79,6 +79,8 @@ export interface IpcDeps {
   selectScreen(sourceId: string): void;
   /** Phones: loudspeaker or earpiece for calls (absent on computers). */
   speaker?: (on: boolean) => void;
+  /** Phones: a short vibration (absent on computers). */
+  haptic?: (kind: 'tap' | 'select' | 'success' | 'warning') => void;
   /** The "can see your screen" bar and pointing (desktop only; ADR 0007). */
   share?: { status(sharing: boolean, viewers: string[]): void; point(x: number, y: number): void };
   /** Creates the account on River's home server by itself. */
@@ -385,6 +387,15 @@ export function registerIpc(deps: IpcDeps): void {
       assertTrustedSender(event as unknown as IpcMainInvokeEvent, deps.devServerUrl);
       const s = shareStatus.parse(status);
       deps.share?.status(s.sharing, s.viewers);
+    } catch {
+      // invalid or untrusted: dropped
+    }
+  });
+  const hapticKind = z.enum(['tap', 'select', 'success', 'warning']);
+  ipcMain.on(IPC.appHaptic, (event, kind: unknown) => {
+    try {
+      assertTrustedSender(event as unknown as IpcMainInvokeEvent, deps.devServerUrl);
+      deps.haptic?.(hapticKind.parse(kind));
     } catch {
       // invalid or untrusted: dropped
     }

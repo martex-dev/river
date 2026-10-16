@@ -193,6 +193,17 @@ public final class CoreHost: NSObject {
             let port: AVAudioSession.PortOverride = (a["on"] as? Bool) == true ? .speaker : AVAudioSession.PortOverride.none
             try? session.overrideOutputAudioPort(port)
             answer(id, value: nil)
+        case "haptic":
+            let kind = (a["kind"] as? String) ?? "tap"
+            DispatchQueue.main.async {
+                switch kind {
+                case "success": UINotificationFeedbackGenerator().notificationOccurred(.success)
+                case "warning": UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                case "select": UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                default: UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+            }
+            answer(id, value: nil)
         case "appLock":
             let available = AppLock.shared.setEnabled((a["enabled"] as? Bool) ?? false)
             answer(id, value: ["available": available] as [String: Any])

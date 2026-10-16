@@ -1,5 +1,6 @@
 import { findFiltered } from '../../../../shared/word-filter.ts';
 import { VoiceRecorder } from '../../components/VoiceMessage.tsx';
+import { useMessageGestures } from '../../components/gestures.ts';
 import { useSharedFiles, useSharedText } from '../../components/ShareSheet.tsx';
 import { tr } from '../../i18n.ts';
 import { MediaGallery } from './MediaGallery.tsx';
@@ -531,9 +532,22 @@ function MessageView(props: {
     const ids = cur.ids.includes(m.id) ? cur.ids.filter((x) => x !== m.id) : [...cur.ids, m.id].slice(0, 100);
     useCommunity.setState({ selecting: { ...cur, ids } });
   };
+  const gestures = useMessageGestures({
+    disabled: !!selecting || editing,
+    ...(can(channel.permissions, Permission.SEND_MESSAGES)
+      ? {
+          onReply: () => {
+            useCommunity.setState({ replyTo: m });
+            document.querySelector<HTMLTextAreaElement>('.chat__composer textarea')?.focus();
+          },
+        }
+      : {}),
+    onHold: (x, y) => setMenu({ x, y }),
+  });
   return (
     <div
       id={`msg-${m.id}`}
+      {...gestures}
       className={`msg ${props.grouped ? 'msg--grouped' : ''} ${m.mine ? 'msg--mine' : ''} ${m.mentionsMe ? 'msg--mention' : ''} ${editing ? 'is-editing' : ''} ${selecting ? 'is-selecting' : ''} ${selected ? 'is-selected' : ''}`}
       onClickCapture={(e) => {
         if (!selecting) return;

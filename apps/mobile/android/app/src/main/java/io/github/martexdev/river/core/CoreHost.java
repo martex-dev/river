@@ -402,6 +402,25 @@ public final class CoreHost {
             else answer(id, (Object) "ended");
             break;
           }
+        case "haptic":
+          {
+            // The phone's own haptics: no permission, and off when the user turned touch feedback off.
+            Screen s = screen;
+            if (s != null) {
+              String k = a.optString("kind", "tap");
+              int effect =
+                  "select".equals(k)
+                      ? android.view.HapticFeedbackConstants.LONG_PRESS
+                      : "success".equals(k) && android.os.Build.VERSION.SDK_INT >= 30
+                          ? android.view.HapticFeedbackConstants.CONFIRM
+                          : "warning".equals(k) && android.os.Build.VERSION.SDK_INT >= 30
+                              ? android.view.HapticFeedbackConstants.REJECT
+                              : android.view.HapticFeedbackConstants.KEYBOARD_TAP;
+              s.activity().getWindow().getDecorView().performHapticFeedback(effect);
+            }
+            answer(id, (Object) null);
+            break;
+          }
         case "screenSecurity":
           {
             Screen s = screen;

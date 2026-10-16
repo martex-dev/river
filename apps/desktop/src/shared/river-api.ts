@@ -31,6 +31,7 @@ export function createRiverApi(t: RiverTransport): RiverApi {
       info: () => t.invoke(IPC.appInfo),
       takeDeepLink: (kind) => t.invoke(IPC.appTakeDeepLink, kind),
       setTitleBar: (colors) => t.invoke(IPC.appTitleBar, colors),
+      haptic: (kind) => t.send(IPC.appHaptic, kind),
       onDeepLink: (listener) => t.on(IPC.appDeepLink, (...args) => listener(args[0] as DeepLink)),
       onShare: (listener) => t.on(IPC.appShare, (...args) => listener(args[0] as SharedContent)),
     },

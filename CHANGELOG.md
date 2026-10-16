@@ -6,6 +6,20 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-10-16
+
+**Phone feel.**
+
+### Added
+
+- **Swipe to reply**: pull a message to the left (direct messages, groups and
+  channels) and let go to reply to it, like Telegram. A ↩ shows how far to go.
+- **Hold for the menu**: holding a message opens its menu on every phone,
+  including iPhone (Reply, Copy, Forward, Pin, Edit, Select, Delete).
+- **Haptics** on Android and iPhone: a short vibration when a swipe reaches
+  reply, when a hold opens the menu, on reactions and when a voice recording
+  starts. It follows the phone's own touch-feedback setting.
+
 ## [2.7.0] - 2026-10-16
 
 **Media.**

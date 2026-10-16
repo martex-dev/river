@@ -1,5 +1,6 @@
 import type { CallView } from '../../../shared/dm.ts';
 import { VoiceRecorder } from '../components/VoiceMessage.tsx';
+import { haptic, useMessageGestures } from '../components/gestures.ts';
 import { create } from 'zustand';
 import { useSharedFiles, useSharedText } from '../components/ShareSheet.tsx';
 import { callNote, callsBetween } from '../dm/call-notes.ts';
@@ -1026,9 +1027,26 @@ function DmMessage(props: {
       ? (c.members.find((x) => x.riverId === m.sender)?.avatar ?? null)
       : c.avatar;
   const react = (emoji: string, on: boolean): void => {
-    if (on) play('reaction');
+    if (on) {
+      play('reaction');
+      haptic('tap');
+    }
     void dm.run({ a: 'react', peer: c.riverId, id: m.id, emoji, on });
   };
+  const canReply =
+    !m.deleted && !editing && (c.kind === 'group' ? c.state !== 'left' : c.state === 'accepted');
+  const gestures = useMessageGestures({
+    disabled: selecting || editing || m.deleted,
+    ...(canReply
+      ? {
+          onReply: () => {
+            useDm.setState({ replyTo: m });
+            document.querySelector<HTMLTextAreaElement>('.chat__composer textarea')?.focus();
+          },
+        }
+      : {}),
+    onHold: (x, y) => setMenu({ x, y }),
+  });
   const remove = (forEveryone: boolean): void => {
     useCommunity.getState().setModal({
       kind: 'confirm',
@@ -1048,6 +1066,7 @@ function DmMessage(props: {
       id={`dm-${m.id}`}
       className={`msg ${props.grouped ? 'msg--grouped' : ''} ${m.mine ? 'msg--mine' : ''} ${editing ? 'is-editing' : ''} ${selected ? 'is-selected' : ''}`}
       aria-selected={selecting ? selected : undefined}
+      {...gestures}
       onClickCapture={(e) => {
         // While selecting, a tap on a message selects it instead of doing anything else.
         if (!selecting || m.deleted) return;

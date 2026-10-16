@@ -1,3 +1,4 @@
+import { haptic } from './gestures.ts';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 
 /**
@@ -92,6 +93,7 @@ export function VoiceRecorder(props: {
       props.onRecorded(new File([blob], `${VOICE_PREFIX}-${seconds}s.${format.ext}`, { type: format.type }));
     };
     r.start(1000);
+    haptic('select');
     recorder.current = r;
     setNow(startedAt);
     setRecording({ startedAt });
