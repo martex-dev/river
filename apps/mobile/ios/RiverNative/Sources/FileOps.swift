@@ -3,11 +3,11 @@ import Foundation
 /// Files for the client core, confined to River's own containers: Application
 /// Support (excluded from iCloud backup: it is useless without this device's
 /// Keychain) and Caches. A file the person chose to export is written under
-/// cache/export/ and then handed to iOS's "Save to Files" sheet.
+/// cache/export/, then handed to iOS's "Save to Files" sheet (CoreHost's
+/// exportFile), and deleted when the sheet closes: no plaintext copy stays.
 final class FileOps {
     let data: URL
     let cache: URL
-    var onExported: ((URL) -> Void)?
     private var exports = Set<String>()
     private var nextExport = 1
 
@@ -23,6 +23,8 @@ final class FileOps {
         cache = try fm.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
             .appendingPathComponent("River", isDirectory: true).standardizedFileURL
         try fm.createDirectory(at: cache, withIntermediateDirectories: true)
+        // Exports left behind by a River that ended before their sheet closed.
+        try? fm.removeItem(at: cache.appendingPathComponent("export", isDirectory: true))
     }
 
     /// A path the core may write once; the file is then offered to the person.
@@ -32,9 +34,27 @@ final class FileOps {
         let dir = cache.appendingPathComponent("export/\(nextExport)", isDirectory: true)
         nextExport += 1
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let path = dir.appendingPathComponent(safe).path
+        let path = dir.appendingPathComponent(safe).standardizedFileURL.path
         exports.insert(path)
         return path
+    }
+
+    /// The written export at `path`, once (nil if it was never handed out or not written).
+    func takeExport(path: String) -> URL? {
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        guard exports.remove(url.path) != nil else { return nil }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            discardExport(url)
+            return nil
+        }
+        return url
+    }
+
+    /// Deletes an export's private copy (and the folder it was given).
+    func discardExport(_ url: URL) {
+        let dir = url.deletingLastPathComponent()
+        let root = cache.appendingPathComponent("export", isDirectory: true).standardizedFileURL.path + "/"
+        try? FileManager.default.removeItem(at: dir.standardizedFileURL.path.hasPrefix(root) ? dir : url)
     }
 
     private func confine(_ path: String) throws -> URL {
@@ -77,7 +97,6 @@ final class FileOps {
             } else {
                 try bytes.write(to: url, options: [.atomic])
             }
-            if exports.remove(url.path) != nil { onExported?(url) }
             return NSNull()
         case "fs.stat":
             let url = try confine(try a.string("path"))

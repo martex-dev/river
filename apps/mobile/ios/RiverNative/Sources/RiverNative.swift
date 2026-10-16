@@ -14,6 +14,11 @@ final class RiverNativeInterface {
         files = try FileOps()
     }
 
+    /// The core's page ended (its web process died): its open databases are closed.
+    func closeDatabases() {
+        db.closeAll()
+    }
+
     func call(method: String, argsJson: String) -> String {
         do {
             let parsed = try JSONSerialization.jsonObject(with: Data(argsJson.utf8), options: [.fragmentsAllowed])
