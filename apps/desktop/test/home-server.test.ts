@@ -141,6 +141,32 @@ describe('HomeAccount', () => {
     expect(registered).toEqual([]);
   });
 
+  it('sets the account up again on River’s server when asked, although its address is saved', async () => {
+    // River saved the home server's address after making the account there; the account then went away.
+    const { home, registered } = setup({ chosen: 'https://home.trycloudflare.com' });
+    await home.ensure();
+    expect(registered).toEqual([]); // by itself: the saved server is left alone
+    expect(await home.isHomeServer('https://home.trycloudflare.com')).toBe(true);
+    await home.ensure({ force: true }); // Set up again / a first community
+    expect(registered).toEqual(['https://home.trycloudflare.com']);
+  });
+
+  it('tells River’s server from another one by its identity', async () => {
+    const { home } = setup();
+    const other = new HomeAccount({
+      ...deps(note('https://home.trycloudflare.com', '2026-10-10T12:00:00.000Z'), {}),
+      requestJson: (async () => ({ id: 'someone-else', publicKey, beacon: null, address: null })) as never,
+      enabled: true,
+      account: { status: () => ({ state: 'none' }) } as never,
+      ready: () => true,
+      chosenServer: () => null,
+      onRegistered: () => undefined,
+      log: { info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined },
+    });
+    expect(await other.isHomeServer('https://my.server')).toBe(false);
+    expect(await home.isHomeServer('https://home.trycloudflare.com/')).toBe(true);
+  });
+
   it('never touches River’s server from development builds', async () => {
     const { home, registered } = setup({ enabled: false });
     home.kick();

@@ -88,7 +88,7 @@ export interface IpcDeps {
   /** The "can see your screen" bar and pointing (desktop only; ADR 0007). */
   share?: { status(sharing: boolean, viewers: string[]): void; point(x: number, y: number): void };
   /** Creates the account on River's home server by itself. */
-  homeAccount: Pick<HomeAccount, 'ensure' | 'kick' | 'isWaiting' | 'enabled' | 'locate'>;
+  homeAccount: Pick<HomeAccount, 'ensure' | 'kick' | 'isWaiting' | 'enabled' | 'locate' | 'isHomeServer'>;
   /** Settings → System → Connection check. */
   diagnostics(): Promise<DiagnosticCheck[]>;
   openLogs(): Promise<void>;
@@ -240,6 +240,21 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.communityList, (_e, mode) =>
     mode === 'connection-only' ? deps.community.connectionState() : result(() => deps.community.refresh()),
   );
+  /**
+   * An account for something the person asked for (Set up again, a first community): on
+   * River's server when that is the one they were using (River saves its address once it
+   * made the account there) or none was chosen, otherwise on the server they chose.
+   */
+  const accountOn = async (server: string | null): Promise<void> => {
+    if (deps.account.status().state !== 'none') return;
+    if (!server || (await deps.homeAccount.isHomeServer(server))) {
+      await deps.homeAccount.ensure({ force: true });
+      if (deps.account.status().state === 'none')
+        throw new UserFacingError('River could not set up your account. Try again in a moment.');
+      return;
+    }
+    await deps.account.register(server);
+  };
   handle(IPC.communityCreate, (_e, name, rawOptions) =>
     result(async () => {
       const options = createCommunityOptionsSchema.parse(rawOptions ?? {});
@@ -250,7 +265,7 @@ export function registerIpc(deps: IpcDeps): void {
           deps.settings.update({ server: { url: options.serverUrl } });
           await deps.account.register(options.serverUrl);
         } else {
-          await deps.homeAccount.ensure();
+          await accountOn(deps.settings.get().server.url);
         }
       }
       return deps.community.create(name, options.template);
@@ -261,7 +276,7 @@ export function registerIpc(deps: IpcDeps): void {
       deps.community.join(link, async (serverUrl) => {
         // A permanent link names River's server, wherever it is today.
         if (isHomeLink(serverUrl)) {
-          await deps.homeAccount.ensure();
+          await deps.homeAccount.ensure({ force: true });
           return;
         }
         try {
@@ -271,7 +286,7 @@ export function registerIpc(deps: IpcDeps): void {
           // The link's address may be an old one of River's server (its host PC restarted):
           // create the account on River's server instead, where the invite code still works.
           if (!(err instanceof UserFacingError && err.unreachable) || !deps.homeAccount.enabled()) throw err;
-          await deps.homeAccount.ensure();
+          await deps.homeAccount.ensure({ force: true });
         }
       }),
     ),
@@ -444,8 +459,7 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.accountStartOver, () =>
     result(async () => {
       const previous = deps.account.forgetMissing();
-      if (deps.homeAccount.enabled()) await deps.homeAccount.ensure();
-      else await deps.account.register(previous);
+      await accountOn(previous);
       deps.community.stop();
       deps.community.ensureSocket();
       return deps.account.status();
