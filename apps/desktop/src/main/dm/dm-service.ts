@@ -1267,16 +1267,24 @@ export class DmService {
         }
         case 'conversations':
           return out(this.conversations());
-        case 'messages':
-          return out(
-            (
-              this.db()
+        case 'messages': {
+          // The latest 500, or everything since `since` when that is more (up to 5000).
+          const latest = (): MessageRow[] =>
+            this.db()
+              .prepare(
+                'SELECT * FROM (SELECT * FROM dm_messages WHERE peer = ? ORDER BY sent_at DESC LIMIT 500) ORDER BY sent_at',
+              )
+              .all(act.peer) as MessageRow[];
+          let rows = act.since
+            ? (this.db()
                 .prepare(
-                  'SELECT * FROM (SELECT * FROM dm_messages WHERE peer = ? ORDER BY sent_at DESC LIMIT 500) ORDER BY sent_at',
+                  'SELECT * FROM (SELECT * FROM dm_messages WHERE peer = ? AND sent_at >= ? ORDER BY sent_at DESC LIMIT 5000) ORDER BY sent_at',
                 )
-                .all(act.peer) as MessageRow[]
-            ).map((r) => this.view(r)),
-          );
+                .all(act.peer, act.since) as MessageRow[])
+            : [];
+          if (rows.length < 500) rows = latest();
+          return out(rows.map((r) => this.view(r)));
+        }
         case 'open': {
           if (act.peer === this.me()) throw new CommunityError('That is your own River ID.');
           await this.prepareSessions(act.peer);

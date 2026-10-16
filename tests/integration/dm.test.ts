@@ -302,6 +302,34 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     expect(got.find((m) => m.id === other.id)?.embed).toBeNull();
   });
 
+  it('loads a long conversation back to a date (jump to date)', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await alice.dm.action({ a: 'open', peer: bob.riverId, name: 'Bob' });
+    const base = Date.parse('2026-01-01T00:00:00.000Z');
+    const at = (i: number) => new Date(base + i * 60_000).toISOString();
+    const insert = alice.local.prepare(
+      `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions) VALUES (?, ?, ?, ?, ?, 'received', '{}')`,
+    );
+    for (let i = 0; i < 700; i++) {
+      insert.run(
+        `m${String(i).padStart(20, '0')}`,
+        bob.riverId,
+        bob.riverId,
+        JSON.stringify({ text: `#${i}` }),
+        at(i),
+      );
+    }
+    const latest = await alice.dm.action({ a: 'messages', peer: bob.riverId });
+    expect(latest).toHaveLength(500);
+    expect(latest[0]!.text).toBe('#200');
+    const back = await alice.dm.action({ a: 'messages', peer: bob.riverId, since: at(50) });
+    expect(back).toHaveLength(650);
+    expect(back[0]!.text).toBe('#50');
+    // A recent date still shows the usual latest 500.
+    expect(await alice.dm.action({ a: 'messages', peer: bob.riverId, since: at(690) })).toHaveLength(500);
+  });
+
   it('searches inside one conversation only', async () => {
     const alice = await person('Alice');
     const bob = await person('Bob');

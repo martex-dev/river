@@ -2400,3 +2400,16 @@ html[data-density='compact'] .member {
   width: 58px;
   height: 58px;
 }
+
+/* Jump to a date in a conversation (2.10.7). */
+.conv-search__date {
+  flex: 0 0 auto;
+  max-width: 150px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--layer-1);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
