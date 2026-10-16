@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { looksLikeInvite, parseFriend, parseSignup } from '../../../../shared/invite-link.ts';
 import type { DeepLink } from '../../../../shared/ipc.ts';
-import { GREETING, sendFriendRequest } from '../../dm/friends.ts';
+import { addFriend, GREETING } from '../../dm/friends.ts';
 import { useRiver } from '../../store.ts';
 import { useCommunity } from '../store.ts';
 import { Modal } from './common.tsx';
@@ -184,10 +184,11 @@ export function AddFriendDialog(props: { riverId: string; serverUrl: string }): 
           disabled={busy || problem !== null}
           onClick={() => {
             setBusy(true);
-            void sendFriendRequest(props.riverId).then((ok) => {
+            // Already a friend: their chat opens and nothing is sent.
+            void addFriend(props.riverId).then((result) => {
               setBusy(false);
-              if (!ok) return setError('Could not send the request.');
-              s.notify('Friend request sent');
+              if (result === 'failed') return setError('Could not send the request.');
+              s.notify(result === 'friend' ? 'You are already friends' : 'Friend request sent');
               s.setModal(null);
             });
           }}

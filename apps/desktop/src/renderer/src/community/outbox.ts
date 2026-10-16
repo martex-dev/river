@@ -50,6 +50,7 @@ const save = (item: Outgoing): void =>
       ...(item.replyTo ? { replyTo: item.replyTo } : {}),
       ...(item.threadId ? { threadId: item.threadId } : {}),
       ...(item.attachments ? { attachments: item.attachments } : {}),
+      ...(item.replyTo && item.noPing ? { noPing: true } : {}),
       createdAt: item.createdAt,
     })
     .catch(() => undefined);

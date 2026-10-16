@@ -100,4 +100,29 @@ describe('outbox', () => {
     await vi.waitFor(() => expect(useOutbox.getState().items).toEqual([]));
     expect(sends()[0]![0]).toMatchObject({ a: 'send', text: 'from before' });
   });
+
+  it('remembers a quiet reply (no ping) across a restart', async () => {
+    useCommunity.setState({ connection: 'offline' });
+    useOutbox.getState().send({ channelId: 'ch', text: 'shh', replyTo: 'r1', noPing: true });
+    expect(action).toHaveBeenCalledWith(
+      expect.objectContaining({ a: 'outboxSave', replyTo: 'r1', noPing: true }),
+    );
+    // River restarts with it unsent; it goes out still without pinging.
+    saved = [
+      {
+        localId: 'local-1-1',
+        channelId: 'ch',
+        text: 'shh',
+        replyTo: 'r1',
+        noPing: true,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    useOutbox.setState({ items: [] });
+    sendReplies = [sent('shh')];
+    useCommunity.setState({ connection: 'online' });
+    await useOutbox.getState().restore();
+    await vi.waitFor(() => expect(sends().length).toBeGreaterThan(0));
+    expect(sends().at(-1)![0]).toMatchObject({ a: 'send', replyTo: 'r1', noPing: true });
+  });
 });
