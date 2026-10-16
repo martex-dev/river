@@ -4,6 +4,9 @@ import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import { useShallow } from 'zustand/react/shallow';
 import type { ChannelView, ChatMessage, CommunityView } from '../../../../shared/ipc.ts';
+import { enterSends } from '../../components/keys.ts';
+import { isPhone } from '../../../../shared/platform.ts';
+import { useRiver } from '../../store.ts';
 import { useOutbox } from '../outbox.ts';
 import { useCommunity } from '../store.ts';
 import { AttachmentList } from './Attachments.tsx';
@@ -39,6 +42,7 @@ export function ThreadPanel(props: {
   const mayEdit = !!thread && (thread.creator === me || manager);
   const mayReply = can(channel.permissions, Permission.SEND_MESSAGES) && (!thread?.archived || manager);
   const close = (): void => useCommunity.setState({ openThread: null });
+  const phone = useRiver((r) => isPhone(r.info?.platform));
 
   useEffect(() => {
     const el = listRef.current;
@@ -147,12 +151,21 @@ export function ThreadPanel(props: {
             </div>
             <div className="msg__text">{o.text}</div>
             {o.status === 'failed' && (
-              <button
-                className="btn btn--link btn--small"
-                onClick={() => useOutbox.getState().retry(o.localId)}
-              >
-                Retry
-              </button>
+              <span className="thread-reply__failed">
+                <button
+                  className="btn btn--link btn--small"
+                  onClick={() => useOutbox.getState().retry(o.localId)}
+                >
+                  Retry
+                </button>
+                {/* Gone from this device too, like a failed message in the channel. */}
+                <button
+                  className="btn btn--link btn--small"
+                  onClick={() => useOutbox.getState().discard(o.localId)}
+                >
+                  Discard
+                </button>
+              </span>
             )}
           </div>
         ))}
@@ -173,7 +186,7 @@ export function ThreadPanel(props: {
             maxLength={4000}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (enterSends(e, phone)) {
                 e.preventDefault();
                 send();
               }

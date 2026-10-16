@@ -145,6 +145,9 @@ interface CommunityState {
 
 let toastTimer: number | undefined;
 
+/** "Load older" requests on their way, per channel. */
+const olderInFlight = new Map<string, Promise<number>>();
+
 /** The last text channel opened in each community, on this device (a convenience; may be unavailable). */
 function lastChannel(communityId: string): string | null {
   try {
@@ -251,17 +254,33 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     const res = await window.river.community.action({ a: 'reports', communityId });
     if (res.ok) set({ reports: { ...get().reports, [communityId]: res.value } });
   },
-  loadOlder: async (channelId) => {
-    const list = get().messages[channelId];
-    if (!list?.length || get().noMore[channelId]) return 0;
-    const res = await window.river.community.action({ a: 'history', channelId, before: list[0]!.sentAt });
-    if (!res.ok) return 0;
-    const older = (res.value as ChatMessage[]).filter((m) => !list.some((x) => x.id === m.id));
-    set({
-      messages: { ...get().messages, [channelId]: [...older, ...(get().messages[channelId] ?? [])] },
-      ...(older.length < 100 ? { noMore: { ...get().noMore, [channelId]: true } } : {}),
-    });
-    return older.length;
+  loadOlder: (channelId) => {
+    // One page at a time per channel: a second request (a quick double press, a jump looking
+    // further back) waits for the one on its way instead of adding the same page twice.
+    const pending = olderInFlight.get(channelId);
+    if (pending) return pending;
+    const run = async (): Promise<number> => {
+      const list = get().messages[channelId];
+      if (!list?.length || get().noMore[channelId]) return 0;
+      const oldest = list[0]!;
+      const res = await window.river.community.action({ a: 'history', channelId, before: oldest.sentAt });
+      if (!res.ok) return 0;
+      const page = res.value as ChatMessage[];
+      // Against the list as it is now (it may have changed while this page was decrypted).
+      const now = get().messages[channelId] ?? [];
+      const known = new Set(now.map((m) => m.id));
+      const older = page.filter((m) => !known.has(m.id));
+      set({
+        messages: { ...get().messages, [channelId]: [...older, ...now] },
+        // The end of the history: an empty page, or one that brought nothing new. (Messages that
+        // cannot be decrypted are dropped from a page, so a short page alone does not mean the end.)
+        ...(older.length === 0 ? { noMore: { ...get().noMore, [channelId]: true } } : {}),
+      });
+      return older.length;
+    };
+    const promise = run().finally(() => olderInFlight.delete(channelId));
+    olderInFlight.set(channelId, promise);
+    return promise;
   },
 
   load: async () => {
@@ -394,6 +413,16 @@ export const useCommunity = create<CommunityState>((set, get) => ({
             messages: { ...get().messages, [event.channelId]: list.filter((m) => m.id !== event.messageId) },
           });
         }
+        // A reply inside a thread goes from that thread's loaded replies too.
+        const threads = get().threads;
+        let changed = false;
+        const next: Record<string, ChatMessage[]> = {};
+        for (const [root, replies] of Object.entries(threads)) {
+          const kept = replies.filter((m) => m.id !== event.messageId);
+          if (kept.length !== replies.length) changed = true;
+          next[root] = kept;
+        }
+        if (changed) set({ threads: next });
         return;
       }
       case 'typing': {
@@ -651,7 +680,10 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     const c = get().communities.find((x) => x.channels.some((ch) => ch.id === channelId));
     if (c?.channels.find((ch) => ch.id === channelId)?.kind !== 'text') return;
     const res = await window.river.community.messages(channelId);
-    if (res.ok) set({ messages: { ...get().messages, [channelId]: res.value } });
+    if (!res.ok) return;
+    // The newest page replaces what was loaded, so older history can be loaded again.
+    const { [channelId]: _done, ...noMore } = get().noMore;
+    set({ messages: { ...get().messages, [channelId]: res.value }, noMore });
   },
 
   joinVoice: async (channelId, me) => {

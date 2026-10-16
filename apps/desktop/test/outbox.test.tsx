@@ -80,6 +80,17 @@ describe('outbox', () => {
     expect(useOutbox.getState().items).toEqual([]);
   });
 
+  it('never leaves a message "Sending…" when the request itself breaks', async () => {
+    action.mockImplementation(async (a: { a: string }) => {
+      if (a.a === 'send') throw new Error('IPC channel closed');
+      return { ok: true, value: null };
+    });
+    useOutbox.getState().send({ channelId: 'ch', text: 'lost?' });
+    await vi.waitFor(() =>
+      expect(useOutbox.getState().items).toMatchObject([{ status: 'failed', error: 'IPC channel closed' }]),
+    );
+  });
+
   it('brings back messages that were unsent when River closed, and sends them', async () => {
     saved = [
       { localId: 'local-1-1', channelId: 'ch', text: 'from before', createdAt: new Date().toISOString() },
