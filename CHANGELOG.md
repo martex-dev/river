@@ -6,6 +6,17 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.10.8] - 2026-10-16
+
+**Chat folders.**
+
+### Added
+
+- **Folders for your chats**, like Telegram: ＋ next to the chat filters makes a
+  folder (a name and the people and groups in it); it shows as a tab beside
+  All, Unread, People and Groups. ✎ edits or deletes the open folder. Up to
+  ten folders, kept on this device only.
+
 ## [2.10.7] - 2026-10-16
 
 **Jump to a date.**

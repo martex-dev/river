@@ -2413,3 +2413,34 @@ html[data-density='compact'] .member {
   font: inherit;
   font-size: 13px;
 }
+
+/* Chat folders (2.10.8). */
+.chat-filters-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.chat-filters-row .chat-filters {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.chat-filters__edit {
+  flex: 0 0 auto;
+}
+.folder-pick {
+  max-height: 46vh;
+  margin: 4px 0 8px;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.folder-pick__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 4px 2px;
+  cursor: pointer;
+}

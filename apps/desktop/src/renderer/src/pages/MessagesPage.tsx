@@ -18,6 +18,8 @@ import {
   type ConversationView,
   type DirectMessageView,
   type ScheduledView,
+  type ChatFolder,
+  MAX_FOLDERS,
 } from '../../../shared/dm.ts';
 import { play } from '../community/sound.ts';
 import { useCommunity } from '../community/store.ts';
@@ -148,14 +150,22 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
     }, 250);
     return () => window.clearTimeout(t);
   }, [query]);
-  const [filter, setFilter] = useState<ChatFilter>('all');
+  const [filter, setFilter] = useState<string>('all');
+  const [folders, setFolders] = useState<ChatFolder[]>([]);
+  const [editingFolder, setEditingFolder] = useState<ChatFolder | 'new' | null>(null);
+  useEffect(() => {
+    void window.river.dm.action({ a: 'folders' }).then((r) => {
+      if (r.ok) setFolders(r.value);
+    });
+  }, []);
+  const activeFolder = folders.find((f) => `folder:${f.id}` === filter) ?? null;
   const [archiveOpen, setArchiveOpen] = useState(false);
   const requests = filtered.filter((c) => c.state === 'request');
   const archived = filtered.filter((c) => c.state !== 'request' && c.archived);
   const archivedUnread = archived.reduce((n, c) => n + c.unread, 0);
   const chats = filtered
     .filter((c) => c.state !== 'request' && (archiveOpen ? c.archived : !c.archived))
-    .filter((c) => matchesFilter(c, filter));
+    .filter((c) => matchesFilter(c, filter, activeFolder));
   return (
     <div className="dms__list">
       <div className="home-sidebar__search">
@@ -220,19 +230,56 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
           </button>
         </div>
         {!archiveOpen && (
-          <div className="chat-filters" role="radiogroup" aria-label="Show conversations">
-            {CHAT_FILTERS.map((f) => (
+          <div className="chat-filters-row">
+            <div className="chat-filters" role="radiogroup" aria-label="Show conversations">
+              {[...CHAT_FILTERS, ...folders.map((f) => ({ id: `folder:${f.id}`, label: f.name }))].map(
+                (f) => (
+                  <button
+                    key={f.id}
+                    role="radio"
+                    aria-checked={filter === f.id}
+                    className={`chat-filters__tab ${filter === f.id ? 'is-active' : ''}`}
+                    onClick={() => setFilter(f.id)}
+                  >
+                    {f.label}
+                  </button>
+                ),
+              )}
+            </div>
+            {activeFolder ? (
               <button
-                key={f.id}
-                role="radio"
-                aria-checked={filter === f.id}
-                className={`chat-filters__tab ${filter === f.id ? 'is-active' : ''}`}
-                onClick={() => setFilter(f.id)}
+                className="icon-btn chat-filters__edit"
+                aria-label={`Edit folder ${activeFolder.name}`}
+                title="Edit this folder"
+                onClick={() => setEditingFolder(activeFolder)}
               >
-                {f.label}
+                ✎
               </button>
-            ))}
+            ) : (
+              folders.length < MAX_FOLDERS && (
+                <button
+                  className="icon-btn chat-filters__edit"
+                  aria-label="New chat folder"
+                  title="New chat folder"
+                  onClick={() => setEditingFolder('new')}
+                >
+                  ＋
+                </button>
+              )
+            )}
           </div>
+        )}
+        {editingFolder && (
+          <FolderDialog
+            folder={editingFolder === 'new' ? null : editingFolder}
+            conversations={dm.conversations.filter((c) => c.state !== 'request')}
+            onSaved={(list, id) => {
+              setFolders(list);
+              setEditingFolder(null);
+              setFilter(id ? `folder:${id}` : 'all');
+            }}
+            onClose={() => setEditingFolder(null)}
+          />
         )}
         {!archiveOpen && filter === 'all' && !dm.conversations.some((c) => c.self) && (
           <button
@@ -314,6 +361,82 @@ const useSelection = create<{
   clear: () => set({ peer: null, ids: [] }),
 }));
 
+/** Make or change a chat folder (2.10.8): a name and the chats in it. */
+function FolderDialog(props: {
+  folder: ChatFolder | null;
+  conversations: ConversationView[];
+  onSaved(folders: ChatFolder[], id: string | null): void;
+  onClose(): void;
+}): ReactElement {
+  const [name, setName] = useState(props.folder?.name ?? '');
+  const [peers, setPeers] = useState<string[]>(props.folder?.peers ?? []);
+  const [busy, setBusy] = useState(false);
+  const save = async (): Promise<void> => {
+    setBusy(true);
+    const r = await window.river.dm.action({
+      a: 'saveFolder',
+      ...(props.folder ? { id: props.folder.id } : {}),
+      name: name.trim(),
+      peers,
+    });
+    setBusy(false);
+    if (!r.ok) return useCommunity.getState().notify(r.message, 'error');
+    const saved = props.folder ? props.folder.id : (r.value.at(-1)?.id ?? null);
+    props.onSaved(r.value, saved);
+  };
+  const remove = async (): Promise<void> => {
+    if (!props.folder) return;
+    const r = await window.river.dm.action({ a: 'deleteFolder', id: props.folder.id });
+    if (r.ok) props.onSaved(r.value, null);
+  };
+  return (
+    <Modal title={props.folder ? 'Edit folder' : 'New chat folder'} onClose={props.onClose}>
+      <label className="textfield">
+        <span className="field__label">Name</span>
+        <input
+          autoFocus
+          maxLength={24}
+          placeholder="Family, Work, Gaming…"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </label>
+      <div className="field__label">Chats in this folder</div>
+      <ul className="folder-pick">
+        {props.conversations.map((c) => (
+          <li key={c.riverId}>
+            <label className="folder-pick__row">
+              <input
+                type="checkbox"
+                checked={peers.includes(c.riverId)}
+                onChange={(e) =>
+                  setPeers(e.target.checked ? [...peers, c.riverId] : peers.filter((p) => p !== c.riverId))
+                }
+              />
+              {c.kind === 'group' ? <GroupAvatar c={c} size={24} /> : <ConvAvatar c={c} size={24} />}
+              <span>{c.name}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <p className="muted small">Folders are kept on this device only.</p>
+      <div className="button-row">
+        {props.folder && (
+          <button className="btn btn--danger" onClick={() => void remove()}>
+            Delete folder
+          </button>
+        )}
+        <button className="btn btn--ghost" onClick={props.onClose}>
+          Cancel
+        </button>
+        <button className="btn btn--primary" disabled={busy || !name.trim()} onClick={() => void save()}>
+          Save
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 /** Copies text and says so (or says why not). */
 function copyText(text: string): void {
   void navigator.clipboard
@@ -333,7 +456,8 @@ const CHAT_FILTERS: Array<{ id: ChatFilter; label: string }> = [
   { id: 'groups', label: 'Groups' },
 ];
 
-function matchesFilter(c: ConversationView, filter: ChatFilter): boolean {
+function matchesFilter(c: ConversationView, filter: string, folder: ChatFolder | null): boolean {
+  if (folder) return folder.peers.includes(c.riverId);
   if (filter === 'unread') return c.unread > 0 || !!c.markedUnread;
   if (filter === 'people') return c.kind === 'direct';
   if (filter === 'groups') return c.kind === 'group';

@@ -105,6 +105,14 @@ export interface CallView {
   startedAt: string;
 }
 
+/** A chat folder (2.10.8): a named set of conversations, kept on this device. */
+export interface ChatFolder {
+  id: string;
+  name: string;
+  peers: string[];
+}
+export const MAX_FOLDERS = 10;
+
 export type DmEvent =
   | { t: 'conversations'; conversations: ConversationView[] }
   | { t: 'message'; message: DirectMessageView; isNew: boolean; senderName: string }
@@ -251,6 +259,18 @@ export const dmActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('myId') }).strict(),
+  /** Chat folders (2.10.8), kept on this device. */
+  z.object({ a: z.literal('folders') }).strict(),
+  z
+    .object({
+      a: z.literal('saveFolder'),
+      /** Absent: a new folder. */
+      id: id.optional(),
+      name: z.string().trim().min(1).max(24),
+      peers: z.array(conv).max(500),
+    })
+    .strict(),
+  z.object({ a: z.literal('deleteFolder'), id }).strict(),
   /** Opens (and creates, the first time) the Note to self conversation (2.9). */
   z.object({ a: z.literal('noteToSelf') }).strict(),
   /** Every file shared in conversations and posts on this device. */
@@ -321,6 +341,9 @@ interface DmResults {
   search: DirectMessageView[];
   files: FileView[];
   calls: CallView[];
+  folders: ChatFolder[];
+  saveFolder: ChatFolder[];
+  deleteFolder: ChatFolder[];
   schedule: ScheduledView;
   scheduled: ScheduledView[];
   pendingCall: Extract<DmEvent, { t: 'call' }> | null;
