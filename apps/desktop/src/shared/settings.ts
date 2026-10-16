@@ -130,6 +130,8 @@ export const settingsSchema = z.object({
     sensitivity: z.number().min(0).max(1).nullable(),
     /** Added in 1.0.22: how loud other people's soundboard sounds play, 0–1 (0 = off). */
     soundboardVolume: z.number().min(0).max(1),
+    /** Added in 2.0.4: everyone's voice, 0–2 (1 = 100%); null = automatic (louder on phones). */
+    outputVolume: z.number().min(0).max(2).nullable(),
     /** Added in 1.0.26: leave a voice channel after this many minutes alone (0 = never). */
     leaveAloneMinutes: z.number().int().min(0).max(240),
     /** Added in 1.0.26: a soundboard sound played when you join voice, per community. */
@@ -231,6 +233,7 @@ export const DEFAULT_SETTINGS: Settings = {
     userVolumes: {},
     sensitivity: null,
     soundboardVolume: 0.6,
+    outputVolume: null,
     keybinds: { ...DEFAULT_KEYBINDS },
     leaveAloneMinutes: 0,
     entranceSounds: {},

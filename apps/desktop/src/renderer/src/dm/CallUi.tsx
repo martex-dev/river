@@ -182,6 +182,7 @@ export function DmCallPanel({ conversation: c }: { conversation: ConversationVie
         </button>
         {/* Video calls start on the loudspeaker, voice calls at the ear, as on any phone. */}
         {phone && <SpeakerButton initial={active.video} />}
+        <TheirVolume peer={c.riverId} name={c.name} />
         {/* Phones have no screen picker yet. */}
         {!phone && (
           <button
@@ -236,5 +237,32 @@ export function DmCallPanel({ conversation: c }: { conversation: ConversationVie
         </div>
       )}
     </div>
+  );
+}
+
+/** How loud the other person sounds, 0–200 % (above 100 % River boosts without distortion). */
+function TheirVolume(props: { peer: string; name: string }): ReactElement {
+  const volume = useRiver((r) => r.settings?.voice.userVolumes[props.peer] ?? 1);
+  const voice = useRiver((r) => r.settings?.voice);
+  const update = useRiver((r) => r.updateSettings);
+  return (
+    <label className="dm-call__volume" title={`Volume for ${props.name}`}>
+      <span className="sr-only">Volume for {props.name}</span>
+      <input
+        type="range"
+        className="slider"
+        min={0}
+        max={200}
+        step={5}
+        value={Math.round(volume * 100)}
+        aria-valuetext={`${Math.round(volume * 100)}%`}
+        onChange={(e) =>
+          void update({
+            voice: { userVolumes: { ...voice?.userVolumes, [props.peer]: Number(e.target.value) / 100 } },
+          })
+        }
+      />
+      <span className="small muted">{Math.round(volume * 100)}%</span>
+    </label>
   );
 }

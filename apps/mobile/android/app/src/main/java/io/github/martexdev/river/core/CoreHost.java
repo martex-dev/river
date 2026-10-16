@@ -216,6 +216,28 @@ public final class CoreHost {
     if (ask != null) answer(ask, (Object) "clicked");
   }
 
+  /**
+   * During a call the volume buttons set the call's volume (not media volume, which the call
+   * does not use); afterwards the phone's audio goes back to normal.
+   */
+  private void callAudio(boolean active) {
+    Screen s = screen;
+    if (s != null) {
+      s.activity()
+          .setVolumeControlStream(
+              active
+                  ? android.media.AudioManager.STREAM_VOICE_CALL
+                  : android.media.AudioManager.USE_DEFAULT_STREAM_TYPE);
+    }
+    if (active) return;
+    android.media.AudioManager am =
+        (android.media.AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+    if (am == null) return;
+    if (android.os.Build.VERSION.SDK_INT >= 31) am.clearCommunicationDevice();
+    else am.setSpeakerphoneOn(false);
+    am.setMode(android.media.AudioManager.MODE_NORMAL);
+  }
+
   /** Calls through the loudspeaker or the earpiece. */
   private void speaker(boolean on) {
     android.media.AudioManager am =
@@ -375,6 +397,7 @@ public final class CoreHost {
             if (previous != null) answer(previous, (Object) "ended");
             boolean active = a.optBoolean("active", false);
             CallService.setActive(context, active);
+            callAudio(active);
             if (active) callAsk = id;
             else answer(id, (Object) "ended");
             break;

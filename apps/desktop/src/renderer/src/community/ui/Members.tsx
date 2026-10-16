@@ -278,9 +278,10 @@ export function ProfileCard(props: {
               type="range"
               className="slider"
               min={0}
-              max={100}
+              max={200}
               value={Math.round(volume * 100)}
               aria-label={`Volume for ${member.name}`}
+              aria-valuetext={`${Math.round(volume * 100)}%`}
               onChange={(e) =>
                 void updateSettings({
                   voice: {
