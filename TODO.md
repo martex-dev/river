@@ -27,9 +27,9 @@ Audit and plan: [docs/product/telegram-parity.md](docs/product/telegram-parity.m
 - [x] 2.10.7 Jump to a date; open older search results
 - [x] 2.10.8 Chat folders
 - [x] 2.10.9 Contact profiles
+- [x] 2.10.10 Stickers in direct messages
 - [ ] Picture-in-picture for calls on iPhone (needs AVPictureInPictureController with a video call source)
 - [ ] Check the message box stays above the keyboard on Android 15+ (edge-to-edge) on a real phone
-- [ ] Stickers in direct messages (today they belong to communities)
 - [ ] More interface languages (English and Bulgarian today)
 
 ## 1.0.0 — Stage 1 release

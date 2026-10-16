@@ -1,4 +1,5 @@
 import { FavoriteStar } from './Favorites.tsx';
+import { isStickerFile } from './Stickers.tsx';
 import { isVoiceMessage, VoiceNote } from '../../components/VoiceMessage.tsx';
 import { useContext, createContext, useEffect, useRef, useState, type ReactElement } from 'react';
 import type { AttachmentPointer } from '../../../../shared/community-actions.ts';
@@ -168,13 +169,17 @@ function ImageAttachment({
   const [manual, setManual] = useState(false);
   const { url, error } = useDecrypted(pointer, (visible && pointer.size <= AUTO_LOAD_BYTES) || manual);
   const ratio = tile ?? (pointer.width && pointer.height ? pointer.width / pointer.height : 4 / 3);
-  const width = tile ? '100%' : Math.max(64, Math.min(400, pointer.width ?? 400, 300 * ratio));
+  // Stickers (2.10.10) are small and drawn without a frame.
+  const sticker = !tile && isStickerFile(pointer.name, pointer.mime);
+  const width = tile
+    ? '100%'
+    : Math.max(64, Math.min(sticker ? 160 : 400, pointer.width ?? 400, (sticker ? 160 : 300) * ratio));
   return (
     // The star sits beside the picture (not inside its button), so controls are never nested.
     <div className={`attachment-image-wrap ${tile === 2 ? 'is-wide' : ''}`} style={{ width }}>
       <div
         ref={ref}
-        className="attachment-image"
+        className={`attachment-image ${sticker ? 'attachment-image--sticker' : ''}`}
         style={{ width, aspectRatio: String(ratio) }}
         role="button"
         tabIndex={0}

@@ -6,6 +6,17 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.10.10] - 2026-10-16
+
+**Stickers in direct messages.**
+
+### Added
+
+- **Stickers in direct messages and groups**: 🗒️ next to the message box shows
+  the stickers of all your communities; the one you pick is sent as an
+  encrypted picture and shown small and frameless, like a sticker. Apps older
+  than 2.10.10 show it as a small picture.
+
 ## [2.10.9] - 2026-10-16
 
 **Contact profiles.**
