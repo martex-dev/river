@@ -6,6 +6,21 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-10-16
+
+**Disappearing messages.**
+
+### Added
+
+- **Disappearing messages** for any conversation or group (⋯ → Disappearing
+  messages): 30 seconds up to 4 weeks. The setting is shared end-to-end
+  encrypted with everyone in the conversation, a notice shows who changed it,
+  and new messages carry a ⏱. Each device deletes its copy on time — together
+  with the file attachments it kept — even if nobody opens the conversation.
+- Honest limits, also shown in the app: a message can be copied or
+  photographed before it disappears, an encrypted backup made before then still
+  contains it, and both sides need River 2.4 or newer.
+
 ## [2.3.0] - 2026-10-16
 
 **Voice messages.**

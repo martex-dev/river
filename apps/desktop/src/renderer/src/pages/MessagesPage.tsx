@@ -8,7 +8,12 @@ import { ForwardDialog } from '../community/ui/Forward.tsx';
 import { useDraft } from '../community/drafts.ts';
 import { clockTime } from '../time.ts';
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
-import type { ConversationView, DirectMessageView } from '../../../shared/dm.ts';
+import {
+  TIMER_CHOICES,
+  timerLabel,
+  type ConversationView,
+  type DirectMessageView,
+} from '../../../shared/dm.ts';
 import { play } from '../community/sound.ts';
 import { useCommunity } from '../community/store.ts';
 import {
@@ -409,6 +414,7 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
   const messages = useDm((x) => x.messages[c.riverId]) ?? [];
   const [showPins, setShowPins] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [timerOpen, setTimerOpen] = useState(false);
   const selection = useSelection();
   useEffect(() => () => useSelection.getState().clear(), [c.riverId]);
   // Calls with this person, from the local call history, shown between messages (1.0.29).
@@ -514,6 +520,15 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
             title="View safety number"
           >
             {c.verified ? '✓ Verified' : '🔒 Encrypted'}
+          </button>
+        )}
+        {!!c.timer && (
+          <button
+            className="chip dm-timer"
+            title={`Messages disappear after ${timerLabel(c.timer)}`}
+            onClick={() => setTimerOpen(true)}
+          >
+            ⏱ {timerLabel(c.timer)}
           </button>
         )}
         <span className="chat__head-actions">
@@ -682,9 +697,20 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           >
             Delete conversation
           </MenuItem>
+          {(c.kind === 'group' ? c.state !== 'left' : c.state === 'accepted') && (
+            <MenuItem
+              onClick={() => {
+                setMenu(null);
+                setTimerOpen(true);
+              }}
+            >
+              Disappearing messages{c.timer ? ` · ${timerLabel(c.timer)}` : ''}
+            </MenuItem>
+          )}
           <NotifyMenuSection id={c.riverId} kind="conversation" onDone={() => setMenu(null)} />
         </Popover>
       )}
+      {timerOpen && <TimerDialog conversation={c} onClose={() => setTimerOpen(false)} />}
       {showPins && (
         <div className="pins dm-pins">
           <header className="pins__head">
@@ -826,15 +852,24 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
                   <span>{dayLabel(m.sentAt)}</span>
                 </div>
               )}
-              <DmMessage
-                m={m}
-                grouped={grouped}
-                conversation={c}
-                myName={myName}
-                myId={myId}
-                replied={m.replyTo ? messages.find((x) => x.id === m.replyTo) : undefined}
-                last={i === messages.length - 1}
-              />
+              {m.notice ? (
+                <div className="chat__notice" role="note">
+                  ⏱ {m.mine ? 'You' : m.senderName}{' '}
+                  {m.notice.timer
+                    ? `set messages to disappear after ${timerLabel(m.notice.timer)}.`
+                    : 'turned off disappearing messages.'}
+                </div>
+              ) : (
+                <DmMessage
+                  m={m}
+                  grouped={grouped}
+                  conversation={c}
+                  myName={myName}
+                  myId={myId}
+                  replied={m.replyTo ? messages.find((x) => x.id === m.replyTo) : undefined}
+                  last={i === messages.length - 1}
+                />
+              )}
             </div>
           );
         })}
@@ -1034,6 +1069,15 @@ function DmMessage(props: {
               {m.pinned && (
                 <span className="msg__pinned" title="Pinned" aria-label="Pinned">
                   📌
+                </span>
+              )}
+              {m.expiresAt && (
+                <span
+                  className="msg__expires"
+                  title={`Disappears ${new Date(m.expiresAt).toLocaleString()}`}
+                  aria-label="Disappearing message"
+                >
+                  ⏱
                 </span>
               )}
             </div>
@@ -1240,6 +1284,42 @@ function DmMessage(props: {
         </Popover>
       )}
     </div>
+  );
+}
+
+/** Choose how long new messages in this conversation stay (2.4). */
+function TimerDialog(props: { conversation: ConversationView; onClose(): void }): ReactElement {
+  const c = props.conversation;
+  const [busy, setBusy] = useState(false);
+  const set = async (seconds: number): Promise<void> => {
+    setBusy(true);
+    const r = await window.river.dm.action({ a: 'setTimer', peer: c.riverId, seconds });
+    setBusy(false);
+    if (!r.ok) useCommunity.getState().notify(r.message, 'error');
+    else props.onClose();
+  };
+  return (
+    <Modal title="Disappearing messages" onClose={props.onClose}>
+      <p className="muted small">
+        New messages in this conversation are deleted from every device in it after the time you choose — for
+        everyone in the conversation. They can still be copied or photographed before they disappear. Both of
+        you need River 2.4 or newer.
+      </p>
+      <div className="timer-choices" role="radiogroup" aria-label="Delete messages after">
+        {TIMER_CHOICES.map((seconds) => (
+          <button
+            key={seconds}
+            role="radio"
+            aria-checked={(c.timer ?? 0) === seconds}
+            disabled={busy}
+            className={`timer-choice ${(c.timer ?? 0) === seconds ? 'is-active' : ''}`}
+            onClick={() => void set(seconds)}
+          >
+            {timerLabel(seconds)}
+          </button>
+        ))}
+      </div>
+    </Modal>
   );
 }
 

@@ -2659,6 +2659,13 @@ export class CommunityService {
     return blob;
   }
 
+  /** Deletes this device's encrypted copy of an attachment (its message disappeared, 2.4). */
+  async forgetAttachment(id: string): Promise<void> {
+    const dir = this.deps.blobDir?.();
+    if (!dir || !/^[A-Za-z0-9_-]{16,64}$/.test(id)) return;
+    await rm(join(dir, id), { force: true }).catch(() => undefined);
+  }
+
   /**
    * Keeps a local (still encrypted) copy of a received file so it outlives the
    * server's retention. Verifies it first so a bad blob is never kept.

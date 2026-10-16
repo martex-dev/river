@@ -222,6 +222,47 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     expect(withBob.map((m) => m.text)).toEqual(['pizza tonight?']);
   });
 
+  it('disappearing messages: a shared timer, then both devices delete on time', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await alice.dm.action({ a: 'open', peer: bob.riverId, name: 'Bob' });
+    await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'hi' });
+    await bob.dm.sync();
+    await bob.dm.action({ a: 'accept', peer: alice.riverId });
+    await alice.dm.sync();
+
+    await alice.dm.action({ a: 'setTimer', peer: bob.riverId, seconds: 30 });
+    await bob.dm.sync();
+    const bobConv = (await bob.dm.action({ a: 'conversations' })).find((c) => c.riverId === alice.riverId)!;
+    expect(bobConv.timer).toBe(30);
+    // Both see a notice about the change.
+    const notice = (await bob.dm.action({ a: 'messages', peer: alice.riverId })).find((m) => m.notice);
+    expect(notice?.notice).toEqual({ timer: 30 });
+
+    const sent = await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'gone soon' });
+    expect(sent.expiresAt).toBeTruthy();
+    await bob.dm.sync();
+    const got = (await bob.dm.action({ a: 'messages', peer: alice.riverId })).find(
+      (m) => m.text === 'gone soon',
+    );
+    expect(got?.expiresAt).toBeTruthy();
+
+    // Not yet… then gone on both sides; older messages stay.
+    expect(alice.dm.sweepExpired(new Date(Date.now() + 5_000))).toBe(0);
+    const later = new Date(Date.now() + 31_000);
+    expect(alice.dm.sweepExpired(later)).toBe(1);
+    expect(bob.dm.sweepExpired(later)).toBe(1);
+    const left = (await bob.dm.action({ a: 'messages', peer: alice.riverId })).map((m) => m.text);
+    expect(left).toContain('hi');
+    expect(left).not.toContain('gone soon');
+
+    // Turning it off: new messages stay.
+    await bob.dm.action({ a: 'setTimer', peer: alice.riverId, seconds: 0 });
+    await alice.dm.sync();
+    const kept = await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'stays' });
+    expect(kept.expiresAt).toBeNull();
+  });
+
   it('sends encrypted files in direct messages', async () => {
     const alice = await person('Alice');
     const bob = await person('Bob');

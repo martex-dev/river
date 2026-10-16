@@ -30,6 +30,7 @@ import {
   type DmActionResult,
   type DmEvent,
   type FileView,
+  MAX_TIMER,
 } from '../../shared/dm.ts';
 import type { AccountService } from '../account/account-service.ts';
 import { CommunityError, type CommunityService } from '../community/community-service.ts';
@@ -59,6 +60,8 @@ const messageFields = {
   attachments: z.array(attachmentPointerSchema).max(10).optional(),
   sentAt: z.iso.datetime(),
   groupId: msgId.optional(),
+  /** Disappearing messages (2.4): delete after this many seconds. */
+  expiresIn: z.number().int().min(1).max(MAX_TIMER).optional(),
 };
 
 const contentSchema = z.discriminatedUnion('t', [
@@ -73,6 +76,13 @@ const contentSchema = z.discriminatedUnion('t', [
     /** The conversation: a person's River ID or a group ID. */
     conv: z.string().min(1).max(64),
     message: z.object(messageFields).strict(),
+  }),
+  /** Disappearing messages timer for this conversation (2.4); 0 turns it off. */
+  z.object({
+    v: z.literal(1),
+    t: z.literal('timer'),
+    seconds: z.number().int().min(0).max(MAX_TIMER),
+    groupId: msgId.optional(),
   }),
   /** Linked devices: a device asks this account's other devices for the friends list. */
   z.object({ v: z.literal(1), t: z.literal('contactsReq') }),
@@ -254,6 +264,7 @@ interface MessageRow {
   deleted: number;
   status: string;
   reactions: string;
+  expires_at?: string | null;
 }
 
 interface ContactRow {
@@ -288,6 +299,15 @@ export class DmService {
     this.deps = deps;
     deps.community.onServerEvent((e) => this.onServerEvent(e));
     deps.community.setKeyChannel({ send: (peer, message) => this.sendContent(peer, { v: 1, ...message }) });
+    // Disappearing messages are deleted on time even if nobody opens the conversation.
+    const sweep = setInterval(() => {
+      try {
+        this.sweepExpired();
+      } catch {
+        // storage not open yet (locked): next time
+      }
+    }, 15_000);
+    sweep.unref?.();
   }
 
   onEvent(listener: (e: DmEvent) => void): () => void {
@@ -541,10 +561,14 @@ export class DmService {
         ).toISOString();
         const exists = this.db().prepare('SELECT 1 FROM dm_messages WHERE id = ?').get(content.id);
         if (exists) return true;
+        // A disappearing message's time starts when it reaches this device.
+        const expiresAt = content.expiresIn
+          ? new Date(now.getTime() + content.expiresIn * 1000).toISOString()
+          : null;
         this.db()
           .prepare(
-            `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions)
-             VALUES (?, ?, ?, ?, ?, 'received', '{}')`,
+            `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions, expires_at)
+             VALUES (?, ?, ?, ?, ?, 'received', '{}', ?)`,
           )
           .run(
             content.id,
@@ -556,6 +580,7 @@ export class DmService {
               attachments: content.attachments,
             }),
             sentAt,
+            expiresAt,
           );
         this.db().prepare('UPDATE contacts SET heard_from = 1 WHERE river_id = ?').run(peer);
         this.emitMessage(content.id, true);
@@ -615,6 +640,11 @@ export class DmService {
             this.emitMessage(id, false);
           }
         }
+        return true;
+      }
+      case 'timer': {
+        if (!groupId && contact?.state !== 'accepted') return true;
+        this.applyTimer(conv, content.seconds, peer);
         return true;
       }
       case 'typing':
@@ -1202,11 +1232,13 @@ export class DmService {
           const id = randomBytes(16).toString('base64url');
           const sentAt = new Date().toISOString();
           const body = { text: act.text, replyTo: act.replyTo, attachments: act.attachments };
+          const ttl = this.timerOf(act.peer);
+          const expiresAt = ttl ? new Date(Date.parse(sentAt) + ttl * 1000).toISOString() : null;
           this.db()
             .prepare(
-              `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions) VALUES (?, ?, ?, ?, ?, 'sending', '{}')`,
+              `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions, expires_at) VALUES (?, ?, ?, ?, ?, 'sending', '{}', ?)`,
             )
-            .run(id, act.peer, this.me(), JSON.stringify(body), sentAt);
+            .run(id, act.peer, this.me(), JSON.stringify(body), sentAt, expiresAt);
           this.emitMessage(id, false);
           try {
             if (!group) await this.shareProfile(act.peer);
@@ -1219,6 +1251,7 @@ export class DmService {
               ...(act.attachments?.length ? { attachments: act.attachments } : {}),
               sentAt,
               ...(group ? { groupId: group.id } : {}),
+              ...(ttl ? { expiresIn: ttl } : {}),
             });
             this.db()
               .prepare(`UPDATE dm_messages SET status = 'sent' WHERE id = ? AND status = 'sending'`)
@@ -1230,6 +1263,7 @@ export class DmService {
               ...(act.attachments?.length ? { attachments: act.attachments } : {}),
               sentAt,
               ...(group ? { groupId: group.id } : {}),
+              ...(ttl ? { expiresIn: ttl } : {}),
             });
           } catch (err) {
             this.db().prepare(`UPDATE dm_messages SET status = 'failed' WHERE id = ?`).run(id);
@@ -1301,6 +1335,22 @@ export class DmService {
             ...(isGroupId(act.peer) ? { groupId: act.peer } : {}),
           });
           this.applyReaction(row, this.me(), act.emoji, act.on);
+          return out(null);
+        }
+        case 'setTimer': {
+          if (isGroupId(act.peer)) {
+            const g = this.group(act.peer);
+            if (!g || g.state === 'left') throw new CommunityError('You are not in this group.');
+          } else if (this.contact(act.peer)?.state !== 'accepted') {
+            throw new CommunityError('You can set a timer once you are friends.');
+          }
+          await this.deliver(act.peer, {
+            v: 1,
+            t: 'timer',
+            seconds: act.seconds,
+            ...(isGroupId(act.peer) ? { groupId: act.peer } : {}),
+          });
+          this.applyTimer(act.peer, act.seconds, this.me());
           return out(null);
         }
         case 'chatFlags': {
@@ -1610,6 +1660,7 @@ export class DmService {
       replyTo?: string;
       attachments?: AttachmentPointer[];
       pinned?: unknown;
+      notice?: { timer?: unknown };
     };
     const me = this.me();
     const reactions = JSON.parse(r.reactions) as Record<string, string[]>;
@@ -1634,6 +1685,8 @@ export class DmService {
         mine: users.includes(me),
         users,
       })),
+      expiresAt: r.expires_at ?? null,
+      notice: body.notice && typeof body.notice.timer === 'number' ? { timer: body.notice.timer } : null,
     };
   }
 
@@ -1651,6 +1704,59 @@ export class DmService {
       sentAt: v.sentAt,
       mine: v.mine,
     };
+  }
+
+  /** Disappearing-message timers per conversation (2.4), in this device's encrypted database. */
+  private timers(): Record<string, number> {
+    try {
+      const raw = this.meta('timers');
+      const parsed: unknown = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, number>) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  timerOf(conv: string): number {
+    const t = this.timers()[conv];
+    return typeof t === 'number' && t > 0 && t <= MAX_TIMER ? t : 0;
+  }
+
+  /** Sets the timer and adds a notice to the conversation ("X set messages to disappear after…"). */
+  private applyTimer(conv: string, seconds: number, by: string): void {
+    const timers = this.timers();
+    if ((timers[conv] ?? 0) === seconds) return;
+    if (seconds) timers[conv] = seconds;
+    else delete timers[conv];
+    this.setMeta('timers', JSON.stringify(timers));
+    const id = randomBytes(16).toString('base64url');
+    this.db()
+      .prepare(
+        `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions) VALUES (?, ?, ?, ?, ?, 'received', '{}')`,
+      )
+      .run(id, conv, by, JSON.stringify({ text: '', notice: { timer: seconds } }), new Date().toISOString());
+    this.emitMessage(id, true);
+    this.emitConversations();
+  }
+
+  /** Deletes this device's copies of messages whose time is up (2.4). Returns how many. */
+  sweepExpired(now = new Date()): number {
+    const db = this.db();
+    const rows = db
+      .prepare('SELECT id, peer, body FROM dm_messages WHERE expires_at IS NOT NULL AND expires_at <= ?')
+      .all(now.toISOString()) as Array<{ id: string; peer: string; body: string }>;
+    for (const r of rows) {
+      db.prepare('DELETE FROM dm_messages WHERE id = ?').run(r.id);
+      try {
+        const body = JSON.parse(r.body) as { attachments?: Array<{ id: string }> };
+        for (const a of body.attachments ?? []) void this.deps.community.forgetAttachment?.(a.id);
+      } catch {
+        // nothing to forget
+      }
+      this.emit({ t: 'remove', peer: r.peer, id: r.id });
+    }
+    if (rows.length) this.emitConversations();
+    return rows.length;
   }
 
   /** Chat-list flags per conversation (2.1), in this device's encrypted database. */
@@ -1679,10 +1785,11 @@ export class DmService {
 
   conversations(): ConversationView[] {
     const prefs = this.chatPrefs();
-    const flags = (id: string): Pick<ConversationView, 'pinned' | 'archived' | 'markedUnread'> => ({
+    const flags = (id: string): Pick<ConversationView, 'pinned' | 'archived' | 'markedUnread' | 'timer'> => ({
       pinned: !!prefs[id]?.pinnedAt,
       archived: !!prefs[id]?.archived,
       markedUnread: !!prefs[id]?.unread,
+      timer: this.timerOf(id),
     });
     const contacts = this.db().prepare('SELECT * FROM contacts').all() as ContactRow[];
     const groups = this.db().prepare('SELECT * FROM dm_groups').all() as GroupRow[];
@@ -1744,10 +1851,12 @@ export class DmService {
           state: c.state,
           last: lastView
             ? {
-                text: lastView.deleted
-                  ? 'Message deleted'
-                  : lastView.text ||
-                    (lastView.attachments.length ? `📎 ${lastView.attachments[0]!.name}` : ''),
+                text: lastView.notice
+                  ? '⏱ Disappearing messages changed'
+                  : lastView.deleted
+                    ? 'Message deleted'
+                    : lastView.text ||
+                      (lastView.attachments.length ? `📎 ${lastView.attachments[0]!.name}` : ''),
                 sentAt: lastView.sentAt,
                 mine: lastView.mine,
               }
