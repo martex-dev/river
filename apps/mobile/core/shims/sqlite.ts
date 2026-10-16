@@ -249,13 +249,19 @@ export default class Database {
       this.depth++;
       try {
         const result = fn(...args);
-        this.depth--;
         this.exec('COMMIT');
         return result;
       } catch (err) {
-        this.depth--;
-        this.exec('ROLLBACK');
+        // A failed statement or COMMIT may already have ended the transaction: then ROLLBACK
+        // fails too, and that must not hide the error that matters.
+        try {
+          this.exec('ROLLBACK');
+        } catch {
+          // already rolled back
+        }
         throw err;
+      } finally {
+        this.depth--;
       }
     };
   }
