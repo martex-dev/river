@@ -214,4 +214,23 @@ describe('River for Android: client core', { timeout: 60_000 }, () => {
     const theirs = await alice.dm.action({ a: 'safetyNumber', peer: p.riverId });
     expect(mine.digits).toBe(theirs.digits);
   });
+
+  it('leaves the call when the UI goes away while the core stays connected', async () => {
+    const alice = await desktop('Caller');
+    const created = await alice.community.create('Voice club');
+    const p = await phone('Nokia');
+    ok(await p.invoke<Result<unknown>>(IPC.communityJoin, await alice.community.invite(created.id)));
+    const joined = ok(await p.invoke<Result<CommunityView[]>>(IPC.communityList)).find(
+      (c) => c.id === created.id,
+    )!;
+    const channel = joined.channels.find((c) => c.kind === 'voice') ?? joined.channels[0]!;
+    const callAsks = (): unknown[] => p.asks.filter((a) => a.kind === 'call').map((a) => a.args);
+    ok(await p.invoke<Result<unknown>>(IPC.voiceJoin, channel.id));
+    await until(async () => callAsks().length === 1);
+    expect(callAsks()).toEqual([{ active: true }]);
+    // River's screen closed: its WebView carried the call's sound, so the core ends the call.
+    p.uiGone();
+    await until(async () => callAsks().length === 2);
+    expect(callAsks()).toEqual([{ active: true }, { active: false }]);
+  });
 });

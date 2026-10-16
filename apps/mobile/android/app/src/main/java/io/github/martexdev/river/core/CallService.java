@@ -71,10 +71,8 @@ public final class CallService extends Service {
                 0,
                 "Hang up",
                 PendingIntent.getService(this, 1, hangUp, PendingIntent.FLAG_IMMUTABLE));
-    if (RiverService.activityClass != null) {
-      Intent open = new Intent(this, RiverService.activityClass).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-      b.setContentIntent(PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE));
-    }
+    Intent open = new Intent(this, RiverService.ACTIVITY).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+    b.setContentIntent(PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE));
     Notification notification = b.build();
     int type = Build.VERSION.SDK_INT >= 30 ? ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE : 0;
     try {
