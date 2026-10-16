@@ -1,6 +1,6 @@
 import { useState, type ReactElement } from 'react';
 import type { ChatMessage } from '../../../../shared/ipc.ts';
-import { POLL_LIMITS, tally, voteEmoji } from '../../../../shared/poll.ts';
+import { POLL_LIMITS, tally, voteEmoji, type Poll } from '../../../../shared/poll.ts';
 import { play } from '../sound.ts';
 import { useCommunity } from '../store.ts';
 import { Modal } from './common.tsx';
@@ -17,7 +17,7 @@ export function timeLeft(endsAt: string, now: number): string {
   return `${Math.round(hours / 24)} days left`;
 }
 
-/** A poll inside a message: vote by clicking an option, see the results as bars. */
+/** A poll in a channel message. */
 export function PollView({
   message,
   me,
@@ -28,10 +28,39 @@ export function PollView({
   canVote: boolean;
 }): ReactElement | null {
   const s = useCommunity();
+  if (!message.poll) return null;
+  return (
+    <PollCard
+      poll={message.poll}
+      reactions={message.reactions}
+      me={me}
+      canVote={canVote}
+      onReact={(emoji, on) =>
+        void s.run({ a: 'react', channelId: message.channelId, messageId: message.id, emoji, on })
+      }
+    />
+  );
+}
+
+/**
+ * A poll inside a message, in channels and direct messages (2.10.4): vote by clicking an option,
+ * see the results as bars. Votes are reactions with a marker emoji.
+ */
+export function PollCard({
+  poll,
+  reactions,
+  me,
+  canVote,
+  onReact,
+}: {
+  poll: Poll;
+  reactions: ReadonlyArray<{ emoji: string; users: string[] }>;
+  me: string;
+  canVote: boolean;
+  onReact(emoji: string, on: boolean): void;
+}): ReactElement {
   const now = useNow();
-  const poll = message.poll;
-  if (!poll) return null;
-  const t = tally(poll, message.reactions, me);
+  const t = tally(poll, reactions, me);
   const open = Date.parse(poll.endsAt) > now;
   const total = t.counts.reduce((a, b) => a + b, 0);
   const vote = (option: number): void => {
@@ -39,22 +68,8 @@ export function PollView({
     const on = !t.mine.includes(option);
     if (on) play('reaction');
     // One choice only: picking a new option takes back the old one.
-    if (on && !poll.multi)
-      for (const old of t.mine)
-        void s.run({
-          a: 'react',
-          channelId: message.channelId,
-          messageId: message.id,
-          emoji: voteEmoji(old),
-          on: false,
-        });
-    void s.run({
-      a: 'react',
-      channelId: message.channelId,
-      messageId: message.id,
-      emoji: voteEmoji(option),
-      on,
-    });
+    if (on && !poll.multi) for (const old of t.mine) onReact(voteEmoji(old), false);
+    onReact(voteEmoji(option), on);
   };
   return (
     <div className="poll" role="group" aria-label={`Poll: ${poll.question}`}>
@@ -104,9 +119,12 @@ const DURATIONS = [
 
 export function CreatePollDialog({
   channelId,
+  onSend,
   onClose,
 }: {
-  channelId: string;
+  /** A channel's poll, or `onSend` for a direct message or group (2.10.4). */
+  channelId?: string;
+  onSend?(poll: Poll, text: string): Promise<unknown>;
   onClose(): void;
 }): ReactElement {
   const s = useCommunity();
@@ -119,17 +137,18 @@ export function CreatePollDialog({
   const ready = question.trim() !== '' && filled.length >= POLL_LIMITS.minOptions;
   const send = async (): Promise<void> => {
     setBusy(true);
-    const res = await s.run({
-      a: 'send',
-      channelId,
-      text: `📊 ${question.trim()}`,
-      poll: {
-        question: question.trim(),
-        options: filled,
-        multi,
-        endsAt: new Date(Date.now() + duration).toISOString(),
-      },
-    });
+    const poll = {
+      question: question.trim(),
+      options: filled,
+      multi,
+      endsAt: new Date(Date.now() + duration).toISOString(),
+    };
+    const text = `📊 ${question.trim()}`;
+    const res = onSend
+      ? await onSend(poll, text)
+      : channelId
+        ? await s.run({ a: 'send', channelId, text, poll })
+        : null;
     setBusy(false);
     if (res) {
       play('send');

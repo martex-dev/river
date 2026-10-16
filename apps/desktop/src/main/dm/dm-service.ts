@@ -20,8 +20,10 @@ import { z } from 'zod';
 import {
   attachmentPointerSchema,
   avatarSchema,
+  pollInputSchema,
   type AttachmentPointer,
 } from '../../shared/community-actions.ts';
+import { readPoll } from '../../shared/poll.ts';
 import {
   dmActionSchema,
   type ConversationView,
@@ -89,6 +91,8 @@ const messageFields = {
   expiresIn: z.number().int().min(1).max(MAX_TIMER).optional(),
   /** Sent without sound (2.5): no notification. */
   silent: z.boolean().optional(),
+  /** A poll (2.10.4). */
+  poll: pollInputSchema.optional(),
 };
 
 const contentSchema = z.discriminatedUnion('t', [
@@ -613,6 +617,7 @@ export class DmService {
               replyTo: content.replyTo,
               attachments: content.attachments,
               ...(content.silent ? { silent: true } : {}),
+              ...(content.poll ? { poll: content.poll } : {}),
             }),
             sentAt,
             expiresAt,
@@ -1033,7 +1038,12 @@ export class DmService {
         message.id,
         conv,
         this.me(),
-        JSON.stringify({ text: message.text, replyTo: message.replyTo, attachments: message.attachments }),
+        JSON.stringify({
+          text: message.text,
+          replyTo: message.replyTo,
+          attachments: message.attachments,
+          ...(message.poll ? { poll: message.poll } : {}),
+        }),
         message.sentAt,
       );
     this.emitMessage(message.id, false);
@@ -1283,7 +1293,12 @@ export class DmService {
           }
           const id = randomBytes(16).toString('base64url');
           const sentAt = new Date().toISOString();
-          const body = { text: act.text, replyTo: act.replyTo, attachments: act.attachments };
+          const body = {
+            text: act.text,
+            replyTo: act.replyTo,
+            attachments: act.attachments,
+            ...(act.poll ? { poll: act.poll } : {}),
+          };
           const ttl = this.timerOf(act.peer);
           const expiresAt = ttl ? new Date(Date.parse(sentAt) + ttl * 1000).toISOString() : null;
           this.db()
@@ -1305,6 +1320,7 @@ export class DmService {
               ...(group ? { groupId: group.id } : {}),
               ...(ttl ? { expiresIn: ttl } : {}),
               ...(act.silent ? { silent: true } : {}),
+              ...(act.poll ? { poll: act.poll } : {}),
             });
             this.db()
               .prepare(`UPDATE dm_messages SET status = 'sent' WHERE id = ? AND status = 'sending'`)
@@ -1317,6 +1333,7 @@ export class DmService {
               sentAt,
               ...(group ? { groupId: group.id } : {}),
               ...(ttl ? { expiresIn: ttl } : {}),
+              ...(act.poll ? { poll: act.poll } : {}),
             });
           } catch (err) {
             this.db().prepare(`UPDATE dm_messages SET status = 'failed' WHERE id = ?`).run(id);
@@ -1756,6 +1773,7 @@ export class DmService {
       pinned?: unknown;
       notice?: { timer?: unknown };
       silent?: unknown;
+      poll?: unknown;
     };
     const me = this.me();
     const reactions = JSON.parse(r.reactions) as Record<string, string[]>;
@@ -1782,6 +1800,7 @@ export class DmService {
       })),
       expiresAt: r.expires_at ?? null,
       silent: body.silent === true,
+      poll: r.deleted ? null : readPoll(body.poll),
       notice: body.notice && typeof body.notice.timer === 'number' ? { timer: body.notice.timer } : null,
     };
   }

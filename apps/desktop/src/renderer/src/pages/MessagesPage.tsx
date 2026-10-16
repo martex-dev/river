@@ -1,6 +1,8 @@
 import type { CallView } from '../../../shared/dm.ts';
 import { VoiceRecorder } from '../components/VoiceMessage.tsx';
 import { haptic, useMessageGestures } from '../components/gestures.ts';
+import { CreatePollDialog, PollCard } from '../community/ui/Poll.tsx';
+import { isVote } from '../../../shared/poll.ts';
 import { create } from 'zustand';
 import { useSharedFiles, useSharedText } from '../components/ShareSheet.tsx';
 import { callNote, callsBetween } from '../dm/call-notes.ts';
@@ -446,6 +448,7 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
   const [searching, setSearching] = useState(false);
   const [timerOpen, setTimerOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
+  const [polling, setPolling] = useState(false);
   const gallery = useMemo(() => galleryOf(messages.map((m) => m.attachments)), [messages]);
   const selection = useSelection();
   useEffect(() => () => useSelection.getState().clear(), [c.riverId]);
@@ -751,6 +754,16 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
             <MenuItem
               onClick={() => {
                 setMenu(null);
+                setPolling(true);
+              }}
+            >
+              📊 Create a poll
+            </MenuItem>
+          )}
+          {(c.kind === 'group' ? c.state !== 'left' : c.state === 'accepted') && (
+            <MenuItem
+              onClick={() => {
+                setMenu(null);
                 setTimerOpen(true);
               }}
             >
@@ -761,6 +774,12 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
         </Popover>
       )}
       {timerOpen && <TimerDialog conversation={c} onClose={() => setTimerOpen(false)} />}
+      {polling && (
+        <CreatePollDialog
+          onSend={(poll, text) => dm.run({ a: 'send', peer: c.riverId, text, poll })}
+          onClose={() => setPolling(false)}
+        />
+      )}
       {mediaOpen && (
         <GalleryContext.Provider value={gallery}>
           <SharedMedia messages={messages} onClose={() => setMediaOpen(false)} />
@@ -1204,21 +1223,32 @@ function DmMessage(props: {
             </div>
           )}
           {!m.deleted && !m.mine && m.text && <InviteCard text={m.text} />}
+          {m.poll && (
+            <PollCard
+              poll={m.poll}
+              reactions={m.reactions}
+              me={props.myId}
+              canVote={canReply}
+              onReact={(emoji, on) => void dm.run({ a: 'react', peer: c.riverId, id: m.id, emoji, on })}
+            />
+          )}
           {m.attachments.length > 0 && <AttachmentList attachments={m.attachments} />}
-          {m.reactions.length > 0 && (
+          {m.reactions.some((r) => !isVote(r.emoji)) && (
             <div className="reactions">
-              {m.reactions.map((r) => (
-                <button
-                  key={r.emoji}
-                  className={`reaction ${r.mine ? 'is-mine' : ''}`}
-                  onClick={() => react(r.emoji, !r.mine)}
-                >
-                  <span className="reaction__emoji">{r.emoji}</span>
-                  <span key={r.count} className="reaction__count">
-                    {r.count}
-                  </span>
-                </button>
-              ))}
+              {m.reactions
+                .filter((r) => !isVote(r.emoji))
+                .map((r) => (
+                  <button
+                    key={r.emoji}
+                    className={`reaction ${r.mine ? 'is-mine' : ''}`}
+                    onClick={() => react(r.emoji, !r.mine)}
+                  >
+                    <span className="reaction__emoji">{r.emoji}</span>
+                    <span key={r.count} className="reaction__count">
+                      {r.count}
+                    </span>
+                  </button>
+                ))}
             </div>
           )}
           {m.mine && (props.last || m.status === 'failed') && (

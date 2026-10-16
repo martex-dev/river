@@ -6,6 +6,18 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.10.4] - 2026-10-16
+
+**Polls everywhere.**
+
+### Added
+
+- **Polls in direct messages and groups**: the conversation menu → 📊 Create a
+  poll. One or several answers, open for an hour up to a week. The question,
+  the answers and every vote are end-to-end encrypted (votes are encrypted
+  reactions, as in channels); apps older than 2.10.4 show the question as a
+  message.
+
 ## [2.10.3] - 2026-10-16
 
 **Polish: albums.**

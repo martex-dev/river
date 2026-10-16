@@ -20,13 +20,15 @@ long-press menus and swipe between panes.
 
 ## Partly there
 
-Folders (communities only), mark unread, copy text, multi-select, jump to
-date and polls (channels only, not direct messages), message search (global
-only), link previews (opt-in, channels only), drafts (memory only, on purpose),
-stickers (communities only), albums (up to 10 files, no grid), shared media
-(channels and the Files page, not per chat), saved messages (bookmarks),
-contact profile (popover), languages (English and Bulgarian), per-person
-volume (fixed in 2.0.4).
+Folders (communities only), jump to date (channels only), link previews
+(opt-in, channels only), drafts (memory only, on purpose), stickers
+(communities only), saved messages (bookmarks, plus Note to self since 2.9),
+contact profile (popover), languages (English and Bulgarian).
+
+Finished since the audit: mark unread and pinned chats (2.1), copy text,
+multi-select and search in a conversation (2.2), shared media per chat (2.7),
+polls in direct messages and groups (2.10.4), album grids (2.10.3),
+per-person volume (2.0.4).
 
 ## Plan
 
