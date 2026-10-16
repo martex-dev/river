@@ -71,6 +71,9 @@ async function person(
   events: CommunityEvent[];
   calls: boolean[];
   dm: () => Promise<DmService>;
+  account: AccountService;
+  /** New connections start frozen (a network that swallows everything). */
+  freezeNew: { on: boolean };
 }> {
   const local = migrateDatabase(join(dir, `${name}.db`), newDatabaseKey(), CLIENT_MIGRATIONS).db;
   locals.push(local);
@@ -85,6 +88,7 @@ async function person(
   await account.register(SERVER);
   const sockets: FreezableSocket[] = [];
   const calls: boolean[] = [];
+  const freezeNew = { on: false };
   const community = new CommunityService({
     onCallChange: (inCall) => calls.push(inCall),
     db: () => local,
@@ -96,6 +100,7 @@ async function person(
     ...(presence ? { presence } : {}),
     createSocket: (url) => {
       const s = new FreezableSocket(url.replace(':8787', `:${port}`));
+      s.frozen = freezeNew.on;
       sockets.push(s);
       return s;
     },
@@ -108,7 +113,7 @@ async function person(
     await service.sync();
     return service;
   };
-  return { community, riverId: created.riverId, sockets, events, calls, dm };
+  return { community, riverId: created.riverId, sockets, events, calls, dm, account, freezeNew };
 }
 
 const online = (c: CommunityService) => () => expect(c.connectionState()).toBe('online');
@@ -317,4 +322,76 @@ describe('voice survives dropped connections', () => {
     await bobDm.action({ a: 'call', peer: alice.riverId, callId, kind: 'end' });
     await vi.waitFor(async () => expect(await aliceDm.action({ a: 'pendingCall' })).toBeNull());
   }, 20_000);
+});
+
+describe('the realtime connection', () => {
+  it('opens one connection however many times it is asked to at once', async () => {
+    const p = await person('Alice');
+    // Startup asks from several places (status listener, connectAll, registration, wake-up).
+    p.community.ensureSocket();
+    p.community.ensureSocket();
+    p.community.reconnectNow();
+    p.community.ensureSocket();
+    await vi.waitFor(online(p.community), { timeout: 5000 });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(p.sockets).toHaveLength(1);
+  });
+
+  it('stop() cancels an open still waiting for its token', async () => {
+    const p = await person('Alice');
+    p.community.ensureSocket();
+    p.community.stop();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(p.sockets).toHaveLength(0);
+    expect(p.community.connectionState()).toBe('offline');
+  });
+
+  it('a connection the old one was replaced by is the only one heard', async () => {
+    const p = await person('Alice');
+    p.community.ensureSocket();
+    await vi.waitFor(online(p.community), { timeout: 5000 });
+    const first = p.sockets[0]!;
+    p.community.stop();
+    p.community.ensureSocket();
+    await vi.waitFor(() => expect(p.sockets).toHaveLength(2), { timeout: 5000 });
+    await vi.waitFor(online(p.community), { timeout: 5000 });
+    // A late message on the closed socket must not reach listeners.
+    const before = p.events.length;
+    first.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify({ t: 'typing', communityId: 'x', channelId: 'y', riverId: 'z' }),
+      }),
+    );
+    expect(p.events.length).toBe(before);
+  });
+
+  it('signs in again when the server refuses an expired session, instead of retrying it forever', async () => {
+    const p = await person('Alice');
+    // With a community listed, opening the connection makes no other request that could notice.
+    await p.community.create('Crew');
+    p.community.ensureSocket();
+    await vi.waitFor(online(p.community), { timeout: 5000 });
+    await new Promise((r) => setTimeout(r, 500)); // the refresh that follows "ready" is done
+    const oldToken = p.account.sessionToken();
+    // The session runs out on the server; then the connection drops.
+    await serverDb.db.deleteFrom('sessions').execute();
+    p.sockets.at(-1)!.close();
+    // The stale token is refused once (4401); River signs in again and the third connection works.
+    await vi.waitFor(() => expect(p.sockets.length).toBeGreaterThanOrEqual(3), { timeout: 10_000 });
+    await vi.waitFor(online(p.community), { timeout: 10_000 });
+    expect(p.account.sessionToken()).not.toBe(oldToken);
+    expect(p.sockets).toHaveLength(3);
+  }, 20_000);
+
+  it('gives up on a connection that never becomes ready and tries again', async () => {
+    const p = await person('Alice');
+    p.community.connectTimeoutMs = 300;
+    p.freezeNew.on = true;
+    p.community.ensureSocket();
+    await vi.waitFor(() => expect(p.sockets).toHaveLength(1), { timeout: 5000 });
+    expect(p.community.connectionState()).toBe('connecting');
+    p.freezeNew.on = false;
+    await vi.waitFor(() => expect(p.sockets).toHaveLength(2), { timeout: 5000 });
+    await vi.waitFor(online(p.community), { timeout: 5000 });
+  }, 15_000);
 });

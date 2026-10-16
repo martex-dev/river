@@ -244,6 +244,13 @@ export class CommunityService {
   private cacheBytes = 0;
   private socket: WebSocket | null = null;
   private socketState: 'online' | 'offline' | 'connecting' = 'offline';
+  /** A connection is being prepared (token, first refresh): never start a second one meanwhile. */
+  private opening = false;
+  /** Bumped by stop(): an open still in flight from before then gives up. */
+  private socketGeneration = 0;
+  private connectTimer: NodeJS.Timeout | null = null;
+  /** How long a new connection may take to be ready before River gives up on it (tests shorten it). */
+  connectTimeoutMs = 20_000;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
   private backoff = 1000;
@@ -2977,18 +2984,38 @@ export class CommunityService {
 
   // ---- Realtime --------------------------------------------------------------------------------
 
-  /** Starts (or keeps) the realtime connection when an account exists. */
+  /** Starts (or keeps) the realtime connection when an account exists. One at a time. */
   ensureSocket(): void {
-    if (this.socket || this.deps.account.status().state !== 'registered') return;
-    void this.openSocket();
+    if (this.socket || this.opening || this.deps.account.status().state !== 'registered') return;
+    this.opening = true;
+    const generation = this.socketGeneration;
+    void this.openSocket(generation).finally(() => {
+      if (this.socketGeneration === generation) this.opening = false;
+    });
   }
 
   stop(): void {
+    // An open still waiting for its token gives up when it gets it.
+    this.socketGeneration += 1;
+    this.opening = false;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
+    this.retryAt = null;
+    this.clearConnectTimer();
     this.stopHeartbeat();
-    this.socket?.close();
+    const socket = this.socket;
     this.socket = null;
+    try {
+      socket?.close();
+    } catch {
+      // already closing
+    }
+    this.setSocketState('offline');
+  }
+
+  private clearConnectTimer(): void {
+    if (this.connectTimer) clearTimeout(this.connectTimer);
+    this.connectTimer = null;
   }
 
   /** Pings keep tunnels from closing an idle connection and find dead ones fast. */
@@ -3025,6 +3052,7 @@ export class CommunityService {
   private dropSocket(socket: WebSocket): void {
     if (this.socket !== socket) return;
     this.socket = null;
+    this.clearConnectTimer();
     this.stopHeartbeat();
     this.voice.clear();
     this.voiceStates.clear();
@@ -3036,7 +3064,7 @@ export class CommunityService {
     this.scheduleReconnect(); // announces "offline" with the time of the next attempt
   }
 
-  private async openSocket(): Promise<void> {
+  private async openSocket(generation: number): Promise<void> {
     this.setSocketState('connecting');
     let token: string;
     let url: string;
@@ -3045,19 +3073,37 @@ export class CommunityService {
       token = await this.token();
       if (this.communities.length === 0) await this.refresh().catch(() => undefined);
     } catch {
-      this.scheduleReconnect();
+      if (generation === this.socketGeneration) this.scheduleReconnect();
+      return;
+    }
+    // Stopped (or signed out) while waiting: this open is no longer wanted.
+    if (generation !== this.socketGeneration || this.socket) return;
+    if (this.deps.account.status().state !== 'registered') {
+      this.setSocketState('offline');
       return;
     }
     const socket = (this.deps.createSocket ?? ((u: string) => new WebSocket(u)))(url);
     this.socket = socket;
+    // A connection that never becomes ready (a black-holed network) is dropped and tried again.
+    this.clearConnectTimer();
+    this.connectTimer = setTimeout(() => {
+      this.connectTimer = null;
+      if (this.socket !== socket || this.socketState === 'online') return;
+      this.deps.log.warn('Realtime connection did not become ready in time; reconnecting');
+      this.dropSocket(socket);
+    }, this.connectTimeoutMs);
+    this.connectTimer.unref?.();
     socket.onopen = () => {
+      if (this.socket !== socket) return;
       const status = this.deps.presence?.status();
       socket.send(JSON.stringify({ t: 'auth', token, ...(status ? { status } : {}) }));
       this.startHeartbeat(socket);
     };
     socket.binaryType = 'arraybuffer';
     socket.onmessage = (msg) => {
-      if (this.socket === socket) this.lastHeard = Date.now();
+      // A connection this service already let go of says nothing any more.
+      if (this.socket !== socket) return;
+      this.lastHeard = Date.now();
       if (msg.data instanceof ArrayBuffer) {
         const frame = decodeRelayIn(new Uint8Array(msg.data));
         if (frame) for (const l of this.relayListeners) l(frame.sender, frame.payload);
@@ -3069,8 +3115,19 @@ export class CommunityService {
         this.deps.log.warn('Ignored malformed realtime event');
       }
     };
-    socket.onclose = () => this.dropSocket(socket);
+    socket.onclose = (event) => {
+      if (this.socket !== socket) return;
+      // 4401: the server no longer accepts this session (expired, or the device was removed).
+      if ((event as CloseEvent | undefined)?.code === 4401) this.sessionRefused();
+      this.dropSocket(socket);
+    };
     socket.onerror = () => socket.close();
+  }
+
+  /** The server refused our session token: sign in again before the next attempt, never reuse it. */
+  private sessionRefused(): void {
+    this.deps.log.warn('Realtime connection refused the session; signing in again');
+    this.deps.account.dropSession();
   }
 
   private scheduleReconnect(): void {
@@ -3107,7 +3164,7 @@ export class CommunityService {
    */
   reconnectNow(): void {
     if (this.deps.account.status().state !== 'registered') return;
-    if (this.socket && this.socketState !== 'offline') return;
+    if (this.opening || (this.socket && this.socketState !== 'offline')) return;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.retryAt = null;
@@ -3119,6 +3176,7 @@ export class CommunityService {
     for (const l of this.rawListeners) l(e);
     switch (e.t) {
       case 'ready':
+        this.clearConnectTimer();
         this.backoff = 1000;
         this.offlineSince = null;
         this.setSocketState('online');
@@ -3214,6 +3272,11 @@ export class CommunityService {
         this.emit({ t: 'voiceDisconnect', ...(e.moveTo ? { moveTo: e.moveTo } : {}) });
         return;
       case 'error':
+        if (e.code === 'unauthorized') {
+          this.sessionRefused();
+          if (this.socket) this.dropSocket(this.socket);
+          return;
+        }
         if (e.code === 'voice_full') this.emit({ t: 'voiceRefused', reason: 'full' });
         // Servers before 1.0.8 refused a voice join with a plain "forbidden": only count it as one while a
         // join is waiting; otherwise it answers something else (a moderation action, a sound) and must not
