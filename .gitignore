@@ -27,3 +27,5 @@ apps/server/data/
 *.sqlite
 *.sqlite-journal
 *.db
+# Agent worktrees
+.claude/worktrees/

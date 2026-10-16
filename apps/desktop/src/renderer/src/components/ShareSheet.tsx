@@ -99,11 +99,14 @@ export function ShareSheet(): ReactElement | null {
 
   const targets = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const people = conversations.map((c) => ({
-      key: `d:${c.riverId}`,
-      label: c.name,
-      detail: 'Direct message',
-    }));
+    // Only conversations you can write in: not requests, blocked people or groups you left.
+    const people = conversations
+      .filter((c) => (c.kind === 'group' ? c.state !== 'left' : c.state === 'accepted'))
+      .map((c) => ({
+        key: `d:${c.riverId}`,
+        label: c.name,
+        detail: 'Direct message',
+      }));
     const channels = communities.flatMap((community) =>
       community.channels
         .filter((ch) => ch.kind === 'text')
@@ -127,7 +130,12 @@ export function ShareSheet(): ReactElement | null {
       useDm.getState().select(key.slice(2));
       useRiver.getState().navigate('messages');
     } else {
-      useCommunity.getState().selectChannel(key.slice(2));
+      // The channel's own community opens with it (it may not be the one that was open).
+      const channelId = key.slice(2);
+      const owner = useCommunity
+        .getState()
+        .communities.find((c) => c.channels.some((ch) => ch.id === channelId));
+      if (owner) useCommunity.getState().select(owner.id, channelId);
       useRiver.getState().navigate('communities');
     }
   };
