@@ -30,6 +30,9 @@ Audit and plan: [docs/product/telegram-parity.md](docs/product/telegram-parity.m
 - [x] 2.10.10 Stickers in direct messages
 - [x] 2.10.11 Reply privately to group messages
 - [x] 2.10.12 Bug sweep: seven audits (server, DM logic, main process, voice and calls, phone native, messaging UI, phone layout), all fixes released together
+- [x] Trust audit: identity changes, own-device copies, community key proofs, stuck rotations, v2 associated data (receiving), call-signal replays, username holds and River ID tombstones (CRYPTOGRAPHY.md §4b)
+- [ ] 2.12: seal community messages and profiles with v2 associated data (`SEAL_V2_DEFAULT = true` in `sealed.ts`) once 2.11 is out on every platform
+- [ ] 2.13: refuse community keys without a proof (`ACCEPT_UNPROVEN_KEYS = false` in `community-service.ts`)
 - [ ] Idempotent channel resend: `send` takes the outbox id so a reply lost while going offline cannot post twice (needs server de-duplication)
 - [ ] Channel history: main returns `hasMore` so pages of undecryptable messages do not end the history early (the renderer guesses today)
 - [ ] Decide: bind River IDs to identity keys so an ID cannot be registered first on another server (architecture decision for the maintainer)

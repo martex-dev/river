@@ -50,6 +50,9 @@ Today (0.1.0): your River ID, your public identity key, your signed device list
 (device IDs and public device keys), the day the account and each device were
 created, hashed session tokens until they expire, and one-time login challenges
 for five minutes. No name, phone number, e-mail, IP address or last-seen time.
+After an account is deleted the server keeps its River ID, public identity key
+and the day (so the ID cannot be taken over under another key), and holds the
+username for 30 days (2.11).
 
 Planned as features arrive: account ID, optional username, public keys, device list, encrypted
 profile, queued encrypted messages until delivered (max 30 days), encrypted

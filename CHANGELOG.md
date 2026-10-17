@@ -6,6 +6,49 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+Trust audit: what a malicious or compromised server can do to end-to-end
+encryption (CRYPTOGRAPHY.md §4b). Every change works with the previous
+releases on desktop, Android and iPhone.
+
+- A contact's identity key changing on an incoming message is accepted only if
+  the server's bundle carries that key, the device list signed by it lists the
+  sending device, and no shared community names another key. Verification is
+  never cleared silently: a verified contact whose key changed shows "changed
+  since verified" and gets nothing until you compare the new safety number.
+  Marking as verified needs the number that was on screen.
+- Copies from your own devices (sent messages, edits, friends list, groups) are
+  accepted only from devices in your signed device list under your own
+  identity key.
+- Contacts' device lists are checked again at least daily (and when a message
+  comes from a device River does not know); the newest versions seen are in
+  backups, so a restore does not accept an older list.
+- Community keys travel with a proof: sealed under the previous epoch's key.
+  Keys from older Rivers are accepted only from members who held a genuine key
+  before; rotations go only to such members. A rotation that reaches nobody is
+  asked for again by the server and redone, and the app says the community is
+  still on the previous key meanwhile. Pending members are never picked to
+  rotate, and a refused claim hands over to the next member.
+- Community messages and profiles can be sealed bound to their ID and sender
+  (associated data v2); every River now opens them. Sending v2 starts in 2.12.
+- Identity-bound call signals cannot be replayed within their ten minutes;
+  signals from someone whose key just changed are refused until you look at it.
+- The file cache is keyed by the whole file pointer, not the blob ID alone.
+- Server: link-code slots are limited per address and for accounts made today;
+  usernames given up are held 30 days for their owner; a deleted River ID can be
+  registered again only with its own identity key.
+- Docs: the recovery secret is 128 bits (16 Bytewords + 2 checksum words), and
+  sealed sender is not implemented — CRYPTOGRAPHY.md said otherwise.
+
+### Fixed
+
+- Traffic for group conversations you removed is dropped instead of waiting
+  forever; only people you know can have messages wait for a group, at most 20
+  each.
+- Call invites are never kept to be replayed later, and one that waited longer
+  than a ring lasts no longer rings.
+
 ## [2.10.12] - 2026-10-16
 
 **Bug sweep: a review of the whole program — server, phone apps, calls, voice, messages and layout.**
