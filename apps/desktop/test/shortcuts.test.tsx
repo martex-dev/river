@@ -1,6 +1,14 @@
 /** @vitest-environment jsdom */
+import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { isPrintable, nextZoom, typingSomewhere } from '../src/renderer/src/components/QuickSwitcher.tsx';
+import {
+  QuickSwitcher,
+  activates,
+  isPrintable,
+  keysForField,
+  nextZoom,
+  typingSomewhere,
+} from '../src/renderer/src/components/QuickSwitcher.tsx';
 
 describe('keyboard routing', () => {
   it('plain characters start a message; shortcuts and special keys do not', () => {
@@ -30,6 +38,34 @@ describe('keyboard routing', () => {
     expect(typingSomewhere(el('in-menu'))).toBe(true);
     expect(typingSomewhere(el('free'))).toBe(false);
     expect(typingSomewhere(document.body)).toBe(false);
+  });
+
+  it('Alt+↑/↓ stay with fields and dialogs, but work from the message box', () => {
+    document.body.innerHTML = `
+      <select id="s"></select><div class="chat__composer"><textarea id="box"></textarea></div>
+      <textarea id="other"></textarea><div role="dialog"><button id="d">x</button></div><div id="free"></div>`;
+    const el = (id: string) => document.getElementById(id);
+    expect(keysForField(el('s'))).toBe(true);
+    expect(keysForField(el('other'))).toBe(true);
+    expect(keysForField(el('d'))).toBe(true);
+    expect(keysForField(el('box'))).toBe(false);
+    expect(keysForField(el('free'))).toBe(false);
+  });
+
+  it('Space on a focused button presses it instead of jumping to the message box', () => {
+    document.body.innerHTML = `
+      <div class="chat__composer"><textarea id="box"></textarea></div>
+      <button id="b">Like</button><div id="free" tabindex="0"></div>`;
+    const { unmount } = render(<QuickSwitcher />);
+    const button = document.getElementById('b')!;
+    expect(activates(button)).toBe(true);
+    button.focus();
+    fireEvent.keyDown(button, { key: ' ' });
+    expect(document.activeElement).toBe(button);
+    // A letter still goes to the message box.
+    fireEvent.keyDown(button, { key: 'a' });
+    expect(document.activeElement?.id).toBe('box');
+    unmount();
   });
 });
 
