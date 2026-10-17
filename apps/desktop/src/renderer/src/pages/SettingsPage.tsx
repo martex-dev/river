@@ -2,6 +2,7 @@ import { isPhone } from '../../../shared/platform.ts';
 import { LANGUAGES, useT } from '../i18n.ts';
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { BackupPanel } from '../components/BackupPanel.tsx';
+import { ErrorBoundary } from '../components/ErrorBoundary.tsx';
 import { DevicesPanel } from '../components/LinkDevice.tsx';
 import { ConnectionCheck } from '../components/ConnectionCheck.tsx';
 import {
@@ -174,44 +175,49 @@ export function SettingsOverlay(): ReactElement | null {
           key={tab}
         >
           <TryBar inSettings />
-          {!settings ? (
-            <p className="muted">Loading…</p>
-          ) : (
-            <>
-              {tab === 'account' && (
-                <>
-                  <ServerPanel settings={settings} />
-                  <DevicesPanel />
-                  {!showHosting && !phone && (
-                    <button
-                      className="btn btn--link"
-                      onClick={() => {
-                        setAskedForHosting(true);
-                        leave(() => openSettings('hosting'));
-                      }}
-                    >
-                      Run a River server on this PC…
-                    </button>
-                  )}
-                </>
-              )}
-              {tab === 'profile' && <Profile />}
-              {tab === 'security' && <SecurityPage />}
-              {tab === 'backup' && <BackupPanel />}
-              {tab === 'appearance' && <AppearanceCenter general={<AppearancePanel settings={settings} />} />}
-              {tab === 'voice' && <VoiceSettings />}
-              {tab === 'notifications' && (
-                <>
-                  <NotificationSettings />
-                  <NotificationsPanel settings={settings} />
-                </>
-              )}
-              {tab === 'system' && <SystemPanel settings={settings} />}
-              {tab === 'updates' && <UpdatesPanel settings={settings} />}
-              {tab === 'hosting' && <HostingTab />}
-              {tab === 'about' && <AboutPanel />}
-            </>
-          )}
+          {/* One panel crashing replaces only that panel (2.11.2): the tabs and Close keep working. */}
+          <ErrorBoundary area={tr(TAB_LABEL[tab])} resetKey={tab}>
+            {!settings ? (
+              <p className="muted">Loading…</p>
+            ) : (
+              <>
+                {tab === 'account' && (
+                  <>
+                    <ServerPanel settings={settings} />
+                    <DevicesPanel />
+                    {!showHosting && !phone && (
+                      <button
+                        className="btn btn--link"
+                        onClick={() => {
+                          setAskedForHosting(true);
+                          leave(() => openSettings('hosting'));
+                        }}
+                      >
+                        Run a River server on this PC…
+                      </button>
+                    )}
+                  </>
+                )}
+                {tab === 'profile' && <Profile />}
+                {tab === 'security' && <SecurityPage />}
+                {tab === 'backup' && <BackupPanel />}
+                {tab === 'appearance' && (
+                  <AppearanceCenter general={<AppearancePanel settings={settings} />} />
+                )}
+                {tab === 'voice' && <VoiceSettings />}
+                {tab === 'notifications' && (
+                  <>
+                    <NotificationSettings />
+                    <NotificationsPanel settings={settings} />
+                  </>
+                )}
+                {tab === 'system' && <SystemPanel settings={settings} />}
+                {tab === 'updates' && <UpdatesPanel settings={settings} />}
+                {tab === 'hosting' && <HostingTab />}
+                {tab === 'about' && <AboutPanel />}
+              </>
+            )}
+          </ErrorBoundary>
         </div>
         <div className="settings-overlay__close">
           <button className="settings-overlay__x" aria-label="Close settings" onClick={() => leave(close)}>
