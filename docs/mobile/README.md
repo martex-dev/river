@@ -84,14 +84,15 @@ screen is its own), link previews.
 
 ## How it is built
 
-| Part                           | What it is                                                                                                       |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `apps/mobile/ui`               | The desktop's React UI, plus the phone layout (`phone.ts`, `phone.css`) and `window.river` over the app bridge   |
-| `apps/mobile/core`             | The desktop's client core (`apps/desktop/src/main`) bundled for a phone; `shims/` replace Node and Electron      |
-| `apps/mobile/core/native.ts`   | The native interface the shims call — see [native-contract.md](native-contract.md)                               |
-| `apps/mobile/android`          | The Android app (Capacitor 8): `core/` is the native interface in Java, `CoreHost` runs the core's own WebView   |
-| `tests/mobile`                 | The core bundle against a real server and the desktop client, with a Node implementation of the native interface |
-| `tests/android`, `android.yml` | The debug APK on an Android emulator in CI, driven through its WebViews                                          |
+| Part                           | What it is                                                                                                                                                                                               |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/mobile/ui`               | The desktop's React UI, plus the phone layout (`phone.ts`, `phone.css`) and `window.river` over the app bridge                                                                                           |
+| `renderer/src/phone`           | The phone shell (2.12): Telegram-style tabs (Chats, Communities, Calls, Feed, Settings) and pushed screens over the same pages and stores; `phone.ts` wires Back, the iPhone edge swipe and the keyboard |
+| `apps/mobile/core`             | The desktop's client core (`apps/desktop/src/main`) bundled for a phone; `shims/` replace Node and Electron                                                                                              |
+| `apps/mobile/core/native.ts`   | The native interface the shims call — see [native-contract.md](native-contract.md)                                                                                                                       |
+| `apps/mobile/android`          | The Android app (Capacitor 8): `core/` is the native interface in Java, `CoreHost` runs the core's own WebView                                                                                           |
+| `tests/mobile`                 | The core bundle against a real server and the desktop client, with a Node implementation of the native interface                                                                                         |
+| `tests/android`, `android.yml` | The debug APK on an Android emulator in CI, driven through its WebViews                                                                                                                                  |
 
 Build locally (needs JDK 21 and the Android SDK):
 

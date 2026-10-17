@@ -6,6 +6,48 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**River on a phone now looks and feels like a phone app (Telegram / Instagram),
+not like Discord.** Computers keep their layout exactly as it was.
+
+### Changed
+
+- **A tab bar at the bottom** on Android and iPhone: Chats, Communities, Calls,
+  Feed and Settings, with your unread messages on Chats and missed calls on
+  Calls. It hides while a conversation is open. The ☰ button and the
+  server-rail-and-channels layout are gone on phones.
+- **Chats** as in Telegram: a large title, search, your chat folders as chips,
+  your friends' stories in a row of circles, and rows with big pictures, the
+  last message ("You: …", or "typing…"), the time, unread counts (grey when
+  muted) and pin and mute marks. Swipe a chat right to mark it read or pin it,
+  left to mute, delete or archive it; hold it for the same and more. The pencil
+  starts a new chat, the person icon opens Friends and requests.
+- **Conversations open full screen** and slide in from the right: Back (with
+  how many messages wait in your other chats), the picture and name with
+  "typing…" or "online" (when River knows it), voice and video call buttons.
+  Messages are bubbles — yours on the right in your skin's accent colour —
+  with the time and ticks (sending, sent, delivered, read) inside, tails on the
+  last of a group, day pills, replies and reactions inside the bubble. Hold a
+  message for quick reactions and everything else (reply, edit, forward, pin,
+  select, delete). The message box has the paper clip, the emoji button inside
+  the field, and the microphone that turns into Send when you type; hold Send
+  to send later or without sound. Search, pinned messages, shared media,
+  disappearing messages and polls are in the ⋯ menu.
+- **Communities** as a list of rows; one opens on its channels (categories as
+  headings, who is in each voice channel), with invite, settings and more at
+  the top. Channels open full screen with the same bubbles.
+- **Calls**: the call history as in Telegram — missed calls in red, in or out
+  arrows, voice or video, and a call-back button on every row.
+- **Feed**: posts full width and stories on top, as in Instagram.
+- **Settings**: your picture, name, @username and River ID at the top, then
+  grouped rows with coloured icons; each opens its page full screen with Back.
+- **Back works like a phone's**: Android's Back closes what is open, then the
+  screen on top, then returns to Chats, then leaves River. On iPhone, swipe
+  from the left edge to go back. Notifications, answered calls, the share
+  sheet and links open the right screen by themselves. Dialogs rise from the
+  bottom. Slides and fades follow your reduced-motion setting.
+- On a phone, opening a community no longer opens (and marks as read) its
+  first channel for you.
+
 ## [2.11.1] - 2026-10-17
 
 **Calls that look and behave like phone calls.**
