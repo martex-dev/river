@@ -39,7 +39,12 @@ let linkListener: ((p: LinkProgress) => void) | null;
 beforeEach(() => {
   linkListener = null;
   river = {
-    app: { takeDeepLink: vi.fn(async () => null), onDeepLink: () => () => undefined },
+    app: {
+      takeDeepLink: vi.fn(async () => null),
+      onDeepLink: () => () => undefined,
+      // Android's Calls and notifications status (none here).
+      phoneStatus: vi.fn(async () => null),
+    },
     host: { status: async () => ({ enabled: false, legacy: 'none' }), onStatus: () => () => undefined },
     security: { status: async () => ({ items: [], releaseKeys: [] }) },
     settings: { update: vi.fn(async () => DEFAULT_SETTINGS) },
