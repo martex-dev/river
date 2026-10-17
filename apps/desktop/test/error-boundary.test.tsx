@@ -49,4 +49,27 @@ describe('error boundary', () => {
     fireEvent.click(screen.getByText('Try again'));
     expect(screen.getByText('Page is back')).toBeTruthy();
   });
+
+  it('draws the page again when another community, channel or conversation is picked', () => {
+    const { rerender } = render(
+      <ErrorBoundary area="Communities" resetKey="communities:a/1">
+        <Page />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText(/Communities could not be shown/)).toBeTruthy();
+    // Same view: the crash stays.
+    rerender(
+      <ErrorBoundary area="Communities" resetKey="communities:a/1">
+        <Page />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText(/Communities could not be shown/)).toBeTruthy();
+    broken = false;
+    rerender(
+      <ErrorBoundary area="Communities" resetKey="communities:b/2">
+        <Page />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText('Page is back')).toBeTruthy();
+  });
 });

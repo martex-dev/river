@@ -200,14 +200,18 @@ function CallPanel({
   const full = phone && !minimized;
   if (!active) return null;
   const remote = call.remotes()[0];
+  // Says "Connected" only while sound can flow: directly, or their voice arriving through the
+  // server (not merely the relay being on).
   const status =
     active.state === 'ringing'
       ? 'Ringing…'
-      : remote?.relayed && active.state === 'connected'
-        ? 'Connected · through your server, end-to-end encrypted'
-        : active.state === 'connecting' || remote?.state !== 'connected'
-          ? 'Connecting…'
-          : 'Connected · encrypted directly between your devices';
+      : active.state === 'connecting'
+        ? 'Connecting…'
+        : remote?.state === 'connected'
+          ? 'Connected · encrypted directly between your devices'
+          : remote?.relayed && remote.relayFlowing
+            ? 'Connected · through your server, end-to-end encrypted'
+            : 'Reconnecting…';
   return (
     <div className={`dm-call ${full ? 'dm-call--full' : ''}`}>
       {full && (
@@ -333,7 +337,7 @@ function CallPanel({
           </button>
         )}
         {/* Video calls start on the loudspeaker, voice calls at the ear, as on any phone. */}
-        {phone && <SpeakerButton initial={active.video} />}
+        {phone && <SpeakerButton initial={active.video} call={call} />}
         <TheirVolume peer={c.riverId} name={c.name} />
         {/* Phones have no screen picker yet. */}
         {!phone && (

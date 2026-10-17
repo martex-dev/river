@@ -6,6 +6,102 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.11.2] - 2026-10-18
+
+**Calls you can rely on, and the 2.11 review fixed.**
+
+### Fixed
+
+- **"Install verified updates by themselves" also installs an update you
+  downloaded with the Download button** while automatic download is off; the
+  toggle never depended on it. If River could not start the install (crash-loop
+  hold, manual mode) or a silent install failed, the next start no longer hides
+  River in the tray.
+- Android: **Stay connected reads as on right after "Turn on"** (Settings shared
+  no status between its parts and did not read it again), and Settings says
+  plainly that Stay connected needs River allowed in the background to keep
+  running. When Android refuses to restart it from the watchdog, River shows a
+  quiet "River was stopped — tap to reconnect" notification.
+- Android: **an update started while River is in the background** waits behind
+  a "River update ready — tap to install" notification instead of staying at
+  "Installing…" forever; with no answer from Android the update is ready to
+  install again after 2 minutes.
+- Unsaved profile edits are kept when Settings closes without asking
+  (answering a call, an update's Details button), and come back next time.
+- **Existing users can save an encrypted backup again**: installs from before
+  2.11 had a recovery phrase but never the new "phrase shown" mark.
+- A crashed page is drawn again when you pick another community, channel or
+  conversation; a crash in one Settings panel keeps the tabs and Close working.
+- A video story no longer freezes the viewer when it never loads or the phone
+  refuses to play it.
+- Android: message notifications posted again after River's core restarted
+  show "New message — open River" instead of the old text, and signing out or
+  losing the account removes them. Opening an existing install whose settings
+  were lost no longer turns Stay connected on by itself.
+- Server: one account holds at most two given-up usernames (renaming cannot
+  squat a list), renames are atomic, and the operator can give out a removed
+  user's username without waiting 30 days.
+- Server: a refused link reservation no longer deletes the code you are still
+  showing, and many people behind one carrier address (CGNAT) can link devices
+  at once.
+- **A bogus "no" written to the link mailbox can no longer pre-empt the new
+  device's real one**: the server keeps up to three declines and the linked
+  device checks each (additive `declines` field).
+- Server: stuck key rotations are looked for at most once a minute, and asked
+  for again only once another member could have received the key.
+- **Missed calls leave a trace when River's screen is closed.** A call nobody
+  answered while River ran in the background (Stay connected) is kept in the
+  call history, and a "Missed call from …" notification says so ("Missed
+  call", without a name, when previews are hidden); computers show it too when
+  River's window is not in front.
+- **A call whose other side vanished ends** ("The call was lost") after about
+  50 seconds without a direct connection or their voice through the server,
+  instead of showing "Connected" forever. Quitting River during a call, or
+  closing it on Android without Stay connected, tells the other side the call
+  ended. While muted, River sends a short silent frame about once a second
+  through the server, so a muted person is not taken for gone.
+- **"Connected" only when sound flows**: a call through your server says
+  "Connected" once the other person's voice really arrives, not when the relay
+  is merely switched on; until then it says "Connecting…" (and still gives up
+  after 30 seconds), and "Reconnecting…" while a connected call has no path.
+- **Two people calling each other at once** no longer both hear "busy": the
+  call with the lower ID goes on, and the other is answered in its place.
+- **A second call while one rings** is answered "busy" without stopping the
+  first call's ringing, call screen or answer.
+- A call is answered, declined or busy only while it rings: after one of the
+  other person's devices answered, another device declining (or a late answer)
+  no longer ends or resets the call.
+- The incoming-call notification on computers and iPhones goes away when the
+  call is answered, declined, handled on another device, ended or missed, and
+  never shows for a call answered "busy".
+- Answering from the lock screen while in a voice channel keeps River over the
+  lock screen while the call starts.
+- A voice-channel disconnect from the server no longer touches a 1:1 call.
+- Phones: the loudspeaker choice is kept when you leave the call's screen and
+  come back; the phone's call audio goes back to normal after a call that
+  never started; a connected Bluetooth or wired headset is used instead of the
+  earpiece (and the screen no longer goes dark at your ear then).
+- Android: answering on the call screen at the very end of the ringing still
+  takes the call (River's window gets 20 seconds from the answer); an incoming
+  call no longer rings twice while River is visible but paused (notification
+  shade, split screen); the phone's ringer rings for calls also while River is
+  in front, so silent and vibrate mode apply; the power button (and a volume
+  button in River) silences the ringing.
+- A call that failed because the microphone was refused is logged as "could
+  not connect" and the caller is told the call ended (not "declined"); calls
+  you made that were declined or met a busy line are logged as "Declined" and
+  "Busy" (not "No answer"); a late answer from another device no longer marks
+  the next unanswered call as failed.
+- A camera that refuses at the start of a video call now says so, and the call
+  goes on as a voice call.
+
+### Security
+
+- **A channel moved into a private category becomes private** again (it is
+  synced to the category unless the request says `synced: false`); since 2.11
+  it kept its old public permissions. A channel moved from one category into
+  another keeps what the old one hid and also hides what the new one hides.
+
 ## [2.11.1] - 2026-10-17
 
 **Calls that look and behave like phone calls.**

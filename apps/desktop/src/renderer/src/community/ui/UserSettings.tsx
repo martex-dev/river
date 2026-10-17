@@ -29,6 +29,14 @@ interface ProfileDraft {
 
 const BANNER_COLORS = [0x4fe3d1, 0x5865f2, 0x3ee08f, 0xf0b232, 0xf47fff, 0xed4245, 0x9b59b6, 0x1f2937];
 
+/**
+ * Unsaved profile edits left behind when Settings closed without asking (2.11.2): answering a call,
+ * an update's Details button. They come back the next time the profile opens, as long as the saved
+ * profile did not change meanwhile. Leaving through Settings' own "Leave without saving?" drops them.
+ */
+let keptDraft: { riverId: string | null; draft: ProfileDraft; saved: ProfileDraft } | null = null;
+const sameProfile = (a: ProfileDraft, b: ProfileDraft): boolean => JSON.stringify(a) === JSON.stringify(b);
+
 export function Profile(): ReactElement {
   const s = useCommunity();
   const identity = useRiver((r) => r.identity);
@@ -43,19 +51,40 @@ export function Profile(): ReactElement {
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     void window.river.community.profile().then((p) => {
-      setDraft(p);
+      const kept = keptDraft;
+      keptDraft = null;
+      const me = useRiver.getState().identity?.riverId ?? null;
+      setDraft(kept && kept.riverId === me && sameProfile(kept.saved, p) ? kept.draft : p);
       setSaved(p);
     });
   }, []);
   const [cropping, setCropping] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const set = (patch: Partial<ProfileDraft>): void => setDraft((d) => ({ ...d, ...patch }));
-  const dirty = saved !== null && JSON.stringify(draft) !== JSON.stringify(saved);
+  const dirty = saved !== null && !sameProfile(draft, saved);
   // Settings asks before closing or switching tabs while there are unsaved changes.
   useEffect(() => {
     useRiver.getState().setSettingsDirty(dirty);
   }, [dirty]);
-  useEffect(() => () => useRiver.getState().setSettingsDirty(false), []);
+  const latest = useRef({ draft, saved });
+  useEffect(() => {
+    latest.current = { draft, saved };
+  });
+  useEffect(
+    () => () => {
+      // Still marked unsaved: Settings closed without asking (Settings' own confirm clears the
+      // mark first). Keep the edits instead of throwing them away.
+      const last = latest.current;
+      if (useRiver.getState().settingsDirty && last.saved && !sameProfile(last.draft, last.saved))
+        keptDraft = {
+          riverId: useRiver.getState().identity?.riverId ?? null,
+          draft: last.draft,
+          saved: last.saved,
+        };
+      useRiver.getState().setSettingsDirty(false);
+    },
+    [],
+  );
   const save = async (): Promise<void> => {
     if (!saved || saving) return;
     const next = {

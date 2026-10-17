@@ -53,6 +53,18 @@ export const keyBundleResponseSchema = z.object({
 });
 export type KeyBundleResponse = z.infer<typeof keyBundleResponseSchema>;
 
+/**
+ * Just the identity-signed device list (2.11.2), for re-checking a person's devices without
+ * claiming any of their one-time prekeys.
+ */
+export const deviceListResponseSchema = z.object({
+  riverId: riverIdSchema,
+  identityKey: base64Bytes(33, 33),
+  deviceList: z.string(),
+  deviceListSignature: signature,
+});
+export type DeviceListResponse = z.infer<typeof deviceListResponseSchema>;
+
 export const MAX_ENVELOPE_BYTES = 96 * 1024;
 
 export const outgoingEnvelopeSchema = z

@@ -161,15 +161,19 @@ describe('1:1 calls', () => {
     expect(logged()).toEqual([expect.objectContaining({ video: true, answered: false })]);
   });
 
-  it('answering without a microphone declines, logs the call and cleans up', async () => {
+  it('answering without a microphone ends the call (not "declined"), logs it as failed and cleans up', async () => {
     mic = async () => {
       throw Object.assign(new Error('denied'), { name: 'NotAllowedError' });
     };
     invite();
     await acceptDmCall(false);
-    expect(sent('decline')).toHaveLength(1);
+    expect(sent('end')).toHaveLength(1);
+    expect(sent('decline')).toHaveLength(0);
     expect(sent('accept')).toHaveLength(0);
-    expect(logged()).toEqual([expect.objectContaining({ direction: 'in', answered: false })]);
+    expect(logged()).toEqual([
+      expect.objectContaining({ direction: 'in', answered: false, outcome: 'failed', callId: 'call-1' }),
+    ]);
+    expect(useCommunity.getState().toast?.text).toMatch(/microphone/);
     expect(useDmCall.getState().active).toBeNull();
     expect(useCommunity.getState().call).toBeNull();
   });
@@ -301,7 +305,7 @@ describe("Android's own call screen (2.11)", () => {
     expect(useDmCall.getState().incoming?.callId).toBe('call-1');
   });
 
-  it('while River is not on screen on Android, the phone rings instead of River', () => {
+  it('on Android the phone rings (its ringer mode applies), never River itself — on screen or not', () => {
     vi.mocked(play).mockClear();
     useRiver.setState({ info: { platform: 'android' } } as unknown as Partial<
       ReturnType<typeof useRiver.getState>
@@ -313,9 +317,125 @@ describe("Android's own call screen (2.11)", () => {
       visibility.mockReturnValue('visible');
       handleCallEvent({ t: 'call', peer: PEER, callId: 'call-1', kind: 'end', video: false });
       invite();
-      expect(ringPlayed()).toBe(1);
+      expect(ringPlayed()).toBe(0);
+      // The incoming call still shows in River.
+      expect(useDmCall.getState().incoming?.callId).toBe('call-1');
     } finally {
       visibility.mockRestore();
+      useRiver.setState({ info: null } as unknown as Partial<ReturnType<typeof useRiver.getState>>);
+    }
+  });
+
+  it('computers ring in River itself', () => {
+    vi.mocked(play).mockClear();
+    invite();
+    expect(ringPlayed()).toBe(1);
+  });
+});
+
+describe('1:1 calls: who answers, and how calls end (2.11.3)', () => {
+  const ours = (i = 0): string => (sent('invite')[i] as { callId: string }).callId;
+  const event = (kind: string, callId: string, video = false): void =>
+    handleCallEvent({ t: 'call', peer: PEER, callId, kind, video } as never);
+
+  it('both calling each other at once: the lower call ID wins, theirs answered and ours dropped quietly', async () => {
+    await startDmCall(PEER, false);
+    const mine = ours();
+    const theirs = '-'.repeat(22);
+    expect(theirs < mine).toBe(true);
+    event('invite', theirs);
+    await vi.waitFor(() => expect(sent('accept')).toEqual([expect.objectContaining({ callId: theirs })]));
+    expect(sent('busy')).toHaveLength(0);
+    // Ours is gone without a word: no "declined", no record of it.
+    expect(sent('end')).toEqual([expect.objectContaining({ callId: mine })]);
+    expect(logged()).toHaveLength(0);
+    expect(useDmCall.getState().active).toMatchObject({ callId: theirs, state: 'connecting' });
+  });
+
+  it('both calling at once, ours wins: their invite is ignored (they answer ours)', async () => {
+    await startDmCall(PEER, false);
+    const mine = ours();
+    event('invite', 'z'.repeat(22));
+    expect(sent('busy')).toHaveLength(0);
+    expect(sent('accept')).toHaveLength(0);
+    expect(useDmCall.getState().incoming).toBeNull();
+    expect(useDmCall.getState().active).toMatchObject({ callId: mine, state: 'ringing' });
+  });
+
+  it('after one of their devices answered, another device declining or answering changes nothing', async () => {
+    await startDmCall(PEER, false);
+    const mine = ours();
+    event('accept', mine);
+    expect(useDmCall.getState().active?.state).toBe('connecting');
+    useCommunity.setState({ toast: null } as never);
+    event('decline', mine);
+    event('busy', mine);
+    event('accept', mine);
+    expect(useDmCall.getState().active).toMatchObject({ callId: mine, state: 'connecting' });
+    expect(useCommunity.getState().toast).toBeNull();
+  });
+
+  it('an answer or a decline for a call that is not ours and ringing is ignored', () => {
+    invite();
+    event('accept', 'call-1');
+    event('decline', 'call-1');
+    expect(useDmCall.getState().incoming?.callId).toBe('call-1');
+    expect(useDmCall.getState().active).toBeNull();
+  });
+
+  it('a call you made that was declined, or met a busy line, is logged as such (not "no answer")', async () => {
+    await startDmCall(PEER, true);
+    event('decline', ours(0));
+    await vi.waitFor(() => expect(useDmCall.getState().active).toBeNull());
+    await startDmCall(PEER, false);
+    event('busy', ours(1));
+    await vi.waitFor(() => expect(useDmCall.getState().active).toBeNull());
+    expect(logged()).toEqual([
+      expect.objectContaining({ direction: 'out', video: true, answered: false, outcome: 'declined' }),
+      expect.objectContaining({ direction: 'out', video: false, answered: false, outcome: 'busy' }),
+    ]);
+  });
+
+  it('a camera that refuses at the start of a video call: River says so and the call goes on as voice', async () => {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: (c: { video?: unknown }) =>
+          c.video ? Promise.reject(Object.assign(new Error('busy'), { name: 'NotReadableError' })) : mic(),
+      },
+    });
+    await startDmCall(PEER, true);
+    expect(useCommunity.getState().toast?.text).toMatch(/camera/);
+    expect(useDmCall.getState().active).toMatchObject({ state: 'ringing' });
+    expect(sent('invite')).toHaveLength(1);
+  });
+
+  it('a voice-channel disconnect from the server never ends a 1:1 call', async () => {
+    await startDmCall(PEER, false);
+    const call = useCommunity.getState().call;
+    useCommunity.getState().handle({ t: 'voiceDisconnect' } as never);
+    expect(useCommunity.getState().call).toBe(call);
+    expect(useDmCall.getState().active).not.toBeNull();
+    expect(sent('end')).toHaveLength(0);
+  });
+
+  it("phones: the end of a 1:1 call puts the phone's audio back to normal, even one that never started", async () => {
+    const setSpeaker = vi.fn().mockResolvedValue(undefined);
+    (window.river.voice as unknown as { setSpeaker: unknown }).setSpeaker = setSpeaker;
+    useRiver.setState({ info: { platform: 'android' } } as unknown as Partial<
+      ReturnType<typeof useRiver.getState>
+    >);
+    try {
+      await startDmCall(PEER, false);
+      await endDmCall();
+      expect(setSpeaker).toHaveBeenCalledWith(null);
+      setSpeaker.mockClear();
+      mic = async () => {
+        throw Object.assign(new Error('denied'), { name: 'NotAllowedError' });
+      };
+      await startDmCall(PEER, false);
+      expect(setSpeaker).toHaveBeenCalledWith(null);
+    } finally {
       useRiver.setState({ info: null } as unknown as Partial<ReturnType<typeof useRiver.getState>>);
     }
   });

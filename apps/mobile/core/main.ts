@@ -1,8 +1,7 @@
-import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { app } from 'electron';
 import { channelOfVersion } from '@river/release/channels';
-import type { AppInfo, HostStatus } from '../../desktop/src/shared/ipc.ts';
+import type { AccountStatus, AppInfo, HostStatus } from '../../desktop/src/shared/ipc.ts';
 import type { DmEvent } from '../../desktop/src/shared/dm.ts';
 import { CommunityService } from '../../desktop/src/main/community/community-service.ts';
 import { ServerLocator } from '../../desktop/src/main/community/server-locator.ts';
@@ -50,6 +49,8 @@ import {
   uiPresent,
 } from './host.ts';
 import { phonePlatform } from './platform.ts';
+import { accountGone } from './account-gone.ts';
+import { isFreshInstall } from './fresh-install.ts';
 import { AndroidUpdateService, CHECK_INTERVAL_MS, FIRST_CHECK_DELAY_MS } from './updater.ts';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import { parseDeepLink } from '../../desktop/src/main/deep-link.ts';
@@ -133,8 +134,6 @@ const PLATFORM = phonePlatform();
  * is up. Until then notifications show, rather than being taken as seen.
  */
 let foreground = false;
-/** How long an incoming call rings (as dm-service's RING_MS). */
-const RING_MS = 45_000;
 /** A River link opened from a browser that the UI has not taken yet (the UI asks when it is ready). */
 let pendingDeepLink: DeepLink | null = null;
 onDeepLink((url) => {
@@ -148,12 +147,12 @@ let lastActive = Date.now();
 async function start(): Promise<void> {
   await cryptoReady;
   const userData = app.getPath('userData');
+  // A new install: nothing of River on this phone yet. Checked before the logger writes `logs`.
+  const freshInstall = isFreshInstall(userData);
   const log = createFileLogger(join(userData, 'logs'));
   log.info(`River ${app.getVersion()} starting on ${PLATFORM}`);
 
   const settingsPath = join(userData, 'settings.json');
-  // A new install: nothing of River on this phone yet (no settings, no encrypted storage).
-  const freshInstall = !existsSync(settingsPath) && !existsSync(join(userData, 'data'));
   const settings = new SettingsStore(settingsPath, log);
   // Android (2.11): a new install stays connected, so messages and calls reach you while River is
   // closed (a visible "River is connected" notification shows meanwhile; Settings → System turns it
@@ -246,7 +245,14 @@ async function start(): Promise<void> {
       // iPhone: only the call's state, for the proximity sensor (screen off at your ear).
       if (PLATFORM === 'ios') void ask('callState', { active }).catch(() => undefined);
       if (PLATFORM === 'android') {
-        void ask<string>('call', { active, ...(active ? { title: callTitle() } : {}) }).then(
+        // Leaving a voice channel to answer a call is not the end of calls for now: River keeps
+        // showing over the lock screen while that call rings or starts (2.11.3).
+        const keepOverLock = !active && ringing !== null;
+        void ask<string>('call', {
+          active,
+          ...(active ? { title: callTitle() } : {}),
+          ...(keepOverLock ? { keepOverLock: true } : {}),
+        }).then(
           (how) => {
             if (how !== 'hangup') return;
             // The UI ends the call itself (it tells the other side); without a UI the core does.
@@ -287,11 +293,9 @@ async function start(): Promise<void> {
   onUiGone(leaveCall);
   /** An incoming call ringing now: the Android shell shows River over the lock screen meanwhile. */
   let ringing: string | null = null;
-  let ringTimer: ReturnType<typeof setTimeout> | undefined;
   const ringOver = (callId?: string): void => {
     if (ringing === null || (callId !== undefined && callId !== ringing)) return;
     ringing = null;
-    clearTimeout(ringTimer);
     if (PLATFORM === 'android') void ask('ringing', { on: false }).catch(() => undefined);
   };
   onInvoke((channel, args) => {
@@ -359,8 +363,14 @@ async function start(): Promise<void> {
    */
   const ringOnPhone = (e: Extract<DmEvent, { t: 'call' }>): void => {
     const s = settings.get();
-    // As the desktop's call notification: notifications on, no Do Not Disturb or quiet hours.
-    if (!s.notifications.desktop || silenced(s)) return;
+    // Like a phone call, it rings whatever the message notifications are set to; only Do Not
+    // Disturb and quiet hours keep it quiet (2.11.2).
+    if (silenced(s)) return;
+    // Already in a call: the caller hears "busy", and nothing takes over this screen or its sound.
+    if (activeCall && activeCall.callId !== e.callId) {
+      void dm.action({ a: 'call', peer: e.peer, callId: e.callId, kind: 'busy' }).catch(() => undefined);
+      return;
+    }
     const name = s.notifications.preview === 'none' ? 'Someone' : dm.nameOf(e.peer);
     void ask<string>('incomingCall', { callId: e.callId, name, video: e.video }).then(
       (how) => {
@@ -381,6 +391,7 @@ async function start(): Promise<void> {
               direction: 'in',
               video: e.video,
               answered: false,
+              outcome: 'declined',
               durationSec: 0,
             })
             .catch(() => undefined);
@@ -394,15 +405,34 @@ async function start(): Promise<void> {
   dm.onEvent((e) => {
     if (e.t !== 'call') return;
     if (e.kind === 'invite') {
+      // A second call while one rings never gets here: the caller hears "busy" (dm-service).
       ringing = e.callId;
-      clearTimeout(ringTimer);
-      ringTimer = setTimeout(() => ringOver(), RING_MS);
       if (PLATFORM === 'android') ringOnPhone(e);
     } else if (e.kind !== 'signal') {
       // The caller gave up, or the other side ended the call.
       if (e.kind !== 'accept' && activeCall?.callId === e.callId) activeCall = null;
       ringOver(e.callId);
     }
+  });
+  // However a call stopped ringing (answered, declined, handled elsewhere, missed, timed out).
+  dm.onRingEnd((end) => {
+    ringOver(end.event.callId);
+    // Missed while River's screen is closed (Stay connected): River's window would have kept the
+    // record; without it the core does, so the call history shows it (and a notification says so:
+    // notifications.ts). Answered on the call screen but never taken: it could not connect.
+    if (end.how !== 'missed' || uiPresent()) return;
+    void dm
+      .action({
+        a: 'logCall',
+        peer: end.event.peer,
+        direction: 'in',
+        video: end.event.video,
+        answered: false,
+        durationSec: 0,
+        callId: end.event.callId,
+        ...(end.answeredOnPhone ? { outcome: 'failed' as const } : {}),
+      })
+      .catch(() => undefined);
   });
   const social = new SocialService({ db: () => storage.db(), identity, dm, log });
   const backup = new BackupService({ db: () => storage.db() });
@@ -421,7 +451,12 @@ async function start(): Promise<void> {
   storage.onStatus((s) => {
     if (s.state === 'open') void connectAll();
   });
+  let lastAccount: AccountStatus | null = account.status();
   account.onStatus((s) => {
+    // Signed out or removed: the account's message notifications go away (Android shell).
+    if (PLATFORM === 'android' && accountGone(lastAccount, s))
+      void ask('clearNotifications', {}).catch(() => undefined);
+    lastAccount = s;
     if (s.state === 'registered' && s.connection === 'online') community.ensureSocket();
   });
   // Coming back to the app (or the network returning): reconnect now rather than after the backoff.
@@ -490,7 +525,12 @@ async function start(): Promise<void> {
       community.ensureSocket();
     },
     selectScreen: () => undefined,
-    speaker: (on) => void ask('speaker', { on }).catch(() => undefined),
+    // null: the 1:1 call is over (or never started): the phone's audio goes back to normal,
+    // unless another call keeps it (2.11.3).
+    speaker: (on) =>
+      void (on === null ? ask('callAudio', { active: false }) : ask('speaker', { on })).catch(
+        () => undefined,
+      ),
     haptic: (kind) => void ask('haptic', { kind }).catch(() => undefined),
     pip: (on) => {
       if (PLATFORM === 'android') void ask('pip', { on }).catch(() => undefined);

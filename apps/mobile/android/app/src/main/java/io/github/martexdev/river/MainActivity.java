@@ -307,10 +307,18 @@ public class MainActivity extends BridgeActivity implements CoreHost.Screen {
   }
 
   @Override
+  public void onStart() {
+    super.onStart();
+    // River is on screen from here on (2.11.3): also behind the notification shade or in split
+    // screen, where it is paused but its interface still shows an incoming call. (onResume and
+    // onPause made the phone ring and show its call screen there too: two rings at once.)
+    core.lifecycle(true);
+  }
+
+  @Override
   public void onResume() {
     super.onResume();
     lock.onResume();
-    core.lifecycle(true);
     askForNotifications();
   }
 
@@ -318,15 +326,23 @@ public class MainActivity extends BridgeActivity implements CoreHost.Screen {
   public void onPause() {
     super.onPause();
     lock.onPause();
-    core.lifecycle(false);
   }
 
   @Override
   public void onStop() {
     super.onStop();
     lock.onStop();
+    core.lifecycle(false);
     // Left the screen outside a call: River no longer shows over the lock screen.
     if (!core.inCall()) showOverLock(false);
+  }
+
+  @Override
+  public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
+    // A call ringing while River is in front: a volume button silences it, as on a phone call.
+    if ((keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP)
+        && core.silenceRinging()) return true;
+    return super.onKeyDown(keyCode, event);
   }
 
   @Override
@@ -339,8 +355,9 @@ public class MainActivity extends BridgeActivity implements CoreHost.Screen {
     runPermissionWaiters();
     lock.detach();
     core.detach(this);
-    // Without "Stay connected" River's core ends with its screen.
-    if (isFinishing() && !RiverService.enabled(this)) core.stop();
+    // Without "Stay connected" River's core ends with its screen — after a call that was on has
+    // told the other side it ended (detach told the core the screen is gone).
+    if (isFinishing() && !RiverService.enabled(this)) core.stopAfterCall();
     super.onDestroy();
   }
 }

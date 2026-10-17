@@ -30,6 +30,8 @@ final class Ringer {
   private Ringtone fallback;
   private Vibrator vibrator;
   private AudioFocusRequest focus;
+  /** Ringing or vibrating now (the ringer mode let it). */
+  private boolean on;
 
   Ringer(Context context) {
     this.context = context.getApplicationContext();
@@ -67,6 +69,7 @@ final class Ringer {
     AudioManager am = context.getSystemService(AudioManager.class);
     int mode = am == null ? AudioManager.RINGER_MODE_NORMAL : am.getRingerMode();
     if (mode == AudioManager.RINGER_MODE_SILENT) return;
+    on = true;
     vibrate();
     if (mode == AudioManager.RINGER_MODE_NORMAL) play(am);
   }
@@ -113,8 +116,14 @@ final class Ringer {
     }
   }
 
-  /** Quiet now (a volume button), still ringing on screen. */
+  /** Whether it rings or vibrates right now. */
+  boolean ringing() {
+    return on;
+  }
+
+  /** Quiet now (a volume or the power button), still ringing on screen. */
   void silence() {
+    on = false;
     if (player != null) {
       try {
         player.stop();

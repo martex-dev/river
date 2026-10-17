@@ -77,6 +77,16 @@ public final class IncomingCallActivity extends Activity {
   private void answer() {
     String id = callId;
     boolean ringing = id != null && CoreHost.get(this).callAnswered(id);
+    // A call screen or notification left from before River's process ended: River opens anyway,
+    // and shows the call there if it still rings (2.11.2).
+    if (!ringing) {
+      startActivity(
+          new Intent(this, RiverService.ACTIVITY)
+              .addFlags(
+                  Intent.FLAG_ACTIVITY_NEW_TASK
+                      | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                      | Intent.FLAG_ACTIVITY_CLEAR_TOP));
+    }
     if (ringing) {
       // River opens over the lock screen (EXTRA_CALL) and its interface answers the call there.
       startActivity(

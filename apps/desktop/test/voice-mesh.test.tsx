@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { VoiceCall, type CallTransport } from '../src/renderer/src/community/voice.ts';
+import { VoiceCall, type CallTransport, type RemotePeer } from '../src/renderer/src/community/voice.ts';
 import type { RelayEngine } from '../src/renderer/src/community/relay-audio.ts';
 
 /**
@@ -437,6 +437,25 @@ describe('voice mesh', () => {
       expect(r2!.received(people[0]!)).toBe(1);
       expect(r0!.received(people[2]!)).toBe(1);
       expect(relays.get(people[1]!)!.recipients).toEqual([]);
+    });
+
+    it('a relayed person counts as heard only once their frames arrive, and not after they stop', async () => {
+      const people = ids(2);
+      net.broken.add(Net.key(people[0]!, people[1]!));
+      const calls = await Promise.all(people.map((id) => joinCall(id, true)));
+      await runUntil(() => relayedPairs(calls).length === 2, 30_000);
+      const them = (): RemotePeer => calls[0]!.remotes()[0]!;
+      // The relay is on, but nothing came through it yet: not flowing, never heard.
+      expect(them().relayFlowing).toBe(false);
+      expect(calls[0]!.lastHeard(people[1]!)).toBe(0);
+      relays.get(people[1]!)!.talk();
+      await vi.advanceTimersByTimeAsync(200);
+      expect(them().relayFlowing).toBe(true);
+      expect(Date.now() - calls[0]!.lastHeard(people[1]!)).toBeLessThan(1000);
+      // Silence (their side vanished): it stops counting as flowing.
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(them().relayFlowing).toBe(false);
+      expect(Date.now() - calls[0]!.lastHeard(people[1]!)).toBeGreaterThan(19_000);
     });
 
     it('switches back to the direct connection once it works', async () => {

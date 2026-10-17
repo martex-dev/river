@@ -13,6 +13,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 import android.util.Log;
+import androidx.core.content.IntentCompat;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -327,6 +328,7 @@ public final class UpdateOps {
         return;
       }
       // An earlier attempt still waiting (its installer screen was closed): it is replaced.
+      AppNotices.cancelUpdate(context);
       for (Integer previous : installs.keySet()) {
         Consumer<String> old = installs.remove(previous);
         try {
@@ -378,29 +380,31 @@ public final class UpdateOps {
   }
 
   /** PackageInstaller's answer for a session (UpdateInstallReceiver). */
-  @SuppressWarnings("deprecation")
   void onStatus(Intent intent) {
     int session = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1);
     int code = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
     String message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
     if (code == PackageInstaller.STATUS_PENDING_USER_ACTION) {
       // Android's confirmation ("Do you want to update this app?"): the user decides.
-      Intent confirm =
-          Build.VERSION.SDK_INT >= 33
-              ? intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent.class)
-              : intent.getParcelableExtra(Intent.EXTRA_INTENT);
+      Intent confirm = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_INTENT, Intent.class);
       if (confirm != null) {
-        try {
-          context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-          return;
-        } catch (RuntimeException e) {
-          Log.w(TAG, "the installer's confirmation could not open");
+        // From the background Android silently blocks the activity (2.11.2): with River not in
+        // front the confirmation waits behind a "River update ready — tap to install" notification.
+        if (CoreHost.get(context).isForeground()) {
+          try {
+            context.startActivity(new Intent(confirm).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            return;
+          } catch (RuntimeException e) {
+            Log.w(TAG, "the installer's confirmation could not open");
+          }
         }
+        if (AppNotices.updateReady(context, session, confirm)) return;
       }
       Consumer<String> reply = installs.remove(session);
       if (reply != null) reply.accept(status("failed", "Android's installer could not open"));
       return;
     }
+    AppNotices.cancelUpdate(context);
     Consumer<String> reply = installs.remove(session);
     if (reply == null) return;
     String outcome;

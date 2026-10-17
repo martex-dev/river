@@ -68,8 +68,8 @@ public final class CoreHost {
   /** A random secret per notification, so other apps cannot fake a tap on River's notifications. */
   public static final String EXTRA_NOTIFICATION_TOKEN = "river.notification.token";
   private final Map<Integer, String> notificationTokens = new HashMap<>();
-  /** Message notifications on screen (title, text), kept as plain ones when the core restarts. */
-  private final Map<Integer, String[]> posted = new HashMap<>();
+  /** Message notifications on screen, kept (as plain, generic ones) when the core restarts. */
+  private final java.util.Set<Integer> posted = new java.util.LinkedHashSet<>();
   private final MessageNotifications messages = new MessageNotifications();
   private final java.security.SecureRandom random = new java.security.SecureRandom();
 
@@ -136,7 +136,7 @@ public final class CoreHost {
   /** UI call ids: from here, not per plugin, so a reply never resolves a newer screen's call. */
   private final AtomicInteger nextCallId = new AtomicInteger(1);
   /** River's screen is in front (the core starts in the background until it is). */
-  private boolean foreground = false;
+  private volatile boolean foreground = false;
   /** What the core asked of the screen, given again to the next one. */
   private Boolean screenSecure;
   private boolean pipAllowed;
@@ -260,6 +260,25 @@ public final class CoreHost {
     teardown();
   }
 
+  /** How long a closing screen's call has to tell the other side before the core stops. */
+  private static final long CALL_END_GRACE_MS = 2_000;
+
+  /**
+   * Stops the core a moment after River's screen closed (2.11.3): {@link #detach} told the core its
+   * screen is gone, and the core tells the other side of a call (also one still ringing on their
+   * side) that it ended — which needs the core a moment longer. A screen that opens meanwhile
+   * keeps the core.
+   */
+  public void stopAfterCall() {
+    if (web == null) return;
+    final int gen = generation;
+    main.postDelayed(
+        () -> {
+          if (gen == generation && screen == null) teardown();
+        },
+        CALL_END_GRACE_MS);
+  }
+
   private void teardown() {
     if (web == null) return;
     generation++;
@@ -272,6 +291,7 @@ public final class CoreHost {
     // Nothing of the call outlives the core: no "In a call" notification, no wake lock, no call audio.
     callAsk = null;
     incomingAsk = null;
+    overLockForCall = false;
     IncomingCall.stop(context);
     CallService.setActive(context, false, null);
     callAudio(false);
@@ -305,6 +325,8 @@ public final class CoreHost {
    * renderer, or River closed), its asks go with it, so a tap or a reply can never answer a newer
    * core's ask. The notifications themselves stay on screen: each message notification still
    * showing is posted again as a plain one that opens River (no Reply, which needed the old core).
+   * It says only "New message — open River" (2.11.2): River may have stopped because it was locked
+   * or signed out, and the old text must not stay readable after that.
    * Notification numbers are never reused within the app's process.
    */
   private void clearNotifications() {
@@ -322,8 +344,7 @@ public final class CoreHost {
         // cannot tell which still show: bring none back rather than ones that were swiped away
       }
     }
-    for (Map.Entry<Integer, String[]> e : posted.entrySet()) {
-      int n = e.getKey();
+    for (int n : posted) {
       if (!showing.contains(n) || !mayNotify()) continue;
       Intent open =
           new Intent(context, RiverService.ACTIVITY)
@@ -334,8 +355,8 @@ public final class CoreHost {
       NotificationCompat.Builder b =
           new NotificationCompat.Builder(context, CHANNEL)
               .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
-              .setContentTitle(e.getValue()[0])
-              .setContentText(e.getValue()[1])
+              .setContentTitle("River")
+              .setContentText("New message — open River")
               .setAutoCancel(true)
               .setOnlyAlertOnce(true)
               .setSilent(true)
@@ -356,6 +377,19 @@ public final class CoreHost {
     posted.clear();
   }
 
+  /**
+   * Signed out, or this account was removed (2.11.2): the message notifications of the account
+   * go away entirely instead of staying readable. The core stops waiting for them.
+   */
+  private void dropMessageNotifications() {
+    NotificationManagerCompat nm = NotificationManagerCompat.from(context);
+    for (int n : new ArrayList<>(posted)) {
+      nm.cancel(n);
+      expire(n);
+    }
+    posted.clear();
+  }
+
   // ---- UI → core ----
 
   public void invoke(int id, String json) {
@@ -364,6 +398,11 @@ public final class CoreHost {
 
   public void send(String json) {
     run("__riverCore.send(" + JSONObject.quote(json) + ")");
+  }
+
+  /** River's screen is in front: activities may open (Android blocks them from the background). */
+  public boolean isForeground() {
+    return foreground;
   }
 
   public void lifecycle(boolean foreground) {
@@ -460,7 +499,10 @@ public final class CoreHost {
    */
   private void callAudio(boolean active) {
     inCall = active;
-    if (!active) earpiece = false;
+    if (!active) {
+      earpiece = false;
+      if (bluetoothSco) stopBluetoothSco();
+    }
     updateProximity();
     Screen s = screen;
     if (s != null) {
@@ -482,8 +524,12 @@ public final class CoreHost {
   // ---- the screen goes dark at your ear (2.10.2), as in any phone call ----
 
   private boolean inCall;
-  /** River put the call on the earpiece (not the loudspeaker, not headphones' default). */
+  /** River put the call on the earpiece (not the loudspeaker, not a headset). */
   private boolean earpiece;
+  /** Android 8 to 11: River turned on a Bluetooth headset's call audio (SCO) for the call. */
+  private boolean bluetoothSco;
+  /** River shows over the lock screen for a call answered on the call screen (2.11.3). */
+  private boolean overLockForCall;
   private android.os.PowerManager.WakeLock proximity;
 
   private void updateProximity() {
@@ -507,28 +553,92 @@ public final class CoreHost {
     }
   }
 
-  /** Calls through the loudspeaker or the earpiece. */
-  private void speaker(boolean on) {
-    earpiece = !on;
-    updateProximity();
+  /** A headset or headphones a call can use (wired, USB, Bluetooth). */
+  private static boolean isHeadset(int type) {
+    if (type == android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET
+        || type == android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES
+        || type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+        || type == android.media.AudioDeviceInfo.TYPE_USB_HEADSET) return true;
+    // TYPE_BLE_HEADSET (26) exists from Android 12 on.
+    return android.os.Build.VERSION.SDK_INT >= 31 && type == 26;
+  }
+
+  /** Bluetooth before wired: a connected Bluetooth headset is the one being worn. */
+  private static int headsetRank(int type) {
+    return type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO || type == 26 ? 0 : 1;
+  }
+
+  private void stopBluetoothSco() {
+    bluetoothSco = false;
     android.media.AudioManager am =
         (android.media.AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
     if (am == null) return;
+    try {
+      am.setBluetoothScoOn(false);
+      am.stopBluetoothSco();
+    } catch (RuntimeException ignored) {
+      // no Bluetooth here
+    }
+  }
+
+  /**
+   * Calls through the loudspeaker, or else a connected headset (Bluetooth first, then wired),
+   * or else the earpiece (2.11.3: headsets were ignored). The screen goes dark at your ear only
+   * with the earpiece.
+   */
+  private void speaker(boolean on) {
+    android.media.AudioManager am =
+        (android.media.AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+    if (am == null) {
+      earpiece = !on;
+      updateProximity();
+      return;
+    }
     am.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
+    boolean headset = false;
     if (android.os.Build.VERSION.SDK_INT >= 31) {
-      if (!on) {
-        am.clearCommunicationDevice();
-        return;
-      }
+      android.media.AudioDeviceInfo chosen = null;
       for (android.media.AudioDeviceInfo d : am.getAvailableCommunicationDevices()) {
-        if (d.getType() == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
-          am.setCommunicationDevice(d);
-          return;
+        int type = d.getType();
+        if (on) {
+          if (type == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+            chosen = d;
+            break;
+          }
+        } else if (isHeadset(type) && (chosen == null || headsetRank(type) < headsetRank(chosen.getType()))) {
+          chosen = d;
         }
+      }
+      if (chosen != null) {
+        headset = !on;
+        am.setCommunicationDevice(chosen);
+      } else {
+        am.clearCommunicationDevice();
       }
     } else {
       am.setSpeakerphoneOn(on);
+      boolean bluetooth = false;
+      if (!on) {
+        for (android.media.AudioDeviceInfo d : am.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)) {
+          if (!isHeadset(d.getType())) continue;
+          headset = true;
+          if (d.getType() == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO) bluetooth = true;
+        }
+      }
+      if (bluetooth && !bluetoothSco) {
+        try {
+          am.startBluetoothSco();
+          am.setBluetoothScoOn(true);
+          bluetoothSco = true;
+        } catch (RuntimeException ignored) {
+          // the headset refused: the earpiece or wired headphones play the call
+        }
+      } else if (!bluetooth && bluetoothSco) {
+        stopBluetoothSco();
+      }
     }
+    earpiece = !on && !headset;
+    updateProximity();
   }
 
   /** Hang up from the "In a call" notification. */
@@ -557,6 +667,8 @@ public final class CoreHost {
       if (IncomingCall.idle()) IncomingCall.stop(context);
       return false;
     }
+    // River opens over the lock screen for it, and stays there while the call starts.
+    overLockForCall = true;
     endIncoming("accept");
     return true;
   }
@@ -569,6 +681,14 @@ public final class CoreHost {
       return;
     }
     if (IncomingCall.ringing(callId)) endIncoming(incomingAsk != null ? "decline" : "ended");
+  }
+
+  /**
+   * A volume button while River's screen is in front and a call rings (2.11.3: the phone rings
+   * then too): quiet. True when it was ringing, so the button does nothing else.
+   */
+  public boolean silenceRinging() {
+    return IncomingCall.silence();
   }
 
   /** Stay connected's watchdog woke the phone: the core checks its connection (2.11). */
@@ -719,15 +839,26 @@ public final class CoreHost {
         case "notify":
           notify(id, a);
           break;
+        case "clearNotifications":
+          // Signed out or the account was removed (2.11.2).
+          dropMessageNotifications();
+          answer(id, (Object) null);
+          break;
         case "incomingCall":
           {
             // Rings like a phone call until answered, declined, or it stops ringing (2.11).
-            endIncoming("ended");
             String callId = a.optString("callId", "");
             if (callId.isEmpty() || callId.length() > 200) {
               answer(id, (Object) "ended");
               break;
             }
+            // Another call already rings: it keeps its screen and its ringtone (the core answered
+            // this one busy); only the same call again replaces its own ask.
+            if (incomingAsk != null && !IncomingCall.idle() && !IncomingCall.ringing(callId)) {
+              answer(id, (Object) "ended");
+              break;
+            }
+            endIncoming("ended");
             incomingAsk = id;
             IncomingCall.start(
                 context,
@@ -764,13 +895,29 @@ public final class CoreHost {
             boolean active = a.optBoolean("active", false);
             CallService.setActive(context, active, a.optString("title", ""));
             callAudio(active);
-            if (active) callAsk = id;
-            else {
+            Screen s = screen;
+            if (active) {
+              callAsk = id;
+              // A call answered from the lock screen (after leaving a voice channel for it, say):
+              // River shows over the lock screen again for it.
+              if (overLockForCall && s != null) s.showOverLock(true);
+            } else {
               answer(id, (Object) "ended");
-              // The call is over: River no longer shows over the lock screen.
-              Screen s = screen;
-              if (s != null) s.showOverLock(false);
+              // The call is over: River no longer shows over the lock screen — unless a call is
+              // still ringing or starting (River left a voice channel to answer it).
+              if (!a.optBoolean("keepOverLock", false)) {
+                overLockForCall = false;
+                if (s != null) s.showOverLock(false);
+              }
             }
+            break;
+          }
+        case "callAudio":
+          {
+            // A 1:1 call ended or failed before it was ever on: the audio River set for it
+            // (call mode, loudspeaker, headset) goes back to normal, unless a call is on now.
+            if (callAsk == null && !a.optBoolean("active", false)) callAudio(false);
+            answer(id, (Object) null);
             break;
           }
         case "ringing":
@@ -779,7 +926,10 @@ public final class CoreHost {
             Screen s = screen;
             if (!a.optBoolean("on", false)) {
               endIncoming("ended");
-              if (!inCall && s != null) s.showOverLock(false);
+              if (!inCall) {
+                overLockForCall = false;
+                if (s != null) s.showOverLock(false);
+              }
             }
             answer(id, (Object) null);
             break;
@@ -954,18 +1104,9 @@ public final class CoreHost {
       answer(ask, (Object) "denied");
       return;
     }
-    // Only so many notifications wait for an answer; the oldest stops waiting.
-    Iterator<Map.Entry<Integer, Integer>> oldest = notificationAsks.entrySet().iterator();
-    while (notificationAsks.size() >= MAX_PENDING_NOTIFICATIONS && oldest.hasNext()) {
-      Map.Entry<Integer, Integer> e = oldest.next();
-      int stale = e.getKey();
-      int staleAsk = e.getValue();
-      oldest.remove();
-      notificationTokens.remove(stale);
-      answer(staleAsk, (Object) "dismissed");
-    }
     // One notification per conversation (2.11): a new message replaces it, and the core stops
-    // waiting for the one it replaces (tapping either opens the same conversation).
+    // waiting for the one it replaces (tapping either opens the same conversation). Reused before
+    // anything is evicted (2.11.2): replacing one adds nothing.
     Integer same = call ? null : messages.idOf(conversation);
     int n;
     if (same != null) {
@@ -974,6 +1115,18 @@ public final class CoreHost {
       Integer replaced = notificationAsks.remove(n);
       if (replaced != null) answer(replaced, (Object) "dismissed");
     } else {
+      // Only so many notifications wait for an answer; the oldest stops waiting, and is forgotten
+      // (its conversation's next message starts a new one; a core restart does not post it again).
+      Iterator<Map.Entry<Integer, Integer>> oldest = notificationAsks.entrySet().iterator();
+      while (notificationAsks.size() >= MAX_PENDING_NOTIFICATIONS && oldest.hasNext()) {
+        Map.Entry<Integer, Integer> e = oldest.next();
+        int stale = e.getKey();
+        int staleAsk = e.getValue();
+        oldest.remove();
+        notificationTokens.remove(stale);
+        forget(stale);
+        answer(staleAsk, (Object) "dismissed");
+      }
       n = nextNotification++;
     }
     notificationAsks.put(n, ask);
@@ -1052,7 +1205,7 @@ public final class CoreHost {
       return;
     }
     if (call) return;
-    posted.put(n, new String[] {title, body});
+    posted.add(n);
     // Settings → System → Light up the screen for new messages (Android, on by default).
     if (a.optBoolean("wake", false)) MessageNotifications.wake(context, CHANNEL);
   }

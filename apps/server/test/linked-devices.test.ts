@@ -342,12 +342,16 @@ describe('linked devices (1.3)', () => {
     const declined = await app.inject({ method: 'PUT', url: `/v1/link/${id}/decline`, payload: { mac } });
     expect(declined.statusCode).toBe(200);
     expect(declined.json().declined).toBe(mac);
-    const again = await app.inject({
-      method: 'PUT',
-      url: `/v1/link/${id}/decline`,
-      payload: { mac: 'C'.repeat(43) },
-    });
-    expect(again.statusCode).toBe(409);
-    expect((await app.inject({ method: 'GET', url: `/v1/link/${id}` })).json().declined).toBe(mac);
+    // The server cannot check a MAC: a few are kept, so one written first cannot shut out the
+    // real one (2.11.2). The first stays in `declined` for older apps.
+    const decline = (m: string) =>
+      app.inject({ method: 'PUT', url: `/v1/link/${id}/decline`, payload: { mac: m } });
+    expect((await decline('C'.repeat(43))).statusCode).toBe(200);
+    expect((await decline(mac)).statusCode).toBe(200);
+    expect((await decline('D'.repeat(43))).statusCode).toBe(200);
+    expect((await decline('E'.repeat(43))).statusCode).toBe(409);
+    const state = (await app.inject({ method: 'GET', url: `/v1/link/${id}` })).json();
+    expect(state.declined).toBe(mac);
+    expect(state.declines).toEqual([mac, 'C'.repeat(43), 'D'.repeat(43)]);
   });
 });

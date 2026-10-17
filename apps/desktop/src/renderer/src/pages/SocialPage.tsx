@@ -27,6 +27,8 @@ import { useSocial } from '../social/store.ts';
 import { useRiver } from '../store.ts';
 
 const STORY_MS = 6000;
+/** Media still not ready after this long: the viewer moves on instead of waiting forever. */
+export const STORY_STALL_MS = STORY_MS + 4000;
 /** A touch that moves down this far closes the story. */
 const SWIPE_CLOSE_PX = 80;
 /** A touch shorter than this (and that hardly moves) is a tap: previous or next. */
@@ -543,6 +545,7 @@ export function StoryViewer(props: {
   const [ready, setReady] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [videoMs, setVideoMs] = useState<{ id: string; ms: number } | null>(null);
+  const [refused, setRefused] = useState<string | null>(null);
   const brokenMedia = !!story && failed === story.id;
   const isReady = !!story && (!media || ready === story.id || brokenMedia);
   const [paused, setPaused] = useState(false);
@@ -552,7 +555,8 @@ export function StoryViewer(props: {
   const frameRef = useRef<HTMLDivElement>(null);
   const press = useRef<{ x: number; y: number; at: number; touch: boolean } | null>(null);
   const elapsed = useRef(0);
-  const durationMs = isVideo && story && videoMs?.id === story.id ? videoMs.ms : STORY_MS;
+  const durationMs =
+    isVideo && story && videoMs?.id === story.id && refused !== story.id ? videoMs.ms : STORY_MS;
 
   const goTo = (riverId: string, i: number): void => {
     const g = props.feed.stories.find((x) => x.riverId === riverId);
@@ -626,16 +630,34 @@ export function StoryViewer(props: {
     };
   }, [story?.id, story, isReady, paused, isVideo, brokenMedia]);
 
+  // Media that never gets ready (its metadata never loads, decrypting hangs) does not freeze the
+  // viewer (2.11.2): after a picture's time plus a margin it moves on. Holding still pauses it.
+  useEffect(() => {
+    if (!story || isReady || paused) return;
+    const t = window.setTimeout(() => latest.current.next(), STORY_STALL_MS);
+    return () => window.clearTimeout(t);
+  }, [story?.id, story, isReady, paused]);
+
+  // A video this device refuses to play never ends: it is shown for a picture's time instead.
+  const playRefused = !!story && refused === story.id;
+  useEffect(() => {
+    if (!story || !isVideo || !playRefused || paused) return;
+    const t = window.setTimeout(() => latest.current.next(), STORY_MS);
+    return () => window.clearTimeout(t);
+  }, [story?.id, story, isVideo, playRefused, paused]);
+
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
+    const id = story?.id ?? null;
     try {
       if (paused) v.pause();
-      else void Promise.resolve(v.play()).catch(() => undefined);
+      else void Promise.resolve(v.play()).catch(() => setRefused(id));
     } catch {
-      // media playback unavailable here
+      // media playback unavailable here: counts as refused
+      queueMicrotask(() => setRefused(id));
     }
-  }, [paused, url]);
+  }, [paused, url, story?.id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {

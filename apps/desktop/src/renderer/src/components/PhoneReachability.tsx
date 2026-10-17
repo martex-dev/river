@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore, type ReactElement } from 'react';
 import type { PhoneFix, PhoneStatus } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
 
@@ -10,6 +10,40 @@ import { useRiver } from '../store.ts';
  * from the phone when asked; nothing is assumed.
  */
 
+/*
+ * One status for every part of Settings that shows it (2.11.2): the Stay connected toggle and the
+ * Calls and notifications section used to read it separately, so turning Stay connected on left
+ * the section saying Android had not started it.
+ */
+let sharedStatus: PhoneStatus | null = null;
+const listeners = new Set<() => void>();
+function setSharedStatus(next: PhoneStatus | null): void {
+  sharedStatus = next;
+  for (const listener of listeners) listener();
+}
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** Reads the phone's state again; everything that shows it updates. */
+export async function refreshPhoneStatus(): Promise<PhoneStatus | null> {
+  const next = await window.river.app.phoneStatus().catch(() => null);
+  if (next) setSharedStatus(next);
+  return next;
+}
+
+/** Stay connected was just turned on: read again now and once Android had a moment to start it. */
+export function refreshAfterStayConnected(): Promise<PhoneStatus | null> {
+  setTimeout(() => void refreshPhoneStatus(), 2_000);
+  return refreshPhoneStatus();
+}
+
+/** For tests: forget the last status. */
+export function resetPhoneStatus(): void {
+  setSharedStatus(null);
+}
+
 /** The phone's current state, read again whenever River comes back to the front. */
 export function usePhoneStatus(): {
   status: PhoneStatus | null;
@@ -17,13 +51,9 @@ export function usePhoneStatus(): {
   fix(fix: PhoneFix): Promise<void>;
 } {
   const android = useRiver((r) => r.info?.platform === 'android');
-  const [status, setStatus] = useState<PhoneStatus | null>(null);
+  const status = useSyncExternalStore(subscribe, () => (android ? sharedStatus : null));
   const refresh = useCallback(() => {
-    if (!android) return;
-    void window.river.app
-      .phoneStatus()
-      .then((s) => setStatus(s))
-      .catch(() => undefined);
+    if (android) void refreshPhoneStatus();
   }, [android]);
   useEffect(() => {
     refresh();
@@ -37,12 +67,30 @@ export function usePhoneStatus(): {
   const fix = useCallback(
     async (which: PhoneFix): Promise<void> => {
       const next = await window.river.app.phoneFix(which).catch(() => null);
-      if (next) setStatus(next);
+      if (next) setSharedStatus(next);
       else refresh();
     },
     [refresh],
   );
   return { status, refresh, fix };
+}
+
+/** What Settings says about Stay connected: never "on" for a service Android has not started. */
+export function stayConnectedText(on: boolean, status: PhoneStatus): { ok: boolean; text: string } {
+  if (!on) return { ok: false, text: 'Off: messages and calls arrive only while River is open.' };
+  if (status.background && status.batteryExempt)
+    return { ok: true, text: 'On: messages and calls reach you while River is closed.' };
+  if (status.background)
+    return {
+      ok: false,
+      text: 'On for now, but Android may stop it: allow River in the background (Battery, below) so it keeps running.',
+    };
+  return {
+    ok: false,
+    text: status.batteryExempt
+      ? 'On, but Android has not started it yet. Open River again, or restart the phone.'
+      : 'On, but Android stopped it or has not started it: Stay connected needs River allowed in the background (Battery, below).',
+  };
 }
 
 export const BATTERY_WHY =
@@ -104,7 +152,10 @@ export function StayConnectedPrompt(): ReactElement | null {
           <button
             className="btn btn--primary btn--small"
             onClick={() =>
-              void done({ background: true }).then(() => (status.batteryExempt ? undefined : fix('battery')))
+              void done({ background: true }).then(() => {
+                refreshAfterStayConnected();
+                return status.batteryExempt ? undefined : fix('battery');
+              })
             }
           >
             {system.background ? 'Allow' : 'Turn on'}
@@ -191,6 +242,7 @@ export function PhoneCallsSection(): ReactElement | null {
     );
   }
   const on = settings.system.background;
+  const stay = stayConnectedText(on, status);
   return (
     <section aria-labelledby="phone-calls-title">
       <h3 id="phone-calls-title" className="field__label">
@@ -198,22 +250,19 @@ export function PhoneCallsSection(): ReactElement | null {
       </h3>
       <Row
         label="Stay connected"
-        ok={on && status.background}
-        okText="On: messages and calls reach you while River is closed."
-        badText={
-          on
-            ? 'On, but Android has not started it yet. Open River again, or restart the phone.'
-            : 'Off: messages and calls arrive only while River is open.'
-        }
+        ok={stay.ok}
+        okText={stay.text}
+        badText={stay.text}
         {...(on
           ? {}
           : {
               action: {
                 label: 'Turn on',
                 run: () =>
-                  void updateSettings({ system: { background: true, backgroundAsked: true } }).then(() =>
-                    status.batteryExempt ? undefined : fix('battery'),
-                  ),
+                  void updateSettings({ system: { background: true, backgroundAsked: true } }).then(() => {
+                    refreshAfterStayConnected();
+                    return status.batteryExempt ? undefined : fix('battery');
+                  }),
               },
             })}
       />
@@ -221,7 +270,7 @@ export function PhoneCallsSection(): ReactElement | null {
         label="Battery"
         ok={status.batteryExempt}
         okText="River may run in the background without delays."
-        badText="Battery optimization may delay messages and calls."
+        badText="Battery optimization may delay messages and calls, and Android may stop Stay connected."
         action={{ label: 'Allow in background', run: () => void fix('battery') }}
       />
       <Row

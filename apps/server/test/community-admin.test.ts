@@ -144,6 +144,75 @@ describe('private categories stay private', () => {
     const mine = await c.view(c.owner.token);
     expect(mine.channels.find((x) => x.id === b)).toMatchObject({ parentId: open, synced: false });
   });
+
+  it('a channel moved into a private category becomes private (full layout, relative move or edit)', async () => {
+    const c = await setup();
+    const member = await c.join();
+    const secret = await c.category([{ roleId: c.cid, allow: 0, deny: Permission.VIEW_CHANNELS }]);
+    // Public channels outside any category, one with a public overwrite of its own.
+    const a = await c.channel();
+    const b = await c.channel({ overwrites: [{ roleId: c.cid, allow: Permission.VIEW_CHANNELS, deny: 0 }] });
+    const d = await c.channel();
+    const kept = await c.channel();
+    const seen = async () => (await c.view(member.token)).channels.map((x) => x.id);
+    for (const ch of [a, b, d, kept]) expect(await seen()).toContain(ch);
+    expect(
+      await status('PUT', `/v1/communities/${c.cid}/layout`, c.owner.token, {
+        categories: [],
+        channels: [{ id: a, position: 0, parentId: secret }],
+      }),
+    ).toBe(200);
+    expect(
+      await status('PUT', `/v1/communities/${c.cid}/layout/move`, c.owner.token, {
+        kind: 'channel',
+        id: b,
+        parentId: secret,
+        afterId: null,
+      }),
+    ).toBe(200);
+    expect(await status('PATCH', `/v1/channels/${d}`, c.owner.token, { parentId: secret })).toBe(200);
+    // Asked for explicitly: keeps its own permissions.
+    expect(
+      await status('PATCH', `/v1/channels/${kept}`, c.owner.token, { parentId: secret, synced: false }),
+    ).toBe(200);
+    const theirs = await seen();
+    for (const ch of [a, b, d]) expect(theirs).not.toContain(ch);
+    expect(theirs).toContain(kept);
+    const mine = await c.view(c.owner.token);
+    for (const ch of [a, b, d])
+      expect(mine.channels.find((x) => x.id === ch)).toMatchObject({ parentId: secret, synced: true });
+  });
+});
+
+describe('moves between categories', () => {
+  it('a synced channel moved from a public category into a private one is hidden', async () => {
+    const c = await setup();
+    const member = await c.join();
+    const open = await c.category();
+    const secret = await c.category([{ roleId: c.cid, allow: 0, deny: Permission.VIEW_CHANNELS }]);
+    const a = await c.channel({ parentId: open });
+    const b = await c.channel({ parentId: open });
+    const d = await c.channel({ parentId: open });
+    const seen = async () => (await c.view(member.token)).channels.map((x) => x.id);
+    for (const ch of [a, b, d]) expect(await seen()).toContain(ch);
+    expect(await status('PATCH', `/v1/channels/${a}`, c.owner.token, { parentId: secret })).toBe(200);
+    expect(
+      await status('PUT', `/v1/communities/${c.cid}/layout/move`, c.owner.token, {
+        kind: 'channel',
+        id: b,
+        parentId: secret,
+        afterId: null,
+      }),
+    ).toBe(200);
+    expect(
+      await status('PUT', `/v1/communities/${c.cid}/layout`, c.owner.token, {
+        categories: [],
+        channels: [{ id: d, position: 0, parentId: secret }],
+      }),
+    ).toBe(200);
+    const theirs = await seen();
+    for (const ch of [a, b, d]) expect(theirs).not.toContain(ch);
+  });
 });
 
 describe('relative channel moves', () => {

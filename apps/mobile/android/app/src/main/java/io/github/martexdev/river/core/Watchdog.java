@@ -65,7 +65,9 @@ public final class Watchdog extends BroadcastReceiver {
     // Android ended the service (or River's process) meanwhile: start it again; its new core
     // connects by itself. River's core never runs without the service's visible notification.
     if (!RiverService.running()) {
-      RiverService.setEnabled(context, true);
+      // From an inexact alarm Android 12+ refuses unless River may run in the background
+      // (2.11.2): say so instead of staying silently disconnected. Opening River reconnects.
+      if (!RiverService.setEnabled(context, true)) AppNotices.stopped(context);
       return;
     }
     CoreHost core = CoreHost.get(context);

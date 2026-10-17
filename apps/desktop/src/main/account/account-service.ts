@@ -360,14 +360,18 @@ export class AccountService {
    * device linked since then is looked up in the list the server has (checked against our own
    * identity key, never older than the local copy).
    */
-  async ownDeviceListed(deviceId: number): Promise<boolean> {
+  /**
+   * Whether this account's identity-signed device list has `deviceId`; null when that cannot be
+   * checked right now (no connection): the caller keeps the message for later instead of losing it.
+   */
+  async ownDeviceListed(deviceId: number): Promise<boolean | null> {
     const row = this.row();
     if (!row) return false;
     if (parseDeviceList(row.device_list).devices.some((d) => d.deviceId === deviceId)) return true;
     try {
       return (await this.deviceList()).devices.some((d) => d.deviceId === deviceId);
     } catch {
-      return false;
+      return null;
     }
   }
 

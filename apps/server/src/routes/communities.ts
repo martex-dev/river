@@ -104,6 +104,10 @@ const SESSION_RECHECK_MS = 5 * 60_000;
 const ROTATION_ADOPT_MS = 10 * 60_000;
 /** How often a rotation that reached nobody is asked for again before the server gives up. */
 const ROTATION_MAX_RETRIES = 3;
+/** Stuck rotations are looked for at most this often per process (2.11.2). */
+const ROTATION_RECHECK_MS = 60_000;
+/** How long the server remembers that a member used River (for stuck rotations). */
+const ACTIVE_MEMORY_MS = 24 * 60 * 60_000;
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 const day = (d: Date): string => d.toISOString().slice(0, 10);
@@ -131,6 +135,24 @@ export interface CommunityOps {
   deleteCommunity(communityId: string): Promise<boolean>;
 }
 
+/**
+ * Overwrites that deny whatever either set denies (2.11.2): a role keeps `base`'s allowances only
+ * where `extra` does not deny them.
+ */
+export function mergeDenials(
+  base: readonly OverwriteWire[],
+  extra: readonly OverwriteWire[],
+): OverwriteWire[] {
+  const out = new Map<string, OverwriteWire>();
+  for (const o of base) out.set(o.roleId, { ...o });
+  for (const o of extra) {
+    const had = out.get(o.roleId);
+    const deny = (had?.deny ?? 0) | o.deny;
+    out.set(o.roleId, { roleId: o.roleId, allow: (had?.allow ?? 0) & ~deny, deny });
+  }
+  return [...out.values()];
+}
+
 export async function registerCommunityRoutes(
   app: FastifyInstance,
   deps: {
@@ -142,6 +164,8 @@ export async function registerCommunityRoutes(
     sessionRecheckMs?: number;
     /** How long a claimed key epoch may go unreported before it is asked for again (tests shorten it). */
     rotationAdoptMs?: number;
+    /** How often stuck rotations are looked for at most (tests set 0). */
+    rotationRecheckMs?: number;
   },
 ): Promise<CommunityOps> {
   const { db } = deps.database;
@@ -149,6 +173,8 @@ export async function registerCommunityRoutes(
   const sessionRecheckMs = deps.sessionRecheckMs ?? SESSION_RECHECK_MS;
   await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
 
+  /** When each member last made a request here, in memory only (ms). */
+  const lastActive = new Map<string, number>();
   const requireSession = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const header = request.headers.authorization ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
@@ -158,6 +184,9 @@ export async function registerCommunityRoutes(
       return;
     }
     request.session = session;
+    // When each member last used River here (in memory): a stuck key rotation is asked for again
+    // only once someone else had a chance to receive it (see recheckRotations).
+    lastActive.set(session.riverId, deps.now().getTime());
   };
   const authed = { preHandler: requireSession };
   const me = (r: FastifyRequest): string => r.session!.riverId;
@@ -312,15 +341,43 @@ export async function registerCommunityRoutes(
    * keeps the permissions it had: the category's overwrites become its own and it stops being
    * synced. Without this a private category's channels would turn public the moment they leave.
    */
-  const keepAccess = async (trx: Transaction<Database>, ch: ChannelModel): Promise<void> => {
+  const keepAccess = async (
+    trx: Transaction<Database>,
+    ch: ChannelModel,
+    alsoDeny: readonly OverwriteWire[] = [],
+  ): Promise<void> => {
     if (!ch.synced) return;
     await trx.deleteFrom('channel_overwrites').where('channel_id', '=', ch.id).execute();
-    for (const o of ch.overwrites)
+    for (const o of mergeDenials(ch.overwrites, alsoDeny))
       await trx
         .insertInto('channel_overwrites')
         .values({ channel_id: ch.id, role_id: o.roleId, allow: o.allow, deny: o.deny })
         .execute();
     await trx.updateTable('channels').set({ synced: 0 }).where('id', '=', ch.id).execute();
+  };
+
+  /**
+   * A channel moved to `parentId` (2.11.2). Leaving a category (for none, or another one) it keeps
+   * the permissions it had (keepAccess). Moving into a category from none, it is synced to that
+   * category, as older servers did: a channel moved into a private category must not keep its old
+   * public overwrites (that failed open). `synced: false` in the request keeps its own instead.
+   */
+  const moved = async (
+    trx: Transaction<Database>,
+    ch: ChannelModel,
+    parentId: string | null,
+    synced?: boolean,
+    into: readonly OverwriteWire[] = [],
+  ): Promise<void> => {
+    if (parentId === ch.parentId) return;
+    if (ch.parentId !== null) {
+      // From one category into another, a synced channel keeps the old category's denials and
+      // takes the new one's too: neither a private old nor a private new category fails open.
+      if (parentId !== null && ch.synced && synced !== false) return keepAccess(trx, ch, into);
+      return keepAccess(trx, ch);
+    }
+    if (parentId === null || synced === false) return;
+    await trx.updateTable('channels').set({ synced: 1 }).where('id', '=', ch.id).execute();
   };
 
   /** Ends everyone's seat in the given voice channels and tells them (channel or community deleted). */
@@ -704,9 +761,15 @@ export async function registerCommunityRoutes(
     const synced = req.synced !== undefined ? req.synced : req.overwrites ? false : undefined;
     const current = model.channel(channelId)!;
     await db.transaction().execute(async (trx) => {
-      // Moved to another category (or out of one) without new permissions: keep the old ones.
-      if (req.parentId !== undefined && req.parentId !== current.parentId && synced === undefined)
-        await keepAccess(trx, current);
+      // Moved into a category: synced to it (unless synced: false). Out of one: keeps its access.
+      if (req.parentId !== undefined && synced !== true)
+        await moved(
+          trx,
+          current,
+          req.parentId,
+          synced,
+          req.parentId ? model.category(req.parentId)?.overwrites : [],
+        );
       if (synced !== undefined) {
         await trx
           .updateTable('channels')
@@ -1474,7 +1537,14 @@ export async function registerCommunityRoutes(
       }
       for (const c of req.channels) {
         const current = model.channel(c.id)!;
-        if (c.parentId !== current.parentId && c.synced === undefined) await keepAccess(trx, current);
+        if (c.synced !== true)
+          await moved(
+            trx,
+            current,
+            c.parentId,
+            c.synced,
+            c.parentId ? model.category(c.parentId)?.overwrites : [],
+          );
         await trx
           .updateTable('channels')
           .set({
@@ -1546,7 +1616,13 @@ export async function registerCommunityRoutes(
       const order = [...rest.slice(0, at), moving, ...rest.slice(at)];
       if (order.length > 1000) throw bad();
       await db.transaction().execute(async (trx) => {
-        if (moving.parentId !== req.parentId) await keepAccess(trx, moving);
+        await moved(
+          trx,
+          moving,
+          req.parentId,
+          undefined,
+          req.parentId ? model.category(req.parentId)?.overwrites : [],
+        );
         for (const [position, c] of order.entries()) {
           if (c === moving) {
             await trx
@@ -2226,22 +2302,36 @@ export async function registerCommunityRoutes(
    * member who claimed it went away, or never sent it): ask for it again, a few times, so the
    * community does not stay on a key a removed member still has.
    */
+  let lastRecheck = Number.NEGATIVE_INFINITY;
   const recheckRotations = async (): Promise<void> => {
-    const cutoff = new Date(deps.now().getTime() - (deps.rotationAdoptMs ?? ROTATION_ADOPT_MS)).toISOString();
+    // At most once a minute per process (2.11.2): GET /communities runs it too, and it scans
+    // every community.
+    const nowMs = deps.now().getTime();
+    if (nowMs - lastRecheck < (deps.rotationRecheckMs ?? ROTATION_RECHECK_MS)) return;
+    lastRecheck = nowMs;
+    for (const [id, at] of lastActive) if (nowMs - at > ACTIVE_MEMORY_MS) lastActive.delete(id);
+    const cutoff = new Date(nowMs - (deps.rotationAdoptMs ?? ROTATION_ADOPT_MS)).toISOString();
     const stuck = await db
       .selectFrom('communities')
-      .select(['id', 'key_epoch'])
+      .select(['id', 'key_epoch', 'epoch_claimed_at', 'epoch_claimed_by'])
       .where('epoch_claimed_at', 'is not', null)
       .where('epoch_claimed_at', '<', cutoff)
       .where('rotation_retries', '<', ROTATION_MAX_RETRIES)
       .execute();
     for (const c of stuck) {
-      const members = await db
-        .selectFrom('community_members')
-        .select((eb) => eb.fn.countAll<number>().as('n'))
-        .where('community_id', '=', c.id)
-        .executeTakeFirst();
-      const alone = Number(members?.n ?? 0) <= 1;
+      const members = (
+        await db.selectFrom('community_members').select('river_id').where('community_id', '=', c.id).execute()
+      ).map((m) => m.river_id);
+      const alone = members.length <= 1;
+      // Nobody else used River since the claim (offline, or older apps that never report the key):
+      // the key may simply not have reached anyone yet. Asked again only once someone could have
+      // taken it in, so offline members do not use up the retries.
+      const claimedAt = Date.parse(c.epoch_claimed_at ?? '');
+      const someoneCould = members.some(
+        (id) =>
+          id !== c.epoch_claimed_by && (hub.isOnline(id) || (lastActive.get(id) ?? -Infinity) >= claimedAt),
+      );
+      if (!alone && !someoneCould) continue;
       const res = await db
         .updateTable('communities')
         .set((eb) => ({

@@ -59,8 +59,12 @@ import { LinkService } from './account/link-service.ts';
 import { UpdateService } from './updater/update-service.ts';
 import { createFetchBytes, createRequestBytes, createRequestJson } from './http.ts';
 import { verifyDownloadedUpdate } from './updater/verify-download.ts';
-import { shouldAutoInstall } from './updater/auto-install.ts';
-import { existsSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  autoInstallAllowed,
+  installWithHiddenMarker,
+  shouldAutoInstall,
+  takeHiddenMarker,
+} from './updater/auto-install.ts';
 import { LaunchHealth } from './updater/launch-health.ts';
 import { runSelfTest, selfTestPath } from './self-test.ts';
 import { runMainDiagnostics } from './diagnostics.ts';
@@ -78,15 +82,6 @@ const HEALTHY_AFTER_MS = 30_000;
 const devServerUrl = (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) || undefined;
 /** Set before an automatic update from the tray, so River starts in the tray again. */
 const hiddenAfterUpdate = (): string => join(app.getPath('userData'), 'start-hidden-after-update');
-function takeHiddenAfterUpdate(): boolean {
-  try {
-    if (!existsSync(hiddenAfterUpdate())) return false;
-    rmSync(hiddenAfterUpdate(), { force: true });
-    return true;
-  } catch {
-    return false;
-  }
-}
 const FIRST_CHECK_DELAY_MS = 15_000;
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
@@ -600,7 +595,7 @@ async function start(): Promise<void> {
       const now = new Date();
       const ok = shouldAutoInstall({
         ready: service.getStatus().state === 'ready',
-        allowed: prefs.autoDownload && prefs.installOnQuit,
+        allowed: autoInstallAllowed(prefs),
         inCall: inCallNow,
         windowVisible: !window.isDestroyed() && window.isVisible() && !window.isMinimized(),
         lastFocusAt: window.isFocused() ? now.getTime() : lastFocusAt,
@@ -610,19 +605,12 @@ async function start(): Promise<void> {
       });
       if (!ok) return;
       // Back in the tray after the update if that is where River was.
-      if (!window.isVisible()) {
-        try {
-          writeFileSync(hiddenAfterUpdate(), '1');
-        } catch {
-          // shows the window after the update instead
-        }
-      }
-      service.installNow();
+      installWithHiddenMarker(hiddenAfterUpdate(), !window.isVisible(), () => service.installNow());
     }, 60_000).unref();
   }
 
   // Started at sign-in: stay in the tray until the user opens River.
-  const startedHidden = process.argv.includes('--hidden') || takeHiddenAfterUpdate();
+  const startedHidden = process.argv.includes('--hidden') || takeHiddenMarker(hiddenAfterUpdate());
   const show = (): void => {
     if (window.isMinimized()) window.restore();
     window.show();
@@ -651,8 +639,22 @@ async function start(): Promise<void> {
   let quitting = false;
   let told = false;
   let hostStopped = false;
+  /** A 1:1 call on when River quits: the other side was told it ended (once). */
+  let quitCallEnded = false;
   app.on('before-quit', (event) => {
     quitting = true;
+    // In a 1:1 call: tell the other side it ended (at most a moment), rather than leaving them in
+    // a call with nobody until it times out.
+    const call = quitCallEnded ? null : dm.currentCall();
+    if (call) {
+      quitCallEnded = true;
+      event.preventDefault();
+      void Promise.race([
+        dm.action({ a: 'call', peer: call.peer, callId: call.callId, kind: 'end' }).catch(() => undefined),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]).finally(() => app.quit());
+      return;
+    }
     // Stop the community server cleanly before River exits (at most a few seconds).
     if (hostStopped || hosting.manager.status().state === 'off') return;
     event.preventDefault();

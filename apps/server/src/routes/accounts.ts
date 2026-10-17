@@ -9,6 +9,7 @@ import {
   linkIdSchema,
   provisionLinkRequestSchema,
   declineLinkRequestSchema,
+  MAX_LINK_DECLINES,
   putLinkHelloRequestSchema,
   registerRequestSchema,
   registrationMessage,
@@ -267,22 +268,32 @@ export function registerAccountRoutes(
       const me = request.session!.riverId;
       const now = deps.now();
       await purgeSignups(db, now);
-      const current = await db
-        .selectFrom('accounts')
-        .select('username')
-        .where('river_id', '=', me)
-        .executeTakeFirst();
-      if (current?.username !== username) {
-        if (!(await usernameFree(db, username, now, me))) {
-          return fail(reply, 409, 'username_taken', `@${username} is taken. Try another one.`);
-        }
-        try {
-          await db.updateTable('accounts').set({ username }).where('river_id', '=', me).execute();
-        } catch {
-          return fail(reply, 409, 'username_taken', `@${username} is taken. Try another one.`);
-        }
-        // The old name stays ours for a while: nobody else can pick it up and pass as us.
-        if (current?.username) await holdUsername(db, current.username, me, now);
+      // One transaction (2.11.2): the old name is held before the new one is checked and taken,
+      // so there is no moment where someone else can pick up the old name.
+      try {
+        await db.transaction().execute(async (trx) => {
+          const current = await trx
+            .selectFrom('accounts')
+            .select('username')
+            .where('river_id', '=', me)
+            .executeTakeFirst();
+          if (current?.username === username) return;
+          // Taking back a name we gave up: its hold is no longer needed.
+          await trx
+            .deleteFrom('username_holds')
+            .where('username', '=', username)
+            .where('river_id', '=', me)
+            .execute();
+          // The old name stays ours for a while: nobody else can pick it up and pass as us.
+          if (current?.username) await holdUsername(trx, current.username, me, now);
+          if (!(await usernameFree(trx, username, now, me))) {
+            throw new Refusal(409, 'username_taken', `@${username} is taken. Try another one.`);
+          }
+          await trx.updateTable('accounts').set({ username }).where('river_id', '=', me).execute();
+        });
+      } catch (err) {
+        if (err instanceof Refusal) return fail(reply, err.status, err.code, err.message);
+        return fail(reply, 409, 'username_taken', `@${username} is taken. Try another one.`);
       }
       return { username, riverId: me };
     },
@@ -462,8 +473,11 @@ export function registerAccountRoutes(
     mac: string | null;
     provision: string | null;
     deviceId: number | null;
-    /** The new device declined the account it was sent (a MAC only the two devices can check). */
-    declined: string | null;
+    /**
+     * The new device declined the account it was sent (a MAC only the two devices can check).
+     * Up to MAX_LINK_DECLINES (2.11.2): a bogus one written first cannot shut out the real one.
+     */
+    declined: string[];
     expires: number;
   }
   const links = new Map<string, PendingLink>();
@@ -474,10 +488,11 @@ export function registerAccountRoutes(
   const MAX_OPEN_PER_IP = 3;
   /**
    * Throwaway accounts must not use up the slots: an account made today may reserve two at a
-   * time, and one network address at most a few in all (2.11).
+   * time, and one network address at most some in all (2.11). Many people can share one address
+   * (a carrier's CGNAT, a school), so that cap is 20 (2.11.2); MAX_LINKS bounds the total.
    */
   const MAX_RESERVED_NEW_ACCOUNT = 2;
-  const MAX_RESERVED_PER_IP = 6;
+  const MAX_RESERVED_PER_IP = 20;
   const sweep = (): void => {
     const t = deps.now().getTime();
     for (const [id, l] of links) if (l.expires <= t) links.delete(id);
@@ -487,7 +502,8 @@ export function registerAccountRoutes(
     mac: l.mac,
     provision: l.provision,
     deviceId: l.deviceId,
-    declined: l.declined,
+    declined: l.declined[0] ?? null,
+    declines: [...l.declined],
     expiresAt: new Date(l.expires).toISOString(),
   });
   const notFound = (reply: FastifyReply): FastifyReply =>
@@ -516,25 +532,29 @@ export function registerAccountRoutes(
       const isNew = !account || account.created_on >= day(deps.now());
       const cap = isNew ? MAX_RESERVED_NEW_ACCOUNT : MAX_RESERVED_PER_ACCOUNT;
       const mine = [...links.entries()].filter(([, l]) => l.reservedBy === riverId);
+      // Trying again: the oldest code nobody answered yet gives way; otherwise wait. It goes only
+      // once every other check passed (2.11.2): a refused request must not destroy the code the
+      // user is still showing.
+      let evict: string | null = null;
       if (mine.length >= cap) {
-        // Trying again: the oldest code nobody answered yet gives way; otherwise wait.
         const unused = mine
           .filter(([, l]) => l.hello === null)
           .sort((a, b) => a[1].expires - b[1].expires)[0];
         if (!unused) {
           return fail(reply, 429, 'too_many_links', 'Finish or cancel the devices you are already linking');
         }
-        links.delete(unused[0]);
+        evict = unused[0];
       }
-      const fromHere = [...links.values()].filter(
-        (l) => l.reservedBy !== null && l.openedBy === request.ip,
+      const fromHere = [...links.entries()].filter(
+        ([key, l]) => key !== evict && l.reservedBy !== null && l.openedBy === request.ip,
       ).length;
       if (fromHere >= MAX_RESERVED_PER_IP) {
         return fail(reply, 429, 'too_many_links', 'Too many devices are being linked from here right now');
       }
-      if (links.size >= MAX_LINKS) {
+      if (links.size - (evict ? 1 : 0) >= MAX_LINKS) {
         return fail(reply, 503, 'busy', 'Too many devices are being linked right now');
       }
+      if (evict) links.delete(evict);
       const l: PendingLink = {
         reservedBy: riverId,
         // Remembered for the per-address cap only (in memory, gone with the slot).
@@ -543,7 +563,7 @@ export function registerAccountRoutes(
         mac: null,
         provision: null,
         deviceId: null,
-        declined: null,
+        declined: [],
         expires: deps.now().getTime() + LINK_TTL_MS,
       };
       links.set(id.data, l);
@@ -582,7 +602,7 @@ export function registerAccountRoutes(
       mac: parsed.data.mac,
       provision: null,
       deviceId: null,
-      declined: null,
+      declined: [],
       expires: deps.now().getTime() + LINK_TTL_MS,
     };
     links.set(id.data, l);
@@ -625,7 +645,9 @@ export function registerAccountRoutes(
 
   // The new device was sent the account but declined it ("Is this you?" → Cancel). Its MAC under
   // the link secret is passed on as it is: only the linked device can check it, and then takes the
-  // device it added off its signed list again. Written once, and only after provisioning.
+  // device it added off its signed list again. Only after provisioning. The server cannot tell a
+  // real MAC from a bogus one, so it keeps up to MAX_LINK_DECLINES of them (2.11.2): someone who
+  // writes one first cannot shut out the new device's real "no". The linked device checks each.
   app.put<{ Params: { id: string } }>(`${API_PREFIX}/link/:id/decline`, sensitive, async (request, reply) => {
     sweep();
     const id = linkIdSchema.safeParse(request.params.id);
@@ -633,8 +655,11 @@ export function registerAccountRoutes(
     if (!id.success || !parsed.success) return fail(reply, 400, 'bad_request', 'Bad request');
     const l = links.get(id.data);
     if (!l?.provision) return notFound(reply);
-    if (l.declined !== null) return fail(reply, 409, 'link_in_use', 'This link was already answered.');
-    l.declined = parsed.data.mac;
+    if (l.declined.includes(parsed.data.mac)) return linkState(l);
+    if (l.declined.length >= MAX_LINK_DECLINES) {
+      return fail(reply, 409, 'link_in_use', 'This link was already answered.');
+    }
+    l.declined.push(parsed.data.mac);
     return linkState(l);
   });
 }

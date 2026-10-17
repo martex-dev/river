@@ -44,7 +44,9 @@ const b64 = (u: Uint8Array): string => Buffer.from(u).toString('base64');
 const id = (): string => randomBytes(16).toString('base64url');
 const sealed = (): string => randomBytes(40).toString('base64');
 
-async function start(options: { voiceGraceMs?: number } = {}): Promise<FastifyInstance> {
+async function start(
+  options: { voiceGraceMs?: number; rotationRecheckMs?: number; now?: () => Date } = {},
+): Promise<FastifyInstance> {
   database = openDatabase('sqlite::memory:');
   await migrateToLatest(database.db);
   app = await buildApp({
@@ -964,7 +966,7 @@ describe('communities', () => {
     });
 
     it('flags key rotation when someone is removed; exactly one rotation wins', async () => {
-      const a = await start();
+      const a = await start({ rotationRecheckMs: 0 });
       const owner = await user(a);
       const { cid } = await createCommunity(a, owner.token);
       const check = sealed();
@@ -1042,6 +1044,39 @@ describe('communities', () => {
         expect(c.rotationNeeded).toBe(retry <= 3);
         if (retry <= 3) expect((await claim()).rotation_retries).toBe(retry);
       }
+    });
+
+    it('a stuck rotation is asked for again only once another member could have received it', async () => {
+      let clock = new Date('2026-10-18T10:00:00.000Z');
+      const later = (ms: number): void => void (clock = new Date(clock.getTime() + ms));
+      const a = await start({ now: () => clock });
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const other = await join(a, owner.token, cid);
+      await status(a, 'DELETE', `/v1/communities/${cid}/members/${other.riverId}`, owner.token);
+      later(60_000);
+      expect(await status(a, 'POST', `/v1/communities/${cid}/epoch`, owner.token, { from: 0 })).toBe(200);
+      const row = async () =>
+        await database.db
+          .selectFrom('communities')
+          .select(['rotation_needed', 'rotation_retries', 'epoch_claimed_by'])
+          .where('id', '=', cid)
+          .executeTakeFirstOrThrow();
+      // Ten minutes on, the member has not used River since the claim: nothing is re-flagged and
+      // no retry is used up (the key may just not have reached anyone yet).
+      later(11 * 60_000);
+      await fetchCommunity(a, owner.token, cid);
+      expect(await row()).toMatchObject({ rotation_needed: 0, rotation_retries: 0 });
+      // The member comes back without the key, but within the minute GET /communities does not
+      // scan every community again.
+      later(30_000);
+      await fetchCommunity(a, member.token, cid);
+      expect(await row()).toMatchObject({ rotation_needed: 0, rotation_retries: 0 });
+      // The next scan sees that the member could have received it: asked for again.
+      later(31_000);
+      await fetchCommunity(a, owner.token, cid);
+      expect(await row()).toMatchObject({ rotation_needed: 1, rotation_retries: 1, epoch_claimed_by: null });
     });
 
     it('members can leave; only the owner can delete the community', async () => {

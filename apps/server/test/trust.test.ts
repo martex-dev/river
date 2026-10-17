@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createIdentity, sign } from '@river/crypto';
 import { challengeResponseSchema, deleteAccountMessage } from '@river/protocol';
 import { buildApp } from '../src/app.ts';
@@ -13,6 +13,7 @@ let app: FastifyInstance;
 let database: RiverDatabase;
 let clock = new Date();
 afterEach(async () => {
+  vi.useRealTimers();
   await app?.close();
   await database?.close();
 });
@@ -64,6 +65,42 @@ describe('usernames given up are held for their owner', () => {
       .set({ until: new Date(clock.getTime() - 1000).toISOString() })
       .execute();
     expect((await setUsername(mallory.token, 'alice')).statusCode).toBe(200);
+  });
+
+  it('one account holds at most two given-up names (the newest): renaming cannot squat a list', async () => {
+    await start();
+    const squatter = await registerUser(app);
+    const someone = await registerUser(app);
+    for (const name of ['name.one', 'name.two', 'name.three', 'name.four']) {
+      expect((await setUsername(squatter.token, name)).statusCode).toBe(200);
+      clock = new Date(clock.getTime() + 1000);
+    }
+    const holds = await database.db
+      .selectFrom('username_holds')
+      .select('username')
+      .where('river_id', '=', squatter.riverId)
+      .orderBy('username')
+      .execute();
+    expect(holds.map((h) => h.username)).toEqual(['name.three', 'name.two']);
+    expect((await setUsername(someone.token, 'name.one')).statusCode).toBe(200);
+    expect((await setUsername(someone.token, 'name.two')).statusCode).toBe(409);
+  });
+
+  it('taking back a held name releases its hold, and a refused rename holds nothing', async () => {
+    await start();
+    const alice = await registerUser(app);
+    const bob = await registerUser(app);
+    expect((await setUsername(alice.token, 'alice')).statusCode).toBe(200);
+    expect((await setUsername(bob.token, 'bob')).statusCode).toBe(200);
+    // Refused (taken): Alice keeps her name and nothing is held.
+    expect((await setUsername(alice.token, 'bob')).statusCode).toBe(409);
+    const holdsOf = async () =>
+      (await database.db.selectFrom('username_holds').select('username').execute()).map((h) => h.username);
+    expect(await holdsOf()).toEqual([]);
+    expect((await setUsername(alice.token, 'alice.new')).statusCode).toBe(200);
+    expect(await holdsOf()).toEqual(['alice']);
+    expect((await setUsername(alice.token, 'alice')).statusCode).toBe(200);
+    expect(await holdsOf()).toEqual(['alice.new']);
   });
 });
 
@@ -118,15 +155,56 @@ describe('link slots', () => {
     expect((await reserve(user.token, slot(4))).statusCode).toBe(201);
   });
 
+  /** The routes' own rate limits (20 a minute per address) start over: only the slot caps count. */
+  const nextMinute = (): void => void vi.setSystemTime(Date.now() + 61_000);
+
   it('throwaway accounts from one address cannot use up the slots', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
     await start();
     let refused = 0;
-    for (let n = 0; n < 10; n++) {
+    for (let n = 0; n < 25; n++) {
+      if (n % 8 === 0) nextMinute();
       const throwaway = await registerUser(app);
       const res = await reserve(throwaway.token, slot(100 + n));
-      if (res.statusCode === 429) refused += 1;
-      else expect(res.statusCode).toBe(201);
+      if (res.statusCode === 429) {
+        expect(res.json().error.code).toBe('too_many_links');
+        refused += 1;
+      } else expect(res.statusCode).toBe(201);
     }
-    expect(refused).toBe(4);
+    vi.useRealTimers();
+    // Enough for many people behind one carrier address (CGNAT), not for a flood.
+    expect(refused).toBe(5);
+  });
+
+  it('a refused reservation does not destroy the code the user is still showing', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    await start();
+    const user = await registerUser(app);
+    expect((await reserve(user.token, slot(1))).statusCode).toBe(201);
+    expect((await reserve(user.token, slot(2))).statusCode).toBe(201);
+    // Another network the user moves to is already at its per-address cap.
+    const busy = '10.0.0.9';
+    const reserveFrom = (token: string, id: string) =>
+      app.inject({
+        method: 'POST',
+        url: `/v1/link/${id}/reserve`,
+        headers: auth(token),
+        remoteAddress: busy,
+      });
+    for (let n = 0; n < 20; n++) {
+      if (n % 8 === 0) nextMinute();
+      const other = await registerUser(app);
+      expect((await reserveFrom(other.token, slot(200 + n))).statusCode).toBe(201);
+    }
+    nextMinute();
+    // Over the account's cap and refused for that address: the code being shown stays.
+    const refused = await reserveFrom(user.token, slot(3));
+    expect(refused.statusCode).toBe(429);
+    expect(refused.json().error.code).toBe('too_many_links');
+    expect((await app.inject({ method: 'GET', url: `/v1/link/${slot(1)}` })).statusCode).toBe(200);
+    // Accepted: only then does the oldest unused code give way.
+    expect((await reserve(user.token, slot(3))).statusCode).toBe(201);
+    expect((await app.inject({ method: 'GET', url: `/v1/link/${slot(1)}` })).statusCode).toBe(404);
+    vi.useRealTimers();
   });
 });

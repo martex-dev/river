@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import type { DmEvent } from '../../../shared/dm.ts';
+import type { CallOutcome, DmEvent } from '../../../shared/dm.ts';
 import type { PhoneCallAction } from '../../../shared/ipc.ts';
+import { isPhone } from '../../../shared/platform.ts';
 import { play } from '../community/sound.ts';
 import { useCommunity } from '../community/store.ts';
 import { VoiceCall, type CallTransport } from '../community/voice.ts';
@@ -17,6 +18,13 @@ import { useDm } from './store.ts';
 const RING_TIMEOUT_MS = 45_000;
 /** An answered call that has not connected after this long ends (instead of "Connecting…" forever). */
 export const CONNECT_TIMEOUT_MS = 30_000;
+/**
+ * A connected call that has heard nothing from the other side for this long — no direct
+ * connection, no voice through the server — is over: they are gone (2.11.3).
+ */
+export const CALL_LOST_MS = 50_000;
+/** How often a connected call checks that the other side is still there. */
+const LOST_CHECK_MS = 5000;
 
 interface DmCallState {
   incoming: { peer: string; callId: string; video: boolean } | null;
@@ -34,27 +42,40 @@ export const useDmCall = create<DmCallState>(() => ({ incoming: null, active: nu
 
 let ringTimer: number | undefined;
 /** The current call, for the call history. */
-let current: { peer: string; direction: 'in' | 'out'; video: boolean; connectedAt: number | null } | null =
-  null;
-
-function logCall(entry: {
+let current: {
   peer: string;
+  callId: string;
   direction: 'in' | 'out';
   video: boolean;
   connectedAt: number | null;
-}): void {
+} | null = null;
+
+function logCall(
+  entry: {
+    peer: string;
+    callId: string;
+    direction: 'in' | 'out';
+    video: boolean;
+    connectedAt: number | null;
+  },
+  outcome?: Exclude<CallOutcome, 'answered' | 'missed'>,
+): void {
   const durationSec = entry.connectedAt ? Math.round((Date.now() - entry.connectedAt) / 1000) : 0;
+  const answered = entry.connectedAt !== null;
   void window.river.dm.action({
     a: 'logCall',
     peer: entry.peer,
     direction: entry.direction,
     video: entry.video,
-    answered: entry.connectedAt !== null,
+    answered,
     durationSec,
+    callId: entry.callId,
+    ...(outcome && !answered ? { outcome } : {}),
   });
 }
 let timeoutTimer: number | undefined;
 let connectTimer: number | undefined;
+let lostTimer: number | undefined;
 
 /** Ends the call if it is still connecting after CONNECT_TIMEOUT_MS. */
 function watchConnect(callId: string): void {
@@ -67,6 +88,27 @@ function watchConnect(callId: string): void {
   }, CONNECT_TIMEOUT_MS);
 }
 
+/**
+ * A connected call whose other side vanished (their phone died, they lost the network, River
+ * was closed without hanging up) ends after CALL_LOST_MS without a sound of them, rather than
+ * showing "Connected" forever.
+ */
+function watchLost(callId: string, call: VoiceCall, peer: string): void {
+  window.clearInterval(lostTimer);
+  let heard = Date.now();
+  lostTimer = window.setInterval(() => {
+    if (useDmCall.getState().active?.callId !== callId || useCommunity.getState().call !== call) {
+      window.clearInterval(lostTimer);
+      return;
+    }
+    heard = Math.max(heard, call.lastHeard(peer));
+    if (Date.now() - heard < CALL_LOST_MS) return;
+    window.clearInterval(lostTimer);
+    useCommunity.getState().notify('The call was lost.', 'error');
+    void endDmCall();
+  }, LOST_CHECK_MS);
+}
+
 function stopRinging(): void {
   window.clearInterval(ringTimer);
   window.clearTimeout(timeoutTimer);
@@ -74,11 +116,12 @@ function stopRinging(): void {
 }
 
 /**
- * Android (2.11) rings for an incoming call with the phone's own ringtone and call screen while
- * River is not on screen: no second ring from here then. It rings here again once River is back.
+ * Android rings for an incoming call with the phone's own ringtone (2.11.3: also while River is
+ * in front), so it follows the phone's ringer mode — silent, vibrate, Do Not Disturb — and never
+ * rings twice. River's interface rings by itself only on computers and iPhones.
  */
 function phoneRingsInstead(): boolean {
-  return useRiver.getState().info?.platform === 'android' && document.visibilityState === 'hidden';
+  return useRiver.getState().info?.platform === 'android';
 }
 
 function ring(sound: 'ring' | 'ringback'): void {
@@ -89,6 +132,12 @@ function ring(sound: 'ring' | 'ringback'): void {
   };
   tick();
   ringTimer = window.setInterval(tick, sound === 'ring' ? 2200 : 3000);
+}
+
+/** Phones: the call audio River set (call mode, loudspeaker, headset) goes back to normal. */
+function resetPhoneAudio(): void {
+  if (isPhone(useRiver.getState().info?.platform))
+    void window.river.voice.setSpeaker(null).catch(() => undefined);
 }
 
 function newCallId(): string {
@@ -141,7 +190,7 @@ async function begin(
   useDmCall.setState({
     active: { peer, callId, video, state: role === 'caller' ? 'ringing' : 'connecting' },
   });
-  current = { peer, direction: role === 'caller' ? 'out' : 'in', video, connectedAt: null };
+  current = { peer, callId, direction: role === 'caller' ? 'out' : 'in', video, connectedAt: null };
   const live = (): boolean => useDmCall.getState().active?.callId === callId;
   const community = useCommunity;
   const previous = community.getState().call;
@@ -162,15 +211,18 @@ async function begin(
     me,
     () => {
       community.setState({ callVersion: community.getState().callVersion + 1 });
-      const connected = call.remotes().some((r) => r.state === 'connected' || r.relayed);
+      // Connected only once sound can really flow: a direct connection that is up, or their voice
+      // arriving through the server (the relay merely being on proves nothing).
+      const connected = call.remotes().some((r) => r.state === 'connected' || (r.relayed && r.relayFlowing));
       const active = useDmCall.getState().active;
       if (connected && !wasConnected && active?.callId === callId) {
         wasConnected = true;
         window.clearTimeout(connectTimer);
         play('callConnected');
         const now = Date.now();
-        if (current) current.connectedAt = now;
+        if (current?.callId === callId) current.connectedAt = now;
         useDmCall.setState({ active: { ...active, state: 'connected', connectedAt: now } });
+        watchLost(callId, call, peer);
       }
     },
     {
@@ -196,10 +248,12 @@ async function begin(
     if (community.getState().call === call) community.setState({ call: null });
     useDmCall.setState({ active: null });
     stopRinging();
+    resetPhoneAudio();
     if (role === 'callee') {
-      // We answered but cannot take part (microphone refused): tell the caller and keep a record.
-      void send(peer, callId, 'decline').catch(() => undefined);
-      if (current) logCall(current);
+      // We answered but cannot take part (microphone refused): the caller hears the call ended
+      // (not "declined": nobody said no), and the history says it could not connect.
+      void send(peer, callId, 'end').catch(() => undefined);
+      if (current) logCall(current, 'failed');
     }
     current = null;
     community
@@ -220,7 +274,15 @@ async function begin(
   void callRoomOf(callId).then((room) => {
     if (live()) void window.river.voice.callRoom(room);
   });
-  if (video) await call.setCamera(true).catch(() => undefined);
+  if (video) {
+    // The camera refused (in use, no permission): the call goes on as a voice call, and says so.
+    await call.setCamera(true).catch(() => {
+      if (live())
+        community
+          .getState()
+          .notify('River could not start your camera, so this call is voice only for now.', 'error');
+    });
+  }
   if (!live()) return false;
   if (role === 'callee') call.updateParticipants([me, peer]);
   return true;
@@ -246,6 +308,8 @@ export async function startDmCall(peer: string, video: boolean): Promise<void> {
     if (useDmCall.getState().active === null) stopRinging();
     return;
   }
+  // Their call may have won a glare meanwhile (both called at once): that one rings no more here.
+  if (useDmCall.getState().active?.callId !== callId) return;
   timeoutTimer = window.setTimeout(() => {
     if (useDmCall.getState().active?.callId === callId && useDmCall.getState().active?.state === 'ringing') {
       useCommunity.getState().notify('No answer.');
@@ -277,19 +341,27 @@ export function declineDmCall(): void {
     answered: false,
     durationSec: 0,
     outcome: 'declined',
+    callId: incoming.callId,
   });
   stopRinging();
   useDmCall.setState({ incoming: null });
   void send(incoming.peer, incoming.callId, 'decline').catch(() => undefined);
 }
 
-export async function endDmCall(): Promise<void> {
+/**
+ * Ends the 1:1 call (hung up, declined or busy on the other side, lost, timed out). `outcome`
+ * says why a call that never connected ended, for the call history.
+ */
+export async function endDmCall(outcome?: 'declined' | 'busy'): Promise<void> {
   stopRinging();
   window.clearTimeout(connectTimer);
-  if (current) logCall(current);
+  window.clearInterval(lostTimer);
+  const hadCall = current !== null || useDmCall.getState().active !== null;
+  if (current) logCall(current, outcome);
   current = null;
   const call = useCommunity.getState().call;
   useDmCall.setState({ active: null });
+  if (hadCall) resetPhoneAudio();
   if (call?.channelId.startsWith('dm:')) {
     void window.river.voice.callRoom(null);
     useCommunity.setState({ call: null });
@@ -318,6 +390,7 @@ export function handlePhoneCall(e: PhoneCallAction): void {
     answerWanted = null;
     void acceptDmCall(incoming.video);
   } else if (!useDmCall.getState().active) {
+    // Measured from the answer: River's window may take a while to open from a locked phone.
     answerWanted = { callId: e.callId, at: Date.now() };
   }
 }
@@ -325,10 +398,34 @@ export function handlePhoneCall(e: PhoneCallAction): void {
 export function handleCallEvent(e: Extract<DmEvent, { t: 'call' }>): void {
   const { active, incoming } = useDmCall.getState();
   const name = useDm.getState().conversations.find((c) => c.riverId === e.peer)?.name ?? 'They';
+  /** Our own call to this person, still ringing on their side. */
+  const calling =
+    active?.callId === e.callId &&
+    active.peer === e.peer &&
+    active.state === 'ringing' &&
+    current?.callId === e.callId &&
+    current.direction === 'out';
   switch (e.kind) {
     case 'invite': {
       // The same call again (River's window found it ringing as it opened): nothing new.
       if (active?.callId === e.callId || incoming?.callId === e.callId) return;
+      // Both called each other at once (glare): the call with the lower ID goes on, on both sides.
+      if (
+        active &&
+        active.peer === e.peer &&
+        active.state === 'ringing' &&
+        current?.direction === 'out' &&
+        !incoming
+      ) {
+        // Ours wins: they answer ours; theirs is ignored here.
+        if (active.callId < e.callId) return;
+        // Theirs wins: ours goes quietly (no "call ended", no record of it), theirs is answered.
+        stopRinging();
+        current = null;
+        useDmCall.setState({ active: null, incoming: { peer: e.peer, callId: e.callId, video: e.video } });
+        void acceptDmCall(active.video);
+        return;
+      }
       // Only another 1:1 call makes you busy; in a voice channel the call rings, and accepting leaves voice.
       if (active || incoming) {
         void send(e.peer, e.callId, 'busy').catch(() => undefined);
@@ -349,14 +446,16 @@ export function handleCallEvent(e: Extract<DmEvent, { t: 'call' }>): void {
         if (useDmCall.getState().incoming?.callId === e.callId) {
           stopRinging();
           useDmCall.setState({ incoming: null });
-          logCall({ peer: ringing.peer, direction: 'in', video: ringing.video, connectedAt: null });
+          logCall({ ...ringing, direction: 'in', connectedAt: null });
           useCommunity.getState().notify(`Missed call from ${name}.`);
         }
       }, RING_TIMEOUT_MS);
       return;
     }
     case 'accept': {
-      if (active?.callId !== e.callId || active.peer !== e.peer) return;
+      // Only while our call rings: after one of their devices answered, another device's answer
+      // (or a late one from the mailbox) changes nothing.
+      if (!calling || !active) return;
       stopRinging();
       useDmCall.setState({ active: { ...active, state: 'connecting' } });
       watchConnect(e.callId);
@@ -367,11 +466,13 @@ export function handleCallEvent(e: Extract<DmEvent, { t: 'call' }>): void {
     }
     case 'decline':
     case 'busy':
-      if (active?.callId !== e.callId) return;
+      // Only while our call rings: one of their devices declining after another answered does
+      // not end the call that is on.
+      if (!calling) return;
       useCommunity
         .getState()
         .notify(e.kind === 'busy' ? `${name} is in another call.` : `${name} declined the call.`);
-      void endDmCall();
+      void endDmCall(e.kind === 'busy' ? 'busy' : 'declined');
       return;
     case 'elsewhere':
       // Answered or declined on another of your devices: quiet here, nothing missed.
@@ -385,9 +486,9 @@ export function handleCallEvent(e: Extract<DmEvent, { t: 'call' }>): void {
         stopRinging();
         useDmCall.setState({ incoming: null });
         // "end" carries no video flag: the invite said whether it was a video call.
-        logCall({ peer: e.peer, direction: 'in', video: incoming.video, connectedAt: null });
+        logCall({ ...incoming, direction: 'in', connectedAt: null });
         useCommunity.getState().notify(`Missed call from ${name}.`);
-      } else if (active?.callId === e.callId) {
+      } else if (active?.callId === e.callId && active.peer === e.peer) {
         void endDmCall();
       }
       return;

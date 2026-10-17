@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SpeakerButton } from '../src/renderer/src/community/ui/Voice.tsx';
 import { callColours, IncomingCall } from '../src/renderer/src/dm/CallUi.tsx';
 import { handleCallEvent, useDmCall } from '../src/renderer/src/dm/call.ts';
 import { useCommunity } from '../src/renderer/src/community/store.ts';
@@ -52,5 +53,28 @@ describe('the incoming call screen', () => {
     handleCallEvent({ t: 'call', peer: 'p', callId: 'c', kind: 'elsewhere', video: false });
     expect(useDmCall.getState().incoming).toBeNull();
     expect(notices).toEqual([]);
+  });
+});
+
+describe('the loudspeaker button (phones)', () => {
+  it('keeps the route chosen for a call when its screen is left and opened again', () => {
+    const setSpeaker = vi.fn().mockResolvedValue(undefined);
+    (window as unknown as { river: unknown }).river = { voice: { setSpeaker } };
+    const call = {};
+    // A voice call starts at the ear: set once.
+    const first = render(<SpeakerButton initial={false} call={call} />);
+    expect(setSpeaker.mock.calls).toEqual([[false]]);
+    fireEvent.click(screen.getByRole('button', { name: 'Speaker off' }));
+    expect(setSpeaker.mock.calls).toEqual([[false], [true]]);
+    first.unmount();
+    // Back to the call: still on the loudspeaker, and nothing set again.
+    render(<SpeakerButton initial={false} call={call} />);
+    expect(screen.getByRole('button', { name: 'Speaker on' })).toBeTruthy();
+    expect(setSpeaker.mock.calls).toEqual([[false], [true]]);
+    cleanup();
+    // A new call starts from its own default again.
+    render(<SpeakerButton initial={false} call={{}} />);
+    expect(screen.getByRole('button', { name: 'Speaker off' })).toBeTruthy();
+    expect(setSpeaker.mock.calls).toEqual([[false], [true], [false]]);
   });
 });
