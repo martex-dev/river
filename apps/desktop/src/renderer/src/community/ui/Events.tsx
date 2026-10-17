@@ -219,7 +219,9 @@ export function durationLabel(ms: number): string {
   const hours = Math.floor((minutes % 1440) / 60);
   const mins = minutes % 60;
   const part = (n: number, unit: string): string => (n ? `${n} ${unit}${n === 1 ? '' : 's'}` : '');
-  return [part(days, 'day'), part(hours, 'hour'), part(mins, 'minute')].filter(Boolean).join(' ') || '0 minutes';
+  return (
+    [part(days, 'day'), part(hours, 'hour'), part(mins, 'minute')].filter(Boolean).join(' ') || '0 minutes'
+  );
 }
 
 export function EventForm(props: {

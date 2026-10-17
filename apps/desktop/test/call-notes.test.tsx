@@ -9,6 +9,7 @@ const call = (startedAt: string, over = {}) => ({
   direction: 'in' as const,
   video: false,
   answered: true,
+  outcome: 'answered' as const,
   durationSec: 300,
   startedAt,
   ...over,
@@ -20,6 +21,10 @@ describe('call notes', () => {
     expect(callNote(call('a', { answered: false }))).toBe('📞 Missed call');
     expect(callNote(call('a', { answered: false, direction: 'out', video: true }))).toBe(
       '📹 Video call — no answer',
+    );
+    expect(callNote(call('a', { answered: false, outcome: 'declined' }))).toBe('📞 Call — declined');
+    expect(callNote(call('a', { answered: false, outcome: 'failed', video: true }))).toBe(
+      '📹 Video call — could not connect',
     );
     expect(duration(45)).toBe('45 s');
     expect(duration(3720)).toBe('1 h 2 min');

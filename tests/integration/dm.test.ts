@@ -281,7 +281,8 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     const convs = await alice.dm.action({ a: 'conversations' });
     expect(convs.filter((c) => c.self)).toHaveLength(1);
     expect(convs.find((c) => c.self)).toMatchObject({ unread: 0, last: { text: 'buy milk', mine: true } });
-    expect(alice.dm.friends()).toEqual([bob.riverId]);
+    // Neither you nor a chat you only opened (Bob never answered) counts as a friend.
+    expect(alice.dm.friends()).toEqual([]);
     await expect(
       alice.dm.action({ a: 'call', peer: alice.riverId, callId: 'A'.repeat(22), kind: 'invite' }),
     ).rejects.toThrow();
@@ -701,6 +702,10 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'hi' });
     await bob.dm.sync();
     await bob.dm.action({ a: 'accept', peer: alice.riverId });
+    // Bob is Alice's friend once his answer (the profile shared on accepting) reached her.
+    expect(alice.dm.friends()).toEqual([]);
+    await alice.dm.sync();
+    expect(alice.dm.friends()).toEqual([bob.riverId]);
     alice.dm.setMyBio('Climber. Coffee.');
     const photo = await alice.dm.action({
       a: 'upload',
@@ -1139,5 +1144,186 @@ describe('social: blocks and comments', { timeout: 60_000 }, () => {
     expect(feed.posts).toEqual([]);
     expect(feed.stories).toEqual([]);
     expect(bob.local.prepare('SELECT COUNT(*) AS n FROM posts').get()).toEqual({ n: 0 });
+  });
+});
+
+describe('social: audit fixes', { timeout: 90_000 }, () => {
+  const post = (p: Person, text: string, audience: 'friends' | string[] = 'friends') =>
+    p.social.action({ a: 'post', kind: 'post', text, attachments: [], audience });
+  const offline = (p: Person, who?: string): (() => void) => {
+    const dm = internals(p);
+    const send = dm.sendContent.bind(p.dm);
+    dm.sendContent = (peer, content, ephemeral) =>
+      !who || peer === who ? Promise.reject(new Error('offline')) : send(peer, content, ephemeral);
+    return () => {
+      dm.sendContent = send;
+    };
+  };
+
+  it('only friends who answered get posts; a chosen list cannot reach anyone else', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    await friends(alice, bob);
+    // Alice only opened a chat with Carol and wrote: a sent request, not a friend.
+    await alice.dm.action({ a: 'open', peer: carol.riverId, name: 'Carol' });
+    await alice.dm.action({ a: 'send', peer: carol.riverId, text: 'hi' });
+    expect(alice.dm.friends()).toEqual([bob.riverId]);
+    expect((await alice.social.action({ a: 'feed' })).friends.map((f) => f.riverId)).toEqual([bob.riverId]);
+    const shared = await post(alice, 'friends only');
+    expect(shared.audience).toBe(1);
+    await expect(post(alice, 'to Carol', [carol.riverId])).rejects.toThrow(/friends/);
+    await carol.dm.sync();
+    expect((await carol.social.action({ a: 'feed' })).posts).toEqual([]);
+  });
+
+  it('a post nobody got is not kept; one that missed someone reaches them later', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    await friends(alice, bob);
+    await friends(alice, carol);
+    let restore = offline(alice);
+    await expect(post(alice, 'lost')).rejects.toThrow(/could not be delivered/);
+    expect((await alice.social.action({ a: 'feed' })).posts).toEqual([]);
+    restore();
+
+    restore = offline(alice, carol.riverId);
+    const shared = await post(alice, 'hello all');
+    await carol.dm.sync();
+    expect((await carol.social.action({ a: 'feed' })).posts).toEqual([]);
+    expect(await alice.social.flushOutbox()).toBe(1);
+    restore();
+    expect(await alice.social.flushOutbox()).toBe(0);
+    await carol.dm.sync();
+    expect((await carol.social.action({ a: 'feed' })).posts.map((p) => p.id)).toEqual([shared.id]);
+    // Bob got it once.
+    await bob.dm.sync();
+    expect((await bob.social.action({ a: 'feed' })).posts).toHaveLength(1);
+  });
+
+  it('an offline comment or like is taken back; a failed "seen" is sent later', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await friends(alice, bob);
+    const shared = await post(alice, 'news');
+    const story = await alice.social.action({
+      a: 'post',
+      kind: 'story',
+      text: 'today',
+      attachments: [],
+      audience: 'friends',
+    });
+    await bob.dm.sync();
+    const restore = offline(bob);
+    await expect(bob.social.action({ a: 'comment', postId: shared.id, text: 'nice' })).rejects.toThrow(
+      /could not be sent/,
+    );
+    await expect(bob.social.action({ a: 'react', postId: shared.id, emoji: '❤️', on: true })).rejects.toThrow(
+      /could not be sent/,
+    );
+    let mine = (await bob.social.action({ a: 'feed' })).posts[0]!;
+    expect(mine.comments).toEqual([]);
+    expect(mine.reactions).toEqual([]);
+    await bob.social.action({ a: 'seen', postId: story.id });
+    expect((await bob.social.action({ a: 'feed' })).stories[0]!.unseen).toBe(false);
+    restore();
+    expect(await bob.social.flushOutbox()).toBe(0);
+    await alice.dm.sync();
+    const aliceStory = (await alice.social.action({ a: 'feed' })).stories[0]!.stories[0]!;
+    expect(aliceStory.viewers.map((v) => v.name)).toEqual(['Bob']);
+    // Online again, a comment goes through and says which one it was.
+    const id = await bob.social.action({ a: 'comment', postId: shared.id, text: 'nice' });
+    expect(id).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    mine = (await bob.social.action({ a: 'feed' })).posts[0]!;
+    expect(mine.comments.map((c) => c.text)).toEqual(['nice']);
+  });
+
+  it('blocked and removed people: no relays to them, their comments and posts are not shown', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    await friends(alice, bob);
+    await friends(alice, carol);
+    const shared = await post(alice, 'party');
+    await bob.dm.sync();
+    await carol.dm.sync();
+    await carol.social.action({ a: 'comment', postId: shared.id, text: 'from Carol' });
+    await bob.social.action({ a: 'comment', postId: shared.id, text: 'from Bob' });
+    await alice.dm.sync();
+    // Bob blocks Carol: her comment on Alice's post is not shown to him.
+    await bob.dm.action({ a: 'block', peer: carol.riverId });
+    await alice.social.relay(shared.id);
+    await bob.dm.sync();
+    expect((await bob.social.action({ a: 'feed' })).posts[0]!.comments.map((c) => c.text)).toEqual([
+      'from Bob',
+    ]);
+
+    // Alice blocks Carol: later snapshots do not go to her (or include her comment).
+    await alice.dm.action({ a: 'block', peer: carol.riverId });
+    const sentTo: string[] = [];
+    const send = alice.dm.sendSocial.bind(alice.dm);
+    alice.dm.sendSocial = (peer, content, ephemeral) => {
+      sentTo.push(peer);
+      return send(peer, content, ephemeral);
+    };
+    await alice.social.relay(shared.id);
+    expect(sentTo).toEqual([bob.riverId]);
+    expect((await alice.social.action({ a: 'feed' })).posts[0]!.comments.map((c) => c.text)).toEqual([
+      'from Bob',
+    ]);
+
+    // Bob removes Alice: her posts leave his feed and her profile.
+    await bob.dm.action({ a: 'removeConversation', peer: alice.riverId });
+    expect((await bob.social.action({ a: 'feed' })).posts).toEqual([]);
+    expect((await bob.social.action({ a: 'profile', riverId: alice.riverId })).posts).toEqual([]);
+  });
+
+  it('a new bio reaches friends; the saved bio is returned', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await friends(alice, bob);
+    expect(await alice.social.action({ a: 'setBio', bio: '  Painter  ' })).toBe('Painter');
+    await alice.dm.shareProfileWithFriends();
+    await bob.dm.sync();
+    expect((await bob.social.action({ a: 'profile', riverId: alice.riverId })).bio).toBe('Painter');
+  });
+
+  it('call history: declined and answered-but-failed calls are not missed, and the list hears of them', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await friends(alice, bob);
+    const log = (extra: object = {}) =>
+      alice.dm.action({
+        a: 'logCall',
+        peer: bob.riverId,
+        direction: 'in',
+        video: false,
+        answered: false,
+        durationSec: 0,
+        ...extra,
+      });
+    alice.events.length = 0;
+    await log();
+    await log({ outcome: 'declined' });
+    // Alice answered, but the call never connected.
+    await alice.dm.action({ a: 'call', peer: bob.riverId, callId: 'C'.repeat(22), kind: 'accept' });
+    await log();
+    await alice.dm.action({
+      a: 'logCall',
+      peer: bob.riverId,
+      direction: 'out',
+      video: true,
+      answered: true,
+      durationSec: 61,
+    });
+    expect(alice.events.filter((e) => e.t === 'calls')).toHaveLength(4);
+    const calls = await alice.dm.action({ a: 'calls' });
+    expect(calls.map((c) => `${c.outcome}:${c.answered}`).sort()).toEqual([
+      'answered:true',
+      'declined:false',
+      'failed:false',
+      'missed:false',
+    ]);
   });
 });

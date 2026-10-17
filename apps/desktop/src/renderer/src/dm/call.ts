@@ -256,7 +256,15 @@ export async function acceptDmCall(withVideo: boolean): Promise<void> {
 export function declineDmCall(): void {
   const incoming = useDmCall.getState().incoming;
   if (!incoming) return;
-  logCall({ peer: incoming.peer, direction: 'in', video: incoming.video, connectedAt: null });
+  void window.river.dm.action({
+    a: 'logCall',
+    peer: incoming.peer,
+    direction: 'in',
+    video: incoming.video,
+    answered: false,
+    durationSec: 0,
+    outcome: 'declined',
+  });
   stopRinging();
   useDmCall.setState({ incoming: null });
   void send(incoming.peer, incoming.callId, 'decline').catch(() => undefined);
