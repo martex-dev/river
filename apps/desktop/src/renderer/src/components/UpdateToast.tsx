@@ -7,7 +7,6 @@ import { useRiver } from '../store.ts';
  */
 export function UpdateToast(): ReactElement | null {
   const update = useRiver((s) => s.update);
-  const navigate = useRiver((s) => s.navigate);
   const openSettings = useRiver((s) => s.openSettings);
   // River for Android: Android's own installer replaces the app (there is no restart).
   const android = useRiver((s) => s.info?.platform === 'android');

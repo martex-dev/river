@@ -130,6 +130,11 @@ export class UpdateService {
     return this.status;
   }
 
+  /** The Download button (Settings → Updates) when automatic download is off. */
+  downloadNow(): Promise<void> {
+    return this.download();
+  }
+
   /** Starts the download of an available update (when automatic download is off). */
   async download(): Promise<void> {
     if (this.status.state !== 'available' || !this.pendingVersion) return;

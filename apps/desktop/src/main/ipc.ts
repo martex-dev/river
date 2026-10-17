@@ -62,6 +62,8 @@ export interface UpdatesApi {
   getStatus(): UpdateStatus;
   check(): Promise<UpdateStatus>;
   install(): void | Promise<void>;
+  /** Downloads an available update when automatic download is off (Android does this in install()). */
+  downloadNow?(): Promise<void>;
   onStatus(listener: (s: UpdateStatus) => void): () => void;
 }
 
@@ -170,7 +172,7 @@ export function registerIpc(deps: IpcDeps): void {
     deps.updates ? deps.updates.check() : { state: 'disabled', reason: deps.updatesDisabledReason },
   );
   handle(IPC.updatesInstall, () => deps.updates?.install());
-  handle(IPC.updatesDownload, () => deps.updates?.download());
+  handle(IPC.updatesDownload, () => deps.updates?.downloadNow?.());
   handle(IPC.updatesOpenDownload, async () => {
     const status = deps.updates?.getStatus();
     if (status && 'version' in status) await shell.openExternal(releasePageUrl(status.version));
