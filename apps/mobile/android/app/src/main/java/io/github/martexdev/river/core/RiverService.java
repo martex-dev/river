@@ -50,21 +50,27 @@ public final class RiverService extends Service {
     return running;
   }
 
-  /** Turns staying connected on or off, and starts or stops the service to match. */
-  public static void setEnabled(Context context, boolean on) {
+  /**
+   * Turns staying connected on or off, and starts or stops the service to match. False when Android
+   * refused to start it (see below).
+   */
+  public static boolean setEnabled(Context context, boolean on) {
     prefs(context).edit().putBoolean("enabled", on).apply();
     Intent intent = new Intent(context, RiverService.class);
     if (!on) {
       Watchdog.cancel(context);
+      AppNotices.cancelStopped(context);
       context.stopService(intent);
-      return;
+      return true;
     }
     try {
       ContextCompat.startForegroundService(context, intent);
+      return true;
     } catch (RuntimeException e) {
       // Android 12+ refuses to start it from the background (battery optimization on): it starts
       // the next time River opens, and Settings → System says it is not running.
       Log.w("RiverService", "could not start: " + e.getClass().getSimpleName());
+      return false;
     }
   }
 
@@ -92,6 +98,8 @@ public final class RiverService extends Service {
     int type = Build.VERSION.SDK_INT >= 34 ? ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING : 0;
     ServiceCompat.startForeground(this, NOTIFICATION, notification, type);
     running = true;
+    // Connected again: "River was stopped" (Watchdog) is no longer true.
+    AppNotices.cancelStopped(this);
     CoreHost.get(this).start();
     // Wakes the phone now and then to check the connection (2.11).
     Watchdog.schedule(this);
