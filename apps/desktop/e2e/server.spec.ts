@@ -117,9 +117,11 @@ test('creates an account on the server and reconnects after a restart', async ()
   if (process.env.RIVER_SCREENSHOTS) await page.screenshot({ path: 'test-results/account.png' });
 
   await openSettings(page, 'Security');
-  await expect(page.locator('.board__row', { hasText: 'Devices' }).locator('.board__value')).toContainText(
-    'signed list v1',
-  );
+  // The row labelled Devices (other rows mention devices in their explanation).
+  const devicesRow = page.locator('.board__row').filter({
+    has: page.locator('.board__label', { hasText: /^Devices$/ }),
+  });
+  await expect(devicesRow.locator('.board__value')).toContainText('signed list v1');
 
   await app.close();
   ({ app, page } = await launchRiver(userDataDir()));
