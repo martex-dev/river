@@ -466,6 +466,61 @@ describe('River for Android: client core', { timeout: 60_000 }, () => {
       );
       expect(ok(await callee.invoke<Result<unknown>>(IPC.dmAction, { a: 'pendingCall' }))).toBeNull();
     });
+
+    it("missed while River's screen is closed: kept in the history, and a notification says so", async () => {
+      // The call answered above is over (its window hangs up): a new call rings, not "busy".
+      ok(
+        await callee.invoke<Result<unknown>>(IPC.dmAction, {
+          a: 'call',
+          peer: caller.riverId,
+          callId: callId('answered'),
+          kind: 'end',
+        }),
+      );
+      const id = callId('missed');
+      await invite(id);
+      const notes = (): Array<{ title: string; body: string; call: boolean }> =>
+        callee.asks
+          .filter((a) => a.kind === 'notify')
+          .map((a) => a.args as { title: string; body: string; call: boolean });
+      const before = notes().length;
+      // River's screen closed (Stay connected keeps the core) while it rang; the caller gives up.
+      callee.uiGone();
+      ok(
+        await caller.invoke<Result<unknown>>(IPC.dmAction, {
+          a: 'call',
+          peer: callee.riverId,
+          callId: id,
+          kind: 'end',
+        }),
+      );
+      const note = await until(async () =>
+        notes()
+          .slice(before)
+          .find((n) => n.title.startsWith('Missed')),
+      );
+      // Previews are hidden by default: no name.
+      expect(note).toMatchObject({ title: 'Missed call', call: false });
+      expect(JSON.stringify(note)).not.toContain('Caller');
+      callee.answerAsk('incomingCall', 'ended');
+      const calls = ok(
+        await callee.invoke<Result<Array<{ peer: string; outcome: string; video: boolean }>>>(IPC.dmAction, {
+          a: 'calls',
+        }),
+      );
+      expect(calls.filter((c) => c.peer === caller.riverId && c.outcome === 'missed')).toHaveLength(1);
+    });
+  });
+
+  it('asks the phone to put its audio back to normal when a 1:1 call ends, validated', async () => {
+    const p = await phone('Audio');
+    await p.invoke(IPC.voiceSpeaker, true);
+    await p.invoke(IPC.voiceSpeaker, null);
+    await expect(p.invoke(IPC.voiceSpeaker, 'loud')).rejects.toThrow();
+    expect(p.asks.filter((a) => a.kind === 'speaker' || a.kind === 'callAudio')).toEqual([
+      { kind: 'speaker', args: { on: true } },
+      { kind: 'callAudio', args: { active: false } },
+    ]);
   });
 
   it('checks its connection when the watchdog wakes the phone', async () => {

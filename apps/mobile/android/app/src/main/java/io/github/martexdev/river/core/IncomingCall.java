@@ -3,22 +3,28 @@ package io.github.martexdev.river.core;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.app.Person;
+import androidx.core.content.ContextCompat;
 import java.lang.ref.WeakReference;
 
 /**
  * An incoming 1:1 call ringing like a phone call (2.11): a call notification
  * (Answer / Decline, Android's CallStyle) whose full-screen intent opens
  * {@link IncomingCallActivity} over the lock screen, plus {@link Ringer}.
- * Only while River's own screen is not in front — River's interface rings by
- * itself then. Main thread only; {@link CoreHost} owns the outcome.
+ * The call notification and screen only while River's own screen is not in
+ * front (River's interface shows the call then); {@link Ringer} rings either
+ * way, so a call follows the phone's ringer mode (2.11.3: River's interface
+ * no longer rings by itself on Android). The power button silences it, as on
+ * a phone call. Main thread only; {@link CoreHost} owns the outcome.
  */
 final class IncomingCall {
   static final String CHANNEL = "incoming_calls";
@@ -36,7 +42,11 @@ final class IncomingCall {
   private static String name = "Someone";
   private static boolean video;
   private static boolean showing;
+  /** The power button or a volume button silenced this call: it does not ring again. */
+  private static boolean silenced;
   private static Ringer ringer;
+  /** Hears the power button (the screen turning off) while a call rings. */
+  private static BroadcastReceiver screenOff;
   private static Runnable onTimeout;
   private static WeakReference<IncomingCallActivity> screen = new WeakReference<>(null);
   /** Application context of the call ringing now (for the timeout, which always stops it). */
@@ -97,14 +107,20 @@ final class IncomingCall {
     name = caller == null || caller.isEmpty() ? "Someone" : caller.substring(0, Math.min(caller.length(), 64));
     video = isVideo;
     onTimeout = whenTimedOut;
+    silenced = false;
     main.postDelayed(timeout, RING_MS);
-    if (!foreground) show(context);
+    listenForPowerButton(app);
+    if (foreground) ring(context);
+    else show(context);
   }
 
-  /** River's screen came to the front (it rings by itself) or went away (the phone rings). */
+  /**
+   * River's screen came to the front (its interface shows the call; the phone keeps ringing) or
+   * went away (the call notification and screen show again).
+   */
   static void setForeground(Context context, boolean foreground) {
     if (callId == null) return;
-    if (foreground) hide(context);
+    if (foreground) hideScreen(context);
     else show(context);
   }
 
@@ -112,11 +128,57 @@ final class IncomingCall {
   static void stop(Context context) {
     main.removeCallbacks(timeout);
     onTimeout = null;
-    hide(context);
+    hideScreen(context);
+    if (ringer != null) ringer.stop();
+    stopListening(context.getApplicationContext());
     callId = null;
     letSleep();
     // Also a notification left from an earlier run of River (its process ended while it rang).
     NotificationManagerCompat.from(context).cancel(NOTIFICATION);
+  }
+
+  /** The power button turns the screen off: the ringing goes quiet, the call still rings on. */
+  private static void listenForPowerButton(Context app) {
+    if (screenOff != null) return;
+    BroadcastReceiver r =
+        new BroadcastReceiver() {
+          @Override
+          public void onReceive(Context c, Intent intent) {
+            if (intent != null && Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) silence();
+          }
+        };
+    try {
+      // SCREEN_OFF is a protected broadcast: only the system sends it.
+      ContextCompat.registerReceiver(
+          app, r, new IntentFilter(Intent.ACTION_SCREEN_OFF), ContextCompat.RECEIVER_EXPORTED);
+      screenOff = r;
+    } catch (RuntimeException e) {
+      screenOff = null;
+    }
+  }
+
+  private static void stopListening(Context app) {
+    BroadcastReceiver r = screenOff;
+    screenOff = null;
+    if (r == null) return;
+    try {
+      app.unregisterReceiver(r);
+    } catch (RuntimeException ignored) {
+      // already unregistered
+    }
+  }
+
+  /**
+   * The ringtone and vibration, as the phone's ringer mode allows: also with River's
+   * notifications off (2.11.2), not when the person turned River's call channel down.
+   */
+  private static void ring(Context context) {
+    if (silenced || callId == null) return;
+    if (ringer != null && ringer.ringing()) return;
+    createChannel(context);
+    if (NotificationManagerCompat.from(context).areNotificationsEnabled() && !channelRings(context)) return;
+    if (ringer == null) ringer = new Ringer(context);
+    ringer.start();
   }
 
   private static void keepAwake(Context context) {
@@ -143,9 +205,13 @@ final class IncomingCall {
     }
   }
 
-  /** A volume button: quiet, still on screen. */
-  static void silence() {
+  /** A volume or the power button: quiet, still on screen. True when it was ringing. */
+  static boolean silence() {
+    if (callId == null) return false;
+    boolean was = !silenced && ringer != null && ringer.ringing();
+    silenced = true;
     if (ringer != null) ringer.silence();
+    return was;
   }
 
   static void attach(IncomingCallActivity activity) {
@@ -164,8 +230,7 @@ final class IncomingCall {
       // Notifications are off for River: no call screen can be shown, but the call still rings
       // (2.11.2) — opening River shows it. Silent and vibrate modes and Do Not Disturb still apply.
       showing = true;
-      if (ringer == null) ringer = new Ringer(context);
-      ringer.start();
+      ring(context);
       return;
     }
     Person caller = new Person.Builder().setName(name).setImportant(true).build();
@@ -216,10 +281,7 @@ final class IncomingCall {
       return;
     }
     showing = true;
-    if (channelRings(context)) {
-      if (ringer == null) ringer = new Ringer(context);
-      ringer.start();
-    }
+    ring(context);
   }
 
   /** The person may have turned River's call channel down or off in Android's settings. */
@@ -230,9 +292,9 @@ final class IncomingCall {
     return c == null || c.getImportance() >= NotificationManager.IMPORTANCE_DEFAULT;
   }
 
-  private static void hide(Context context) {
+  /** The call notification and the call screen go; the ringing is {@link #stop}'s. */
+  private static void hideScreen(Context context) {
     showing = false;
-    if (ringer != null) ringer.stop();
     NotificationManagerCompat.from(context).cancel(NOTIFICATION);
     IncomingCallActivity s = screen.get();
     screen = new WeakReference<>(null);

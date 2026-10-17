@@ -30,6 +30,12 @@ export interface RelayEngine {
 }
 
 const SAMPLE_RATE = 48_000;
+/**
+ * While not transmitting (muted, deafened, push-to-talk released), one quiet frame goes out every
+ * this many frames (≈1 s), so the other side still knows we are there (2.11.3: a call whose other
+ * side vanished ends; a muted person has not vanished).
+ */
+const KEEPALIVE_EVERY = 50;
 const OPUS = { codec: 'opus', sampleRate: SAMPLE_RATE, numberOfChannels: 1 } as const;
 
 interface RemoteVoice {
@@ -64,6 +70,7 @@ export class WebCodecsRelay implements RelayEngine {
   private recipients: string[] = [];
   private transmitting = true;
   private seq = 0;
+  private quietFrames = 0;
   private timestamp = 0;
   private readonly remotes = new Map<string, RemoteVoice>();
   private readonly pendingKeys = new Map<string, Uint8Array>();
@@ -196,9 +203,15 @@ export class WebCodecsRelay implements RelayEngine {
     return { key, replay: new ReplayGuard(), decoder, node, out, frames: 0, chain: Promise.resolve() };
   }
 
-  private encode(samples: Float32Array): void {
+  private encode(captured: Float32Array): void {
     if (!this.encoder || this.encoder.state !== 'configured') return;
-    if (!this.transmitting || this.recipients.length === 0) return;
+    if (this.recipients.length === 0) return;
+    let samples = captured;
+    if (!this.transmitting) {
+      // Muted: only now and then, and only silence.
+      if (++this.quietFrames % KEEPALIVE_EVERY !== 0) return;
+      samples = new Float32Array(captured.length);
+    }
     const data = new AudioData({
       format: 'f32-planar',
       sampleRate: SAMPLE_RATE,

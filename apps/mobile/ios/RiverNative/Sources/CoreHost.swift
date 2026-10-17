@@ -250,7 +250,17 @@ public final class CoreHost: NSObject {
         case "notify":
             notify(
                 id: id, title: a["title"] as? String ?? "River", body: a["body"] as? String ?? "",
-                reply: (a["reply"] as? Bool) ?? false, call: (a["call"] as? Bool) ?? false)
+                reply: (a["reply"] as? Bool) ?? false, call: (a["call"] as? Bool) ?? false,
+                tag: a["tag"] as? String)
+        case "notifyClose":
+            // An incoming call stopped ringing: its notification goes (2.11.3).
+            if let tag = a["tag"] as? String, !tag.isEmpty {
+                let center = UNUserNotificationCenter.current()
+                center.removeDeliveredNotifications(withIdentifiers: [tag])
+                center.removePendingNotificationRequests(withIdentifiers: [tag])
+                if let ask = takeNotification(tag) { answer(ask, value: "dismissed") }
+            }
+            answer(id, value: nil)
         case "callState":
             inCall = (a["active"] as? Bool) == true
             if !inCall { earpiece = false }
@@ -262,6 +272,14 @@ public final class CoreHost: NSObject {
             let session = AVAudioSession.sharedInstance()
             let port: AVAudioSession.PortOverride = (a["on"] as? Bool) == true ? .speaker : AVAudioSession.PortOverride.none
             try? session.overrideOutputAudioPort(port)
+            answer(id, value: nil)
+        case "callAudio":
+            // A 1:1 call ended or failed before it was ever on: no loudspeaker left set (2.11.3).
+            if !inCall {
+                earpiece = false
+                updateProximity()
+                try? AVAudioSession.sharedInstance().overrideOutputAudioPort(.none)
+            }
             answer(id, value: nil)
         case "haptic":
             let kind = (a["kind"] as? String) ?? "tap"
@@ -323,7 +341,7 @@ public final class CoreHost: NSObject {
         ]
     }
 
-    private func notify(id: Int, title: String, body: String, reply: Bool, call: Bool) {
+    private func notify(id: Int, title: String, body: String, reply: Bool, call: Bool, tag: String? = nil) {
         let gen = generation
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
@@ -339,7 +357,11 @@ public final class CoreHost: NSObject {
                 content.categoryIdentifier = reply ? CoreHost.replyCategory : CoreHost.plainCategory
                 // An incoming call makes a sound; other notifications stay quiet, as on computers.
                 if call { content.sound = .default }
-                let identifier = UUID().uuidString
+                // A named notification (an incoming call's) can be taken away again by its name.
+                let identifier = (tag?.isEmpty == false) ? tag! : UUID().uuidString
+                if let earlier = self.takeNotification(identifier) {
+                    self.answer(earlier, value: "dismissed")
+                }
                 // Only so many notifications wait for an answer; the oldest stops waiting.
                 while self.notificationOrder.count >= CoreHost.maxPendingNotifications {
                     let oldest = self.notificationOrder.removeFirst()

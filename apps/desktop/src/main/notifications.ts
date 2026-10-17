@@ -5,6 +5,11 @@ import type { CommunityService } from './community/community-service.ts';
 import type { DmService } from './dm/dm-service.ts';
 
 const MAX_KEPT = 100;
+/**
+ * An incoming call's notification waits this long: an invite this device answers "busy" (you are
+ * in another call here) never shows one.
+ */
+const CALL_NOTIFY_DELAY_MS = 300;
 
 /**
  * What a phone needs to show a notification well (2.11); Electron never reads it. `conversation`
@@ -23,6 +28,9 @@ export interface PhoneHints {
 
 const withHints = (n: Notification, hints: PhoneHints): Notification =>
   Object.assign(n, { phoneHints: hints });
+
+/** Names a phone notification so it can be taken away again (an incoming call's; Electron ignores it). */
+const withTag = (n: Notification, tag: string): Notification => Object.assign(n, { phoneTag: tag });
 
 /**
  * Desktop notifications for new community messages while River is not
@@ -69,10 +77,11 @@ export function startMessageNotifications(deps: {
     onReply?: (text: string) => void,
     call = false,
     phone?: PhoneHints,
-  ): void => {
-    if (window.isDestroyed() || window.isFocused() || !Notification.isSupported()) return;
+    tag?: string,
+  ): Notification | null => {
+    if (window.isDestroyed() || window.isFocused() || !Notification.isSupported()) return null;
     // Do Not Disturb or quiet hours: nothing pops up.
-    if (silenced(deps.settings())) return;
+    if (silenced(deps.settings())) return null;
     const notification = new Notification({
       title,
       body,
@@ -82,6 +91,7 @@ export function startMessageNotifications(deps: {
       ...(call ? { urgency: 'critical' as const, timeoutType: 'never' as const } : {}),
     });
     if (phone) withHints(notification, phone);
+    if (tag) withTag(notification, tag);
     if (onReply) {
       notification.on('reply', (_e, reply) => {
         const text = reply.trim();
@@ -98,22 +108,78 @@ export function startMessageNotifications(deps: {
     keep(notification);
     notification.show();
     if (mention) window.flashFrame(true);
+    return notification;
   };
+  /** Incoming-call notifications by call: each goes away when its call stops ringing. */
+  const calls = new Map<string, Notification>();
+  const waiting = new Map<string, ReturnType<typeof setTimeout>>();
+  const closeCall = (callId: string): void => {
+    clearTimeout(waiting.get(callId));
+    waiting.delete(callId);
+    const n = calls.get(callId);
+    calls.delete(callId);
+    try {
+      (n as { close?: () => void } | undefined)?.close?.();
+    } catch {
+      // already gone
+    }
+  };
+  const offRingEnd = deps.dm.onRingEnd?.((end) => {
+    closeCall(end.event.callId);
+    // Nobody answered (or the caller gave up) while River was not in front: say so, as phones do.
+    if (end.how !== 'missed' || end.answeredOnPhone) return;
+    const prefs = deps.settings().notifications;
+    if (!prefs.desktop) return;
+    const peer = end.event.peer;
+    // Previews hidden: no name, on the lock screen or anywhere else.
+    const named = prefs.preview !== 'none';
+    show(
+      named ? `Missed call from ${deps.dm.nameOf(peer)}` : 'Missed call',
+      end.event.video ? 'River video call' : 'River voice call',
+      false,
+      () => deps.dm.focus(peer),
+      undefined,
+      false,
+      {
+        conversation: `missed:${end.event.callId}`,
+        sender: null,
+        group: null,
+        lockScreen: prefs.preview === 'full',
+        wake: false,
+      },
+    );
+  });
   // Direct messages always notify (they are personal), subject to the preview setting.
   const offDm = deps.dm.onEvent((event) => {
-    if (event.t === 'call' && event.kind === 'invite') {
+    if (event.t === 'call') {
+      // Answered, declined, handled elsewhere, ended: its notification goes.
+      if (event.kind !== 'invite') {
+        if (event.kind !== 'signal') closeCall(event.callId);
+        return;
+      }
       // A call rings even while River is in the tray (or closed, on a phone that stays connected).
       if (!deps.settings().notifications.desktop) return;
-      const prefs = deps.settings().notifications;
-      const name = prefs.preview === 'none' ? 'Someone' : deps.dm.nameOf(event.peer);
-      show(
-        `Incoming ${event.video ? 'video ' : ''}call`,
-        `${name} is calling you`,
-        true,
-        () => deps.dm.focus(event.peer),
-        undefined,
-        true,
-      );
+      if (calls.has(event.callId) || waiting.has(event.callId)) return;
+      const callId = event.callId;
+      const timer = setTimeout(() => {
+        waiting.delete(callId);
+        // Answered "busy" here meanwhile, or no longer ringing: no notification.
+        if (deps.dm.ringingCall && deps.dm.ringingCall()?.callId !== callId) return;
+        const prefs = deps.settings().notifications;
+        const name = prefs.preview === 'none' ? 'Someone' : deps.dm.nameOf(event.peer);
+        const n = show(
+          `Incoming ${event.video ? 'video ' : ''}call`,
+          `${name} is calling you`,
+          true,
+          () => deps.dm.focus(event.peer),
+          undefined,
+          true,
+          undefined,
+          `call:${callId}`,
+        );
+        if (n) calls.set(callId, n);
+      }, CALL_NOTIFY_DELAY_MS);
+      waiting.set(callId, timer);
       return;
     }
     if (event.t !== 'message' || !event.isNew || event.message.mine) return;
@@ -194,6 +260,8 @@ export function startMessageNotifications(deps: {
   });
   return () => {
     offDm();
+    offRingEnd?.();
+    for (const callId of [...waiting.keys(), ...calls.keys()]) closeCall(callId);
     offEvents();
     offCommunity();
     shown.clear();

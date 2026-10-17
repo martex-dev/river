@@ -276,7 +276,10 @@ of types are shown inline; everything else is saved only when the user chooses.
   sealed signals. The server forwards frames only between members of the same
   voice channel, caps size and rate, and never stores them. It cannot decrypt,
   alter, reorder or replay frames; it sees who relays to whom, when, and frame
-  sizes. Camera and screen sharing still need a direct connection.
+  sizes. While a person is muted, their app sends one sealed frame of
+  silence about once a second (2.11.3), so the other side knows they are still
+  there; the server could already tell muted from talking by the frame rate.
+  Camera and screen sharing still need a direct connection.
 - **Identity-bound call setup.** Every community call signal is also signed
   with the sender's identity key (XEdDSA) over
   `"river-call-signal-v1" ‖ community ‖ channel ‖ sender ‖ recipient ‖ time ‖ payload`.

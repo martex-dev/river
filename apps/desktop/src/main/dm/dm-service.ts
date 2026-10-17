@@ -50,15 +50,41 @@ import type { LocalDatabase } from '../storage/database.ts';
 
 /** How long a call invite rings (the same as the window's ring timeout). */
 const RING_MS = 45_000;
+/**
+ * Answered on the phone's own call screen (2.11.3): River's window, still opening, may take the
+ * call this long after the answer, even when the ringing itself would have ended by then.
+ */
+const ANSWER_GRACE_MS = 20_000;
 
 /**
  * How a call ended, kept in call_log.answered (so older Rivers still read 1 as answered and
- * anything else as not answered): 0 missed / no answer, 1 answered, 2 declined, 3 failed.
+ * anything else as not answered): 0 missed / no answer, 1 answered, 2 declined, 3 failed, 4 busy.
  */
-const CALL_OUTCOMES: readonly CallOutcome[] = ['missed', 'answered', 'declined', 'failed'];
-const CALL_OUTCOME_CODE: Record<CallOutcome, number> = { missed: 0, answered: 1, declined: 2, failed: 3 };
-/** An answer this recent, for a call logged as never connected, means the call failed after it was answered. */
-const CALL_ANSWER_WINDOW_MS = 10 * 60_000;
+const CALL_OUTCOMES: readonly CallOutcome[] = ['missed', 'answered', 'declined', 'failed', 'busy'];
+const CALL_OUTCOME_CODE: Record<CallOutcome, number> = {
+  missed: 0,
+  answered: 1,
+  declined: 2,
+  failed: 3,
+  busy: 4,
+};
+/**
+ * An answer to a call, for that call logged as never connected, means it failed after it was
+ * answered. Only this long: a call rings 45 s and then has 30 s to connect.
+ */
+const CALL_ANSWER_WINDOW_MS = 3 * 60_000;
+
+/**
+ * How an incoming call stopped ringing on this device: answered, declined or answered busy here,
+ * missed (nobody answered, or the caller gave up), handled on another of your devices, or over
+ * for another reason. `answeredOnPhone`: missed although it was answered on the phone's call
+ * screen (River's window never took the call).
+ */
+export interface RingEnd {
+  event: Extract<DmEvent, { t: 'call' }>;
+  how: 'answered' | 'declined' | 'busy' | 'missed' | 'elsewhere' | 'ended';
+  answeredOnPhone: boolean;
+}
 /** A new bio goes to friends this long after the last change. */
 const BIO_SHARE_DELAY_MS = 5_000;
 
@@ -422,8 +448,15 @@ export class DmService {
   private readonly undelivered = new Map<string, Inbound>();
   /** Scheduled messages being sent right now, and whether they were cancelled meanwhile. */
   private readonly scheduledInFlight = new Map<string, { cancelled: boolean }>();
-  /** When each person last answered a call with us (either side), so an answered call that then failed is not "missed". */
-  private readonly callAnswered = new Map<string, number>();
+  /**
+   * Calls answered (by us, or by the person we called), so an answered call that then failed is
+   * not "missed": by call, and only for the call being made or answered on this device.
+   */
+  private readonly callAnswered = new Map<string, { peer: string; at: number }>();
+  /** The 1:1 call this device made or answered (in memory only), until it ends. */
+  private ownCall: { peer: string; callId: string; outgoing: boolean; answered: boolean; at: number } | null =
+    null;
+  private readonly ringEndListeners = new Set<(end: RingEnd) => void>();
   /** A changed bio goes to friends once typing has settled (not once per save). */
   private bioShareTimer: NodeJS.Timeout | undefined;
 
@@ -449,10 +482,61 @@ export class DmService {
     return () => this.listeners.delete(listener);
   }
 
-  /** Used by notifications: brings a conversation to the front. */
-  /** The call invite ringing right now, if any (in memory only). */
-  private ringing: { event: Extract<DmEvent, { t: 'call' }>; at: number; answer?: boolean } | null = null;
+  /** The call invite ringing right now, if any (in memory only), and until when. */
+  private ringing: {
+    event: Extract<DmEvent, { t: 'call' }>;
+    until: number;
+    answer?: boolean;
+    timer: NodeJS.Timeout;
+  } | null = null;
 
+  /** Hears how each incoming call stopped ringing (notifications, the phone's core). */
+  onRingEnd(listener: (end: RingEnd) => void): () => void {
+    this.ringEndListeners.add(listener);
+    return () => this.ringEndListeners.delete(listener);
+  }
+
+  /** The 1:1 call this device is making or in, if any (for quitting: the other side is told). */
+  currentCall(): { peer: string; callId: string } | null {
+    return this.ownCall ? { peer: this.ownCall.peer, callId: this.ownCall.callId } : null;
+  }
+
+  private liveRinging(): NonNullable<DmService['ringing']> | null {
+    return this.ringing && Date.now() <= this.ringing.until ? this.ringing : null;
+  }
+
+  private startRinging(event: Extract<DmEvent, { t: 'call' }>): void {
+    if (this.ringing) this.endRinging(this.ringing.event.callId, 'ended');
+    const timer = setTimeout(() => this.endRinging(event.callId, 'missed'), RING_MS);
+    timer.unref?.();
+    this.ringing = { event, until: Date.now() + RING_MS, timer };
+  }
+
+  /** The call `callId` stopped ringing here (nothing happens for a call that is not ringing). */
+  private endRinging(callId: string, how: RingEnd['how']): void {
+    const r = this.ringing;
+    if (!r || r.event.callId !== callId) return;
+    clearTimeout(r.timer);
+    this.ringing = null;
+    const end: RingEnd = { event: r.event, how, answeredOnPhone: r.answer === true && how === 'missed' };
+    for (const fn of this.ringEndListeners) {
+      try {
+        fn(end);
+      } catch {
+        // one listener never stops the others
+      }
+    }
+  }
+
+  /** Records that `callId` was answered (answers older than the window are forgotten). */
+  private noteAnswered(peer: string, callId: string): void {
+    const now = Date.now();
+    for (const [id, a] of this.callAnswered)
+      if (now - a.at > CALL_ANSWER_WINDOW_MS) this.callAnswered.delete(id);
+    this.callAnswered.set(callId, { peer, at: now });
+  }
+
+  /** Used by notifications: brings a conversation to the front. */
   focus(peer: string): void {
     this.emit({ t: 'focus', peer });
   }
@@ -1038,10 +1122,48 @@ export class DmService {
           video: content.video ?? false,
           ...(content.data !== undefined ? { data: content.data } : {}),
         };
-        // An invite is remembered while it rings, so a window that opens because of it can show it.
-        if (content.kind === 'invite') this.ringing = { event, at: Date.now() };
-        else if (this.ringing?.event.callId === content.callId) this.ringing = null;
-        if (content.kind === 'accept') this.callAnswered.set(peer, Date.now());
+        if (content.kind === 'invite') {
+          const own = this.ownCall;
+          // Both called each other at once (glare): the call with the lower ID goes on. Ours wins:
+          // this invite is dropped quietly (they answer ours). Theirs wins: it rings, and the
+          // window answers it in place of our own call.
+          if (
+            own?.peer === peer &&
+            own.outgoing &&
+            !own.answered &&
+            Date.now() - own.at < RING_MS &&
+            own.callId < content.callId
+          )
+            return null;
+          const ringing = this.liveRinging();
+          // The same invite again: it already rings.
+          if (ringing?.event.callId === content.callId) return null;
+          if (ringing && ringing.event.peer !== peer) {
+            // Already ringing for someone else: this caller hears "busy", and the call ringing
+            // now keeps ringing (its screen, its sound, its answer).
+            void this.sendContent(peer, { v: 1, t: 'call', callId: content.callId, kind: 'busy' }).catch(
+              (err: unknown) => this.deps.log.warn(`Busy not sent: ${(err as Error).message}`),
+            );
+            return null;
+          }
+          // An invite is remembered while it rings, so a window that opens because of it can show
+          // it. (The same person calling again replaces their earlier call.)
+          this.startRinging(event);
+        } else if (content.kind !== 'signal') {
+          // The caller hung up while it rang: missed. Anything else: it no longer rings.
+          this.endRinging(content.callId, content.kind === 'end' ? 'missed' : 'ended');
+          const own = this.ownCall;
+          if (own?.callId === content.callId && own.peer === peer) {
+            if (content.kind === 'accept' && own.outgoing && !own.answered) {
+              own.answered = true;
+              this.noteAnswered(peer, content.callId);
+            } else if (content.kind === 'end' || !own.answered) {
+              // Ended, or declined / busy before anyone answered. (Another of their devices
+              // declining after one of them answered changes nothing.)
+              this.ownCall = null;
+            }
+          }
+        }
         this.emit(event);
         return null;
       }
@@ -1365,15 +1487,21 @@ export class DmService {
    * window, opening because of it, finds it as `pendingCall` with `answer` and answers it.
    */
   answerRinging(callId: string): boolean {
-    if (!this.ringing || this.ringing.event.callId !== callId || Date.now() - this.ringing.at > RING_MS)
-      return false;
-    this.ringing.answer = true;
+    const ringing = this.liveRinging();
+    if (!ringing || ringing.event.callId !== callId) return false;
+    ringing.answer = true;
+    // River's window takes a moment to open (longer from a locked phone): the answer holds a
+    // little while from now, not only until the ringing would have ended.
+    ringing.until = Math.max(ringing.until, Date.now() + ANSWER_GRACE_MS);
+    clearTimeout(ringing.timer);
+    ringing.timer = setTimeout(() => this.endRinging(callId, 'missed'), ringing.until - Date.now());
+    ringing.timer.unref?.();
     return true;
   }
 
   /** The call ringing now (in memory only), or null. */
   ringingCall(): Extract<DmEvent, { t: 'call' }> | null {
-    return this.ringing && Date.now() - this.ringing.at <= RING_MS ? this.ringing.event : null;
+    return this.liveRinging()?.event ?? null;
   }
 
   nameOf(riverId: string, g?: GroupRow): string {
@@ -1563,7 +1691,7 @@ export class DmService {
     }
     switch (op.t) {
       case 'callHandled': {
-        if (this.ringing?.event.callId === op.callId) this.ringing = null;
+        this.endRinging(op.callId, 'elsewhere');
         this.emit({ t: 'call', peer: conv, callId: op.callId, kind: 'elsewhere', video: false });
         return null;
       }
@@ -1863,9 +1991,20 @@ export class DmService {
           return out(files.sort((a, b) => b.sentAt.localeCompare(a.sentAt)));
         }
         case 'logCall': {
-          // Someone answered (we or they) but the call never connected: it failed, it was not missed.
-          const answeredAt = this.callAnswered.get(act.peer);
-          this.callAnswered.delete(act.peer);
+          // Someone answered this call (we or they) but it never connected: it failed, it was not
+          // missed. Only an answer to this very call counts (by its ID; by person for a window
+          // that does not say which call it was).
+          let answeredAt: number | undefined;
+          if (act.callId) {
+            answeredAt = this.callAnswered.get(act.callId)?.at;
+            this.callAnswered.delete(act.callId);
+          } else {
+            for (const [id, a] of this.callAnswered) {
+              if (a.peer !== act.peer) continue;
+              answeredAt = Math.max(answeredAt ?? 0, a.at);
+              this.callAnswered.delete(id);
+            }
+          }
           const outcome: CallOutcome = act.answered
             ? 'answered'
             : (act.outcome ??
@@ -2218,8 +2357,8 @@ export class DmService {
           this.emitConversations();
           return out(null);
         case 'pendingCall': {
-          const ringing = this.ringing;
-          if (!ringing || Date.now() - ringing.at > RING_MS) return out(null);
+          const ringing = this.liveRinging();
+          if (!ringing) return out(null);
           return out(ringing.answer ? { ...ringing.event, answer: true } : ringing.event);
         }
         case 'safetyNumber': {
@@ -2366,8 +2505,35 @@ export class DmService {
           if (act.peer === this.me() || this.contact(act.peer)?.state !== 'accepted')
             throw new CommunityError('You can only call your contacts.');
           // Answered, declined or ended here: the call no longer rings for a window that opens later.
-          if (act.kind !== 'signal' && act.kind !== 'invite' && this.ringing?.event.callId === act.callId)
-            this.ringing = null;
+          if (act.kind !== 'signal' && act.kind !== 'invite')
+            this.endRinging(
+              act.callId,
+              act.kind === 'accept'
+                ? 'answered'
+                : act.kind === 'decline'
+                  ? 'declined'
+                  : act.kind === 'end'
+                    ? 'ended'
+                    : 'busy',
+            );
+          if (act.kind === 'invite')
+            this.ownCall = {
+              peer: act.peer,
+              callId: act.callId,
+              outgoing: true,
+              answered: false,
+              at: Date.now(),
+            };
+          else if (act.kind === 'accept') {
+            this.ownCall = {
+              peer: act.peer,
+              callId: act.callId,
+              outgoing: false,
+              answered: true,
+              at: Date.now(),
+            };
+            this.noteAnswered(act.peer, act.callId);
+          } else if (act.kind !== 'signal' && this.ownCall?.callId === act.callId) this.ownCall = null;
           await this.sendContent(
             act.peer,
             {
@@ -2384,7 +2550,6 @@ export class DmService {
             // invite would ring there hours later, for a call long over.
             act.kind === 'signal' || act.kind === 'invite',
           );
-          if (act.kind === 'accept') this.callAnswered.set(act.peer, Date.now());
           // Answered or declined here: this account's other devices stop ringing for it.
           if (act.kind === 'accept' || act.kind === 'decline')
             this.syncOp(act.peer, { t: 'callHandled', callId: act.callId });

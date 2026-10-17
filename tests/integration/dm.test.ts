@@ -133,6 +133,16 @@ type Internals = {
 };
 const internals = (p: { dm: DmService }): Internals => p.dm as unknown as Internals;
 
+/**
+ * Call invites travel only to a live connection (never stored, 2.11.2), and these tests have no
+ * sockets: this person's invites go through the mailbox instead, as if the other side were online.
+ */
+function liveInvites(p: { dm: DmService }): void {
+  const i = internals(p);
+  const send = i.sendContent.bind(p.dm);
+  i.sendContent = (peer, content) => send(peer, content, false);
+}
+
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'river-dm-'));
   serverDb = openDatabase('sqlite::memory:');
@@ -842,6 +852,7 @@ describe('direct messages: audit fixes', { timeout: 60_000 }, () => {
       return (await conversationOf(bobPhone, alice.riverId))?.state === 'accepted';
     });
     const callId = 'R'.repeat(22);
+    liveInvites(alice);
     await alice.dm.action({ a: 'call', peer: bob.riverId, callId, kind: 'invite', video: false });
     await bob.dm.sync();
     await bobPhone.dm.sync();
@@ -855,6 +866,148 @@ describe('direct messages: audit fixes', { timeout: 60_000 }, () => {
       return kinds(bobPhone).includes('elsewhere');
     });
     expect(kinds(bobPhone)).not.toContain('end');
+  });
+
+  describe('calls (2.11.3)', () => {
+    const kinds = (p: Person, callId: string) =>
+      p.events.filter((e) => e.t === 'call' && e.callId === callId).map((e) => (e as { kind: string }).kind);
+    const call = (from: Person, to: Person, callId: string, kind: string) =>
+      from.dm.action({ a: 'call', peer: to.riverId, callId, kind, video: false } as never);
+
+    it('a second call while one rings: its caller hears busy, and the first keeps ringing', async () => {
+      const bob = await person('Bob');
+      const alice = await person('Alice');
+      const carol = await person('Carol');
+      await friends(alice, bob);
+      await friends(carol, bob);
+      liveInvites(alice);
+      liveInvites(carol);
+      const ends: string[] = [];
+      bob.dm.onRingEnd((e) => ends.push(`${e.event.callId[0]}:${e.how}`));
+      const first = 'A'.repeat(22);
+      const second = 'B'.repeat(22);
+      await call(alice, bob, first, 'invite');
+      await bob.dm.sync();
+      await call(carol, bob, second, 'invite');
+      await bob.dm.sync();
+      // Carol's call never rang here, and did not replace Alice's.
+      expect(kinds(bob, second)).toEqual([]);
+      expect(await bob.dm.action({ a: 'pendingCall' })).toMatchObject({ callId: first });
+      expect(ends).toEqual([]);
+      await until(async () => {
+        await carol.dm.sync();
+        return kinds(carol, second).includes('busy');
+      });
+      // Alice hangs up while it rings: a missed call, as the history and the notification say.
+      await call(alice, bob, first, 'end');
+      await bob.dm.sync();
+      expect(ends).toEqual(['A:missed']);
+      expect(await bob.dm.action({ a: 'pendingCall' })).toBeNull();
+    });
+
+    it('how a call stopped ringing: answered or declined here, handled on another device', async () => {
+      const bob = await person('Bob');
+      const alice = await person('Alice');
+      await friends(alice, bob);
+      liveInvites(alice);
+      const ends: string[] = [];
+      bob.dm.onRingEnd((e) => ends.push(`${e.event.callId[0]}:${e.how}`));
+      await call(alice, bob, 'C'.repeat(22), 'invite');
+      await bob.dm.sync();
+      await call(bob, alice, 'C'.repeat(22), 'accept');
+      await call(alice, bob, 'D'.repeat(22), 'invite');
+      await bob.dm.sync();
+      await call(bob, alice, 'D'.repeat(22), 'decline');
+      expect(ends).toEqual(['C:answered', 'D:declined']);
+    });
+
+    it('both calling each other at once: only the call with the lower ID rings', async () => {
+      const alice = await person('Alice');
+      const bob = await person('Bob');
+      await friends(alice, bob);
+      liveInvites(alice);
+      liveInvites(bob);
+      const low = 'L'.repeat(22);
+      const high = 'm'.repeat(22);
+      await call(alice, bob, low, 'invite');
+      await call(bob, alice, high, 'invite');
+      await alice.dm.sync();
+      await bob.dm.sync();
+      // Alice's call wins: Bob's never rings at Alice; Alice's rings at Bob (his window answers it).
+      expect(kinds(alice, high)).toEqual([]);
+      expect(kinds(bob, low)).toEqual(['invite']);
+    });
+
+    it('answered on the call screen: the window may take the call a while after the answer', async () => {
+      const bob = await person('Bob');
+      const alice = await person('Alice');
+      await friends(alice, bob);
+      liveInvites(alice);
+      const id = 'E'.repeat(22);
+      await call(alice, bob, id, 'invite');
+      await bob.dm.sync();
+      // The answer comes at the very end of the ringing.
+      const ringing = (bob.dm as unknown as { ringing: { until: number } }).ringing;
+      ringing.until = Date.now() + 500;
+      expect(bob.dm.answerRinging(id)).toBe(true);
+      expect(ringing.until - Date.now()).toBeGreaterThan(15_000);
+      await new Promise((r) => setTimeout(r, 700));
+      expect(await bob.dm.action({ a: 'pendingCall' })).toMatchObject({ callId: id, answer: true });
+    });
+
+    it("a stray or late answer from someone's other device does not turn the next unanswered call into a failed one", async () => {
+      const alice = await person('Alice');
+      const bob = await person('Bob');
+      await friends(alice, bob);
+      // Bob's other device answers a call Alice is not making (late, from the mailbox).
+      await call(bob, alice, 'F'.repeat(22), 'accept');
+      await alice.dm.sync();
+      expect(kinds(alice, 'F'.repeat(22))).toEqual(['accept']);
+      await alice.dm.action({
+        a: 'logCall',
+        peer: bob.riverId,
+        direction: 'in',
+        video: false,
+        answered: false,
+        durationSec: 0,
+        callId: 'G'.repeat(22),
+      });
+      // Alice's own call that Bob answered, then could not connect: failed (by its ID).
+      const mine = 'H'.repeat(22);
+      await call(alice, bob, mine, 'invite');
+      await call(bob, alice, mine, 'accept');
+      await alice.dm.sync();
+      // A second device of Bob's declining after that changes nothing.
+      await call(bob, alice, mine, 'decline');
+      await alice.dm.sync();
+      expect(alice.dm.currentCall()).toEqual({ peer: bob.riverId, callId: mine });
+      await alice.dm.action({
+        a: 'logCall',
+        peer: bob.riverId,
+        direction: 'out',
+        video: false,
+        answered: false,
+        durationSec: 0,
+        callId: mine,
+      });
+      await alice.dm.action({
+        a: 'logCall',
+        peer: bob.riverId,
+        direction: 'out',
+        video: false,
+        answered: false,
+        durationSec: 0,
+        outcome: 'busy',
+      });
+      const calls = await alice.dm.action({ a: 'calls' });
+      expect(calls.map((c) => `${c.direction}:${c.outcome}`).sort()).toEqual([
+        'in:missed',
+        'out:busy',
+        'out:failed',
+      ]);
+      await call(alice, bob, mine, 'end');
+      expect(alice.dm.currentCall()).toBeNull();
+    });
   });
 
   it('linked devices get groups, timers, disappearing copies, edits, reactions, pins, deletes and reads', async () => {

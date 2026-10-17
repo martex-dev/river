@@ -134,6 +134,9 @@ interface PhoneHints {
 export class Notification {
   /** Assigned after construction by notifications.ts; Electron's own Notification ignores it. */
   phoneHints?: PhoneHints;
+  /** Names it, so close() can take it away again (an incoming call's notification). */
+  phoneTag?: string;
+  private shown = false;
   private readonly options: { title: string; body: string; reply: boolean; call: boolean };
   private readonly clicks: ClickListener[] = [];
   private readonly replies: ReplyListener[] = [];
@@ -167,8 +170,10 @@ export class Notification {
     // second, ordinary notification.
     if (this.options.call && phonePlatform() === 'android') return;
     const h = this.phoneHints;
+    this.shown = true;
     const args = {
       ...this.options,
+      ...(this.phoneTag ? { tag: String(this.phoneTag).slice(0, 200) } : {}),
       ...(h
         ? {
             conversation: String(h.conversation).slice(0, 200),
@@ -188,6 +193,12 @@ export class Notification {
       },
       () => undefined,
     );
+  }
+  /** Takes a named notification away (the iPhone shell; Android rings calls with its own screen). */
+  close(): void {
+    if (!this.shown || !this.phoneTag) return;
+    this.shown = false;
+    void ask('notifyClose', { tag: String(this.phoneTag).slice(0, 200) }).catch(() => undefined);
   }
 }
 
