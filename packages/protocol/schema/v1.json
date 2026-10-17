@@ -3479,6 +3479,14 @@
           }
         ]
       },
+      "declines": {
+        "maxItems": 3,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        }
+      },
       "expiresAt": {
         "type": "string",
         "format": "date-time",
