@@ -170,6 +170,32 @@ describe('operator-created accounts and invite-only mode', () => {
     expect(res.statusCode).toBe(409);
   });
 
+  it('the operator can recreate a removed user’s username without waiting out its hold', async () => {
+    await start();
+    const gone = await registerUser(app);
+    await setUsername(gone.token, 'returning');
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: `/v1/admin/accounts/${gone.riverId}`,
+      headers: host,
+    });
+    expect(removed.statusCode).toBe(200);
+    // Held for the removed account: nobody else may take it...
+    const other = await registerUser(app);
+    expect((await setUsername(other.token, 'returning')).statusCode).toBe(409);
+    // ...but the operator may give it out again.
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/signups',
+      headers: host,
+      payload: { username: 'returning' },
+    });
+    expect(res.statusCode).toBe(200);
+    const claimed = await registerWithCode(res.json().code);
+    const me = await app.inject({ method: 'GET', url: '/v1/accounts/me', headers: auth(claimed.token) });
+    expect(me.json().username).toBe('returning');
+  });
+
   it('in invite-only mode, only people with a code can register', async () => {
     await start();
     expect(

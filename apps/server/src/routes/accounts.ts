@@ -267,22 +267,32 @@ export function registerAccountRoutes(
       const me = request.session!.riverId;
       const now = deps.now();
       await purgeSignups(db, now);
-      const current = await db
-        .selectFrom('accounts')
-        .select('username')
-        .where('river_id', '=', me)
-        .executeTakeFirst();
-      if (current?.username !== username) {
-        if (!(await usernameFree(db, username, now, me))) {
-          return fail(reply, 409, 'username_taken', `@${username} is taken. Try another one.`);
-        }
-        try {
-          await db.updateTable('accounts').set({ username }).where('river_id', '=', me).execute();
-        } catch {
-          return fail(reply, 409, 'username_taken', `@${username} is taken. Try another one.`);
-        }
-        // The old name stays ours for a while: nobody else can pick it up and pass as us.
-        if (current?.username) await holdUsername(db, current.username, me, now);
+      // One transaction (2.11.2): the old name is held before the new one is checked and taken,
+      // so there is no moment where someone else can pick up the old name.
+      try {
+        await db.transaction().execute(async (trx) => {
+          const current = await trx
+            .selectFrom('accounts')
+            .select('username')
+            .where('river_id', '=', me)
+            .executeTakeFirst();
+          if (current?.username === username) return;
+          // Taking back a name we gave up: its hold is no longer needed.
+          await trx
+            .deleteFrom('username_holds')
+            .where('username', '=', username)
+            .where('river_id', '=', me)
+            .execute();
+          // The old name stays ours for a while: nobody else can pick it up and pass as us.
+          if (current?.username) await holdUsername(trx, current.username, me, now);
+          if (!(await usernameFree(trx, username, now, me))) {
+            throw new Refusal(409, 'username_taken', `@${username} is taken. Try another one.`);
+          }
+          await trx.updateTable('accounts').set({ username }).where('river_id', '=', me).execute();
+        });
+      } catch (err) {
+        if (err instanceof Refusal) return fail(reply, err.status, err.code, err.message);
+        return fail(reply, 409, 'username_taken', `@${username} is taken. Try another one.`);
       }
       return { username, riverId: me };
     },

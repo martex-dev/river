@@ -139,15 +139,20 @@ export function registerAdminRoutes(
     const { username } = parsed.data;
     const now = deps.now();
     await purgeSignups(db, now);
-    if (!(await usernameFree(db, username, now))) {
+    // The operator may give out a name someone gave up (or a removed account had) without
+    // waiting out its 30-day hold (2.11.2): it is their server.
+    if (!(await usernameFree(db, username, now, undefined, { ignoreHolds: true }))) {
       throw new HttpError(409, 'username_taken', `@${username} is already taken.`);
     }
     const code = randomBytes(16).toString('base64url');
     const expiresAt = new Date(now.getTime() + SIGNUP_TTL_MS).toISOString();
-    await db
-      .insertInto('signups')
-      .values({ code_hash: sha256(code), username, created_at: now.toISOString(), expires_at: expiresAt })
-      .execute();
+    await db.transaction().execute(async (trx) => {
+      await trx.deleteFrom('username_holds').where('username', '=', username).execute();
+      await trx
+        .insertInto('signups')
+        .values({ code_hash: sha256(code), username, created_at: now.toISOString(), expires_at: expiresAt })
+        .execute();
+    });
     return { username, code, expiresAt };
   });
 

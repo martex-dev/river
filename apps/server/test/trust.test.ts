@@ -65,6 +65,42 @@ describe('usernames given up are held for their owner', () => {
       .execute();
     expect((await setUsername(mallory.token, 'alice')).statusCode).toBe(200);
   });
+
+  it('one account holds at most two given-up names (the newest): renaming cannot squat a list', async () => {
+    await start();
+    const squatter = await registerUser(app);
+    const someone = await registerUser(app);
+    for (const name of ['name.one', 'name.two', 'name.three', 'name.four']) {
+      expect((await setUsername(squatter.token, name)).statusCode).toBe(200);
+      clock = new Date(clock.getTime() + 1000);
+    }
+    const holds = await database.db
+      .selectFrom('username_holds')
+      .select('username')
+      .where('river_id', '=', squatter.riverId)
+      .orderBy('username')
+      .execute();
+    expect(holds.map((h) => h.username)).toEqual(['name.three', 'name.two']);
+    expect((await setUsername(someone.token, 'name.one')).statusCode).toBe(200);
+    expect((await setUsername(someone.token, 'name.two')).statusCode).toBe(409);
+  });
+
+  it('taking back a held name releases its hold, and a refused rename holds nothing', async () => {
+    await start();
+    const alice = await registerUser(app);
+    const bob = await registerUser(app);
+    expect((await setUsername(alice.token, 'alice')).statusCode).toBe(200);
+    expect((await setUsername(bob.token, 'bob')).statusCode).toBe(200);
+    // Refused (taken): Alice keeps her name and nothing is held.
+    expect((await setUsername(alice.token, 'bob')).statusCode).toBe(409);
+    const holdsOf = async () =>
+      (await database.db.selectFrom('username_holds').select('username').execute()).map((h) => h.username);
+    expect(await holdsOf()).toEqual([]);
+    expect((await setUsername(alice.token, 'alice.new')).statusCode).toBe(200);
+    expect(await holdsOf()).toEqual(['alice']);
+    expect((await setUsername(alice.token, 'alice')).statusCode).toBe(200);
+    expect(await holdsOf()).toEqual(['alice.new']);
+  });
 });
 
 describe('deleted River IDs', () => {
