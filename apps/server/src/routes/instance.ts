@@ -4,6 +4,7 @@ import { API_PREFIX, beaconMessage, instanceAddressRequestSchema } from '@river/
 import type { ServerConfig } from '../config.ts';
 import type { RiverDatabase } from '../db/database.ts';
 import { requireHost } from '../host-auth.ts';
+import { HttpError } from '../http-error.ts';
 
 /**
  * Who this server is, and where it can be found after its address changes.
@@ -51,6 +52,9 @@ export function registerInstanceRoutes(
 ): void {
   const { config } = deps;
   const instance = loadInstance(deps.database.db);
+  // Awaited by the routes; a database that fails here must not also crash the process as an
+  // unhandled rejection before the first request.
+  instance.catch(() => undefined);
   const publish = deps.fetch ?? fetch;
 
   /** The last public address River Host announced (it is public anyway). */
@@ -71,7 +75,10 @@ export function registerInstanceRoutes(
   const hostToken = config.hostToken;
   app.post(`${API_PREFIX}/instance/address`, async (request) => {
     requireHost(request, hostToken);
-    const { url } = instanceAddressRequestSchema.parse(request.body);
+    // A malformed announcement is the host's mistake (400), not a server failure logged as one.
+    const parsed = instanceAddressRequestSchema.safeParse(request.body);
+    if (!parsed.success) throw new HttpError(400, 'bad_request', 'Bad request');
+    const { url } = parsed.data;
     const i = await instance;
     const issuedAt = deps.now().toISOString();
     const sig = sign(null, beaconMessage(i.id, url, issuedAt), createPrivateKey(i.privateKeyPem)).toString(

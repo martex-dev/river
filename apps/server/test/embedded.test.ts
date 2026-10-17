@@ -27,4 +27,27 @@ describe('startServer', () => {
     }
     await expect(fetch(`http://127.0.0.1:${server.port}/v1/health`)).rejects.toThrow();
   });
+
+  it('lets go of its database and timers when the port is taken, so the caller can try another', async () => {
+    const env = { RIVER_LOG_LEVEL: 'silent', RIVER_ATTACHMENT_DIR: join(dir, 'attachments-busy') };
+    const first = await startServer(
+      loadConfig({ ...env, RIVER_PORT: '0', RIVER_DATABASE_URL: `sqlite:${join(dir, 'first.sqlite')}` }),
+    );
+    const timers = (): number => process.getActiveResourcesInfo().filter((r) => r === 'Timeout').length;
+    const before = timers();
+    try {
+      const busy = join(dir, 'busy.sqlite');
+      await expect(
+        startServer(
+          loadConfig({ ...env, RIVER_PORT: String(first.port), RIVER_DATABASE_URL: `sqlite:${busy}` }),
+        ),
+      ).rejects.toMatchObject({ code: 'EADDRINUSE' });
+      // No garbage-collection or pruning timers left behind by the server that never started.
+      expect(timers()).toBeLessThanOrEqual(before);
+      // The database file is closed: it can be removed at once (an open handle blocks this on Windows).
+      for (const f of [busy, `${busy}-wal`, `${busy}-shm`]) rmSync(f, { force: true });
+    } finally {
+      await first.close();
+    }
+  });
 });

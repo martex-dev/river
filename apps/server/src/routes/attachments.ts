@@ -126,6 +126,11 @@ export async function registerAttachmentRoutes(
         .where('id', '=', parsed.data)
         .executeTakeFirst();
       if (!row) throw new HttpError(404, 'not_found', 'Not found');
+      // The file must be there (and whole) before any header goes out: a missing blob (a disk that
+      // was restored without its attachments folder) is "not found", never a stream that fails
+      // after a binary content type was set, which Fastify then answers with its own error text.
+      const info = await stat(fileOf(row.id)).catch(() => null);
+      if (!info?.isFile() || info.size !== row.size) throw new HttpError(404, 'not_found', 'Not found');
       reply.header('content-type', 'application/octet-stream');
       reply.header('content-length', String(row.size));
       reply.header('cache-control', 'private, max-age=31536000, immutable');

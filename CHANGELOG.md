@@ -6,6 +6,48 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Messages always arrive.** Mail that came in while River was already
+  fetching your mailbox (the connection dropped and came back meanwhile) now
+  arrives at once instead of waiting for the next reconnect.
+- **A message is never posted twice.** When the answer to a send was lost on
+  the way back (a tunnel blip, a timeout) and the message was sent again, it
+  could appear twice in the channel; every attempt now carries the same message
+  ID and a retry recognises the message that already got through.
+- **New conversations keep their one-time keys.** A device that stayed
+  connected for days only topped up its one-time prekeys when it reconnected,
+  so they could run out; River now tops them up shortly after people start
+  conversations with you, and checks them (and rotates its signed prekey)
+  regularly while connected.
+- **Reconnecting just works.** When the network comes back or the computer
+  wakes, a connection that still looks online is asked whether it works and is
+  replaced at once if not (instead of up to a minute of silence). A server that
+  ends every connection right after accepting it is no longer retried every
+  second by every member. River signs in once when many parts of it ask at the
+  same time, instead of using up the server's sign-in limit.
+- **"Offline, trying again" instead of "the server rejected the request"**
+  when a tunnel or proxy answers for a server that is down (502, 503, 504,
+  Cloudflare 52x) or the connection drops while an answer is being read.
+- **Hosting on your PC:** turning hosting off and on while Tailscale was
+  setting up your permanent address no longer stops River from ever trying it
+  again until it restarts; after a crash and a port conflict, the public
+  address (tunnel or Funnel) follows the server to its new port instead of
+  showing "Online" while pointing at the old one; a server process that does
+  not answer no longer keeps hosting from coming up; requests to it time out.
+- **Settings → Hosting no longer says "Switching to your permanent address…"
+  for ever** when Tailscale is signed in but Funnel could not be opened: it
+  says what went wrong and that River keeps trying.
+- **River Host** (`scripts/host`) no longer stops when `cloudflared` is
+  missing or cannot start (it retries and logs it), when a log file cannot be
+  written, or after its server restarts (it tells the server its address
+  again); it announces a new quick-tunnel address once it answers.
+- **Server:** a file whose blob is missing from disk answers "not found"
+  instead of an internal error with Fastify's own text; a PostgreSQL restart
+  or dropped idle connection no longer crashes the server; a server that
+  cannot listen (port taken) closes its database and timers before the app
+  tries another port; a malformed address announcement is a 400, not a 500.
+
 ## [2.11.2] - 2026-10-18
 
 **Calls you can rely on, and the 2.11 review fixed.**
