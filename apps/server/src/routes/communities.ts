@@ -334,6 +334,24 @@ export async function registerCommunityRoutes(
     await trx.updateTable('channels').set({ synced: 0 }).where('id', '=', ch.id).execute();
   };
 
+  /**
+   * A channel moved to `parentId` (2.11.2). Leaving a category (for none, or another one) it keeps
+   * the permissions it had (keepAccess). Moving into a category from none, it is synced to that
+   * category, as older servers did: a channel moved into a private category must not keep its old
+   * public overwrites (that failed open). `synced: false` in the request keeps its own instead.
+   */
+  const moved = async (
+    trx: Transaction<Database>,
+    ch: ChannelModel,
+    parentId: string | null,
+    synced?: boolean,
+  ): Promise<void> => {
+    if (parentId === ch.parentId) return;
+    if (ch.parentId !== null) return keepAccess(trx, ch);
+    if (parentId === null || synced === false) return;
+    await trx.updateTable('channels').set({ synced: 1 }).where('id', '=', ch.id).execute();
+  };
+
   /** Ends everyone's seat in the given voice channels and tells them (channel or community deleted). */
   const endVoice = (channelIds: Iterable<string>): void => {
     for (const channelId of channelIds) {
@@ -715,9 +733,8 @@ export async function registerCommunityRoutes(
     const synced = req.synced !== undefined ? req.synced : req.overwrites ? false : undefined;
     const current = model.channel(channelId)!;
     await db.transaction().execute(async (trx) => {
-      // Moved to another category (or out of one) without new permissions: keep the old ones.
-      if (req.parentId !== undefined && req.parentId !== current.parentId && synced === undefined)
-        await keepAccess(trx, current);
+      // Moved into a category: synced to it (unless synced: false). Out of one: keeps its access.
+      if (req.parentId !== undefined && synced !== true) await moved(trx, current, req.parentId, synced);
       if (synced !== undefined) {
         await trx
           .updateTable('channels')
@@ -1485,7 +1502,7 @@ export async function registerCommunityRoutes(
       }
       for (const c of req.channels) {
         const current = model.channel(c.id)!;
-        if (c.parentId !== current.parentId && c.synced === undefined) await keepAccess(trx, current);
+        if (c.synced !== true) await moved(trx, current, c.parentId, c.synced);
         await trx
           .updateTable('channels')
           .set({
@@ -1557,7 +1574,7 @@ export async function registerCommunityRoutes(
       const order = [...rest.slice(0, at), moving, ...rest.slice(at)];
       if (order.length > 1000) throw bad();
       await db.transaction().execute(async (trx) => {
-        if (moving.parentId !== req.parentId) await keepAccess(trx, moving);
+        await moved(trx, moving, req.parentId);
         for (const [position, c] of order.entries()) {
           if (c === moving) {
             await trx
