@@ -182,6 +182,9 @@ export type LinkHello = z.infer<typeof linkHelloSchema>;
 export const putLinkHelloRequestSchema = z.object({ hello: linkHelloSchema, mac: linkMacSchema }).strict();
 
 /** `GET /v1/link/:id`: what the mailbox holds so far. */
+/** How many declines the server keeps for one link (a bogus one cannot pre-empt the real one). */
+export const MAX_LINK_DECLINES = 3;
+
 export const linkStateResponseSchema = z.object({
   hello: linkHelloSchema.nullable(),
   mac: linkMacSchema.nullable(),
@@ -198,6 +201,12 @@ export const linkStateResponseSchema = z.object({
    * device list again. Older servers never set it.
    */
   declined: linkMacSchema.nullable().optional(),
+  /**
+   * Every decline written so far (2.11.2), at most MAX_LINK_DECLINES: the server cannot check a
+   * MAC, so a bogus one written first must not shut out the new device's real one. `declined` is
+   * the first of them, for older apps. Older servers never set it.
+   */
+  declines: z.array(linkMacSchema).max(MAX_LINK_DECLINES).optional(),
   expiresAt: z.iso.datetime(),
 });
 export type LinkState = z.infer<typeof linkStateResponseSchema>;

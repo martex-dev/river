@@ -189,6 +189,8 @@ beforeEach(async () => {
       RIVER_ATTACHMENT_DIR: join(dir, 'blobs'),
     }),
     database: serverDb,
+    // Stuck rotations are looked for on every request here, not once a minute.
+    rotationRecheckMs: 0,
   });
 });
 

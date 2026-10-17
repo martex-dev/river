@@ -68,8 +68,8 @@ public final class CoreHost {
   /** A random secret per notification, so other apps cannot fake a tap on River's notifications. */
   public static final String EXTRA_NOTIFICATION_TOKEN = "river.notification.token";
   private final Map<Integer, String> notificationTokens = new HashMap<>();
-  /** Message notifications on screen (title, text), kept as plain ones when the core restarts. */
-  private final Map<Integer, String[]> posted = new HashMap<>();
+  /** Message notifications on screen, kept (as plain, generic ones) when the core restarts. */
+  private final java.util.Set<Integer> posted = new java.util.LinkedHashSet<>();
   private final MessageNotifications messages = new MessageNotifications();
   private final java.security.SecureRandom random = new java.security.SecureRandom();
 
@@ -136,7 +136,7 @@ public final class CoreHost {
   /** UI call ids: from here, not per plugin, so a reply never resolves a newer screen's call. */
   private final AtomicInteger nextCallId = new AtomicInteger(1);
   /** River's screen is in front (the core starts in the background until it is). */
-  private boolean foreground = false;
+  private volatile boolean foreground = false;
   /** What the core asked of the screen, given again to the next one. */
   private Boolean screenSecure;
   private boolean pipAllowed;
@@ -305,6 +305,8 @@ public final class CoreHost {
    * renderer, or River closed), its asks go with it, so a tap or a reply can never answer a newer
    * core's ask. The notifications themselves stay on screen: each message notification still
    * showing is posted again as a plain one that opens River (no Reply, which needed the old core).
+   * It says only "New message — open River" (2.11.2): River may have stopped because it was locked
+   * or signed out, and the old text must not stay readable after that.
    * Notification numbers are never reused within the app's process.
    */
   private void clearNotifications() {
@@ -322,8 +324,7 @@ public final class CoreHost {
         // cannot tell which still show: bring none back rather than ones that were swiped away
       }
     }
-    for (Map.Entry<Integer, String[]> e : posted.entrySet()) {
-      int n = e.getKey();
+    for (int n : posted) {
       if (!showing.contains(n) || !mayNotify()) continue;
       Intent open =
           new Intent(context, RiverService.ACTIVITY)
@@ -334,8 +335,8 @@ public final class CoreHost {
       NotificationCompat.Builder b =
           new NotificationCompat.Builder(context, CHANNEL)
               .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
-              .setContentTitle(e.getValue()[0])
-              .setContentText(e.getValue()[1])
+              .setContentTitle("River")
+              .setContentText("New message — open River")
               .setAutoCancel(true)
               .setOnlyAlertOnce(true)
               .setSilent(true)
@@ -356,6 +357,19 @@ public final class CoreHost {
     posted.clear();
   }
 
+  /**
+   * Signed out, or this account was removed (2.11.2): the message notifications of the account
+   * go away entirely instead of staying readable. The core stops waiting for them.
+   */
+  private void dropMessageNotifications() {
+    NotificationManagerCompat nm = NotificationManagerCompat.from(context);
+    for (int n : new ArrayList<>(posted)) {
+      nm.cancel(n);
+      expire(n);
+    }
+    posted.clear();
+  }
+
   // ---- UI → core ----
 
   public void invoke(int id, String json) {
@@ -364,6 +378,11 @@ public final class CoreHost {
 
   public void send(String json) {
     run("__riverCore.send(" + JSONObject.quote(json) + ")");
+  }
+
+  /** River's screen is in front: activities may open (Android blocks them from the background). */
+  public boolean isForeground() {
+    return foreground;
   }
 
   public void lifecycle(boolean foreground) {
@@ -719,6 +738,11 @@ public final class CoreHost {
         case "notify":
           notify(id, a);
           break;
+        case "clearNotifications":
+          // Signed out or the account was removed (2.11.2).
+          dropMessageNotifications();
+          answer(id, (Object) null);
+          break;
         case "incomingCall":
           {
             // Rings like a phone call until answered, declined, or it stops ringing (2.11).
@@ -954,18 +978,9 @@ public final class CoreHost {
       answer(ask, (Object) "denied");
       return;
     }
-    // Only so many notifications wait for an answer; the oldest stops waiting.
-    Iterator<Map.Entry<Integer, Integer>> oldest = notificationAsks.entrySet().iterator();
-    while (notificationAsks.size() >= MAX_PENDING_NOTIFICATIONS && oldest.hasNext()) {
-      Map.Entry<Integer, Integer> e = oldest.next();
-      int stale = e.getKey();
-      int staleAsk = e.getValue();
-      oldest.remove();
-      notificationTokens.remove(stale);
-      answer(staleAsk, (Object) "dismissed");
-    }
     // One notification per conversation (2.11): a new message replaces it, and the core stops
-    // waiting for the one it replaces (tapping either opens the same conversation).
+    // waiting for the one it replaces (tapping either opens the same conversation). Reused before
+    // anything is evicted (2.11.2): replacing one adds nothing.
     Integer same = call ? null : messages.idOf(conversation);
     int n;
     if (same != null) {
@@ -974,6 +989,18 @@ public final class CoreHost {
       Integer replaced = notificationAsks.remove(n);
       if (replaced != null) answer(replaced, (Object) "dismissed");
     } else {
+      // Only so many notifications wait for an answer; the oldest stops waiting, and is forgotten
+      // (its conversation's next message starts a new one; a core restart does not post it again).
+      Iterator<Map.Entry<Integer, Integer>> oldest = notificationAsks.entrySet().iterator();
+      while (notificationAsks.size() >= MAX_PENDING_NOTIFICATIONS && oldest.hasNext()) {
+        Map.Entry<Integer, Integer> e = oldest.next();
+        int stale = e.getKey();
+        int staleAsk = e.getValue();
+        oldest.remove();
+        notificationTokens.remove(stale);
+        forget(stale);
+        answer(staleAsk, (Object) "dismissed");
+      }
       n = nextNotification++;
     }
     notificationAsks.put(n, ask);
@@ -1052,7 +1079,7 @@ public final class CoreHost {
       return;
     }
     if (call) return;
-    posted.put(n, new String[] {title, body});
+    posted.add(n);
     // Settings → System → Light up the screen for new messages (Android, on by default).
     if (a.optBoolean("wake", false)) MessageNotifications.wake(context, CHANNEL);
   }

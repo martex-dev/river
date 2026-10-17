@@ -448,7 +448,11 @@ describe('linking, carefully', { timeout: 60_000 }, () => {
     expect(forged.statusCode).toBe(200);
     await new Promise((r) => setTimeout(r, 500));
     expect((await desktop.link.devices()).map((d) => d.deviceId)).toEqual([1, 2]);
+    // The forged "no" did not end the watch: the phone's real one still takes it off (2.11.2).
+    await until(() => phone.link.status().state === 'review');
     phone.link.cancel();
+    await until(async () => (await desktop.link.devices()).length === 1);
+    expect((await desktop.link.devices()).map((d) => d.deviceId)).toEqual([1]);
   });
 
   it('pressing “Link a new device” twice shows one working code, and Link it twice links once', async () => {

@@ -1,5 +1,56 @@
+import { existsSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { IDLE_MS, shouldAutoInstall, type AutoInstallState } from '../src/main/updater/auto-install.ts';
+import {
+  HIDDEN_MARKER_MAX_AGE_MS,
+  IDLE_MS,
+  autoInstallAllowed,
+  installWithHiddenMarker,
+  shouldAutoInstall,
+  takeHiddenMarker,
+  type AutoInstallState,
+} from '../src/main/updater/auto-install.ts';
+
+describe('the start-hidden-after-update marker', () => {
+  const marker = (): string => join(mkdtempSync(join(tmpdir(), 'river-hidden-')), 'marker');
+
+  it('installs a manually downloaded verified update too: only the install toggle decides', () => {
+    expect(autoInstallAllowed({ installOnQuit: true })).toBe(true);
+    expect(autoInstallAllowed({ installOnQuit: false })).toBe(false);
+  });
+  it('is kept when the install starts from the tray, and taken once', () => {
+    const m = marker();
+    expect(installWithHiddenMarker(m, true, () => true)).toBe(true);
+    expect(takeHiddenMarker(m)).toBe(true);
+    expect(takeHiddenMarker(m)).toBe(false);
+  });
+  it('is removed when the install is refused, so the next launch shows the window', () => {
+    const m = marker();
+    expect(installWithHiddenMarker(m, true, () => false)).toBe(false);
+    expect(existsSync(m)).toBe(false);
+    const thrown = marker();
+    expect(() =>
+      installWithHiddenMarker(thrown, true, () => {
+        throw new Error('boom');
+      }),
+    ).toThrow();
+    expect(existsSync(thrown)).toBe(false);
+  });
+  it('is not written when River was on screen', () => {
+    const m = marker();
+    installWithHiddenMarker(m, false, () => true);
+    expect(existsSync(m)).toBe(false);
+  });
+  it('a stale marker (a silent install that failed) is ignored and removed', () => {
+    const m = marker();
+    writeFileSync(m, '1');
+    const old = (Date.now() - HIDDEN_MARKER_MAX_AGE_MS - 60_000) / 1000;
+    utimesSync(m, old, old);
+    expect(takeHiddenMarker(m)).toBe(false);
+    expect(existsSync(m)).toBe(false);
+  });
+});
 
 const base: AutoInstallState = {
   ready: true,

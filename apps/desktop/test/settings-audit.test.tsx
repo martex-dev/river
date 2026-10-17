@@ -131,6 +131,32 @@ describe('Settings overlay', () => {
     expect(useRiver.getState().settingsTab).toBeNull();
   });
 
+  it('keeps unsaved profile edits when Settings is left without asking (answering a call, Details)', async () => {
+    const confirm = vi.spyOn(window, 'confirm');
+    useRiver.setState({ settingsTab: 'profile' });
+    const { rerender } = render(<SettingsOverlay />);
+    fireEvent.change(await screen.findByDisplayValue('Al'), { target: { value: 'Alice' } });
+    await waitFor(() => expect(useRiver.getState().settingsDirty).toBe(true));
+    // Answering a call navigates to Messages: never blocked by a question.
+    act(() => useRiver.getState().navigate('messages'));
+    rerender(<SettingsOverlay />);
+    expect(useRiver.getState().settingsTab).toBeNull();
+    expect(confirm).not.toHaveBeenCalled();
+    act(() => useRiver.getState().openSettings('profile'));
+    rerender(<SettingsOverlay />);
+    expect(await screen.findByDisplayValue('Alice')).toBeTruthy();
+    await waitFor(() => expect(useRiver.getState().settingsDirty).toBe(true));
+    // An update's Details button switches tabs: the edits come back again.
+    act(() => useRiver.getState().openSettings('updates'));
+    act(() => useRiver.getState().openSettings('profile'));
+    expect(await screen.findByDisplayValue('Alice')).toBeTruthy();
+    // "Leave without saving" through Settings itself drops them.
+    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
+    act(() => useRiver.getState().openSettings('profile'));
+    expect(await screen.findByDisplayValue('Al')).toBeTruthy();
+  });
+
   it('lets the profile be saved without a display name, once at a time', async () => {
     let finish: (v: unknown) => void = () => undefined;
     const action = vi.fn(() => new Promise((r) => (finish = r)));

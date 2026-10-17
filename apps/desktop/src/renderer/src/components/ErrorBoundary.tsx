@@ -4,6 +4,12 @@ interface Props {
   children: ReactNode;
   /** Shown in the message: "Messages could not be shown". Without it, the whole window failed. */
   area?: string;
+  /**
+   * What is shown inside (the section and the community, channel or conversation picked there).
+   * When it changes, a crash screen goes away and the new view is drawn (2.11.2), without
+   * remounting the page while nothing went wrong.
+   */
+  resetKey?: string;
 }
 
 interface State {
@@ -23,6 +29,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error('River could not draw part of its window:', error, info.componentStack);
+  }
+
+  override componentDidUpdate(prev: Props): void {
+    if (this.state.error && prev.resetKey !== this.props.resetKey) this.setState({ error: null });
   }
 
   override render(): ReactNode {

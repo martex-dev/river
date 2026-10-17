@@ -1,8 +1,7 @@
-import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { app } from 'electron';
 import { channelOfVersion } from '@river/release/channels';
-import type { AppInfo, HostStatus } from '../../desktop/src/shared/ipc.ts';
+import type { AccountStatus, AppInfo, HostStatus } from '../../desktop/src/shared/ipc.ts';
 import type { DmEvent } from '../../desktop/src/shared/dm.ts';
 import { CommunityService } from '../../desktop/src/main/community/community-service.ts';
 import { ServerLocator } from '../../desktop/src/main/community/server-locator.ts';
@@ -50,6 +49,8 @@ import {
   uiPresent,
 } from './host.ts';
 import { phonePlatform } from './platform.ts';
+import { accountGone } from './account-gone.ts';
+import { isFreshInstall } from './fresh-install.ts';
 import { AndroidUpdateService, CHECK_INTERVAL_MS, FIRST_CHECK_DELAY_MS } from './updater.ts';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import { parseDeepLink } from '../../desktop/src/main/deep-link.ts';
@@ -148,12 +149,12 @@ let lastActive = Date.now();
 async function start(): Promise<void> {
   await cryptoReady;
   const userData = app.getPath('userData');
+  // A new install: nothing of River on this phone yet. Checked before the logger writes `logs`.
+  const freshInstall = isFreshInstall(userData);
   const log = createFileLogger(join(userData, 'logs'));
   log.info(`River ${app.getVersion()} starting on ${PLATFORM}`);
 
   const settingsPath = join(userData, 'settings.json');
-  // A new install: nothing of River on this phone yet (no settings, no encrypted storage).
-  const freshInstall = !existsSync(settingsPath) && !existsSync(join(userData, 'data'));
   const settings = new SettingsStore(settingsPath, log);
   // Android (2.11): a new install stays connected, so messages and calls reach you while River is
   // closed (a visible "River is connected" notification shows meanwhile; Settings → System turns it
@@ -421,7 +422,12 @@ async function start(): Promise<void> {
   storage.onStatus((s) => {
     if (s.state === 'open') void connectAll();
   });
+  let lastAccount: AccountStatus | null = account.status();
   account.onStatus((s) => {
+    // Signed out or removed: the account's message notifications go away (Android shell).
+    if (PLATFORM === 'android' && accountGone(lastAccount, s))
+      void ask('clearNotifications', {}).catch(() => undefined);
+    lastAccount = s;
     if (s.state === 'registered' && s.connection === 'online') community.ensureSocket();
   });
   // Coming back to the app (or the network returning): reconnect now rather than after the backoff.

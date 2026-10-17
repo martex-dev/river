@@ -2,7 +2,13 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FeedView, PostView } from '../src/shared/social.ts';
-import { Composer, ProfileModal, StoryViewer, type StoryAt } from '../src/renderer/src/pages/SocialPage.tsx';
+import {
+  Composer,
+  ProfileModal,
+  STORY_STALL_MS,
+  StoryViewer,
+  type StoryAt,
+} from '../src/renderer/src/pages/SocialPage.tsx';
 import { useSocial } from '../src/renderer/src/social/store.ts';
 
 const story = (id: string, author: string, over: Partial<PostView> = {}): PostView => ({
@@ -187,6 +193,52 @@ describe('story viewer', () => {
     expect(video.muted).toBe(true);
     expect(video.hasAttribute('playsinline')).toBe(true);
     fireEvent.ended(video);
+    expect(onMove).toHaveBeenCalledWith({ riverId: 'alice', storyId: 'a2', index: 1 });
+  });
+
+  it('a video whose metadata never loads does not freeze the viewer', async () => {
+    vi.useFakeTimers();
+    const onMove = vi.fn();
+    render(
+      <Viewer
+        feed={feedOf([
+          group('alice', [story('a1', 'alice', { attachments: [pointer('v1')] }), story('a2', 'alice')]),
+        ])}
+        at={{ riverId: 'alice', storyId: 'a1', index: 0 }}
+        onMove={onMove}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STORY_STALL_MS - 500);
+    });
+    expect(onMove).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(onMove).toHaveBeenCalledWith({ riverId: 'alice', storyId: 'a2', index: 1 });
+  });
+
+  it('a video this device refuses to play is shown for a picture’s time', async () => {
+    HTMLMediaElement.prototype.play = () => Promise.reject(new Error('NotAllowedError'));
+    vi.useFakeTimers();
+    const onMove = vi.fn();
+    render(
+      <Viewer
+        feed={feedOf([
+          group('alice', [story('a1', 'alice', { attachments: [pointer('v1')] }), story('a2', 'alice')]),
+        ])}
+        at={{ riverId: 'alice', storyId: 'a1', index: 0 }}
+        onMove={onMove}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    const video = document.querySelector('.story-viewer__content video')!;
+    fireEvent.loadedMetadata(video);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6100);
+    });
     expect(onMove).toHaveBeenCalledWith({ riverId: 'alice', storyId: 'a2', index: 1 });
   });
 

@@ -180,6 +180,15 @@ export function App(): ReactElement {
   const community = useCommunity((c) => c.communities.find((x) => x.id === c.selectedCommunity));
   const communityStart = useRiver((r) => r.communityStart);
   const noCommunities = useCommunity((c) => c.loaded && c.communities.length === 0);
+  // A crashed page is drawn again when you pick another community, channel or conversation.
+  const viewKey = useCommunity((c) => `${c.selectedCommunity ?? ''}/${c.selectedChannel ?? ''}`);
+  const dmPeer = useDm((d) => d.selected);
+  const pageKey =
+    section === 'communities'
+      ? `communities:${viewKey}`
+      : section === 'messages'
+        ? `messages:${dmPeer ?? ''}`
+        : section;
   // "Create or join a community" keeps the Home column, so you (and Settings) stay at the bottom left.
   const homeColumn = inHome || (section === 'communities' && (communityStart || noCommunities));
 
@@ -257,7 +266,7 @@ export function App(): ReactElement {
             )}
           </div>
           {/* One page crashing replaces only that page; the rail, calls and dialogs keep working. */}
-          <ErrorBoundary area={t(LABELS[section])}>
+          <ErrorBoundary area={t(LABELS[section])} resetKey={pageKey}>
             {(section === 'home' || section === 'contacts') && <FriendsPage />}
             {section === 'communities' && <CommunitiesPage />}
             {section === 'messages' && <MessagesPage />}
