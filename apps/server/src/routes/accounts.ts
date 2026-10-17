@@ -484,10 +484,11 @@ export function registerAccountRoutes(
   const MAX_OPEN_PER_IP = 3;
   /**
    * Throwaway accounts must not use up the slots: an account made today may reserve two at a
-   * time, and one network address at most a few in all (2.11).
+   * time, and one network address at most some in all (2.11). Many people can share one address
+   * (a carrier's CGNAT, a school), so that cap is 20 (2.11.2); MAX_LINKS bounds the total.
    */
   const MAX_RESERVED_NEW_ACCOUNT = 2;
-  const MAX_RESERVED_PER_IP = 6;
+  const MAX_RESERVED_PER_IP = 20;
   const sweep = (): void => {
     const t = deps.now().getTime();
     for (const [id, l] of links) if (l.expires <= t) links.delete(id);
@@ -526,25 +527,29 @@ export function registerAccountRoutes(
       const isNew = !account || account.created_on >= day(deps.now());
       const cap = isNew ? MAX_RESERVED_NEW_ACCOUNT : MAX_RESERVED_PER_ACCOUNT;
       const mine = [...links.entries()].filter(([, l]) => l.reservedBy === riverId);
+      // Trying again: the oldest code nobody answered yet gives way; otherwise wait. It goes only
+      // once every other check passed (2.11.2): a refused request must not destroy the code the
+      // user is still showing.
+      let evict: string | null = null;
       if (mine.length >= cap) {
-        // Trying again: the oldest code nobody answered yet gives way; otherwise wait.
         const unused = mine
           .filter(([, l]) => l.hello === null)
           .sort((a, b) => a[1].expires - b[1].expires)[0];
         if (!unused) {
           return fail(reply, 429, 'too_many_links', 'Finish or cancel the devices you are already linking');
         }
-        links.delete(unused[0]);
+        evict = unused[0];
       }
-      const fromHere = [...links.values()].filter(
-        (l) => l.reservedBy !== null && l.openedBy === request.ip,
+      const fromHere = [...links.entries()].filter(
+        ([key, l]) => key !== evict && l.reservedBy !== null && l.openedBy === request.ip,
       ).length;
       if (fromHere >= MAX_RESERVED_PER_IP) {
         return fail(reply, 429, 'too_many_links', 'Too many devices are being linked from here right now');
       }
-      if (links.size >= MAX_LINKS) {
+      if (links.size - (evict ? 1 : 0) >= MAX_LINKS) {
         return fail(reply, 503, 'busy', 'Too many devices are being linked right now');
       }
+      if (evict) links.delete(evict);
       const l: PendingLink = {
         reservedBy: riverId,
         // Remembered for the per-address cap only (in memory, gone with the slot).
