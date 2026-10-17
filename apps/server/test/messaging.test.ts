@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -311,6 +312,33 @@ describe('abuse limits', () => {
     const over = await upload();
     expect(over.statusCode).toBe(413);
     expect(over.json().error.code).toBe('quota_exceeded');
+  });
+
+  it('answers 404 (in River’s error format) for a file whose blob is gone from disk', async () => {
+    const blobs = join(tmpdir(), `river-blobs-${Math.random().toString(36).slice(2)}`);
+    await custom({ RIVER_ATTACHMENT_DIR: blobs });
+    const alice = await client(app);
+    const up = await app.inject({
+      method: 'POST',
+      url: '/v1/attachments',
+      headers: { ...auth(alice.token), 'content-type': 'application/octet-stream' },
+      payload: Buffer.alloc(16 + 64 + 32),
+    });
+    const { id } = up.json() as { id: string };
+    expect(
+      (await app.inject({ method: 'GET', url: `/v1/attachments/${id}`, headers: auth(alice.token) }))
+        .statusCode,
+    ).toBe(200);
+    // A data folder restored without its attachments: the row is there, the blob is not.
+    rmSync(join(blobs, id));
+    const gone = await app.inject({
+      method: 'GET',
+      url: `/v1/attachments/${id}`,
+      headers: auth(alice.token),
+    });
+    expect(gone.statusCode).toBe(404);
+    expect(gone.json()).toEqual({ error: { code: 'not_found', message: 'Not found' } });
+    expect(gone.body).not.toContain('FST_');
   });
 });
 

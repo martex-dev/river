@@ -2,7 +2,7 @@ import type { Writable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import { buildApp, SERVER_VERSION } from './app.ts';
 import type { ServerConfig } from './config.ts';
-import { migrateToLatest, openDatabase } from './db/database.ts';
+import { migrateToLatest, openDatabase, type RiverDatabase } from './db/database.ts';
 
 export { loadConfig, ConfigError, type ServerConfig } from './config.ts';
 export { SERVER_VERSION };
@@ -27,18 +27,31 @@ export async function startServer(
   options: { logStream?: Writable } = {},
 ): Promise<RunningServer> {
   const database = openDatabase(config.databaseUrl);
-  const migrated = await migrateToLatest(database.db);
-  const app = await buildApp({
-    config,
-    database,
-    ...(options.logStream ? { logStream: options.logStream } : {}),
-  });
-  const applied = migrated.results?.filter((r) => r.status === 'Success').map((r) => r.migrationName) ?? [];
-  app.log.info(
-    { version: SERVER_VERSION, dialect: database.dialect, migrationsApplied: applied },
-    'River server starting',
-  );
-  await app.listen({ host: config.host, port: config.port });
+  let app: FastifyInstance | null = null;
+  try {
+    const migrated = await migrateToLatest(database.db);
+    app = await buildApp({
+      config,
+      database,
+      ...(options.logStream ? { logStream: options.logStream } : {}),
+    });
+    const applied = migrated.results?.filter((r) => r.status === 'Success').map((r) => r.migrationName) ?? [];
+    app.log.info(
+      { version: SERVER_VERSION, dialect: database.dialect, migrationsApplied: applied },
+      'River server starting',
+    );
+    await app.listen({ host: config.host, port: config.port });
+  } catch (err) {
+    // The port is taken (or a migration failed): let go of the database and every timer before
+    // the caller tries again on another port, so the old handle does not keep the file open.
+    await app?.close().catch(() => undefined);
+    await database.close().catch(() => undefined);
+    throw err;
+  }
+  return running(app, database, config);
+}
+
+function running(app: FastifyInstance, database: RiverDatabase, config: ServerConfig): RunningServer {
   const address = app.server.address();
   const port = typeof address === 'object' && address ? address.port : config.port;
   let closed = false;
