@@ -60,6 +60,39 @@
             android:name=".core.NotificationReplyReceiver"
             android:exported="false" />
 
+        <!-- Incoming calls (2.11): the call screen over the lock screen, opened only by River's own
+             call notification. Its own task, so declining returns to what was on screen. -->
+        <activity
+            android:name=".core.IncomingCallActivity"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
+
+        <!-- Decline on an incoming call's notification (River's own notification only). -->
+        <receiver
+            android:name=".core.CallActionReceiver"
+            android:exported="false" />
+
+        <!-- Stay connected: checks the connection every ~15 minutes with the screen off (2.11). -->
+        <receiver
+            android:name=".core.Watchdog"
+            android:exported="false" />
+
+        <!-- Stay connected starts again after a restart of the phone or an update of River. -->
+        <receiver
+            android:name=".core.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Calls and voice channels keep running with the screen off (an "In a call" notification). -->
         <service
             android:name=".core.CallService"
@@ -95,6 +128,15 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- Incoming calls fill the screen when the phone is locked, like any calling app. -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- Incoming calls vibrate while they ring (2.11). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- A new message may light up a dark screen for a few seconds (Settings → System; Android 14+). -->
+    <uses-permission android:name="android.permission.TURN_SCREEN_ON" />
+    <!-- Stay connected: start again after the phone restarts (only when it is on). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Stay connected: Android's own question "Let River always run in the background?" (asked only
+         after River explains why; River never changes this by itself). -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
