@@ -110,8 +110,12 @@ function fakeShell(o: ShellOptions) {
           installed: o.installed ?? { current: [CERT_A], history: [CERT_A] },
           apk: o.apk === undefined ? { current: [CERT_A], history: [CERT_A] } : o.apk,
         } as T;
-      case 'update.install':
-        return (installs.shift() ?? { status: 'success' }) as T;
+      case 'update.install': {
+        const next = installs.shift() ?? { status: 'success' };
+        // Android's confirmation never came up (River was in the background): no answer.
+        if (next.status === 'no-answer') return new Promise<T>(() => undefined);
+        return next as T;
+      }
       default:
         throw new Error(`unexpected ask ${kind}`);
     }
@@ -140,6 +144,7 @@ function service(
     trustedKeys: trusted,
     log: nullLogger,
     progressMs: 5,
+    installWaitMs: 50,
   });
   const states: UpdateStatus[] = [];
   s.onStatus((st) => states.push(st));
@@ -301,6 +306,21 @@ describe('Android updater: the whole update', () => {
     expect(s.getStatus()).toEqual({ state: 'ready', version: '2.11.0' });
     await s.install();
     expect(s.getStatus()).toEqual({ state: 'installing', version: '2.11.0' });
+  });
+
+  it('is ready to install again when Android never answers (its confirmation could not open)', async () => {
+    const { pem, trusted } = releaseKey();
+    const r = stableRelease('2.11.0', pem);
+    const shell = fakeShell({ urls: r.urls, install: [{ status: 'no-answer' }, { status: 'success' }] });
+    const { s } = service(shell, trusted);
+    expect(await s.check()).toEqual({ state: 'ready', version: '2.11.0' });
+    void s.install();
+    expect(s.getStatus()).toEqual({ state: 'installing', version: '2.11.0' });
+    await new Promise((done) => setTimeout(done, 120));
+    expect(s.getStatus()).toEqual({ state: 'ready', version: '2.11.0' });
+    // Tapping Install again tries again.
+    await s.install();
+    expect(shell.asks.filter((a) => a.kind === 'update.install')).toHaveLength(2);
   });
 
   it('keeps the 32-bit APK for a phone that runs it', async () => {

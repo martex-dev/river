@@ -187,7 +187,15 @@ export interface AndroidUpdaterDeps {
   now?: () => Date;
   /** How often download progress is asked for. */
   progressMs?: number;
+  /** How long "installing" waits for Android's answer before Install can be tapped again. */
+  installWaitMs?: number;
 }
+
+/**
+ * Android may never answer an install (2.11.2): its confirmation could not open (River was in the
+ * background) or was left behind a notification. After this long the update shows as ready again.
+ */
+export const INSTALL_WAIT_MS = 2 * 60 * 1000;
 
 const BUSY = new Set<UpdateStatus['state']>(['checking', 'downloading', 'verifying', 'installing', 'ready']);
 
@@ -290,12 +298,19 @@ export class AndroidUpdateService {
     const { version, path } = ready;
     this.deps.log.info(`Installing verified update ${version}`);
     this.setStatus({ state: 'installing', version });
+    const waiting = setTimeout(() => {
+      if (run !== this.installRun || this.status.state !== 'installing') return;
+      this.deps.log.warn(`No answer from Android's installer for ${version}: ready to try again`);
+      this.setStatus({ state: 'ready', version });
+    }, this.deps.installWaitMs ?? INSTALL_WAIT_MS);
     let answer: InstallAnswer | null;
     try {
       answer = await this.deps.ask<InstallAnswer | null>('update.install', { path });
     } catch (err) {
       if (run === this.installRun) this.fail(err, 'install-failed');
       return;
+    } finally {
+      clearTimeout(waiting);
     }
     // Tapped again meanwhile: the newer attempt decides.
     if (run !== this.installRun) return;

@@ -136,7 +136,7 @@ public final class CoreHost {
   /** UI call ids: from here, not per plugin, so a reply never resolves a newer screen's call. */
   private final AtomicInteger nextCallId = new AtomicInteger(1);
   /** River's screen is in front (the core starts in the background until it is). */
-  private boolean foreground = false;
+  private volatile boolean foreground = false;
   /** What the core asked of the screen, given again to the next one. */
   private Boolean screenSecure;
   private boolean pipAllowed;
@@ -364,6 +364,11 @@ public final class CoreHost {
 
   public void send(String json) {
     run("__riverCore.send(" + JSONObject.quote(json) + ")");
+  }
+
+  /** River's screen is in front: activities may open (Android blocks them from the background). */
+  public boolean isForeground() {
+    return foreground;
   }
 
   public void lifecycle(boolean foreground) {
