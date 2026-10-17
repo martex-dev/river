@@ -104,6 +104,10 @@ const SESSION_RECHECK_MS = 5 * 60_000;
 const ROTATION_ADOPT_MS = 10 * 60_000;
 /** How often a rotation that reached nobody is asked for again before the server gives up. */
 const ROTATION_MAX_RETRIES = 3;
+/** Stuck rotations are looked for at most this often per process (2.11.2). */
+const ROTATION_RECHECK_MS = 60_000;
+/** How long the server remembers that a member used River (for stuck rotations). */
+const ACTIVE_MEMORY_MS = 24 * 60 * 60_000;
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 const day = (d: Date): string => d.toISOString().slice(0, 10);
@@ -142,6 +146,8 @@ export async function registerCommunityRoutes(
     sessionRecheckMs?: number;
     /** How long a claimed key epoch may go unreported before it is asked for again (tests shorten it). */
     rotationAdoptMs?: number;
+    /** How often stuck rotations are looked for at most (tests set 0). */
+    rotationRecheckMs?: number;
   },
 ): Promise<CommunityOps> {
   const { db } = deps.database;
@@ -149,6 +155,8 @@ export async function registerCommunityRoutes(
   const sessionRecheckMs = deps.sessionRecheckMs ?? SESSION_RECHECK_MS;
   await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
 
+  /** When each member last made a request here, in memory only (ms). */
+  const lastActive = new Map<string, number>();
   const requireSession = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const header = request.headers.authorization ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
@@ -158,6 +166,9 @@ export async function registerCommunityRoutes(
       return;
     }
     request.session = session;
+    // When each member last used River here (in memory): a stuck key rotation is asked for again
+    // only once someone else had a chance to receive it (see recheckRotations).
+    lastActive.set(session.riverId, deps.now().getTime());
   };
   const authed = { preHandler: requireSession };
   const me = (r: FastifyRequest): string => r.session!.riverId;
@@ -2226,22 +2237,36 @@ export async function registerCommunityRoutes(
    * member who claimed it went away, or never sent it): ask for it again, a few times, so the
    * community does not stay on a key a removed member still has.
    */
+  let lastRecheck = Number.NEGATIVE_INFINITY;
   const recheckRotations = async (): Promise<void> => {
-    const cutoff = new Date(deps.now().getTime() - (deps.rotationAdoptMs ?? ROTATION_ADOPT_MS)).toISOString();
+    // At most once a minute per process (2.11.2): GET /communities runs it too, and it scans
+    // every community.
+    const nowMs = deps.now().getTime();
+    if (nowMs - lastRecheck < (deps.rotationRecheckMs ?? ROTATION_RECHECK_MS)) return;
+    lastRecheck = nowMs;
+    for (const [id, at] of lastActive) if (nowMs - at > ACTIVE_MEMORY_MS) lastActive.delete(id);
+    const cutoff = new Date(nowMs - (deps.rotationAdoptMs ?? ROTATION_ADOPT_MS)).toISOString();
     const stuck = await db
       .selectFrom('communities')
-      .select(['id', 'key_epoch'])
+      .select(['id', 'key_epoch', 'epoch_claimed_at', 'epoch_claimed_by'])
       .where('epoch_claimed_at', 'is not', null)
       .where('epoch_claimed_at', '<', cutoff)
       .where('rotation_retries', '<', ROTATION_MAX_RETRIES)
       .execute();
     for (const c of stuck) {
-      const members = await db
-        .selectFrom('community_members')
-        .select((eb) => eb.fn.countAll<number>().as('n'))
-        .where('community_id', '=', c.id)
-        .executeTakeFirst();
-      const alone = Number(members?.n ?? 0) <= 1;
+      const members = (
+        await db.selectFrom('community_members').select('river_id').where('community_id', '=', c.id).execute()
+      ).map((m) => m.river_id);
+      const alone = members.length <= 1;
+      // Nobody else used River since the claim (offline, or older apps that never report the key):
+      // the key may simply not have reached anyone yet. Asked again only once someone could have
+      // taken it in, so offline members do not use up the retries.
+      const claimedAt = Date.parse(c.epoch_claimed_at ?? '');
+      const someoneCould = members.some(
+        (id) =>
+          id !== c.epoch_claimed_by && (hub.isOnline(id) || (lastActive.get(id) ?? -Infinity) >= claimedAt),
+      );
+      if (!alone && !someoneCould) continue;
       const res = await db
         .updateTable('communities')
         .set((eb) => ({

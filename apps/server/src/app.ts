@@ -48,6 +48,8 @@ export interface AppDeps {
   voiceGraceMs?: number;
   /** How often an open realtime connection's session is checked again (tests shorten it). */
   sessionRecheckMs?: number;
+  /** How often stuck key rotations are looked for at most (tests set 0). */
+  rotationRecheckMs?: number;
 }
 
 function errorBody(code: string, message: string): ErrorResponse {
@@ -201,6 +203,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     now,
     hub,
     ...(deps.sessionRecheckMs !== undefined ? { sessionRecheckMs: deps.sessionRecheckMs } : {}),
+    ...(deps.rotationRecheckMs !== undefined ? { rotationRecheckMs: deps.rotationRecheckMs } : {}),
   });
   registerAdminRoutes(app, { config, database: deps.database, now, hub, ops });
   registerLandingRoutes(app);
