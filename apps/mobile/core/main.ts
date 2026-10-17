@@ -51,6 +51,7 @@ import {
 import { phonePlatform } from './platform.ts';
 import { accountGone } from './account-gone.ts';
 import { isFreshInstall } from './fresh-install.ts';
+import { watchNetwork } from './network.ts';
 import { AndroidUpdateService, CHECK_INTERVAL_MS, FIRST_CHECK_DELAY_MS } from './updater.ts';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import { parseDeepLink } from '../../desktop/src/main/deep-link.ts';
@@ -468,13 +469,17 @@ async function start(): Promise<void> {
   });
   // Android's watchdog (Stay connected, 2.11) wakes the phone every few minutes: with the screen
   // off the heartbeat may have slept through a dropped connection. Check it, or connect again.
-  onWake(() => {
+  const checkConnection = (): void => {
     if (storage.getStatus().state !== 'open') return;
     const status = account.status();
     if (status.state !== 'registered') return;
     if (status.connection !== 'online') void connectAll().catch(() => undefined);
     else community.probe();
-  });
+  };
+  onWake(checkConnection);
+  // The network came back or changed (2.12): the old connection may be dead, and a reconnect may
+  // be waiting out its backoff. Check now rather than when the heartbeat or the backoff ends.
+  watchNetwork(checkConnection);
 
   const appInfo = (): AppInfo => ({
     version: app.getVersion(),
