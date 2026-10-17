@@ -1,5 +1,6 @@
 import type { DmEvent } from './dm.ts';
 import type { SocialEvent } from './social.ts';
+import type { Settings } from './settings.ts';
 import {
   IPC,
   type AccountStatus,
@@ -39,6 +40,7 @@ export function createRiverApi(t: RiverTransport): RiverApi {
     settings: {
       get: () => t.invoke(IPC.settingsGet),
       update: (patch) => t.invoke(IPC.settingsUpdate, patch),
+      onChange: (listener) => t.on(IPC.settingsChanged, (...args) => listener(args[0] as Settings)),
     },
     updates: {
       status: () => t.invoke(IPC.updatesStatus),
@@ -81,6 +83,7 @@ export function createRiverApi(t: RiverTransport): RiverApi {
       setUsername: (username) => t.invoke(IPC.accountSetUsername, username),
       redeemSignup: (link) => t.invoke(IPC.accountRedeemSignup, link),
       startOver: () => t.invoke(IPC.accountStartOver),
+      relink: () => t.invoke(IPC.accountRelink),
       deleteAccount: () => t.invoke(IPC.accountDelete),
       exportData: () => t.invoke(IPC.accountExport),
       onStatus: (listener) => t.on(IPC.accountStatusChanged, (...args) => listener(args[0] as AccountStatus)),

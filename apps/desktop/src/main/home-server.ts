@@ -159,14 +159,32 @@ export class HomeAccount {
 
   private retryMs = RETRY_MIN_MS;
 
-  /** Tries now, and keeps trying (5 s, 10 s, 20 s … then every minute) until it works. Never throws. */
+  private inviteOnly = false;
+
+  /** River's server said it only takes invited people: the account needs a sign-up link. */
+  needsInvite(): boolean {
+    return this.inviteOnly && this.deps.account.status().state === 'none';
+  }
+
+  /**
+   * Tries now, and keeps trying (5 s, 10 s, 20 s … then every minute) until it works. Never throws.
+   * A server that only takes invited people stops it: asking again cannot help without a sign-up
+   * link (the next kick, e.g. River starting again, asks once more).
+   */
   kick(): void {
     if (!this.needed() || this.deps.autoAccount?.() === false) return;
     void this.ensure().then(
       () => {
         this.retryMs = RETRY_MIN_MS;
+        this.setInviteOnly(false);
       },
-      () => {
+      (err: unknown) => {
+        if (err instanceof UserFacingError && err.code === 'signup_invite_only') {
+          this.deps.log.info('River’s server only accepts invited people; waiting for a sign-up link');
+          this.setWaiting(false);
+          this.setInviteOnly(true);
+          return;
+        }
         if (this.timer) return;
         const wait = this.retryMs;
         this.retryMs = Math.min(this.retryMs * 2, RETRY_MAX_MS);
@@ -204,6 +222,12 @@ export class HomeAccount {
       this.setWaiting(true);
       throw err;
     }
+  }
+
+  private setInviteOnly(inviteOnly: boolean): void {
+    if (this.inviteOnly === inviteOnly) return;
+    this.inviteOnly = inviteOnly;
+    for (const l of this.listeners) l();
   }
 
   private setWaiting(waiting: boolean): void {

@@ -8,6 +8,7 @@ import {
   parseDeviceList,
   linkIdSchema,
   provisionLinkRequestSchema,
+  declineLinkRequestSchema,
   putLinkHelloRequestSchema,
   registerRequestSchema,
   registrationMessage,
@@ -449,6 +450,8 @@ export function registerAccountRoutes(
     mac: string | null;
     provision: string | null;
     deviceId: number | null;
+    /** The new device declined the account it was sent (a MAC only the two devices can check). */
+    declined: string | null;
     expires: number;
   }
   const links = new Map<string, PendingLink>();
@@ -466,6 +469,7 @@ export function registerAccountRoutes(
     mac: l.mac,
     provision: l.provision,
     deviceId: l.deviceId,
+    declined: l.declined,
     expiresAt: new Date(l.expires).toISOString(),
   });
   const notFound = (reply: FastifyReply): FastifyReply =>
@@ -500,6 +504,7 @@ export function registerAccountRoutes(
         mac: null,
         provision: null,
         deviceId: null,
+        declined: null,
         expires: deps.now().getTime() + LINK_TTL_MS,
       };
       links.set(id.data, l);
@@ -536,6 +541,7 @@ export function registerAccountRoutes(
       mac: parsed.data.mac,
       provision: null,
       deviceId: null,
+      declined: null,
       expires: deps.now().getTime() + LINK_TTL_MS,
     };
     links.set(id.data, l);
@@ -575,6 +581,21 @@ export function registerAccountRoutes(
       return linkState(l);
     },
   );
+
+  // The new device was sent the account but declined it ("Is this you?" → Cancel). Its MAC under
+  // the link secret is passed on as it is: only the linked device can check it, and then takes the
+  // device it added off its signed list again. Written once, and only after provisioning.
+  app.put<{ Params: { id: string } }>(`${API_PREFIX}/link/:id/decline`, sensitive, async (request, reply) => {
+    sweep();
+    const id = linkIdSchema.safeParse(request.params.id);
+    const parsed = declineLinkRequestSchema.safeParse(request.body);
+    if (!id.success || !parsed.success) return fail(reply, 400, 'bad_request', 'Bad request');
+    const l = links.get(id.data);
+    if (!l?.provision) return notFound(reply);
+    if (l.declined !== null) return fail(reply, 409, 'link_in_use', 'This link was already answered.');
+    l.declined = parsed.data.mac;
+    return linkState(l);
+  });
 }
 
 class SignupError extends Error {}

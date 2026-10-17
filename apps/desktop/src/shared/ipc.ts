@@ -17,6 +17,8 @@ export const IPC = {
   appShare: 'river:app:share',
   settingsGet: 'river:settings:get',
   settingsUpdate: 'river:settings:update',
+  /** Settings changed in the client core (by River itself, or by another call): the new settings. */
+  settingsChanged: 'river:settings:changed',
   updatesStatus: 'river:updates:status',
   updatesCheck: 'river:updates:check',
   updatesInstall: 'river:updates:install',
@@ -64,6 +66,7 @@ export const IPC = {
   accountRemoveDevice: 'river:account:remove-device',
   accountRedeemSignup: 'river:account:redeem-signup',
   accountStartOver: 'river:account:start-over',
+  accountRelink: 'river:account:relink',
   usersLookup: 'river:users:lookup',
   accountStatusChanged: 'river:account:status-changed',
   communityList: 'river:community:list',
@@ -140,7 +143,11 @@ export type LinkProgress =
   | { state: 'joining' }
   /** The new device received an account: whose it is, before it links (the person confirms). */
   | { state: 'review'; displayName: string; riverId: string; server: string }
-  | { state: 'linked' }
+  /**
+   * Linked. `deviceName` on the device that added the new one (it shows "Linked" for a moment);
+   * absent on the new device itself.
+   */
+  | { state: 'linked'; deviceName?: string }
   | { state: 'failed'; message: string };
 
 /** One device of this account, from its signed device list. */
@@ -212,6 +219,11 @@ export type AccountStatus =
       state: 'none';
       /** River is creating your account on River's server but cannot reach it yet; it keeps trying. */
       waiting?: boolean;
+      /**
+       * River's server only accepts people its owner invites: the account needs a sign-up link.
+       * River stopped trying by itself.
+       */
+      needsInvite?: boolean;
     }
   | {
       state: 'registered';
@@ -233,6 +245,13 @@ export type AccountStatus =
        * the device was replaced): signing in cannot work until the account is set up again.
        */
       missing?: boolean;
+      /**
+       * With `missing`: setting the account up again showed it is still on the server, so this
+       * device was removed from it. Only linking it again (from another device) helps.
+       */
+      removed?: boolean;
+      /** With `missing`: this device shared the account with others, so it was most likely removed. */
+      wasLinked?: boolean;
       /** What people find you by (1.0.13); null until you choose one. */
       username: string | null;
       message?: string;
@@ -538,7 +557,12 @@ export interface RiverApi {
     /** Android: River went into or out of picture-in-picture (2.10). Never fires on computers. */
     onPip(listener: (on: boolean) => void): () => void;
   };
-  settings: { get(): Promise<Settings>; update(patch: SettingsPatch): Promise<Settings> };
+  settings: {
+    get(): Promise<Settings>;
+    update(patch: SettingsPatch): Promise<Settings>;
+    /** Settings changed in the client core (also when River changed them itself). */
+    onChange(listener: (settings: Settings) => void): () => void;
+  };
   updates: {
     status(): Promise<UpdateStatus>;
     check(): Promise<UpdateStatus>;
@@ -590,8 +614,13 @@ export interface RiverApi {
     setUsername(username: string): Promise<Result<AccountStatus>>;
     /** Use an operator's sign-up link (`…/add#s=…`) to create this account. */
     redeemSignup(link: string): Promise<Result<AccountStatus>>;
-    /** The server no longer knows this account: forget it here and create a new one. */
+    /**
+     * The server no longer lets this device sign in: create a new account for this identity
+     * (the old one is forgotten only once that worked).
+     */
     startOver(): Promise<Result<AccountStatus>>;
+    /** This device was removed from its account: forget it here, ready to be linked again. */
+    relink(): Promise<Result<null>>;
     /** Delete your account from its server for good (1.0.18). */
     deleteAccount(): Promise<Result<null>>;
     /** Save a readable copy of your data (1.0.23); false when the save dialog was cancelled. */
@@ -619,7 +648,8 @@ export interface RiverApi {
     lookup(username: string): Promise<Result<{ username: string; riverId: string }>>;
   };
   backup: {
-    status(): Promise<{ hasPhrase: boolean; lastBackupAt: string | null }>;
+    /** `phraseShown`: the person has seen the recovery phrase (backups need it first). */
+    status(): Promise<{ hasPhrase: boolean; phraseShown: boolean; lastBackupAt: string | null }>;
     /** The 18-word recovery phrase (created on first request). */
     phrase(): Promise<string[]>;
     /** Encrypts a backup and asks where to save it. */
