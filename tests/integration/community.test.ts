@@ -20,6 +20,14 @@ import { buildApp } from '../../apps/server/src/app.ts';
 import { loadConfig } from '../../apps/server/src/config.ts';
 import { migrateToLatest, openDatabase, type RiverDatabase } from '../../apps/server/src/db/database.ts';
 import { HOME_LINK_BASE } from '../../apps/desktop/src/shared/home-server.ts';
+import {
+  messageBinding,
+  newCommunityKey,
+  randomId,
+  seal,
+  sealBound,
+} from '../../apps/desktop/src/main/community/sealed.ts';
+import { z } from 'zod';
 
 const testBlobDir = (): string => join(tmpdir(), `river-blobs-${Math.random().toString(36).slice(2)}`);
 
@@ -1062,6 +1070,88 @@ describe('desktop ↔ server communities', () => {
     expect(older.map((m) => m.text)).toContain('the hidden needle');
     const found = await alice.community.action({ a: 'search', communityId: created.id, query: 'NEEDLE' });
     expect(found.map((m) => m.text)).toEqual(['the hidden needle']);
+  });
+
+  it('history pages through messages this device cannot open; search and jumps go past them', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Before you');
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.kind === 'text')!;
+    await alice.community.send(general.id, 'the old needle');
+    // A hundred messages sealed with a key this device never had (sent before it joined).
+    const unknown = newCommunityKey();
+    for (let i = 0; i < 100; i++) {
+      await alice.community.api(
+        `/channels/${general.id}/messages`,
+        'POST',
+        { id: randomId(), body: seal(unknown, created.id, `message:${general.id}`, { text: `x${i}` }) },
+        z.unknown(),
+      );
+    }
+    for (const t of ['one', 'two', 'three']) await alice.community.send(general.id, t);
+
+    const newest = await alice.community.action({ a: 'historyPage', channelId: general.id });
+    expect(newest.messages.map((m) => m.text)).toEqual(['one', 'two', 'three']);
+    expect(newest.hasMore).toBe(true);
+    // The next page starts where the server's page ended, not at the oldest message shown.
+    const older = await alice.community.action({
+      a: 'historyPage',
+      channelId: general.id,
+      before: newest.before!,
+      beforeId: newest.beforeId!,
+    });
+    expect(older.messages.map((m) => m.text)).toEqual(['the old needle']);
+    expect(older.hasMore).toBe(false);
+    const found = await alice.community.action({ a: 'search', communityId: created.id, query: 'needle' });
+    expect(found.map((m) => m.text)).toEqual(['the old needle']);
+  });
+
+  it('messages sharing a time at a page boundary are all paged, none skipped', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Same time');
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.kind === 'text')!;
+    const key = Buffer.from(
+      (
+        locals.at(-1)!.prepare('SELECT key FROM community_keys WHERE community_id = ?').get(created.id) as {
+          key: Uint8Array;
+        }
+      ).key,
+    );
+    // 101 messages in the same millisecond (a burst, or a server with a coarse clock).
+    const at = new Date().toISOString();
+    await serverDb.db
+      .insertInto('messages')
+      .values(
+        Array.from({ length: 101 }, (_, i) => {
+          const id = randomId();
+          return {
+            id,
+            channel_id: general.id,
+            sender: alice.riverId,
+            body: sealBound(
+              key,
+              created.id,
+              `message:${general.id}`,
+              messageBinding(id, alice.riverId),
+              { text: `m${i}` },
+              true,
+            ),
+            sent_at: at,
+            pinned: 0,
+            thread_id: null,
+          };
+        }),
+      )
+      .execute();
+    const first = await alice.community.action({ a: 'historyPage', channelId: general.id });
+    expect(first.messages).toHaveLength(100);
+    const rest = await alice.community.action({
+      a: 'historyPage',
+      channelId: general.id,
+      before: first.before!,
+      beforeId: first.beforeId!,
+    });
+    expect(rest.messages).toHaveLength(1);
+    expect(new Set([...first.messages, ...rest.messages].map((m) => m.text)).size).toBe(101);
   });
 
   it('categories, sidebar moves and unread markers that survive a restart', async () => {

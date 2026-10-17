@@ -2355,23 +2355,33 @@ export async function registerCommunityRoutes(
   app.addHook('onClose', async () => clearInterval(rotationTimer));
 
   // ---- messages --------------------------------------------------------------------------------
-  app.get<{ Params: { id: string }; Querystring: { before?: string; pinned?: string } }>(
-    `${API_PREFIX}/channels/:id/messages`,
-    authed,
-    async (request) => {
-      const { channelId } = await channelCommunity(request.params.id, me(request));
-      let q = db
-        .selectFrom('messages')
-        .selectAll()
-        .where('channel_id', '=', channelId)
-        .where('thread_id', 'is', null);
-      const before = request.query.before;
-      if (before && /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(before)) q = q.where('sent_at', '<', before);
-      if (request.query.pinned === '1') q = q.where('pinned', '=', 1);
-      const rows = await q.orderBy('sent_at', 'desc').limit(PAGE).execute();
-      return { messages: await loadMessages(db, rows.reverse()) };
-    },
-  );
+  /**
+   * The page of messages before a cursor, newest first. The cursor is the time of the oldest
+   * message already seen and, from 2.12, its ID: messages sharing that time are ordered by ID, so
+   * none of them is skipped at a page boundary. Without an ID it is the time alone, as before.
+   */
+  const messageRows = () => db.selectFrom('messages').selectAll();
+  type MessageQuery = ReturnType<typeof messageRows>;
+  const beforeCursor = (q: MessageQuery, before?: string, beforeId?: string): MessageQuery => {
+    if (!before || !/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(before)) return q;
+    if (beforeId && /^[A-Za-z0-9_-]{22}$/.test(beforeId))
+      return q.where((eb) =>
+        eb.or([eb('sent_at', '<', before), eb.and([eb('sent_at', '=', before), eb('id', '<', beforeId)])]),
+      );
+    return q.where('sent_at', '<', before);
+  };
+
+  app.get<{
+    Params: { id: string };
+    Querystring: { before?: string; beforeId?: string; pinned?: string };
+  }>(`${API_PREFIX}/channels/:id/messages`, authed, async (request) => {
+    const { channelId } = await channelCommunity(request.params.id, me(request));
+    let q = messageRows().where('channel_id', '=', channelId).where('thread_id', 'is', null);
+    q = beforeCursor(q, request.query.before, request.query.beforeId);
+    if (request.query.pinned === '1') q = q.where('pinned', '=', 1);
+    const rows = await q.orderBy('sent_at', 'desc').orderBy('id', 'desc').limit(PAGE).execute();
+    return { messages: await loadMessages(db, rows.reverse()) };
+  });
 
   app.post<{ Params: { id: string } }>(
     `${API_PREFIX}/channels/:id/messages`,
@@ -2651,15 +2661,14 @@ export async function registerCommunityRoutes(
     return { ok: true };
   });
 
-  app.get<{ Params: { id: string }; Querystring: { before?: string } }>(
+  app.get<{ Params: { id: string }; Querystring: { before?: string; beforeId?: string } }>(
     `${API_PREFIX}/threads/:id/messages`,
     authed,
     async (request) => {
       const { msg } = await messageContext(request.params.id, me(request));
-      let q = db.selectFrom('messages').selectAll().where('thread_id', '=', msg.id);
-      const before = request.query.before;
-      if (before && /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(before)) q = q.where('sent_at', '<', before);
-      const rows = await q.orderBy('sent_at', 'desc').limit(PAGE).execute();
+      let q = messageRows().where('thread_id', '=', msg.id);
+      q = beforeCursor(q, request.query.before, request.query.beforeId);
+      const rows = await q.orderBy('sent_at', 'desc').orderBy('id', 'desc').limit(PAGE).execute();
       return { messages: await loadMessages(db, rows.reverse()) };
     },
   );

@@ -51,10 +51,10 @@ Audit and plan: [docs/product/telegram-parity.md](docs/product/telegram-parity.m
 - [ ] iPhone ringing and notifications while closed: needs Apple push (PushKit/CallKit) and a paid Apple developer account
 - [x] 2.11.1 Calls answered or declined on another device stop the others ringing; ringing stops when the caller hangs up even with the screen off; phone-style call screens
 - [x] Trust audit: identity changes, own-device copies, community key proofs, stuck rotations, v2 associated data (receiving), call-signal replays, username holds and River ID tombstones (CRYPTOGRAPHY.md §4b)
-- [ ] 2.12: seal community messages and profiles with v2 associated data (`SEAL_V2_DEFAULT = true` in `sealed.ts`) once 2.11 is out on every platform
+- [x] 2.12: seal community messages and profiles with v2 associated data (`SEAL_V2_DEFAULT = true` in `sealed.ts`) once 2.11 is out on every platform
 - [ ] 2.13: refuse community keys without a proof (`ACCEPT_UNPROVEN_KEYS = false` in `community-service.ts`)
 - [ ] Idempotent channel resend: `send` takes the outbox id so a reply lost while going offline cannot post twice (needs server de-duplication)
-- [ ] Channel history: main returns `hasMore` so pages of undecryptable messages do not end the history early (the renderer guesses today)
+- [x] Channel history: main returns `hasMore` (and where the next page starts) so pages of undecryptable messages do not end the history early; messages sharing a time at a page boundary are no longer skipped
 - [ ] Decide: bind River IDs to identity keys so an ID cannot be registered first on another server (architecture decision for the maintainer)
 - [x] Android rings and notifies like a phone: call screen over the lock screen, ringtone, CallStyle notifications, Stay connected on by default, watchdog, restart after reboot, honest Settings state (unreleased)
 - [ ] Check on real phones: Android Back, picture-in-picture, proximity, lock-screen calls, the new call screen and ringtone, Stay connected with the screen off for an hour, battery and full-screen prompts, iPhone core recovery (native code first compiled in CI)

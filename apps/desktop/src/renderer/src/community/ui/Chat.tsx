@@ -42,7 +42,7 @@ import { announcement } from '../announce.ts';
 import { useOutbox, type Outgoing } from '../outbox.ts';
 import { useDraft } from '../drafts.ts';
 import { play } from '../sound.ts';
-import { typingNames, useCommunity } from '../store.ts';
+import { canLoadOlder, typingNames, useCommunity } from '../store.ts';
 import {
   AttachmentList,
   MAX_PENDING,
@@ -321,7 +321,7 @@ export function TextChannel(props: {
       {view === 'gallery' && (
         <MediaGallery
           messages={messages}
-          more={messages.length >= 100 && !s.noMore[channel.id]}
+          more={canLoadOlder(s.noMore, channel.id, messages.length)}
           onLoadOlder={() => s.loadOlder(channel.id)}
         />
       )}
@@ -345,7 +345,7 @@ export function TextChannel(props: {
             else if (leftAt === null) setLeftAt(messages.at(-1)?.sentAt ?? '');
           }}
         >
-          {messages.length >= 100 && !s.noMore[channel.id] && (
+          {canLoadOlder(s.noMore, channel.id, messages.length) && (
             <div className="chat__older">
               <button
                 className="btn btn--ghost btn--small"
@@ -367,7 +367,7 @@ export function TextChannel(props: {
               </button>
             </div>
           )}
-          <div className="chat__welcome" hidden={messages.length >= 100 && !s.noMore[channel.id]}>
+          <div className="chat__welcome" hidden={canLoadOlder(s.noMore, channel.id, messages.length)}>
             <div className="chat__welcome-icon">
               <HashIcon size={34} />
             </div>

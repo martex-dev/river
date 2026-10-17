@@ -18,6 +18,12 @@ All notable changes to River are documented here. The format follows
 
 ### Fixed
 
+- **Channel history no longer ends early.** A channel whose older messages you
+  cannot read (they were sent before you joined, under a key you never had)
+  used to stop "Load older messages" — and hide the button when the newest
+  page was mostly such messages; River now pages on past them, and search,
+  jumps to a message and Insights look past them too. Messages sent in the
+  same millisecond at the edge of a page are no longer skipped.
 - **Messages always arrive.** Mail that came in while River was already
   fetching your mailbox (the connection dropped and came back meanwhile) now
   arrives at once instead of waiting for the next reconnect.

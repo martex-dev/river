@@ -60,6 +60,7 @@ import {
   type SavedMessageView,
   EMOJI_NAME,
   type SavedOutgoing,
+  type HistoryPage,
 } from '../../shared/community-actions.ts';
 import {
   layoutChanges,
@@ -233,6 +234,8 @@ const PENDING_SIGNALS_MAX = 400;
 /** Messages remembered for edits and saves, and how far back to look for one not seen yet. */
 const RECENT_MESSAGES = 3000;
 const FIND_MESSAGE_PAGES = 5;
+/** Messages per history page (the server's page size). */
+const HISTORY_PAGE = 100;
 const PENDING_SIGNAL_TTL_MS = 30_000;
 
 /** Forum tags from decrypted data: short, unique strings only (1.0.22). */
@@ -1746,8 +1749,22 @@ export class CommunityService {
   }
 
   async messages(channelId: string, before?: string): Promise<ChatMessage[]> {
+    return (await this.messagesPage(channelId, before)).messages;
+  }
+
+  /**
+   * One page of a channel's history (oldest first), with whether older messages exist and where
+   * the next page starts. Both come from what the server sent, not from what this device could
+   * open: a page of messages sealed with keys this device never had (sent before you joined)
+   * neither ends the history nor makes the next page the same one again.
+   */
+  async messagesPage(channelId: string, before?: string, beforeId?: string): Promise<HistoryPage> {
     const communityId = this.communityOf(channelId);
-    const query = before ? `?before=${encodeURIComponent(before)}` : '';
+    const params = new URLSearchParams();
+    if (before) params.set('before', before);
+    // Messages sharing the cursor's time are told apart by ID (servers before 2.12 ignore it).
+    if (before && beforeId) params.set('beforeId', beforeId);
+    const query = params.size ? `?${params.toString()}` : '';
     const res = await this.call(
       `/channels/${channelId}/messages${query}`,
       'GET',
@@ -1755,7 +1772,15 @@ export class CommunityService {
       messagesResponseSchema,
     );
     for (const m of res.messages) this.remember(m.id);
-    return res.messages.map((m) => this.toChat(communityId, m)).filter((m): m is ChatMessage => m !== null);
+    const oldest = res.messages[0];
+    return {
+      messages: res.messages
+        .map((m) => this.toChat(communityId, m))
+        .filter((m): m is ChatMessage => m !== null),
+      hasMore: res.messages.length >= HISTORY_PAGE,
+      before: oldest?.sentAt ?? null,
+      beforeId: oldest?.id ?? null,
+    };
   }
 
   async send(
@@ -2559,6 +2584,8 @@ export class CommunityService {
         break;
       case 'history':
         return (await this.messages(act.channelId, act.before)) as CommunityActionResult<A>;
+      case 'historyPage':
+        return (await this.messagesPage(act.channelId, act.before, act.beforeId)) as CommunityActionResult<A>;
       case 'search': {
         // The server cannot search ciphertext: fetch history per channel and search it here.
         const community = this.requireCommunity(act.communityId);
@@ -2571,11 +2598,15 @@ export class CommunityService {
         for (const ch of channels) {
           // A before: date starts the walk there; an after: date ends it.
           let before: string | undefined = q.before ?? undefined;
+          let beforeId: string | undefined;
           for (let page = 0; page < (q.after || q.before ? 20 : 5); page++) {
-            const batch = await this.messages(ch.id, before).catch(() => []);
-            found.push(...batch.filter((m) => matchesSearch(m, q, ch.name)));
-            if (batch.length < 100) break;
-            before = batch[0]!.sentAt;
+            const batch = await this.messagesPage(ch.id, before, beforeId).catch(() => null);
+            if (!batch) break;
+            found.push(...batch.messages.filter((m) => matchesSearch(m, q, ch.name)));
+            // Paged by what the server sent: messages this device cannot open do not end the walk.
+            if (!batch.hasMore || !batch.before) break;
+            before = batch.before;
+            beforeId = batch.beforeId ?? undefined;
             if (q.after && before < q.after) break;
           }
         }
@@ -2661,15 +2692,19 @@ export class CommunityService {
         let partial = false;
         for (const ch of community.channels.filter((c) => c.kind === 'text')) {
           let before: string | undefined;
+          let beforeId: string | undefined;
           for (let page = 0; ; page++) {
-            const batch = await this.messages(ch.id, before).catch(() => []);
-            for (const m of batch) seen.push({ channelId: m.channelId, sender: m.sender, sentAt: m.sentAt });
-            if (batch.length < 100 || batch[0]!.sentAt < since) break;
+            const batch = await this.messagesPage(ch.id, before, beforeId).catch(() => null);
+            if (!batch) break;
+            for (const m of batch.messages)
+              seen.push({ channelId: m.channelId, sender: m.sender, sentAt: m.sentAt });
+            if (!batch.hasMore || !batch.before || batch.before < since) break;
             if (page === 9) {
               partial = true;
               break;
             }
-            before = batch[0]!.sentAt;
+            before = batch.before;
+            beforeId = batch.beforeId ?? undefined;
           }
         }
         return summarizeActivity(seen, now, act.days, partial) as CommunityActionResult<A>;
@@ -3200,11 +3235,14 @@ export class CommunityService {
     };
     if (seen()) return seen();
     let before: string | undefined;
+    let beforeId: string | undefined;
     for (let page = 0; page < FIND_MESSAGE_PAGES; page++) {
-      const list = await this.messages(channelId, before);
+      const batch = await this.messagesPage(channelId, before, beforeId);
       if (seen()) return seen();
-      if (!list.length || list[0]!.sentAt === before) return undefined;
-      before = list[0]!.sentAt;
+      if (!batch.hasMore || !batch.before || (batch.before === before && batch.beforeId === beforeId))
+        return undefined;
+      before = batch.before;
+      beforeId = batch.beforeId ?? undefined;
     }
     return undefined;
   }
