@@ -67,7 +67,8 @@ export class SocialService {
   private readonly deps: Deps;
   private readonly listeners = new Set<(e: SocialEvent) => void>();
   private readonly relayTimers = new Map<string, NodeJS.Timeout>();
-  private flushing = false;
+  /** The retry running now, if any (one at a time). */
+  private flushing: Promise<number> | null = null;
   private lastFlush = 0;
 
   constructor(deps: Deps) {
@@ -370,9 +371,13 @@ export class SocialService {
     if (rest.length !== items.length) this.setOutbox(rest);
   }
 
-  /** Tries the outbox again, at most every OUTBOX_EVERY_MS (never while storage is locked). */
+  /**
+   * Tries the outbox again when something waits in it, at most every OUTBOX_EVERY_MS (never
+   * while storage is locked).
+   */
   private flushSoon(): void {
     if (this.flushing || Date.now() - this.lastFlush < OUTBOX_EVERY_MS || !this.deps.db()) return;
+    if (!this.outbox().length) return;
     void this.flushOutbox().catch((err: unknown) =>
       this.deps.log.warn(`Social retry failed: ${(err as Error).message}`),
     );
@@ -380,43 +385,49 @@ export class SocialService {
 
   /** Sends again what could not be sent before. Returns how many items are still waiting. */
   async flushOutbox(): Promise<number> {
-    if (this.flushing) return this.outbox().length;
-    this.flushing = true;
+    // One at a time: a retry already running finishes first, then this one runs.
+    while (this.flushing) await this.flushing.catch(() => undefined);
     this.lastFlush = Date.now();
+    const run = this.sendOutbox();
+    this.flushing = run;
     try {
-      const items = this.outbox();
-      if (!items.length) return 0;
-      const same = (a: OutboxItem, b: OutboxItem): boolean =>
-        a.peer === b.peer && a.postId === b.postId && a.t === b.t && a.at === b.at;
-      const left: OutboxItem[] = [];
-      for (const item of items) {
-        // Blocked or removed since: nothing more goes to them.
-        if (this.deps.dm.contactState(item.peer) !== 'accepted') continue;
-        let content = item.content;
-        if (item.relay) {
-          const post = this.row(item.postId);
-          if (!post || post.author !== this.me() || !this.reachable(post).includes(item.peer)) continue;
-          content = this.activity(post);
-        } else if (item.t === 'post' && !this.row(item.postId)) continue;
-        if (!content) continue;
-        try {
-          await this.deps.dm.sendSocial(item.peer, content);
-        } catch {
-          left.push({ ...item, tries: item.tries + 1 });
-        }
-      }
-      // Anything queued (or taken back) while this ran is respected.
-      const now = this.outbox();
-      const added = now.filter((x) => !items.some((y) => same(x, y)));
-      const stillQueued = left.filter((x) => now.some((y) => same(x, y)));
-      const replaced = stillQueued.filter(
-        (x) => !added.some((y) => y.peer === x.peer && y.postId === x.postId && y.t === x.t),
-      );
-      this.setOutbox([...replaced, ...added]);
-      return replaced.length + added.length;
+      return await run;
     } finally {
-      this.flushing = false;
+      this.flushing = null;
     }
+  }
+
+  private async sendOutbox(): Promise<number> {
+    const items = this.outbox();
+    if (!items.length) return 0;
+    const same = (a: OutboxItem, b: OutboxItem): boolean =>
+      a.peer === b.peer && a.postId === b.postId && a.t === b.t && a.at === b.at;
+    const left: OutboxItem[] = [];
+    for (const item of items) {
+      // Blocked or removed since: nothing more goes to them.
+      if (this.deps.dm.contactState(item.peer) !== 'accepted') continue;
+      let content = item.content;
+      if (item.relay) {
+        const post = this.row(item.postId);
+        if (!post || post.author !== this.me() || !this.reachable(post).includes(item.peer)) continue;
+        content = this.activity(post);
+      } else if (item.t === 'post' && !this.row(item.postId)) continue;
+      if (!content) continue;
+      try {
+        await this.deps.dm.sendSocial(item.peer, content);
+      } catch {
+        left.push({ ...item, tries: item.tries + 1 });
+      }
+    }
+    // Anything queued (or taken back) while this ran is respected.
+    const now = this.outbox();
+    const added = now.filter((x) => !items.some((y) => same(x, y)));
+    const stillQueued = left.filter((x) => now.some((y) => same(x, y)));
+    const replaced = stillQueued.filter(
+      (x) => !added.some((y) => y.peer === x.peer && y.postId === x.postId && y.t === x.t),
+    );
+    this.setOutbox([...replaced, ...added]);
+    return replaced.length + added.length;
   }
 
   // ---- actions -----------------------------------------------------------------------------------

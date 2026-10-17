@@ -27,6 +27,8 @@ let dir: string;
 let server: FastifyInstance;
 let serverDb: RiverDatabase;
 const locals: LocalDatabase[] = [];
+/** Stopped before their databases close, so no reconnect timer outlives its test. */
+const communities: CommunityService[] = [];
 
 const injectFetch: typeof fetch = async (input, init) => {
   const url = new URL(String(input));
@@ -85,6 +87,7 @@ function install(name: string, privacy?: { readReceipts: boolean; typing: boolea
   });
   const events: DmEvent[] = [];
   dm.onEvent((e) => events.push(e));
+  communities.push(community);
   return { identity, account, dm, community, social, link, events, local };
 }
 
@@ -145,6 +148,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  for (const c of communities.splice(0)) c.stop();
   for (const l of locals.splice(0)) l.close();
   await server.close();
   await serverDb.close();
