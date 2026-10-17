@@ -6,6 +6,39 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- **Community messages and profiles are now bound to who sent them.** New
+  messages, their edits and your community profile are sealed with v2
+  associated data (the message's ID and sender, the profile's member), so the
+  server can no longer show a message under someone else's name, replay it as
+  a new message, or give your profile to another member. Messages from before
+  2.12, from Rivers that have not updated yet and from webhooks keep opening.
+  Rivers older than 2.11 cannot read the new messages.
+
+### Fixed
+
+- **Channel history no longer ends early.** A channel whose older messages you
+  cannot read (they were sent before you joined, under a key you never had)
+  used to stop "Load older messages" — and hide the button when the newest
+  page was mostly such messages; River now pages on past them, and search,
+  jumps to a message and Insights look past them too. Messages sent in the
+  same millisecond at the edge of a page are no longer skipped.
+- **A message you sent is never shown as failed when it got through** under
+  slowmode or a timeout that began right after: sending it again now answers
+  "already there" instead of "slow down" or "you cannot send here".
+- **No "new message" alert for old messages.** A reaction, edit or pin on a
+  message, or a thread reply counted on it, no longer rings and notifies as a
+  new message when this session had not opened that channel yet.
+- **Newcomers get the community key sooner.** A member who joined after
+  another member's app last looked at the member list was ignored when asking
+  for the key until something else refreshed that app; and a key replacement
+  no longer stops before handing out the key when the profile update fails.
+- **Server:** a message can carry at most 20 different reactions (joining an
+  existing one always works), and a realtime connection that stops reading is
+  closed (code 4408) once 4 MiB are queued for it instead of growing without
+  end; its app reconnects and catches up.
+
 ## [2.11.3] - 2026-10-18
 
 **Connections that recover by themselves, and hosting that tells you what is wrong.**

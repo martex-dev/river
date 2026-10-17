@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { Permission } from '@river/protocol/permissions';
-import type { CommunityAction, CommunityActionResult } from '../../../shared/community-actions.ts';
+import type {
+  CommunityAction,
+  CommunityActionResult,
+  HistoryPage,
+} from '../../../shared/community-actions.ts';
 import type { ChatMessage, CommunityEvent, CommunityView, Result } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
 import { setMessageLinkOpener } from './message-link.ts';
@@ -165,6 +169,24 @@ let mutedBeforeDeafen = false;
 /** "Load older" requests on their way, per channel. */
 const olderInFlight = new Map<string, Promise<number>>();
 
+/**
+ * Where the next older page of a channel starts, as main reported it (2.12): the oldest message
+ * the server sent, opened or not. Valid while the oldest message shown is still `anchor`; when
+ * the list changed at its start (reloaded), the oldest message shown is the cursor again.
+ */
+const olderCursor = new Map<string, { before: string; beforeId?: string; anchor: string | null }>();
+/** Pages one "Load older" may walk through when none of them brings a message this device can open. */
+const OLDER_PAGES_PER_LOAD = 10;
+
+/**
+ * Whether to offer older messages. From main's answer once known (it counts what the server sent,
+ * so a page of messages from before you joined does not hide the rest); until then the guess.
+ */
+export function canLoadOlder(noMore: Record<string, boolean>, channelId: string, shown: number): boolean {
+  const known = noMore[channelId];
+  return known === undefined ? shown >= 100 : !known;
+}
+
 /** The last text channel opened in each community, on this device (a convenience; may be unavailable). */
 function lastChannel(communityId: string): string | null {
   try {
@@ -277,23 +299,47 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     const pending = olderInFlight.get(channelId);
     if (pending) return pending;
     const run = async (): Promise<number> => {
-      const list = get().messages[channelId];
-      if (!list?.length || get().noMore[channelId]) return 0;
-      const oldest = list[0]!;
-      const res = await window.river.community.action({ a: 'history', channelId, before: oldest.sentAt });
-      if (!res.ok) return 0;
-      const page = res.value as ChatMessage[];
-      // Against the list as it is now (it may have changed while this page was decrypted).
-      const now = get().messages[channelId] ?? [];
-      const known = new Set(now.map((m) => m.id));
-      const older = page.filter((m) => !known.has(m.id));
-      set({
-        messages: { ...get().messages, [channelId]: [...older, ...now] },
-        // The end of the history: an empty page, or one that brought nothing new. (Messages that
-        // cannot be decrypted are dropped from a page, so a short page alone does not mean the end.)
-        ...(older.length === 0 ? { noMore: { ...get().noMore, [channelId]: true } } : {}),
-      });
-      return older.length;
+      for (let i = 0; i < OLDER_PAGES_PER_LOAD; i++) {
+        const list = get().messages[channelId];
+        if (!list || get().noMore[channelId]) return 0;
+        const anchor = list[0]?.id ?? null;
+        const saved = olderCursor.get(channelId);
+        const cursor =
+          saved && saved.anchor === anchor
+            ? saved
+            : list[0]
+              ? { before: list[0].sentAt, beforeId: list[0].id }
+              : null;
+        if (!cursor) return 0;
+        const res = await window.river.community.action({
+          a: 'historyPage',
+          channelId,
+          before: cursor.before,
+          ...(cursor.beforeId ? { beforeId: cursor.beforeId } : {}),
+        });
+        if (!res.ok) return 0;
+        const page = res.value as HistoryPage;
+        // Against the list as it is now (it may have changed while this page was decrypted).
+        const now = get().messages[channelId] ?? [];
+        const known = new Set(now.map((m) => m.id));
+        const older = page.messages.filter((m) => !known.has(m.id));
+        const next = [...older, ...now];
+        if (page.before)
+          olderCursor.set(channelId, {
+            before: page.before,
+            ...(page.beforeId ? { beforeId: page.beforeId } : {}),
+            anchor: next[0]?.id ?? null,
+          });
+        // The end of the history is what main says: messages this device cannot open (sent
+        // before you joined) are left out of a page, so an empty page alone does not mean it.
+        const noMore = !page.hasMore || !page.before;
+        set({
+          messages: { ...get().messages, [channelId]: next },
+          ...(noMore ? { noMore: { ...get().noMore, [channelId]: true } } : {}),
+        });
+        if (older.length || noMore) return older.length;
+      }
+      return 0;
     };
     const promise = run().finally(() => olderInFlight.delete(channelId));
     olderInFlight.set(channelId, promise);
@@ -715,11 +761,22 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   loadMessages: async (channelId) => {
     const c = get().communities.find((x) => x.channels.some((ch) => ch.id === channelId));
     if (c?.channels.find((ch) => ch.id === channelId)?.kind !== 'text') return;
-    const res = await window.river.community.messages(channelId);
+    const res = await window.river.community.action({ a: 'historyPage', channelId });
     if (!res.ok) return;
-    // The newest page replaces what was loaded, so older history can be loaded again.
-    const { [channelId]: _done, ...noMore } = get().noMore;
-    set({ messages: { ...get().messages, [channelId]: res.value }, noMore });
+    const page = res.value as HistoryPage;
+    // The newest page replaces what was loaded, so older history can be loaded again; whether
+    // there is any is main's answer, not a guess from how many messages could be opened.
+    olderCursor.delete(channelId);
+    if (page.before)
+      olderCursor.set(channelId, {
+        before: page.before,
+        ...(page.beforeId ? { beforeId: page.beforeId } : {}),
+        anchor: page.messages[0]?.id ?? null,
+      });
+    set({
+      messages: { ...get().messages, [channelId]: page.messages },
+      noMore: { ...get().noMore, [channelId]: !page.hasMore },
+    });
   },
 
   joinVoice: async (channelId, me) => {

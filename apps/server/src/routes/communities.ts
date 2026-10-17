@@ -93,6 +93,10 @@ const PAGE = 100;
 const SOCKET_RATE = 40;
 /** Bytes queued for a slow connection beyond which relayed voice frames are dropped. */
 const MAX_RELAY_BUFFER = 256 * 1024;
+/** Different reactions one message may carry (joining an existing one is always possible). */
+const MAX_REACTION_KINDS = 20;
+/** Bytes queued for a connection that stopped reading beyond which it is closed (code 4408). */
+const MAX_EVENT_BUFFER = 4 * 1024 * 1024;
 /** Server → client WebSocket ping interval; two missed pongs close the connection. */
 const HEARTBEAT_MS = 25_000;
 /** A member whose last connection dropped is announced offline only after this long. */
@@ -166,6 +170,8 @@ export async function registerCommunityRoutes(
     rotationAdoptMs?: number;
     /** How often stuck rotations are looked for at most (tests set 0). */
     rotationRecheckMs?: number;
+    /** Bytes a connection may have queued before it is closed (tests lower it). */
+    maxEventBuffer?: number;
   },
 ): Promise<CommunityOps> {
   const { db } = deps.database;
@@ -2355,23 +2361,33 @@ export async function registerCommunityRoutes(
   app.addHook('onClose', async () => clearInterval(rotationTimer));
 
   // ---- messages --------------------------------------------------------------------------------
-  app.get<{ Params: { id: string }; Querystring: { before?: string; pinned?: string } }>(
-    `${API_PREFIX}/channels/:id/messages`,
-    authed,
-    async (request) => {
-      const { channelId } = await channelCommunity(request.params.id, me(request));
-      let q = db
-        .selectFrom('messages')
-        .selectAll()
-        .where('channel_id', '=', channelId)
-        .where('thread_id', 'is', null);
-      const before = request.query.before;
-      if (before && /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(before)) q = q.where('sent_at', '<', before);
-      if (request.query.pinned === '1') q = q.where('pinned', '=', 1);
-      const rows = await q.orderBy('sent_at', 'desc').limit(PAGE).execute();
-      return { messages: await loadMessages(db, rows.reverse()) };
-    },
-  );
+  /**
+   * The page of messages before a cursor, newest first. The cursor is the time of the oldest
+   * message already seen and, from 2.12, its ID: messages sharing that time are ordered by ID, so
+   * none of them is skipped at a page boundary. Without an ID it is the time alone, as before.
+   */
+  const messageRows = () => db.selectFrom('messages').selectAll();
+  type MessageQuery = ReturnType<typeof messageRows>;
+  const beforeCursor = (q: MessageQuery, before?: string, beforeId?: string): MessageQuery => {
+    if (!before || !/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(before)) return q;
+    if (beforeId && /^[A-Za-z0-9_-]{22}$/.test(beforeId))
+      return q.where((eb) =>
+        eb.or([eb('sent_at', '<', before), eb.and([eb('sent_at', '=', before), eb('id', '<', beforeId)])]),
+      );
+    return q.where('sent_at', '<', before);
+  };
+
+  app.get<{
+    Params: { id: string };
+    Querystring: { before?: string; beforeId?: string; pinned?: string };
+  }>(`${API_PREFIX}/channels/:id/messages`, authed, async (request) => {
+    const { channelId } = await channelCommunity(request.params.id, me(request));
+    let q = messageRows().where('channel_id', '=', channelId).where('thread_id', 'is', null);
+    q = beforeCursor(q, request.query.before, request.query.beforeId);
+    if (request.query.pinned === '1') q = q.where('pinned', '=', 1);
+    const rows = await q.orderBy('sent_at', 'desc').orderBy('id', 'desc').limit(PAGE).execute();
+    return { messages: await loadMessages(db, rows.reverse()) };
+  });
 
   app.post<{ Params: { id: string } }>(
     `${API_PREFIX}/channels/:id/messages`,
@@ -2380,9 +2396,18 @@ export async function registerCommunityRoutes(
       const { model, channelId } = await channelCommunity(request.params.id, me(request));
       const ch = model.channel(channelId)!;
       if (ch.kind !== 'text') throw notFound();
+      const req = parse(sendMessageRequestSchema, request.body);
+      // Your own message sent again under its ID (its answer was lost): "already exists", before
+      // slowmode, a timeout or anything else could refuse it as if it were a new one, so the app
+      // recognises it was sent instead of showing it failed.
+      const existing = await db
+        .selectFrom('messages')
+        .select('sender')
+        .where('id', '=', req.id)
+        .executeTakeFirst();
+      if (existing?.sender === me(request)) throw new HttpError(409, 'conflict', 'Message ID already exists');
       if (!model.can(me(request), Permission.SEND_MESSAGES, channelId))
         throw forbidden('You cannot send messages here');
-      const req = parse(sendMessageRequestSchema, request.body);
       if (req.thread && req.threadId) throw bad('A thread cannot start inside another thread');
       // In a forum every top-level message is a post: it starts its own titled thread.
       if (ch.forum && !req.threadId && !req.thread)
@@ -2651,15 +2676,14 @@ export async function registerCommunityRoutes(
     return { ok: true };
   });
 
-  app.get<{ Params: { id: string }; Querystring: { before?: string } }>(
+  app.get<{ Params: { id: string }; Querystring: { before?: string; beforeId?: string } }>(
     `${API_PREFIX}/threads/:id/messages`,
     authed,
     async (request) => {
       const { msg } = await messageContext(request.params.id, me(request));
-      let q = db.selectFrom('messages').selectAll().where('thread_id', '=', msg.id);
-      const before = request.query.before;
-      if (before && /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(before)) q = q.where('sent_at', '<', before);
-      const rows = await q.orderBy('sent_at', 'desc').limit(PAGE).execute();
+      let q = messageRows().where('thread_id', '=', msg.id);
+      q = beforeCursor(q, request.query.before, request.query.beforeId);
+      const rows = await q.orderBy('sent_at', 'desc').orderBy('id', 'desc').limit(PAGE).execute();
       return { messages: await loadMessages(db, rows.reverse()) };
     },
   );
@@ -2778,6 +2802,17 @@ export async function registerCommunityRoutes(
       const restricted = model.pending(me(request)) || model.timedOut(me(request));
       if (!model.can(me(request), Permission.ADD_REACTIONS, msg.channel_id) && (!existing || restricted))
         throw forbidden();
+      // A new kind of reaction only while the message has fewer than MAX_REACTION_KINDS: every
+      // load of the message carries them all, so one member must not be able to pile up thousands.
+      if (!existing) {
+        const kinds = await db
+          .selectFrom('message_reactions')
+          .select((eb) => eb.fn.count<number>('tag').distinct().as('n'))
+          .where('message_id', '=', msg.id)
+          .executeTakeFirst();
+        if (Number(kinds?.n ?? 0) >= MAX_REACTION_KINDS)
+          throw bad(`A message can have up to ${MAX_REACTION_KINDS} different reactions`);
+      }
       const req = parse(reactRequestSchema, request.body);
       await db
         .insertInto('message_reactions')
@@ -2843,6 +2878,12 @@ export async function registerCommunityRoutes(
         if (socket.readyState !== socket.OPEN) return;
         // A connection that cannot keep up gets no more voice frames rather than an ever-growing buffer.
         if (typeof d !== 'string' && socket.bufferedAmount > MAX_RELAY_BUFFER) return;
+        // Events are never dropped (an app would miss a message): one that stopped reading closes
+        // instead of holding ever more of the server's memory. Its app reconnects and catches up.
+        if (socket.bufferedAmount > (deps.maxEventBuffer ?? MAX_EVENT_BUFFER)) {
+          socket.close(4408);
+          return;
+        }
         socket.send(d);
       },
       close: (c) => socket.close(c),

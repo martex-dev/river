@@ -42,11 +42,12 @@ const aadV2 = (communityId: string, purpose: SealPurpose, binding: string): Buff
   Buffer.from(`river-community-v2|${communityId}|${purpose}|${binding}`, 'utf8');
 
 /**
- * Whether new messages and profiles are sealed with v2 associated data. Off until every
- * supported River opens v2 (receivers have since 2.11): older versions cannot read v2 values.
- * See CRYPTOGRAPHY.md §4a for the planned switch.
+ * Whether new messages and profiles are sealed with v2 associated data. On since 2.12: every
+ * supported River opens v2 (receivers have since 2.11, released on every platform). Rivers
+ * before 2.11 cannot read v2 values. Values sealed v1 (older messages, older senders, webhook
+ * posts) keep opening through the v1 fallback. See CRYPTOGRAPHY.md §4a.
  */
-export const SEAL_V2_DEFAULT = false;
+export const SEAL_V2_DEFAULT = true;
 
 /** What a message is bound to under v2. */
 export const messageBinding = (messageId: string, sender: string): string => `${messageId}|${sender}`;

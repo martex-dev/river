@@ -60,6 +60,7 @@ import {
   type SavedMessageView,
   EMOJI_NAME,
   type SavedOutgoing,
+  type HistoryPage,
 } from '../../shared/community-actions.ts';
 import {
   layoutChanges,
@@ -233,6 +234,8 @@ const PENDING_SIGNALS_MAX = 400;
 /** Messages remembered for edits and saves, and how far back to look for one not seen yet. */
 const RECENT_MESSAGES = 3000;
 const FIND_MESSAGE_PAGES = 5;
+/** Messages per history page (the server's page size). */
+const HISTORY_PAGE = 100;
 const PENDING_SIGNAL_TTL_MS = 30_000;
 
 /** Forum tags from decrypted data: short, unique strings only (1.0.22). */
@@ -275,7 +278,7 @@ export class CommunityService {
   keyStuckMs = 120_000;
   /** How long one rotation candidate has before the next one takes over (tests shorten it). */
   rotateHandoffMs = 30_000;
-  /** Seal new messages and profiles with v2 associated data (off until every River opens v2). */
+  /** Seal new messages and profiles with v2 associated data (on since 2.12; tests turn it off to act as 2.11). */
   sealV2 = SEAL_V2_DEFAULT;
   /** When we first asked for a missing key, per community and epoch. */
   private readonly keyAsked = new Map<string, number>();
@@ -720,7 +723,11 @@ export class CommunityService {
       const recipients = c.members.filter((m) => m.riverId !== me && this.profileOpens(before, c.id, m));
       const key = newCommunityKey();
       this.storeKey(c.id, key, epoch);
-      await this.publishProfile(c.id);
+      // The key goes out even if the profile could not be republished just now (members check the
+      // proof, not the profile; the profile follows on the next start or refresh).
+      await this.publishProfile(c.id).catch((err: unknown) =>
+        this.deps.log.warn(`Could not republish the profile after a key change: ${(err as Error).message}`),
+      );
       const proof = this.wrapKey(c.id, epoch, key, prev);
       for (const m of recipients) {
         await this.keyChannel
@@ -777,12 +784,29 @@ export class CommunityService {
     return run;
   }
 
+  /** When the member list was last fetched again for a key message from someone not on it. */
+  private readonly keyRefreshAt = new Map<string, number>();
+
   private async applyKeyMessage(sender: string, message: KeyMessage): Promise<void> {
-    const c = this.wires.get(message.communityId);
-    const ring = this.keys.get(message.communityId);
-    if (!c || !ring) return;
-    const senderMember = c.members.find((m) => m.riverId === sender);
-    if (!senderMember || !this.keyChannel) return;
+    let c = this.wires.get(message.communityId);
+    let ring = this.keys.get(message.communityId);
+    if (!c || !ring || !this.keyChannel) return;
+    let senderMember = c.members.find((m) => m.riverId === sender);
+    // Someone who joined (or published their profile) after our last look at the members — a
+    // newcomer asking for the key at once, typically. Look again, at most every few seconds per
+    // community, rather than ignore them until something else makes River look.
+    const stale =
+      !senderMember ||
+      (message.t === 'ckeyReq' && !this.profileOpens(ring, message.communityId, senderMember));
+    if (stale && Date.now() - (this.keyRefreshAt.get(message.communityId) ?? 0) > 5_000) {
+      this.keyRefreshAt.set(message.communityId, Date.now());
+      await this.refresh().catch(() => undefined);
+      c = this.wires.get(message.communityId);
+      ring = this.keys.get(message.communityId);
+      if (!c || !ring) return;
+      senderMember = c.members.find((m) => m.riverId === sender);
+    }
+    if (!senderMember) return;
     if (message.t === 'ckey') {
       if (ring.has(message.epoch)) return;
       const key = Buffer.from(message.key, 'base64');
@@ -1746,8 +1770,22 @@ export class CommunityService {
   }
 
   async messages(channelId: string, before?: string): Promise<ChatMessage[]> {
+    return (await this.messagesPage(channelId, before)).messages;
+  }
+
+  /**
+   * One page of a channel's history (oldest first), with whether older messages exist and where
+   * the next page starts. Both come from what the server sent, not from what this device could
+   * open: a page of messages sealed with keys this device never had (sent before you joined)
+   * neither ends the history nor makes the next page the same one again.
+   */
+  async messagesPage(channelId: string, before?: string, beforeId?: string): Promise<HistoryPage> {
     const communityId = this.communityOf(channelId);
-    const query = before ? `?before=${encodeURIComponent(before)}` : '';
+    const params = new URLSearchParams();
+    if (before) params.set('before', before);
+    // Messages sharing the cursor's time are told apart by ID (servers before 2.12 ignore it).
+    if (before && beforeId) params.set('beforeId', beforeId);
+    const query = params.size ? `?${params.toString()}` : '';
     const res = await this.call(
       `/channels/${channelId}/messages${query}`,
       'GET',
@@ -1755,7 +1793,15 @@ export class CommunityService {
       messagesResponseSchema,
     );
     for (const m of res.messages) this.remember(m.id);
-    return res.messages.map((m) => this.toChat(communityId, m)).filter((m): m is ChatMessage => m !== null);
+    const oldest = res.messages[0];
+    return {
+      messages: res.messages
+        .map((m) => this.toChat(communityId, m))
+        .filter((m): m is ChatMessage => m !== null),
+      hasMore: res.messages.length >= HISTORY_PAGE,
+      before: oldest?.sentAt ?? null,
+      beforeId: oldest?.id ?? null,
+    };
   }
 
   async send(
@@ -2533,7 +2579,8 @@ export class CommunityService {
         const embedUrl = (next.embed as { url?: unknown } | undefined)?.url;
         if (next.embed !== undefined && !(typeof embedUrl === 'string' && act.text.includes(embedUrl)))
           delete next.embed;
-        // A v2 message stays v2 (bound to its ID and sender); v1 ones change only once v2 is on.
+        // Bound to the message's own ID and sender, whatever it was sealed with: a v2 message stays
+        // v2, and a v1 one (older Rivers) becomes v2 once this River seals v2 (the default since 2.12).
         const body = sealBound(
           opened.key,
           communityId,
@@ -2558,6 +2605,8 @@ export class CommunityService {
         break;
       case 'history':
         return (await this.messages(act.channelId, act.before)) as CommunityActionResult<A>;
+      case 'historyPage':
+        return (await this.messagesPage(act.channelId, act.before, act.beforeId)) as CommunityActionResult<A>;
       case 'search': {
         // The server cannot search ciphertext: fetch history per channel and search it here.
         const community = this.requireCommunity(act.communityId);
@@ -2570,11 +2619,15 @@ export class CommunityService {
         for (const ch of channels) {
           // A before: date starts the walk there; an after: date ends it.
           let before: string | undefined = q.before ?? undefined;
+          let beforeId: string | undefined;
           for (let page = 0; page < (q.after || q.before ? 20 : 5); page++) {
-            const batch = await this.messages(ch.id, before).catch(() => []);
-            found.push(...batch.filter((m) => matchesSearch(m, q, ch.name)));
-            if (batch.length < 100) break;
-            before = batch[0]!.sentAt;
+            const batch = await this.messagesPage(ch.id, before, beforeId).catch(() => null);
+            if (!batch) break;
+            found.push(...batch.messages.filter((m) => matchesSearch(m, q, ch.name)));
+            // Paged by what the server sent: messages this device cannot open do not end the walk.
+            if (!batch.hasMore || !batch.before) break;
+            before = batch.before;
+            beforeId = batch.beforeId ?? undefined;
             if (q.after && before < q.after) break;
           }
         }
@@ -2660,15 +2713,19 @@ export class CommunityService {
         let partial = false;
         for (const ch of community.channels.filter((c) => c.kind === 'text')) {
           let before: string | undefined;
+          let beforeId: string | undefined;
           for (let page = 0; ; page++) {
-            const batch = await this.messages(ch.id, before).catch(() => []);
-            for (const m of batch) seen.push({ channelId: m.channelId, sender: m.sender, sentAt: m.sentAt });
-            if (batch.length < 100 || batch[0]!.sentAt < since) break;
+            const batch = await this.messagesPage(ch.id, before, beforeId).catch(() => null);
+            if (!batch) break;
+            for (const m of batch.messages)
+              seen.push({ channelId: m.channelId, sender: m.sender, sentAt: m.sentAt });
+            if (!batch.hasMore || !batch.before || batch.before < since) break;
             if (page === 9) {
               partial = true;
               break;
             }
-            before = batch[0]!.sentAt;
+            before = batch.before;
+            beforeId = batch.beforeId ?? undefined;
           }
         }
         return summarizeActivity(seen, now, act.days, partial) as CommunityActionResult<A>;
@@ -3199,11 +3256,14 @@ export class CommunityService {
     };
     if (seen()) return seen();
     let before: string | undefined;
+    let beforeId: string | undefined;
     for (let page = 0; page < FIND_MESSAGE_PAGES; page++) {
-      const list = await this.messages(channelId, before);
+      const batch = await this.messagesPage(channelId, before, beforeId);
       if (seen()) return seen();
-      if (!list.length || list[0]!.sentAt === before) return undefined;
-      before = list[0]!.sentAt;
+      if (!batch.hasMore || !batch.before || (batch.before === before && batch.beforeId === beforeId))
+        return undefined;
+      before = batch.before;
+      beforeId = batch.beforeId ?? undefined;
     }
     return undefined;
   }
@@ -3733,7 +3793,11 @@ export class CommunityService {
           .catch(() => undefined);
         return;
       case 'message': {
-        const isNew = !this.seen.has(e.message.id);
+        // The server pushes a message again when it changes (an edit, a reaction, a pin, a thread
+        // reply counted on its first message): one this session has not opened yet is new only if
+        // nothing has happened to it since it was sent. Otherwise a reaction to an old message would
+        // ring and notify as a new one.
+        const isNew = !this.seen.has(e.message.id) && unchangedSinceSent(e.message);
         this.remember(e.message.id);
         if (e.message.sentAt > (this.liveLast.get(e.message.channelId) ?? ''))
           this.liveLast.set(e.message.channelId, e.message.sentAt);
@@ -3985,6 +4049,11 @@ export class CommunityService {
     this.communities = this.communities.filter((c) => c.id !== id);
     this.emit({ t: 'communities', communities: this.communities });
   }
+}
+
+/** A message as it was sent: never edited, reacted to, pinned or replied to in a thread. */
+function unchangedSinceSent(m: MessageWire): boolean {
+  return !m.editedAt && !m.pinned && m.reactions.length === 0 && (!m.thread || m.thread.count === 0);
 }
 
 function defaultVoiceState(): VoiceState {
