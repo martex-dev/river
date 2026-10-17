@@ -135,6 +135,24 @@ export interface CommunityOps {
   deleteCommunity(communityId: string): Promise<boolean>;
 }
 
+/**
+ * Overwrites that deny whatever either set denies (2.11.2): a role keeps `base`'s allowances only
+ * where `extra` does not deny them.
+ */
+export function mergeDenials(
+  base: readonly OverwriteWire[],
+  extra: readonly OverwriteWire[],
+): OverwriteWire[] {
+  const out = new Map<string, OverwriteWire>();
+  for (const o of base) out.set(o.roleId, { ...o });
+  for (const o of extra) {
+    const had = out.get(o.roleId);
+    const deny = (had?.deny ?? 0) | o.deny;
+    out.set(o.roleId, { roleId: o.roleId, allow: (had?.allow ?? 0) & ~deny, deny });
+  }
+  return [...out.values()];
+}
+
 export async function registerCommunityRoutes(
   app: FastifyInstance,
   deps: {
@@ -323,10 +341,14 @@ export async function registerCommunityRoutes(
    * keeps the permissions it had: the category's overwrites become its own and it stops being
    * synced. Without this a private category's channels would turn public the moment they leave.
    */
-  const keepAccess = async (trx: Transaction<Database>, ch: ChannelModel): Promise<void> => {
+  const keepAccess = async (
+    trx: Transaction<Database>,
+    ch: ChannelModel,
+    alsoDeny: readonly OverwriteWire[] = [],
+  ): Promise<void> => {
     if (!ch.synced) return;
     await trx.deleteFrom('channel_overwrites').where('channel_id', '=', ch.id).execute();
-    for (const o of ch.overwrites)
+    for (const o of mergeDenials(ch.overwrites, alsoDeny))
       await trx
         .insertInto('channel_overwrites')
         .values({ channel_id: ch.id, role_id: o.roleId, allow: o.allow, deny: o.deny })
@@ -345,9 +367,15 @@ export async function registerCommunityRoutes(
     ch: ChannelModel,
     parentId: string | null,
     synced?: boolean,
+    into: readonly OverwriteWire[] = [],
   ): Promise<void> => {
     if (parentId === ch.parentId) return;
-    if (ch.parentId !== null) return keepAccess(trx, ch);
+    if (ch.parentId !== null) {
+      // From one category into another, a synced channel keeps the old category's denials and
+      // takes the new one's too: neither a private old nor a private new category fails open.
+      if (parentId !== null && ch.synced && synced !== false) return keepAccess(trx, ch, into);
+      return keepAccess(trx, ch);
+    }
     if (parentId === null || synced === false) return;
     await trx.updateTable('channels').set({ synced: 1 }).where('id', '=', ch.id).execute();
   };
@@ -734,7 +762,14 @@ export async function registerCommunityRoutes(
     const current = model.channel(channelId)!;
     await db.transaction().execute(async (trx) => {
       // Moved into a category: synced to it (unless synced: false). Out of one: keeps its access.
-      if (req.parentId !== undefined && synced !== true) await moved(trx, current, req.parentId, synced);
+      if (req.parentId !== undefined && synced !== true)
+        await moved(
+          trx,
+          current,
+          req.parentId,
+          synced,
+          req.parentId ? model.category(req.parentId)?.overwrites : [],
+        );
       if (synced !== undefined) {
         await trx
           .updateTable('channels')
@@ -1502,7 +1537,14 @@ export async function registerCommunityRoutes(
       }
       for (const c of req.channels) {
         const current = model.channel(c.id)!;
-        if (c.synced !== true) await moved(trx, current, c.parentId, c.synced);
+        if (c.synced !== true)
+          await moved(
+            trx,
+            current,
+            c.parentId,
+            c.synced,
+            c.parentId ? model.category(c.parentId)?.overwrites : [],
+          );
         await trx
           .updateTable('channels')
           .set({
@@ -1574,7 +1616,13 @@ export async function registerCommunityRoutes(
       const order = [...rest.slice(0, at), moving, ...rest.slice(at)];
       if (order.length > 1000) throw bad();
       await db.transaction().execute(async (trx) => {
-        await moved(trx, moving, req.parentId);
+        await moved(
+          trx,
+          moving,
+          req.parentId,
+          undefined,
+          req.parentId ? model.category(req.parentId)?.overwrites : [],
+        );
         for (const [position, c] of order.entries()) {
           if (c === moving) {
             await trx
