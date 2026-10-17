@@ -3,6 +3,22 @@
 Ordered by priority. The top unchecked item is the next thing to build.
 Milestone definitions: [ROADMAP.md](ROADMAP.md).
 
+## Road to 3.0 (maintainer request, 2026-10-18)
+
+Plan: [docs/product/road-to-3.md](docs/product/road-to-3.md). Many releases, one theme per minor.
+
+- [ ] 2.11.2 Call fixes (missed calls, glare, a second call, other devices, speaker and Bluetooth), review fixes
+- [ ] 2.12.0 Phones look like Telegram and Instagram: bottom tabs, chat list, conversation screen with bubbles, communities as a list, calls list, feed, profile
+- [ ] 2.12.x Polish for each phone screen; v2 associated data on by default
+- [ ] 2.13.x Easy start: install to first chat in under a minute, one-screen profile, invite links that open the app; community keys need a proof
+- [ ] 2.14.x Group calls, call quality, call links
+- [ ] 2.15.x Voice channels and meetings: bigger rooms, grid and speaker views, raise hand, stage
+- [ ] 2.16.x Notifications: per-chat sounds, mentions-only, grouping
+- [ ] 2.17.x Looks: wallpapers, accent colours, bubble styles, theme editor
+- [ ] 2.18.x Messaging, part 2
+- [ ] 2.19.x Privacy, part 2: less metadata, padding, proxy-friendly connections
+- [ ] 2.20.x Whole-app sweep
+
 ## 2.x — Telegram, Signal and phone-call parity (maintainer request, 2026-10-16)
 
 Audit and plan: [docs/product/telegram-parity.md](docs/product/telegram-parity.md). One release per line.
