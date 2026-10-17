@@ -2717,15 +2717,19 @@ body:has(.dm-call--full) .popover {
   background: #34c759;
 }
 .call-action--nudge {
-  animation: call-nudge 1.2s ease-in-out infinite;
+  animation: call-nudge 1.4s ease-out infinite;
 }
+/* A glow pulsing out from Answer: the button itself does not move, so it is always easy to press. */
 @keyframes call-nudge {
-  0%,
-  100% {
-    transform: scale(1);
+  0% {
+    box-shadow:
+      0 10px 24px -8px rgba(0, 0, 0, 0.6),
+      0 0 0 0 rgba(52, 199, 89, 0.55);
   }
-  50% {
-    transform: scale(1.1);
+  100% {
+    box-shadow:
+      0 10px 24px -8px rgba(0, 0, 0, 0.6),
+      0 0 0 18px rgba(52, 199, 89, 0);
   }
 }
 .call-action--decline svg {
