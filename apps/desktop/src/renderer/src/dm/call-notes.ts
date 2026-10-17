@@ -17,6 +17,7 @@ export function callNote(
   if (!c.answered) {
     if (c.outcome === 'declined') return `${icon} ${kind} — declined`;
     if (c.outcome === 'failed') return `${icon} ${kind} — could not connect`;
+    if (c.outcome === 'busy') return `${icon} ${kind} — busy`;
     return c.direction === 'in' ? `${icon} Missed ${kind.toLowerCase()}` : `${icon} ${kind} — no answer`;
   }
   return `${icon} ${kind} · ${duration(c.durationSec)}`;

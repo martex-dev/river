@@ -186,7 +186,7 @@ export function VoiceChannel(props: {
             >
               <CameraIcon />
             </button>
-            {phone && <SpeakerButton initial />}
+            {phone && <SpeakerButton initial call={call} />}
             {/* Phones have no screen picker yet. */}
             {!phone && (
               <button
@@ -294,23 +294,32 @@ export function VoiceChannel(props: {
   );
 }
 
-/** Phones: loudspeaker or earpiece for this call. */
-export function SpeakerButton(props: { initial: boolean }): ReactElement {
-  const [on, setOn] = useState(props.initial);
+/**
+ * The loudspeaker choice of each call, kept for as long as the call: leaving the call's screen
+ * (another conversation, another page) and coming back keeps it (2.11.3: it reset every time).
+ */
+const speakerChoice = new WeakMap<object, boolean>();
+
+/** Phones: loudspeaker, or earpiece (a headset when one is connected), for this call. */
+export function SpeakerButton(props: { initial: boolean; call: object }): ReactElement {
+  const { initial, call } = props;
+  const [on, setOn] = useState(() => speakerChoice.get(call) ?? initial);
   useEffect(() => {
-    void window.river.voice.setSpeaker(props.initial).catch(() => undefined);
-    // Set once for this call; afterwards the button decides.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // Set once per call; afterwards the button decides.
+    if (speakerChoice.has(call)) return;
+    speakerChoice.set(call, initial);
+    void window.river.voice.setSpeaker(initial).catch(() => undefined);
+  }, [call, initial]);
   return (
     <button
       className={`round-btn ${on ? 'round-btn--on' : ''}`}
       aria-pressed={on}
       aria-label={on ? 'Speaker on' : 'Speaker off'}
-      title={on ? 'Playing through the loudspeaker' : 'Playing through the earpiece'}
+      title={on ? 'Playing through the loudspeaker' : 'Playing through the earpiece, or your headset'}
       onClick={() => {
         const next = !on;
         setOn(next);
+        speakerChoice.set(call, next);
         void window.river.voice.setSpeaker(next).catch(() => undefined);
       }}
     >

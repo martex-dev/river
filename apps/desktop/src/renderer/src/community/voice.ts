@@ -65,6 +65,11 @@ const RELAY_CHECK_MS = 2000;
 /** While relayed, our key is sent again this many times, this far apart (lost signals). */
 const RELAY_KEY_RESENDS = 5;
 const RELAY_KEY_RESEND_MS = 8000;
+/**
+ * Relayed voice counts as flowing while their frames arrived this recently (River sends a quiet
+ * frame now and then while muted, so a muted person still counts).
+ */
+const RELAY_SILENT_MS = 15_000;
 
 function newSid(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(9));
@@ -84,6 +89,11 @@ export interface RemotePeer {
   reconnecting: boolean;
   /** Voice goes through the River server (no direct connection); audio only. */
   relayed: boolean;
+  /**
+   * Their voice really arrives through the server (frames that decrypt came in lately): only
+   * then is a relayed call connected. The relay merely being on proves nothing.
+   */
+  relayFlowing: boolean;
   /** Says Priority speaker is on (1.0.33); listeners honour it only if the community allows it. */
   priority?: boolean;
 }
@@ -212,6 +222,9 @@ export class VoiceCall {
    * our connection to the server comes back.
    */
   private readonly keySentTo = new Map<string, { at: number; times: number }>();
+  /** Relayed frames received from each person so far, and when the count last grew. */
+  private readonly relayHeard = new Map<string, { frames: number; at: number }>();
+  private relayPollPending = false;
   private local: Record<Slot, MediaStreamTrack | null> = { audio: null, camera: null, screen: null };
   private readonly onChange: () => void;
   muted = false;
@@ -361,6 +374,7 @@ export class VoiceCall {
    */
   private checkRelays(): void {
     if (this.closed) return;
+    this.pollRelayFrames();
     const now = Date.now();
     for (const id of [...this.relayPeers]) {
       if (this.peers.get(id)?.pc.connectionState === 'connected') {
@@ -399,7 +413,48 @@ export class VoiceCall {
 
   /** A relayed voice frame arrived from the server. */
   receiveRelay(from: string, payload: Uint8Array): void {
-    if (!this.closed && this.relayPeers.has(from)) this.relay?.receive(from, payload);
+    if (this.closed || !this.relayPeers.has(from)) return;
+    this.relay?.receive(from, payload);
+    // The first frames after a silence: see soon (once they decrypted) that sound flows again.
+    if (!this.views.get(from)?.relayFlowing && !this.relayPollPending) {
+      this.relayPollPending = true;
+      this.later(150, () => {
+        this.relayPollPending = false;
+        this.pollRelayFrames();
+      });
+    }
+  }
+
+  /** Notes who we really hear through the server (their frames decrypt), and since when. */
+  private pollRelayFrames(): void {
+    if (this.closed || !this.relay) return;
+    const now = Date.now();
+    let changed = false;
+    for (const id of this.relayPeers) {
+      const frames = this.relay.received(id);
+      const heard = this.relayHeard.get(id);
+      if (!heard) this.relayHeard.set(id, { frames, at: 0 });
+      else if (frames > heard.frames) this.relayHeard.set(id, { frames, at: now });
+      const view = this.views.get(id);
+      if (!view) continue;
+      const at = this.relayHeard.get(id)!.at;
+      const flowing = at > 0 && now - at < RELAY_SILENT_MS;
+      if (view.relayFlowing !== flowing) {
+        view.relayFlowing = flowing;
+        changed = true;
+      }
+    }
+    if (changed) this.onChange();
+  }
+
+  /**
+   * When we last knew this person was still there: now while a direct connection with them is
+   * up, else when their voice last came through the server (0: never).
+   */
+  lastHeard(id: string): number {
+    if (this.peers.get(id)?.pc.connectionState === 'connected') return Date.now();
+    this.pollRelayFrames();
+    return this.relayPeers.has(id) ? (this.relayHeard.get(id)?.at ?? 0) : 0;
   }
 
   /** Talk to this person through the server until a direct connection works. */
@@ -408,6 +463,8 @@ export class VoiceCall {
     if (!this.relayPeers.has(id)) {
       this.relayPeers.add(id);
       this.relay.setRecipients([...this.relayPeers]);
+      // Counted from now: frames from an earlier stretch through the server say nothing of now.
+      this.relayHeard.set(id, { frames: this.relay.received(id), at: 0 });
     }
     if (!this.keySentTo.has(id)) this.sendRelayKey(id);
     this.refreshAudio(id);
@@ -431,6 +488,7 @@ export class VoiceCall {
   private forgetRelay(id: string): void {
     this.relayPeers.delete(id);
     this.keySentTo.delete(id);
+    this.relayHeard.delete(id);
     this.relay?.setRecipients([...this.relayPeers]);
     this.relay?.dropPeer(id);
   }
@@ -442,6 +500,7 @@ export class VoiceCall {
     const relayed = this.relayPeers.has(id);
     const stream = relayed ? (this.relay?.streamFor(id) ?? null) : (this.peers.get(id)?.directAudio ?? null);
     view.relayed = relayed;
+    if (!relayed) view.relayFlowing = false;
     if (view.audio !== stream) {
       view.audio = stream;
       this.watch(id, stream?.getAudioTracks()[0] ?? null);
@@ -591,6 +650,7 @@ export class VoiceCall {
         state: 'new',
         reconnecting: false,
         relayed: this.relayPeers.has(id),
+        relayFlowing: false,
       };
       this.views.set(id, v);
     }
@@ -844,6 +904,7 @@ export class VoiceCall {
     this.views.clear();
     this.relay?.close();
     this.relayPeers.clear();
+    this.relayHeard.clear();
     this.stopLocal();
     this.syncShare();
     this.micProbe?.stop();

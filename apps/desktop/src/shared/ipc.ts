@@ -744,8 +744,11 @@ export interface RiverApi {
     iceServers(): Promise<Array<{ urls: string[]; username?: string; credential?: string }>>;
     screenSources(): Promise<ScreenSource[]>;
     selectScreen(sourceId: string): Promise<void>;
-    /** Phones: calls through the loudspeaker (true) or the earpiece (false). Nothing on computers. */
-    setSpeaker(on: boolean): Promise<void>;
+    /**
+     * Phones: calls through the loudspeaker (true) or the earpiece (false); null when the call is
+     * over, so the phone's audio goes back to normal. Nothing on computers.
+     */
+    setSpeaker(on: boolean | null): Promise<void>;
     /** Android: while a call is on, leaving River shows it in picture-in-picture (2.10). */
     setPip(on: boolean): void;
     /**

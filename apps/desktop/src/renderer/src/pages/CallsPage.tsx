@@ -31,6 +31,8 @@ export function callLabel(
       return `${arrow} Declined`;
     case 'failed':
       return `${arrow} Could not connect`;
+    case 'busy':
+      return `${arrow} Busy`;
     case 'missed':
       return c.direction === 'in' ? `${arrow} Missed` : `${arrow} No answer`;
   }

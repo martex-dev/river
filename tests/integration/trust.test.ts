@@ -418,7 +418,9 @@ describe('direct-message replays and parking', { timeout: 60_000 }, () => {
     await bob.dm.sync();
     expect(kept(bob)).toBe(20);
 
-    // A call invite that waited in the mailbox longer than a ring lasts does not ring.
+    // An invite's age is measured on this device's own clock (2.11.2): the server's time (here
+    // set two minutes back, as a server whose clock runs behind would) never drops a live call.
+    // Invites are not stored any more, so an old one cannot wait in the mailbox to ring later.
     const callId = msgId();
     await internals(alice).sendContent(bob.riverId, { v: 1, t: 'call', callId, kind: 'invite' });
     await serverDb.db
@@ -427,7 +429,9 @@ describe('direct-message replays and parking', { timeout: 60_000 }, () => {
       .where('recipient', '=', bob.riverId)
       .execute();
     await bob.dm.sync();
-    expect(bob.events.some((e) => e.t === 'call' && e.callId === callId)).toBe(false);
+    expect(bob.events.some((e) => e.t === 'call' && e.callId === callId)).toBe(true);
+    await internals(alice).sendContent(bob.riverId, { v: 1, t: 'call', callId, kind: 'end' });
+    await bob.dm.sync();
     const fresh = msgId();
     await internals(alice).sendContent(bob.riverId, { v: 1, t: 'call', callId: fresh, kind: 'invite' });
     await bob.dm.sync();

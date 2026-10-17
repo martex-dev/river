@@ -533,7 +533,8 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       }
       case 'voiceDisconnect': {
         const call = get().call;
-        if (!call) return;
+        // About a voice channel only: a 1:1 call is not in one, and ends only by its own signals.
+        if (!call || call.channelId.startsWith('dm:')) return;
         set({ call: null });
         // A moderator ended it: do not offer to rejoin.
         forgetCall();

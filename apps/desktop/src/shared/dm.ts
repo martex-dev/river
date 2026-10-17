@@ -100,8 +100,11 @@ export interface FileView {
   sentAt: string;
 }
 
-/** How a call ended: answered, missed (no answer), declined, or answered but never connected. */
-export type CallOutcome = 'answered' | 'missed' | 'declined' | 'failed';
+/**
+ * How a call ended: answered, missed (no answer), declined, answered but never connected, or (a
+ * call you made) the other person was in another call.
+ */
+export type CallOutcome = 'answered' | 'missed' | 'declined' | 'failed' | 'busy';
 
 export interface CallView {
   id: string;
@@ -309,7 +312,9 @@ export const dmActionSchema = z.discriminatedUnion('a', [
       video: z.boolean(),
       answered: z.boolean(),
       /** Why an unanswered call ended, when the window knows (a call you declined). */
-      outcome: z.enum(['declined', 'failed']).optional(),
+      outcome: z.enum(['declined', 'failed', 'busy']).optional(),
+      /** The call, so an answer recorded for it (and only for it) can mark it as failed. */
+      callId: id.optional(),
       durationSec: z
         .number()
         .int()

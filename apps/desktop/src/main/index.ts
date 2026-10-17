@@ -639,8 +639,22 @@ async function start(): Promise<void> {
   let quitting = false;
   let told = false;
   let hostStopped = false;
+  /** A 1:1 call on when River quits: the other side was told it ended (once). */
+  let quitCallEnded = false;
   app.on('before-quit', (event) => {
     quitting = true;
+    // In a 1:1 call: tell the other side it ended (at most a moment), rather than leaving them in
+    // a call with nobody until it times out.
+    const call = quitCallEnded ? null : dm.currentCall();
+    if (call) {
+      quitCallEnded = true;
+      event.preventDefault();
+      void Promise.race([
+        dm.action({ a: 'call', peer: call.peer, callId: call.callId, kind: 'end' }).catch(() => undefined),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]).finally(() => app.quit());
+      return;
+    }
     // Stop the community server cleanly before River exits (at most a few seconds).
     if (hostStopped || hosting.manager.status().state === 'off') return;
     event.preventDefault();
