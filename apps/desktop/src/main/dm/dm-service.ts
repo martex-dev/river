@@ -1,9 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import {
+  IdentityChangeRefusedError,
   RiverProtocol,
   SafetyNumberChangedError,
   safetyNumber,
   verify,
+  type IncomingIdentityChange,
   type ProtocolStorage,
   type StoreKind,
 } from '@river/crypto';
@@ -211,12 +213,17 @@ const contentSchema = z.discriminatedUnion('t', [
     communityId: msgId,
     epoch: z.number().int().min(0).max(1_000_000),
     key: z.string().regex(/^[A-Za-z0-9+/]{43}=$/),
+    /** Proof the sender held the previous key (2.11): the key sealed under epoch `prev`'s key. */
+    wrap: z.string().max(400).optional(),
+    prev: z.number().int().min(0).max(1_000_000).optional(),
   }),
   z.object({
     v: z.literal(1),
     t: z.literal('ckeyReq'),
     communityId: msgId,
     epoch: z.number().int().min(0).max(1_000_000),
+    /** The newest epoch the requester holds (2.11). */
+    have: z.number().int().min(0).max(1_000_000).optional(),
   }),
   z.object({
     v: z.literal(1),
@@ -304,6 +311,14 @@ interface Inbound {
   tries: number;
 }
 const INBOX_MAX_WAITING = 500;
+/** Messages one sender may have waiting for groups this device does not know yet. */
+const INBOX_MAX_WAITING_PER_SENDER = 20;
+/** Live signals: never kept to be applied later. */
+const EPHEMERAL = new Set(['call', 'typing']);
+/** How long a removed group stays remembered, so its traffic is dropped instead of waiting. */
+const GROUP_TOMBSTONE_MS = 90 * 86_400_000;
+/** Peer device lists are fetched and verified again at least this often. */
+const DEVICE_LIST_MAX_AGE_MS = 24 * 3_600_000;
 const INBOX_WAIT_MS = 7 * 86_400_000;
 const INBOX_MAX_TRIES = 5;
 /** Decrypted messages kept in memory while storage is unavailable (their envelopes stay on the server). */
@@ -489,8 +504,11 @@ export class DmService {
     const protocol = new RiverProtocol({ ...identity, deviceId: this.deviceId() }, this.storage());
     protocol.onIdentityChanged = (riverId) => {
       this.db().prepare('UPDATE contacts SET key_changed = 1 WHERE river_id = ?').run(riverId);
+      // Their devices are looked up again under the new key before the next message goes out.
+      this.storage().delete('meta', `dm:devicesAt:${riverId}`);
       this.emitConversations();
     };
+    protocol.approveIdentityChange = (change) => this.confirmIdentityChange(change);
     this.protocolCache = protocol;
     this.protocolOwner = identity.riverId;
     return protocol;
@@ -595,12 +613,32 @@ export class DmService {
     // the same message twice, so use the plaintext kept in memory.
     let inbound = this.undelivered.get(env.id);
     if (!inbound) {
+      // The server names the sender. Content "from us" (copies, contacts, groups) is accepted only
+      // from another device in this account's identity-signed device list; libsignal also checks
+      // that such a session uses this account's own identity key (RiverProtocol).
+      if (env.sender === this.me()) {
+        const listed =
+          env.senderDevice !== this.deviceId() &&
+          (await this.deps.account.ownDeviceListed(env.senderDevice).catch(() => false));
+        if (!listed) {
+          this.deps.log.warn('Dropped a message claiming to come from a device this account does not have');
+          return true;
+        }
+      } else {
+        this.hintDevice(env.sender, env.senderDevice);
+      }
       let content: Content;
       try {
         const plain = await this.protocol().decrypt(env.sender, env.senderDevice, env);
         content = contentSchema.parse(JSON.parse(new TextDecoder().decode(plain)));
       } catch (err) {
-        this.deps.log.warn(`Dropped a direct message that could not be decrypted (${(err as Error).name})`);
+        if (err instanceof IdentityChangeRefusedError) {
+          this.deps.log.warn(
+            'Dropped a direct message under a new safety key that River could not confirm for its sender',
+          );
+        } else {
+          this.deps.log.warn(`Dropped a direct message that could not be decrypted (${(err as Error).name})`);
+        }
         return true;
       }
       inbound = { sender: env.sender, receivedAt: env.receivedAt, content, keptAt: Date.now(), tries: 0 };
@@ -621,6 +659,11 @@ export class DmService {
       waitGroup = this.apply(inbound);
     } catch (err) {
       this.deps.log.warn(`A direct message could not be applied yet: ${(err as Error).message}`);
+      // Live signals are worthless later: a call replayed after unlocking would ring long after it ended.
+      if (EPHEMERAL.has(inbound.content.t)) {
+        this.undelivered.delete(id);
+        return true;
+      }
       try {
         this.keep(id, { ...inbound, tries: inbound.tries + 1 });
         this.undelivered.delete(id);
@@ -634,15 +677,38 @@ export class DmService {
       }
     }
     this.undelivered.delete(id);
-    if (waitGroup) {
-      // Group traffic that arrived before the group's details: keep it for a while (bounded).
+    if (waitGroup && !EPHEMERAL.has(inbound.content.t)) {
+      // Group traffic that arrived before the group's details: keep it for a while (bounded in
+      // total and per sender, so nobody can fill the space with made-up groups).
       try {
-        if (this.keptCount() < INBOX_MAX_WAITING) this.keep(id, { ...inbound, waitGroup });
+        if (
+          this.keptCount() < INBOX_MAX_WAITING &&
+          this.keptFrom(inbound.sender) < INBOX_MAX_WAITING_PER_SENDER
+        )
+          this.keep(id, { ...inbound, waitGroup });
       } catch (err) {
         this.deps.log.warn(`A group message could not be kept: ${(err as Error).message}`);
       }
     }
     return true;
+  }
+
+  /**
+   * Traffic for a group this device does not know waits for the group's details only from
+   * people it already knows (contacts, members of its groups, its own devices), and never for a
+   * group that was removed here.
+   */
+  private mayWaitForGroup(sender: string, groupId: string): boolean {
+    const gone = Number(this.meta(`groupGone:${groupId}`) ?? 0);
+    if (gone && Date.now() - gone < GROUP_TOMBSTONE_MS) return false;
+    if (sender === this.me()) return true;
+    const c = this.contact(sender);
+    if (c) return c.state !== 'blocked';
+    return (
+      this.db().prepare(`SELECT members FROM dm_groups WHERE state != 'left'`).all() as Array<{
+        members: string;
+      }>
+    ).some((g) => this.list(g.members).includes(sender));
   }
 
   private keep(id: string, inbound: Inbound): void {
@@ -651,6 +717,11 @@ export class DmService {
 
   private unkeep(id: string): void {
     this.storage().delete('meta', `dm:inbox:${id}`);
+  }
+
+  /** Kept messages from one sender that wait for a group. */
+  private keptFrom(sender: string): number {
+    return this.kept().filter(([, x]) => x.sender === sender && x.waitGroup).length;
   }
 
   private keptCount(): number {
@@ -671,6 +742,8 @@ export class DmService {
       const id = r.id.slice('dm:inbox:'.length);
       try {
         const raw = JSON.parse(Buffer.from(r.value).toString('utf8')) as Inbound;
+        // Calls and typing kept by older versions are long over.
+        if (EPHEMERAL.has((raw.content as { t?: string } | undefined)?.t ?? '')) throw new Error('ephemeral');
         out.push([
           id,
           {
@@ -804,7 +877,7 @@ export class DmService {
     }
     if (content.t === 'profile' && content.groupId) {
       const g = this.group(content.groupId);
-      if (!g) return content.groupId;
+      if (!g) return this.mayWaitForGroup(peer, content.groupId) ? content.groupId : null;
       if (this.list(g.members).includes(peer)) {
         const profiles = JSON.parse(g.profiles) as Record<
           string,
@@ -825,7 +898,7 @@ export class DmService {
     if (groupId) {
       const g = this.group(groupId);
       // Not known yet (its details may still be on the way): wait for them, except typing.
-      if (!g) return content.t === 'typing' ? null : groupId;
+      if (!g) return content.t !== 'typing' && this.mayWaitForGroup(peer, groupId) ? groupId : null;
       if (g.state === 'left' || !this.list(g.members).includes(peer)) return null;
       conv = groupId;
     }
@@ -935,6 +1008,9 @@ export class DmService {
         // Only accepted contacts can ring you; call setup is never stored.
         if (contact?.state !== 'accepted') return null;
         if (content.data !== undefined && JSON.stringify(content.data).length > 30_000) return null;
+        // An invite that waited in the mailbox (or in storage) longer than a ring lasts is over.
+        const age = now.getTime() - Date.parse(inbound.receivedAt);
+        if (content.kind === 'invite' && !(age <= RING_MS)) return null;
         const event = {
           t: 'call' as const,
           peer,
@@ -1159,6 +1235,8 @@ export class DmService {
         created_at: new Date().toISOString(),
         last_read: null,
       });
+      // Added (back) on purpose: it is no longer a removed group.
+      this.storage().delete('meta', `dm:groupGone:${update.groupId}`);
       // Messages that arrived before the group's details can be shown now.
       this.retryKept(update.groupId);
     }
@@ -1380,7 +1458,7 @@ export class DmService {
     if (this.db().prepare('SELECT 1 FROM dm_messages WHERE id = ?').get(message.id)) return null;
     if (isGroupId(conv)) {
       const g = this.group(conv);
-      if (!g) return conv;
+      if (!g) return this.mayWaitForGroup(this.me(), conv) ? conv : null;
       if (g.state === 'left') return null;
     } else if (!this.contact(conv)) {
       this.upsertContact(conv, 'accepted');
@@ -1422,7 +1500,7 @@ export class DmService {
     const me = this.me();
     if (isGroupId(conv)) {
       const g = this.group(conv);
-      if (!g) return conv;
+      if (!g) return this.mayWaitForGroup(me, conv) ? conv : null;
       if (g.state === 'left' && op.t !== 'read') return null;
     }
     switch (op.t) {
@@ -1486,8 +1564,55 @@ export class DmService {
       ? (JSON.parse(cachedRaw) as Array<{ deviceId: number; registrationId: number }>)
       : null;
     const protocol = this.protocol();
-    if (!force && cached?.length && cached.every((d) => protocol.hasSession(peer, d.deviceId))) return cached;
+    // The cached list is used while it is fresh; it is fetched and verified again at least daily,
+    // and sooner when a message arrives from a device it does not have (hintDevice).
+    const checkedAt = Number(this.meta(`devicesAt:${peer}`) ?? 0);
+    const fresh = Date.now() - checkedAt < DEVICE_LIST_MAX_AGE_MS && checkedAt <= Date.now();
+    if (!force && fresh && cached?.length && cached.every((d) => protocol.hasSession(peer, d.deviceId)))
+      return cached;
 
+    const { res, identityKey, list } = await this.verifiedKeys(peer);
+    // A server must not bring back a device that was removed by replaying an older signed list.
+    // Versions count per identity key: a new key (after a reinstall) starts its own list.
+    const stored = peer === this.me() ? null : protocol.identityOf(peer);
+    const sameKey = !stored || Buffer.from(stored).equals(identityKey);
+    const seen = Number(this.meta(`listVersion:${peer}`) ?? '0');
+    if (sameKey && list.version < seen) {
+      throw new CommunityError(
+        'The server offered an older device list for this person than River has already seen. Messages were not sent.',
+      );
+    }
+    const devices: Array<{ deviceId: number; registrationId: number }> = [];
+    for (const d of res.devices) {
+      if (peer === this.me() && d.deviceId === this.deviceId()) continue;
+      const listed = list.devices.find((x) => x.deviceId === d.deviceId);
+      if (!listed || listed.registrationId !== d.registrationId) continue;
+      if (force || !protocol.hasSession(peer, d.deviceId)) {
+        await protocol.startSession(peer, identityKey, d);
+      }
+      devices.push({ deviceId: d.deviceId, registrationId: d.registrationId });
+    }
+    if (!devices.length) throw new CommunityError('That person has not set up messaging yet.');
+    // This list is now the newest seen for the key River holds (libsignal accepted a new one, if any).
+    const nowStored = peer === this.me() ? null : protocol.identityOf(peer);
+    const adopted = !nowStored || Buffer.from(nowStored).equals(identityKey);
+    if (adopted && (!sameKey || list.version > seen))
+      this.setMeta(`listVersion:${peer}`, String(list.version));
+    this.setMeta(`devices:${peer}`, JSON.stringify(devices));
+    this.setMeta(`devicesAt:${peer}`, String(Date.now()));
+    return devices;
+  }
+
+  /**
+   * A person's key bundle, checked against what the server cannot forge on its own: the device
+   * list must be signed by the identity key it comes with, and that key must match the one in
+   * their sealed profile in a shared community (when there is one).
+   */
+  private async verifiedKeys(peer: string): Promise<{
+    res: z.infer<typeof keyBundleResponseSchema>;
+    identityKey: Buffer;
+    list: z.infer<typeof deviceListSchema>;
+  }> {
     let res;
     try {
       res = await this.deps.community.api(`/keys/${peer}`, 'GET', undefined, keyBundleResponseSchema);
@@ -1498,7 +1623,7 @@ export class DmService {
     const identityKey = Buffer.from(res.identityKey, 'base64');
     // Shared communities carry the person's identity key sealed with a community key the server
     // cannot read; if the server hands out a different key, refuse.
-    const fromCommunity = this.deps.community.communityIdentityKey(peer);
+    const fromCommunity = peer === this.me() ? null : this.deps.community.communityIdentityKey(peer);
     if (fromCommunity && fromCommunity !== res.identityKey) {
       throw new CommunityError(
         'The server offered a different safety key for this person than the one in your shared community. Messages were not sent.',
@@ -1512,27 +1637,45 @@ export class DmService {
     }
     const list = deviceListSchema.parse(JSON.parse(listBytes.toString('utf8')));
     if (list.riverId !== peer) throw new CommunityError('The server returned keys for someone else.');
-    // A server must not bring back a device that was removed by replaying an older signed list.
-    const seen = Number(this.meta(`listVersion:${peer}`) ?? '0');
-    if (list.version < seen) {
-      throw new CommunityError(
-        'The server offered an older device list for this person than River has already seen. Messages were not sent.',
-      );
+    return { res, identityKey, list };
+  }
+
+  /**
+   * A contact's identity key changed on an incoming message. Accepted only if the server's
+   * current bundle for them carries that same key, their device list is signed by it and lists
+   * the sending device (with the registration ID it claimed), and no shared community holds a
+   * different key for them. A verified contact stays marked "changed since verified" (sending
+   * stops) until the user compares safety numbers again; verification is never cleared.
+   */
+  private async confirmIdentityChange(change: IncomingIdentityChange): Promise<boolean> {
+    const peer = change.riverId;
+    const newKey = Buffer.from(change.identityKey);
+    try {
+      const { identityKey, list } = await this.verifiedKeys(peer);
+      if (!identityKey.equals(newKey)) return false;
+      const listed = list.devices.find((d) => d.deviceId === change.deviceId);
+      if (!listed) return false;
+      if (change.registrationId !== null && listed.registrationId !== change.registrationId) return false;
+      // The new key's device list starts its own version count; cached devices are looked up again.
+      this.setMeta(`listVersion:${peer}`, String(list.version));
+      this.storage().delete('meta', `dm:devicesAt:${peer}`);
+      return true;
+    } catch (err) {
+      this.deps.log.warn(`A changed safety key was not accepted: ${(err as Error).message}`);
+      return false;
     }
-    if (list.version > seen) this.setMeta(`listVersion:${peer}`, String(list.version));
-    const devices: Array<{ deviceId: number; registrationId: number }> = [];
-    for (const d of res.devices) {
-      if (peer === this.me() && d.deviceId === this.deviceId()) continue;
-      const listed = list.devices.find((x) => x.deviceId === d.deviceId);
-      if (!listed || listed.registrationId !== d.registrationId) continue;
-      if (force || !protocol.hasSession(peer, d.deviceId)) {
-        await protocol.startSession(peer, identityKey, d);
-      }
-      devices.push({ deviceId: d.deviceId, registrationId: d.registrationId });
+  }
+
+  /** A message from a device the cached list does not have: look the list up again before sending. */
+  private hintDevice(peer: string, deviceId: number): void {
+    try {
+      const raw = this.meta(`devices:${peer}`);
+      if (!raw) return;
+      const cached = JSON.parse(raw) as Array<{ deviceId: number }>;
+      if (!cached.some((d) => d.deviceId === deviceId)) this.storage().delete('meta', `dm:devicesAt:${peer}`);
+    } catch {
+      // storage unavailable: the daily check still runs
     }
-    if (!devices.length) throw new CommunityError('That person has not set up messaging yet.');
-    this.setMeta(`devices:${peer}`, JSON.stringify(devices));
-    return devices;
   }
 
   /** Encrypts content for every device of `peer` and posts it, retrying once if their devices changed. */
@@ -1987,6 +2130,9 @@ export class DmService {
             }
             this.db().prepare('DELETE FROM dm_messages WHERE peer = ?').run(act.peer);
             this.db().prepare('DELETE FROM dm_groups WHERE id = ?').run(act.peer);
+            // Remembered as removed: its traffic is dropped instead of waiting for the group to return.
+            this.setMeta(`groupGone:${act.peer}`, String(Date.now()));
+            for (const [id, x] of this.kept()) if (x.waitGroup === act.peer) this.unkeep(id);
             this.forgetConversation(act.peer);
             this.emitConversations();
             return out(null);
@@ -2016,14 +2162,39 @@ export class DmService {
           return out({
             digits: n.digits,
             verified: this.protocol().isVerified(act.peer),
+            changedSinceVerified: this.protocol().verificationState(act.peer) === 'changed',
             theirName: this.contact(act.peer)?.name ?? 'This person',
           });
         }
-        case 'setVerified':
-          this.protocol().setVerified(act.peer, act.verified);
+        case 'setVerified': {
+          if (!act.verified) {
+            this.protocol().setVerified(act.peer, false);
+          } else {
+            // Only the key whose safety number the user compared is marked: if it changed while
+            // the number was on screen, nothing is marked.
+            const mine = this.deps.identity.protocolIdentity();
+            const theirs = this.protocol().identityOf(act.peer);
+            const shown =
+              mine && theirs
+                ? safetyNumber(
+                    { riverId: mine.riverId, publicKey: mine.publicKey },
+                    { riverId: act.peer, publicKey: theirs },
+                  ).digits
+                : null;
+            if (
+              !theirs ||
+              !act.digits ||
+              shown !== act.digits ||
+              !this.protocol().setVerified(act.peer, true, theirs)
+            )
+              throw new CommunityError(
+                'The safety number changed while it was on screen. Compare the new number before verifying.',
+              );
+          }
           this.db().prepare('UPDATE contacts SET key_changed = 0 WHERE river_id = ?').run(act.peer);
           this.emitConversations();
           return out(null);
+        }
         case 'acknowledgeKeyChange':
           this.db().prepare('UPDATE contacts SET key_changed = 0 WHERE river_id = ?').run(act.peer);
           this.emitConversations();
@@ -2681,6 +2852,9 @@ export class DmService {
           unread: self ? 0 : unread,
           verified: !self && (protocol?.isVerified(c.river_id) ?? false),
           keyChanged: !self && c.key_changed === 1,
+          ...(!self && protocol?.verificationState(c.river_id) === 'changed'
+            ? { verifiedChanged: true }
+            : {}),
           awaitingReply: !self && c.state === 'accepted' && c.heard_from === 0,
           ...flags(c.river_id),
         };

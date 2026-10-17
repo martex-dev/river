@@ -27,6 +27,7 @@ import {
   roleIdSchema,
   roleOrderRequestSchema,
   rotateKeyRequestSchema,
+  rotateKeyResponseSchema,
   sendMessageRequestSchema,
   timeoutRequestSchema,
   updateCategoryRequestSchema,
@@ -99,6 +100,10 @@ const PRESENCE_GRACE_MS = 15_000;
 const SOCKET_BURST = 400;
 /** An open realtime connection's session is checked again this often (expiry, sign-out, suspension). */
 const SESSION_RECHECK_MS = 5 * 60_000;
+/** A claimed key epoch nobody else reports having in this long is asked for again (2.11). */
+const ROTATION_ADOPT_MS = 10 * 60_000;
+/** How often a rotation that reached nobody is asked for again before the server gives up. */
+const ROTATION_MAX_RETRIES = 3;
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 const day = (d: Date): string => d.toISOString().slice(0, 10);
@@ -135,6 +140,8 @@ export async function registerCommunityRoutes(
     hub: Hub;
     /** How often an open realtime connection's session is checked again (tests shorten it). */
     sessionRecheckMs?: number;
+    /** How long a claimed key epoch may go unreported before it is asked for again (tests shorten it). */
+    rotationAdoptMs?: number;
   },
 ): Promise<CommunityOps> {
   const { db } = deps.database;
@@ -258,7 +265,11 @@ export async function registerCommunityRoutes(
         .where('river_id', '=', riverId)
         .execute();
       // The removed person still knows the current key: a member must replace it.
-      await trx.updateTable('communities').set({ rotation_needed: 1 }).where('id', '=', model.id).execute();
+      await trx
+        .updateTable('communities')
+        .set({ rotation_needed: 1, rotation_retries: 0 })
+        .where('id', '=', model.id)
+        .execute();
     });
     if (hub.voiceChannelOf(riverId) && model.channel(hub.voiceChannelOf(riverId)!)) {
       const left = hub.leaveVoice(riverId);
@@ -324,6 +335,8 @@ export async function registerCommunityRoutes(
 
   // ---- communities ---------------------------------------------------------------------------
   app.get(`${API_PREFIX}/communities`, authed, async (request) => {
+    // Stuck rotations are noticed here too, not only by the minute timer.
+    await recheckRotations().catch(() => undefined);
     const rows = await db
       .selectFrom('community_members')
       .select('community_id')
@@ -2167,7 +2180,13 @@ export async function registerCommunityRoutes(
       const req = parse(rotateKeyRequestSchema, request.body);
       const res = await db
         .updateTable('communities')
-        .set({ key_epoch: req.from + 1, rotation_needed: 0 })
+        .set({
+          key_epoch: req.from + 1,
+          rotation_needed: 0,
+          // Remembered until another member reports having the new key (see epoch/adopted).
+          epoch_claimed_at: deps.now().toISOString(),
+          epoch_claimed_by: me(request),
+        })
         .where('id', '=', model.id)
         .where('key_epoch', '=', req.from)
         .executeTakeFirst();
@@ -2180,6 +2199,70 @@ export async function registerCommunityRoutes(
       return { epoch: req.from + 1 };
     },
   );
+
+  /**
+   * A member reports that the current epoch's key reached them (2.11). Once someone other than
+   * the member who claimed the epoch has it, the rotation is done.
+   */
+  app.post<{ Params: { id: string } }>(
+    `${API_PREFIX}/communities/:id/epoch/adopted`,
+    { ...authed, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+    async (request) => {
+      const model = await community(request.params.id, me(request));
+      const req = parse(rotateKeyResponseSchema.strict(), request.body);
+      await db
+        .updateTable('communities')
+        .set({ epoch_claimed_at: null, epoch_claimed_by: null })
+        .where('id', '=', model.id)
+        .where('key_epoch', '=', req.epoch)
+        .where('epoch_claimed_by', '!=', me(request))
+        .execute();
+      return { ok: true };
+    },
+  );
+
+  /**
+   * A rotation nobody else reported having within ROTATION_ADOPT_MS never reached anyone (the
+   * member who claimed it went away, or never sent it): ask for it again, a few times, so the
+   * community does not stay on a key a removed member still has.
+   */
+  const recheckRotations = async (): Promise<void> => {
+    const cutoff = new Date(deps.now().getTime() - (deps.rotationAdoptMs ?? ROTATION_ADOPT_MS)).toISOString();
+    const stuck = await db
+      .selectFrom('communities')
+      .select(['id', 'key_epoch'])
+      .where('epoch_claimed_at', 'is not', null)
+      .where('epoch_claimed_at', '<', cutoff)
+      .where('rotation_retries', '<', ROTATION_MAX_RETRIES)
+      .execute();
+    for (const c of stuck) {
+      const members = await db
+        .selectFrom('community_members')
+        .select((eb) => eb.fn.countAll<number>().as('n'))
+        .where('community_id', '=', c.id)
+        .executeTakeFirst();
+      const alone = Number(members?.n ?? 0) <= 1;
+      const res = await db
+        .updateTable('communities')
+        .set((eb) => ({
+          rotation_needed: alone ? 0 : 1,
+          epoch_claimed_at: null,
+          epoch_claimed_by: null,
+          rotation_retries: eb('rotation_retries', '+', 1),
+        }))
+        .where('id', '=', c.id)
+        .where('key_epoch', '=', c.key_epoch)
+        .where('epoch_claimed_at', '<', cutoff)
+        .executeTakeFirst();
+      if (!alone && Number(res.numUpdatedRows) === 1) {
+        const model = await loadCommunity(db, c.id);
+        if (model) changed(model);
+      }
+    }
+  };
+  const rotationTimer = setInterval(() => void recheckRotations().catch(() => undefined), 60_000);
+  rotationTimer.unref?.();
+  app.addHook('onClose', async () => clearInterval(rotationTimer));
 
   // ---- messages --------------------------------------------------------------------------------
   app.get<{ Params: { id: string }; Querystring: { before?: string; pinned?: string } }>(

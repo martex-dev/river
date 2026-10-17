@@ -446,6 +446,11 @@ export interface CommunityView {
   selfRoles: string[];
   /** You have not accepted the rules yet, so you can only read. */
   myPending: boolean;
+  /**
+   * Someone left or was removed and the community key has not been replaced for you yet (2.11):
+   * new messages are still sealed with the previous key, which they also had.
+   */
+  securing?: boolean;
   /** The community's word filter (1.0.28), or null. */
   filter?: WordFilter | null;
   /** A picture (shown instead of the emoji icon) and a banner (1.0.29), as image data URLs. */

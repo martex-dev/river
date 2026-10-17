@@ -91,6 +91,14 @@ export function CommunitiesPage(): ReactElement {
 
       <section className="community__main">
         <ConnectionBanner />
+        {community?.securing && (
+          <div className="dm-banner dm-banner--warn" role="status">
+            <span>
+              <strong>Securing this community after a member left…</strong> Until the new key reaches you,
+              messages here are still protected with the previous key, which the person who left also had.
+            </span>
+          </div>
+        )}
         {community?.myPending && <RulesGate community={community} />}
         {community && channel?.nsfw && !ageOk.includes(channel.id) && !ageConfirmed(channel.id) ? (
           <AgeGate channel={channel} onOk={() => setAgeOk([...ageOk, channel.id])} />

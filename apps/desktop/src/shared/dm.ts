@@ -30,6 +30,11 @@ export interface ConversationView {
   verified: boolean;
   /** The contact's safety number changed since you last looked. */
   keyChanged: boolean;
+  /**
+   * You verified this contact and their safety number changed since: River sends them nothing
+   * until you compare safety numbers again (2.11).
+   */
+  verifiedChanged?: boolean;
   /** Disappearing messages timer in seconds (0 = off), 2.4. */
   timer?: number;
   /** Chat-list flags (2.1), kept on this device: pinned to the top, archived, marked unread. */
@@ -247,7 +252,18 @@ export const dmActionSchema = z.discriminatedUnion('a', [
   z.object({ a: z.literal('safetyNumber'), peer: riverId }).strict(),
   /** A call that is ringing right now (River opened from its "Incoming call" notification). */
   z.object({ a: z.literal('pendingCall') }).strict(),
-  z.object({ a: z.literal('setVerified'), peer: riverId, verified: z.boolean() }).strict(),
+  /** `digits`: the safety number the user compared (required to mark as verified). */
+  z
+    .object({
+      a: z.literal('setVerified'),
+      peer: riverId,
+      verified: z.boolean(),
+      digits: z
+        .string()
+        .regex(/^\d{60}$/)
+        .optional(),
+    })
+    .strict(),
   z.object({ a: z.literal('acknowledgeKeyChange'), peer: riverId }).strict(),
   z
     .object({
@@ -335,7 +351,7 @@ interface DmResults {
   messages: DirectMessageView[];
   open: ConversationView;
   send: DirectMessageView;
-  safetyNumber: { digits: string; verified: boolean; theirName: string };
+  safetyNumber: { digits: string; verified: boolean; changedSinceVerified?: boolean; theirName: string };
   upload: AttachmentPointer;
   myId: string;
   noteToSelf: ConversationView;

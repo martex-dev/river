@@ -876,6 +876,10 @@ describe('direct messages: audit fixes', { timeout: 60_000 }, () => {
     });
     await bob.dm.sync();
     await carol.dm.sync();
+    // Bob knows Carol (only people he knows may have messages wait for a group).
+    await carol.dm.action({ a: 'open', peer: bob.riverId });
+    await carol.dm.action({ a: 'send', peer: bob.riverId, text: 'hi Bob' });
+    await bob.dm.sync();
     // As if the group's details had not reached Bob yet.
     bob.local.prepare('DELETE FROM dm_groups').run();
     await carol.dm.action({ a: 'send', peer: group.riverId, text: 'early bird' });
