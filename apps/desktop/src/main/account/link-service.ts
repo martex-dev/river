@@ -134,9 +134,13 @@ export function helloMac(secret: Uint8Array, hello: LinkHello): string {
   ).toString('base64url');
 }
 
-/** "No" from the new device: only someone who saw the code could make it, for this device only. */
-export function declineMac(secret: Uint8Array, deviceId: number, authKey: string): string {
-  return hmac(secret, `river-link-decline-v1|${deviceId}|${authKey}`).toString('base64url');
+/**
+ * "No" from the new device: only someone who saw the code could make it, for this device number
+ * only. The device's key is checked where the decline is applied (removeDeclined), so it need not
+ * be in the MAC; the link secret already binds it to this one link.
+ */
+export function declineMac(secret: Uint8Array, deviceId: number): string {
+  return hmac(secret, `river-link-decline-v1|${deviceId}`).toString('base64url');
 }
 
 /** The provisioning message is bound to the secret: only someone who saw the code could make it. */
@@ -437,7 +441,7 @@ export class LinkService {
       // Gone (expired, or the server restarted): nothing more will come.
       if (state === null) return done();
       if (!state?.declined) return schedule();
-      const expected = Buffer.from(declineMac(w.secret, w.deviceId, w.authKey), 'base64url');
+      const expected = Buffer.from(declineMac(w.secret, w.deviceId), 'base64url');
       const got = Buffer.from(state.declined, 'base64url');
       if (expected.length !== got.length || !timingSafeEqual(expected, got)) return done();
       done();
@@ -621,7 +625,7 @@ export class LinkService {
       const decline = async (): Promise<void> => {
         await this.deps.requestJson(
           `${code.serverUrl}${API_PREFIX}/link/${id}/decline`,
-          { method: 'PUT', body: { mac: declineMac(code.secret, deviceId, hello.authKey) } },
+          { method: 'PUT', body: { mac: declineMac(code.secret, deviceId) } },
           z.unknown(),
         );
       };
