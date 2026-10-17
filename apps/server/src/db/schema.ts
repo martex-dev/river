@@ -20,6 +20,20 @@ export interface AccountsTable {
   username: string | null;
 }
 
+/** A username given up recently: only its previous owner may take it back until `until` (2.11). */
+export interface UsernameHoldsTable {
+  username: string;
+  river_id: string;
+  until: string;
+}
+
+/** A deleted account's River ID and identity key: the ID returns only with that key (2.11). */
+export interface AccountTombstonesTable {
+  river_id: string;
+  identity_key: string;
+  deleted_on: string;
+}
+
 export interface SignupsTable {
   code_hash: string;
   username: string;
@@ -62,6 +76,11 @@ export interface CommunitiesTable {
   self_roles: Generated<string>;
   /** Sealed { icon, banner } (1.0.29). */
   art: string | null;
+  /** When and by whom the current key epoch was claimed, until a member reports having it (2.11). */
+  epoch_claimed_at: string | null;
+  epoch_claimed_by: string | null;
+  /** How often a rotation that reached nobody was asked for again (2.11). */
+  rotation_retries: Generated<number>;
 }
 
 export interface CommunityMembersTable {
@@ -347,6 +366,8 @@ export interface Database {
   message_reactions: MessageReactionsTable;
   server_meta: ServerMetaTable;
   signups: SignupsTable;
+  username_holds: UsernameHoldsTable;
+  account_tombstones: AccountTombstonesTable;
   accounts: AccountsTable;
   devices: DevicesTable;
   sessions: SessionsTable;

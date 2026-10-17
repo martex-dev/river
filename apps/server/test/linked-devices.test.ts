@@ -220,10 +220,14 @@ describe('linked devices (1.3)', () => {
       (await app.inject({ method: 'PUT', url: `/v1/link/${id}`, payload: { hello, mac } })).statusCode,
     ).toBe(409);
     expect((await app.inject({ method: 'GET', url: `/v1/link/${id}` })).json()).toMatchObject({ hello });
-    // An account holds a few reservations at most.
+    // An account holds a few reservations at most (a new one two, 2.11; a retry replaces a code
+    // nobody answered yet).
     expect((await reserve(user.token, 'ReServedSlot0123456781')).statusCode).toBe(201);
-    expect((await reserve(user.token, 'ReServedSlot0123456782')).statusCode).toBe(201);
-    expect((await reserve(user.token, 'ReServedSlot0123456783')).statusCode).toBe(429);
+    expect(
+      (await app.inject({ method: 'PUT', url: '/v1/link/ReServedSlot0123456781', payload: { hello, mac } }))
+        .statusCode,
+    ).toBe(201);
+    expect((await reserve(user.token, 'ReServedSlot0123456782')).statusCode).toBe(429);
     // Unreserved codes (older apps) are capped per network address.
     for (const n of [0, 1, 2]) {
       const res = await app.inject({
