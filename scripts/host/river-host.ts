@@ -77,10 +77,20 @@ function writeStatus(extra: Record<string, unknown> = {}): void {
   );
 }
 
+/**
+ * A line safe to keep in a log: what child processes print (tunnel output can carry text from the
+ * network) loses control characters and is cut to a sensible length.
+ */
+function logSafe(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  const clean = text.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '');
+  return clean.length > 4000 ? `${clean.slice(0, 4000)}…\n` : clean;
+}
+
 /** Appends to a log file; a full disk or a locked file must never stop hosting. */
 function append(file: string, text: string): void {
   try {
-    appendFileSync(join(logDir, file), text);
+    appendFileSync(join(logDir, file), logSafe(text));
   } catch {
     // logging must never stop hosting
   }
