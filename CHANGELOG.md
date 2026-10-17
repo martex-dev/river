@@ -6,6 +6,15 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Updates on computers install by themselves.** Closing River only hides it in
+  the tray, so a downloaded update used to wait for a real quit that rarely came
+  (some people stayed on old versions for weeks). Now a verified update
+  restarts River by itself while River is in the tray or unused for 10 minutes,
+  never during a call, and River comes back in the tray if that is where it
+  was. A PC that hosts River does it at night (3–5 am).
+
 ## [2.10.12] - 2026-10-16
 
 **Bug sweep: a review of the whole program — server, phone apps, calls, voice, messages and layout.**

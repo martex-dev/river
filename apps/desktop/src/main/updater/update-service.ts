@@ -134,6 +134,23 @@ export class UpdateService {
   }
 
   /**
+   * Restarts into the verified update without asking (2.10.13): used when River is in the tray or
+   * unused, outside calls (see auto-install.ts). Same checks as installing on quit.
+   */
+  installNow(): boolean {
+    if (this.status.state !== 'ready' || this.verifiedVersion === null) return false;
+    if (this.deps.mode !== 'auto') return false;
+    const hold = this.deps.installHold?.();
+    if (hold) {
+      this.deps.log.warn(`Not installing ${this.verifiedVersion} now: ${hold}`);
+      return false;
+    }
+    this.deps.log.info(`Installing verified update ${this.verifiedVersion} while River is not in use`);
+    this.deps.updater.quitAndInstall(true, true);
+    return true;
+  }
+
+  /**
    * Called from the app's `quit` handler. Installs silently if a verified update
    * is waiting and the user allows install-on-quit. Returns true if started.
    */

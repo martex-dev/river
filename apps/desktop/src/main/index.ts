@@ -58,6 +58,8 @@ import { LinkService } from './account/link-service.ts';
 import { UpdateService } from './updater/update-service.ts';
 import { createFetchBytes, createRequestBytes, createRequestJson } from './http.ts';
 import { verifyDownloadedUpdate } from './updater/verify-download.ts';
+import { shouldAutoInstall } from './updater/auto-install.ts';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { LaunchHealth } from './updater/launch-health.ts';
 import { runSelfTest, selfTestPath } from './self-test.ts';
 import { runMainDiagnostics } from './diagnostics.ts';
@@ -73,6 +75,17 @@ import {
 const HEALTHY_AFTER_MS = 30_000;
 
 const devServerUrl = (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) || undefined;
+/** Set before an automatic update from the tray, so River starts in the tray again. */
+const hiddenAfterUpdate = (): string => join(app.getPath('userData'), 'start-hidden-after-update');
+function takeHiddenAfterUpdate(): boolean {
+  try {
+    if (!existsSync(hiddenAfterUpdate())) return false;
+    rmSync(hiddenAfterUpdate(), { force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
 const FIRST_CHECK_DELAY_MS = 15_000;
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
@@ -215,10 +228,13 @@ async function start(): Promise<void> {
     presence,
     // A call that ends takes any screen share in it along (the bar goes with it).
     onCallChange: (inCall) => {
+      inCallNow = inCall;
       if (!inCall) callEnded();
     },
   });
   let callEnded: () => void = () => undefined;
+  // Updates never restart River during a voice channel or a call.
+  let inCallNow = false;
   // Hosting runs from sign-in, whether or not the user has unlocked their own River data.
   const hosting = new Hosting({
     userData: app.getPath('userData'),
@@ -570,10 +586,39 @@ async function start(): Promise<void> {
     app.on('quit', (_event, exitCode) => {
       if (exitCode === 0) service.installOnQuit();
     });
+    // River lives in the tray, so "on quit" rarely comes: a verified update is installed by
+    // itself while River is hidden or unused for a while, never during a call (2.10.13).
+    let lastFocusAt: number | null = Date.now();
+    window.on('focus', () => (lastFocusAt = Date.now()));
+    window.on('blur', () => (lastFocusAt = Date.now()));
+    setInterval(() => {
+      const prefs = settings.get().updates;
+      const now = new Date();
+      const ok = shouldAutoInstall({
+        ready: service.getStatus().state === 'ready',
+        allowed: prefs.autoDownload && prefs.installOnQuit,
+        inCall: inCallNow,
+        windowVisible: !window.isDestroyed() && window.isVisible() && !window.isMinimized(),
+        lastFocusAt: window.isFocused() ? now.getTime() : lastFocusAt,
+        hosting: hosting.status().enabled,
+        now: now.getTime(),
+        hour: now.getHours(),
+      });
+      if (!ok) return;
+      // Back in the tray after the update if that is where River was.
+      if (!window.isVisible()) {
+        try {
+          writeFileSync(hiddenAfterUpdate(), '1');
+        } catch {
+          // shows the window after the update instead
+        }
+      }
+      service.installNow();
+    }, 60_000).unref();
   }
 
   // Started at sign-in: stay in the tray until the user opens River.
-  const startedHidden = process.argv.includes('--hidden');
+  const startedHidden = process.argv.includes('--hidden') || takeHiddenAfterUpdate();
   const show = (): void => {
     if (window.isMinimized()) window.restore();
     window.show();

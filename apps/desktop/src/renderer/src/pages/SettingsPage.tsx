@@ -263,7 +263,8 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
         onChange={(v) => void updateSettings({ updates: { autoDownload: v } })}
       />
       <Toggle
-        label="Install verified updates when River quits"
+        label="Install verified updates by themselves"
+        hint="When River is in the tray or you have not used it for 10 minutes, and never during a call. A PC that hosts River does it at night."
         checked={settings.updates.installOnQuit}
         onChange={(v) => void updateSettings({ updates: { installOnQuit: v } })}
       />

@@ -112,6 +112,20 @@ describe('UpdateService', () => {
     expect(service.installOnQuit()).toBe(true);
   });
 
+  it('installs a verified update silently on request, never before it is verified or while held', async () => {
+    let hold: string | null = null;
+    const { updater, service } = setup({ hold: () => hold });
+    expect(service.installNow()).toBe(false);
+    updater.offer = '0.0.2';
+    await service.check();
+    await flush();
+    hold = 'this version has been failing to start';
+    expect(service.installNow()).toBe(false);
+    hold = null;
+    expect(service.installNow()).toBe(true);
+    expect(updater.quitAndInstall).toHaveBeenCalledWith(true, true);
+  });
+
   it('refuses to install when signature verification fails', async () => {
     const { updater, service } = setup({
       verify: async () => {
