@@ -184,4 +184,22 @@ describe('backup and restore', { timeout: 60_000 }, () => {
     dee.backup.saved(createdAt);
     expect(dee.backup.status().lastBackupAt).toBe(createdAt);
   });
+
+  it('does not lock out an install from before 2.11 that already has a recovery secret', async () => {
+    const eve = await install('eve.db', 'Eve');
+    // An older River made the secret (showing the phrase, or saving a backup) without the mark.
+    eve.local
+      .prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)')
+      .run('recovery_secret', 'ab'.repeat(32));
+    eve.local
+      .prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)')
+      .run('last_backup_at', '2026-09-01T10:00:00.000Z');
+    expect(eve.backup.status()).toMatchObject({ hasPhrase: true, phraseShown: true });
+    expect(() => eve.backup.create()).not.toThrow();
+    // Migrated once: the mark is written, so it does not depend on the secret any more.
+    const mark = eve.local.prepare("SELECT value FROM meta WHERE key = 'recovery_phrase_shown'").get() as {
+      value: string;
+    };
+    expect(mark.value).toMatch(/^migrated /);
+  });
 });

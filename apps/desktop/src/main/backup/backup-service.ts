@@ -78,8 +78,21 @@ export class BackupService {
     this.require().prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run(key, value);
   }
 
+  /**
+   * Installs from before 2.11.0 never wrote `recovery_phrase_shown`, which locked existing users out
+   * of "Save encrypted backup" (2.11.2). Since 2.11.0 the recovery secret is only created together
+   * with that mark (showing the phrase, or restoring with it), so a secret without the mark comes
+   * from an older River, where it was made by showing the phrase or by saving a backup: counted as
+   * shown, once.
+   */
+  private migratePhraseShown(): void {
+    if (this.meta('recovery_phrase_shown') !== null || this.meta('recovery_secret') === null) return;
+    this.setMeta('recovery_phrase_shown', `migrated ${new Date().toISOString()}`);
+  }
+
   status(): { hasPhrase: boolean; phraseShown: boolean; lastBackupAt: string | null } {
     if (!this.db()) return { hasPhrase: false, phraseShown: false, lastBackupAt: null };
+    this.migratePhraseShown();
     return {
       hasPhrase: this.meta('recovery_secret') !== null,
       phraseShown: this.meta('recovery_phrase_shown') !== null,
@@ -110,6 +123,7 @@ export class BackupService {
    */
   create(): { file: Uint8Array; createdAt: string } {
     const db = this.require();
+    this.migratePhraseShown();
     if (this.meta('recovery_phrase_shown') === null) {
       throw new BackupError(
         'Show your recovery phrase and write it down first: without it, no backup can be opened.',
