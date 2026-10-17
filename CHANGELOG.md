@@ -6,6 +6,31 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Phones: **River reconnects as soon as the network comes back or changes**
+  (Wi-Fi to mobile data, another Wi-Fi, out of a tunnel) instead of after its
+  heartbeat gave up or a reconnect's wait ran out (up to 30 seconds).
+- Android: **no crash when Android restarts Stay connected by itself** in the
+  background and refuses it: River says "River was stopped — tap to reconnect"
+  instead, and never stays connected without its notification.
+- Android: **closing River or declining a call no longer cuts another app's
+  call** (WhatsApp, the phone's own): River reset the phone's audio even when it
+  had set nothing up.
+- Android: **a River call that comes in during another call vibrates** instead
+  of playing the ringtone into that call, and River's calls ring through Do Not
+  Disturb when you allowed them in Android's settings.
+- Android: a conversation's notification still showing after Android ended
+  River is no longer replaced by another conversation's; after you turn message
+  previews down, a new message no longer shows earlier messages' text again.
+- iPhone: **signing out or deleting the account removes its notifications**
+  from Notification Center (they stayed readable), the loudspeaker is reset when
+  a call ends, and notifications shown while River is half in front stay in
+  Notification Center.
+- Android: sharing styled text to River no longer arrives empty, sharing files
+  is sturdier on Android 13, saving a file to Google Drive works, and Android
+  8.0 shows River over the lock screen for an answered call.
+
 ## [2.12.0] - 2026-10-18
 
 **Community messages bound to who sent them, and channel history that never stops early.**

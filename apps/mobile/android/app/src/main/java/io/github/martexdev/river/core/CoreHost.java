@@ -189,6 +189,11 @@ public final class CoreHost {
     return web != null;
   }
 
+  /** River's screen is open (in front or not). Main thread. */
+  public boolean hasScreen() {
+    return screen != null;
+  }
+
   /** In a call or a voice channel right now. */
   public boolean inCall() {
     return inCall;
@@ -251,8 +256,67 @@ public final class CoreHost {
     web.addJavascriptInterface(new Shell(gen), "RiverHost");
     web.loadUrl(CORE_URL);
     createChannel();
+    watchNetwork(gen);
     // The core starts in the background; tell it if River's screen is already in front.
     if (foreground) lifecycle(true);
+  }
+
+  // ---- the phone's network (2.12) ----
+
+  private android.net.ConnectivityManager.NetworkCallback network;
+
+  /**
+   * A new network (Wi-Fi to mobile data, another Wi-Fi, back from no network): the core checks its
+   * connection at once (the old one may be dead without either side noticing, and a reconnect may
+   * be waiting out its backoff), as when the watchdog wakes it.
+   */
+  private void watchNetwork(int gen) {
+    unwatchNetwork();
+    android.net.ConnectivityManager cm = context.getSystemService(android.net.ConnectivityManager.class);
+    if (cm == null) return;
+    android.net.Network now;
+    try {
+      now = cm.getActiveNetwork();
+    } catch (RuntimeException e) {
+      now = null;
+    }
+    final android.net.Network initial = now;
+    android.net.ConnectivityManager.NetworkCallback callback =
+        new android.net.ConnectivityManager.NetworkCallback() {
+          /** The network the core is on (Android reports it again as soon as this listens). */
+          private android.net.Network current = initial;
+
+          @Override
+          public void onAvailable(android.net.Network n) {
+            boolean changed = !n.equals(current);
+            current = n;
+            if (changed && gen == generation) wake();
+          }
+
+          @Override
+          public void onLost(android.net.Network n) {
+            if (n.equals(current)) current = null;
+          }
+        };
+    try {
+      // Called on Android's connectivity thread; wake() hands over to the main thread.
+      cm.registerDefaultNetworkCallback(callback);
+      network = callback;
+    } catch (RuntimeException e) {
+      Log.w(TAG, "cannot watch the network: " + e.getClass().getSimpleName());
+    }
+  }
+
+  private void unwatchNetwork() {
+    android.net.ConnectivityManager.NetworkCallback callback = network;
+    network = null;
+    if (callback == null) return;
+    android.net.ConnectivityManager cm = context.getSystemService(android.net.ConnectivityManager.class);
+    try {
+      if (cm != null) cm.unregisterNetworkCallback(callback);
+    } catch (RuntimeException ignored) {
+      // not registered
+    }
   }
 
   /** Stops the core (River's screen closed and it does not stay connected). */
@@ -274,7 +338,8 @@ public final class CoreHost {
     final int gen = generation;
     main.postDelayed(
         () -> {
-          if (gen == generation && screen == null) teardown();
+          // Stay connected started again meanwhile (its service needs the core): keep it.
+          if (gen == generation && screen == null && !RiverService.running()) teardown();
         },
         CALL_END_GRACE_MS);
   }
@@ -282,6 +347,7 @@ public final class CoreHost {
   private void teardown() {
     if (web == null) return;
     generation++;
+    unwatchNetwork();
     web.destroy();
     web = null;
     ready = false;
@@ -512,7 +578,15 @@ public final class CoreHost {
                   ? android.media.AudioManager.STREAM_VOICE_CALL
                   : android.media.AudioManager.USE_DEFAULT_STREAM_TYPE);
     }
-    if (active) return;
+    if (active) {
+      callAudioSet = true;
+      return;
+    }
+    // 2.12: only audio River set up for a call goes back to normal. River closing, its core
+    // restarting or a call declined here set every app's audio to normal — also in the middle of
+    // another app's call (WhatsApp, the phone's own), cutting its microphone or loudspeaker.
+    if (!callAudioSet) return;
+    callAudioSet = false;
     android.media.AudioManager am =
         (android.media.AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
     if (am == null) return;
@@ -524,6 +598,8 @@ public final class CoreHost {
   // ---- the screen goes dark at your ear (2.10.2), as in any phone call ----
 
   private boolean inCall;
+  /** River set the phone's audio up for a call (call mode, loudspeaker, headset) since it was reset. */
+  private boolean callAudioSet;
   /** River put the call on the earpiece (not the loudspeaker, not a headset). */
   private boolean earpiece;
   /** Android 8 to 11: River turned on a Bluetooth headset's call audio (SCO) for the call. */
@@ -587,6 +663,7 @@ public final class CoreHost {
    * with the earpiece.
    */
   private void speaker(boolean on) {
+    callAudioSet = true;
     android.media.AudioManager am =
         (android.media.AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
     if (am == null) {
@@ -984,8 +1061,9 @@ public final class CoreHost {
         case "background":
           {
             boolean on = a.optBoolean("enabled", false);
-            RiverService.setEnabled(context, on);
-            answer(id, json("running", on));
+            // Only what is true (2.12): Android may refuse to start it from the background.
+            boolean started = RiverService.setEnabled(context, on);
+            answer(id, json("running", on && started));
             break;
           }
         case "update.device":
@@ -1090,6 +1168,30 @@ public final class CoreHost {
     show(ask, a);
   }
 
+  /** Message notifications are numbered from 1; River's own (service, call, ringing, notices) use far higher numbers. */
+  private static final int MAX_MESSAGE_NOTIFICATION = 0x10000000;
+
+  /**
+   * A number no notification on screen has (2.12). Numbers start at 1 again in each app process:
+   * one still showing from before Android ended River (a conversation's unread messages) was
+   * replaced by the first new conversation's notification, and so lost.
+   */
+  private int freshNotificationId() {
+    java.util.Set<Integer> showing = new java.util.HashSet<>();
+    NotificationManager nm = context.getSystemService(NotificationManager.class);
+    if (nm != null) {
+      try {
+        for (android.service.notification.StatusBarNotification sbn : nm.getActiveNotifications())
+          showing.add(sbn.getId());
+      } catch (RuntimeException ignored) {
+        // cannot tell: numbers of this process are still never reused
+      }
+    }
+    if (nextNotification <= 0 || nextNotification >= MAX_MESSAGE_NOTIFICATION) nextNotification = 1;
+    while (showing.contains(nextNotification) && nextNotification < MAX_MESSAGE_NOTIFICATION) nextNotification++;
+    return nextNotification++;
+  }
+
   private void show(int ask, JSONObject a) {
     String title = a.optString("title", "River");
     String body = a.optString("body", "");
@@ -1127,7 +1229,7 @@ public final class CoreHost {
         forget(stale);
         answer(staleAsk, (Object) "dismissed");
       }
-      n = nextNotification++;
+      n = freshNotificationId();
     }
     notificationAsks.put(n, ask);
     byte[] secret = new byte[16];
