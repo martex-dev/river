@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PhoneCallsSection, StayConnectedPrompt } from '../src/renderer/src/components/PhoneReachability.tsx';
+import {
+  PhoneCallsSection,
+  StayConnectedPrompt,
+  resetPhoneStatus,
+  stayConnectedText,
+} from '../src/renderer/src/components/PhoneReachability.tsx';
 import { useRiver } from '../src/renderer/src/store.ts';
 import type { PhoneStatus } from '../src/shared/ipc.ts';
 import { DEFAULT_SETTINGS, type Settings } from '../src/shared/settings.ts';
@@ -35,6 +40,7 @@ beforeEach(() => {
   updateSettings.mockResolvedValue(undefined);
   phoneFix.mockResolvedValue(null);
   localStorage.clear();
+  resetPhoneStatus();
   (window as unknown as { river: unknown }).river = { app: { phoneStatus, phoneFix } };
 });
 
@@ -85,12 +91,49 @@ describe('Settings → System → Calls and notifications (Android)', () => {
     phoneStatus.mockResolvedValue(status({ background: true, fullScreenCalls: false, notifications: true }));
     phone('android', { background: true, backgroundAsked: true });
     render(<PhoneCallsSection />);
-    await screen.findByText('Battery optimization may delay messages and calls.');
+    await screen.findByText('Battery optimization may delay messages and calls, and Android may stop Stay connected.');
     expect(screen.getByText('Not allowed: a locked phone only shows a notification for calls.')).toBeTruthy();
-    expect(screen.getByText('On: messages and calls reach you while River is closed.')).toBeTruthy();
+    // Not exempt: Android may stop the service, and Settings says so instead of a plain "On".
+    expect(screen.getByText(/On for now, but Android may stop it/)).toBeTruthy();
     fireEvent.click(screen.getByText('Allow in background'));
     expect(phoneFix).toHaveBeenCalledWith('battery');
     fireEvent.click(screen.getByText('Allow'));
     expect(phoneFix).toHaveBeenCalledWith('fullScreen');
+  });
+
+  it('"Turn on" (battery already allowed) reads the phone again, so it does not say Android has not started it', async () => {
+    phoneStatus.mockResolvedValue(status({ background: false, batteryExempt: true }));
+    phone('android', { background: false, backgroundAsked: true });
+    const { rerender } = render(<PhoneCallsSection />);
+    fireEvent.click(await screen.findByText('Turn on'));
+    expect(updateSettings).toHaveBeenCalledWith({ system: { background: true, backgroundAsked: true } });
+    // The service is running now; the settings change arrives from main.
+    phoneStatus.mockResolvedValue(status({ background: true, batteryExempt: true }));
+    phone('android', { background: true, backgroundAsked: true });
+    rerender(<PhoneCallsSection />);
+    await screen.findByText('On: messages and calls reach you while River is closed.');
+    expect(phoneFix).not.toHaveBeenCalled();
+  });
+
+  it('every part of Settings shares one status', async () => {
+    phoneStatus.mockResolvedValue(status({ background: true, batteryExempt: true }));
+    phone('android', { background: true, backgroundAsked: true });
+    render(
+      <>
+        <PhoneCallsSection />
+        <PhoneCallsSection />
+      </>,
+    );
+    await waitFor(() =>
+      expect(screen.getAllByText('On: messages and calls reach you while River is closed.')).toHaveLength(2),
+    );
+  });
+
+  it('says plainly that Stay connected needs the battery exemption to keep running', () => {
+    expect(stayConnectedText(false, status()).text).toMatch(/^Off/);
+    expect(stayConnectedText(true, status({ background: true, batteryExempt: true })).ok).toBe(true);
+    expect(stayConnectedText(true, status({ background: true })).ok).toBe(false);
+    expect(stayConnectedText(true, status()).text).toMatch(/needs River allowed in the background/);
+    expect(stayConnectedText(true, status({ batteryExempt: true })).text).toMatch(/has not started it yet/);
   });
 });

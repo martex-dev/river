@@ -4,7 +4,12 @@ import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { BackupPanel } from '../components/BackupPanel.tsx';
 import { DevicesPanel } from '../components/LinkDevice.tsx';
 import { ConnectionCheck } from '../components/ConnectionCheck.tsx';
-import { BATTERY_WHY, PhoneCallsSection } from '../components/PhoneReachability.tsx';
+import {
+  BATTERY_WHY,
+  PhoneCallsSection,
+  refreshAfterStayConnected,
+  refreshPhoneStatus,
+} from '../components/PhoneReachability.tsx';
 import { HostingPanel, useHostStatus } from '../components/HostingPanel.tsx';
 import type { ReleaseChannel } from '@river/release/channels';
 import type { AccountStatus, ServerCheckResult, UpdateStatus } from '../../../shared/ipc.ts';
@@ -1061,11 +1066,17 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
             checked={settings.system.background}
             onChange={(v) =>
               void updateSettings({ system: { background: v, backgroundAsked: true } }).then(async () => {
-                if (!v) return;
+                // The section below shows the same status, read again now (2.11.2).
+                if (!v) {
+                  void refreshPhoneStatus();
+                  return;
+                }
                 // Turned on: Android asks to let River run in the background (explained above).
-                const status = await window.river.app.phoneStatus().catch(() => null);
-                if (status && !status.batteryExempt)
+                const status = await refreshAfterStayConnected();
+                if (status && !status.batteryExempt) {
                   await window.river.app.phoneFix('battery').catch(() => null);
+                  void refreshPhoneStatus();
+                }
               })
             }
           />
