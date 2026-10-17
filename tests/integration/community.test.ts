@@ -1446,6 +1446,46 @@ describe('desktop ↔ server communities', () => {
     expect((await order()).at(-1)).toBe('C');
   });
 
+  it('a manager reorders only the roles below their own, all at once', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Ranks');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const mk = (name: string, permissions = 0) =>
+      alice.community.action({ a: 'createRole', communityId: created.id, name, color: 0, permissions });
+    // New roles go in just above @everyone, so the first one made ends up highest.
+    await mk('Admins');
+    const mods = await mk('Mods', Permission.MANAGE_ROLES);
+    const x = await mk('X');
+    await mk('Y');
+    await alice.community.action({
+      a: 'setMemberRoles',
+      communityId: created.id,
+      riverId: bob.riverId,
+      roles: [mods],
+    });
+    const order = async () =>
+      (await bob.community.refresh())[0]!.roles
+        .filter((r) => !r.everyone)
+        .map((r) => `${r.name}:${r.position}`);
+    expect(await order()).toEqual(['Admins:4', 'Mods:3', 'X:2', 'Y:1']);
+    // Below Bob's own role: works, keeping the positions in use.
+    await bob.community.action({ a: 'moveRole', communityId: created.id, roleId: x, direction: -1 });
+    expect(await order()).toEqual(['Admins:4', 'Mods:3', 'Y:2', 'X:1']);
+    // Dragged "above Admins": lands as high as Bob may put it, nothing above him moves.
+    await bob.community.action({ a: 'placeRole', communityId: created.id, roleId: x, aboveId: null });
+    await bob.community.action({
+      a: 'placeRole',
+      communityId: created.id,
+      roleId: x,
+      aboveId: (await bob.community.refresh())[0]!.roles.find((r) => r.name === 'Admins')!.id,
+    });
+    expect(await order()).toEqual(['Admins:4', 'Mods:3', 'X:2', 'Y:1']);
+    // Cannot pass his own role: nothing happens (and nothing is half done).
+    await bob.community.action({ a: 'moveRole', communityId: created.id, roleId: x, direction: 1 });
+    expect(await order()).toEqual(['Admins:4', 'Mods:3', 'X:2', 'Y:1']);
+  });
+
   it('role icons are sealed and shown next to members with the role', async () => {
     const alice = await person('Alice');
     const created = await alice.community.create('Icons');

@@ -1815,6 +1815,56 @@
   border: 2px solid var(--text-faint);
   border-radius: 50%;
 }
+/* Phone width: the tabs become a strip that scrolls sideways above the page. */
+@media (max-width: 760px) {
+  .settings-layout {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .settings-layout__nav {
+    flex: none;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    /* Room on the right for the close button. */
+    padding: 10px 60px 10px 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-layout__nav > * {
+    width: auto;
+    flex: none;
+    white-space: nowrap;
+  }
+  .settings-layout__heading {
+    max-width: 40vw;
+  }
+  .settings-layout__nav hr {
+    align-self: stretch;
+    margin: 4px 2px;
+    border-top: 0;
+    border-left: 1px solid var(--border);
+  }
+  .settings-layout__body {
+    flex: 1;
+    min-height: 0;
+    padding: 18px 16px calc(40px + env(safe-area-inset-bottom));
+  }
+  .settings-layout__close {
+    top: calc(6px + env(safe-area-inset-top));
+    right: calc(10px + env(safe-area-inset-right));
+    z-index: 2;
+    background: var(--bg-1);
+  }
+  /* (More specific: the base rule for split pages comes later in this file.) */
+  .settings-layout .settings-page--split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .settings-page {
   max-width: 740px;
   display: flex;
@@ -2111,6 +2161,10 @@ input.switch:disabled {
 .tri__opt--allow.is-on {
   background: #23a55a;
   color: #fff;
+}
+.tri__opt:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
 }
 
 .profile-editor {

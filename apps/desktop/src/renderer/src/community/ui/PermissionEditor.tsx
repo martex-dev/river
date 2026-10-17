@@ -1,4 +1,5 @@
 import { useState, type ReactElement } from 'react';
+import { computePermissions } from '@river/protocol/permissions';
 import type { CommunityView } from '../../../../shared/ipc.ts';
 import { infoOf } from './CommunitySettings.tsx';
 import { hex } from './common.tsx';
@@ -25,6 +26,26 @@ export function stateOf(list: Overwrite[], roleId: string, bit: number): BitStat
   return 'inherit';
 }
 
+/** What you hold in a category with its saved overwrites applied, as the server checks it. */
+export function categoryPermissions(community: CommunityView, me: string, saved: Overwrite[]): number {
+  const member = community.members.find((m) => m.riverId === me);
+  return computePermissions({
+    ownerId: community.ownerId,
+    everyoneRoleId: community.id,
+    roles: community.roles,
+    member: { riverId: me, roles: member?.roles ?? [] },
+    overwrites: saved,
+  });
+}
+
+/**
+ * May you set Allow on this bit for this role? Only for what you hold there yourself, or what the
+ * saved overwrite already allowed (the server refuses anything else).
+ */
+export function mayAllow(mine: number, saved: Overwrite[], roleId: string, bit: number): boolean {
+  return (mine & bit) === bit || ((saved.find((o) => o.roleId === roleId)?.allow ?? 0) & bit) === bit;
+}
+
 /**
  * Per-role allow / inherit / deny switches for a channel or a category. Roles
  * with changes are marked; @everyone is first.
@@ -33,6 +54,9 @@ export function PermissionEditor(props: {
   community: CommunityView;
   overwrites: Overwrite[];
   bits: number[];
+  /** Your own permissions here and the saved overwrites: Allow is offered only where it would work. */
+  mine: number;
+  saved: Overwrite[];
   onChange(next: Overwrite[]): void;
 }): ReactElement {
   const { community, overwrites, bits } = props;
@@ -63,6 +87,7 @@ export function PermissionEditor(props: {
         {bits.map((bit) => {
           const info = infoOf(bit);
           const value = stateOf(overwrites, role, bit);
+          const allowable = value === 'allow' || mayAllow(props.mine, props.saved, role, bit);
           return (
             <div key={bit} className="tri-row">
               <span className="toggle-row__text">
@@ -95,7 +120,8 @@ export function PermissionEditor(props: {
                   role="radio"
                   aria-checked={value === 'allow'}
                   aria-label="Allow"
-                  title="Allow"
+                  title={allowable ? 'Allow' : 'You can only allow permissions you have yourself'}
+                  disabled={!allowable}
                   onClick={() => set(bit, 'allow')}
                 >
                   ✓

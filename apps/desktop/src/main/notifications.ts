@@ -164,7 +164,11 @@ export function startMessageNotifications(deps: {
     if (!prefs.desktop) return;
     if (silenced(deps.settings())) return;
     const m0 = event.message;
-    if (!shouldAlert(effectiveNotify(prefs, m0.communityId, m0.channelId), m0.mentionsMe)) return;
+    const category = community.channelParent?.(m0.channelId) ?? null;
+    if (
+      !shouldAlert(effectiveNotify(prefs, m0.communityId, m0.channelId, Date.now(), category), m0.mentionsMe)
+    )
+      return;
     if (window.isDestroyed() || window.isFocused()) return;
     if (!Notification.isSupported()) return;
     const m = event.message;

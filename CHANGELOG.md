@@ -87,6 +87,40 @@ so Stay connected matters.
   iPhone cannot ring or notify while iOS has paused River. Settings → System
   says so; nothing here pretends otherwise.
 
+- Private channels stay private: deleting a category, or moving a channel synced
+  to it elsewhere, now gives the channel the category's permissions as its own
+  instead of making it public. The delete confirmation says so.
+- Channel and category permissions that already allowed Administrator (from
+  older versions) can be edited again, owner included; adding Administrator is
+  still refused.
+- Forum posts: opening a post loads its replies, and new replies appear live;
+  a thread opened any other way fetches its replies; message links to a forum
+  post open it.
+- Dragging channels: the move shows at once (no snap back), is placed among all
+  channels including ones you cannot see, and only needs Manage channels on the
+  channel you moved. Reordering roles changes only roles below your own and is
+  applied all at once; deleting a role closes the gap in the order.
+- The role editor lists Time out members, View audit log, Manage events,
+  Manage emoji & sounds and Priority speaker. The channel and category
+  permission editors offer Allow only for permissions you hold there.
+- "Community settings" is offered wherever any of its tabs is (Webhooks and
+  Reports included), the same in every menu. Settings fit a phone screen: the
+  tabs become a strip that scrolls sideways and the close button stays in reach.
+- Webhooks list only channels you manage, and deleting one asks first.
+- Replying in an archived thread is offered only to people who manage messages,
+  as the server requires.
+- New members of a screened community whose rules cannot be shown still get the
+  welcome screen with a way in; accepting the rules and picking roles confirm
+  properly.
+- Notification level "Nothing" also hides mention badges and thread mention
+  sounds; followed threads stay quiet in muted channels. Categories have their
+  own mute and notification level (a channel's own setting still wins).
+- Used-up invites are no longer listed as active; the audit log no longer skips
+  entries that share a timestamp when loading older ones.
+- `:emoji:` codes after text starting with `<` or a lone backtick (`<3 :party:`)
+  are converted; switching communities marks the channel you left as read; the
+  thread Follow button updates after you reply.
+
 ## [2.10.12] - 2026-10-16
 
 **Bug sweep: a review of the whole program — server, phone apps, calls, voice, messages and layout.**

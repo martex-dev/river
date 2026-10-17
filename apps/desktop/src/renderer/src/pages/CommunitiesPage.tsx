@@ -15,6 +15,7 @@ import {
 import { StartScreen } from '../community/ui/StartScreen.tsx';
 import { ThreadPanel } from '../community/ui/Thread.tsx';
 import { useCommunity } from '../community/store.ts';
+import { canOpenCommunitySettings } from '../community/settings-tabs.ts';
 import { play } from '../community/sound.ts';
 import { pttKeyIsTyping } from '../community/ptt.ts';
 import { ChannelSidebar } from '../community/ui/Sidebar.tsx';
@@ -90,7 +91,7 @@ export function CommunitiesPage(): ReactElement {
 
       <section className="community__main">
         <ConnectionBanner />
-        {community?.myPending && community.rules.length > 0 && <RulesGate community={community} />}
+        {community?.myPending && <RulesGate community={community} />}
         {community && channel?.nsfw && !ageOk.includes(channel.id) && !ageConfirmed(channel.id) ? (
           <AgeGate channel={channel} onOk={() => setAgeOk([...ageOk, channel.id])} />
         ) : (
@@ -284,13 +285,7 @@ function CommunityMenu(props: {
   const c = props.community;
   if (!c) return null;
   const perms = c.permissions;
-  const settings =
-    can(perms, Permission.MANAGE_COMMUNITY) ||
-    can(perms, Permission.MANAGE_ROLES) ||
-    can(perms, Permission.KICK_MEMBERS) ||
-    can(perms, Permission.BAN_MEMBERS) ||
-    can(perms, Permission.VIEW_AUDIT_LOG) ||
-    can(perms, Permission.MANAGE_EXPRESSIONS);
+  const settings = canOpenCommunitySettings(perms);
   const run = (f: () => void) => () => {
     props.onClose();
     f();

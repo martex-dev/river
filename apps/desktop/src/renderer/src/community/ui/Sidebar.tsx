@@ -6,6 +6,7 @@ import type { ChannelView, CommunityView, MemberView } from '../../../../shared/
 import { ProfileCard } from './Members.tsx';
 import { useRiver } from '../../store.ts';
 import { useCommunity } from '../store.ts';
+import { canOpenCommunitySettings } from '../settings-tabs.ts';
 import { ChannelList } from './ChannelList.tsx';
 import { NotifyMenuSection } from './NotifyMenu.tsx';
 import { eventPhase, useEvents, whenLabel } from './Events.tsx';
@@ -39,11 +40,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const perms = community.permissions;
   const manageChannels = can(perms, Permission.MANAGE_CHANNELS);
-  const canSettings =
-    can(perms, Permission.MANAGE_COMMUNITY) ||
-    can(perms, Permission.MANAGE_ROLES) ||
-    can(perms, Permission.KICK_MEMBERS) ||
-    can(perms, Permission.BAN_MEMBERS);
+  const canSettings = canOpenCommunitySettings(perms);
 
   const confirmLeave = (): void =>
     s.setModal({
@@ -193,7 +190,11 @@ export function ChannelRow(props: {
   const active = ch.id === s.selectedChannel;
   // Live count this session, or newer messages than where you stopped last time.
   const notifyPrefs = useRiver((r) => r.settings?.notifications);
-  const muted = !!notifyPrefs && (isMuted(notifyPrefs, ch.id) || isMuted(notifyPrefs, community.id));
+  const muted =
+    !!notifyPrefs &&
+    (isMuted(notifyPrefs, ch.id) ||
+      (!!ch.parentId && isMuted(notifyPrefs, ch.parentId)) ||
+      isMuted(notifyPrefs, community.id));
   // Muted channels show no unread dot (mentions still badge).
   const unread = muted ? 0 : (s.unread[ch.id] ?? (ch.unread && !active ? 1 : 0));
   const participants = community.voice[ch.id] ?? [];

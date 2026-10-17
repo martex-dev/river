@@ -103,14 +103,18 @@ export function useEmojiIndex(wanted = true): EmojiIndex | null {
 export function replaceShortcodes(text: string, index: EmojiIndex): string {
   const byCode = new Map<string, string>();
   for (const e of index.all) for (const c of e.shortcodes) if (!byCode.has(c)) byCode.set(c, e.emoji);
-  return text
-    .split(/(```[\s\S]*?```|`[^`\n]*`)/g)
-    .map((part) =>
-      part.startsWith('`')
-        ? part
-        : part.replace(/:([a-z0-9_+-]{2,32}):/gi, (m, c: string) => byCode.get(c.toLowerCase()) ?? m),
-    )
-    .join('');
+  return (
+    text
+      .split(/(```[\s\S]*?```|`[^`\n]*`)/g)
+      // split() puts the captured code spans at odd indexes; only those are left alone (an unclosed `
+      // starts an ordinary part).
+      .map((part, i) =>
+        i % 2 === 1
+          ? part
+          : part.replace(/:([a-z0-9_+-]{2,32}):/gi, (m, c: string) => byCode.get(c.toLowerCase()) ?? m),
+      )
+      .join('')
+  );
 }
 
 /** Best matches for a search: exact shortcode, shortcode prefix, name words, then keywords. */
@@ -195,15 +199,19 @@ export function toggleFavoriteEmoji(emoji: string): string[] {
 export function replaceCustomShortcodes(text: string, custom: Array<{ id: string; name: string }>): string {
   if (custom.length === 0) return text;
   const byName = new Map(custom.map((e) => [e.name.toLowerCase(), e]));
-  return text
-    .split(/(```[\s\S]*?```|`[^`\n]*`|<a?:[A-Za-z0-9_]{2,32}:[A-Za-z0-9_-]{22}>)/g)
-    .map((part) =>
-      part.startsWith('`') || part.startsWith('<')
-        ? part
-        : part.replace(/:([A-Za-z0-9_]{2,32}):/g, (m, name: string) => {
-            const e = byName.get(name.toLowerCase());
-            return e ? `<:${e.name}:${e.id}>` : m;
-          }),
-    )
-    .join('');
+  return (
+    text
+      .split(/(```[\s\S]*?```|`[^`\n]*`|<a?:[A-Za-z0-9_]{2,32}:[A-Za-z0-9_-]{22}>)/g)
+      // Code spans and emoji already written out are the captured parts, at odd indexes. A part that
+      // merely starts with < or ` ("<3 :party:") is ordinary text.
+      .map((part, i) =>
+        i % 2 === 1
+          ? part
+          : part.replace(/:([A-Za-z0-9_]{2,32}):/g, (m, name: string) => {
+              const e = byName.get(name.toLowerCase());
+              return e ? `<:${e.name}:${e.id}>` : m;
+            }),
+      )
+      .join('')
+  );
 }

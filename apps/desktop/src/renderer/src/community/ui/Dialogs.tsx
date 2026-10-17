@@ -8,7 +8,8 @@ import { play } from '../sound.ts';
 import { useCommunity, type Modal as ModalState } from '../store.ts';
 import { HashIcon, Modal, SpeakerIcon, Toggle, XIcon } from './common.tsx';
 import { moveToCategory } from './ChannelList.tsx';
-import { PermissionEditor, setOverwrite, type Overwrite } from './PermissionEditor.tsx';
+import { PermissionEditor, categoryPermissions, setOverwrite, type Overwrite } from './PermissionEditor.tsx';
+import { useRiver } from '../../store.ts';
 
 export function ConfirmDialog({ modal }: { modal: Extract<ModalState, { kind: 'confirm' }> }): ReactElement {
   const s = useCommunity();
@@ -255,6 +256,7 @@ export function CategoryDialog(props: { community: CommunityView; categoryId?: s
   const [overwrites, setOverwrites] = useState<Overwrite[]>(existing?.overwrites ?? []);
   const [tab, setTab] = useState<'overview' | 'permissions'>('overview');
   const [busy, setBusy] = useState(false);
+  const me = useRiver((r) => r.identity?.riverId ?? '');
   const close = (): void => s.setModal(null);
 
   if (!existing) {
@@ -322,7 +324,7 @@ export function CategoryDialog(props: { community: CommunityView; categoryId?: s
               s.setModal({
                 kind: 'confirm',
                 title: `Delete ${existing.name}`,
-                body: 'Its channels stay; they just move out of the category.',
+                body: "Its channels stay and move out of the category. Channels synced to it keep the category's permissions as their own, so private channels stay private.",
                 action: 'Delete category',
                 run: async () => {
                   await s.run({
@@ -383,6 +385,8 @@ export function CategoryDialog(props: { community: CommunityView; categoryId?: s
                 community={props.community}
                 overwrites={overwrites}
                 bits={CATEGORY_PERMS}
+                mine={categoryPermissions(props.community, me, existing.overwrites)}
+                saved={existing.overwrites}
                 onChange={setOverwrites}
               />
               {dirtyPerms && (
@@ -714,6 +718,8 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
                 community={community}
                 overwrites={overwrites}
                 bits={bits}
+                mine={channel.permissions}
+                saved={channel.overwrites}
                 onChange={setOverwrites}
               />
               <AccessCheck community={community} channel={channel} overwrites={overwrites} bits={bits} />

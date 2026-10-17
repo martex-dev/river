@@ -32,7 +32,7 @@ export function mutedLabel(until: string | null | undefined, now = Date.now()): 
  */
 export function NotifyMenuSection(props: {
   id: string;
-  kind: 'channel' | 'community' | 'conversation';
+  kind: 'channel' | 'category' | 'community' | 'conversation';
   onDone(): void;
 }): ReactElement | null {
   const settings = useRiver((r) => r.settings);
