@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.11.2] - 2026-10-18
+
+**Calls you can rely on, and the 2.11 review fixed.**
+
 ### Fixed
 
 - **"Install verified updates by themselves" also installs an update you
@@ -95,7 +99,8 @@ All notable changes to River are documented here. The format follows
 
 - **A channel moved into a private category becomes private** again (it is
   synced to the category unless the request says `synced: false`); since 2.11
-  it kept its old public permissions.
+  it kept its old public permissions. A channel moved from one category into
+  another keeps what the old one hid and also hides what the new one hides.
 
 ## [2.11.1] - 2026-10-17
 

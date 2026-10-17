@@ -7,7 +7,7 @@ Milestone definitions: [ROADMAP.md](ROADMAP.md).
 
 Plan: [docs/product/road-to-3.md](docs/product/road-to-3.md). Many releases, one theme per minor.
 
-- [ ] 2.11.2 Call fixes (missed calls, glare, a second call, other devices, speaker and Bluetooth), review fixes
+- [x] 2.11.2 Call fixes (missed calls, glare, a second call, other devices, speaker and Bluetooth), review fixes
 - [ ] 2.12.0 Phones look like Telegram and Instagram: bottom tabs, chat list, conversation screen with bubbles, communities as a list, calls list, feed, profile
 - [ ] 2.12.x Polish for each phone screen; v2 associated data on by default
 - [ ] 2.13.x Easy start: install to first chat in under a minute, one-screen profile, invite links that open the app; community keys need a proof
