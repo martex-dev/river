@@ -284,8 +284,10 @@ export async function registerCommunityRoutes(
   ): void => {
     for (const o of overwrites) {
       if (!model.role(o.roleId)) throw bad('Unknown role');
-      if (o.allow & Permission.ADMINISTRATOR) throw bad('Overwrites cannot grant Administrator');
       const had = before.find((b) => b.roleId === o.roleId)?.allow ?? 0;
+      // Only newly adding Administrator is refused: a legacy overwrite that already allows it must
+      // stay editable (the editor resends the existing allow bits unchanged).
+      if (o.allow & ~had & Permission.ADMINISTRATOR) throw bad('Overwrites cannot grant Administrator');
       if ((o.allow & ~had & ~mine) !== 0) throw forbidden('You cannot grant permissions you do not have');
     }
   };

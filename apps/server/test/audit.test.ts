@@ -408,6 +408,34 @@ describe('community authorization', () => {
     expect(await status('PATCH', `/v1/channels/${c.text}`, manager.token, { overwrites: owned })).toBe(200);
   });
 
+  it('a legacy overwrite that already allows Administrator stays editable; adding it is still refused', async () => {
+    await start();
+    const owner = await registerUser(app);
+    const c = await community(owner);
+    const mods = await c.role(0);
+    const cat = id();
+    expect(
+      await status('POST', `/v1/communities/${c.cid}/categories`, owner.token, { id: cat, name: sealed() }),
+    ).toBe(201);
+    // Written before overwrites were checked: Administrator is already in there.
+    await database.db
+      .insertInto('channel_overwrites')
+      .values({ channel_id: c.text, role_id: c.cid, allow: Permission.ADMINISTRATOR, deny: 0 })
+      .execute();
+    await database.db
+      .insertInto('category_overwrites')
+      .values({ category_id: cat, role_id: c.cid, allow: Permission.ADMINISTRATOR, deny: 0 })
+      .execute();
+    const legacy = { roleId: c.cid, allow: Permission.ADMINISTRATOR | Permission.SEND_MESSAGES, deny: 0 };
+    // The editor resends the existing allow bits with the change: accepted.
+    expect(await status('PATCH', `/v1/channels/${c.text}`, owner.token, { overwrites: [legacy] })).toBe(200);
+    expect(await status('PATCH', `/v1/categories/${cat}`, owner.token, { overwrites: [legacy] })).toBe(200);
+    // Newly granting Administrator to another role is still refused.
+    const added = [legacy, { roleId: mods, allow: Permission.ADMINISTRATOR, deny: 0 }];
+    expect(await status('PATCH', `/v1/channels/${c.text}`, owner.token, { overwrites: added })).toBe(400);
+    expect(await status('PATCH', `/v1/categories/${cat}`, owner.token, { overwrites: added })).toBe(400);
+  });
+
   it('a self-assignable role cannot later gain moderation permissions', async () => {
     await start();
     const owner = await registerUser(app);
