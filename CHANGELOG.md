@@ -6,6 +6,52 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Account, devices, backup and settings audit.**
+  - A device removed from its account (or an old backup restored) is no longer
+    told its account was deleted: it says it was probably removed, offers
+    **Link this device again** (forgets the stale account and identity and opens
+    linking; only a code from the same account is accepted), and **Set up my
+    account again** now creates the new account _before_ forgetting the old one
+    — if the account still exists it explains that this device was removed,
+    instead of a dead end. Every failure message is shown.
+  - Cancelling at "Is this you?" on a new device no longer leaves a phantom
+    device on the account: it sends a signed "no" (new `PUT /v1/link/:id/decline`)
+    and the device that showed the code takes it off the list again.
+  - "Link a new device" and "Link it" cannot be pressed twice (a second start
+    could show a code of zeros; a second confirm published an outdated list);
+    a start replaced or cancelled while reserving never shows its code. "Linked"
+    clears after a moment and never shows on the new device itself.
+  - "Last backup" is set only once the file is written (not when the save
+    dialog is cancelled or writing fails), and the first backup needs the
+    recovery phrase to have been shown.
+  - Settings changed by River itself reach the screen at once (a phone without a
+    screen lock turning app lock off, hosting turning on start-at-login, server
+    moves, deleting the account), so a switch never shows a protection that is off.
+  - Interface size is hidden on phones (it only zooms computer windows), and
+    the keyboard hint names ⌘ on a Mac. "Start River when I sign in" is hidden on
+    Linux, where River cannot do it, and the hosting text no longer claims it.
+  - Esc no longer closes Settings while typing in a field or when something else
+    handled it; closing Settings or switching tabs with unsaved profile changes
+    asks first. The profile saves without a display name (it is optional) and
+    cannot be saved twice at once.
+  - Notifications shows the preview choice once, as one radio group.
+  - Onboarding on an invite-only River server asks for a sign-up link, and River
+    stops retrying the account in the background until it gets one. A device
+    link arriving after the identity exists no longer strands the first run.
+  - A pasted "@alice" is saved as "alice", and the username field shows what the
+    server saved (it keeps lower case) instead of staying "changed".
+  - The lock screen buttons no longer stay on "Encrypting…/Unlocking…" when a
+    call fails, and passphrases longer than 1024 characters are refused up front.
+  - Security Center describes what River does now: messages pass through the
+    server end-to-end encrypted, devices can be linked, contacts verified by
+    safety number.
+  - Bulgarian: "Account" is "Акаунт" and "Profile" is "Профил".
+  - The background picture is kept once in settings, with appearance profiles
+    pointing to it, instead of a ~2.7 MB copy in every profile (settings files of
+    up to ~80 MB); existing settings are compacted when read.
+
 ## [2.10.12] - 2026-10-16
 
 **Bug sweep: a review of the whole program — server, phone apps, calls, voice, messages and layout.**

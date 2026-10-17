@@ -36,8 +36,9 @@ export function SecurityPage(): ReactElement {
           </div>
           <p className="muted small">
             Read these words to a contact (in person or on a call) and ask them to compare with what River
-            shows for you. If they match, nobody has swapped your key. Contact verification arrives with
-            messaging.
+            shows for you. If they match, nobody has swapped your key. To check a contact, open your
+            conversation with them and choose View safety number; once you mark it verified, River warns you
+            and stops sending if it ever changes.
           </p>
           <IdentityFingerprint identity={identity} />
         </section>

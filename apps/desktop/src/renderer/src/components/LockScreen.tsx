@@ -3,6 +3,9 @@ import type { StorageStatus } from '../../../shared/ipc.ts';
 import { LockIcon } from './Icons.tsx';
 import { RiverMark } from './RiverMark.tsx';
 
+/** The longest passphrase River accepts (main refuses longer ones too). */
+const MAX_PASSPHRASE_LENGTH = 1024;
+
 /**
  * Shown when River's local data needs a passphrase: either to create one (no
  * OS keyring available) or to unlock. Also shows unrecoverable storage errors.
@@ -44,14 +47,24 @@ function SetupPassphrase({ minLength }: { minLength: number }): ReactElement {
 
   const submit = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
+    if (busy) return;
     if (passphrase.length < minLength) return setError(`Use at least ${minLength} characters.`);
+    if (passphrase.length > MAX_PASSPHRASE_LENGTH)
+      return setError(`Use at most ${MAX_PASSPHRASE_LENGTH} characters.`);
     if (passphrase !== confirm) return setError('The passphrases do not match.');
     setBusy(true);
     setError(null);
-    const result = await window.river.storage.setupPassphrase(passphrase);
-    setBusy(false);
-    if (!result.ok)
-      setError(result.reason === 'too-short' ? `Use at least ${minLength} characters.` : 'Please try again.');
+    try {
+      const result = await window.river.storage.setupPassphrase(passphrase);
+      if (!result.ok)
+        setError(
+          result.reason === 'too-short' ? `Use at least ${minLength} characters.` : 'Please try again.',
+        );
+    } catch {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -67,6 +80,7 @@ function SetupPassphrase({ minLength }: { minLength: number }): ReactElement {
             type="password"
             autoComplete="new-password"
             autoFocus
+            maxLength={MAX_PASSPHRASE_LENGTH}
             value={passphrase}
             onChange={(e) => setPassphrase(e.target.value)}
           />
@@ -76,6 +90,7 @@ function SetupPassphrase({ minLength }: { minLength: number }): ReactElement {
           <input
             type="password"
             autoComplete="new-password"
+            maxLength={MAX_PASSPHRASE_LENGTH}
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
           />
@@ -104,15 +119,26 @@ function Unlock(): ReactElement {
 
   const submit = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
+    if (busy) return;
+    if (passphrase.length > MAX_PASSPHRASE_LENGTH) {
+      setError('That passphrase is not correct.');
+      setPassphrase('');
+      return;
+    }
     setBusy(true);
     setError(null);
-    const result = await window.river.storage.unlock(passphrase);
-    setBusy(false);
-    if (!result.ok) {
-      setError(
-        result.reason === 'wrong-passphrase' ? 'That passphrase is not correct.' : 'Please try again.',
-      );
-      setPassphrase('');
+    try {
+      const result = await window.river.storage.unlock(passphrase);
+      if (!result.ok) {
+        setError(
+          result.reason === 'wrong-passphrase' ? 'That passphrase is not correct.' : 'Please try again.',
+        );
+        setPassphrase('');
+      }
+    } catch {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -126,6 +152,7 @@ function Unlock(): ReactElement {
             type="password"
             autoComplete="current-password"
             autoFocus
+            maxLength={MAX_PASSPHRASE_LENGTH}
             value={passphrase}
             onChange={(e) => setPassphrase(e.target.value)}
           />
