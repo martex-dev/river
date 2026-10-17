@@ -136,6 +136,23 @@ describe('desktop ↔ server accounts', () => {
     expect(c.account.sessionToken()).toBeNull();
   });
 
+  it('signs in once for everyone who asks at the same time', async () => {
+    const c = client();
+    c.identity.create('');
+    await c.account.register(SERVER);
+    // After a restart, or an expired session: the socket, the direct messages and every request that
+    // got a 401 all ask for a session at once.
+    const fresh = client();
+    const before = requests;
+    const results = await Promise.all(Array.from({ length: 8 }, () => fresh.account.connect()));
+    expect(results.every((r) => r.state === 'registered' && r.connection === 'online')).toBe(true);
+    // challenge, session, accounts/me: one sign-in, not eight (the server allows 20 a minute).
+    expect(requests - before).toBe(3);
+    // A later call signs in again.
+    await fresh.account.connect();
+    expect(requests - before).toBe(6);
+  });
+
   it('reports offline servers without losing the account', async () => {
     const c = client();
     c.identity.create('');

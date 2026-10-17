@@ -286,6 +286,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       a: z.literal('outboxSave'),
       localId: z.string().regex(/^local-[0-9]+-[0-9]+$/),
       channelId: id,
+      /** The ID the message is sent with, kept so a retry after a restart still sends it once. */
+      messageId: id.optional(),
       text: z.string().max(4000),
       replyTo: id.optional(),
       threadId: id.optional(),
@@ -383,6 +385,11 @@ export const communityActionSchema = z.discriminatedUnion('a', [
       a: z.literal('send'),
       channelId: id,
       text: z.string().max(4000),
+      /**
+       * The message's ID, chosen once by the outbox and reused by every retry (2.12): a retry of a
+       * send whose answer was lost finds the message already there instead of posting it twice.
+       */
+      messageId: id.optional(),
       replyTo: id.optional(),
       attachments: z.array(attachmentPointerSchema).max(10).optional(),
       /** Descriptions of attached pictures, by attachment ID (1.0.21). */
@@ -750,6 +757,7 @@ export type CommunityActionResult<A extends CommunityAction> = A['a'] extends ke
 export interface SavedOutgoing {
   localId: string;
   channelId: string;
+  messageId?: string;
   text: string;
   replyTo?: string;
   threadId?: string;

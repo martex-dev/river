@@ -55,6 +55,42 @@ export class NetworkError extends Error {
   }
 }
 
+/**
+ * Answers from something in front of the server (a tunnel, a proxy, Fastify closing down) that say
+ * the server itself cannot be reached right now: 502/503/504, and Cloudflare's 520–530.
+ */
+const GATEWAY = (status: number): boolean =>
+  status === 502 || status === 503 || status === 504 || (status >= 520 && status <= 530);
+
+/** The River error a response carries, if it carries one (`{ error: { code, message } }`). */
+function riverError(json: unknown): { code: string; message?: unknown } | null {
+  const err = (json as { error?: { code?: unknown; message?: unknown } } | null)?.error;
+  return err && typeof err === 'object' && typeof err.code === 'string'
+    ? (err as { code: string; message?: unknown })
+    : null;
+}
+
+/**
+ * A gateway answering for a server that is down is "unreachable", like a refused connection: the
+ * app shows itself offline and keeps retrying, instead of reporting the server rejected the request.
+ * A River server's own 503 (e.g. "busy") keeps its code.
+ */
+function unreachable(status: number, json: unknown): NetworkError | null {
+  return GATEWAY(status) && !riverError(json)
+    ? new NetworkError(`The server is not answering (HTTP ${status})`)
+    : null;
+}
+
+/** Reading the body can fail too (the connection drops, the timeout fires): that is a network failure. */
+async function readBody(res: Response, maxBytes: number): Promise<string> {
+  try {
+    return await readCapped(res, maxBytes);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new NetworkError((err as Error).message);
+  }
+}
+
 export type RequestJson = <T>(
   url: string,
   options: { method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; body?: unknown; token?: string },
@@ -88,14 +124,19 @@ export function createRequestJson(
     } catch (err) {
       throw new NetworkError((err as Error).message);
     }
-    const text = await readCapped(res, maxBytes);
+    const text = await readBody(res, maxBytes);
     let json: unknown;
     try {
       json = text ? JSON.parse(text) : null;
     } catch {
-      throw new ApiError(res.status, 'invalid_response', 'The server sent an invalid response');
+      throw (
+        unreachable(res.status, null) ??
+        new ApiError(res.status, 'invalid_response', 'The server sent an invalid response')
+      );
     }
     if (!res.ok) {
+      const down = unreachable(res.status, json);
+      if (down) throw down;
       const err = (json as { error?: { code?: unknown; message?: unknown } } | null)?.error;
       throw new ApiError(
         res.status,
@@ -163,12 +204,15 @@ export function createRequestBytes(
     }
     if (!res.ok) {
       const text = await readCapped(res, 64 * 1024).catch(() => '');
-      let err: { code?: unknown; message?: unknown } | undefined;
+      let json: unknown = null;
       try {
-        err = (JSON.parse(text) as { error?: typeof err }).error;
+        json = JSON.parse(text);
       } catch {
         // not JSON
       }
+      const down = unreachable(res.status, json);
+      if (down) throw down;
+      const err = (json as { error?: { code?: unknown; message?: unknown } } | null)?.error;
       throw new ApiError(
         res.status,
         typeof err?.code === 'string' ? err.code.slice(0, 64) : 'http_error',
@@ -182,7 +226,14 @@ export function createRequestBytes(
     const chunks: Uint8Array[] = [];
     let total = 0;
     for (;;) {
-      const { done, value } = await reader.read();
+      let next: Awaited<ReturnType<typeof reader.read>>;
+      try {
+        next = await reader.read();
+      } catch (err) {
+        // The download broke off (connection dropped, timeout): retryable, not a server refusal.
+        throw new NetworkError((err as Error).message);
+      }
+      const { done, value } = next;
       if (done) break;
       total += value.byteLength;
       if (total > req.maxBytes) {

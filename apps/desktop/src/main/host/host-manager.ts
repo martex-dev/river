@@ -65,6 +65,11 @@ const FUNNEL_ROUTE_TIMEOUT_MS = 180_000;
 const BACKUP_EVERY_MS = 24 * 60 * 60 * 1000;
 const BACKUP_CHECK_MS = 60 * 60 * 1000;
 const BACKUPS_KEPT = 7;
+/** Calls to the server process on this PC: it answers in milliseconds, or it is stuck. */
+const LOCAL_TIMEOUT_MS = 10_000;
+/** The address announcement waits for the server to post it to the relay (15 s there). */
+const ANNOUNCE_TIMEOUT_MS = 30_000;
+const OPERATOR_TIMEOUT_MS = 30_000;
 
 /**
  * Hosts communities on this PC: keeps the River server and its public tunnel
@@ -87,7 +92,19 @@ export class HostManager {
   private via: 'tailscale' | 'quick-tunnel' | null = null;
   private permanent: 'missing' | 'signed-out' | 'ready' | undefined;
   private approval: string | null = null;
-  private funnelBusy = false;
+  /** Why the permanent address is not in use although Tailscale is signed in (shown, not hidden). */
+  private permanentProblem: string | null = null;
+  /** The run (see `run`) whose Funnel attempt is in progress, if any. */
+  private funnelBusy: number | null = null;
+  /**
+   * Bumped by stop(): waits and loops of an earlier run end instead of acting on the new one. A
+   * Funnel attempt waiting when hosting was turned off used to hold `funnelBusy` for good, so the
+   * permanent address was never tried again until River restarted.
+   */
+  private run = 0;
+  private readonly sleepers = new Set<() => void>();
+  /** The port the tunnel or Funnel was last pointed at (the current port is 0 while one is found). */
+  private servedPort: number | null = null;
 
   private server: ServerHandle | null = null;
   private serverDelay = RESTART_MIN_MS;
@@ -117,6 +134,9 @@ export class HostManager {
       ...(this.state === 'online' && this.via ? { via: this.via } : {}),
       ...(this.permanent ? { permanent: this.permanent } : {}),
       ...(this.approval ? { needsApproval: true } : {}),
+      ...(this.permanent === 'ready' && this.via !== 'tailscale' && this.permanentProblem
+        ? { permanentProblem: this.permanentProblem }
+        : {}),
     };
   }
 
@@ -167,10 +187,13 @@ export class HostManager {
   async stop(): Promise<void> {
     if (!this.wanted) return;
     this.wanted = false;
+    this.run += 1;
     for (const t of this.timers) clearTimeout(t);
     for (const i of this.intervals) clearInterval(i);
     this.timers.clear();
     this.intervals.clear();
+    // Waits in progress end now (their loops see the run is over) instead of never.
+    for (const wake of [...this.sleepers]) wake();
     this.tunnel?.kill();
     this.tunnel = null;
     if (this.via === 'tailscale') await this.deps.funnel?.close().catch(() => undefined);
@@ -212,6 +235,7 @@ export class HostManager {
     if (this.port === null || !this.server) throw new Error('Hosting is not running.');
     const res = await this.deps.fetch(`${this.local()}${path}`, {
       method,
+      signal: this.timeout(OPERATOR_TIMEOUT_MS),
       headers: {
         authorization: `Bearer ${this.hostToken}`,
         ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
@@ -302,11 +326,15 @@ export class HostManager {
   }
 
   private async serverReady(port: number): Promise<void> {
-    const moved = this.port !== null && this.port !== 0 && this.port !== port;
+    // Compared with where the tunnel or Funnel points, not with `port` (0 after a port conflict).
+    const moved = this.servedPort !== null && this.servedPort !== port;
     this.port = port;
     this.deps.log.info(`host: server answering on 127.0.0.1:${port}`);
     try {
-      const res = await this.deps.fetch(`${this.local()}/v1/instance`);
+      // A server process that never answers must not keep hosting from coming up.
+      const res = await this.deps.fetch(`${this.local()}/v1/instance`, {
+        signal: this.timeout(LOCAL_TIMEOUT_MS),
+      });
       const info = (await res.json()) as { id?: unknown };
       if (typeof info.id === 'string') this.instanceId = info.id;
     } catch {
@@ -364,6 +392,7 @@ export class HostManager {
     if (!this.wanted || this.tunnel) return;
     if (this.state !== 'online') this.set('starting', 'Opening your public address…');
     const startedAt = Date.now();
+    this.servedPort = this.port;
     const tunnel = this.deps.spawnTunnel(this.tunnelBinary, this.local());
     this.tunnel = tunnel;
     tunnel.onLine((line) => {
@@ -450,12 +479,17 @@ export class HostManager {
    */
   private async tryFunnel(): Promise<boolean> {
     const funnel = this.deps.funnel;
-    if (!funnel || this.funnelBusy || !this.wanted || this.port === null || this.deps.localOnly) return false;
-    this.funnelBusy = true;
+    const run = this.run;
+    if (!funnel || this.funnelBusy === run || !this.wanted || this.port === null || this.deps.localOnly)
+      return false;
+    this.funnelBusy = run;
+    const current = (): boolean => this.wanted && this.run === run;
     try {
       const check = await funnel.check().catch(() => ({ state: 'missing' }) as const);
+      if (!current()) return false;
       const changed = this.permanent !== check.state;
       this.permanent = check.state;
+      if (check.state !== 'ready') this.permanentProblem = null;
       if (changed) this.emit();
       if (check.state !== 'ready') return false;
       if (this.state !== 'online') this.set('starting', 'Opening your permanent address…');
@@ -469,15 +503,18 @@ export class HostManager {
           if (!this.tunnel) void this.launchTunnel();
         });
       } finally {
-        this.approval = null;
+        if (this.run === run) this.approval = null;
       }
       const deadline = Date.now() + FUNNEL_ROUTE_TIMEOUT_MS;
-      while (this.wanted && this.port === port && Date.now() < deadline) {
+      while (current() && this.port === port && Date.now() < deadline) {
         if (await this.reachable(check.address)) {
+          if (!current() || this.port !== port) return false;
           const quick = this.tunnel;
           this.tunnel = null;
           quick?.kill();
           this.via = 'tailscale';
+          this.servedPort = port;
+          this.permanentProblem = null;
           this.address = check.address;
           this.tunnelDelay = RESTART_MIN_MS;
           this.watchFailures = 0;
@@ -489,14 +526,19 @@ export class HostManager {
         }
         await this.sleep(5_000);
       }
+      if (!current()) return false;
       this.deps.log.warn('host: the permanent address did not answer; using the quick tunnel');
+      this.permanentProblem = 'Tailscale is signed in, but your permanent address did not answer.';
+      this.emit();
       return false;
     } catch (err) {
+      if (!current()) return false;
       this.deps.log.warn(`host: permanent address unavailable: ${(err as Error).message}`);
+      this.permanentProblem = (err as Error).message;
       this.emit();
       return false;
     } finally {
-      this.funnelBusy = false;
+      if (this.funnelBusy === run) this.funnelBusy = null;
     }
   }
 
@@ -515,6 +557,7 @@ export class HostManager {
     try {
       const res = await this.deps.fetch(`${this.local()}/v1/instance/address`, {
         method: 'POST',
+        signal: this.timeout(ANNOUNCE_TIMEOUT_MS),
         headers: { 'content-type': 'application/json', authorization: `Bearer ${this.hostToken}` },
         body: JSON.stringify({ url: this.address }),
       });
@@ -591,8 +634,27 @@ export class HostManager {
     this.intervals.add(setInterval(fn, ms));
   }
 
+  /** A wait that ends early when hosting stops (callers then see `wanted` or `run` changed). */
   private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => this.later(ms, resolve));
+    return new Promise((resolve) => {
+      const wake = (): void => {
+        this.sleepers.delete(wake);
+        resolve();
+      };
+      this.sleepers.add(wake);
+      this.later(ms, wake);
+    });
+  }
+
+  /** An abort signal for a request to the local server (its own timer, so tests can run it). */
+  private timeout(ms: number): AbortSignal {
+    const controller = new AbortController();
+    const t = setTimeout(
+      () => controller.abort(new Error('The community server did not answer in time.')),
+      ms,
+    );
+    t.unref?.();
+    return controller.signal;
   }
 
   private now(): Date {

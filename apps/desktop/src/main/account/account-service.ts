@@ -451,7 +451,23 @@ export class AccountService {
    * Opens a session with the device key and checks that the server holds the
    * device list we signed. Never throws; problems are reported in status().
    */
-  async connect(): Promise<AccountStatus> {
+  connect(): Promise<AccountStatus> {
+    // Many callers ask at once (the realtime connection, every request that just got a 401, the
+    // direct messages): one sign-in serves them all. Separate ones each used a challenge, raced to
+    // set the token, and a burst of them ran into the server's sign-in rate limit.
+    const url = this.row()?.server_url ?? '';
+    if (this.connecting && this.connecting.url === url) return this.connecting.run;
+    const run: Promise<AccountStatus> = this.signIn().finally(() => {
+      if (this.connecting?.run === run) this.connecting = null;
+    });
+    this.connecting = { url, run };
+    return run;
+  }
+
+  /** The sign-in in progress, and the address it signs in at (a move starts a new one). */
+  private connecting: { url: string; run: Promise<AccountStatus> } | null = null;
+
+  private async signIn(): Promise<AccountStatus> {
     const row = this.row();
     const signer = this.deps.identity.signer();
     if (!row || !signer) return this.status();

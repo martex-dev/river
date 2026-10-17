@@ -85,6 +85,15 @@ describe('server identity and address notes', () => {
     ).toBe(404);
     expect((await announce({ authorization: 'Bearer wrong' })).statusCode).toBe(401);
     expect(relay).not.toHaveBeenCalled();
+    // A malformed announcement is a bad request, not an internal error.
+    const malformed = await app.inject({
+      method: 'POST',
+      url: '/v1/instance/address',
+      headers: { authorization: `Bearer ${TOKEN}` },
+      payload: { url: 'not a url' },
+    });
+    expect(malformed.statusCode).toBe(400);
+    expect(malformed.json().error.code).toBe('bad_request');
 
     const res = await announce({ authorization: `Bearer ${TOKEN}` });
     expect(res.statusCode).toBe(200);
