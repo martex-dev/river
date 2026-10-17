@@ -61,6 +61,15 @@ async function reset(db: Kysely<Database>): Promise<void> {
   ]) {
     await sql`drop table if exists ${sql.table(t)}`.execute(db);
   }
+  // Tables added by later migrations that the list above does not name yet: dropped too, so a
+  // reused PostgreSQL database never keeps a table its migration would create again.
+  for (const table of await db.introspection.getTables()) {
+    try {
+      await sql`drop table if exists ${sql.table(table.name)} cascade`.execute(db);
+    } catch {
+      await sql`drop table if exists ${sql.table(table.name)}`.execute(db);
+    }
+  }
 }
 
 describe.each(targets)('migrations on %s', (_name, open) => {

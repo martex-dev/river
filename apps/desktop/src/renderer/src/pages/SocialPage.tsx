@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type PointerEvent, type ReactElement } from 'react';
 import type { FeedView, PostView, ProfileView } from '../../../shared/social.ts';
 import { useCommunity } from '../community/store.ts';
 import {
   AttachmentList,
+  MAX_PENDING,
   PendingFiles,
   decryptToUrl,
+  dropPreviews,
   pendingFrom,
   uploadAll,
   type PendingFile,
@@ -25,6 +27,10 @@ import { useSocial } from '../social/store.ts';
 import { useRiver } from '../store.ts';
 
 const STORY_MS = 6000;
+/** A touch that moves down this far closes the story. */
+const SWIPE_CLOSE_PX = 80;
+/** A touch shorter than this (and that hardly moves) is a tap: previous or next. */
+const TAP_MS = 250;
 
 function ago(iso: string): string {
   const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
@@ -34,13 +40,30 @@ function ago(iso: string): string {
   return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
+/** Where the story viewer is: whose stories and which one (by ID, so a re-sorted feed never moves it). */
+export interface StoryAt {
+  riverId: string;
+  storyId: string;
+  /** Its position when it was opened, to stay near if that story disappears. */
+  index: number;
+}
+
+/** Whether a key press belongs to a text field (typing a reply), not to the story viewer. */
+function typing(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  return (
+    !!el && 'tagName' in el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
+  );
+}
+
 export function SocialPage(): ReactElement {
   const social = useSocial();
   const account = useRiver((r) => r.account);
   const me = useRiver((r) => r.identity);
   const [composer, setComposer] = useState<'post' | 'story' | null>(null);
-  const [story, setStory] = useState<{ group: number; index: number } | null>(null);
+  const [story, setStory] = useState<StoryAt | null>(null);
   const [profile, setProfile] = useState<string | null>(null);
+  const [friendsOpen, setFriendsOpen] = useState(false);
 
   useEffect(() => {
     void social.load();
@@ -63,12 +86,47 @@ export function SocialPage(): ReactElement {
   }
 
   const feed = social.feed;
+  const openMine = (): void => setProfile(useRiver.getState().identity?.riverId ?? null);
+  const friendList = (
+    <>
+      {feed?.friends.map((f) => (
+        <button
+          key={f.riverId}
+          className="dm-row"
+          onClick={() => {
+            setFriendsOpen(false);
+            setProfile(f.riverId);
+          }}
+        >
+          <Avatar id={f.riverId} name={f.name} avatar={f.avatar} size={30} />
+          <span className="dm-row__text">
+            <strong>{f.name}</strong>
+          </span>
+        </button>
+      ))}
+      {feed?.friends.length === 0 && (
+        <p className="muted small">Your friends are the people you have accepted in Messages.</p>
+      )}
+    </>
+  );
   return (
     <div className="social">
       <div className="social__main">
+        {/* On a narrow window (a phone) the side column is hidden: your profile and friends are here. */}
+        <div className="social__narrow">
+          <MyCard onProfile={openMine} />
+          <button className="btn btn--ghost btn--small" onClick={() => setFriendsOpen(true)}>
+            Friends — {feed?.friends.length ?? 0}
+          </button>
+        </div>
         <StoriesRail
           feed={feed}
-          onOpen={(group) => setStory({ group, index: 0 })}
+          onOpen={(g) => {
+            const first = g.stories.findIndex((s) => !s.mine && !s.seen);
+            const index = Math.max(0, first);
+            const s = g.stories[index];
+            if (s) setStory({ riverId: g.riverId, storyId: s.id, index });
+          }}
           onAdd={() => setComposer('story')}
         />
         <button className="social__compose glass" onClick={() => setComposer('post')}>
@@ -89,28 +147,23 @@ export function SocialPage(): ReactElement {
         ))}
       </div>
       <aside className="social__side">
-        <MyCard onProfile={() => setProfile(useRiver.getState().identity?.riverId ?? null)} />
+        <MyCard onProfile={openMine} />
         <div className="glass social__friends">
           <div className="channel-group__head">
             <span>Friends — {feed?.friends.length ?? 0}</span>
           </div>
-          {feed?.friends.map((f) => (
-            <button key={f.riverId} className="dm-row" onClick={() => setProfile(f.riverId)}>
-              <Avatar id={f.riverId} name={f.name} avatar={f.avatar} size={30} />
-              <span className="dm-row__text">
-                <strong>{f.name}</strong>
-              </span>
-            </button>
-          ))}
-          {feed?.friends.length === 0 && (
-            <p className="muted small">Your friends are the people you have accepted in Messages.</p>
-          )}
+          {friendList}
         </div>
       </aside>
+      {friendsOpen && (
+        <Modal title={`Friends — ${feed?.friends.length ?? 0}`} onClose={() => setFriendsOpen(false)}>
+          <div className="social__friends">{friendList}</div>
+        </Modal>
+      )}
       {composer && (
         <Composer kind={composer} friends={feed?.friends ?? []} onClose={() => setComposer(null)} />
       )}
-      {story && feed && feed.stories[story.group] && (
+      {story && feed && (
         <StoryViewer feed={feed} at={story} onMove={setStory} onClose={() => setStory(null)} />
       )}
       {profile && (
@@ -122,7 +175,7 @@ export function SocialPage(): ReactElement {
 
 function StoriesRail(props: {
   feed: FeedView | null;
-  onOpen(group: number): void;
+  onOpen(group: FeedView['stories'][number]): void;
   onAdd(): void;
 }): ReactElement {
   const me = useRiver((r) => r.identity);
@@ -141,8 +194,8 @@ function StoriesRail(props: {
           <span className="story-bubble__name">Your story</span>
         </button>
       )}
-      {groups.map((g, i) => (
-        <button key={g.riverId} className="story-bubble" onClick={() => props.onOpen(i)}>
+      {groups.map((g) => (
+        <button key={g.riverId} className="story-bubble" onClick={() => props.onOpen(g)}>
           <span className={`story-bubble__ring ${g.unseen ? 'is-unseen' : ''}`}>
             <Avatar id={g.riverId} name={g.name} avatar={g.avatar} size={58} />
           </span>
@@ -176,7 +229,7 @@ function MyCard({ onProfile }: { onProfile(): void }): ReactElement {
   );
 }
 
-function Composer(props: {
+export function Composer(props: {
   kind: 'post' | 'story';
   friends: FeedView['friends'];
   onClose(): void;
@@ -187,7 +240,21 @@ function Composer(props: {
   const [audience, setAudience] = useState<'friends' | string[]>('friends');
   const [busy, setBusy] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // The previews still waiting, freed when the composer closes (shared, cancelled or closed).
+  const waiting = useRef<PendingFile[]>([]);
   const story = props.kind === 'story';
+
+  useEffect(() => {
+    waiting.current = files;
+  }, [files]);
+  useEffect(() => () => dropPreviews(waiting.current), []);
+
+  /** Adds files up to the limit; the previews of those that do not fit are freed at once. */
+  const add = (more: Iterable<File>): void => {
+    const all = [...files, ...pendingFrom(more)];
+    dropPreviews(all.slice(MAX_PENDING));
+    setFiles(all.slice(0, MAX_PENDING));
+  };
 
   const share = async (): Promise<void> => {
     if ((!text.trim() && !files.length) || busy) return;
@@ -221,12 +288,18 @@ function Composer(props: {
             const pasted = [...e.clipboardData.files];
             if (pasted.length) {
               e.preventDefault();
-              setFiles([...files, ...pendingFrom(pasted)].slice(0, 10));
+              add(pasted);
             }
           }}
         />
         {files.length > 0 && (
-          <PendingFiles files={files} onRemove={(k) => setFiles(files.filter((f) => f.key !== k))} />
+          <PendingFiles
+            files={files}
+            onRemove={(k) => {
+              dropPreviews(files.filter((f) => f.key === k));
+              setFiles(files.filter((f) => f.key !== k));
+            }}
+          />
         )}
         <div className="composer__row">
           <button className="btn btn--ghost btn--small" onClick={() => fileRef.current?.click()}>
@@ -238,8 +311,9 @@ function Composer(props: {
             accept="image/*,video/*"
             multiple
             hidden
+            aria-label="Add photos or videos"
             onChange={(e) => {
-              if (e.target.files?.length) setFiles([...files, ...pendingFrom(e.target.files)].slice(0, 10));
+              if (e.target.files?.length) add(e.target.files);
               e.target.value = '';
             }}
           />
@@ -407,13 +481,17 @@ function PostCard({ post, onProfile }: { post: PostView; onProfile(id: string): 
           const text = comment.trim();
           if (!text) return;
           setComment('');
-          void social.run({ a: 'comment', postId: post.id, text });
+          void social.run({ a: 'comment', postId: post.id, text }).then((id) => {
+            // Not sent (the reason was shown): what you wrote comes back, unless you started another.
+            if (id === null) setComment((now) => now || text);
+          });
         }}
       >
         <input
           value={comment}
           maxLength={1000}
           placeholder="Add a comment…"
+          aria-label="Add a comment"
           onChange={(e) => setComment(e.target.value)}
         />
         <button className="btn btn--link" disabled={!comment.trim()}>
@@ -439,78 +517,203 @@ function PostCard({ post, onProfile }: { post: PostView; onProfile(id: string): 
   );
 }
 
-function StoryViewer(props: {
+export function StoryViewer(props: {
   feed: FeedView;
-  at: { group: number; index: number };
-  onMove(at: { group: number; index: number } | null): void;
+  at: StoryAt;
+  onMove(at: StoryAt): void;
   onClose(): void;
-}): ReactElement {
-  const group = props.feed.stories[props.at.group]!;
-  const story = group.stories[props.at.index]!;
-  // The decrypted image, remembered with the story it belongs to.
+}): ReactElement | null {
+  // The order of people when the viewer opened: marking a story seen re-sorts the feed, not this.
+  const [order] = useState(() => props.feed.stories.map((g) => g.riverId));
+  const group = props.feed.stories.find((g) => g.riverId === props.at.riverId);
+  const found = group ? group.stories.findIndex((s) => s.id === props.at.storyId) : -1;
+  // A story that disappeared (deleted, expired): the one now at its place, if any.
+  const index = !group?.stories.length
+    ? -1
+    : found >= 0
+      ? found
+      : Math.min(props.at.index, group.stories.length - 1);
+  const story = group && index >= 0 ? group.stories[index] : undefined;
+  const media = story?.attachments.find((a) => a.mime.startsWith('image/') || a.mime.startsWith('video/'));
+  const isVideo = !!media?.mime.startsWith('video/');
+  // The decrypted picture or video, remembered with the story it belongs to.
   const [loaded, setLoaded] = useState<{ id: string; url: string } | null>(null);
-  const url = loaded?.id === story.id ? loaded.url : null;
+  const url = story && loaded?.id === story.id ? loaded.url : null;
+  // Stories whose media is shown (or could not be loaded): only then does the timer run.
+  const [ready, setReady] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [videoMs, setVideoMs] = useState<{ id: string; ms: number } | null>(null);
+  const brokenMedia = !!story && failed === story.id;
+  const isReady = !!story && (!media || ready === story.id || brokenMedia);
   const [paused, setPaused] = useState(false);
   const [reply, setReply] = useState('');
   const social = useSocial();
-  const image = story.attachments.find((a) => a.mime.startsWith('image/'));
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const press = useRef<{ x: number; y: number; at: number; touch: boolean } | null>(null);
+  const elapsed = useRef(0);
+  const durationMs = isVideo && story && videoMs?.id === story.id ? videoMs.ms : STORY_MS;
 
+  const goTo = (riverId: string, i: number): void => {
+    const g = props.feed.stories.find((x) => x.riverId === riverId);
+    const s = g?.stories[i];
+    if (g && s) props.onMove({ riverId, storyId: s.id, index: i });
+  };
+  /** The next (or previous) person, in the order the viewer opened with, who still has stories. */
+  const neighbour = (step: 1 | -1): string | undefined => {
+    const at = order.indexOf(props.at.riverId);
+    for (let i = at + step; i >= 0 && i < order.length; i += step) {
+      const id = order[i]!;
+      if (props.feed.stories.some((g) => g.riverId === id && g.stories.length)) return id;
+    }
+    return undefined;
+  };
   const next = (): void => {
-    if (props.at.index + 1 < group.stories.length)
-      props.onMove({ group: props.at.group, index: props.at.index + 1 });
-    else if (props.at.group + 1 < props.feed.stories.length)
-      props.onMove({ group: props.at.group + 1, index: 0 });
+    if (!group) return props.onClose();
+    if (index + 1 < group.stories.length) return goTo(group.riverId, index + 1);
+    const who = neighbour(1);
+    if (who) goTo(who, 0);
     else props.onClose();
   };
   const prev = (): void => {
-    if (props.at.index > 0) props.onMove({ group: props.at.group, index: props.at.index - 1 });
-    else if (props.at.group > 0) props.onMove({ group: props.at.group - 1, index: 0 });
+    if (!group) return;
+    if (index > 0) return goTo(group.riverId, index - 1);
+    const who = neighbour(-1);
+    if (who) goTo(who, 0);
   };
+  // Timers and listeners always call the latest next/prev/close.
+  const latest = useRef({ next, prev, close: props.onClose });
+  useEffect(() => {
+    latest.current = { next, prev, close: props.onClose };
+  });
+
+  // Gone (that person's stories all disappeared): the viewer closes; moved: it follows.
+  useEffect(() => {
+    if (!story) props.onClose();
+    else if (story.id !== props.at.storyId)
+      props.onMove({ riverId: props.at.riverId, storyId: story.id, index });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [story?.id, props.at.storyId]);
 
   useEffect(() => {
+    if (!story) return;
     let live = true;
-    if (image) {
-      void decryptToUrl(image)
+    if (media) {
+      void decryptToUrl(media)
         .then((u) => live && setLoaded({ id: story.id, url: u }))
-        .catch(() => undefined);
+        .catch(() => live && setFailed(story.id));
     }
     if (!story.mine && !story.seen) void social.run({ a: 'seen', postId: story.id });
     return () => {
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [story.id]);
+  }, [story?.id]);
+
+  // Each story starts from the beginning (declared before the timer, so it resets first).
+  useEffect(() => {
+    elapsed.current = 0;
+  }, [story?.id]);
+
+  // Pictures and text advance after STORY_MS of being shown (pauses do not count); a video when it ends.
+  useEffect(() => {
+    if (!story || !isReady || paused || (isVideo && !brokenMedia)) return;
+    const started = Date.now();
+    const t = window.setTimeout(() => latest.current.next(), Math.max(0, STORY_MS - elapsed.current));
+    return () => {
+      window.clearTimeout(t);
+      elapsed.current += Date.now() - started;
+    };
+  }, [story?.id, story, isReady, paused, isVideo, brokenMedia]);
 
   useEffect(() => {
-    if (paused) return;
-    const t = window.setTimeout(next, STORY_MS);
-    return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [story.id, paused]);
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      if (paused) v.pause();
+      else void Promise.resolve(v.play()).catch(() => undefined);
+    } catch {
+      // media playback unavailable here
+    }
+  }, [paused, url]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') props.onClose();
-      if (e.key === 'ArrowRight') next();
-      if (e.key === 'ArrowLeft') prev();
+      // Writing a reply: the arrows move the cursor, and Esc leaves the box (the story stays).
+      if (typing(e.target)) {
+        if (e.key === 'Escape') (e.target as HTMLElement).blur();
+        return;
+      }
+      if (e.key === 'Escape') latest.current.close();
+      if (e.key === 'ArrowRight') latest.current.next();
+      if (e.key === 'ArrowLeft') latest.current.prev();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  });
+  }, []);
+
+  if (!group || !story) return null;
+
+  /** Holding pauses; on touch a quick tap goes back or on, and a swipe down closes. */
+  const down = (e: PointerEvent<HTMLDivElement>): void => {
+    if ((e.target as HTMLElement).closest('input, form, .story-viewer__head')) return;
+    const touch = e.pointerType !== 'mouse';
+    press.current = { x: e.clientX, y: e.clientY, at: Date.now(), touch };
+    setPaused(true);
+    if (touch) {
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        // pointer already gone
+      }
+    }
+  };
+  const up = (e: PointerEvent<HTMLDivElement>): void => {
+    const p = press.current;
+    press.current = null;
+    if (!p) return;
+    setPaused(false);
+    if (!p.touch) return;
+    const dx = e.clientX - p.x;
+    const dy = e.clientY - p.y;
+    if (dy > SWIPE_CLOSE_PX && Math.abs(dy) > Math.abs(dx)) return props.onClose();
+    if (Date.now() - p.at < TAP_MS && Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      // With the pointer captured, the tap reaches the frame, not the buttons: decide by where it was.
+      const rect = frameRef.current?.getBoundingClientRect();
+      if (!rect || !rect.width) return;
+      const at = (e.clientX - rect.left) / rect.width;
+      if (at < 0.35) prev();
+      else if (at > 0.65) next();
+    }
+  };
+  const cancel = (): void => {
+    if (!press.current) return;
+    press.current = null;
+    setPaused(false);
+  };
 
   return (
     <div className="story-viewer" role="dialog" aria-label={`${group.name}'s story`}>
       <div
+        ref={frameRef}
         className="story-viewer__frame"
-        onMouseDown={() => setPaused(true)}
-        onMouseUp={() => setPaused(false)}
+        onPointerDown={down}
+        onPointerUp={up}
+        onPointerCancel={cancel}
+        onLostPointerCapture={cancel}
+        onPointerLeave={(e) => {
+          if (e.pointerType === 'mouse') cancel();
+        }}
       >
         <div className="story-viewer__bars">
           {group.stories.map((s, i) => (
             <span key={s.id} className="story-viewer__bar">
               <span
-                className={`story-viewer__fill ${i < props.at.index ? 'is-done' : i === props.at.index && !paused ? 'is-running' : ''}`}
-                style={{ animationDuration: `${STORY_MS}ms` }}
+                className={`story-viewer__fill ${i < index ? 'is-done' : i === index && isReady ? 'is-running' : ''}`}
+                style={{
+                  animationDuration: `${durationMs}ms`,
+                  animationPlayState: paused ? 'paused' : 'running',
+                }}
               />
             </span>
           ))}
@@ -524,12 +727,37 @@ function StoryViewer(props: {
           </button>
         </header>
         <div className="story-viewer__content">
-          {url ? (
-            <img src={url} alt="" />
+          {media && brokenMedia ? (
+            <div className="story-viewer__textonly muted small">This story could not be loaded.</div>
+          ) : url && isVideo ? (
+            <video
+              key={story.id}
+              ref={videoRef}
+              src={url}
+              muted
+              autoPlay
+              playsInline
+              aria-label={story.text || 'Video story'}
+              onLoadedMetadata={(e) => {
+                const ms = e.currentTarget.duration * 1000;
+                if (Number.isFinite(ms) && ms > 0) setVideoMs({ id: story.id, ms });
+                setReady(story.id);
+              }}
+              onEnded={() => latest.current.next()}
+              onError={() => setFailed(story.id)}
+            />
+          ) : url ? (
+            <img
+              key={story.id}
+              src={url}
+              alt=""
+              onLoad={() => setReady(story.id)}
+              onError={() => setFailed(story.id)}
+            />
           ) : (
-            !image && <div className="story-viewer__textonly">{story.text}</div>
+            !media && <div className="story-viewer__textonly">{story.text}</div>
           )}
-          {image && story.text && <div className="story-viewer__caption">{story.text}</div>}
+          {media && story.text && <div className="story-viewer__caption">{story.text}</div>}
         </div>
         <button className="story-viewer__nav story-viewer__nav--prev" aria-label="Previous" onClick={prev} />
         <button className="story-viewer__nav story-viewer__nav--next" aria-label="Next" onClick={next} />
@@ -555,6 +783,7 @@ function StoryViewer(props: {
               <input
                 value={reply}
                 placeholder={`Reply to ${group.name}…`}
+                aria-label={`Reply to ${group.name}`}
                 onFocus={() => setPaused(true)}
                 onBlur={() => setPaused(false)}
                 onChange={(e) => setReply(e.target.value)}
@@ -567,18 +796,29 @@ function StoryViewer(props: {
   );
 }
 
-function ProfileModal(props: {
+export function ProfileModal(props: {
   riverId: string;
   onClose(): void;
   onOpenPost(id: string): void;
 }): ReactElement {
   const social = useSocial();
+  // Likes, comments and deletes change the feed: the profile's posts follow.
+  const feed = useSocial((s) => s.feed);
   const [profile, setProfile] = useState<ProfileView | null>(null);
   const [bio, setBio] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
-    void social.run({ a: 'profile', riverId: props.riverId }).then((p) => p && setProfile(p));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.riverId]);
+    let live = true;
+    // Read directly: social.run() reloads the feed, which would bring us straight back here.
+    void window.river.social.action({ a: 'profile', riverId: props.riverId }).then((res) => {
+      if (!live) return;
+      if (res.ok) setProfile(res.value as ProfileView);
+      else useCommunity.getState().notify(res.message, 'error');
+    });
+    return () => {
+      live = false;
+    };
+  }, [props.riverId, feed]);
   return (
     <Modal onClose={props.onClose} wide className="profile-modal">
       {!profile ? (
@@ -593,9 +833,15 @@ function ProfileModal(props: {
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
-                    void social.run({ a: 'setBio', bio }).then(() => {
-                      setProfile({ ...profile, bio });
+                    if (saving) return;
+                    setSaving(true);
+                    void social.run({ a: 'setBio', bio }).then((saved) => {
+                      setSaving(false);
+                      // Not saved: the reason was shown and what you wrote stays to try again.
+                      if (saved === null) return;
+                      setProfile({ ...profile, bio: saved });
                       setBio(null);
+                      useCommunity.getState().notify('Bio saved');
                     });
                   }}
                 >
@@ -603,11 +849,14 @@ function ProfileModal(props: {
                     value={bio}
                     maxLength={300}
                     rows={3}
+                    aria-label="Your bio"
                     onChange={(e) => setBio(e.target.value)}
                     autoFocus
                   />
                   <div className="button-row">
-                    <button className="btn btn--primary btn--small">Save</button>
+                    <button className="btn btn--primary btn--small" disabled={saving}>
+                      {saving ? 'Saving…' : 'Save'}
+                    </button>
                     <button type="button" className="btn btn--link" onClick={() => setBio(null)}>
                       Cancel
                     </button>

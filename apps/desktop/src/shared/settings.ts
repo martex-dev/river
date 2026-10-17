@@ -1,7 +1,7 @@
 import { DEFAULT_KEYBINDS } from './keybinds.ts';
 import { z } from 'zod';
 import { RELEASE_CHANNELS } from '@river/release/channels';
-import { DEFAULT_DESIGN, designSettingsSchema } from './design.ts';
+import { DEFAULT_DESIGN, compactDesignImages, designSettingsSchema } from './design.ts';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
@@ -158,6 +158,10 @@ export const settingsSchema = z.object({
     background: z.boolean(),
     /** Added in 2.6.0: block screenshots and screen recording of River (Android, Windows, macOS). */
     screenSecurity: z.boolean(),
+    /** Added in 2.11.0 (Android): the one-time "Get messages and calls when River is closed?" was answered. */
+    backgroundAsked: z.boolean(),
+    /** Added in 2.11.0 (Android): a new message lights up the screen for a few seconds when it is off. */
+    wakeScreen: z.boolean(),
   }),
   /** Added in 1.0.11: communities hosted by this PC, from inside River. */
   hosting: z.object({
@@ -250,6 +254,8 @@ export const DEFAULT_SETTINGS: Settings = {
     appLock: false,
     background: false,
     screenSecurity: false,
+    backgroundAsked: false,
+    wakeScreen: true,
   },
   hosting: { enabled: false, keepAwake: true },
   rail: { order: [], folders: [] },
@@ -355,7 +361,16 @@ export const settingsPatchSchema = z
 
 export type SettingsPatch = z.input<typeof settingsPatchSchema>;
 
+/** Settings in their stored form: each background picture kept once (see compactDesignImages). */
+export function normalizeSettings(settings: Settings): Settings {
+  return { ...settings, design: compactDesignImages(settings.design) };
+}
+
 export function applySettingsPatch(current: Settings, patch: z.output<typeof settingsPatchSchema>): Settings {
+  return normalizeSettings(applyPatch(current, patch));
+}
+
+function applyPatch(current: Settings, patch: z.output<typeof settingsPatchSchema>): Settings {
   return settingsSchema.parse({
     ...current,
     updates: { ...current.updates, ...patch.updates },

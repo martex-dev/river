@@ -100,6 +100,12 @@ interface SocialResults {
   feed: FeedView;
   post: PostView;
   profile: ProfileView;
+  /** The new comment's ID (null when the post is gone). */
+  comment: string | null;
+  /** Whether the reaction was applied (false when the post is gone). */
+  react: boolean;
+  /** The bio as saved. */
+  setBio: string;
 }
 
 export type SocialActionResult<A extends SocialAction> = A['a'] extends keyof SocialResults

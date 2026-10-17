@@ -9,7 +9,12 @@ interface Entry {
   url: string;
   bytes: number;
   refs: number;
+  /** When it was made: a URL just handed out is not revoked before its component can hold it. */
+  madeAt: number;
 }
+
+/** A new URL reaches the screen (and takes its reference) within this time. */
+const FRESH_MS = 10_000;
 
 export interface BlobCacheOptions {
   maxEntries: number;
@@ -17,6 +22,7 @@ export interface BlobCacheOptions {
   /** Injected for tests; URL.createObjectURL / revokeObjectURL in the app. */
   create?(blob: Blob): string;
   revoke?(url: string): void;
+  now?(): number;
 }
 
 export class BlobUrlCache {
@@ -51,7 +57,7 @@ export class BlobUrlCache {
     const promise = make()
       .then((blob) => {
         const url = this.create(blob);
-        this.entries.set(key, { url, bytes: blob.size, refs: 0 });
+        this.entries.set(key, { url, bytes: blob.size, refs: 0, madeAt: this.now() });
         this.total += blob.size;
         this.evict(key);
         return url;
@@ -83,11 +89,15 @@ export class BlobUrlCache {
     return this.total;
   }
 
+  private now(): number {
+    return this.options.now?.() ?? Date.now();
+  }
+
   /** Revokes the least recently used URLs nothing shows until within the limits (`keep` stays). */
   private evict(keep?: string): void {
     for (const [key, entry] of this.entries) {
       if (this.entries.size <= this.options.maxEntries && this.total <= this.options.maxBytes) return;
-      if (entry.refs > 0 || key === keep) continue;
+      if (entry.refs > 0 || key === keep || this.now() - entry.madeAt < FRESH_MS) continue;
       this.entries.delete(key);
       this.total -= entry.bytes;
       this.revoke(entry.url);

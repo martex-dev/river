@@ -26,21 +26,55 @@ export type SealPurpose =
   | `note:${string}`
   | `sticker:${string}`
   | `webhook:${string}`
+  | `epoch:${number}`
   | 'invite';
 
 const aad = (communityId: string, purpose: SealPurpose): Buffer =>
   Buffer.from(`river-community-v1|${communityId}|${purpose}`, 'utf8');
 
+/**
+ * Associated data v2 (2.11) also binds a value to who and what it is: a message to its ID and
+ * sender (`<messageId>|<senderRiverId>`), a profile to its member (`<riverId>`). The server can
+ * then no longer show a message under another ID or sender, replay it as a new message, or give
+ * one member's profile to another. Receivers open v2 first and fall back to v1.
+ */
+const aadV2 = (communityId: string, purpose: SealPurpose, binding: string): Buffer =>
+  Buffer.from(`river-community-v2|${communityId}|${purpose}|${binding}`, 'utf8');
+
+/**
+ * Whether new messages and profiles are sealed with v2 associated data. Off until every
+ * supported River opens v2 (receivers have since 2.11): older versions cannot read v2 values.
+ * See CRYPTOGRAPHY.md §4a for the planned switch.
+ */
+export const SEAL_V2_DEFAULT = false;
+
+/** What a message is bound to under v2. */
+export const messageBinding = (messageId: string, sender: string): string => `${messageId}|${sender}`;
+
 export function newCommunityKey(): Buffer {
   return randomBytes(32);
 }
 
-export function seal(key: Uint8Array, communityId: string, purpose: SealPurpose, value: unknown): string {
+function sealWith(key: Uint8Array, associated: Buffer, value: unknown): string {
   const nonce = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', key, nonce);
-  cipher.setAAD(aad(communityId, purpose));
+  cipher.setAAD(associated);
   const ct = Buffer.concat([cipher.update(JSON.stringify(value), 'utf8'), cipher.final()]);
   return Buffer.concat([nonce, ct, cipher.getAuthTag()]).toString('base64');
+}
+
+function openWithAad<T>(key: Uint8Array, associated: Buffer, sealed: string): T {
+  const raw = Buffer.from(sealed, 'base64');
+  if (raw.length < 12 + 16) throw new Error('sealed value too short');
+  const decipher = createDecipheriv('aes-256-gcm', key, raw.subarray(0, 12));
+  decipher.setAAD(associated);
+  decipher.setAuthTag(raw.subarray(raw.length - 16));
+  const pt = Buffer.concat([decipher.update(raw.subarray(12, raw.length - 16)), decipher.final()]);
+  return JSON.parse(pt.toString('utf8')) as T;
+}
+
+export function seal(key: Uint8Array, communityId: string, purpose: SealPurpose, value: unknown): string {
+  return sealWith(key, aad(communityId, purpose), value);
 }
 
 /** Throws if the ciphertext was not made with this key for this community and purpose. */
@@ -50,13 +84,36 @@ export function open<T = unknown>(
   purpose: SealPurpose,
   sealed: string,
 ): T {
-  const raw = Buffer.from(sealed, 'base64');
-  if (raw.length < 12 + 16) throw new Error('sealed value too short');
-  const decipher = createDecipheriv('aes-256-gcm', key, raw.subarray(0, 12));
-  decipher.setAAD(aad(communityId, purpose));
-  decipher.setAuthTag(raw.subarray(raw.length - 16));
-  const pt = Buffer.concat([decipher.update(raw.subarray(12, raw.length - 16)), decipher.final()]);
-  return JSON.parse(pt.toString('utf8')) as T;
+  return openWithAad<T>(key, aad(communityId, purpose), sealed);
+}
+
+/** Seals with v2 associated data (bound to `binding`), or v1 when `v2` is false. */
+export function sealBound(
+  key: Uint8Array,
+  communityId: string,
+  purpose: SealPurpose,
+  binding: string,
+  value: unknown,
+  v2: boolean,
+): string {
+  return v2
+    ? sealWith(key, aadV2(communityId, purpose, binding), value)
+    : seal(key, communityId, purpose, value);
+}
+
+/** Opens a v2 value bound to `binding`, else a v1 value (made before v2, or by older Rivers). */
+export function openBound<T = unknown>(
+  key: Uint8Array,
+  communityId: string,
+  purpose: SealPurpose,
+  binding: string,
+  sealed: string,
+): { value: T; version: 1 | 2 } {
+  try {
+    return { value: openWithAad<T>(key, aadV2(communityId, purpose, binding), sealed), version: 2 };
+  } catch {
+    return { value: open<T>(key, communityId, purpose, sealed), version: 1 };
+  }
 }
 
 /**
@@ -148,5 +205,27 @@ export class KeyRing {
 
   open<T = unknown>(communityId: string, purpose: SealPurpose, sealed: string): T {
     return this.openWith<T>(communityId, purpose, sealed).value;
+  }
+
+  /** Like openWith, for values that may carry v2 associated data bound to `binding`. */
+  openBoundWith<T = unknown>(
+    communityId: string,
+    purpose: SealPurpose,
+    binding: string,
+    sealed: string,
+  ): { value: T; key: Buffer; epoch: number; version: 1 | 2 } {
+    for (const { key, epoch } of this.entries) {
+      try {
+        return { ...openBound<T>(key, communityId, purpose, binding, sealed), key, epoch };
+      } catch {
+        // try an older key
+      }
+    }
+    throw new Error('no key opens this value');
+  }
+
+  /** Epochs held, newest first. */
+  epochs(): number[] {
+    return this.entries.map((e) => e.epoch);
   }
 }

@@ -192,9 +192,18 @@ export const linkStateResponseSchema = z.object({
     .nullable(),
   /** The device ID the new device was given, once linked. */
   deviceId: deviceIdSchema.nullable(),
+  /**
+   * The new device did not take the account ("Is this you?" → Cancel): HMAC under the link
+   * secret, so the linked device knows it really came from the new device and takes it off the
+   * device list again. Older servers never set it.
+   */
+  declined: linkMacSchema.nullable().optional(),
   expiresAt: z.iso.datetime(),
 });
 export type LinkState = z.infer<typeof linkStateResponseSchema>;
+
+/** `PUT /v1/link/:id/decline` (no account needed, once, after provisioning): the new device said no. */
+export const declineLinkRequestSchema = z.object({ mac: linkMacSchema }).strict();
 
 /** `PUT /v1/link/:id/provision` (signed in, on the account the device was added to). */
 export const provisionLinkRequestSchema = z

@@ -215,6 +215,75 @@ describe('desktop ↔ server accounts', () => {
     expect(again.state === 'registered' && again.missing).toBeFalsy();
   });
 
+  it('setting up again replaces the old account only once the new one exists', async () => {
+    const c = client();
+    const me = c.identity.create('');
+    await c.account.register(SERVER);
+    await serverDb.db.deleteFrom('devices').execute();
+    await serverDb.db.deleteFrom('accounts').execute();
+    await c.account.connect();
+    // Nothing to set up again while the account is fine; and no network: nothing changes.
+    reachable = false;
+    await expect(c.account.register(SERVER, undefined, { replaceMissing: true })).rejects.toThrow(
+      /reach the server/,
+    );
+    expect(c.account.status()).toMatchObject({ state: 'registered', missing: true });
+    reachable = true;
+    const again = await c.account.register(SERVER, undefined, { replaceMissing: true });
+    expect(again).toMatchObject({ state: 'registered', riverId: me.riverId, connection: 'online' });
+    expect(again.state === 'registered' && again.missing).toBeFalsy();
+    await expect(c.account.register(SERVER, undefined, { replaceMissing: true })).rejects.toThrow(
+      /nothing to set up again/,
+    );
+  });
+
+  it('a device removed from an account that still exists is told so, and keeps its account row', async () => {
+    const c = client();
+    c.identity.create('');
+    await c.account.register(SERVER);
+    // Another device of this account removed this one: the account stays, this device's key goes.
+    await serverDb.db.deleteFrom('devices').execute();
+    const status = await c.account.connect();
+    expect(status).toMatchObject({ state: 'registered', missing: true });
+    expect(status.state === 'registered' && status.removed).toBeFalsy();
+
+    const err = await c.account.register(SERVER, undefined, { replaceMissing: true }).catch((e) => e);
+    expect(err).toBeInstanceOf(UserFacingError);
+    expect((err as UserFacingError).message).toMatch(/this device was removed from it/);
+    // Not "account deleted", no dead end: the account row is still there, now known as removed.
+    expect(c.account.status()).toMatchObject({
+      state: 'registered',
+      missing: true,
+      removed: true,
+      connection: 'error',
+    });
+
+    // Link this device again: account and identity go, the account's ID is remembered.
+    const riverId = c.account.forgetForRelink();
+    expect(c.account.status().state).toBe('none');
+    expect(c.identity.get()).toBeNull();
+    expect(c.account.relinkTarget()).toBe(riverId);
+  });
+
+  it('a device that shared its account says it was probably removed, not that the account was deleted', async () => {
+    const c = client();
+    c.identity.create('');
+    await c.account.register(SERVER);
+    // As seen by a linked device: its local device list has another device on it.
+    local.prepare('UPDATE account SET device_id = 2 WHERE id = 1').run();
+    const status = await c.account.connect();
+    expect(status).toMatchObject({ state: 'registered', missing: true, wasLinked: true });
+    expect(status.state === 'registered' && status.message).toMatch(/removed on one of your other devices/);
+  });
+
+  it('only forgets a device for linking again when its server refused it', async () => {
+    const c = client();
+    c.identity.create('');
+    await c.account.register(SERVER);
+    expect(() => c.account.forgetForRelink()).toThrow(/still linked/);
+    expect(c.account.status().state).toBe('registered');
+  });
+
   it('refuses a second account on the same device', async () => {
     const c = client();
     c.identity.create('');

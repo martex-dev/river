@@ -1006,6 +1006,42 @@ describe('communities', () => {
       expect(c).toMatchObject({ keyEpoch: 1, rotationNeeded: false });
       // Non-members cannot rotate.
       expect(await status(a, 'POST', `/v1/communities/${cid}/epoch`, other.token, { from: 1 })).toBe(404);
+
+      // 2.11: a rotation counts as done once someone other than its claimer reports the key.
+      const claim = async () =>
+        await database.db
+          .selectFrom('communities')
+          .select(['epoch_claimed_at', 'epoch_claimed_by', 'rotation_retries'])
+          .where('id', '=', cid)
+          .executeTakeFirstOrThrow();
+      expect(await claim()).toMatchObject({ epoch_claimed_by: member.riverId });
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/epoch/adopted`, member.token, { epoch: 1 }),
+      ).toBe(200);
+      expect((await claim()).epoch_claimed_at).not.toBeNull();
+      expect(await status(a, 'POST', `/v1/communities/${cid}/epoch/adopted`, owner.token, { epoch: 0 })).toBe(
+        200,
+      );
+      expect((await claim()).epoch_claimed_at).not.toBeNull();
+      expect(await status(a, 'POST', `/v1/communities/${cid}/epoch/adopted`, owner.token, { epoch: 1 })).toBe(
+        200,
+      );
+      expect((await claim()).epoch_claimed_at).toBeNull();
+
+      // A claimed rotation that nobody reports in ten minutes reached nobody: asked for again,
+      // at most three times.
+      for (let retry = 1; retry <= 4; retry++) {
+        const from = (await fetchCommunity(a, owner.token, cid)).keyEpoch;
+        expect(await status(a, 'POST', `/v1/communities/${cid}/epoch`, owner.token, { from })).toBe(200);
+        await database.db
+          .updateTable('communities')
+          .set({ epoch_claimed_at: new Date(Date.now() - 11 * 60_000).toISOString() })
+          .where('id', '=', cid)
+          .execute();
+        c = await fetchCommunity(a, owner.token, cid);
+        expect(c.rotationNeeded).toBe(retry <= 3);
+        if (retry <= 3) expect((await claim()).rotation_retries).toBe(retry);
+      }
     });
 
     it('members can leave; only the owner can delete the community', async () => {

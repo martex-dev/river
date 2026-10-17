@@ -27,7 +27,8 @@ const BG: Record<string, string> = {
   // Settings tabs and headings
   Updates: 'Обновления',
   Hosting: 'Хостване',
-  Account: 'Профил',
+  Account: 'Акаунт',
+  Profile: 'Профил',
   Backup: 'Резервно копие',
   Appearance: 'Външен вид',
   Notifications: 'Известия',

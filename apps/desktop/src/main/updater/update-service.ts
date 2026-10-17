@@ -100,6 +100,18 @@ export class UpdateService {
     // Setting `channel` flips allowDowngrade on inside electron-updater; River never downgrades.
     u.allowDowngrade = false;
     u.autoDownload = false;
+    // Back on a channel that does not take the waiting update (a beta, after choosing Stable):
+    // it is not installed (2.10.13).
+    const waiting =
+      this.status.state === 'ready' || this.status.state === 'available' ? this.status.version : null;
+    if (waiting) {
+      if (!acceptsVersion(prefs.channel, waiting)) {
+        this.deps.log.info(`Dropping ${waiting}: not on the ${prefs.channel} channel`);
+        this.verifiedVersion = null;
+        this.pendingVersion = null;
+        this.setStatus({ state: 'up-to-date', checkedAt: this.now() });
+      }
+    }
     // electron-updater would decide this at download time, before River's signature check.
     // River installs on quit itself, and only after verification (see installOnQuit()).
     u.autoInstallOnAppQuit = false;
@@ -118,6 +130,11 @@ export class UpdateService {
     return this.status;
   }
 
+  /** The Download button (Settings → Updates) when automatic download is off. */
+  downloadNow(): Promise<void> {
+    return this.download();
+  }
+
   /** Starts the download of an available update (when automatic download is off). */
   async download(): Promise<void> {
     if (this.status.state !== 'available' || !this.pendingVersion) return;
@@ -131,6 +148,23 @@ export class UpdateService {
     }
     this.deps.log.info(`Installing verified update ${this.verifiedVersion}`);
     this.deps.updater.quitAndInstall(false, true);
+  }
+
+  /**
+   * Restarts into the verified update without asking (2.10.13): used when River is in the tray or
+   * unused, outside calls (see auto-install.ts). Same checks as installing on quit.
+   */
+  installNow(): boolean {
+    if (this.status.state !== 'ready' || this.verifiedVersion === null) return false;
+    if (this.deps.mode !== 'auto') return false;
+    const hold = this.deps.installHold?.();
+    if (hold) {
+      this.deps.log.warn(`Not installing ${this.verifiedVersion} now: ${hold}`);
+      return false;
+    }
+    this.deps.log.info(`Installing verified update ${this.verifiedVersion} while River is not in use`);
+    this.deps.updater.quitAndInstall(true, true);
+    return true;
   }
 
   /**
@@ -244,5 +278,14 @@ function friendlyMessage(code: string, raw: string): string {
       return 'The update download failed. River will try again later.';
     default:
       return 'The update could not be completed. Your current version is unchanged.';
+  }
+}
+
+/** Whether `channel` takes `version` (an unsupported version string is not taken). */
+function acceptsVersion(channel: UpdatePreferences['channel'], version: string): boolean {
+  try {
+    return channelAccepts(channel, channelOfVersion(version));
+  } catch {
+    return false;
   }
 }

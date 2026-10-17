@@ -109,6 +109,39 @@ export class SafetyNumberChangedError extends Error {
   }
 }
 
+/** A changed identity key that River refused to accept from a contact (see `approveIdentityChange`). */
+export class IdentityChangeRefusedError extends Error {
+  readonly riverId: string;
+  constructor(riverId: string) {
+    super('A message claimed a new identity key for this contact that River could not confirm.');
+    this.name = 'IdentityChangeRefusedError';
+    this.riverId = riverId;
+  }
+}
+
+/**
+ * What River knows about a contact's identity key: 'verified' — the user verified the key held
+ * now; 'changed' — they verified an earlier key and it changed since (sending stops until they
+ * verify again); 'unverified' — trust on first use.
+ */
+export type VerificationState = 'unverified' | 'verified' | 'changed';
+
+/** A contact's identity key changing on an incoming message (the first message of a new session). */
+export interface IncomingIdentityChange {
+  riverId: string;
+  deviceId: number;
+  /** The libsignal registration ID claimed by the sending device (from the PreKey message). */
+  registrationId: number | null;
+  /** The new identity public key (33 bytes). */
+  identityKey: Uint8Array;
+  /** The identity key River had stored before (33 bytes). */
+  previousKey: Uint8Array;
+}
+
+/** The verification mark before 2.11: one byte, meaning "the stored key was verified". */
+const LEGACY_VERIFIED = 1;
+const isLegacyMark = (mark: Uint8Array): boolean => mark.length === 1 && mark[0] === LEGACY_VERIFIED;
+
 /**
  * The libsignal protocol stores over a ProtocolStorage, plus helpers to
  * create and upload prekeys and to encrypt/decrypt messages.
@@ -119,6 +152,15 @@ export class RiverProtocol {
   private readonly identityPair: IdentityKeyPair;
   /** Called when a contact's identity key changes (show a safety-number warning). */
   onIdentityChanged: (riverId: string) => void = () => undefined;
+  /**
+   * Decides whether an incoming message may replace a contact's stored identity key (a new
+   * session after they reinstalled — or a server substituting a key). The caller checks the
+   * change against what the server cannot forge on its own (the device list signed by the new
+   * key, the key sealed in a shared community). Without a decision the change is refused.
+   */
+  approveIdentityChange: (change: IncomingIdentityChange) => Promise<boolean> = async () => false;
+  /** Registration IDs claimed by PreKey messages being decrypted right now, by address. */
+  private readonly incomingRegistration = new Map<string, number>();
 
   readonly sessions: SessionStore;
   readonly identities: IdentityKeyStore;
@@ -156,6 +198,10 @@ export class RiverProtocol {
       }
     })();
 
+    const approve = (change: IncomingIdentityChange): Promise<boolean> => this.approveIdentityChange(change);
+    const claimedRegistration = (address: string): number | null =>
+      this.incomingRegistration.get(address) ?? null;
+    const ownKey = Buffer.from(local.publicKey);
     this.identities = new (class extends IdentityKeyStore {
       async getIdentityKey(): Promise<PrivateKey> {
         return pair.privateKey;
@@ -164,25 +210,49 @@ export class RiverProtocol {
         return local.registrationId;
       }
       async saveIdentity(name: ProtocolAddress, key: PublicKey): Promise<IdentityChange> {
-        const existing = st.get('identity', name.name());
         const serialized = key.serialize();
-        st.put('identity', name.name(), serialized);
+        // This account's other devices share its identity key: never store another key for us.
+        if (name.name() === local.riverId) {
+          if (!ownKey.equals(Buffer.from(serialized))) throw new IdentityChangeRefusedError(name.name());
+          return IdentityChange.NewOrUnchanged;
+        }
+        const existing = st.get('identity', name.name());
         if (existing && !Buffer.from(existing).equals(Buffer.from(serialized))) {
-          st.delete('verified', name.name());
+          // Verification is never cleared silently: a legacy mark ("the stored key was verified")
+          // becomes the key that was verified, so the contact shows as changed since verification.
+          const mark = st.get('verified', name.name());
+          if (mark && isLegacyMark(mark)) st.put('verified', name.name(), existing);
+          st.put('identity', name.name(), serialized);
           notifyChange(name.name());
           return IdentityChange.ReplacedExisting;
         }
+        st.put('identity', name.name(), serialized);
         return IdentityChange.NewOrUnchanged;
       }
       async isTrustedIdentity(name: ProtocolAddress, key: PublicKey, direction: Direction): Promise<boolean> {
+        const serialized = Buffer.from(key.serialize());
+        if (name.name() === local.riverId) return ownKey.equals(serialized);
         const existing = st.get('identity', name.name());
-        if (!existing || Buffer.from(existing).equals(Buffer.from(key.serialize()))) return true;
-        // Trust on first use. A changed key is accepted (with a warning) unless the
-        // user had verified this contact, in which case sending stops until they re-verify.
-        if (direction === Direction.Sending && st.get('verified', name.name())) return false;
-        return true;
+        if (direction === Direction.Sending) {
+          // Trust on first use, but a contact the user verified gets nothing under any other key
+          // until they verify again (also after an incoming message changed the stored key).
+          const mark = st.get('verified', name.name());
+          if (mark && !isLegacyMark(mark)) return serialized.equals(Buffer.from(mark));
+          if (mark && existing) return serialized.equals(Buffer.from(existing));
+          return true;
+        }
+        if (!existing || Buffer.from(existing).equals(serialized)) return true;
+        // An incoming message under a new identity key: accepted only when the caller confirmed it.
+        return approve({
+          riverId: name.name(),
+          deviceId: name.deviceId(),
+          registrationId: claimedRegistration(addr(name.name(), name.deviceId())),
+          identityKey: new Uint8Array(serialized),
+          previousKey: new Uint8Array(existing),
+        });
       }
       async getIdentity(name: ProtocolAddress): Promise<PublicKey | null> {
+        if (name.name() === local.riverId) return PublicKey.deserialize(bytes(ownKey));
         const raw = st.get('identity', name.name());
         return raw ? PublicKey.deserialize(bytes(raw)) : null;
       }
@@ -372,16 +442,27 @@ export class RiverProtocol {
     const raw = unb64(envelope.body);
     let padded: Uint8Array;
     if (envelope.type === CiphertextMessageType.PreKey) {
-      padded = await signalDecryptPreKey(
-        PreKeySignalMessage.deserialize(raw),
-        from,
-        this.localAddress,
-        this.sessions,
-        this.identities,
-        this.preKeys,
-        this.signedPreKeys,
-        this.kyberPreKeys,
-      );
+      const message = PreKeySignalMessage.deserialize(raw);
+      const address = addr(riverId, deviceId);
+      this.incomingRegistration.set(address, message.registrationId());
+      try {
+        padded = await signalDecryptPreKey(
+          message,
+          from,
+          this.localAddress,
+          this.sessions,
+          this.identities,
+          this.preKeys,
+          this.signedPreKeys,
+          this.kyberPreKeys,
+        );
+      } catch (err) {
+        if (LibSignalErrorBase.is(err, ErrorCode.UntrustedIdentity))
+          throw new IdentityChangeRefusedError(riverId);
+        throw err;
+      } finally {
+        this.incomingRegistration.delete(address);
+      }
     } else if (envelope.type === CiphertextMessageType.Whisper) {
       padded = await signalDecrypt(
         SignalMessage.deserialize(raw),
@@ -401,13 +482,34 @@ export class RiverProtocol {
     return this.storage.get('identity', riverId);
   }
 
-  setVerified(riverId: string, verified: boolean): void {
-    if (verified) this.storage.put('verified', riverId, new Uint8Array([1]));
-    else this.storage.delete('verified', riverId);
+  /**
+   * Marks the contact's current identity key as verified (the key itself is recorded), or clears
+   * the mark. With `expected`, only while that is still the stored key — the one whose safety
+   * number the user compared. Returns whether the mark was set.
+   */
+  setVerified(riverId: string, verified: boolean, expected?: Uint8Array): boolean {
+    if (!verified) {
+      this.storage.delete('verified', riverId);
+      return true;
+    }
+    const current = this.storage.get('identity', riverId);
+    if (!current) return false;
+    if (expected && !Buffer.from(expected).equals(Buffer.from(current))) return false;
+    this.storage.put('verified', riverId, current);
+    return true;
   }
 
+  verificationState(riverId: string): VerificationState {
+    const mark = this.storage.get('verified', riverId);
+    if (!mark) return 'unverified';
+    if (isLegacyMark(mark)) return 'verified';
+    const current = this.storage.get('identity', riverId);
+    return current && Buffer.from(current).equals(Buffer.from(mark)) ? 'verified' : 'changed';
+  }
+
+  /** True only while the key the user verified is still the contact's key. */
   isVerified(riverId: string): boolean {
-    return this.storage.get('verified', riverId) !== null;
+    return this.verificationState(riverId) === 'verified';
   }
 
   /** Remaining one-time prekeys stored locally (the server count is authoritative for uploads). */

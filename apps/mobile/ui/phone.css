@@ -152,3 +152,11 @@ html:is([data-platform='android'], [data-platform='ios']) select {
 html[data-platform='ios'] body {
   -webkit-touch-callout: none;
 }
+
+/* The update toast (Android updates itself): full width above the gesture bar, not a corner card. */
+html:is([data-platform='android'], [data-platform='ios']) .toast {
+  left: calc(env(safe-area-inset-left) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  max-width: none;
+}

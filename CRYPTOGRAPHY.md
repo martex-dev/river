@@ -8,13 +8,13 @@ possible.
 
 ## 1. Libraries
 
-| Library                                                                                                                           | Used for                                                                                                            | Platforms                                    |
-| --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| [libsignal](https://github.com/signalapp/libsignal) (`@signalapp/libsignal-client`, `LibSignalClient` Swift, `libsignal-android`) | Identity keys, PQXDH session setup, Double Ratchet, Sender Keys, sealed sender, safety-number fingerprints          | Desktop, server (cert issuing), iOS, Android |
-| Node.js / Electron `crypto` (OpenSSL / BoringSSL)                                                                                 | Ed25519 (release signatures, device auth), AES-256-GCM, AES-256-CBC + HMAC-SHA256, HKDF-SHA256, SHA-256/512, CSPRNG | Desktop, server                              |
-| libsodium                                                                                                                         | Argon2id (passphrase-protected local key, backups) — Electron's BoringSSL has no Argon2                             | Desktop, mobile                              |
-| SQLCipher                                                                                                                         | Encrypted local database (AES-256, HMAC-SHA512, PBKDF2 on a random key)                                             | Desktop, mobile                              |
-| WebRTC (DTLS-SRTP) + insertable streams / SFrame-style frame encryption                                                           | Calls                                                                                                               | All                                          |
+| Library                                                                                                                           | Used for                                                                                                                  | Platforms                                    |
+| --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| [libsignal](https://github.com/signalapp/libsignal) (`@signalapp/libsignal-client`, `LibSignalClient` Swift, `libsignal-android`) | Identity keys, PQXDH session setup, Double Ratchet, safety-number fingerprints (Sender Keys, sealed sender: not used yet) | Desktop, server (cert issuing), iOS, Android |
+| Node.js / Electron `crypto` (OpenSSL / BoringSSL)                                                                                 | Ed25519 (release signatures, device auth), AES-256-GCM, AES-256-CBC + HMAC-SHA256, HKDF-SHA256, SHA-256/512, CSPRNG       | Desktop, server                              |
+| libsodium                                                                                                                         | Argon2id (passphrase-protected local key, backups) — Electron's BoringSSL has no Argon2                                   | Desktop, mobile                              |
+| SQLCipher                                                                                                                         | Encrypted local database (AES-256, HMAC-SHA512, PBKDF2 on a random key)                                                   | Desktop, mobile                              |
+| WebRTC (DTLS-SRTP) + insertable streams / SFrame-style frame encryption                                                           | Calls                                                                                                                     | All                                          |
 
 ## 2. Release signing (implemented, 0.0.1)
 
@@ -32,15 +32,15 @@ possible.
 
 ## 3. Identity (identity key: implemented in 0.0.4; device keys and device list: 0.1.0)
 
-| Key              | Type                                                        | Scope                              | Purpose                                                                                                     |
-| ---------------- | ----------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Identity key     | libsignal `IdentityKeyPair` (Curve25519, XEdDSA signatures) | Account (shared by linked devices) | Long-term identity; fingerprints; signs prekeys and the device list — **implemented 0.0.4**                 |
-| Device auth key  | libsignal Curve25519 (XEdDSA)                               | Per device                         | Authenticates the device to the server (challenge–response). Never used for content — **implemented 0.1.0** |
-| Signed prekey    | Curve25519                                                  | Per device, rotated ≤ 7 days       | PQXDH                                                                                                       |
-| Kyber prekeys    | ML-KEM-1024 (libsignal)                                     | Per device                         | Post-quantum component of PQXDH                                                                             |
-| One-time prekeys | Curve25519                                                  | Per device, batches of 100         | PQXDH                                                                                                       |
-| Profile key      | 256-bit random                                              | Account                            | Encrypts profile fields; shared with contacts                                                               |
-| Recovery secret  | 256-bit random, shown as 24 BIP-39 words                    | Account                            | Derives backup key and recovery auth key (HKDF-SHA256 with distinct `info` labels)                          |
+| Key              | Type                                                          | Scope                              | Purpose                                                                                                     |
+| ---------------- | ------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Identity key     | libsignal `IdentityKeyPair` (Curve25519, XEdDSA signatures)   | Account (shared by linked devices) | Long-term identity; fingerprints; signs prekeys and the device list — **implemented 0.0.4**                 |
+| Device auth key  | libsignal Curve25519 (XEdDSA)                                 | Per device                         | Authenticates the device to the server (challenge–response). Never used for content — **implemented 0.1.0** |
+| Signed prekey    | Curve25519                                                    | Per device, rotated ≤ 7 days       | PQXDH                                                                                                       |
+| Kyber prekeys    | ML-KEM-1024 (libsignal)                                       | Per device                         | Post-quantum component of PQXDH                                                                             |
+| One-time prekeys | Curve25519                                                    | Per device, batches of 100         | PQXDH                                                                                                       |
+| Profile key      | 256-bit random                                                | Account                            | Encrypts profile fields; shared with contacts                                                               |
+| Recovery secret  | 128-bit random, shown as 16 Bytewords + 2 checksum words (§7) | Account                            | Derives the backup key (HKDF-SHA256, `info` label `river-backup-v1`)                                        |
 
 **Signatures.** All River protocol signatures are libsignal XEdDSA over a
 distinct ASCII context followed by the payload (`river-device-list-v1`,
@@ -80,10 +80,12 @@ about. This prevents the server from silently adding an eavesdropping device.
   Prekey signatures are checked by the server and by libsignal; key bundles
   are checked against the identity-signed device list and, when known, the
   identity key sealed in a shared community profile. Identity keys are trusted
-  on first use; changes are flagged, and block sending to verified contacts.
+  on first use; changes are flagged, and block sending to verified contacts
+  (see §4b for how a change on an incoming message is checked).
   Wire details: [docs/protocol/messaging.md](docs/protocol/messaging.md).
-- Sealed sender (0.3.x): sender certificates issued by the server, signed with a
-  server key whose public part is pinned per-server on first use.
+- **Sealed sender is not implemented.** The server sees which account sends a
+  direct message to which (THREAT_MODEL.md §5). libsignal's sealed sender
+  (server-issued sender certificates) remains planned.
 - Groups (implemented, 0.6.0): **pairwise** — each group message is encrypted
   separately under the 1:1 libsignal session with every other member (fine for
   the 32-person limit), so a removed member simply stops being encrypted to and
@@ -120,21 +122,96 @@ than per-member sender keys:
 - **Key epochs (0.6.0)**: when someone leaves or is removed, the server flags
   the community and the highest-ranked online member's client claims the next
   epoch with a compare-and-set, generates a fresh 32-byte key, seals its own
-  profile with it and sends it to every remaining member inside libsignal
-  messages. New content is sealed with the newest key; members keep older keys
-  to read history (a value is opened with whichever key sealed it). A key is
-  accepted only for an epoch the server has reached and only if it opens the
-  sender's current profile. Members who missed a rotation, or joined with an
-  older invite, request the key; members answer only people whose sealed
-  profile opens with a genuine community key — so a fake member injected by
-  the server, who never held an invite key, receives nothing. Invite links carry
-  the epoch (`&e=`) and a check value sealed with their key.
+  profile with it and sends it inside libsignal messages to the remaining
+  members whose sealed profile opens with a key it held before (2.11; a member
+  the server lists without ever holding a key gets nothing). Since 2.11 the
+  key travels with a **proof**: the new key sealed (AES-256-GCM, purpose
+  `epoch:<n>`) under the key of the epoch before it. New content is sealed with
+  the newest key; members keep older keys to read history (a value is opened
+  with whichever key sealed it). A key is accepted only for an epoch the server
+  has reached and only with a proof sealed under the newest key the receiver
+  holds below that epoch — so only someone who held that genuine key can hand
+  out the next one (keys without a proof: see §4b). Members who missed a
+  rotation, or joined with an older invite, request the key and say which epoch
+  they hold; members answer only people whose sealed profile opens with a
+  genuine community key and names an identity key, with every missing key in
+  order, each sealed under the one before. Invite links carry the epoch (`&e=`)
+  and a check value sealed with their key.
+- **A rotation that reaches nobody (2.11)**: the server remembers when and by
+  whom an epoch was claimed until another member reports having its key. If
+  nobody does within ten minutes it asks for a rotation again (at most three
+  times). A member still missing the key after asking for it replaces it from
+  the newest key it holds. Meanwhile the app says so: "Securing this community
+  after a member left… messages here are still protected with the previous
+  key". Pending members (rules not accepted) are never picked to rotate; a
+  refused claim lets the next candidate take over.
 - **Limits, stated plainly**: anyone who holds a valid invite link can join and
   read the community; rotation protects content created _after_ someone is
   removed, not what they could already read, and there is no per-message forward
   secrecy inside a community. Until the rotating member's message reaches
   everyone, a member may still seal a few messages with the previous key.
   Rotation needs members on 0.5.0+ (it travels over direct-message sessions).
+  The server decides who is a member: a member who was removed but whom the
+  server keeps listing still receives the next key from the rotator and can
+  produce a valid proof for the epoch right after the one they held. Membership
+  signed by the community's managers would be needed to close that.
+- **Associated data v2 (2.11, receiving only for now)**: messages may be sealed
+  with `river-community-v2|<communityId>|message:<channelId>|<messageId>|<senderRiverId>`
+  and profiles with `river-community-v2|<communityId>|profile|<riverId>`, which
+  stops the server re-attributing a message to another sender, replaying it
+  under a new ID, or giving one member's profile to another. Receivers open v2
+  first, then v1. Senders keep sealing v1 until every supported River opens v2
+  (`SEAL_V2_DEFAULT` in `sealed.ts`; see §4b). Values sealed v1 stay readable
+  forever and keep v1's weaker binding. An edit of a v2 message stays v2; the
+  server can still show an earlier version of the same message (edits are not
+  ordered cryptographically).
+
+## 4b. Trust checks against the server (2.11) and the compatibility plan
+
+The server routes everything, so it is treated as an adversary (THREAT_MODEL
+A3) wherever a check is possible without new primitives:
+
+- **Changed identity keys on incoming messages.** A PreKey message under a key
+  other than the one stored for that contact is accepted only if the server's
+  current bundle for them carries that same key, their device list is signed by
+  it and lists the sending device with the registration ID the message claims,
+  and no shared community profile names a different key. Otherwise the message
+  is dropped and the stored key stays. Verification is never cleared silently:
+  the verified key itself is recorded, so a contact whose key changed after
+  verification shows "changed since verified" and gets nothing until the user
+  compares the new safety number (marking needs the number that was shown).
+  Without verification and without a shared community a server can still
+  substitute a key — trust on first use cannot prevent that — but the change
+  is shown.
+- **Copies from this account's own devices** (sent messages, edits, the friends
+  list, groups) are accepted only from another device in the account's
+  identity-signed device list, and libsignal accepts only the account's own
+  identity key for them.
+- **Device lists** of contacts are fetched and verified again at least daily,
+  and sooner when a message comes from a device the cached list lacks. Newest
+  seen versions (per identity key) are included in backups.
+- **Call signals**: replays refused (§8). **Attachments**: the in-memory cache
+  is keyed by blob ID, digest and key.
+- **Usernames and deleted accounts** (server): a username someone gave up stays
+  theirs to take back for 30 days; a deleted account leaves a tombstone (River
+  ID, identity key) so its River ID can be registered again only with the same
+  key.
+
+**Mixed versions.** Desktop, Android and iPhone update at different times, so
+every change is readable by the previous releases and accepts what they send:
+
+| Change                   | 2.11 sends                                                                 | 2.11 accepts                                                                                                                                                                                                                                                      | Later release                                                                  |
+| ------------------------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Community key proof      | `ckey` with `wrap`/`prev` (ignored by older Rivers); `ckeyReq` with `have` | proven keys; unproven keys (older Rivers) only from a member whose sealed profile opened with a key held before, naming the identity key that member's messages use, and only if the sender's current profile opens with the offered key (`ACCEPT_UNPROVEN_KEYS`) | **2.13**: stop accepting unproven keys (`ACCEPT_UNPROVEN_KEYS = false`)        |
+| Associated data v2       | v1 (`SEAL_V2_DEFAULT = false`)                                             | v2 and v1                                                                                                                                                                                                                                                         | **2.12**: send v2 (`SEAL_V2_DEFAULT = true`); v1 stays readable for old values |
+| Rotation adoption report | `POST …/epoch/adopted` (older servers: ignored)                            | —                                                                                                                                                                                                                                                                 | none                                                                           |
+| Verification marks       | the verified key (33 bytes)                                                | the verified key, and the one-byte mark of older versions (treated as "the stored key was verified")                                                                                                                                                              | none                                                                           |
+
+What stays possible during the transition: a member who held a genuine key at
+some point (including someone removed whom the server keeps listing) can, with
+the server, hand an unproven key to others until 2.13; v1-sealed messages and
+profiles can still be re-attributed or swapped until senders switch to v2 (and,
+for values sealed v1 before then, afterwards too).
 
 ## 5. Attachments and files (implemented, 0.4.0)
 
@@ -206,8 +283,12 @@ of types are shown inline; everything else is saved only when the user chooses.
   For people River already holds an identity key for in libsignal (anyone you
   have exchanged direct messages with — the key your safety numbers verify),
   a valid signature no older than ten minutes is required: a server colluding
-  with a member who holds the community key can no longer forge or replay call
-  setup from them, and stripping the signature is refused. For people River
+  with a member who holds the community key can no longer forge call setup from
+  them, and stripping the signature is refused. Replays inside the ten minutes
+  are refused too since 2.11: each accepted signature is remembered (in memory)
+  until it would be stale anyway; a restarted app does not remember earlier
+  ones. While that person's key is a change the user has not looked at yet (or
+  it replaced a key they verified), their signals are refused. For people River
   has no libsignal key for yet, call setup rests on the community key alone,
   as before; River does not use the identity key in a community profile for
   this, because a profile is not bound to the person it describes.

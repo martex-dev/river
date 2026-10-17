@@ -12,6 +12,30 @@ const duration = (s: number): string =>
       ? `${Math.floor(s / 60)}m ${s % 60}s`
       : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
 
+/** How a call ended (entries from older versions only know answered or not). */
+export function callOutcome(
+  c: Pick<CallView, 'answered'> & { outcome?: CallView['outcome'] },
+): CallView['outcome'] {
+  return c.answered ? 'answered' : (c.outcome ?? 'missed');
+}
+
+/** "↙ Missed", "↗ Declined", "↙ Could not connect"… */
+export function callLabel(
+  c: Pick<CallView, 'answered' | 'direction'> & { outcome?: CallView['outcome'] },
+): string {
+  const arrow = c.direction === 'in' ? '↙' : '↗';
+  switch (callOutcome(c)) {
+    case 'answered':
+      return `${arrow} ${c.direction === 'in' ? 'Incoming' : 'Outgoing'}`;
+    case 'declined':
+      return `${arrow} Declined`;
+    case 'failed':
+      return `${arrow} Could not connect`;
+    case 'missed':
+      return c.direction === 'in' ? `${arrow} Missed` : `${arrow} No answer`;
+  }
+}
+
 /** Call history and quick calls to your contacts. */
 export function CallsPage(): ReactElement {
   const account = useRiver((r) => r.account);
@@ -24,7 +48,20 @@ export function CallsPage(): ReactElement {
 
   useEffect(() => {
     if (account.state !== 'registered') return;
-    void window.river.dm.action({ a: 'calls' }).then((r) => setCalls(r.ok ? r.value : []));
+    let live = true;
+    const load = (): void =>
+      void window.river.dm.action({ a: 'calls' }).then((r) => {
+        if (live) setCalls(r.ok ? r.value : []);
+      });
+    load();
+    // A call added to the history (missed while you look at this page, declined, ended) shows at once.
+    const off = window.river.dm.onEvent((e) => {
+      if (e.t === 'calls') load();
+    });
+    return () => {
+      live = false;
+      off();
+    };
   }, [account.state, active]);
 
   const call = (peer: string, video: boolean): void => {
@@ -59,17 +96,13 @@ export function CallsPage(): ReactElement {
               <div key={c.id} className="call-row">
                 <Avatar id={c.peer} name={c.name} avatar={c.avatar} size={36} />
                 <span className="dm-row__text">
-                  <strong className={!c.answered && c.direction === 'in' ? 'call-row__missed' : ''}>
+                  <strong
+                    className={callOutcome(c) === 'missed' && c.direction === 'in' ? 'call-row__missed' : ''}
+                  >
                     {c.name}
                   </strong>
                   <span className="muted small">
-                    {c.direction === 'in'
-                      ? c.answered
-                        ? '↙ Incoming'
-                        : '↙ Missed'
-                      : c.answered
-                        ? '↗ Outgoing'
-                        : '↗ No answer'}
+                    {callLabel(c)}
                     {c.video ? ' video' : ''} ·{' '}
                     {new Date(c.startedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                     {c.answered ? ` · ${duration(c.durationSec)}` : ''}

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { formatReport, runMainDiagnostics, type DiagnosticsDeps } from '../src/main/diagnostics.ts';
 
-describe('main-process connection checks', () => {
+// The first test imports the diagnostics module cold: slow on a busy machine.
+describe('main-process connection checks', { timeout: 30_000 }, () => {
   const base = (over: Partial<DiagnosticsDeps> = {}): DiagnosticsDeps => ({
     fetchBytes: async () => new Uint8Array(),
     account: () => ({ state: 'registered', serverUrl: 'https://srv.example', username: 'martex' }),

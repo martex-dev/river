@@ -14,6 +14,7 @@ import type { BanView } from '../../../../shared/community-actions.ts';
 import type { AuditView, CommunityView, MemberView, RoleView } from '../../../../shared/ipc.ts';
 import { COMMUNITY_ICONS } from '../../../../shared/templates.ts';
 import { useCommunity, type CommunityTab } from '../store.ts';
+import { communityTabs } from '../settings-tabs.ts';
 import { EmojiSettings } from './EmojiSettings.tsx';
 import {
   ArrowDownIcon,
@@ -43,26 +44,7 @@ export function CommunitySettings(props: {
 }): ReactElement {
   const { community, me } = props;
   const s = useCommunity();
-  const perms = community.permissions;
-  const tabs: Array<[CommunityTab, string, boolean]> = [
-    ['overview', 'Overview', can(perms, Permission.MANAGE_COMMUNITY)],
-    ['onboarding', 'Rules & roles', can(perms, Permission.MANAGE_COMMUNITY)],
-    ['roles', 'Roles', can(perms, Permission.MANAGE_ROLES)],
-    ['members', 'Members', true],
-    ['emoji', 'Emoji', true],
-    ['stickers', 'Stickers', true],
-    ['sounds', 'Soundboard', true],
-    ['bans', 'Bans', can(perms, Permission.BAN_MEMBERS)],
-    ['invites', 'Invites', can(perms, Permission.MANAGE_COMMUNITY)],
-    ['webhooks', 'Webhooks', can(perms, Permission.MANAGE_CHANNELS)],
-    ['reports', 'Reports', can(perms, Permission.MANAGE_MESSAGES)],
-    [
-      'insights',
-      'Insights',
-      can(perms, Permission.MANAGE_COMMUNITY) || can(perms, Permission.VIEW_AUDIT_LOG),
-    ],
-    ['audit', 'Audit log', can(perms, Permission.VIEW_AUDIT_LOG)],
-  ];
+  const tabs = communityTabs(community.permissions);
   const visible = tabs.filter((t) => t[2]);
   const [tab, setTab] = useState<CommunityTab>(
     props.tab && visible.some((t) => t[0] === props.tab) ? props.tab : (visible[0]?.[0] ?? 'members'),
@@ -219,7 +201,8 @@ function Overview({ community }: { community: CommunityView }): ReactElement {
   );
 }
 
-const PERMISSION_GROUPS: Array<[string, number[]]> = [
+/** Every permission, grouped for the role editor (each bit appears exactly once). */
+export const PERMISSION_GROUPS: Array<[string, number[]]> = [
   [
     'General',
     [
@@ -228,16 +211,18 @@ const PERMISSION_GROUPS: Array<[string, number[]]> = [
       Permission.MANAGE_ROLES,
       Permission.MANAGE_COMMUNITY,
       Permission.CREATE_INVITE,
+      Permission.VIEW_AUDIT_LOG,
+      Permission.MANAGE_EVENTS,
+      Permission.MANAGE_EXPRESSIONS,
     ],
   ],
-  ['Membership', [Permission.KICK_MEMBERS, Permission.BAN_MEMBERS]],
+  ['Membership', [Permission.KICK_MEMBERS, Permission.BAN_MEMBERS, Permission.MODERATE_MEMBERS]],
   [
     'Text',
     [
       Permission.SEND_MESSAGES,
       Permission.ADD_REACTIONS,
       Permission.ATTACH_FILES,
-
       Permission.MENTION_EVERYONE,
       Permission.MANAGE_MESSAGES,
       Permission.PIN_MESSAGES,
@@ -251,6 +236,7 @@ const PERMISSION_GROUPS: Array<[string, number[]]> = [
       Permission.STREAM,
       Permission.MUTE_MEMBERS,
       Permission.MOVE_MEMBERS,
+      Permission.PRIORITY_SPEAKER,
     ],
   ],
   ['Advanced', [Permission.ADMINISTRATOR]],
@@ -889,12 +875,18 @@ function AuditLog({ community }: { community: CommunityView }): ReactElement {
   const s = useCommunity();
   const [entries, setEntries] = useState<AuditView[] | null>(null);
   const [more, setMore] = useState(true);
-  const load = (before?: string): void => {
-    void s.run({ a: 'audit', communityId: community.id, ...(before ? { before } : {}) }).then((page) => {
-      const list = page ?? [];
-      setEntries((prev) => (before ? [...(prev ?? []), ...list] : list));
-      setMore(list.length === 100);
-    });
+  const load = (before?: { at: string; id: string }): void => {
+    void s
+      .run({
+        a: 'audit',
+        communityId: community.id,
+        ...(before ? { before: before.at, beforeId: before.id } : {}),
+      })
+      .then((page) => {
+        const list = page ?? [];
+        setEntries((prev) => (before ? [...(prev ?? []), ...list] : list));
+        setMore(list.length === 100);
+      });
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => load(), [community.id]);
@@ -974,7 +966,7 @@ function AuditLog({ community }: { community: CommunityView }): ReactElement {
         })}
       </ol>
       {entries && entries.length > 0 && more && (
-        <button className="btn btn--ghost btn--small" onClick={() => load(entries.at(-1)!.at)}>
+        <button className="btn btn--ghost btn--small" onClick={() => load(entries.at(-1)!)}>
           Load older
         </button>
       )}

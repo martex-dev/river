@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { BackupPanel } from '../components/BackupPanel.tsx';
 import { DevicesPanel } from '../components/LinkDevice.tsx';
 import { ConnectionCheck } from '../components/ConnectionCheck.tsx';
+import { BATTERY_WHY, PhoneCallsSection } from '../components/PhoneReachability.tsx';
 import { HostingPanel, useHostStatus } from '../components/HostingPanel.tsx';
 import type { ReleaseChannel } from '@river/release/channels';
 import type { AccountStatus, ServerCheckResult, UpdateStatus } from '../../../shared/ipc.ts';
@@ -47,7 +48,8 @@ const CHANNELS: Array<{ id: ReleaseChannel; name: string; text: string }> = [
   { id: 'nightly', name: 'Nightly', text: 'Development builds. May break. For testers only.' },
 ];
 
-export function describeUpdate(status: UpdateStatus): string {
+/** `phone`: River for Android, where Android's own installer replaces the app. */
+export function describeUpdate(status: UpdateStatus, phone = false): string {
   switch (status.state) {
     case 'disabled':
       return status.reason;
@@ -64,12 +66,30 @@ export function describeUpdate(status: UpdateStatus): string {
     case 'verifying':
       return `Verifying the signature of River ${status.version}…`;
     case 'ready':
-      return `River ${status.version} is downloaded and verified. Restart to finish updating.`;
+      if (status.needsPermission) {
+        return `River ${status.version} is downloaded and verified. Android needs your permission first: turn on “Allow from this source” for River in the settings screen that opened, then come back and tap Install update.`;
+      }
+      return phone
+        ? `River ${status.version} is downloaded and verified. Tap Install update; Android asks you to confirm.`
+        : `River ${status.version} is downloaded and verified. Restart to finish updating.`;
+    case 'installing':
+      return `Installing River ${status.version}… Confirm in Android’s installer. River closes while it updates; open it again afterwards.`;
+    case 'reinstall-needed':
+      return status.message;
     case 'manual':
       return `River ${status.version} is available. On macOS, download it from the release page.`;
     case 'error':
       return status.message;
   }
+}
+
+/** Switches, sliders and buttons are not typed into: Esc there still closes Settings. */
+const NOT_TYPED = new Set(['checkbox', 'radio', 'range', 'button', 'submit', 'reset', 'color', 'file']);
+
+function typingIn(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return true;
+  return target instanceof HTMLInputElement && !NOT_TYPED.has(target.type);
 }
 
 /**
@@ -91,11 +111,27 @@ export function SettingsOverlay(): ReactElement | null {
   const showHosting =
     !phone && (askedForHosting || tab === 'hosting' || host?.enabled || (host?.legacy ?? 'none') !== 'none');
 
+  // Unsaved edits (the profile's "Careful — you have unsaved changes!") are not thrown away by
+  // closing Settings or switching tabs without asking.
+  const leave = (then: () => void): void => {
+    if (
+      useRiver.getState().settingsDirty &&
+      !window.confirm('You have unsaved changes. Leave without saving them?')
+    )
+      return;
+    useRiver.getState().setSettingsDirty(false);
+    then();
+  };
+
   useEffect(() => {
     if (!tab) return;
     const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
       // A dialog opened from Settings (a crop, a confirmation) closes first.
-      if (e.key === 'Escape' && !document.querySelector('.modal')) close();
+      if (document.querySelector('.modal')) return;
+      // Esc while typing belongs to the field (clearing it, closing a picker, cancelling a rename).
+      if (typingIn(e.target)) return;
+      leave(close);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -116,7 +152,9 @@ export function SettingsOverlay(): ReactElement | null {
                     key={id}
                     className={`settings-overlay__tab ${tab === id ? 'is-active' : ''}`}
                     aria-current={tab === id ? 'page' : undefined}
-                    onClick={() => openSettings(id)}
+                    onClick={() => {
+                      if (id !== tab) leave(() => openSettings(id));
+                    }}
                   >
                     {tr(TAB_LABEL[id])}
                   </button>
@@ -144,7 +182,7 @@ export function SettingsOverlay(): ReactElement | null {
                       className="btn btn--link"
                       onClick={() => {
                         setAskedForHosting(true);
-                        openSettings('hosting');
+                        leave(() => openSettings('hosting'));
                       }}
                     >
                       Run a River server on this PC…
@@ -171,7 +209,7 @@ export function SettingsOverlay(): ReactElement | null {
           )}
         </div>
         <div className="settings-overlay__close">
-          <button className="settings-overlay__x" aria-label="Close settings" onClick={close}>
+          <button className="settings-overlay__x" aria-label="Close settings" onClick={() => leave(close)}>
             <XIcon />
           </button>
           <span aria-hidden="true">ESC</span>
@@ -186,6 +224,10 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
   const update = useRiver((s) => s.update);
   const updateSettings = useRiver((s) => s.updateSettings);
   const check = useRiver((s) => s.checkForUpdates);
+  const openSettings = useRiver((s) => s.openSettings);
+  // Android updates itself (with Android's installer); an iPhone cannot, so it has no update settings.
+  const phone = info?.platform === 'android';
+  const ios = info?.platform === 'ios';
   const busy = ['checking', 'downloading', 'verifying'].includes(update.state);
 
   return (
@@ -197,7 +239,7 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
             River <span className="mono">{info?.version ?? '…'}</span>
             <span className="chip">{info?.channel ?? 'stable'}</span>
           </div>
-          <p className="muted">{describeUpdate(update)}</p>
+          <p className="muted">{describeUpdate(update, phone)}</p>
           {update.state === 'downloading' && (
             <div className="progress" aria-hidden="true">
               <div className="progress__bar" style={{ width: `${update.percent}%` }} />
@@ -205,9 +247,34 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
           )}
         </div>
         <div className="update-status__actions">
-          {update.state === 'ready' ? (
+          {phone && (update.state === 'ready' || update.state === 'installing') ? (
+            // Android: opens Android's installer (again, if it was closed without an answer).
+            <button className="btn btn--primary" onClick={() => void window.river.updates.install()}>
+              Install update
+            </button>
+          ) : phone && update.state === 'available' ? (
+            <button className="btn btn--primary" onClick={() => void window.river.updates.install()}>
+              Download update
+            </button>
+          ) : update.state === 'reinstall-needed' ? (
+            <>
+              <button className="btn btn--ghost" onClick={() => openSettings('backup')}>
+                Back up first
+              </button>
+              <button
+                className="btn btn--primary"
+                onClick={() => void window.river.updates.openDownloadPage()}
+              >
+                Open download page <ExternalIcon size={14} />
+              </button>
+            </>
+          ) : update.state === 'ready' ? (
             <button className="btn btn--primary" onClick={() => void window.river.updates.install()}>
               Restart and update
+            </button>
+          ) : update.state === 'available' ? (
+            <button className="btn btn--primary" onClick={() => void window.river.updates.download()}>
+              Download {update.version}
             </button>
           ) : update.state === 'manual' ? (
             <button className="btn btn--primary" onClick={() => void window.river.updates.openDownloadPage()}>
@@ -225,48 +292,63 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
         </div>
       </div>
 
-      <fieldset className="field">
-        <legend className="field__label">Release channel</legend>
-        <div className="choice-grid">
-          {CHANNELS.map((c) => (
-            <label key={c.id} className={`choice ${settings.updates.channel === c.id ? 'is-selected' : ''}`}>
-              <input
-                type="radio"
-                name="channel"
-                value={c.id}
-                checked={settings.updates.channel === c.id}
-                onChange={() => void updateSettings({ updates: { channel: c.id } })}
-              />
-              <span className="choice__name">{c.name}</span>
-              <span className="choice__text">{c.text}</span>
-            </label>
-          ))}
-        </div>
-        {settings.updates.channel !== 'stable' && (
-          <p className="warning-note">
-            You will receive pre-release builds. They are signed like every release, but may contain bugs.
-            Switching back to Stable takes effect at the next stable version newer than the one you have.
-          </p>
-        )}
-      </fieldset>
+      {!ios && (
+        <>
+          <fieldset className="field">
+            <legend className="field__label">Release channel</legend>
+            <div className="choice-grid">
+              {CHANNELS.map((c) => (
+                <label
+                  key={c.id}
+                  className={`choice ${settings.updates.channel === c.id ? 'is-selected' : ''}`}
+                >
+                  <input
+                    type="radio"
+                    name="channel"
+                    value={c.id}
+                    checked={settings.updates.channel === c.id}
+                    onChange={() => void updateSettings({ updates: { channel: c.id } })}
+                  />
+                  <span className="choice__name">{c.name}</span>
+                  <span className="choice__text">{c.text}</span>
+                </label>
+              ))}
+            </div>
+            {settings.updates.channel !== 'stable' && (
+              <p className="warning-note">
+                You will receive pre-release builds. They are signed like every release, but may contain bugs.
+                Switching back to Stable takes effect at the next stable version newer than the one you have.
+              </p>
+            )}
+          </fieldset>
 
-      <Toggle
-        label="Check for updates automatically"
-        hint="Checks GitHub Releases about every four hours."
-        checked={settings.updates.autoCheck}
-        onChange={(v) => void updateSettings({ updates: { autoCheck: v } })}
-      />
-      <Toggle
-        label="Download updates automatically"
-        hint="Every download is verified against River’s release signature before it can be installed."
-        checked={settings.updates.autoDownload}
-        onChange={(v) => void updateSettings({ updates: { autoDownload: v } })}
-      />
-      <Toggle
-        label="Install verified updates when River quits"
-        checked={settings.updates.installOnQuit}
-        onChange={(v) => void updateSettings({ updates: { installOnQuit: v } })}
-      />
+          <Toggle
+            label="Check for updates automatically"
+            hint={`Checks GitHub Releases about every ${phone ? 'six' : 'four'} hours.`}
+            checked={settings.updates.autoCheck}
+            onChange={(v) => void updateSettings({ updates: { autoCheck: v } })}
+          />
+          <Toggle
+            label="Download updates automatically"
+            hint={
+              phone
+                ? 'Every download is verified against River’s release signature. Android asks you before it installs anything.'
+                : 'Every download is verified against River’s release signature before it can be installed.'
+            }
+            checked={settings.updates.autoDownload}
+            onChange={(v) => void updateSettings({ updates: { autoDownload: v } })}
+          />
+          {/* Android always asks before installing, and River never quits on its own there. */}
+          {!phone && (
+            <Toggle
+              label="Install verified updates by themselves"
+              hint="When River is in the tray or you have not used it for 10 minutes, and never during a call. A PC that hosts River does it at night."
+              checked={settings.updates.installOnQuit}
+              onChange={(v) => void updateSettings({ updates: { installOnQuit: v } })}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -280,21 +362,36 @@ function UsernameEditor({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const setAccount = useRiver((r) => r.setAccount);
+  // The username as typed, without the @ people often paste with it.
+  const typed = value.trim().replace(/^@+/, '');
+  // The account's username changed (saved here, or elsewhere — the server keeps it in lower
+  // case): show what it is now.
+  const [shown, setShown] = useState(account.username);
+  if (shown !== account.username) {
+    setShown(account.username);
+    setValue(account.username ?? '');
+  }
   const save = async (): Promise<void> => {
+    if (busy) return;
     setBusy(true);
     setMsg(null);
-    const res = await window.river.account.setUsername(value.trim());
-    setBusy(false);
-    if (res.ok) {
-      setAccount(res.value);
-      const name = res.value.state === 'registered' ? (res.value.username ?? value.trim()) : value.trim();
-      setMsg({ ok: true, text: `Saved. People can add you as @${name}.` });
-    } else {
-      play('error');
-      setMsg({ ok: false, text: res.message });
+    try {
+      const res = await window.river.account.setUsername(typed);
+      if (res.ok) {
+        void setAccount(res.value);
+        // What the server saved (it keeps usernames in lower case).
+        const name = res.value.state === 'registered' ? (res.value.username ?? typed) : typed;
+        setValue(name);
+        setMsg({ ok: true, text: `Saved. People can add you as @${name}.` });
+      } else {
+        play('error');
+        setMsg({ ok: false, text: res.message });
+      }
+    } finally {
+      setBusy(false);
     }
   };
-  const changed = value.trim().replace(/^@/, '') !== (account.username ?? '');
+  const changed = typed.toLowerCase() !== (account.username ?? '').toLowerCase();
   return (
     <div className="field">
       <label className="field__label" htmlFor="username">
@@ -307,9 +404,9 @@ function UsernameEditor({
           </span>
           <input
             id="username"
-            value={value.replace(/^@/, '')}
+            value={value}
             onChange={(e) => {
-              setValue(e.target.value);
+              setValue(e.target.value.replace(/^\s*@+/, ''));
               setMsg(null);
             }}
             placeholder="username"
@@ -320,7 +417,7 @@ function UsernameEditor({
         </div>
         <button
           className="btn btn--primary btn--small"
-          disabled={busy || !changed || value.trim().length < 3}
+          disabled={busy || !changed || typed.length < 3}
           onClick={() => void save()}
         >
           {busy ? 'Saving…' : account.username ? 'Change' : 'Set username'}
@@ -377,25 +474,7 @@ function AccountPanel({
           <p className="field__error">{account.message}</p>
         )}
         {account.missing ? (
-          <div className="button-row">
-            <button
-              className="btn btn--primary btn--small"
-              disabled={busy}
-              onClick={() => {
-                setBusy(true);
-                void window.river.account.startOver().then((res) => {
-                  setBusy(false);
-                  if (res.ok) useRiver.getState().setAccount(res.value);
-                  else play('error');
-                });
-              }}
-            >
-              {busy ? 'Setting up…' : 'Set up my account again'}
-            </button>
-            <span className="muted small">
-              Same name and messages on this computer; rejoin communities with an invite.
-            </span>
-          </div>
+          <MissingAccount account={account} />
         ) : (
           !connected && (
             <div className="button-row">
@@ -439,6 +518,105 @@ function AccountPanel({
       <ExportData />
       <DeleteAccount />
     </div>
+  );
+}
+
+/**
+ * The server no longer lets this device sign in. Either the account was removed (set it up
+ * again: a new account for the same identity) or this device was removed from it (link it
+ * again from a device that still has the account). The server does not say which on purpose;
+ * setting up again finds out, and keeps everything as it was if the account is still there.
+ */
+export function MissingAccount({
+  account,
+}: {
+  account: Extract<AccountStatus, { state: 'registered' }>;
+}): ReactElement {
+  const [busy, setBusy] = useState<'setup' | 'relink' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const startOver = async (): Promise<void> => {
+    setBusy('setup');
+    setError(null);
+    try {
+      const res = await window.river.account.startOver();
+      if (res.ok) void useRiver.getState().setAccount(res.value);
+      else {
+        play('error');
+        setError(res.message);
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+  const relink = async (): Promise<void> => {
+    setBusy('relink');
+    setError(null);
+    try {
+      const res = await window.river.account.relink();
+      if (res.ok) useRiver.getState().startRelink();
+      else {
+        play('error');
+        setError(res.message);
+      }
+    } finally {
+      setBusy(null);
+      setConfirming(false);
+    }
+  };
+  const linkFirst = account.removed || account.wasLinked;
+  const linkButton = (
+    <button
+      className={`btn ${linkFirst ? 'btn--primary' : 'btn--ghost'} btn--small`}
+      disabled={busy !== null}
+      onClick={() => setConfirming(true)}
+    >
+      {busy === 'relink' ? 'Preparing…' : 'Link this device again'}
+    </button>
+  );
+  return (
+    <>
+      <div className="button-row">
+        {linkFirst && linkButton}
+        {!account.removed && (
+          <button
+            className={`btn ${linkFirst ? 'btn--ghost' : 'btn--primary'} btn--small`}
+            disabled={busy !== null}
+            onClick={() => void startOver()}
+          >
+            {busy === 'setup' ? 'Setting up…' : 'Set up my account again'}
+          </button>
+        )}
+        {!linkFirst && linkButton}
+      </div>
+      <p className="muted small">
+        {account.removed
+          ? 'On a device that still has your account, open Settings → Account → Devices → Link a new device, then use its code here.'
+          : 'Set up again: a new account for your identity — same name and messages here; rejoin communities with an invite. Link again: if this device was removed, join your account from a device that still has it.'}
+      </p>
+      {error && (
+        <p className="field__error" role="alert">
+          {error}
+        </p>
+      )}
+      {confirming && (
+        <Modal title="Link this device again?" onClose={() => setConfirming(false)}>
+          <p>
+            River forgets the account and identity on this device, then you link it again with a code from a
+            device that still has your account. Your messages and contacts on this device stay, and only work
+            again with the same account.
+          </p>
+          <div className="modal__foot">
+            <button className="btn btn--link" onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+            <button className="btn btn--primary" disabled={busy !== null} onClick={() => void relink()}>
+              {busy === 'relink' ? 'Preparing…' : 'Continue'}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -671,6 +849,9 @@ function ServerSetup({ settings }: { settings: Settings }): ReactElement {
 
 function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
   const updateSettings = useRiver((s) => s.updateSettings);
+  const platform = useRiver((r) => r.info?.platform);
+  const phone = isPhone(platform);
+  const mac = platform === 'darwin';
   const tr = useT();
   const options: Array<{ id: Settings['appearance']['motion']; name: string; text: string }> = [
     { id: 'system', name: 'Follow system', text: 'Use your operating system’s reduced-motion setting.' },
@@ -720,21 +901,27 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
           ))}
         </div>
       </fieldset>
-      <label className="field slider-field">
-        <span className="field__label">
-          Interface size <span className="muted small">{Math.round(settings.appearance.zoom * 100)}%</span>
-        </span>
-        <input
-          type="range"
-          min={0.7}
-          max={1.6}
-          step={0.05}
-          value={settings.appearance.zoom}
-          aria-label="Interface size"
-          onChange={(e) => void updateSettings({ appearance: { zoom: Number(e.target.value) } })}
-        />
-        <span className="muted small">Shortcut: Ctrl+= bigger, Ctrl+− smaller, Ctrl+0 normal.</span>
-      </label>
+      {/* Phones size River with the phone's own display and text size settings; this zooms the window. */}
+      {!phone && (
+        <label className="field slider-field">
+          <span className="field__label">
+            Interface size <span className="muted small">{Math.round(settings.appearance.zoom * 100)}%</span>
+          </span>
+          <input
+            type="range"
+            min={0.7}
+            max={1.6}
+            step={0.05}
+            value={settings.appearance.zoom}
+            aria-label="Interface size"
+            onChange={(e) => void updateSettings({ appearance: { zoom: Number(e.target.value) } })}
+          />
+          <span className="muted small">
+            Shortcut: {mac ? '⌘' : 'Ctrl+'}= bigger, {mac ? '⌘' : 'Ctrl+'}− smaller, {mac ? '⌘' : 'Ctrl+'}0
+            normal.
+          </span>
+        </label>
+      )}
       <label className="field slider-field">
         <span className="field__label">
           Message text size <span className="muted small">{settings.appearance.fontSize}px</span>
@@ -867,12 +1054,36 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
       )}
       <h2 className="panel__title">System</h2>
       {phone && platform === 'android' && (
-        <Toggle
-          label="Stay connected"
-          hint="New messages and calls notify you even when River is closed. Android shows a quiet “River is connected” notification while it runs, and it uses some battery. River does not use Google’s push service."
-          checked={settings.system.background}
-          onChange={(v) => void updateSettings({ system: { background: v } })}
-        />
+        <>
+          <Toggle
+            label="Stay connected"
+            hint={`New messages and calls notify you even when River is closed. Android shows a quiet “River is connected” notification while it runs, and it uses some battery. River does not use Google’s push service. ${BATTERY_WHY}`}
+            checked={settings.system.background}
+            onChange={(v) =>
+              void updateSettings({ system: { background: v, backgroundAsked: true } }).then(async () => {
+                if (!v) return;
+                // Turned on: Android asks to let River run in the background (explained above).
+                const status = await window.river.app.phoneStatus().catch(() => null);
+                if (status && !status.batteryExempt)
+                  await window.river.app.phoneFix('battery').catch(() => null);
+              })
+            }
+          />
+          <Toggle
+            label="Light up the screen for new messages"
+            hint="When the screen is off, a new message turns it on for a few seconds. Not during Do Not Disturb, and not for messages sent without sound."
+            checked={settings.system.wakeScreen}
+            onChange={(v) => void updateSettings({ system: { wakeScreen: v } })}
+          />
+          <PhoneCallsSection />
+        </>
+      )}
+      {platform === 'ios' && (
+        <p className="muted small">
+          On iPhone, River gets messages and calls only while it is open or was just in use. River does not
+          use Apple’s push service yet (it needs a paid Apple developer account), so once iOS pauses River,
+          new messages and calls wait until you open it again. Calls do not ring while River is closed.
+        </p>
       )}
       {phone ? (
         <Toggle
@@ -883,12 +1094,15 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
         />
       ) : (
         <>
-          <Toggle
-            label="Start River when I sign in"
-            hint="River opens quietly in the tray, so you get messages and calls right away."
-            checked={settings.system.startAtLogin}
-            onChange={(v) => void updateSettings({ system: { startAtLogin: v } })}
-          />
+          {/* River cannot add itself to Linux desktops' autostart, so it does not offer to. */}
+          {!linux && (
+            <Toggle
+              label="Start River when I sign in"
+              hint="River opens quietly in the tray, so you get messages and calls right away."
+              checked={settings.system.startAtLogin}
+              onChange={(v) => void updateSettings({ system: { startAtLogin: v } })}
+            />
+          )}
           <Toggle
             label="Keep River running when I close the window"
             hint="River stays in the tray. Quit it from the tray icon's menu."
@@ -940,6 +1154,9 @@ function NotificationsPanel({ settings }: { settings: Settings }): ReactElement 
             </label>
           ))}
         </div>
+        <p className="muted small">
+          Notification text is shown by your operating system and may be visible on your lock screen.
+        </p>
       </fieldset>
       <QuietHours settings={settings} />
       <p className="muted small">

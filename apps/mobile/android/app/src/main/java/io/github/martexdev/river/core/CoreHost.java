@@ -58,7 +58,6 @@ public final class CoreHost {
   private static final String ORIGIN = "https://appassets.androidplatform.net";
   private static final String CORE_URL = ORIGIN + "/assets/core/index.html";
   private static final String CHANNEL = "messages";
-  private static final String CALL_CHANNEL = "calls";
   /** Notifications whose answer the core still waits for; older ones are answered "dismissed". */
   private static final int MAX_PENDING_NOTIFICATIONS = 32;
   /** An incoming call's notification rings this long (then Android removes it). */
@@ -69,6 +68,9 @@ public final class CoreHost {
   /** A random secret per notification, so other apps cannot fake a tap on River's notifications. */
   public static final String EXTRA_NOTIFICATION_TOKEN = "river.notification.token";
   private final Map<Integer, String> notificationTokens = new HashMap<>();
+  /** Message notifications on screen (title, text), kept as plain ones when the core restarts. */
+  private final Map<Integer, String[]> posted = new HashMap<>();
+  private final MessageNotifications messages = new MessageNotifications();
   private final java.security.SecureRandom random = new java.security.SecureRandom();
 
   private static CoreHost instance;
@@ -115,6 +117,11 @@ public final class CoreHost {
   private final LinkedHashMap<Integer, Integer> notificationAsks = new LinkedHashMap<>();
   /** The core's open "call" ask: answered "hangup" (notification button) or "ended". */
   private Integer callAsk;
+  /**
+   * The core's open "incomingCall" ask (2.11): answered "accept" or "decline" (the call screen or
+   * notification), "timeout" (nobody answered) or "ended" (it stopped ringing for another reason).
+   */
+  private Integer incomingAsk;
   private RiverNative nativeInterface;
   private WebView web;
   private boolean ready = false;
@@ -264,7 +271,9 @@ public final class CoreHost {
     nativeInterface = null;
     // Nothing of the call outlives the core: no "In a call" notification, no wake lock, no call audio.
     callAsk = null;
-    CallService.setActive(context, false);
+    incomingAsk = null;
+    IncomingCall.stop(context);
+    CallService.setActive(context, false, null);
     callAudio(false);
     pipAllowed = false;
     Screen s = screen;
@@ -292,14 +301,59 @@ public final class CoreHost {
   }
 
   /**
-   * The core's notifications belong to its asks: when the core goes, they go too, so a tap or a
-   * reply can never answer a newer core's ask with the same number.
+   * The core's notifications belong to its asks: when the core goes (it crashed, Android ended its
+   * renderer, or River closed), its asks go with it, so a tap or a reply can never answer a newer
+   * core's ask. The notifications themselves stay on screen: each message notification still
+   * showing is posted again as a plain one that opens River (no Reply, which needed the old core).
+   * Notification numbers are never reused within the app's process.
    */
   private void clearNotifications() {
-    NotificationManagerCompat nm = NotificationManagerCompat.from(context);
-    for (Integer n : notificationAsks.keySet()) nm.cancel(n);
     notificationAsks.clear();
     notificationTokens.clear();
+    messages.restarted();
+    if (posted.isEmpty()) return;
+    java.util.Set<Integer> showing = new java.util.HashSet<>();
+    NotificationManager nm = context.getSystemService(NotificationManager.class);
+    if (nm != null) {
+      try {
+        for (android.service.notification.StatusBarNotification sbn : nm.getActiveNotifications())
+          showing.add(sbn.getId());
+      } catch (RuntimeException ignored) {
+        // cannot tell which still show: bring none back rather than ones that were swiped away
+      }
+    }
+    for (Map.Entry<Integer, String[]> e : posted.entrySet()) {
+      int n = e.getKey();
+      if (!showing.contains(n) || !mayNotify()) continue;
+      Intent open =
+          new Intent(context, RiverService.ACTIVITY)
+              .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+      PendingIntent tap =
+          PendingIntent.getActivity(
+              context, n, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+      NotificationCompat.Builder b =
+          new NotificationCompat.Builder(context, CHANNEL)
+              .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
+              .setContentTitle(e.getValue()[0])
+              .setContentText(e.getValue()[1])
+              .setAutoCancel(true)
+              .setOnlyAlertOnce(true)
+              .setSilent(true)
+              .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+              .setPublicVersion(
+                  new NotificationCompat.Builder(context, CHANNEL)
+                      .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
+                      .setContentTitle("River")
+                      .setContentText("New message")
+                      .build())
+              .setContentIntent(tap);
+      try {
+        NotificationManagerCompat.from(context).notify(n, b.build());
+      } catch (SecurityException ignored) {
+        // notifications turned off meanwhile
+      }
+    }
+    posted.clear();
   }
 
   // ---- UI → core ----
@@ -314,6 +368,8 @@ public final class CoreHost {
 
   public void lifecycle(boolean foreground) {
     this.foreground = foreground;
+    // River's interface rings by itself while it is in front; otherwise the phone's call screen.
+    IncomingCall.setForeground(context, foreground);
     run("__riverCore.lifecycle('" + (foreground ? "foreground" : "background") + "')");
   }
 
@@ -337,6 +393,7 @@ public final class CoreHost {
       return;
     }
     notificationTokens.remove(notification);
+    forget(notification);
     Integer ask = notificationAsks.remove(notification);
     NotificationManagerCompat.from(context).cancel(notification);
     if (ask != null) answer(ask, json("reply", text.length() > 4000 ? text.substring(0, 4000) : text));
@@ -347,8 +404,15 @@ public final class CoreHost {
   public void notificationTapped(int notification, String token) {
     if (!tokenMatches(notification, token)) return;
     notificationTokens.remove(notification);
+    forget(notification);
     Integer ask = notificationAsks.remove(notification);
     if (ask != null) answer(ask, (Object) "clicked");
+  }
+
+  /** The notification is gone: its conversation's next message starts a new one. */
+  private void forget(int notification) {
+    posted.remove(notification);
+    messages.forget(notification);
   }
 
   /** A notification River posted was swiped away (or cleared). Main thread. */
@@ -360,6 +424,7 @@ public final class CoreHost {
   /** The core stops waiting for this notification. */
   private void expire(int notification) {
     notificationTokens.remove(notification);
+    forget(notification);
     Integer ask = notificationAsks.remove(notification);
     if (ask != null) answer(ask, (Object) "dismissed");
   }
@@ -474,6 +539,41 @@ public final class CoreHost {
           callAsk = null;
           if (ask != null) answer(ask, (Object) "hangup");
         });
+  }
+
+  // ---- incoming calls on the phone's own call screen (2.11) ----
+
+  /** The ringing is over: the screen, notification and ringtone go, and the core learns how. */
+  private void endIncoming(String how) {
+    Integer ask = incomingAsk;
+    incomingAsk = null;
+    IncomingCall.stop(context);
+    if (ask != null) answer(ask, (Object) how);
+  }
+
+  /** Answer on the call screen or notification: true when that call still rings. Main thread. */
+  public boolean callAnswered(String callId) {
+    if (!IncomingCall.ringing(callId) || incomingAsk == null) {
+      if (IncomingCall.idle()) IncomingCall.stop(context);
+      return false;
+    }
+    endIncoming("accept");
+    return true;
+  }
+
+  /** Decline on the call screen or notification: the core declines it, without River's screen. */
+  public void callDeclined(String callId) {
+    if (IncomingCall.idle()) {
+      // left over from an earlier run of River: just take it away
+      IncomingCall.stop(context);
+      return;
+    }
+    if (IncomingCall.ringing(callId)) endIncoming(incomingAsk != null ? "decline" : "ended");
+  }
+
+  /** Stay connected's watchdog woke the phone: the core checks its connection (2.11). */
+  public void wake() {
+    run("__riverCore.wake()");
   }
 
   private void answer(int id, Object value) {
@@ -617,13 +717,40 @@ public final class CoreHost {
             break;
           }
         case "notify":
-          notify(
-              id,
-              a.optString("title", "River"),
-              a.optString("body", ""),
-              a.optBoolean("reply", false),
-              a.optBoolean("call", false));
+          notify(id, a);
           break;
+        case "incomingCall":
+          {
+            // Rings like a phone call until answered, declined, or it stops ringing (2.11).
+            endIncoming("ended");
+            String callId = a.optString("callId", "");
+            if (callId.isEmpty() || callId.length() > 200) {
+              answer(id, (Object) "ended");
+              break;
+            }
+            incomingAsk = id;
+            IncomingCall.start(
+                context,
+                callId,
+                a.optString("name", "Someone"),
+                a.optBoolean("video", false),
+                foreground,
+                () -> {
+                  if (gen == generation) endIncoming("timeout");
+                });
+            break;
+          }
+        case "phoneStatus":
+          answer(id, PhoneState.status(context));
+          break;
+        case "phoneFix":
+          {
+            Screen s = screen;
+            PhoneState.open(s != null ? s.activity() : context, a.optString("fix", ""));
+            // What the phone says now; the UI asks again when River is back in front.
+            answer(id, PhoneState.status(context));
+            break;
+          }
         case "appLock":
           answer(id, json("available", AppLock.setEnabled(context, a.optBoolean("enabled", false))));
           break;
@@ -634,7 +761,7 @@ public final class CoreHost {
             callAsk = null;
             if (previous != null) answer(previous, (Object) "ended");
             boolean active = a.optBoolean("active", false);
-            CallService.setActive(context, active);
+            CallService.setActive(context, active, a.optString("title", ""));
             callAudio(active);
             if (active) callAsk = id;
             else {
@@ -649,7 +776,10 @@ public final class CoreHost {
           {
             // An incoming call stopped ringing (declined, missed, or the caller gave up).
             Screen s = screen;
-            if (!a.optBoolean("on", false) && !inCall && s != null) s.showOverLock(false);
+            if (!a.optBoolean("on", false)) {
+              endIncoming("ended");
+              if (!inCall && s != null) s.showOverLock(false);
+            }
             answer(id, (Object) null);
             break;
           }
@@ -707,6 +837,20 @@ public final class CoreHost {
             answer(id, json("running", on));
             break;
           }
+        case "update.device":
+        case "update.download":
+        case "update.progress":
+        case "update.signers":
+        case "update.install":
+          // River's own signed updates (UpdateOps); answers may come later, from another thread.
+          UpdateOps.get(context)
+              .ask(
+                  kind,
+                  a,
+                  reply -> {
+                    if (gen == generation) answerPayload(id, reply);
+                  });
+          break;
         default:
           answerPayload(id, "{\"ok\":false,\"error\":\"not available on this phone\"}");
       }
@@ -764,20 +908,15 @@ public final class CoreHost {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
     NotificationManager nm = context.getSystemService(NotificationManager.class);
     if (nm == null) return;
+    // Pops up, sounds and vibrates (the phone's notification sound); the lock screen shows only
+    // what each notification allows (MessageNotifications).
     NotificationChannel channel = new NotificationChannel(CHANNEL, "Messages", NotificationManager.IMPORTANCE_HIGH);
     channel.setDescription("New messages and mentions while River is in the background");
+    channel.enableVibration(true);
+    channel.setLockscreenVisibility(android.app.Notification.VISIBILITY_PRIVATE);
     nm.createNotificationChannel(channel);
-    // Incoming calls ring with the phone's ringtone, like any calling app.
-    NotificationChannel calls = new NotificationChannel(CALL_CHANNEL, "Calls", NotificationManager.IMPORTANCE_HIGH);
-    calls.setDescription("Incoming calls while River is in the background");
-    calls.setSound(
-        android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE),
-        new android.media.AudioAttributes.Builder()
-            .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
-            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build());
-    calls.enableVibration(true);
-    nm.createNotificationChannel(calls);
+    // Incoming calls ring with the phone's ringtone and call screen, like any calling app.
+    IncomingCall.createChannel(context);
   }
 
   private boolean mayNotify() {
@@ -786,21 +925,30 @@ public final class CoreHost {
             == PackageManager.PERMISSION_GRANTED;
   }
 
-  private void notify(int ask, String title, String body, boolean reply, boolean call) {
+  private void notify(int ask, JSONObject a) {
     Screen s = screen;
     if (!mayNotify() && s != null && foreground) {
       // Android 13+: asked only while River is in front (a prompt cannot show from the background).
       final int gen = generation;
       s.requestNotifications(
           () -> {
-            if (gen == generation) show(ask, title, body, reply, call);
+            if (gen == generation) show(ask, a);
           });
       return;
     }
-    show(ask, title, body, reply, call);
+    show(ask, a);
   }
 
-  private void show(int ask, String title, String body, boolean reply, boolean call) {
+  private void show(int ask, JSONObject a) {
+    String title = a.optString("title", "River");
+    String body = a.optString("body", "");
+    boolean reply = a.optBoolean("reply", false);
+    boolean call = a.optBoolean("call", false);
+    boolean lockScreen = a.optBoolean("lockScreen", false);
+    String conversation = a.optString("conversation", "");
+    if (conversation.length() > 200) conversation = conversation.substring(0, 200);
+    String sender = a.isNull("sender") ? null : a.optString("sender", "");
+    String group = a.isNull("group") ? null : a.optString("group", "");
     if (!mayNotify()) {
       answer(ask, (Object) "denied");
       return;
@@ -815,7 +963,18 @@ public final class CoreHost {
       notificationTokens.remove(stale);
       answer(staleAsk, (Object) "dismissed");
     }
-    int n = nextNotification++;
+    // One notification per conversation (2.11): a new message replaces it, and the core stops
+    // waiting for the one it replaces (tapping either opens the same conversation).
+    Integer same = call ? null : messages.idOf(conversation);
+    int n;
+    if (same != null) {
+      n = same;
+      notificationTokens.remove(n);
+      Integer replaced = notificationAsks.remove(n);
+      if (replaced != null) answer(replaced, (Object) "dismissed");
+    } else {
+      n = nextNotification++;
+    }
     notificationAsks.put(n, ask);
     byte[] secret = new byte[16];
     random.nextBytes(secret);
@@ -841,7 +1000,7 @@ public final class CoreHost {
         PendingIntent.getBroadcast(
             context, n, dismissed, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     NotificationCompat.Builder b =
-        new NotificationCompat.Builder(context, call ? CALL_CHANNEL : CHANNEL)
+        new NotificationCompat.Builder(context, call ? IncomingCall.CHANNEL : CHANNEL)
             .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
             .setContentTitle(title)
             .setContentText(body)
@@ -881,13 +1040,20 @@ public final class CoreHost {
               .setAllowGeneratedReplies(false)
               .build());
     }
+    if (!call) messages.style(context, b, CHANNEL, n, conversation, title, body, sender, group, lockScreen);
     try {
       NotificationManagerCompat.from(context).notify(n, b.build());
     } catch (SecurityException e) {
       notificationAsks.remove(n);
       notificationTokens.remove(n);
+      forget(n);
       answer(ask, (Object) "denied");
+      return;
     }
+    if (call) return;
+    posted.put(n, new String[] {title, body});
+    // Settings → System → Light up the screen for new messages (Android, on by default).
+    if (a.optBoolean("wake", false)) MessageNotifications.wake(context, CHANNEL);
   }
 
   private void fatal(String details) {

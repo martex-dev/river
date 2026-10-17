@@ -1,6 +1,8 @@
 import { useState, type ReactElement } from 'react';
+import { Permission } from '@river/protocol/permissions';
 import type { CommunityView } from '../../../../shared/ipc.ts';
 import { useCommunity } from '../store.ts';
+import { can } from './common.tsx';
 
 /**
  * Community settings → Webhooks (1.0.32, ADR 0004). Outside services post with
@@ -9,7 +11,12 @@ import { useCommunity } from '../store.ts';
  */
 export function WebhooksPanel({ community }: { community: CommunityView }): ReactElement {
   const s = useCommunity();
-  const channels = community.channels.filter((c) => c.kind === 'text' && !c.forum);
+  // Only channels you may manage there: the server refuses webhooks anywhere else.
+  const channels = community.channels.filter(
+    (c) => c.kind === 'text' && !c.forum && can(c.permissions, Permission.MANAGE_CHANNELS),
+  );
+  const manages = (channelId: string): boolean =>
+    community.channels.some((c) => c.id === channelId && can(c.permissions, Permission.MANAGE_CHANNELS));
   const [name, setName] = useState('');
   const [channelId, setChannelId] = useState(channels[0]?.id ?? '');
   const [address, setAddress] = useState<string | null>(null);
@@ -59,7 +66,9 @@ export function WebhooksPanel({ community }: { community: CommunityView }): Reac
       )}
 
       {channels.length === 0 ? (
-        <p className="muted">Webhooks can post only in text channels; this community has none.</p>
+        <p className="muted">
+          Webhooks can post only in text channels you manage; there are none here for you.
+        </p>
       ) : (
         <div className="row">
           <input
@@ -100,16 +109,26 @@ export function WebhooksPanel({ community }: { community: CommunityView }): Reac
                   {new Date(w.createdAt).toLocaleDateString()}
                 </span>
               </div>
-              <div className="report__actions">
-                <button
-                  className="btn btn--ghost btn--small btn--danger-text"
-                  onClick={() =>
-                    void s.run({ a: 'revokeWebhook', communityId: community.id, webhookId: w.id })
-                  }
-                >
-                  Delete
-                </button>
-              </div>
+              {manages(w.channelId) && (
+                <div className="report__actions">
+                  <button
+                    className="btn btn--ghost btn--small btn--danger-text"
+                    onClick={() =>
+                      s.setModal({
+                        kind: 'confirm',
+                        title: `Delete ${w.name}`,
+                        body: 'Its address stops working at once; anything using it can no longer post. This cannot be undone.',
+                        action: 'Delete webhook',
+                        run: async () => {
+                          await s.run({ a: 'revokeWebhook', communityId: community.id, webhookId: w.id });
+                        },
+                      })
+                    }
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
             </li>
           ))}
         </ul>

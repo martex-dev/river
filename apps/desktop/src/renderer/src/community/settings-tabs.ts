@@ -1,0 +1,46 @@
+import { Permission } from '@river/protocol/permissions';
+import type { CommunityTab } from './store.ts';
+
+const can = (perms: number, p: number): boolean => (perms & p) === p;
+
+/**
+ * The tabs of Community settings and whether you see each one. Members, Emoji, Stickers and
+ * Soundboard are open to everyone to look at; the rest are for running the community.
+ */
+export function communityTabs(perms: number): Array<[CommunityTab, string, boolean]> {
+  return [
+    ['overview', 'Overview', can(perms, Permission.MANAGE_COMMUNITY)],
+    ['onboarding', 'Rules & roles', can(perms, Permission.MANAGE_COMMUNITY)],
+    ['roles', 'Roles', can(perms, Permission.MANAGE_ROLES)],
+    ['members', 'Members', true],
+    ['emoji', 'Emoji', true],
+    ['stickers', 'Stickers', true],
+    ['sounds', 'Soundboard', true],
+    ['bans', 'Bans', can(perms, Permission.BAN_MEMBERS)],
+    ['invites', 'Invites', can(perms, Permission.MANAGE_COMMUNITY)],
+    ['webhooks', 'Webhooks', can(perms, Permission.MANAGE_CHANNELS)],
+    ['reports', 'Reports', can(perms, Permission.MANAGE_MESSAGES)],
+    [
+      'insights',
+      'Insights',
+      can(perms, Permission.MANAGE_COMMUNITY) || can(perms, Permission.VIEW_AUDIT_LOG),
+    ],
+    ['audit', 'Audit log', can(perms, Permission.VIEW_AUDIT_LOG)],
+  ];
+}
+
+/** Tabs everyone sees; they alone do not make "Community settings" worth offering. */
+const EVERYONE: readonly CommunityTab[] = ['members', 'emoji', 'stickers', 'sounds'];
+
+/**
+ * Whether to offer "Community settings": some management tab is open to you, or you manage
+ * members or expressions in the tabs everyone sees. One rule for every place that offers it.
+ */
+export function canOpenCommunitySettings(perms: number): boolean {
+  return (
+    communityTabs(perms).some(([id, , shown]) => shown && !EVERYONE.includes(id)) ||
+    can(perms, Permission.KICK_MEMBERS) ||
+    can(perms, Permission.MODERATE_MEMBERS) ||
+    can(perms, Permission.MANAGE_EXPRESSIONS)
+  );
+}

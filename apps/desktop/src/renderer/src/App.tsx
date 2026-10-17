@@ -1,7 +1,9 @@
 import { WhatsNew } from './components/WhatsNew.tsx';
+import { StayConnectedPrompt } from './components/PhoneReachability.tsx';
 import { ShareSheet } from './components/ShareSheet.tsx';
 import { useEffect, useState, type ReactElement } from 'react';
 import { QuickSwitcher } from './components/QuickSwitcher.tsx';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { startNavHistory } from './nav-history.ts';
 import { useDesignEngine } from './appearance/use-design.ts';
 import { TryBar } from './appearance/TryBar.tsx';
@@ -23,7 +25,7 @@ import { FriendsPage } from './pages/FriendsPage.tsx';
 import { FilesPage } from './pages/FilesPage.tsx';
 import { onSocialChanged } from './social/store.ts';
 import { totalUnread, useDm } from './dm/store.ts';
-import { handleCallEvent } from './dm/call.ts';
+import { handleCallEvent, handlePhoneCall } from './dm/call.ts';
 import { useCommunity } from './community/store.ts';
 import { PlannedPage } from './pages/PlannedPage.tsx';
 import { SettingsOverlay } from './pages/SettingsPage.tsx';
@@ -86,6 +88,8 @@ export function App(): ReactElement {
     const offUpdates = window.river.updates.onStatus(setUpdate);
     const offStorage = window.river.storage.onStatus((s) => void setStorage(s));
     const offAccount = window.river.account.onStatus((s) => void setAccount(s));
+    // Settings River changed by itself (e.g. app lock turned off on a phone without a screen lock).
+    const offSettings = window.river.settings.onChange((s) => void useRiver.getState().setSettings(s));
     const offCommunity = window.river.community.onEvent((e) => useCommunity.getState().handle(e));
     const offRelay = window.river.voice.onRelay((from, payload) =>
       useCommunity.getState().call?.receiveRelay(from, payload),
@@ -94,14 +98,18 @@ export function App(): ReactElement {
       e.t === 'call' ? handleCallEvent(e) : useDm.getState().handle(e),
     );
     const offSocial = window.river.social.onEvent(() => onSocialChanged());
+    // Android (2.11): a call answered or declined on the phone's own call screen.
+    const offPhoneCall = window.river.app.onPhoneCall?.((call) => handlePhoneCall(call));
     return () => {
       offUpdates();
       offStorage();
       offAccount();
+      offSettings();
       offCommunity();
       offRelay();
       offDm();
       offSocial();
+      offPhoneCall?.();
     };
   }, [load, setUpdate, setStorage, setAccount]);
 
@@ -117,7 +125,11 @@ export function App(): ReactElement {
       .load()
       .then(() => window.river.dm.action({ a: 'pendingCall' }))
       .then((ringing) => {
-        if (ringing.ok && ringing.value) handleCallEvent(ringing.value);
+        if (!ringing.ok || !ringing.value) return;
+        // Answered on Android's call screen (2.11): River opened for it and answers it now.
+        const { answer, ...call } = ringing.value;
+        if (answer) handlePhoneCall({ callId: call.callId, action: 'answer' });
+        handleCallEvent(call);
       })
       .catch(() => undefined);
     // The rail shows your communities on every page, not only after opening Communities.
@@ -237,20 +249,24 @@ export function App(): ReactElement {
             )}
             <UsernamePrompt />
             <WhatsNew />
+            <StayConnectedPrompt />
             {loadError && (
               <div className="glass card card--error" role="alert">
                 River could not load its settings: {loadError}
               </div>
             )}
           </div>
-          {(section === 'home' || section === 'contacts') && <FriendsPage />}
-          {section === 'communities' && <CommunitiesPage />}
-          {section === 'messages' && <MessagesPage />}
-          {section === 'social' && <SocialPage />}
-          {section === 'calls' && <CallsPage />}
-          {section === 'files' && <FilesPage />}
-          {section === 'admin' && <AdminPage />}
-          {planned && <PlannedPage section={section} feature={planned} />}
+          {/* One page crashing replaces only that page; the rail, calls and dialogs keep working. */}
+          <ErrorBoundary area={t(LABELS[section])}>
+            {(section === 'home' || section === 'contacts') && <FriendsPage />}
+            {section === 'communities' && <CommunitiesPage />}
+            {section === 'messages' && <MessagesPage />}
+            {section === 'social' && <SocialPage />}
+            {section === 'calls' && <CallsPage />}
+            {section === 'files' && <FilesPage />}
+            {section === 'admin' && <AdminPage />}
+            {planned && <PlannedPage section={section} feature={planned} />}
+          </ErrorBoundary>
         </main>
       </div>
       <SettingsOverlay />
