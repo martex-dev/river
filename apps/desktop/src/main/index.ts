@@ -496,9 +496,11 @@ async function start(): Promise<void> {
     share: {
       status: (sharing, viewers) => {
         if (sharing) indicator.show(sharedDisplay, viewers);
-        // The window saying it stopped cannot hide the bar of a screen main handed out:
-        // that takes the bar's own Stop, the call ending, or the page going away.
+        // The window saying it stopped cannot hide the bar of a screen main handed out: the bar
+        // says River reports it stopped, and goes with one click (or the call ending, or the page
+        // going away). It never keeps claiming people can see the screen.
         else if (!captureGranted) indicator.hide();
+        else indicator.stoppedInApp();
       },
       point: (x, y) => indicator.ping(x, y),
     },

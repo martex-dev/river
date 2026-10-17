@@ -160,6 +160,7 @@ export function EmojiSettings({ community }: { community: CommunityView }): Reac
                     value={renaming.name}
                     maxLength={32}
                     onChange={(ev) => setRenaming({ id: e.id, name: ev.target.value })}
+                    data-own-escape=""
                     onKeyDown={(ev) => ev.key === 'Escape' && setRenaming(null)}
                   />
                   <button className="btn btn--small" disabled={!EMOJI_NAME.test(renaming.name)}>

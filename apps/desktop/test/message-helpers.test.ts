@@ -44,9 +44,27 @@ describe('decrypted file URLs', () => {
       maxBytes: 100,
       create: () => `blob:${++i}`,
       revoke: (u) => void revoked.push(u),
+      // Time moves on between steps, past the grace period a fresh URL gets.
+      now: () => (clock += 20_000),
     });
     return { c, revoked };
   };
+  let clock = 0;
+
+  it('never revokes a URL it just handed out, before the picture can hold it', async () => {
+    const revoked: string[] = [];
+    let n = 0;
+    const c = new BlobUrlCache({
+      maxEntries: 1,
+      maxBytes: 100,
+      create: () => `blob:${++n}`,
+      revoke: (u) => void revoked.push(u),
+      now: () => 1000,
+    });
+    const first = await c.load('a', async () => blob(1));
+    await c.load('b', async () => blob(1));
+    expect(revoked).not.toContain(first);
+  });
 
   it('decrypt a file once even when asked for it twice at the same time', async () => {
     const { c } = cache();

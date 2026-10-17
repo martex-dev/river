@@ -2544,3 +2544,15 @@ body:has(.dm-call--full) .river-toast {
   margin: 8px 2px 4px;
   font-weight: 600;
 }
+
+/* Dialogs, menus and the picture viewer opened during a full-screen call show above it (2.10.13);
+   toasts stay on top of everything. */
+body:has(.dm-call--full) .modal {
+  z-index: 850;
+}
+body:has(.dm-call--full) .lightbox {
+  z-index: 860;
+}
+body:has(.dm-call--full) .popover {
+  z-index: 870;
+}
