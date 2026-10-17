@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.12.0] - 2026-10-18
+
+**Community messages bound to who sent them, and channel history that never stops early.**
+
 ### Security
 
 - **Community messages and profiles are now bound to who sent them.** New

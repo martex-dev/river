@@ -27,20 +27,21 @@ signed update channel, rather than a few large ones.
 One theme per minor version. Patch versions (2.12.1, 2.12.2 …) carry polish and fixes for
 that theme, and as many of them ship as needed.
 
-| Version | Theme                              | Contents                                                                                                                                                                         |
-| ------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2.11.x  | Phone calls                        | Rings like a phone, stops when the caller hangs up, phone-style call screens, call fixes and reviews                                                                             |
-| 2.12.x  | Phones look like Telegram          | Bottom tabs (Chats, Communities, Calls, Feed, Settings), Telegram-style chat list and conversation, bubbles, Instagram-style profiles and feed; v2 associated data on by default |
-| 2.13.x  | Easy start                         | Install-to-chat in under a minute, one-screen profile, invite links that open the app, friend links, QR everywhere; community keys need a proof                                  |
-| 2.14.x  | Calls, part 2                      | Group calls in conversations and groups, call quality (bandwidth adaptation, reconnect on network change), call links                                                            |
-| 2.15.x  | Voice channels and meetings        | Bigger rooms, grid and speaker views, raise hand, stage channels, screen share in voice                                                                                          |
-| 2.16.x  | Notifications                      | Per-chat sounds and vibration, mentions-only, grouped notifications, reliable delivery on every platform that allows it                                                          |
-| 2.17.x  | Looks                              | Chat wallpapers, accent colours, bubble styles, theme editor, app icon choices, more motion and sounds                                                                           |
-| 2.18.x  | Messaging, part 2                  | Message effects, quick replies, richer editor, saved-message folders, more sticker and emoji tools                                                                               |
-| 2.19.x  | Privacy, part 2                    | Less metadata on the server, padding, proxy and Tor-friendly connections, local-only mode                                                                                        |
-| 2.20.x  | Whole-app sweep                    | Audits of every area, performance, accessibility, languages                                                                                                                      |
-| 2.21+   | Whatever the maintainer finds next | Feedback from real phones and computers                                                                                                                                          |
-| 3.0.0   | River 3.0                          | When the sweeps find nothing left to fix                                                                                                                                         |
+| Version | Theme                              | Contents                                                                                                                                        |
+| ------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2.11.x  | Phone calls                        | Rings like a phone, stops when the caller hangs up, phone-style call screens, call fixes and reviews                                            |
+| 2.12.x  | Stronger community encryption      | Messages and profiles bound to their sender (v2 associated data), full channel history, no double posts, community delivery fixes               |
+| 2.13.x  | Phones look like Telegram          | Bottom tabs (Chats, Communities, Calls, Feed, Settings), Telegram-style chat list and conversation, bubbles, Instagram-style profiles and feed  |
+| 2.14.x  | Easy start                         | Install-to-chat in under a minute, one-screen profile, invite links that open the app, friend links, QR everywhere; community keys need a proof |
+| 2.15.x  | Calls, part 2                      | Group calls in conversations and groups, call quality (bandwidth adaptation, reconnect on network change), call links                           |
+| 2.16.x  | Voice channels and meetings        | Bigger rooms, grid and speaker views, raise hand, stage channels, screen share in voice                                                         |
+| 2.17.x  | Notifications                      | Per-chat sounds and vibration, mentions-only, grouped notifications, reliable delivery on every platform that allows it                         |
+| 2.18.x  | Looks                              | Chat wallpapers, accent colours, bubble styles, theme editor, app icon choices, more motion and sounds                                          |
+| 2.19.x  | Messaging, part 2                  | Message effects, quick replies, richer editor, saved-message folders, more sticker and emoji tools                                              |
+| 2.20.x  | Privacy, part 2                    | Less metadata on the server, padding, proxy and Tor-friendly connections, local-only mode                                                       |
+| 2.21.x  | Whole-app sweep                    | Audits of every area, performance, accessibility, languages                                                                                     |
+| 2.22+   | Whatever the maintainer finds next | Feedback from real phones and computers                                                                                                         |
+| 3.0.0   | River 3.0                          | When the sweeps find nothing left to fix                                                                                                        |
 
 ## What stays out
 

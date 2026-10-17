@@ -139,7 +139,7 @@ export type KeyMessage =
  * Keys from Rivers before 2.11 come without proof that their sender held the previous key. Until
  * every supported River sends the proof, such keys are still accepted — only from a member whose
  * sealed profile once opened with a key this device held (see CRYPTOGRAPHY.md §4a). Planned to be
- * turned off in 2.13.
+ * turned off in 2.14.
  */
 export const ACCEPT_UNPROVEN_KEYS = true;
 

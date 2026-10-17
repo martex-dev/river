@@ -317,8 +317,9 @@ export const useCommunity = create<CommunityState>((set, get) => ({
           before: cursor.before,
           ...(cursor.beforeId ? { beforeId: cursor.beforeId } : {}),
         });
-        if (!res.ok) return 0;
-        const page = res.value as HistoryPage;
+        const page = res.ok ? (res.value as HistoryPage | null) : null;
+        // An answer without a page (an older main, a failure) ends this load, nothing more.
+        if (!page || !Array.isArray(page.messages)) return 0;
         // Against the list as it is now (it may have changed while this page was decrypted).
         const now = get().messages[channelId] ?? [];
         const known = new Set(now.map((m) => m.id));
@@ -762,8 +763,8 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     const c = get().communities.find((x) => x.channels.some((ch) => ch.id === channelId));
     if (c?.channels.find((ch) => ch.id === channelId)?.kind !== 'text') return;
     const res = await window.river.community.action({ a: 'historyPage', channelId });
-    if (!res.ok) return;
-    const page = res.value as HistoryPage;
+    const page = res.ok ? (res.value as HistoryPage | null) : null;
+    if (!page || !Array.isArray(page.messages)) return;
     // The newest page replaces what was loaded, so older history can be loaded again; whether
     // there is any is main's answer, not a guess from how many messages could be opened.
     olderCursor.delete(channelId);
