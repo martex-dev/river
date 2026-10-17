@@ -11,6 +11,8 @@ import { useCommunity } from './store.ts';
  */
 export interface Outgoing {
   localId: string;
+  /** The message's ID on the server, the same for every attempt (a retry never posts it twice). */
+  messageId: string;
   channelId: string;
   text: string;
   replyTo?: string;
@@ -30,7 +32,7 @@ export interface Outgoing {
 
 interface OutboxState {
   items: Outgoing[];
-  send(item: Omit<Outgoing, 'localId' | 'status' | 'createdAt'>): void;
+  send(item: Omit<Outgoing, 'localId' | 'messageId' | 'status' | 'createdAt'>): void;
   retry(localId: string): void;
   discard(localId: string): void;
   /** Sends everything that was waiting or failed (after reconnecting). */
@@ -45,6 +47,7 @@ const save = (item: Outgoing): void =>
     .action({
       a: 'outboxSave',
       localId: item.localId,
+      messageId: item.messageId,
       channelId: item.channelId,
       text: item.text,
       ...(item.replyTo ? { replyTo: item.replyTo } : {}),
@@ -58,6 +61,15 @@ const forget = (localId: string): void =>
   void window.river.community.action({ a: 'outboxDelete', localId }).catch(() => undefined);
 
 let counter = 0;
+
+/** A new message ID (16 random bytes, base64url), the form River's server expects. */
+export function newMessageId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
 
 export const useOutbox = create<OutboxState>((set, get) => {
   const patch = (localId: string, change: Partial<Outgoing>): void =>
@@ -76,6 +88,7 @@ export const useOutbox = create<OutboxState>((set, get) => {
       res = (await window.river.community.action({
         a: 'send',
         channelId: item.channelId,
+        messageId: item.messageId,
         text: item.text,
         ...(item.replyTo ? { replyTo: item.replyTo } : {}),
         ...(item.replyTo && item.noPing ? { noPing: true } : {}),
@@ -107,7 +120,13 @@ export const useOutbox = create<OutboxState>((set, get) => {
     items: [],
     send: (item) => {
       const localId = `local-${Date.now()}-${++counter}`;
-      const full: Outgoing = { ...item, localId, status: 'waiting', createdAt: new Date().toISOString() };
+      const full: Outgoing = {
+        ...item,
+        localId,
+        messageId: newMessageId(),
+        status: 'waiting',
+        createdAt: new Date().toISOString(),
+      };
       set({ items: [...get().items, full] });
       save(full);
       void attempt(localId);
@@ -123,8 +142,10 @@ export const useOutbox = create<OutboxState>((set, get) => {
       const known = new Set(get().items.map((i) => i.localId));
       const back: Outgoing[] = res.value
         .filter((i) => !known.has(i.localId))
-        .map((i) => ({ ...i, status: 'waiting' }));
+        .map((i) => ({ ...i, messageId: i.messageId ?? newMessageId(), status: 'waiting' }));
       set({ items: [...get().items, ...back] });
+      // Saved by an older River without an ID: keep the one just chosen for the next restart too.
+      for (const i of back) if (!res.value.find((r) => r.localId === i.localId)?.messageId) save(i);
       get().flush();
     },
     flush: () => {

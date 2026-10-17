@@ -761,6 +761,47 @@ describe('replies', () => {
   });
 });
 
+describe('sending again', () => {
+  it('a retry of a message whose answer was lost does not post it twice', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Retry Club');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const view = (await alice.community.refresh())[0]!;
+    const general = view.channels.find((c) => c.name === 'general')!;
+    const messageId = 'R'.repeat(22);
+    const first = await alice.community.action({ a: 'send', channelId: general.id, text: 'once', messageId });
+    expect(first.id).toBe(messageId);
+    // The answer never arrived (the tunnel dropped it), so the outbox tries again with the same ID.
+    const again = await alice.community.action({ a: 'send', channelId: general.id, text: 'once', messageId });
+    expect(again).toMatchObject({ id: messageId, text: 'once', mine: true });
+    // In a thread too.
+    await alice.community.action({ a: 'createThread', channelId: general.id, messageId, name: 'Plans' });
+    const reply = await alice.community.action({
+      a: 'send',
+      channelId: general.id,
+      text: 'in the thread',
+      threadId: messageId,
+      messageId: 'T'.repeat(22),
+    });
+    expect(
+      await alice.community.action({
+        a: 'send',
+        channelId: general.id,
+        text: 'in the thread',
+        threadId: messageId,
+        messageId: reply.id,
+      }),
+    ).toMatchObject({ id: reply.id, threadId: messageId });
+    await bob.community.refresh();
+    expect((await bob.community.messages(general.id)).filter((m) => m.text === 'once')).toHaveLength(1);
+    // Someone else's message ID is not "already sent" for you: that is refused.
+    await expect(
+      bob.community.action({ a: 'send', channelId: general.id, text: 'mine?', messageId }),
+    ).rejects.toThrow();
+  });
+});
+
 describe('desktop ↔ server communities', () => {
   it('roles, private channels, reactions, edits and profiles work end to end, encrypted', async () => {
     const alice = await person('Alice');
@@ -1240,6 +1281,80 @@ describe('desktop ↔ server communities', () => {
 
     await alice.community.action({ a: 'reconnect' });
     await vi.waitFor(() => expect(sockets).toHaveLength(2));
+    alice.community.stop();
+  });
+
+  type FakeSocket = {
+    onmessage?: (e: { data: string }) => void;
+    onclose?: () => void;
+    send(data: string): void;
+    close(): void;
+    readyState: number;
+    sent: string[];
+  };
+  const fakeSockets = (): { sockets: FakeSocket[]; make: () => WebSocket } => {
+    const sockets: FakeSocket[] = [];
+    return {
+      sockets,
+      make: () => {
+        const socket: FakeSocket = {
+          sent: [],
+          send(data) {
+            this.sent.push(data);
+          },
+          close() {},
+          readyState: WebSocket.OPEN,
+        };
+        sockets.push(socket);
+        return socket as unknown as WebSocket;
+      },
+    };
+  };
+  const ready = (socket: FakeSocket, riverId: string): void =>
+    socket.onmessage!({ data: JSON.stringify({ t: 'ready', riverId }) });
+
+  it('keeps backing off when the server ends every connection right after it is ready', async () => {
+    const { sockets, make } = fakeSockets();
+    const alice = await person('Alice', make);
+    alice.community.stableAfterMs = 60_000;
+    await alice.community.create('Net');
+    await vi.waitFor(() => expect(sockets).toHaveLength(1));
+    const retries: number[] = [];
+    alice.community.onEvent((e) => {
+      if (e.t === 'connection' && e.state === 'offline' && e.retryAt) retries.push(e.retryAt - Date.now());
+    });
+    ready(sockets[0]!, alice.riverId);
+    sockets[0]!.onclose!();
+    expect(retries[0]).toBeLessThanOrEqual(1250);
+    await vi.waitFor(() => expect(sockets).toHaveLength(2), { timeout: 3_000 });
+    // Ready again, and dropped again at once (a server restarting in a loop): wait longer this time.
+    ready(sockets[1]!, alice.riverId);
+    sockets[1]!.onclose!();
+    expect(retries[1]).toBeGreaterThan(1500);
+    alice.community.stop();
+  });
+
+  it('asks an "online" connection whether it still works when the network comes back, and replaces a dead one', async () => {
+    const { sockets, make } = fakeSockets();
+    const alice = await person('Alice', make);
+    alice.community.probeMs = 50;
+    await alice.community.create('Net');
+    await vi.waitFor(() => expect(sockets).toHaveLength(1));
+    ready(sockets[0]!, alice.riverId);
+    expect(alice.community.connectionState()).toBe('online');
+
+    // It answers: kept.
+    await alice.community.action({ a: 'reconnect' });
+    expect(sockets[0]!.sent.at(-1)).toBe(JSON.stringify({ t: 'ping' }));
+    sockets[0]!.onmessage!({ data: JSON.stringify({ t: 'pong' }) });
+    await new Promise((r) => setTimeout(r, 150));
+    expect(sockets).toHaveLength(1);
+    expect(alice.community.connectionState()).toBe('online');
+
+    // The Wi-Fi changed under it: the old connection says nothing any more. Replaced.
+    await alice.community.action({ a: 'reconnect' });
+    expect(sockets[0]!.sent.filter((d) => d === JSON.stringify({ t: 'ping' }))).toHaveLength(2);
+    await vi.waitFor(() => expect(sockets).toHaveLength(2), { timeout: 3_000 });
     alice.community.stop();
   });
 

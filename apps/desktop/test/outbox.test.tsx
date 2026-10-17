@@ -56,7 +56,12 @@ describe('outbox', () => {
     sendReplies = [sent('hello')];
     useCommunity.setState({ connection: 'online' });
     await vi.waitFor(() => expect(useOutbox.getState().items).toEqual([]));
-    expect(sends()[0]![0]).toEqual({ a: 'send', channelId: 'ch', text: 'hello' });
+    expect(sends()[0]![0]).toEqual({
+      a: 'send',
+      channelId: 'ch',
+      messageId: expect.stringMatching(/^[A-Za-z0-9_-]{22}$/),
+      text: 'hello',
+    });
     // Delivered: the local copy goes away.
     expect(action).toHaveBeenCalledWith(expect.objectContaining({ a: 'outboxDelete' }));
   });
@@ -78,6 +83,44 @@ describe('outbox', () => {
     await vi.waitFor(() => expect(useOutbox.getState().items[0]?.status).toBe('failed'));
     useOutbox.getState().discard(useOutbox.getState().items[0]!.localId);
     expect(useOutbox.getState().items).toEqual([]);
+  });
+
+  it('sends every attempt of a message with the same ID, so a retry can never post it twice', async () => {
+    // The first answer is lost on the way back (the connection dropped): the server may have it.
+    sendReplies = [{ ok: false, message: 'Can’t reach your River server.' }];
+    useOutbox.getState().send({ channelId: 'ch', text: 'once' });
+    await vi.waitFor(() => expect(useOutbox.getState().items[0]?.status).toBe('failed'));
+    const saves = action.mock.calls.filter(([a]) => (a as { a: string }).a === 'outboxSave');
+    sendReplies = [sent('once')];
+    useOutbox.getState().retry(useOutbox.getState().items[0]!.localId);
+    await vi.waitFor(() => expect(useOutbox.getState().items).toEqual([]));
+    const ids = sends().map(([a]) => (a as { messageId?: string }).messageId);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    expect(ids[1]).toBe(ids[0]);
+    // The ID is kept on this device with the message, for a retry after River restarts.
+    expect(saves[0]![0]).toMatchObject({ a: 'outboxSave', messageId: ids[0] });
+    // Another message gets its own ID.
+    sendReplies = [sent('twice')];
+    useOutbox.getState().send({ channelId: 'ch', text: 'twice' });
+    await vi.waitFor(() => expect(sends()).toHaveLength(3));
+    expect((sends()[2]![0] as { messageId: string }).messageId).not.toBe(ids[0]);
+  });
+
+  it('keeps the ID a message was saved with when River starts again', async () => {
+    saved = [
+      {
+        localId: 'local-1-1',
+        messageId: 'A'.repeat(22),
+        channelId: 'ch',
+        text: 'from before',
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    sendReplies = [sent('from before')];
+    await useOutbox.getState().restore();
+    await vi.waitFor(() => expect(useOutbox.getState().items).toEqual([]));
+    expect(sends()[0]![0]).toMatchObject({ a: 'send', messageId: 'A'.repeat(22) });
   });
 
   it('never leaves a message "Sending…" when the request itself breaks', async () => {
