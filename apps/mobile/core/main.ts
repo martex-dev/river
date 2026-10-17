@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { app } from 'electron';
 import { channelOfVersion } from '@river/release/channels';
-import type { AppInfo, HostStatus } from '../../desktop/src/shared/ipc.ts';
+import type { AccountStatus, AppInfo, HostStatus } from '../../desktop/src/shared/ipc.ts';
 import type { DmEvent } from '../../desktop/src/shared/dm.ts';
 import { CommunityService } from '../../desktop/src/main/community/community-service.ts';
 import { ServerLocator } from '../../desktop/src/main/community/server-locator.ts';
@@ -50,6 +50,7 @@ import {
   uiPresent,
 } from './host.ts';
 import { phonePlatform } from './platform.ts';
+import { accountGone } from './account-gone.ts';
 import { AndroidUpdateService, CHECK_INTERVAL_MS, FIRST_CHECK_DELAY_MS } from './updater.ts';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import { parseDeepLink } from '../../desktop/src/main/deep-link.ts';
@@ -421,7 +422,12 @@ async function start(): Promise<void> {
   storage.onStatus((s) => {
     if (s.state === 'open') void connectAll();
   });
+  let lastAccount: AccountStatus | null = account.status();
   account.onStatus((s) => {
+    // Signed out or removed: the account's message notifications go away (Android shell).
+    if (PLATFORM === 'android' && accountGone(lastAccount, s))
+      void ask('clearNotifications', {}).catch(() => undefined);
+    lastAccount = s;
     if (s.state === 'registered' && s.connection === 'online') community.ensureSocket();
   });
   // Coming back to the app (or the network returning): reconnect now rather than after the backoff.
