@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { BackupPanel } from '../components/BackupPanel.tsx';
 import { DevicesPanel } from '../components/LinkDevice.tsx';
 import { ConnectionCheck } from '../components/ConnectionCheck.tsx';
+import { BATTERY_WHY, PhoneCallsSection } from '../components/PhoneReachability.tsx';
 import { HostingPanel, useHostStatus } from '../components/HostingPanel.tsx';
 import type { ReleaseChannel } from '@river/release/channels';
 import type { AccountStatus, ServerCheckResult, UpdateStatus } from '../../../shared/ipc.ts';
@@ -867,12 +868,36 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
       )}
       <h2 className="panel__title">System</h2>
       {phone && platform === 'android' && (
-        <Toggle
-          label="Stay connected"
-          hint="New messages and calls notify you even when River is closed. Android shows a quiet “River is connected” notification while it runs, and it uses some battery. River does not use Google’s push service."
-          checked={settings.system.background}
-          onChange={(v) => void updateSettings({ system: { background: v } })}
-        />
+        <>
+          <Toggle
+            label="Stay connected"
+            hint={`New messages and calls notify you even when River is closed. Android shows a quiet “River is connected” notification while it runs, and it uses some battery. River does not use Google’s push service. ${BATTERY_WHY}`}
+            checked={settings.system.background}
+            onChange={(v) =>
+              void updateSettings({ system: { background: v, backgroundAsked: true } }).then(async () => {
+                if (!v) return;
+                // Turned on: Android asks to let River run in the background (explained above).
+                const status = await window.river.app.phoneStatus().catch(() => null);
+                if (status && !status.batteryExempt)
+                  await window.river.app.phoneFix('battery').catch(() => null);
+              })
+            }
+          />
+          <Toggle
+            label="Light up the screen for new messages"
+            hint="When the screen is off, a new message turns it on for a few seconds. Not during Do Not Disturb, and not for messages sent without sound."
+            checked={settings.system.wakeScreen}
+            onChange={(v) => void updateSettings({ system: { wakeScreen: v } })}
+          />
+          <PhoneCallsSection />
+        </>
+      )}
+      {platform === 'ios' && (
+        <p className="muted small">
+          On iPhone, River gets messages and calls only while it is open or was just in use. River does not
+          use Apple’s push service yet (it needs a paid Apple developer account), so once iOS pauses River,
+          new messages and calls wait until you open it again. Calls do not ring while River is closed.
+        </p>
       )}
       {phone ? (
         <Toggle

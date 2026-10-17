@@ -8,6 +8,7 @@ import {
   type SharedContent,
   type HostStatus,
   type LinkProgress,
+  type PhoneCallAction,
   type RiverApi,
   type StorageStatus,
   type UpdateStatus,
@@ -33,6 +34,13 @@ export function createRiverApi(t: RiverTransport): RiverApi {
       setTitleBar: (colors) => t.invoke(IPC.appTitleBar, colors),
       haptic: (kind) => t.send(IPC.appHaptic, kind),
       onPip: (listener) => t.on(IPC.appPip, (...args) => listener(args[0] === true)),
+      phoneStatus: () => t.invoke(IPC.appPhoneStatus),
+      phoneFix: (fix) => t.invoke(IPC.appPhoneFix, fix),
+      onPhoneCall: (listener) =>
+        t.on(IPC.appPhoneCall, (...args) => {
+          const call = args[0] as PhoneCallAction | undefined;
+          if (call && typeof call.callId === 'string') listener(call);
+        }),
       onDeepLink: (listener) => t.on(IPC.appDeepLink, (...args) => listener(args[0] as DeepLink)),
       onShare: (listener) => t.on(IPC.appShare, (...args) => listener(args[0] as SharedContent)),
     },

@@ -92,6 +92,12 @@ export const IPC = {
   voicePip: 'river:voice:pip',
   /** Android: River went into (true) or out of (false) picture-in-picture. */
   appPip: 'river:app:pip',
+  /** Android: what keeps River reachable while it is closed (Settings → System). */
+  appPhoneStatus: 'river:app:phone-status',
+  /** Android: opens the phone's own screen to fix one of those (battery, full-screen calls…). */
+  appPhoneFix: 'river:app:phone-fix',
+  /** Android: an incoming call was answered or declined on the phone's own call screen. */
+  appPhoneCall: 'river:app:phone-call',
   screenShareStatus: 'river:voice:share-status',
   screenPoint: 'river:voice:point',
   communityEvent: 'river:community:event',
@@ -162,6 +168,29 @@ export interface AppInfo {
   versions: { electron: string; chrome: string; node: string };
   /** Set when this version keeps failing to start after an update (automatic installs are paused). */
   startupProblem: string | null;
+}
+
+/**
+ * Android (2.11): what River needs to reach you while it is closed, as the phone reports it.
+ * Every value is read from Android when asked; nothing here is assumed.
+ */
+export interface PhoneStatus {
+  /** Settings → System → Stay connected is on and its service runs. */
+  background: boolean;
+  /** Android lets River run in the background without battery optimization delaying it. */
+  batteryExempt: boolean;
+  /** Incoming calls may cover the screen when the phone is locked (Android 14+ asks for this). */
+  fullScreenCalls: boolean;
+  /** River may post notifications (Android 13+ asks for this). */
+  notifications: boolean;
+}
+
+export type PhoneFix = 'battery' | 'fullScreen' | 'notifications';
+
+/** A call answered or declined on Android's own call screen (2.11). */
+export interface PhoneCallAction {
+  callId: string;
+  action: 'answer' | 'decline';
 }
 
 export type UpdateStatus =
@@ -537,6 +566,12 @@ export interface RiverApi {
     haptic(kind: 'tap' | 'select' | 'success' | 'warning'): void;
     /** Android: River went into or out of picture-in-picture (2.10). Never fires on computers. */
     onPip(listener: (on: boolean) => void): () => void;
+    /** Android: what keeps River reachable while closed (2.11); null on other platforms. */
+    phoneStatus(): Promise<PhoneStatus | null>;
+    /** Android: opens the phone's screen to fix one of those, then reports again; null elsewhere. */
+    phoneFix(fix: PhoneFix): Promise<PhoneStatus | null>;
+    /** Android: a call was answered or declined on the phone's own call screen (2.11). */
+    onPhoneCall(listener: (call: PhoneCallAction) => void): () => void;
   };
   settings: { get(): Promise<Settings>; update(patch: SettingsPatch): Promise<Settings> };
   updates: {

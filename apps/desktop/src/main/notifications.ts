@@ -7,6 +7,24 @@ import type { DmService } from './dm/dm-service.ts';
 const MAX_KEPT = 100;
 
 /**
+ * What a phone needs to show a notification well (2.11); Electron never reads it. `conversation`
+ * groups a conversation's notifications into one, `sender` is shown only when the preview setting
+ * shows names, and `lockScreen` is true only with full previews: otherwise the lock screen says
+ * "New message". `wake` lights up a dark screen (Settings → System on Android).
+ */
+export interface PhoneHints {
+  conversation: string;
+  sender: string | null;
+  /** A channel's or group's name, when the notification is about one (shown with the sender). */
+  group: string | null;
+  lockScreen: boolean;
+  wake: boolean;
+}
+
+const withHints = (n: Notification, hints: PhoneHints): Notification =>
+  Object.assign(n, { phoneHints: hints });
+
+/**
  * Desktop notifications for new community messages while River is not
  * focused. What a notification reveals follows Settings → Notifications →
  * preview: by default only "New message", never the sender or the text.
@@ -32,6 +50,17 @@ export function startMessageNotifications(deps: {
     for (const event of ['close', 'click', 'failed']) events.on(event, release);
     if (shown.size > MAX_KEPT) shown.delete(shown.values().next().value!);
   };
+  const hints = (conversation: string, sender: string | null, group: string | null = null): PhoneHints => {
+    const s = deps.settings();
+    const named = s.notifications.preview !== 'none';
+    return {
+      conversation,
+      sender: named ? sender : null,
+      group: named ? group : null,
+      lockScreen: s.notifications.preview === 'full',
+      wake: s.system.wakeScreen,
+    };
+  };
   const show = (
     title: string,
     body: string,
@@ -39,6 +68,7 @@ export function startMessageNotifications(deps: {
     onClick: () => void,
     onReply?: (text: string) => void,
     call = false,
+    phone?: PhoneHints,
   ): void => {
     if (window.isDestroyed() || window.isFocused() || !Notification.isSupported()) return;
     // Do Not Disturb or quiet hours: nothing pops up.
@@ -51,6 +81,7 @@ export function startMessageNotifications(deps: {
       // An incoming call stays until it is answered or stops ringing (phones ring for it).
       ...(call ? { urgency: 'critical' as const, timeoutType: 'never' as const } : {}),
     });
+    if (phone) withHints(notification, phone);
     if (onReply) {
       notification.on('reply', (_e, reply) => {
         const text = reply.trim();
@@ -109,6 +140,8 @@ export function startMessageNotifications(deps: {
       true,
       () => deps.dm.focus(m.peer),
       (text) => void deps.dm.action({ a: 'send', peer: m.peer, text }).catch(() => undefined),
+      false,
+      hints(`dm:${m.peer}`, event.senderName),
     );
   });
   const offEvents = community.onEvent((event) => {
@@ -120,6 +153,9 @@ export function startMessageNotifications(deps: {
       preview === 'none' ? 'An event you are interested in is starting' : 'Starting now',
       true,
       () => community.focusChannel(event.communityId, event.channelId ?? ''),
+      undefined,
+      false,
+      hints(`event:${event.communityId}:${event.channelId ?? ''}`, null),
     );
   });
   const offCommunity = community.onEvent((event) => {
@@ -140,6 +176,7 @@ export function startMessageNotifications(deps: {
     }
     if (prefs.preview === 'full') body = m.text.length > 180 ? `${m.text.slice(0, 180)}…` : m.text;
     const notification = new Notification({ title, body, silent: true });
+    withHints(notification, hints(`channel:${m.channelId}`, m.senderName, channel ? `#${channel}` : null));
     notification.on('click', () => {
       if (window.isDestroyed()) return;
       if (window.isMinimized()) window.restore();

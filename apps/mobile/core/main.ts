@@ -1,7 +1,9 @@
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { app } from 'electron';
 import { channelOfVersion } from '@river/release/channels';
 import type { AppInfo, HostStatus } from '../../desktop/src/shared/ipc.ts';
+import type { DmEvent } from '../../desktop/src/shared/dm.ts';
 import { CommunityService } from '../../desktop/src/main/community/community-service.ts';
 import { ServerLocator } from '../../desktop/src/main/community/server-locator.ts';
 import { HomeAccount } from '../../desktop/src/main/home-server.ts';
@@ -40,13 +42,15 @@ import {
   onInvoke,
   onLifecycle,
   onUiGone,
+  onWake,
   ready,
   ui,
   uiPresent,
 } from './host.ts';
 import { phonePlatform } from './platform.ts';
 import { parseDeepLink } from '../../desktop/src/main/deep-link.ts';
-import { IPC, type DeepLink } from '../../desktop/src/shared/ipc.ts';
+import { IPC, type DeepLink, type PhoneFix, type PhoneStatus } from '../../desktop/src/shared/ipc.ts';
+import { silenced } from '../../desktop/src/shared/notify-rules.ts';
 
 /**
  * River's client core on a phone: the desktop's services (accounts,
@@ -140,7 +144,15 @@ async function start(): Promise<void> {
   const log = createFileLogger(join(userData, 'logs'));
   log.info(`River ${app.getVersion()} starting on ${PLATFORM}`);
 
-  const settings = new SettingsStore(join(userData, 'settings.json'), log);
+  const settingsPath = join(userData, 'settings.json');
+  // A new install: nothing of River on this phone yet (no settings, no encrypted storage).
+  const freshInstall = !existsSync(settingsPath) && !existsSync(join(userData, 'data'));
+  const settings = new SettingsStore(settingsPath, log);
+  // Android (2.11): a new install stays connected, so messages and calls reach you while River is
+  // closed (a visible "River is connected" notification shows meanwhile; Settings → System turns it
+  // off). Existing installs are asked once instead (the UI's "Get messages and calls…" prompt).
+  // Computers and iPhones keep the shared default (off).
+  if (PLATFORM === 'android' && freshInstall) settings.update({ system: { background: true } });
   // Settings → System → Lock River: the app shell asks for biometrics or the screen lock.
   // Without a screen lock on the phone the setting cannot work, so it turns itself off.
   let lockState: boolean | null = null;
@@ -227,7 +239,7 @@ async function start(): Promise<void> {
       // iPhone: only the call's state, for the proximity sensor (screen off at your ear).
       if (PLATFORM === 'ios') void ask('callState', { active }).catch(() => undefined);
       if (PLATFORM === 'android') {
-        void ask<string>('call', { active }).then(
+        void ask<string>('call', { active, ...(active ? { title: callTitle() } : {}) }).then(
           (how) => {
             if (how !== 'hangup') return;
             // The UI ends the call itself (it tells the other side); without a UI the core does.
@@ -246,6 +258,11 @@ async function start(): Promise<void> {
   let inCall = false;
   /** The 1:1 call the UI started or accepted, so the core can end it if the UI goes away. */
   let activeCall: { peer: string; callId: string } | null = null;
+  /** Who the "In a call" notification names: the person (unless previews hide names) or voice. */
+  const callTitle = (): string => {
+    if (!activeCall) return 'Voice channel';
+    return settings.get().notifications.preview === 'none' ? 'River call' : dm.nameOf(activeCall.peer);
+  };
   /**
    * The UI's WebView carries a call's media: when it is gone (River's screen closed while the
    * core stays connected), the call cannot go on. Leave the voice channel or the call's relay
@@ -327,12 +344,53 @@ async function start(): Promise<void> {
       community.ensureSocket();
     },
   });
+  /**
+   * Android (2.11): an incoming call rings like a phone call — the phone's ringtone, a call screen
+   * over the lock screen, Answer and Decline in the notification. The shell answers how it ended
+   * there: "accept" (River's screen opens and answers), "decline" (declined here, without River's
+   * screen), or anything else (it stopped ringing for another reason).
+   */
+  const ringOnPhone = (e: Extract<DmEvent, { t: 'call' }>): void => {
+    const s = settings.get();
+    // As the desktop's call notification: notifications on, no Do Not Disturb or quiet hours.
+    if (!s.notifications.desktop || silenced(s)) return;
+    const name = s.notifications.preview === 'none' ? 'Someone' : dm.nameOf(e.peer);
+    void ask<string>('incomingCall', { callId: e.callId, name, video: e.video }).then(
+      (how) => {
+        if (ringing !== e.callId) return;
+        if (how === 'accept') {
+          // River's screen opens now: a window already open answers on this event, one that is
+          // still starting finds the call as pendingCall with `answer`.
+          dm.answerRinging(e.callId);
+          emit(IPC.appPhoneCall, [{ callId: e.callId, action: 'answer' }]);
+        } else if (how === 'decline') {
+          void dm
+            .action({ a: 'call', peer: e.peer, callId: e.callId, kind: 'decline' })
+            .catch(() => undefined);
+          void dm
+            .action({
+              a: 'logCall',
+              peer: e.peer,
+              direction: 'in',
+              video: e.video,
+              answered: false,
+              durationSec: 0,
+            })
+            .catch(() => undefined);
+          emit(IPC.appPhoneCall, [{ callId: e.callId, action: 'decline' }]);
+          ringOver(e.callId);
+        }
+      },
+      () => undefined,
+    );
+  };
   dm.onEvent((e) => {
     if (e.t !== 'call') return;
     if (e.kind === 'invite') {
       ringing = e.callId;
       clearTimeout(ringTimer);
       ringTimer = setTimeout(() => ringOver(), RING_MS);
+      if (PLATFORM === 'android') ringOnPhone(e);
     } else if (e.kind !== 'signal') {
       // The caller gave up, or the other side ended the call.
       if (e.kind !== 'accept' && activeCall?.callId === e.callId) activeCall = null;
@@ -365,6 +423,15 @@ async function start(): Promise<void> {
     lastActive = Date.now();
     presence.check();
     if (foreground) community.reconnectNow();
+  });
+  // Android's watchdog (Stay connected, 2.11) wakes the phone every few minutes: with the screen
+  // off the heartbeat may have slept through a dropped connection. Check it, or connect again.
+  onWake(() => {
+    if (storage.getStatus().state !== 'open') return;
+    const status = account.status();
+    if (status.state !== 'registered') return;
+    if (status.connection !== 'online') void connectAll().catch(() => undefined);
+    else community.probe();
   });
 
   const appInfo = (): AppInfo => ({
@@ -408,6 +475,15 @@ async function start(): Promise<void> {
     pip: (on) => {
       if (PLATFORM === 'android') void ask('pip', { on }).catch(() => undefined);
     },
+    // Android (2.11): what keeps River reachable while closed, read from the phone each time.
+    ...(PLATFORM === 'android'
+      ? {
+          phone: {
+            status: () => ask<PhoneStatus>('phoneStatus', {}),
+            fix: (fix: PhoneFix) => ask<PhoneStatus>('phoneFix', { fix }),
+          },
+        }
+      : {}),
     hosting: noHosting,
     homeAccount,
     takeDeepLink: (kind) => {

@@ -1,6 +1,7 @@
 import { ask, handle, on, ui } from '../host.ts';
 import { expectExport } from '../exports.ts';
 import { native } from '../native.ts';
+import { phonePlatform } from '../platform.ts';
 
 /**
  * The few Electron main-process APIs River's IPC layer touches, mapped to the
@@ -121,7 +122,18 @@ type ClickListener = () => void;
 /** A system notification, shown by the app shell; tapping it opens River and runs the click handler. */
 type ReplyListener = (event: unknown, reply: string) => void;
 
+/** Set by the desktop's notifications.ts (PhoneHints): grouping, lock-screen privacy, waking the screen. */
+interface PhoneHints {
+  conversation: string;
+  sender: string | null;
+  group: string | null;
+  lockScreen: boolean;
+  wake: boolean;
+}
+
 export class Notification {
+  /** Assigned after construction by notifications.ts; Electron's own Notification ignores it. */
+  phoneHints?: PhoneHints;
   private readonly options: { title: string; body: string; reply: boolean; call: boolean };
   private readonly clicks: ClickListener[] = [];
   private readonly replies: ReplyListener[] = [];
@@ -151,7 +163,23 @@ export class Notification {
     return this;
   }
   show(): void {
-    void ask<string | { reply?: unknown }>('notify', this.options).then(
+    // Android rings for calls with its own call screen (the core asks for it: main.ts), not with a
+    // second, ordinary notification.
+    if (this.options.call && phonePlatform() === 'android') return;
+    const h = this.phoneHints;
+    const args = {
+      ...this.options,
+      ...(h
+        ? {
+            conversation: String(h.conversation).slice(0, 200),
+            sender: h.sender,
+            group: h.group,
+            lockScreen: h.lockScreen === true,
+            wake: h.wake === true,
+          }
+        : { lockScreen: false, wake: false }),
+    };
+    void ask<string | { reply?: unknown }>('notify', args).then(
       (result) => {
         if (result === 'clicked') for (const fn of this.clicks) fn();
         else if (result && typeof result === 'object' && typeof result.reply === 'string') {

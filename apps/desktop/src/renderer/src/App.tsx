@@ -1,4 +1,5 @@
 import { WhatsNew } from './components/WhatsNew.tsx';
+import { StayConnectedPrompt } from './components/PhoneReachability.tsx';
 import { ShareSheet } from './components/ShareSheet.tsx';
 import { useEffect, useState, type ReactElement } from 'react';
 import { QuickSwitcher } from './components/QuickSwitcher.tsx';
@@ -23,7 +24,7 @@ import { FriendsPage } from './pages/FriendsPage.tsx';
 import { FilesPage } from './pages/FilesPage.tsx';
 import { onSocialChanged } from './social/store.ts';
 import { totalUnread, useDm } from './dm/store.ts';
-import { handleCallEvent } from './dm/call.ts';
+import { handleCallEvent, handlePhoneCall } from './dm/call.ts';
 import { useCommunity } from './community/store.ts';
 import { PlannedPage } from './pages/PlannedPage.tsx';
 import { SettingsOverlay } from './pages/SettingsPage.tsx';
@@ -94,6 +95,8 @@ export function App(): ReactElement {
       e.t === 'call' ? handleCallEvent(e) : useDm.getState().handle(e),
     );
     const offSocial = window.river.social.onEvent(() => onSocialChanged());
+    // Android (2.11): a call answered or declined on the phone's own call screen.
+    const offPhoneCall = window.river.app.onPhoneCall?.((call) => handlePhoneCall(call));
     return () => {
       offUpdates();
       offStorage();
@@ -102,6 +105,7 @@ export function App(): ReactElement {
       offRelay();
       offDm();
       offSocial();
+      offPhoneCall?.();
     };
   }, [load, setUpdate, setStorage, setAccount]);
 
@@ -117,7 +121,11 @@ export function App(): ReactElement {
       .load()
       .then(() => window.river.dm.action({ a: 'pendingCall' }))
       .then((ringing) => {
-        if (ringing.ok && ringing.value) handleCallEvent(ringing.value);
+        if (!ringing.ok || !ringing.value) return;
+        // Answered on Android's call screen (2.11): River opened for it and answers it now.
+        const { answer, ...call } = ringing.value;
+        if (answer) handlePhoneCall({ callId: call.callId, action: 'answer' });
+        handleCallEvent(call);
       })
       .catch(() => undefined);
     // The rail shows your communities on every page, not only after opening Communities.
@@ -237,6 +245,7 @@ export function App(): ReactElement {
             )}
             <UsernamePrompt />
             <WhatsNew />
+            <StayConnectedPrompt />
             {loadError && (
               <div className="glass card card--error" role="alert">
                 River could not load its settings: {loadError}

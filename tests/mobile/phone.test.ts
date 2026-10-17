@@ -1,10 +1,11 @@
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { build } from 'vite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { IPC, type CommunityView, type Result } from '../../apps/desktop/src/shared/ipc.ts';
+import { DEFAULT_SETTINGS, type Settings } from '../../apps/desktop/src/shared/settings.ts';
 import { AccountService } from '../../apps/desktop/src/main/account/account-service.ts';
 import { CommunityService } from '../../apps/desktop/src/main/community/community-service.ts';
 import { DmService } from '../../apps/desktop/src/main/dm/dm-service.ts';
@@ -17,7 +18,7 @@ import { CLIENT_MIGRATIONS } from '../../apps/desktop/src/main/storage/migration
 import { buildApp } from '../../apps/server/src/app.ts';
 import { loadConfig } from '../../apps/server/src/config.ts';
 import { migrateToLatest, openDatabase, type RiverDatabase } from '../../apps/server/src/db/database.ts';
-import { startPhone, type Phone } from './phone.ts';
+import { startPhone, type Phone, type PhoneOptions } from './phone.ts';
 
 /**
  * River for Android's client core (apps/mobile/core), as built for the phone,
@@ -61,8 +62,8 @@ async function desktop(name: string) {
   return { riverId: me.riverId, community, dm };
 }
 
-async function phone(name: string): Promise<Phone & { riverId: string }> {
-  const p = await startPhone(bundle, mkdtempSync(join(dir, 'phone-')));
+async function phone(name: string, options?: PhoneOptions): Promise<Phone & { riverId: string }> {
+  const p = await startPhone(bundle, mkdtempSync(join(dir, 'phone-')), options);
   phones.push(p);
   await p.invoke(IPC.settingsUpdate, { server: { url } });
   const created = await p.invoke<{ riverId: string }>(IPC.identityCreate, name);
@@ -227,10 +228,190 @@ describe('River for Android: client core', { timeout: 60_000 }, () => {
     const callAsks = (): unknown[] => p.asks.filter((a) => a.kind === 'call').map((a) => a.args);
     ok(await p.invoke<Result<unknown>>(IPC.voiceJoin, channel.id));
     await until(async () => callAsks().length === 1);
-    expect(callAsks()).toEqual([{ active: true }]);
+    // The "In a call" notification names it (2.11).
+    expect(callAsks()).toEqual([{ active: true, title: 'Voice channel' }]);
     // River's screen closed: its WebView carried the call's sound, so the core ends the call.
     p.uiGone();
     await until(async () => callAsks().length === 2);
-    expect(callAsks()).toEqual([{ active: true }, { active: false }]);
+    expect(callAsks()).toEqual([{ active: true, title: 'Voice channel' }, { active: false }]);
+  });
+
+  it('stays connected by default on a new Android install, and asks an existing install once', async () => {
+    // A new install: nothing of River on the phone yet.
+    const fresh = await phone('Fresh');
+    const settings = await fresh.invoke<Settings>(IPC.settingsGet);
+    expect(settings.system.background).toBe(true);
+    expect(settings.system.backgroundAsked).toBe(false);
+    expect(settings.system.wakeScreen).toBe(true);
+    expect(fresh.asks.filter((a) => a.kind === 'background').map((a) => a.args)).toEqual([{ enabled: true }]);
+
+    // An install from before 2.11: its settings file has neither new setting.
+    const root = mkdtempSync(join(dir, 'phone-'));
+    mkdirSync(join(root, 'files'), { recursive: true });
+    const older = structuredClone(DEFAULT_SETTINGS) as unknown as { system: Record<string, unknown> };
+    delete older.system.backgroundAsked;
+    delete older.system.wakeScreen;
+    writeFileSync(join(root, 'files', 'settings.json'), JSON.stringify(older));
+    let existing = await startPhone(bundle, root);
+    phones.push(existing);
+    let kept = await existing.invoke<Settings>(IPC.settingsGet);
+    // Not switched on behind the person's back: the UI asks once instead.
+    expect(kept.system.background).toBe(false);
+    expect(kept.system.backgroundAsked).toBe(false);
+    expect(
+      existing.asks.some((a) => a.kind === 'background' && (a.args as { enabled: boolean }).enabled),
+    ).toBe(false);
+    // "Not now": remembered, so River never asks again, even after starting again.
+    await existing.invoke(IPC.settingsUpdate, { system: { backgroundAsked: true } });
+    await existing.stop();
+    phones.splice(phones.indexOf(existing), 1);
+    existing = await startPhone(bundle, root);
+    phones.push(existing);
+    kept = await existing.invoke<Settings>(IPC.settingsGet);
+    expect(kept.system).toMatchObject({ background: false, backgroundAsked: true });
+  });
+
+  it("reports the phone's state to Settings and passes fixes to the phone, validated", async () => {
+    const p = await phone('Settings');
+    expect(await p.invoke(IPC.appPhoneStatus)).toEqual({
+      background: true,
+      batteryExempt: false,
+      fullScreenCalls: true,
+      notifications: true,
+    });
+    await p.invoke(IPC.appPhoneFix, 'battery');
+    await expect(p.invoke(IPC.appPhoneFix, 'reboot')).rejects.toThrow();
+    expect(p.asks.filter((a) => a.kind === 'phoneFix').map((a) => a.args)).toEqual([{ fix: 'battery' }]);
+  });
+
+  describe("incoming calls on the phone's own call screen", () => {
+    const callId = (name: string): string => name.padEnd(22, '_');
+    let caller: Phone & { riverId: string };
+    let callee: Phone & { riverId: string };
+
+    beforeAll(async () => {
+      caller = await phone('Caller phone');
+      callee = await phone('Called phone', { hold: ['incomingCall'] });
+      // People find each other through a community they share.
+      const host = await desktop('Call host');
+      const club = await host.community.create('Phone calls');
+      for (const p of [caller, callee])
+        ok(await p.invoke<Result<unknown>>(IPC.communityJoin, await host.community.invite(club.id)));
+      ok(
+        await caller.invoke<Result<unknown>>(IPC.dmAction, {
+          a: 'open',
+          peer: callee.riverId,
+          name: 'Called',
+        }),
+      );
+      ok(await caller.invoke<Result<unknown>>(IPC.dmAction, { a: 'send', peer: callee.riverId, text: 'hi' }));
+      await until(async () => {
+        const messages = ok(
+          await callee.invoke<Result<Array<{ text: string }>>>(IPC.dmAction, {
+            a: 'messages',
+            peer: caller.riverId,
+          }),
+        );
+        return messages.some((m) => m.text === 'hi');
+      });
+      ok(await callee.invoke<Result<unknown>>(IPC.dmAction, { a: 'accept', peer: caller.riverId }));
+    }, 60_000);
+
+    const invite = async (id: string): Promise<{ kind: string; args: unknown }> => {
+      ok(
+        await caller.invoke<Result<unknown>>(IPC.dmAction, {
+          a: 'call',
+          peer: callee.riverId,
+          callId: id,
+          kind: 'invite',
+          video: true,
+        }),
+      );
+      return until(async () =>
+        callee.asks.find((a) => a.kind === 'incomingCall' && (a.args as { callId: string }).callId === id),
+      );
+    };
+    const ringingOff = (): number =>
+      callee.asks.filter((a) => a.kind === 'ringing' && !(a.args as { on: boolean }).on).length;
+
+    it("rings with the caller hidden by default, and declines without River's screen", async () => {
+      const id = callId('declined');
+      const ring = await invite(id);
+      // Settings → Notifications → preview is "Hidden" by default: no name on the lock screen.
+      expect(ring.args).toEqual({ callId: id, name: 'Someone', video: true });
+      const before = ringingOff();
+      callee.answerAsk('incomingCall', 'decline');
+      // The caller hears "declined": the core told it, with no window on the called phone.
+      await caller.waitFor(IPC.dmEvent, (args) => {
+        const e = args[0] as { t: string; kind?: string; callId?: string };
+        return e.t === 'call' && e.kind === 'decline' && e.callId === id;
+      });
+      await callee.waitFor(IPC.appPhoneCall, (args) => {
+        const e = args[0] as { callId: string; action: string };
+        return e.callId === id && e.action === 'decline';
+      });
+      await until(async () => ringingOff() > before);
+      // Kept in the call history, as a call declined in River's window is.
+      const calls = await until(async () => {
+        const list = ok(
+          await callee.invoke<Result<Array<{ peer: string; answered: boolean }>>>(IPC.dmAction, {
+            a: 'calls',
+          }),
+        );
+        return list.some((c) => c.peer === caller.riverId && !c.answered) ? list : null;
+      });
+      expect(calls.length).toBeGreaterThan(0);
+    });
+
+    it('stops ringing when the caller hangs up', async () => {
+      const id = callId('hungup');
+      await invite(id);
+      const before = ringingOff();
+      ok(
+        await caller.invoke<Result<unknown>>(IPC.dmAction, {
+          a: 'call',
+          peer: callee.riverId,
+          callId: id,
+          kind: 'end',
+        }),
+      );
+      await until(async () => ringingOff() > before);
+      // Ringing is over: an answer the phone sends late changes nothing.
+      callee.answerAsk('incomingCall', 'ended');
+      expect(ok(await callee.invoke<Result<unknown>>(IPC.dmAction, { a: 'pendingCall' }))).toBeNull();
+    });
+
+    it("answered on the call screen: River's window answers it, now or when it opens", async () => {
+      const id = callId('answered');
+      await invite(id);
+      callee.answerAsk('incomingCall', 'accept');
+      await callee.waitFor(IPC.appPhoneCall, (args) => {
+        const e = args[0] as { callId: string; action: string };
+        return e.callId === id && e.action === 'answer';
+      });
+      const pending = ok(
+        await callee.invoke<Result<{ callId: string; answer?: boolean }>>(IPC.dmAction, { a: 'pendingCall' }),
+      );
+      expect(pending).toMatchObject({ callId: id, kind: 'invite', answer: true });
+      // The window accepts it: the call no longer rings for a window that opens later.
+      ok(
+        await callee.invoke<Result<unknown>>(IPC.dmAction, {
+          a: 'call',
+          peer: caller.riverId,
+          callId: id,
+          kind: 'accept',
+        }),
+      );
+      expect(ok(await callee.invoke<Result<unknown>>(IPC.dmAction, { a: 'pendingCall' }))).toBeNull();
+    });
+  });
+
+  it('checks its connection when the watchdog wakes the phone', async () => {
+    const p = await phone('Sleeper');
+    p.wake();
+    // Still connected afterwards: the probe's ping is answered, nothing is torn down.
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(p.events.some((e) => e.channel === 'core:fatal')).toBe(false);
+    expect(await p.invoke(IPC.accountStatus)).toMatchObject({ state: 'registered' });
   });
 });

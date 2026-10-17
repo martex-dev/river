@@ -15,6 +15,7 @@ import {
   acceptDmCall,
   endDmCall,
   handleCallEvent,
+  handlePhoneCall,
   startDmCall,
   useDmCall,
 } from '../src/renderer/src/dm/call.ts';
@@ -245,5 +246,67 @@ describe('voice channels', () => {
     s().toggleDeafen();
     s().toggleDeafen();
     expect(s()).toMatchObject({ selfMuted: false, selfDeafened: false });
+  });
+});
+
+describe("Android's own call screen (2.11)", () => {
+  const ringPlayed = (): number => vi.mocked(play).mock.calls.filter(([s]) => s === 'ring').length;
+
+  it('answered there before this window knew it rang: River answers it without ringing', async () => {
+    vi.mocked(play).mockClear();
+    handlePhoneCall({ callId: 'call-1', action: 'answer' });
+    invite(true);
+    await vi.waitFor(() => expect(sent('accept')).toHaveLength(1));
+    expect(ringPlayed()).toBe(0);
+    expect(useDmCall.getState().incoming).toBeNull();
+    expect(useDmCall.getState().active).toMatchObject({ callId: 'call-1', video: true });
+  });
+
+  it('answered there while it rings here: River answers that call', async () => {
+    invite();
+    handlePhoneCall({ callId: 'call-1', action: 'answer' });
+    await vi.waitFor(() => expect(sent('accept')).toHaveLength(1));
+    expect(useDmCall.getState().incoming).toBeNull();
+  });
+
+  it('an answer for another call answers nothing', () => {
+    invite();
+    handlePhoneCall({ callId: 'call-2', action: 'answer' });
+    expect(useDmCall.getState().incoming?.callId).toBe('call-1');
+    expect(sent('accept')).toHaveLength(0);
+  });
+
+  it('declined there: it stops ringing here, and only the phone tells the caller and logs it', () => {
+    invite();
+    handlePhoneCall({ callId: 'call-1', action: 'decline' });
+    expect(useDmCall.getState().incoming).toBeNull();
+    expect(sent('decline')).toHaveLength(0);
+    expect(logged()).toHaveLength(0);
+  });
+
+  it('the same call found again when the window opens is not "busy"', () => {
+    invite();
+    invite();
+    expect(sent('busy')).toHaveLength(0);
+    expect(useDmCall.getState().incoming?.callId).toBe('call-1');
+  });
+
+  it('while River is not on screen on Android, the phone rings instead of River', () => {
+    vi.mocked(play).mockClear();
+    useRiver.setState({ info: { platform: 'android' } } as unknown as Partial<
+      ReturnType<typeof useRiver.getState>
+    >);
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    try {
+      invite();
+      expect(ringPlayed()).toBe(0);
+      visibility.mockReturnValue('visible');
+      handleCallEvent({ t: 'call', peer: PEER, callId: 'call-1', kind: 'end', video: false });
+      invite();
+      expect(ringPlayed()).toBe(1);
+    } finally {
+      visibility.mockRestore();
+      useRiver.setState({ info: null } as unknown as Partial<ReturnType<typeof useRiver.getState>>);
+    }
   });
 });

@@ -25,6 +25,8 @@ import {
   type DeepLink,
   type IdentityInfo,
   type PassphraseResult,
+  type PhoneFix,
+  type PhoneStatus,
   type Result,
   type CommunityEvent,
   type SecurityStatus,
@@ -83,6 +85,8 @@ export interface IpcDeps {
   haptic?: (kind: 'tap' | 'select' | 'success' | 'warning') => void;
   /** Android: allow picture-in-picture while a call is on (absent elsewhere). */
   pip?: (on: boolean) => void;
+  /** Android (2.11): what keeps River reachable while closed, and the phone's screens to fix it. */
+  phone?: { status(): Promise<PhoneStatus>; fix(fix: PhoneFix): Promise<PhoneStatus> };
   /** How link previews reach the network (desktop only: phones make no previews). */
   previewDeps?: PreviewDeps;
   /** The "can see your screen" bar and pointing (desktop only; ADR 0007). */
@@ -151,6 +155,11 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.appTakeDeepLink, (_e, kind) =>
     deps.takeDeepLink(z.enum(['invite', 'friend', 'signup', 'device']).optional().parse(kind)),
   );
+  handle(IPC.appPhoneStatus, () => deps.phone?.status() ?? null);
+  handle(IPC.appPhoneFix, (_e, fix) => {
+    const which = z.enum(['battery', 'fullScreen', 'notifications']).parse(fix);
+    return deps.phone?.fix(which) ?? null;
+  });
   handle(IPC.settingsGet, () => deps.settings.get());
   handle(IPC.settingsUpdate, (_e, patch) => deps.settings.update(patch));
 
