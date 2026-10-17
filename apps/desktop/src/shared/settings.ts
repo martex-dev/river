@@ -1,7 +1,7 @@
 import { DEFAULT_KEYBINDS } from './keybinds.ts';
 import { z } from 'zod';
 import { RELEASE_CHANNELS } from '@river/release/channels';
-import { DEFAULT_DESIGN, designSettingsSchema } from './design.ts';
+import { DEFAULT_DESIGN, compactDesignImages, designSettingsSchema } from './design.ts';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
@@ -355,7 +355,16 @@ export const settingsPatchSchema = z
 
 export type SettingsPatch = z.input<typeof settingsPatchSchema>;
 
+/** Settings in their stored form: each background picture kept once (see compactDesignImages). */
+export function normalizeSettings(settings: Settings): Settings {
+  return { ...settings, design: compactDesignImages(settings.design) };
+}
+
 export function applySettingsPatch(current: Settings, patch: z.output<typeof settingsPatchSchema>): Settings {
+  return normalizeSettings(applyPatch(current, patch));
+}
+
+function applyPatch(current: Settings, patch: z.output<typeof settingsPatchSchema>): Settings {
   return settingsSchema.parse({
     ...current,
     updates: { ...current.updates, ...patch.updates },

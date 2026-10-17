@@ -1,5 +1,5 @@
 import type { CustomTheme, DesignPrefs, DesignSettings } from '../../../shared/design.ts';
-import { DEFAULT_DESIGN, DEFAULT_DESIGN_PREFS } from '../../../shared/design.ts';
+import { DEFAULT_DESIGN, DEFAULT_DESIGN_PREFS, designImage } from '../../../shared/design.ts';
 import { channels, contrast, ensureContrast, inkOn, mix, rgba, saturate } from './color.ts';
 import { FONT_STACKS, SKINS, skinById, type Pattern, type Skin } from './skins.ts';
 import { THEMES, themeById, themesOf, type Theme } from './themes.ts';
@@ -115,7 +115,12 @@ export function resolveDesign(
   design: DesignSettings,
   opts: { systemDark: boolean; highContrast: boolean } = { systemDark: true, highContrast: false },
 ): Resolved {
-  const prefs: DesignPrefs = { ...DEFAULT_DESIGN_PREFS, ...design.prefs };
+  const prefs: DesignPrefs = {
+    ...DEFAULT_DESIGN_PREFS,
+    ...design.prefs,
+    // Pictures are kept once and pointed to (image:<key>): the picture itself goes into the CSS.
+    backgroundImage: designImage(design, design.prefs.backgroundImage),
+  };
   const picked = baseTheme(design.theme, design.customThemes);
   const theme = withMode(picked.theme, prefs.mode, opts.systemDark);
   const skin = skinById(theme.skin) ?? SKINS[0]!;

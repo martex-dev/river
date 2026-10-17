@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { nullLogger } from '../src/main/logger.ts';
 import { SettingsStore } from '../src/main/settings-store.ts';
 import { DEFAULT_SETTINGS } from '../src/shared/settings.ts';
+import { IMAGE_REF, designImage } from '../src/shared/design.ts';
 
 let dir: string;
 let file: string;
@@ -166,5 +167,83 @@ describe('SettingsStore', () => {
     expect(() => store.update({ server: { url: 'http://river.example.org' } })).toThrow();
     store.update({ server: { url: null } });
     expect(store.get().server.url).toBeNull();
+  });
+
+  it('tells listeners about every change, also the ones River makes itself', () => {
+    const store = new SettingsStore(file, nullLogger);
+    const seen: boolean[] = [];
+    store.onChange((s) => seen.push(s.system.appLock));
+    store.update({ system: { appLock: true } });
+    store.update({ system: { appLock: false } }); // e.g. the phone has no screen lock
+    expect(seen).toEqual([true, false]);
+  });
+});
+
+describe('background pictures', () => {
+  const picture = `data:image/png;base64,${'A'.repeat(200_000)}`;
+  const other = `data:image/jpeg;base64,${'B'.repeat(1000)}`;
+  const profile = (id: string, backgroundImage: string | null) => ({
+    id,
+    name: id,
+    skin: DEFAULT_SETTINGS.design.skin,
+    theme: DEFAULT_SETTINGS.design.theme,
+    prefs: { ...DEFAULT_SETTINGS.design.prefs, background: 'image' as const, backgroundImage },
+  });
+
+  it('are kept once however many profiles use them', () => {
+    const store = new SettingsStore(file, nullLogger);
+    const design = {
+      ...DEFAULT_SETTINGS.design,
+      prefs: { ...DEFAULT_SETTINGS.design.prefs, background: 'image' as const, backgroundImage: picture },
+      profiles: Array.from({ length: 30 }, (_, i) => profile(`p-${i}`, picture)),
+    };
+    const saved = store.update({ design });
+    expect(Object.values(saved.design.images)).toEqual([picture]);
+    const ref = saved.design.prefs.backgroundImage;
+    expect(ref).toMatch(IMAGE_REF);
+    expect(saved.design.profiles.every((p) => p.prefs.backgroundImage === ref)).toBe(true);
+    expect(designImage(saved.design, ref)).toBe(picture);
+    // One copy on disk, not 31.
+    expect(readFileSync(file, 'utf8').length).toBeLessThan(picture.length * 2);
+  });
+
+  it('are moved out of the profiles of an older settings file when it is read', () => {
+    const older = {
+      ...DEFAULT_SETTINGS,
+      design: {
+        ...DEFAULT_SETTINGS.design,
+        prefs: { ...DEFAULT_SETTINGS.design.prefs, backgroundImage: picture },
+        profiles: [profile('a', picture), profile('b', picture), profile('c', other)],
+      },
+    };
+    delete (older.design as { images?: unknown }).images;
+    writeFileSync(file, JSON.stringify(older));
+    const s = new SettingsStore(file, nullLogger).get();
+    expect(Object.values(s.design.images).sort()).toEqual([picture, other].sort());
+    expect(designImage(s.design, s.design.profiles[2]!.prefs.backgroundImage)).toBe(other);
+    expect(designImage(s.design, s.design.profiles[0]!.prefs.backgroundImage)).toBe(picture);
+    // Written back in the compact form at once.
+    expect(readFileSync(file, 'utf8').split(picture).length - 1).toBe(1);
+  });
+
+  it('go when nothing uses them any more', () => {
+    const store = new SettingsStore(file, nullLogger);
+    const first = store.update({
+      design: {
+        ...DEFAULT_SETTINGS.design,
+        prefs: { ...DEFAULT_SETTINGS.design.prefs, backgroundImage: picture },
+        profiles: [profile('a', other)],
+      },
+    });
+    expect(Object.keys(first.design.images)).toHaveLength(2);
+    const after = store.update({
+      design: { ...first.design, prefs: { ...first.design.prefs, backgroundImage: null }, profiles: [] },
+    });
+    expect(after.design.images).toEqual({});
+    // A reference to a picture that is not there shows nothing (and is dropped).
+    const dangling = store.update({
+      design: { ...after.design, prefs: { ...after.design.prefs, backgroundImage: 'image:nothere' } },
+    });
+    expect(dangling.design.prefs.backgroundImage).toBeNull();
   });
 });

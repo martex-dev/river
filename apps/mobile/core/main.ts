@@ -12,6 +12,7 @@ import {
   broadcastCommunityEvents,
   broadcastDmEvents,
   broadcastLinkStatus,
+  broadcastSettings,
   broadcastSocialEvents,
   broadcastStorageStatus,
   registerIpc,
@@ -431,6 +432,7 @@ async function start(): Promise<void> {
 
   const target = ui as unknown as Parameters<typeof broadcastStorageStatus>[0];
   broadcastStorageStatus(target, storage);
+  broadcastSettings(target, settings);
   broadcastAccountStatus(target, account, homeAccount);
   broadcastCommunityEvents(target, community);
   broadcastDmEvents(target, dm);

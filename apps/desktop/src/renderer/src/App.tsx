@@ -86,6 +86,8 @@ export function App(): ReactElement {
     const offUpdates = window.river.updates.onStatus(setUpdate);
     const offStorage = window.river.storage.onStatus((s) => void setStorage(s));
     const offAccount = window.river.account.onStatus((s) => void setAccount(s));
+    // Settings River changed by itself (e.g. app lock turned off on a phone without a screen lock).
+    const offSettings = window.river.settings.onChange((s) => void useRiver.getState().setSettings(s));
     const offCommunity = window.river.community.onEvent((e) => useCommunity.getState().handle(e));
     const offRelay = window.river.voice.onRelay((from, payload) =>
       useCommunity.getState().call?.receiveRelay(from, payload),
@@ -98,6 +100,7 @@ export function App(): ReactElement {
       offUpdates();
       offStorage();
       offAccount();
+      offSettings();
       offCommunity();
       offRelay();
       offDm();
