@@ -2,6 +2,7 @@ import { WhatsNew } from './components/WhatsNew.tsx';
 import { ShareSheet } from './components/ShareSheet.tsx';
 import { useEffect, useState, type ReactElement } from 'react';
 import { QuickSwitcher } from './components/QuickSwitcher.tsx';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { startNavHistory } from './nav-history.ts';
 import { useDesignEngine } from './appearance/use-design.ts';
 import { TryBar } from './appearance/TryBar.tsx';
@@ -243,14 +244,17 @@ export function App(): ReactElement {
               </div>
             )}
           </div>
-          {(section === 'home' || section === 'contacts') && <FriendsPage />}
-          {section === 'communities' && <CommunitiesPage />}
-          {section === 'messages' && <MessagesPage />}
-          {section === 'social' && <SocialPage />}
-          {section === 'calls' && <CallsPage />}
-          {section === 'files' && <FilesPage />}
-          {section === 'admin' && <AdminPage />}
-          {planned && <PlannedPage section={section} feature={planned} />}
+          {/* One page crashing replaces only that page; the rail, calls and dialogs keep working. */}
+          <ErrorBoundary area={t(LABELS[section])}>
+            {(section === 'home' || section === 'contacts') && <FriendsPage />}
+            {section === 'communities' && <CommunitiesPage />}
+            {section === 'messages' && <MessagesPage />}
+            {section === 'social' && <SocialPage />}
+            {section === 'calls' && <CallsPage />}
+            {section === 'files' && <FilesPage />}
+            {section === 'admin' && <AdminPage />}
+            {planned && <PlannedPage section={section} feature={planned} />}
+          </ErrorBoundary>
         </main>
       </div>
       <SettingsOverlay />
