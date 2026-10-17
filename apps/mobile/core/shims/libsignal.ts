@@ -431,6 +431,52 @@ export class PreKeySignalMessage {
   serialize(): Bytes {
     return new Uint8Array(this.bytes);
   }
+  /** The sender's registration ID, as libsignal-client's own PreKeySignalMessage gives it. */
+  registrationId(): number {
+    return preKeyRegistrationId(this.bytes);
+  }
+}
+
+/**
+ * Reads `registration_id` (field 5) from a serialized PreKeySignalMessage: one version byte, then
+ * the protobuf fields of libsignal's wire format. Only reading — libsignal still checks everything
+ * when it decrypts. 0 if the field is missing or the bytes are malformed.
+ */
+export function preKeyRegistrationId(bytes: Uint8Array): number {
+  let i = 1;
+  const varint = (): number => {
+    let value = 0;
+    let shift = 0;
+    for (;;) {
+      if (i >= bytes.length || shift > 35) throw new Error('truncated');
+      const b = bytes[i++]!;
+      value += (b & 0x7f) * 2 ** shift;
+      if (b < 0x80) return value;
+      shift += 7;
+    }
+  };
+  try {
+    while (i < bytes.length) {
+      const tag = varint();
+      const field = Math.floor(tag / 8);
+      const wire = tag % 8;
+      if (wire === 0) {
+        const v = varint();
+        if (field === 5) return v >>> 0;
+      } else if (wire === 2) {
+        // Read the length first: `i += varint()` would add it to the position before the length.
+        const length = varint();
+        i += length;
+      } else if (wire === 5) {
+        i += 4;
+      } else if (wire === 1) {
+        i += 8;
+      } else return 0;
+    }
+  } catch {
+    return 0;
+  }
+  return 0;
 }
 
 export class CiphertextMessage {
