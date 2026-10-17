@@ -45,7 +45,12 @@ const id = (): string => randomBytes(16).toString('base64url');
 const sealed = (): string => randomBytes(40).toString('base64');
 
 async function start(
-  options: { voiceGraceMs?: number; rotationRecheckMs?: number; now?: () => Date } = {},
+  options: {
+    voiceGraceMs?: number;
+    rotationRecheckMs?: number;
+    now?: () => Date;
+    maxEventBuffer?: number;
+  } = {},
 ): Promise<FastifyInstance> {
   database = openDatabase('sqlite::memory:');
   await migrateToLatest(database.db);
@@ -1857,6 +1862,63 @@ describe('communities', () => {
         await vi.waitFor(() => expect(lastVoice(host.events)?.participants).toEqual([owner.riverId]));
         for (const c of [host, member]) c.ws.close();
       });
+    });
+    it('a message sent again under its ID is "already exists", even under slowmode or a timeout', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      expect(await status(a, 'PATCH', `/v1/channels/${text}`, owner.token, { slowmode: 60 })).toBe(200);
+      const mid = id();
+      const send = (token: string, messageId = mid) =>
+        status(a, 'POST', `/v1/channels/${text}/messages`, token, { id: messageId, body: sealed() });
+      expect(await send(member.token)).toBe(201);
+      // The retry of an accepted send: the app recognises 409 as "it got through".
+      expect(await send(member.token)).toBe(409);
+      // A new message is still held back by slowmode.
+      expect(await send(member.token, id())).toBe(429);
+      // Someone else using that ID is a conflict too, never a post.
+      expect(await send(owner.token)).toBe(409);
+      // Timed out right after sending: the retry is still "already exists", not "you cannot send".
+      const until = new Date(Date.now() + 60_000).toISOString();
+      expect(
+        await status(a, 'PUT', `/v1/communities/${cid}/members/${member.riverId}/timeout`, owner.token, {
+          until,
+        }),
+      ).toBe(200);
+      expect(await send(member.token)).toBe(409);
+      expect(await send(member.token, id())).toBe(403);
+    });
+
+    it('a message carries at most 20 different reactions; joining one is always possible', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const mid = id();
+      await status(a, 'POST', `/v1/channels/${text}/messages`, owner.token, { id: mid, body: sealed() });
+      const react = (token: string, tag: string) =>
+        status(a, 'PUT', `/v1/messages/${mid}/reactions/${tag}`, token, { emoji: sealed() });
+      const tags = Array.from({ length: 20 }, () => randomBytes(16).toString('hex'));
+      for (const tag of tags) expect(await react(member.token, tag)).toBe(200);
+      expect(await react(member.token, randomBytes(16).toString('hex'))).toBe(400);
+      expect(await react(owner.token, tags[0]!)).toBe(200);
+    });
+
+    it('a connection that stops reading is closed instead of queueing without end', async () => {
+      // Every byte counts as too much here, so the first event closes it.
+      const a = await start({ maxEventBuffer: -1 });
+      const owner = await user(a);
+      await a.listen({ host: '127.0.0.1', port: 0 });
+      const { port } = a.server.address() as { port: number };
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/ws`);
+      await new Promise((resolve, reject) => {
+        ws.onopen = resolve;
+        ws.onerror = reject;
+      });
+      const closed = new Promise<number>((resolve) => (ws.onclose = (e) => resolve(e.code)));
+      ws.send(JSON.stringify({ t: 'auth', token: owner.token }));
+      expect(await closed).toBe(4408);
     });
   });
   describe('attachments', () => {

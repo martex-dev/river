@@ -50,6 +50,8 @@ export interface AppDeps {
   sessionRecheckMs?: number;
   /** How often stuck key rotations are looked for at most (tests set 0). */
   rotationRecheckMs?: number;
+  /** Bytes a realtime connection may have queued before it is closed (tests lower it). */
+  maxEventBuffer?: number;
 }
 
 function errorBody(code: string, message: string): ErrorResponse {
@@ -204,6 +206,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     hub,
     ...(deps.sessionRecheckMs !== undefined ? { sessionRecheckMs: deps.sessionRecheckMs } : {}),
     ...(deps.rotationRecheckMs !== undefined ? { rotationRecheckMs: deps.rotationRecheckMs } : {}),
+    ...(deps.maxEventBuffer !== undefined ? { maxEventBuffer: deps.maxEventBuffer } : {}),
   });
   registerAdminRoutes(app, { config, database: deps.database, now, hub, ops });
   registerLandingRoutes(app);
