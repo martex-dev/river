@@ -16,6 +16,7 @@ import {
   createRoleRequestSchema,
   editMessageRequestSchema,
   joinRequestSchema,
+  layoutMoveRequestSchema,
   layoutRequestSchema,
   memberRolesRequestSchema,
   messageIdSchema,
@@ -24,6 +25,7 @@ import {
   reactionTagSchema,
   riverIdSchema,
   roleIdSchema,
+  roleOrderRequestSchema,
   rotateKeyRequestSchema,
   sendMessageRequestSchema,
   timeoutRequestSchema,
@@ -69,7 +71,9 @@ import {
 } from '@river/protocol';
 import { authenticate } from '../accounts/auth-store.ts';
 import type { Hub, HubSocket } from '../communities/hub.ts';
-import type { CommunityModel } from '../communities/model.ts';
+import type { Transaction } from 'kysely';
+import type { ChannelModel, CommunityModel } from '../communities/model.ts';
+import type { Database } from '../db/schema.ts';
 import { communityOfChannel, lastMessageTimes, loadCommunity, loadMessages } from '../communities/model.ts';
 import type { ServerConfig } from '../config.ts';
 import { HttpError } from '../http-error.ts';
@@ -290,6 +294,22 @@ export async function registerCommunityRoutes(
       if (o.allow & ~had & Permission.ADMINISTRATOR) throw bad('Overwrites cannot grant Administrator');
       if ((o.allow & ~had & ~mine) !== 0) throw forbidden('You cannot grant permissions you do not have');
     }
+  };
+
+  /**
+   * A synced channel leaving its category (category deleted, channel moved out or elsewhere)
+   * keeps the permissions it had: the category's overwrites become its own and it stops being
+   * synced. Without this a private category's channels would turn public the moment they leave.
+   */
+  const keepAccess = async (trx: Transaction<Database>, ch: ChannelModel): Promise<void> => {
+    if (!ch.synced) return;
+    await trx.deleteFrom('channel_overwrites').where('channel_id', '=', ch.id).execute();
+    for (const o of ch.overwrites)
+      await trx
+        .insertInto('channel_overwrites')
+        .values({ channel_id: ch.id, role_id: o.roleId, allow: o.allow, deny: o.deny })
+        .execute();
+    await trx.updateTable('channels').set({ synced: 0 }).where('id', '=', ch.id).execute();
   };
 
   /** Ends everyone's seat in the given voice channels and tells them (channel or community deleted). */
@@ -669,7 +689,11 @@ export async function registerCommunityRoutes(
     }
     // Editing a channel's own permissions unsyncs it from its category; synced: true syncs it again.
     const synced = req.synced !== undefined ? req.synced : req.overwrites ? false : undefined;
+    const current = model.channel(channelId)!;
     await db.transaction().execute(async (trx) => {
+      // Moved to another category (or out of one) without new permissions: keep the old ones.
+      if (req.parentId !== undefined && req.parentId !== current.parentId && synced === undefined)
+        await keepAccess(trx, current);
       if (synced !== undefined) {
         await trx
           .updateTable('channels')
@@ -1405,6 +1429,8 @@ export async function registerCommunityRoutes(
   app.delete<{ Params: { id: string } }>(`${API_PREFIX}/categories/:id`, authed, async (request) => {
     const { model, categoryId } = await categoryCommunity(request.params.id, me(request));
     await db.transaction().execute(async (trx) => {
+      // Its channels keep the category's permissions (a private category's stay private).
+      for (const ch of model.channels.filter((c) => c.parentId === categoryId)) await keepAccess(trx, ch);
       await trx
         .updateTable('channels')
         .set({ parent_id: null })
@@ -1434,6 +1460,8 @@ export async function registerCommunityRoutes(
         await trx.updateTable('categories').set({ position: k.position }).where('id', '=', k.id).execute();
       }
       for (const c of req.channels) {
+        const current = model.channel(c.id)!;
+        if (c.parentId !== current.parentId && c.synced === undefined) await keepAccess(trx, current);
         await trx
           .updateTable('channels')
           .set({
@@ -1452,6 +1480,77 @@ export async function registerCommunityRoutes(
     changed(model);
     return { ok: true };
   });
+
+  /**
+   * One drag and drop, relative to a neighbour (2.10.13). The positions are worked out here over
+   * the whole list, hidden channels included, so nothing ties with a channel the mover cannot see,
+   * and only the moved channel needs Manage channels. Applied in one transaction.
+   */
+  app.put<{ Params: { id: string } }>(
+    `${API_PREFIX}/communities/:id/layout/move`,
+    authed,
+    async (request) => {
+      const model = await community(request.params.id, me(request));
+      const actor = me(request);
+      if (!model.can(actor, Permission.MANAGE_CHANNELS)) throw forbidden();
+      const req = parse(layoutMoveRequestSchema, request.body);
+      if (req.kind === 'category') {
+        if (!model.category(req.id)) throw bad('Unknown category');
+        if (req.afterId !== null && (req.afterId === req.id || !model.category(req.afterId)))
+          throw bad('Unknown category');
+        const rest = [...model.categories]
+          .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id))
+          .filter((k) => k.id !== req.id);
+        const at = req.afterId === null ? 0 : rest.findIndex((k) => k.id === req.afterId) + 1;
+        const order = [...rest.slice(0, at), model.category(req.id)!, ...rest.slice(at)];
+        await db.transaction().execute(async (trx) => {
+          for (const [position, k] of order.entries())
+            if (k.position !== position)
+              await trx.updateTable('categories').set({ position }).where('id', '=', k.id).execute();
+        });
+        await audit(model.id, actor, 'channels.reorder', req.id, { categories: 1, channels: 0 });
+        changed(model);
+        return { ok: true };
+      }
+      const moving = model.channel(req.id);
+      if (!moving) throw bad('Unknown channel');
+      if (!model.can(actor, Permission.MANAGE_CHANNELS, req.id)) throw forbidden();
+      if (req.parentId !== null && !model.category(req.parentId)) throw bad('Unknown category');
+      const groupOf = (c: ChannelModel): string | null =>
+        c.parentId !== null && model.category(c.parentId) ? c.parentId : null;
+      const byPosition = (a: ChannelModel, b: ChannelModel): number =>
+        a.position - b.position ||
+        (a.kind === b.kind ? 0 : a.kind === 'text' ? -1 : 1) ||
+        a.id.localeCompare(b.id);
+      let rest = model.channels
+        .filter((c) => c.id !== req.id && groupOf(c) === req.parentId)
+        .sort(byPosition);
+      // Without categories the sidebar lists text channels before voice channels.
+      if (model.categories.length === 0)
+        rest = [...rest.filter((c) => c.kind === 'text'), ...rest.filter((c) => c.kind !== 'text')];
+      if (req.afterId !== null && !rest.some((c) => c.id === req.afterId)) throw bad('Unknown channel');
+      const at = req.afterId === null ? 0 : rest.findIndex((c) => c.id === req.afterId) + 1;
+      const order = [...rest.slice(0, at), moving, ...rest.slice(at)];
+      if (order.length > 1000) throw bad();
+      await db.transaction().execute(async (trx) => {
+        if (moving.parentId !== req.parentId) await keepAccess(trx, moving);
+        for (const [position, c] of order.entries()) {
+          if (c === moving) {
+            await trx
+              .updateTable('channels')
+              .set({ position, parent_id: req.parentId })
+              .where('id', '=', c.id)
+              .execute();
+          } else if (c.position !== position) {
+            await trx.updateTable('channels').set({ position }).where('id', '=', c.id).execute();
+          }
+        }
+      });
+      await audit(model.id, actor, 'channels.reorder', req.id, { categories: 0, channels: 1 });
+      changed(model);
+      return { ok: true };
+    },
+  );
 
   // ---- roles -----------------------------------------------------------------------------------
   const checkGrant = (model: CommunityModel, actor: string, permissions: number): void => {
@@ -1553,6 +1652,39 @@ export async function registerCommunityRoutes(
     return { ok: true };
   });
 
+  /**
+   * Reorders roles in one go (2.10.13): either every new position is applied or none is, so a
+   * refused step can never leave half an order behind. Only roles below the mover's highest role
+   * move, and only to places below it; no two roles end up sharing a position.
+   */
+  app.put<{ Params: { id: string } }>(`${API_PREFIX}/communities/:id/role-order`, authed, async (request) => {
+    const model = await community(request.params.id, me(request));
+    const actor = me(request);
+    if (!model.can(actor, Permission.MANAGE_ROLES)) throw forbidden();
+    const req = parse(roleOrderRequestSchema, request.body);
+    const top = model.top(actor);
+    const ids = new Set(req.roles.map((r) => r.id));
+    const positions = new Set(req.roles.map((r) => r.position));
+    if (ids.size !== req.roles.length || positions.size !== req.roles.length) throw bad();
+    for (const r of req.roles) {
+      const role = model.role(r.id);
+      if (!role || role.id === model.everyoneRoleId) throw bad('Unknown role');
+      if (role.position >= top) throw forbidden('You can only move roles below your highest role');
+      if (r.position >= top) throw forbidden('Cannot move a role above your own');
+    }
+    for (const role of model.roles) {
+      if (role.id === model.everyoneRoleId || ids.has(role.id)) continue;
+      if (positions.has(role.position)) throw bad('Two roles cannot share a position');
+    }
+    await db.transaction().execute(async (trx) => {
+      for (const r of req.roles)
+        await trx.updateTable('roles').set({ position: r.position }).where('id', '=', r.id).execute();
+    });
+    await audit(model.id, actor, 'role.reorder', null, { roles: req.roles.length });
+    changed(model);
+    return { ok: true };
+  });
+
   app.delete<{ Params: { id: string } }>(`${API_PREFIX}/roles/:id`, authed, async (request) => {
     const roleId = parse(roleIdSchema, request.params.id);
     const row = await db
@@ -1564,12 +1696,20 @@ export async function registerCommunityRoutes(
     const model = await community(row.community_id, me(request));
     if (!model.can(me(request), Permission.MANAGE_ROLES)) throw forbidden();
     if (roleId === model.everyoneRoleId) throw bad('@everyone cannot be deleted');
-    if (model.role(roleId)!.position >= model.top(me(request)))
-      throw forbidden('You can only delete roles below your own');
+    const gone = model.role(roleId)!;
+    if (gone.position >= model.top(me(request))) throw forbidden('You can only delete roles below your own');
     await db.transaction().execute(async (trx) => {
       await trx.deleteFrom('channel_overwrites').where('role_id', '=', roleId).execute();
       await trx.deleteFrom('category_overwrites').where('role_id', '=', roleId).execute();
       await trx.deleteFrom('roles').where('id', '=', roleId).execute();
+      // Close the gap, so positions stay 1..n (creating a role shifts every other one up).
+      await trx
+        .updateTable('roles')
+        .set((eb) => ({ position: eb('position', '-', 1) }))
+        .where('community_id', '=', model.id)
+        .where('id', '!=', model.everyoneRoleId)
+        .where('position', '>', gone.position)
+        .execute();
     });
     await audit(model.id, me(request), 'role.delete', roleId);
     changed(model);
@@ -1779,7 +1919,7 @@ export async function registerCommunityRoutes(
     },
   );
 
-  app.get<{ Params: { id: string }; Querystring: { before?: string } }>(
+  app.get<{ Params: { id: string }; Querystring: { before?: string; beforeId?: string } }>(
     `${API_PREFIX}/communities/:id/audit`,
     authed,
     async (request) => {
@@ -1787,13 +1927,24 @@ export async function registerCommunityRoutes(
       if (!model.can(me(request), Permission.VIEW_AUDIT_LOG)) throw forbidden();
       const before = request.query.before;
       if (before !== undefined && Number.isNaN(Date.parse(before))) throw bad('Bad cursor');
+      // The cursor is (time, ID) of the last entry seen, so entries sharing that time are not skipped.
+      const beforeId = request.query.beforeId;
+      if (beforeId !== undefined && !/^[A-Za-z0-9_-]{1,64}$/.test(beforeId)) throw bad('Bad cursor');
       let q = db
         .selectFrom('audit_log')
         .selectAll()
         .where('community_id', '=', model.id)
         .orderBy('created_at', 'desc')
+        .orderBy('id', 'desc')
         .limit(PAGE);
-      if (before) q = q.where('created_at', '<', before);
+      if (before && beforeId)
+        q = q.where((eb) =>
+          eb.or([
+            eb('created_at', '<', before),
+            eb.and([eb('created_at', '=', before), eb('id', '<', beforeId)]),
+          ]),
+        );
+      else if (before) q = q.where('created_at', '<', before);
       const rows = await q.execute();
       return {
         entries: rows.map((r) => ({
@@ -1861,6 +2012,8 @@ export async function registerCommunityRoutes(
       .selectAll()
       .where('community_id', '=', model.id)
       .where('expires_at', '>', deps.now().toISOString())
+      // Used up invites no longer work, so they are not listed as active.
+      .where((eb) => eb('uses', '<', eb.ref('max_uses')))
       .orderBy('expires_at', 'desc')
       .execute();
     const joinedWith = await db

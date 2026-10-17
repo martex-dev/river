@@ -302,6 +302,37 @@ export const layoutRequestSchema = z
   .strict();
 export type LayoutRequest = z.infer<typeof layoutRequestSchema>;
 
+/**
+ * One drag and drop, relative to its neighbours (2.10.13): "put channel X after channel Y in
+ * category Z" (afterId null: first) or "put category X after category Y". The server works out
+ * the positions over the whole list, including channels the mover cannot see, and only checks
+ * the moved channel.
+ */
+export const layoutMoveRequestSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('channel'),
+      id: channelIdSchema,
+      parentId: channelIdSchema.nullable(),
+      afterId: channelIdSchema.nullable(),
+    })
+    .strict(),
+  z
+    .object({ kind: z.literal('category'), id: channelIdSchema, afterId: channelIdSchema.nullable() })
+    .strict(),
+]);
+export type LayoutMoveRequest = z.infer<typeof layoutMoveRequestSchema>;
+
+/** New positions for several roles, applied together or not at all (2.10.13). */
+export const roleOrderRequestSchema = z
+  .object({
+    roles: z
+      .array(z.object({ id: roleIdSchema, position: z.number().int().min(1).max(1000) }).strict())
+      .min(1)
+      .max(100),
+  })
+  .strict();
+
 export const createRoleRequestSchema = z
   .object({
     id: roleIdSchema,
