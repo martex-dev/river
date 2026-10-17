@@ -6,6 +6,16 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- **Community messages and profiles are now bound to who sent them.** New
+  messages, their edits and your community profile are sealed with v2
+  associated data (the message's ID and sender, the profile's member), so the
+  server can no longer show a message under someone else's name, replay it as
+  a new message, or give your profile to another member. Messages from before
+  2.12, from Rivers that have not updated yet and from webhooks keep opening.
+  Rivers older than 2.11 cannot read the new messages.
+
 ### Fixed
 
 - **Messages always arrive.** Mail that came in while River was already

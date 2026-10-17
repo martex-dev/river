@@ -265,9 +265,10 @@ encrypted call and point signals and sees who takes part, as for any call.
 - **Trust on first use.** Without verified safety numbers or a shared
   community, a server can still present a different identity key for a
   contact; River shows the change but cannot tell it from a reinstall.
-- **Community messages sealed with v1 associated data** (all senders until
-  2.12) can still be re-attributed to another sender or replayed under a new ID
-  by the server.
+- **Community messages sealed with v1 associated data** (everything sent
+  before 2.12, and anything from Rivers not yet on 2.12) can still be
+  re-attributed to another sender or replayed under a new ID by the server;
+  receivers keep opening v1 so old history stays readable.
 
 - **Linked devices are not revoked cryptographically.** A removed device keeps
   the identity and community keys it had; the server ends its access. Leaving

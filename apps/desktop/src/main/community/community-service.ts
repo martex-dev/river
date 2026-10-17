@@ -275,7 +275,7 @@ export class CommunityService {
   keyStuckMs = 120_000;
   /** How long one rotation candidate has before the next one takes over (tests shorten it). */
   rotateHandoffMs = 30_000;
-  /** Seal new messages and profiles with v2 associated data (off until every River opens v2). */
+  /** Seal new messages and profiles with v2 associated data (on since 2.12; tests turn it off to act as 2.11). */
   sealV2 = SEAL_V2_DEFAULT;
   /** When we first asked for a missing key, per community and epoch. */
   private readonly keyAsked = new Map<string, number>();
@@ -2533,7 +2533,8 @@ export class CommunityService {
         const embedUrl = (next.embed as { url?: unknown } | undefined)?.url;
         if (next.embed !== undefined && !(typeof embedUrl === 'string' && act.text.includes(embedUrl)))
           delete next.embed;
-        // A v2 message stays v2 (bound to its ID and sender); v1 ones change only once v2 is on.
+        // Bound to the message's own ID and sender, whatever it was sealed with: a v2 message stays
+        // v2, and a v1 one (older Rivers) becomes v2 once this River seals v2 (the default since 2.12).
         const body = sealBound(
           opened.key,
           communityId,
