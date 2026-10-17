@@ -5,10 +5,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.Build;
 import android.provider.OpenableColumns;
 import android.util.Base64;
 import android.util.Log;
+import androidx.core.content.IntentCompat;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -37,9 +37,11 @@ final class ShareReceiver {
   /** The event for the UI (channel river:app:share), or null if there is nothing to share. */
   static String read(Context context, Intent intent) {
     try {
-      String text = intent.getStringExtra(Intent.EXTRA_TEXT);
-      String subject = intent.getStringExtra(Intent.EXTRA_SUBJECT);
-      if (text == null) text = "";
+      // A CharSequence, not only a String (2.12): apps that share styled text sent nothing.
+      CharSequence sharedText = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+      CharSequence sharedSubject = intent.getCharSequenceExtra(Intent.EXTRA_SUBJECT);
+      String text = sharedText == null ? "" : sharedText.toString();
+      String subject = sharedSubject == null ? null : sharedSubject.toString();
       if (subject != null && !subject.isEmpty() && !text.contains(subject)) {
         text = text.isEmpty() ? subject : subject + "\n" + text;
       }
@@ -66,21 +68,18 @@ final class ShareReceiver {
     }
   }
 
-  @SuppressWarnings("deprecation")
+  /**
+   * IntentCompat (2.12): Android 13's own typed getParcelableExtra can throw on some intents, and
+   * the older one took anything another app put under EXTRA_STREAM as a Uri.
+   */
   private static List<Uri> streams(Intent intent) {
     List<Uri> out = new ArrayList<>();
     if (Intent.ACTION_SEND.equals(intent.getAction())) {
-      Uri one =
-          Build.VERSION.SDK_INT >= 33
-              ? intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri.class)
-              : (Uri) intent.getParcelableExtra(Intent.EXTRA_STREAM);
+      Uri one = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri.class);
       if (one != null) out.add(one);
     } else {
-      ArrayList<Uri> many =
-          Build.VERSION.SDK_INT >= 33
-              ? intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri.class)
-              : intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
-      if (many != null) out.addAll(many);
+      ArrayList<Uri> many = IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri.class);
+      if (many != null) for (Uri u : many) if (u != null) out.add(u);
     }
     return out;
   }

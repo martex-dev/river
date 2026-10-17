@@ -93,8 +93,9 @@ final class Ringer {
       am.requestAudioFocus(focus);
     }
     Uri uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
+    MediaPlayer p = null;
     try {
-      MediaPlayer p = new MediaPlayer();
+      p = new MediaPlayer();
       p.setAudioAttributes(attributes());
       p.setDataSource(context, uri);
       p.setLooping(true);
@@ -102,6 +103,8 @@ final class Ringer {
       p.start();
       player = p;
     } catch (Exception e) {
+      // 2.12: the player that failed is released (it held a native player and a file per call).
+      if (p != null) p.release();
       // No playable ringtone file (or none chosen): the system's Ringtone player, looped where it can.
       try {
         Ringtone r = RingtoneManager.getRingtone(context, uri);

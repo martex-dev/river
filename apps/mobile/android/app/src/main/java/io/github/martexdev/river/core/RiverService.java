@@ -31,6 +31,8 @@ public final class RiverService extends Service {
   private static final int NOTIFICATION = 0x52495645; // "RIVE"
   /** Whether the service runs in this process right now (Settings → System shows it). */
   private static volatile boolean running;
+  /** Android refused this start of the service as a foreground service: it ends at once. */
+  private boolean refused;
 
   /**
    * River's screen, which its notifications open. A constant: Android restarts this service
@@ -96,7 +98,18 @@ public final class RiverService extends Service {
     b.setContentIntent(PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE));
     Notification notification = b.build();
     int type = Build.VERSION.SDK_INT >= 34 ? ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING : 0;
-    ServiceCompat.startForeground(this, NOTIFICATION, notification, type);
+    try {
+      ServiceCompat.startForeground(this, NOTIFICATION, notification, type);
+    } catch (RuntimeException e) {
+      // 2.12: Android restarted the service by itself (START_STICKY) while River was in the
+      // background, and Android 12+ refused the foreground start (ForegroundServiceStartNotAllowed)
+      // — that crashed River. Now it stops quietly and says so; opening River starts it again.
+      Log.w("RiverService", "foreground refused: " + e.getClass().getSimpleName());
+      refused = true;
+      AppNotices.stopped(this);
+      stopSelf();
+      return;
+    }
     running = true;
     // Connected again: "River was stopped" (Watchdog) is no longer true.
     AppNotices.cancelStopped(this);
@@ -107,12 +120,22 @@ public final class RiverService extends Service {
 
   @Override
   public void onDestroy() {
+    boolean was = running;
     running = false;
+    // 2.12: the service ended (Stay connected turned off, or Android stopped it) while River's
+    // screen is closed: the core goes too, instead of staying connected without the visible
+    // "River is connected" notification. With the screen open the core stays with the screen.
+    if (was) {
+      CoreHost core = CoreHost.get(this);
+      if (!core.hasScreen()) core.stopAfterCall();
+    }
     super.onDestroy();
   }
 
   @Override
   public int onStartCommand(Intent intent, int flags, int startId) {
+    // Never a core without the notification (the foreground start was refused in onCreate).
+    if (refused) return START_NOT_STICKY;
     CoreHost.get(this).start();
     return START_STICKY;
   }

@@ -221,13 +221,22 @@ public class MainActivity extends BridgeActivity implements CoreHost.Screen {
    */
   @Override
   public void showOverLock(boolean on) {
-    if (android.os.Build.VERSION.SDK_INT < 27) return;
     handler.removeCallbacks(ringTimeout);
     if (on) handler.postDelayed(ringTimeout, RING_OVER_LOCK_MS);
     if (on == overLock) return;
     overLock = on;
-    setShowWhenLocked(on);
-    setTurnScreenOn(on);
+    if (android.os.Build.VERSION.SDK_INT >= 27) {
+      setShowWhenLocked(on);
+      setTurnScreenOn(on);
+      return;
+    }
+    // Android 8.0 (2.12): the window flags, as the call screen uses there — a call answered on
+    // the lock screen opened River behind the lock instead.
+    int flags =
+        android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+            | android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON;
+    if (on) getWindow().addFlags(flags);
+    else getWindow().clearFlags(flags);
   }
 
   // ---- picture-in-picture during calls (2.10) ----
