@@ -1,4 +1,4 @@
-import { isFollowing, setFollowing } from '../thread-follow.ts';
+import { setFollowing, useFollowing } from '../thread-follow.ts';
 import { clockTime } from '../../time.ts';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
@@ -40,9 +40,26 @@ export function ThreadPanel(props: {
     can(channel.permissions, Permission.MANAGE_MESSAGES) ||
     can(channel.permissions, Permission.MANAGE_CHANNELS);
   const mayEdit = !!thread && (thread.creator === me || manager);
-  const mayReply = can(channel.permissions, Permission.SEND_MESSAGES) && (!thread?.archived || manager);
+  // Replying in an archived thread takes Manage messages (the server checks exactly that).
+  const mayReply =
+    can(channel.permissions, Permission.SEND_MESSAGES) &&
+    (!thread?.archived || can(channel.permissions, Permission.MANAGE_MESSAGES));
   const close = (): void => useCommunity.setState({ openThread: null });
   const phone = useRiver((r) => isPhone(r.info?.platform));
+
+  // Opened some other way than showThread (or the load failed): fetch the replies.
+  const missing = replies === undefined;
+  useEffect(() => {
+    if (!missing) return;
+    void window.river.community
+      .action({ a: 'threadMessages', channelId: channel.id, messageId: rootId })
+      .then((res) => {
+        if (res.ok && !useCommunity.getState().threads[rootId])
+          useCommunity.setState({
+            threads: { ...useCommunity.getState().threads, [rootId]: res.value as ChatMessage[] },
+          });
+      });
+  }, [missing, channel.id, rootId]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -56,7 +73,7 @@ export function ThreadPanel(props: {
     useOutbox.getState().send({ channelId: channel.id, text: value, threadId: rootId });
   };
 
-  const [following, setFollowingState] = useState(() => isFollowing(rootId));
+  const following = useFollowing(rootId);
   return (
     <aside className="thread-panel" aria-label={`Thread ${thread?.name ?? ''}`}>
       <header className="thread-panel__head">
@@ -96,10 +113,7 @@ export function ThreadPanel(props: {
             className={`btn btn--small ${following ? 'btn--ghost' : 'btn--primary'}`}
             aria-pressed={following}
             title={following ? 'Stop hearing about new replies' : 'Hear about new replies'}
-            onClick={() => {
-              setFollowing(rootId, !following);
-              setFollowingState(!following);
-            }}
+            onClick={() => setFollowing(rootId, !following)}
           >
             {following ? 'Following' : 'Follow'}
           </button>

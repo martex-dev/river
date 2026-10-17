@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, ChatMessage, CommunityView } from '../../../../shared/ipc.ts';
 import { relativeTime } from '../../time.ts';
@@ -33,6 +33,23 @@ export function forumPosts(
     );
 }
 
+/**
+ * The post a message link in a forum opens: the post itself, or the post a loaded reply belongs to
+ * (pure, for tests). Null when it is not loaded here.
+ */
+export function forumJumpTarget(
+  messages: ChatMessage[],
+  threads: Record<string, ChatMessage[]>,
+  messageId: string,
+): string | null {
+  const m = messages.find((x) => x.id === messageId);
+  if (m) return m.threadId ?? m.id;
+  const posts = new Set(messages.map((x) => x.id));
+  for (const [rootId, replies] of Object.entries(threads))
+    if (posts.has(rootId) && replies.some((x) => x.id === messageId)) return rootId;
+  return null;
+}
+
 /** A forum channel (1.0.22): posts as cards; open one to read and reply in its thread. */
 export function ForumChannel(props: { community: CommunityView; channel: ChannelView }): ReactElement {
   const { community, channel } = props;
@@ -46,8 +63,34 @@ export function ForumChannel(props: { community: CommunityView; channel: Channel
   const canPost = can(channel.permissions, Permission.SEND_MESSAGES);
   const canModerate = can(channel.permissions, Permission.MANAGE_MESSAGES);
   const [menu, setMenu] = useState<{ x: number; y: number; m: ChatMessage } | null>(null);
-  const open = (m: ChatMessage): void =>
-    useCommunity.setState({ openThread: { channelId: channel.id, rootId: m.id } });
+  // Opening a post loads its replies, so they show and live replies keep arriving.
+  const open = (m: ChatMessage): void => void useCommunity.getState().showThread(channel.id, m.id);
+
+  // A message link to a post here (or a reply in one): open that post once it is loaded.
+  const pendingJump = useCommunity((x) => x.pendingJump);
+  const ready = loaded !== undefined;
+  useEffect(() => {
+    if (!pendingJump || pendingJump.channelId !== channel.id || !ready) return;
+    const target = pendingJump.messageId;
+    let cancelled = false;
+    void (async () => {
+      const find = (): string | null => {
+        const st = useCommunity.getState();
+        return forumJumpTarget(st.messages[channel.id] ?? [], st.threads, target);
+      };
+      // Further back: older pages of posts (up to ~2000) until it is there.
+      for (let i = 0; i < 20 && !find() && !cancelled; i++)
+        if ((await useCommunity.getState().loadOlder(channel.id)) === 0) break;
+      if (cancelled) return;
+      useCommunity.setState({ pendingJump: null });
+      const rootId = find();
+      if (rootId) void useCommunity.getState().showThread(channel.id, rootId);
+      else useCommunity.getState().notify('Open the post to find that message; it could not be shown here.');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingJump, ready, channel.id]);
   return (
     <div className="chat forum">
       <header className="chat__head">
