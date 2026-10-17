@@ -20,12 +20,28 @@ export interface Phone {
   lifecycle(state: 'foreground' | 'background'): void;
   /** The shell says the UI's WebView was destroyed (River's screen closed, the core stays). */
   uiGone(): void;
+  /** Android's Stay connected watchdog woke the phone. */
+  wake(): void;
+  /** Answers the oldest held ask of `kind` (see `hold`), as the person on the phone would. */
+  answerAsk(kind: string, value: unknown): void;
   stop(): Promise<void>;
+}
+
+export interface PhoneOptions {
+  /** Ask kinds the test answers itself with `answerAsk` (e.g. an incoming call's outcome). */
+  hold?: string[];
+  /**
+   * Answers an ask as the Android shell would (e.g. the updater's `update.*`). Returning undefined
+   * leaves the ask to the defaults below; a throw answers it as failed.
+   */
+  answer?: (kind: string, args: unknown) => unknown;
 }
 
 const SHARED_BYTES = 64 * 1024 * 1024;
 
-export async function startPhone(bundle: string, root: string): Promise<Phone> {
+export async function startPhone(bundle: string, root: string, options: PhoneOptions = {}): Promise<Phone> {
+  const hold = new Set(options.hold ?? []);
+  const held: Array<{ kind: string; id: number }> = [];
   mkdirSync(join(root, 'files'), { recursive: true });
   mkdirSync(join(root, 'cache'), { recursive: true });
   const shared = new SharedArrayBuffer(8 + SHARED_BYTES);
@@ -42,8 +58,10 @@ export async function startPhone(bundle: string, root: string): Promise<Phone> {
   let nextId = 1;
   let fatal: string | null = null;
 
-  const call = (name: 'invoke' | 'send' | 'answer' | 'lifecycle' | 'uiGone', ...args: unknown[]): void =>
-    worker.postMessage({ call: name, args });
+  const call = (
+    name: 'invoke' | 'send' | 'answer' | 'lifecycle' | 'uiGone' | 'wake',
+    ...args: unknown[]
+  ): void => worker.postMessage({ call: name, args });
   const answerNative = (json: string): void => {
     const encoded = new TextEncoder().encode(json);
     if (encoded.length > SHARED_BYTES) throw new Error('native result too large for the test bridge');
@@ -100,7 +118,30 @@ export async function startPhone(bundle: string, root: string): Promise<Phone> {
           }
           case 'ask': {
             const kind = header.kind ?? '';
-            asks.push({ kind, args: decodeWire(payload) });
+            const askArgs = decodeWire(payload);
+            asks.push({ kind, args: askArgs });
+            for (const w of [...waiters]) w();
+            if (hold.has(kind)) {
+              held.push({ kind, id: header.id! });
+              break;
+            }
+            if (options.answer) {
+              const id = header.id;
+              let custom: unknown;
+              try {
+                custom = options.answer(kind, askArgs);
+              } catch (err) {
+                call('answer', id, encodeWire({ ok: false, error: (err as Error).message }));
+                break;
+              }
+              if (custom !== undefined) {
+                void Promise.resolve(custom).then(
+                  (value) => call('answer', id, encodeWire({ ok: true, value })),
+                  (err: Error) => call('answer', id, encodeWire({ ok: false, error: err.message })),
+                );
+                break;
+              }
+            }
             // What a person tapping through the Android dialogs would answer.
             const value =
               kind === 'messageBox'
@@ -111,7 +152,14 @@ export async function startPhone(bundle: string, root: string): Promise<Phone> {
                     ? 'shown'
                     : kind === 'appLock'
                       ? { available: true }
-                      : null;
+                      : kind === 'phoneStatus' || kind === 'phoneFix'
+                        ? {
+                            background: true,
+                            batteryExempt: false,
+                            fullScreenCalls: true,
+                            notifications: true,
+                          }
+                        : null;
             call('answer', header.id, encodeWire({ ok: true, value }));
             break;
           }
@@ -140,6 +188,15 @@ export async function startPhone(bundle: string, root: string): Promise<Phone> {
     },
     uiGone() {
       call('uiGone');
+    },
+    wake() {
+      call('wake');
+    },
+    answerAsk(kind, value) {
+      const i = held.findIndex((h) => h.kind === kind);
+      if (i < 0) throw new Error(`no ${kind} ask is waiting`);
+      const [h] = held.splice(i, 1);
+      call('answer', h!.id, encodeWire({ ok: true, value }));
     },
     waitFor(channel, match = () => true, timeoutMs = 15_000) {
       return new Promise((resolve, reject) => {

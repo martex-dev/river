@@ -404,21 +404,25 @@ export function Popover(props: {
       if (anchor.current?.isConnected && anchor.current.contains(target)) swallowClickOn(anchor.current);
       latest.current();
     };
-    const onScroll = (e: Event): void => {
+    // Only the reader scrolling away closes it (wheel, finger): not River scrolling the chat to a
+    // new message, an image loading, or the phone keyboard opening (2.10.13).
+    const onUserScroll = (e: Event): void => {
       // Settling in (focus, layout) right after opening is not the reader scrolling away.
       if (performance.now() - openedAt < 300) return;
       const target = e.target;
-      if (target instanceof Node && target !== document && insideLayer(id, target)) return;
+      if (target instanceof Node && insideLayer(id, target)) return;
       latest.current();
     };
     const t = window.setTimeout(() => {
       window.addEventListener('pointerdown', onDown, true);
-      window.addEventListener('scroll', onScroll, true);
+      window.addEventListener('wheel', onUserScroll, { capture: true, passive: true });
+      window.addEventListener('touchmove', onUserScroll, { capture: true, passive: true });
     });
     return () => {
       window.clearTimeout(t);
       window.removeEventListener('pointerdown', onDown, true);
-      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('wheel', onUserScroll, true);
+      window.removeEventListener('touchmove', onUserScroll, true);
     };
   }, [id]);
   return createPortal(

@@ -310,6 +310,7 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
                   value={renaming.name}
                   maxLength={32}
                   onChange={(e) => setRenaming({ id: sound.id, name: e.target.value })}
+                  data-own-escape=""
                   onKeyDown={(e) => e.key === 'Escape' && setRenaming(null)}
                 />
                 <button className="btn btn--small" disabled={!renaming.name.trim()}>

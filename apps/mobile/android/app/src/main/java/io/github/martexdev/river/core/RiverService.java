@@ -11,6 +11,7 @@ import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
+import android.util.Log;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.ServiceCompat;
 import androidx.core.content.ContextCompat;
@@ -28,6 +29,8 @@ import androidx.core.content.ContextCompat;
 public final class RiverService extends Service {
   private static final String CHANNEL = "connection";
   private static final int NOTIFICATION = 0x52495645; // "RIVE"
+  /** Whether the service runs in this process right now (Settings → System shows it). */
+  private static volatile boolean running;
 
   /**
    * River's screen, which its notifications open. A constant: Android restarts this service
@@ -43,12 +46,26 @@ public final class RiverService extends Service {
     return prefs(context).getBoolean("enabled", false);
   }
 
+  public static boolean running() {
+    return running;
+  }
+
   /** Turns staying connected on or off, and starts or stops the service to match. */
   public static void setEnabled(Context context, boolean on) {
     prefs(context).edit().putBoolean("enabled", on).apply();
     Intent intent = new Intent(context, RiverService.class);
-    if (on) ContextCompat.startForegroundService(context, intent);
-    else context.stopService(intent);
+    if (!on) {
+      Watchdog.cancel(context);
+      context.stopService(intent);
+      return;
+    }
+    try {
+      ContextCompat.startForegroundService(context, intent);
+    } catch (RuntimeException e) {
+      // Android 12+ refuses to start it from the background (battery optimization on): it starts
+      // the next time River opens, and Settings → System says it is not running.
+      Log.w("RiverService", "could not start: " + e.getClass().getSimpleName());
+    }
   }
 
   @Override
@@ -74,7 +91,16 @@ public final class RiverService extends Service {
     Notification notification = b.build();
     int type = Build.VERSION.SDK_INT >= 34 ? ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING : 0;
     ServiceCompat.startForeground(this, NOTIFICATION, notification, type);
+    running = true;
     CoreHost.get(this).start();
+    // Wakes the phone now and then to check the connection (2.11).
+    Watchdog.schedule(this);
+  }
+
+  @Override
+  public void onDestroy() {
+    running = false;
+    super.onDestroy();
   }
 
   @Override

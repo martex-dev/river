@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { CommunityView } from '../../../../shared/ipc.ts';
+import { attempt } from '../attempt.ts';
 import { useCommunity } from '../store.ts';
 import { Modal, Toggle, can, hex } from './common.tsx';
 import { parseWords, type FilterMode } from '../../../../shared/word-filter.ts';
@@ -234,9 +235,10 @@ export function RulesGate({ community }: { community: CommunityView }): ReactEle
   const [busy, setBusy] = useState(false);
   const accept = async (): Promise<void> => {
     setBusy(true);
-    const res = await s.run({ a: 'acceptRules', communityId: community.id });
+    // run() answers null for actions without a result, also when they worked.
+    const ok = await attempt({ a: 'acceptRules', communityId: community.id });
     setBusy(false);
-    if (res === null) return;
+    if (!ok) return;
     s.notify(`Welcome to ${community.name}!`);
     if (community.selfRoles.length) s.setModal({ kind: 'pick-roles', communityId: community.id });
   };
@@ -244,12 +246,22 @@ export function RulesGate({ community }: { community: CommunityView }): ReactEle
     <div className="rules-gate" role="region" aria-label={`Rules of ${community.name}`}>
       <h2>Welcome to {community.name}</h2>
       {community.welcomeNote && <p className="rules-gate__welcome">{community.welcomeNote}</p>}
-      <p className="muted small">Before you join in, please read the rules:</p>
-      <ol className="rules-gate__rules">
-        {community.rules.map((r, i) => (
-          <li key={i}>{r}</li>
-        ))}
-      </ol>
+      {community.rules.length > 0 ? (
+        <>
+          <p className="muted small">Before you join in, please read the rules:</p>
+          <ol className="rules-gate__rules">
+            {community.rules.map((r, i) => (
+              <li key={i}>{r}</li>
+            ))}
+          </ol>
+        </>
+      ) : (
+        // No rules to show (none written, or they could not be read on this device): still a way in.
+        <p className="muted small">
+          This community asks new members to agree to its rules before joining in. Its rules could not be
+          shown here; by continuing you agree to follow them and the moderators&apos; guidance.
+        </p>
+      )}
       <label className="rules-gate__agree">
         <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
         I&apos;ve read and agree to the rules
@@ -270,9 +282,9 @@ export function PickRolesDialog({ community, me }: { community: CommunityView; m
   const offered = community.roles.filter((r) => community.selfRoles.includes(r.id));
   const save = async (): Promise<void> => {
     setBusy(true);
-    const res = await s.run({ a: 'setSelfRoles', communityId: community.id, roles: chosen });
+    const ok = await attempt({ a: 'setSelfRoles', communityId: community.id, roles: chosen });
     setBusy(false);
-    if (res !== null) s.setModal(null);
+    if (ok) s.setModal(null);
   };
   return (
     <Modal title="Pick your roles" onClose={() => s.setModal(null)}>

@@ -143,7 +143,9 @@ operator can tell accounts apart. Display names stay end-to-end encrypted;
 usernames are not secret and are not content. Lookup and bulk-resolve
 endpoints need a valid session. Operator-created accounts are one-time sign-up
 codes (hashed at rest, 7-day expiry) that carry a chosen username; in
-invite-only mode registration requires one.
+invite-only mode registration requires one. A username someone changes or
+whose account is deleted is held for 30 days (only they may take it back), so
+nobody else can pick it up and be taken for them (2.11).
 
 ### 5e. Voice reliability (1.0.16) and the voice relay (1.0.17)
 
@@ -170,7 +172,10 @@ challenge signed by one of the account's device keys under its own signing
 context (`river-delete-account-v1`), so a leaked session token cannot delete
 an account. Deletion leaves every community (owned communities are deleted)
 and removes keys, devices, sessions, reactions, event interest, bans, blocks
-and undelivered mail. Messages already sent remain as ciphertext.
+and undelivered mail. Messages already sent remain as ciphertext. Since 2.11 a
+tombstone stays — the River ID, its public identity key and the day — so the
+River ID can be registered again only with that same key (never by someone
+else posing as the person contacts knew), and the username is held for 30 days.
 
 ### 5h. Custom emoji (1.0.19)
 
@@ -250,6 +255,19 @@ encrypted call and point signals and sees who takes part, as for any call.
 | Elevation       | Remote-assistance abuse                | Consent asked by main per share, always-visible bar with Stop outside the window, no control or unattended mode (ADR 0007)              | ✅ 1.8.0                                               |
 
 ## 7. Residual risks (current)
+
+- **The server decides community membership.** A removed member whom a
+  malicious server keeps listing still gets the next community key from the
+  rotating member. Until River stops accepting keys from older Rivers without
+  a proof (planned for 2.13), such a member (or anyone who once held a genuine
+  key) can, with the server, hand out a key of their own; members the server
+  adds without ever holding a key cannot (CRYPTOGRAPHY.md §4a–4b).
+- **Trust on first use.** Without verified safety numbers or a shared
+  community, a server can still present a different identity key for a
+  contact; River shows the change but cannot tell it from a reinstall.
+- **Community messages sealed with v1 associated data** (all senders until
+  2.12) can still be re-attributed to another sender or replayed under a new ID
+  by the server.
 
 - **Linked devices are not revoked cryptographically.** A removed device keeps
   the identity and community keys it had; the server ends its access. Leaving

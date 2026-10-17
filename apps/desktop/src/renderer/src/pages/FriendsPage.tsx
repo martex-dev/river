@@ -5,7 +5,7 @@ import { play } from '../community/sound.ts';
 import { useCommunity } from '../community/store.ts';
 import { Avatar } from '../community/ui/common.tsx';
 import { startDmCall, useDmCall } from '../dm/call.ts';
-import { addFriend, GREETING } from '../dm/friends.ts';
+import { addFriend, addFriendMessage, GREETING } from '../dm/friends.ts';
 import { useDm } from '../dm/store.ts';
 import { useRiver } from '../store.ts';
 import { QrCode } from '../components/QrCode.tsx';
@@ -310,15 +310,11 @@ function AddFriend(props: {
   const request = async (riverId: string): Promise<void> => {
     const result = await addFriend(riverId, message.trim() || GREETING);
     setBusy(false);
-    if (result === 'failed') return setError('Could not send the request. Try again.');
+    const name = useDm.getState().conversations.find((c) => c.riverId === riverId)?.name;
+    if (result === 'failed' || result === 'blocked') return setError(addFriendMessage(result, name));
     setHandle('');
-    if (result === 'friend') {
-      const name = useDm.getState().conversations.find((c) => c.riverId === riverId)?.name;
-      notify(`${name ?? 'This person'} is already your friend — here is your chat.`);
-      return;
-    }
-    notify('Friend request sent');
-    props.onSent();
+    notify(addFriendMessage(result, name));
+    if (result === 'sent') props.onSent();
   };
 
   const submit = async (e: FormEvent): Promise<void> => {

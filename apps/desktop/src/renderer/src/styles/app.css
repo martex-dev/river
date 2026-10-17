@@ -1688,6 +1688,23 @@ html[data-density='compact'] .member {
   line-height: 1.5;
 }
 
+/* Settings → System → Calls and notifications (Android, 2.11) */
+.phone-check {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.phone-check > span {
+  display: flex;
+  flex-direction: column;
+}
+.phone-check__bad {
+  color: var(--danger);
+}
+
 /* Settings → Account → Devices (linked devices, 1.3) */
 .devices__list {
   display: grid;
@@ -2543,4 +2560,50 @@ body:has(.dm-call--full) .river-toast {
 .sticker-picker__group {
   margin: 8px 2px 4px;
   font-weight: 600;
+}
+
+/* Dialogs, menus and the picture viewer opened during a full-screen call show above it (2.10.13);
+   toasts stay on top of everything. */
+body:has(.dm-call--full) .modal {
+  z-index: 850;
+}
+body:has(.dm-call--full) .lightbox {
+  z-index: 860;
+}
+body:has(.dm-call--full) .popover {
+  z-index: 870;
+}
+
+/* ---------- Something went wrong (error boundary) ---------- */
+.crash {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px 16px;
+  background: var(--bg, #0b0f1c);
+  color: var(--text);
+}
+.crash--page {
+  min-height: 100%;
+  background: none;
+}
+.crash__card {
+  width: min(520px, 100%);
+  padding: 24px;
+}
+.crash__title {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+.crash__detail {
+  max-height: 160px;
+  margin: 12px 0;
+  padding: 10px;
+  overflow: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

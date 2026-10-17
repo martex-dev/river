@@ -30,6 +30,11 @@ export interface ConversationView {
   verified: boolean;
   /** The contact's safety number changed since you last looked. */
   keyChanged: boolean;
+  /**
+   * You verified this contact and their safety number changed since: River sends them nothing
+   * until you compare safety numbers again (2.11).
+   */
+  verifiedChanged?: boolean;
   /** Disappearing messages timer in seconds (0 = off), 2.4. */
   timer?: number;
   /** Chat-list flags (2.1), kept on this device: pinned to the top, archived, marked unread. */
@@ -95,6 +100,9 @@ export interface FileView {
   sentAt: string;
 }
 
+/** How a call ended: answered, missed (no answer), declined, or answered but never connected. */
+export type CallOutcome = 'answered' | 'missed' | 'declined' | 'failed';
+
 export interface CallView {
   id: string;
   peer: string;
@@ -103,6 +111,7 @@ export interface CallView {
   direction: 'in' | 'out';
   video: boolean;
   answered: boolean;
+  outcome: CallOutcome;
   durationSec: number;
   startedAt: string;
 }
@@ -123,6 +132,8 @@ export type DmEvent =
   | { t: 'focus'; peer: string }
   /** The list of messages waiting to be sent later changed (2.5). */
   | { t: 'scheduled' }
+  /** A call was added to the call history. */
+  | { t: 'calls' }
   | {
       t: 'call';
       peer: string;
@@ -247,7 +258,18 @@ export const dmActionSchema = z.discriminatedUnion('a', [
   z.object({ a: z.literal('safetyNumber'), peer: riverId }).strict(),
   /** A call that is ringing right now (River opened from its "Incoming call" notification). */
   z.object({ a: z.literal('pendingCall') }).strict(),
-  z.object({ a: z.literal('setVerified'), peer: riverId, verified: z.boolean() }).strict(),
+  /** `digits`: the safety number the user compared (required to mark as verified). */
+  z
+    .object({
+      a: z.literal('setVerified'),
+      peer: riverId,
+      verified: z.boolean(),
+      digits: z
+        .string()
+        .regex(/^\d{60}$/)
+        .optional(),
+    })
+    .strict(),
   z.object({ a: z.literal('acknowledgeKeyChange'), peer: riverId }).strict(),
   z
     .object({
@@ -285,6 +307,8 @@ export const dmActionSchema = z.discriminatedUnion('a', [
       direction: z.enum(['in', 'out']),
       video: z.boolean(),
       answered: z.boolean(),
+      /** Why an unanswered call ended, when the window knows (a call you declined). */
+      outcome: z.enum(['declined', 'failed']).optional(),
       durationSec: z
         .number()
         .int()
@@ -335,7 +359,7 @@ interface DmResults {
   messages: DirectMessageView[];
   open: ConversationView;
   send: DirectMessageView;
-  safetyNumber: { digits: string; verified: boolean; theirName: string };
+  safetyNumber: { digits: string; verified: boolean; changedSinceVerified?: boolean; theirName: string };
   upload: AttachmentPointer;
   myId: string;
   noteToSelf: ConversationView;
@@ -348,7 +372,8 @@ interface DmResults {
   deleteFolder: ChatFolder[];
   schedule: ScheduledView;
   scheduled: ScheduledView[];
-  pendingCall: Extract<DmEvent, { t: 'call' }> | null;
+  /** `answer`: it was answered on the phone's own call screen (Android, 2.11), so the window answers it. */
+  pendingCall: (Extract<DmEvent, { t: 'call' }> & { answer?: boolean }) | null;
 }
 
 export type DmActionResult<A extends DmAction> = A['a'] extends keyof DmResults ? DmResults[A['a']] : null;

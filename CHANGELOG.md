@@ -6,6 +6,255 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Updates on computers install by themselves.** Closing River only hides it in
+  the tray, so a downloaded update used to wait for a real quit that rarely came
+  (some people stayed on old versions for weeks). Now a verified update
+  restarts River by itself while River is in the tray or unused for 10 minutes,
+  never during a call, and River comes back in the tray if that is where it
+  was. A PC that hosts River does it at night (3–5 am).
+
+### Added
+
+- **River for Android updates itself** (Settings → Updates). It checks GitHub
+  Releases at start, about every six hours and on demand; takes only a release
+  whose manifest is signed by River's release key (the desktop's verifier) and
+  is newer, on your channel (Beta and Nightly only if you chose them); downloads
+  the APK for the phone's processor; checks its SHA-256 and size against the
+  signed manifest and that it is signed with the same Android key as the
+  installed River; then hands it to Android's installer, which asks you to
+  confirm. The first time, Android asks you to allow River to install apps.
+- A release signed with a different Android key than yours (the early preview
+  builds) is not installed over it: River explains that only a fresh install
+  gets it, that uninstalling deletes River's data on the phone unless you back
+  up first (Settings → Backup), and links the download page.
+
+### Changed
+
+- iPhone: Settings → Updates says plainly that a sideloaded app cannot update
+  itself, and no longer shows update settings that do nothing there.
+
+**Android rings and notifies like a phone (maintainer request).** River still
+uses no Google push service: everything depends on River's own connection,
+so Stay connected matters.
+
+### Added
+
+- **Incoming calls on Android** ring like a phone call: the phone's ringtone in
+  a loop and a repeating vibration (silent and vibrate modes and Do Not
+  Disturb respected), a call screen that wakes the phone and covers the lock
+  screen with the caller's name, Voice or Video call, and big Answer and
+  Decline buttons. With another app in front, Android's call notification
+  (Answer / Decline) stays on top. Answer opens River straight into the call;
+  Decline declines without opening River. Ringing stops when the caller hangs
+  up or after 45 seconds. With notification previews hidden, the call screen
+  says "Someone".
+- **The "In a call" notification** is Android's ongoing-call notification with
+  Hang up, naming the person (or "River call" with previews hidden).
+- **Message notifications on Android**: one per conversation with the
+  sender's name (Android's conversation style), sound and vibration; the lock
+  screen shows sender and text only with "Sender and message" previews,
+  otherwise "New message". **Light up the screen for new messages**
+  (Settings → System, on by default) turns a dark screen on for a few seconds,
+  but not during Do Not Disturb or for messages sent without sound.
+- **Stay connected is on for new Android installs**; existing installs are asked
+  once ("Get messages and calls when River is closed?"). Turning it on explains
+  and then lets Android ask to stop battery optimization delaying River.
+- **Settings → System → Calls and notifications** (Android): Stay connected,
+  battery optimization, full-screen calls (Android 14+ asks separately) and
+  notification permission, as Android reports them, each with a button to fix
+  it. A one-time prompt offers the full-screen permission when it is missing.
+- Stay connected keeps working with the screen off: a watchdog wakes the phone
+  about every 15 minutes to check the connection (a ping that must be
+  answered) and reconnect, and the service starts again after a restart of
+  the phone or an update of River.
+
+### Fixed
+
+- Android: when River's core restarted (Android often ends background
+  renderers), every River notification on screen disappeared. They now stay,
+  as plain notifications that open River.
+- Android: an interface renderer that kept crashing could rebuild River's
+  screen in a loop; it is rebuilt at most three times a minute, then closes
+  with a message.
+- Opening River from a ringing call no longer risks answering "busy" to that
+  same call.
+
+### Not on iPhone
+
+- Without Apple's push service (it needs a paid Apple developer account), an
+  iPhone cannot ring or notify while iOS has paused River. Settings → System
+  says so; nothing here pretends otherwise.
+
+- Private channels stay private: deleting a category, or moving a channel synced
+  to it elsewhere, now gives the channel the category's permissions as its own
+  instead of making it public. The delete confirmation says so.
+- Channel and category permissions that already allowed Administrator (from
+  older versions) can be edited again, owner included; adding Administrator is
+  still refused.
+- Forum posts: opening a post loads its replies, and new replies appear live;
+  a thread opened any other way fetches its replies; message links to a forum
+  post open it.
+- Dragging channels: the move shows at once (no snap back), is placed among all
+  channels including ones you cannot see, and only needs Manage channels on the
+  channel you moved. Reordering roles changes only roles below your own and is
+  applied all at once; deleting a role closes the gap in the order.
+- The role editor lists Time out members, View audit log, Manage events,
+  Manage emoji & sounds and Priority speaker. The channel and category
+  permission editors offer Allow only for permissions you hold there.
+- "Community settings" is offered wherever any of its tabs is (Webhooks and
+  Reports included), the same in every menu. Settings fit a phone screen: the
+  tabs become a strip that scrolls sideways and the close button stays in reach.
+- Webhooks list only channels you manage, and deleting one asks first.
+- Replying in an archived thread is offered only to people who manage messages,
+  as the server requires.
+- New members of a screened community whose rules cannot be shown still get the
+  welcome screen with a way in; accepting the rules and picking roles confirm
+  properly.
+- Notification level "Nothing" also hides mention badges and thread mention
+  sounds; followed threads stay quiet in muted channels. Categories have their
+  own mute and notification level (a channel's own setting still wins).
+- Used-up invites are no longer listed as active; the audit log no longer skips
+  entries that share a timestamp when loading older ones.
+- `:emoji:` codes after text starting with `<` or a lone backtick (`<3 :party:`)
+  are converted; switching communities marks the channel you left as read; the
+  thread Follow button updates after you reply.
+
+- **Account, devices, backup and settings audit.**
+  - A device removed from its account (or an old backup restored) is no longer
+    told its account was deleted: it says it was probably removed, offers
+    **Link this device again** (forgets the stale account and identity and opens
+    linking; only a code from the same account is accepted), and **Set up my
+    account again** now creates the new account _before_ forgetting the old one
+    — if the account still exists it explains that this device was removed,
+    instead of a dead end. Every failure message is shown.
+  - Cancelling at "Is this you?" on a new device no longer leaves a phantom
+    device on the account: it sends a signed "no" (new `PUT /v1/link/:id/decline`)
+    and the device that showed the code takes it off the list again.
+  - "Link a new device" and "Link it" cannot be pressed twice (a second start
+    could show a code of zeros; a second confirm published an outdated list);
+    a start replaced or cancelled while reserving never shows its code. "Linked"
+    clears after a moment and never shows on the new device itself.
+  - "Last backup" is set only once the file is written (not when the save
+    dialog is cancelled or writing fails), and the first backup needs the
+    recovery phrase to have been shown.
+  - Settings changed by River itself reach the screen at once (a phone without a
+    screen lock turning app lock off, hosting turning on start-at-login, server
+    moves, deleting the account), so a switch never shows a protection that is off.
+  - Interface size is hidden on phones (it only zooms computer windows), and
+    the keyboard hint names ⌘ on a Mac. "Start River when I sign in" is hidden on
+    Linux, where River cannot do it, and the hosting text no longer claims it.
+  - Esc no longer closes Settings while typing in a field or when something else
+    handled it; closing Settings or switching tabs with unsaved profile changes
+    asks first. The profile saves without a display name (it is optional) and
+    cannot be saved twice at once.
+  - Notifications shows the preview choice once, as one radio group.
+  - Onboarding on an invite-only River server asks for a sign-up link, and River
+    stops retrying the account in the background until it gets one. A device
+    link arriving after the identity exists no longer strands the first run.
+  - A pasted "@alice" is saved as "alice", and the username field shows what the
+    server saved (it keeps lower case) instead of staying "changed".
+  - The lock screen buttons no longer stay on "Encrypting…/Unlocking…" when a
+    call fails, and passphrases longer than 1024 characters are refused up front.
+  - Security Center describes what River does now: messages pass through the
+    server end-to-end encrypted, devices can be linked, contacts verified by
+    safety number.
+  - Bulgarian: "Account" is "Акаунт" and "Profile" is "Профил".
+  - The background picture is kept once in settings, with appearance profiles
+    pointing to it, instead of a ~2.7 MB copy in every profile (settings files of
+    up to ~80 MB); existing settings are compacted when read.
+
+### Security
+
+Trust audit: what a malicious or compromised server can do to end-to-end
+encryption (CRYPTOGRAPHY.md §4b). Every change works with the previous
+releases on desktop, Android and iPhone.
+
+- A contact's identity key changing on an incoming message is accepted only if
+  the server's bundle carries that key, the device list signed by it lists the
+  sending device, and no shared community names another key. Verification is
+  never cleared silently: a verified contact whose key changed shows "changed
+  since verified" and gets nothing until you compare the new safety number.
+  Marking as verified needs the number that was on screen.
+- Copies from your own devices (sent messages, edits, friends list, groups) are
+  accepted only from devices in your signed device list under your own
+  identity key.
+- Contacts' device lists are checked again at least daily (and when a message
+  comes from a device River does not know); the newest versions seen are in
+  backups, so a restore does not accept an older list.
+- Community keys travel with a proof: sealed under the previous epoch's key.
+  Keys from older Rivers are accepted only from members who held a genuine key
+  before; rotations go only to such members. A rotation that reaches nobody is
+  asked for again by the server and redone, and the app says the community is
+  still on the previous key meanwhile. Pending members are never picked to
+  rotate, and a refused claim hands over to the next member.
+- Community messages and profiles can be sealed bound to their ID and sender
+  (associated data v2); every River now opens them. Sending v2 starts in 2.12.
+- Identity-bound call signals cannot be replayed within their ten minutes;
+  signals from someone whose key just changed are refused until you look at it.
+- The file cache is keyed by the whole file pointer, not the blob ID alone.
+- Server: link-code slots are limited per address and for accounts made today;
+  usernames given up are held 30 days for their owner; a deleted River ID can be
+  registered again only with its own identity key.
+- Docs: the recovery secret is 128 bits (16 Bytewords + 2 checksum words), and
+  sealed sender is not implemented — CRYPTOGRAPHY.md said otherwise.
+
+### Fixed
+
+- Traffic for group conversations you removed is dropped instead of waiting
+  forever; only people you know can have messages wait for a group, at most 20
+  each.
+- Call invites are never kept to be replayed later, and one that waited longer
+  than a ring lasts no longer rings.
+
+### Security
+
+- **Social privacy**: posts and stories go only to friends who have answered
+  (as the Friends page counts them), never to someone you only opened a chat
+  with or sent a request to; a hand-picked audience is limited to friends too.
+  Comments and reactions are relayed only to people who are still your
+  contacts, comments from people you blocked are not shown on anyone's post,
+  and posts and stories of people you removed leave your feed and their profile.
+
+### Fixed
+
+- **A crash no longer leaves a blank window**: River shows "Something went
+  wrong" with the error and Reload; a crash on one page leaves the rest of River
+  working (and that page can be tried again).
+- **Stories**: the viewer follows the story you are watching by its ID, so
+  marking it seen no longer jumps to someone else or crashes when stories
+  disappear. Video stories play (muted, inline) and move on when they end; the
+  timer starts once the picture is shown, and holding keeps its progress.
+  Arrow keys and Esc while writing a reply stay in the reply box. On touch
+  screens, a hold pauses, a tap goes back or on, and a swipe down closes.
+- **Posts that did not go out**: a post nobody received is removed instead of
+  staying as if shared (sharing again makes no duplicate); people a post
+  missed, deletes, "seen" receipts and comment relays are sent again later. An
+  offline comment or like is taken back and says so (your comment returns to
+  the box) instead of looking sent and being lost.
+- **Profiles**: a bio that could not be saved is no longer shown as saved, and
+  a new bio reaches your friends (once, a few seconds after the last change).
+  Profiles update after likes, comments and deletes. On narrow windows (phones)
+  your profile, bio and friends are reachable at the top of the feed.
+- Photo previews in the post and story composer are freed when removed, cut
+  off by the limit or closed.
+- **Call history**: calls you decline show as declined and calls that were
+  answered but never connected as "Could not connect", not as missed; new
+  calls appear on the Calls page at once.
+- **Adding a friend** again no longer sends a second greeting ("already sent");
+  adding someone who asked you first accepts their request and says you are
+  now friends; someone you blocked is refused with a reason. Pasting a bare
+  River ID offers to add them instead of doing nothing.
+- **Events**: a half-typed start time no longer crashes the form (Save waits
+  for a valid time), and an event of another length (say 90 minutes) keeps it
+  when edited instead of becoming one hour.
+- **Shortcuts**: Space on a focused button presses it instead of jumping to
+  the message box; Alt+↑/↓ and Ctrl+Alt+↑/↓ no longer switch channels from
+  other fields, menus or dialogs (they still work from the message box).
+- **Admin**: a new sign-up link is no longer shown as already copied, and a
+  failed copy, sign-up mode change or cancelled link says so.
+
 ## [2.10.12] - 2026-10-16
 
 **Bug sweep: a review of the whole program — server, phone apps, calls, voice, messages and layout.**

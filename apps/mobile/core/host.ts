@@ -11,6 +11,7 @@ import { decodeWire, encodeWire } from '../shared/wire.ts';
  *   lifecycle(state)   'foreground' | 'background'
  *   deepLink(url)      a river://open?link=… URL the system handed to the app
  *   uiGone()           the UI's WebView was destroyed (its calls and media ended with it)
+ *   wake()             Android's watchdog woke the phone: check the connection now (2.11)
  *
  * Out (core → app shell): `RiverHost.post(header, payload)`. The header is a
  * small JSON object the shell reads; the payload goes on untouched:
@@ -34,6 +35,7 @@ const listeners = new Map<string, Listener[]>();
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 const lifecycleListeners = new Set<(state: 'foreground' | 'background') => void>();
 const uiGoneListeners = new Set<() => void>();
+const wakeListeners = new Set<() => void>();
 const invokeObservers = new Set<(channel: string, args: unknown[]) => void>();
 let deepLinkHandler: (url: string) => void = () => undefined;
 let nextAsk = 1;
@@ -95,6 +97,12 @@ export function onDeepLink(fn: (url: string) => void): void {
 export function onUiGone(fn: () => void): () => void {
   uiGoneListeners.add(fn);
   return () => uiGoneListeners.delete(fn);
+}
+
+/** Android's watchdog woke the phone (Stay connected): timers may have slept through a dead connection. */
+export function onWake(fn: () => void): () => void {
+  wakeListeners.add(fn);
+  return () => wakeListeners.delete(fn);
 }
 
 /** Whether a UI is there to take events (false before it first calls, and after it went away). */
@@ -179,12 +187,23 @@ function uiGone(): void {
   for (const fn of uiGoneListeners) fn();
 }
 
+function wake(): void {
+  for (const fn of wakeListeners) {
+    try {
+      fn();
+    } catch {
+      // one listener never stops the others
+    }
+  }
+}
+
 export const inbound = {
   invoke: (id: number, json: string): void => void invoke(id, json),
   send,
   answer,
   lifecycle,
   uiGone,
+  wake,
   deepLink: (url: string): void => {
     if (typeof url === 'string') deepLinkHandler(url);
   },

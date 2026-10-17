@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createIdentity } from '../src/identity.ts';
 import {
+  IdentityChangeRefusedError,
   RiverProtocol,
   SafetyNumberChangedError,
   pad,
@@ -171,6 +172,122 @@ describe('libsignal sessions', () => {
     expect(alice.protocol.isVerified(bob.identity.riverId)).toBe(false);
     const m = await alice.protocol.encrypt(bob.identity.riverId, 1, text('welcome back'));
     expect(str(await bob2.decrypt(alice.identity.riverId, 1, m))).toBe('welcome back');
+  });
+
+  it('accepts a changed key on an incoming message only when the caller confirms it; verification is kept', async () => {
+    const alice = party();
+    const bob = party();
+    await alice.protocol.startSession(
+      bob.identity.riverId,
+      bob.identity.publicKey,
+      serve(bob.protocol.generatePreKeys({ oneTime: 1, rotate: true }), bob.identity.registrationId),
+    );
+    const hello = await alice.protocol.encrypt(bob.identity.riverId, 1, text('hi'));
+    await bob.protocol.decrypt(alice.identity.riverId, 1, hello);
+    expect(alice.protocol.setVerified(bob.identity.riverId, true)).toBe(true);
+    expect(alice.protocol.verificationState(bob.identity.riverId)).toBe('verified');
+
+    // Someone with Bob's River ID and a new key starts a session with Alice.
+    const bob2Identity = { ...createIdentity(), riverId: bob.identity.riverId };
+    const bob2 = new RiverProtocol({ ...bob2Identity, deviceId: 1 }, memoryStorage());
+    const aliceKeys = alice.protocol.generatePreKeys({ oneTime: 2, rotate: true });
+    const seen: Array<{ deviceId: number; registrationId: number | null }> = [];
+    await bob2.startSession(
+      alice.identity.riverId,
+      alice.identity.publicKey,
+      serve(aliceKeys, alice.identity.registrationId),
+    );
+    const claim = await bob2.encrypt(alice.identity.riverId, 1, text('new phone'));
+
+    // Nobody confirmed it: refused, and the stored key stays.
+    await expect(alice.protocol.decrypt(bob.identity.riverId, 1, claim)).rejects.toBeInstanceOf(
+      IdentityChangeRefusedError,
+    );
+    expect(alice.protocol.identityOf(bob.identity.riverId)).toEqual(bob.identity.publicKey);
+
+    // Confirmed (the caller checked the device list signed by the new key): accepted, and the
+    // contact shows as changed since verification — never silently unverified.
+    alice.protocol.approveIdentityChange = async (change) => {
+      seen.push({ deviceId: change.deviceId, registrationId: change.registrationId });
+      return Buffer.from(change.identityKey).equals(Buffer.from(bob2Identity.publicKey));
+    };
+    const claim2 = await bob2.encrypt(alice.identity.riverId, 1, text('new phone, again'));
+    expect(str(await alice.protocol.decrypt(bob.identity.riverId, 1, claim2))).toBe('new phone, again');
+    expect(seen).toEqual([{ deviceId: 1, registrationId: bob2Identity.registrationId }]);
+    expect(alice.protocol.verificationState(bob.identity.riverId)).toBe('changed');
+    expect(alice.protocol.isVerified(bob.identity.riverId)).toBe(false);
+    // Sending stops until the user verifies the new key.
+    await expect(alice.protocol.encrypt(bob.identity.riverId, 1, text('hello?'))).rejects.toBeInstanceOf(
+      SafetyNumberChangedError,
+    );
+    // Verifying needs the key that was compared.
+    expect(alice.protocol.setVerified(bob.identity.riverId, true, bob.identity.publicKey)).toBe(false);
+    expect(alice.protocol.setVerified(bob.identity.riverId, true, bob2Identity.publicKey)).toBe(true);
+    const back = await alice.protocol.encrypt(bob.identity.riverId, 1, text('verified again'));
+    expect(str(await bob2.decrypt(alice.identity.riverId, 1, back))).toBe('verified again');
+  });
+
+  it('keeps a verification mark from before 2.11 as "changed" when the key changes', async () => {
+    const alice = party();
+    const bob = party();
+    await alice.protocol.startSession(
+      bob.identity.riverId,
+      bob.identity.publicKey,
+      serve(bob.protocol.generatePreKeys({ oneTime: 1, rotate: true }), bob.identity.registrationId),
+    );
+    alice.storage.put('verified', bob.identity.riverId, new Uint8Array([1]));
+    expect(alice.protocol.verificationState(bob.identity.riverId)).toBe('verified');
+    const bob2Identity = { ...createIdentity(), riverId: bob.identity.riverId };
+    const bob2 = new RiverProtocol({ ...bob2Identity, deviceId: 1 }, memoryStorage());
+    await bob2.startSession(
+      alice.identity.riverId,
+      alice.identity.publicKey,
+      serve(alice.protocol.generatePreKeys({ oneTime: 1, rotate: true }), alice.identity.registrationId),
+    );
+    alice.protocol.approveIdentityChange = async () => true;
+    await alice.protocol.decrypt(
+      bob.identity.riverId,
+      1,
+      await bob2.encrypt(alice.identity.riverId, 1, text('x')),
+    );
+    expect(alice.protocol.verificationState(bob.identity.riverId)).toBe('changed');
+  });
+
+  it('never accepts another identity key for its own account (forged copies from "our" devices)', async () => {
+    const alice = party();
+    const laptopStorage = memoryStorage();
+    const laptop = new RiverProtocol({ ...alice.identity, deviceId: 2 }, laptopStorage);
+    // Someone else's session, relabelled by the server as coming from Alice's device 3.
+    const forger = new RiverProtocol({ ...createIdentity(), deviceId: 3 }, memoryStorage());
+    const keys = alice.protocol.generatePreKeys({ oneTime: 2, rotate: true });
+    // Even with a caller that would approve anything.
+    alice.protocol.approveIdentityChange = async () => true;
+    await forger.startSession(
+      alice.identity.riverId,
+      alice.identity.publicKey,
+      serve(keys, alice.identity.registrationId),
+    );
+    const forged = await forger.encrypt(alice.identity.riverId, 1, text('block everyone'));
+    await expect(alice.protocol.decrypt(alice.identity.riverId, 3, forged)).rejects.toBeInstanceOf(
+      IdentityChangeRefusedError,
+    );
+    // The account's real other device works.
+    await laptop.startSession(
+      alice.identity.riverId,
+      alice.identity.publicKey,
+      serve(keys, alice.identity.registrationId),
+    );
+    const copy = await laptop.encrypt(alice.identity.riverId, 1, text('a copy'));
+    expect(str(await alice.protocol.decrypt(alice.identity.riverId, 2, copy))).toBe('a copy');
+    // And a server handing out another key for our own account is refused when sending.
+    const other = party();
+    await expect(
+      alice.protocol.startSession(
+        alice.identity.riverId,
+        other.identity.publicKey,
+        serve(other.protocol.generatePreKeys({ oneTime: 1, rotate: true }), other.identity.registrationId),
+      ),
+    ).rejects.toThrow();
   });
 
   it('never stores keys outside the provided storage', async () => {

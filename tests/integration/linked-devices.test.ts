@@ -30,6 +30,10 @@ let dir: string;
 let server: FastifyInstance;
 let serverDb: RiverDatabase;
 const locals: LocalDatabase[] = [];
+const links: LinkService[] = [];
+
+/** Stopped before their databases close, so no reconnect timer outlives its test. */
+const communities: CommunityService[] = [];
 
 const injectFetch: typeof fetch = async (input, init) => {
   const url = new URL(String(input));
@@ -80,7 +84,11 @@ function install(name: string, broken: { when: (url: string) => boolean } = { wh
     requestJson: createRequestJson(fetchHere),
     log: nullLogger,
     onLinked: () => undefined,
+    timings: { watchMs: 100, linkedShowMs: 3000 },
   });
+  links.push(link);
+
+  communities.push(community);
   return { identity, account, community, dm, link };
 }
 
@@ -112,6 +120,9 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  for (const l of links.splice(0)) l.dispose();
+
+  for (const c of communities.splice(0)) c.stop();
   for (const l of locals.splice(0)) l.close();
   await server.close();
   await serverDb.close();
@@ -384,5 +395,141 @@ describe('linked devices', { timeout: 60_000 }, () => {
     expect((await phone.link.join(again.code, 'Phone')).state).toBe('joining');
     phone.link.cancel();
     desktop.link.cancel();
+  });
+});
+
+/** Desktop shows a code, the phone uses it, the desktop confirms; returns when the phone reviews. */
+async function linkUpToReview(desktop: ReturnType<typeof install>, phone: ReturnType<typeof install>) {
+  const offered = (await desktop.link.start()) as Extract<LinkProgress, { state: 'offering' }>;
+  await phone.link.join(offered.code, 'Phone');
+  await until(() => desktop.link.status().state === 'request');
+  const { deviceId } = await desktop.link.confirm();
+  await until(() => phone.link.status().state === 'review');
+  return deviceId;
+}
+
+describe('linking, carefully', { timeout: 60_000 }, () => {
+  it('a new device that cancels at “Is this you?” is taken off the account again', async () => {
+    const desktop = install('eve-desktop');
+    desktop.identity.create('Eve');
+    await desktop.account.register(SERVER);
+    const phone = install('eve-phone');
+    const deviceId = await linkUpToReview(desktop, phone);
+    expect((await desktop.link.devices()).map((d) => d.deviceId)).toEqual([1, deviceId]);
+
+    phone.link.cancel();
+    expect(phone.link.status().state).toBe('idle');
+    expect(phone.identity.get()).toBeNull();
+    // The desktop sees the signed "no" and removes the device it had added.
+    const told = await until(() => {
+      const p = desktop.link.status();
+      return p.state === 'failed' ? p : null;
+    });
+    expect(told.message).toMatch(/did not take the account/);
+    expect((await desktop.link.devices()).map((d) => d.deviceId)).toEqual([1]);
+  });
+
+  it('a “no” the new device did not sign removes nothing', async () => {
+    const desktop = install('fay-desktop');
+    desktop.identity.create('Fay');
+    await desktop.account.register(SERVER);
+    const offered = (await desktop.link.start()) as Extract<LinkProgress, { state: 'offering' }>;
+    const phone = install('fay-phone');
+    await phone.link.join(offered.code, 'Phone');
+    await until(() => desktop.link.status().state === 'request');
+    await desktop.link.confirm();
+    // Someone (the server) writes a decline without the link secret.
+    const id = mailboxId(parseLinkCode(offered.code)!.secret);
+    const forged = await server.inject({
+      method: 'PUT',
+      url: `/v1/link/${id}/decline`,
+      payload: { mac: 'A'.repeat(43) },
+    });
+    expect(forged.statusCode).toBe(200);
+    await new Promise((r) => setTimeout(r, 500));
+    expect((await desktop.link.devices()).map((d) => d.deviceId)).toEqual([1, 2]);
+    phone.link.cancel();
+  });
+
+  it('pressing “Link a new device” twice shows one working code, and Link it twice links once', async () => {
+    const desktop = install('gil-desktop');
+    desktop.identity.create('Gil');
+    await desktop.account.register(SERVER);
+    const [, second] = await Promise.all([desktop.link.start(), desktop.link.start()]);
+    const shown = desktop.link.status() as Extract<LinkProgress, { state: 'offering' }>;
+    expect(shown.state).toBe('offering');
+    // Never the wiped secret of the replaced attempt (a code of zeros).
+    expect(shown.shortCode).not.toMatch(/^[0-]+$/);
+    expect(second).toEqual(shown);
+
+    const phone = install('gil-phone');
+    await phone.link.join(shown.code, 'Phone');
+    await until(() => desktop.link.status().state === 'request');
+    const confirms = await Promise.allSettled([desktop.link.confirm(), desktop.link.confirm()]);
+    expect(confirms.filter((c) => c.status === 'fulfilled')).toHaveLength(1);
+    expect(confirms.find((c) => c.status === 'rejected')).toMatchObject({
+      reason: expect.objectContaining({ message: expect.stringMatching(/already being linked/) }),
+    });
+    const list = await desktop.account.deviceList();
+    expect(list.version).toBe(2);
+    expect(list.devices.map((d) => d.deviceId)).toEqual([1, 2]);
+
+    // "Linked" names the new device on the desktop only, and clears after a while.
+    const linked = desktop.link.status();
+    expect(linked).toEqual({ state: 'linked', deviceName: 'Phone' });
+    await until(() => phone.link.status().state === 'review');
+    await phone.link.accept();
+    expect(phone.link.status()).toEqual({ state: 'linked' });
+    await until(() => desktop.link.status().state === 'idle', 10_000);
+  });
+
+  it('cancelling while the code is being reserved shows no code', async () => {
+    const desktop = install('hal-desktop');
+    desktop.identity.create('Hal');
+    await desktop.account.register(SERVER);
+    const starting = desktop.link.start();
+    desktop.link.cancel();
+    expect((await starting).state).toBe('idle');
+    expect(desktop.link.status().state).toBe('idle');
+  });
+
+  it('a removed device can be linked again, only to its own account', async () => {
+    const desktop = install('ida-desktop');
+    const me = desktop.identity.create('Ida');
+    await desktop.account.register(SERVER);
+    const phone = install('ida-phone');
+    await linkUpToReview(desktop, phone);
+    await phone.link.accept();
+    await until(() => phone.link.status().state === 'linked');
+    await desktop.link.remove(2);
+    expect(await phone.account.connect()).toMatchObject({ missing: true, wasLinked: true });
+
+    // "Link this device again".
+    phone.account.forgetForRelink();
+    expect(phone.identity.get()).toBeNull();
+
+    // A code from someone else's account is refused (this phone holds Ida's messages)…
+    const other = install('jon-desktop');
+    other.identity.create('Jon');
+    await other.account.register(SERVER);
+    const foreign = (await other.link.start()) as Extract<LinkProgress, { state: 'offering' }>;
+    await phone.link.join(foreign.code, 'Phone');
+    await until(() => other.link.status().state === 'request');
+    await other.link.confirm();
+    const refused = await until(() => {
+      const p = phone.link.status();
+      return p.state === 'failed' ? p : null;
+    });
+    expect(refused.message).toMatch(/different account/);
+    expect(phone.identity.get()).toBeNull();
+    // …and Jon's account does not keep the device it was refused by.
+    await until(async () => (await other.account.deviceList()).devices.length === 1);
+
+    // A code from Ida's desktop links it again, as a new device of the same account.
+    await linkUpToReview(desktop, phone);
+    await phone.link.accept();
+    expect(phone.identity.get()?.riverId).toBe(me.riverId);
+    expect(phone.account.status()).toMatchObject({ state: 'registered', deviceId: 2, connection: 'online' });
+    expect(phone.account.relinkTarget()).toBeNull();
   });
 });

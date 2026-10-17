@@ -8,6 +8,7 @@ import {
   parseDeviceList,
   linkIdSchema,
   provisionLinkRequestSchema,
+  declineLinkRequestSchema,
   putLinkHelloRequestSchema,
   registerRequestSchema,
   registrationMessage,
@@ -24,7 +25,7 @@ import {
   type RegisterResponse,
 } from '@river/protocol';
 import type { ServerConfig } from '../config.ts';
-import { purgeSignups, sha256, signupMode, usernameFree } from '../accounts/usernames.ts';
+import { holdUsername, purgeSignups, sha256, signupMode, usernameFree } from '../accounts/usernames.ts';
 import type { RiverDatabase } from '../db/database.ts';
 import type { Database } from '../db/schema.ts';
 import {
@@ -141,6 +142,16 @@ export function registerAccountRoutes(
     }
     if (!verify(b(device.authKey), message, b(req.deviceSignature))) {
       return fail(reply, 400, 'bad_signature', 'Device signature is invalid');
+    }
+    // A deleted account's River ID comes back only with the identity key it had: nobody else can
+    // register it under a new key and pass as the person their contacts knew.
+    const tombstone = await db
+      .selectFrom('account_tombstones')
+      .select('identity_key')
+      .where('river_id', '=', list.riverId)
+      .executeTakeFirst();
+    if (tombstone && tombstone.identity_key !== req.identityKey) {
+      return fail(reply, 409, 'account_exists', 'An account with this River ID already exists');
     }
     if (!req.signupCode && (await signupMode(db)) === 'invite') {
       return fail(
@@ -262,7 +273,7 @@ export function registerAccountRoutes(
         .where('river_id', '=', me)
         .executeTakeFirst();
       if (current?.username !== username) {
-        if (!(await usernameFree(db, username, now))) {
+        if (!(await usernameFree(db, username, now, me))) {
           return fail(reply, 409, 'username_taken', `@${username} is taken. Try another one.`);
         }
         try {
@@ -270,6 +281,8 @@ export function registerAccountRoutes(
         } catch {
           return fail(reply, 409, 'username_taken', `@${username} is taken. Try another one.`);
         }
+        // The old name stays ours for a while: nobody else can pick it up and pass as us.
+        if (current?.username) await holdUsername(db, current.username, me, now);
       }
       return { username, riverId: me };
     },
@@ -443,12 +456,14 @@ export function registerAccountRoutes(
   interface PendingLink {
     /** Reserved by a signed-in device that showed the code (1.3.1); null: opened by a hello. */
     reservedBy: string | null;
-    /** Who opened an unreserved slot (older apps), for the per-address cap. */
+    /** The network address that opened or reserved the slot, for the per-address caps. */
     openedBy: string | null;
     hello: LinkHello | null;
     mac: string | null;
     provision: string | null;
     deviceId: number | null;
+    /** The new device declined the account it was sent (a MAC only the two devices can check). */
+    declined: string | null;
     expires: number;
   }
   const links = new Map<string, PendingLink>();
@@ -457,6 +472,12 @@ export function registerAccountRoutes(
   /** Slots one account may hold reserved at once, and unreserved slots per network address. */
   const MAX_RESERVED_PER_ACCOUNT = 3;
   const MAX_OPEN_PER_IP = 3;
+  /**
+   * Throwaway accounts must not use up the slots: an account made today may reserve two at a
+   * time, and one network address at most a few in all (2.11).
+   */
+  const MAX_RESERVED_NEW_ACCOUNT = 2;
+  const MAX_RESERVED_PER_IP = 6;
   const sweep = (): void => {
     const t = deps.now().getTime();
     for (const [id, l] of links) if (l.expires <= t) links.delete(id);
@@ -466,6 +487,7 @@ export function registerAccountRoutes(
     mac: l.mac,
     provision: l.provision,
     deviceId: l.deviceId,
+    declined: l.declined,
     expiresAt: new Date(l.expires).toISOString(),
   });
   const notFound = (reply: FastifyReply): FastifyReply =>
@@ -486,20 +508,42 @@ export function registerAccountRoutes(
         if (existing.reservedBy === riverId) return reply.code(200).send(linkState(existing));
         return fail(reply, 409, 'link_in_use', 'This link code was already used.');
       }
-      const mine = [...links.values()].filter((l) => l.reservedBy === riverId).length;
-      if (mine >= MAX_RESERVED_PER_ACCOUNT) {
-        return fail(reply, 429, 'too_many_links', 'Finish or cancel the devices you are already linking');
+      const account = await db
+        .selectFrom('accounts')
+        .select('created_on')
+        .where('river_id', '=', riverId)
+        .executeTakeFirst();
+      const isNew = !account || account.created_on >= day(deps.now());
+      const cap = isNew ? MAX_RESERVED_NEW_ACCOUNT : MAX_RESERVED_PER_ACCOUNT;
+      const mine = [...links.entries()].filter(([, l]) => l.reservedBy === riverId);
+      if (mine.length >= cap) {
+        // Trying again: the oldest code nobody answered yet gives way; otherwise wait.
+        const unused = mine
+          .filter(([, l]) => l.hello === null)
+          .sort((a, b) => a[1].expires - b[1].expires)[0];
+        if (!unused) {
+          return fail(reply, 429, 'too_many_links', 'Finish or cancel the devices you are already linking');
+        }
+        links.delete(unused[0]);
+      }
+      const fromHere = [...links.values()].filter(
+        (l) => l.reservedBy !== null && l.openedBy === request.ip,
+      ).length;
+      if (fromHere >= MAX_RESERVED_PER_IP) {
+        return fail(reply, 429, 'too_many_links', 'Too many devices are being linked from here right now');
       }
       if (links.size >= MAX_LINKS) {
         return fail(reply, 503, 'busy', 'Too many devices are being linked right now');
       }
       const l: PendingLink = {
         reservedBy: riverId,
-        openedBy: null,
+        // Remembered for the per-address cap only (in memory, gone with the slot).
+        openedBy: request.ip,
         hello: null,
         mac: null,
         provision: null,
         deviceId: null,
+        declined: null,
         expires: deps.now().getTime() + LINK_TTL_MS,
       };
       links.set(id.data, l);
@@ -522,7 +566,9 @@ export function registerAccountRoutes(
       return reply.code(201).send(linkState(reserved));
     }
     // A code from an older app that did not reserve: allowed, a few per network address.
-    const opened = [...links.values()].filter((l) => l.openedBy === request.ip).length;
+    const opened = [...links.values()].filter(
+      (l) => l.reservedBy === null && l.openedBy === request.ip,
+    ).length;
     if (opened >= MAX_OPEN_PER_IP) {
       return fail(reply, 429, 'too_many_links', 'Too many devices are being linked from here right now');
     }
@@ -536,6 +582,7 @@ export function registerAccountRoutes(
       mac: parsed.data.mac,
       provision: null,
       deviceId: null,
+      declined: null,
       expires: deps.now().getTime() + LINK_TTL_MS,
     };
     links.set(id.data, l);
@@ -575,6 +622,21 @@ export function registerAccountRoutes(
       return linkState(l);
     },
   );
+
+  // The new device was sent the account but declined it ("Is this you?" → Cancel). Its MAC under
+  // the link secret is passed on as it is: only the linked device can check it, and then takes the
+  // device it added off its signed list again. Written once, and only after provisioning.
+  app.put<{ Params: { id: string } }>(`${API_PREFIX}/link/:id/decline`, sensitive, async (request, reply) => {
+    sweep();
+    const id = linkIdSchema.safeParse(request.params.id);
+    const parsed = declineLinkRequestSchema.safeParse(request.body);
+    if (!id.success || !parsed.success) return fail(reply, 400, 'bad_request', 'Bad request');
+    const l = links.get(id.data);
+    if (!l?.provision) return notFound(reply);
+    if (l.declined !== null) return fail(reply, 409, 'link_in_use', 'This link was already answered.');
+    l.declined = parsed.data.mac;
+    return linkState(l);
+  });
 }
 
 class SignupError extends Error {}

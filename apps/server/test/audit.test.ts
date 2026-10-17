@@ -408,6 +408,34 @@ describe('community authorization', () => {
     expect(await status('PATCH', `/v1/channels/${c.text}`, manager.token, { overwrites: owned })).toBe(200);
   });
 
+  it('a legacy overwrite that already allows Administrator stays editable; adding it is still refused', async () => {
+    await start();
+    const owner = await registerUser(app);
+    const c = await community(owner);
+    const mods = await c.role(0);
+    const cat = id();
+    expect(
+      await status('POST', `/v1/communities/${c.cid}/categories`, owner.token, { id: cat, name: sealed() }),
+    ).toBe(201);
+    // Written before overwrites were checked: Administrator is already in there.
+    await database.db
+      .insertInto('channel_overwrites')
+      .values({ channel_id: c.text, role_id: c.cid, allow: Permission.ADMINISTRATOR, deny: 0 })
+      .execute();
+    await database.db
+      .insertInto('category_overwrites')
+      .values({ category_id: cat, role_id: c.cid, allow: Permission.ADMINISTRATOR, deny: 0 })
+      .execute();
+    const legacy = { roleId: c.cid, allow: Permission.ADMINISTRATOR | Permission.SEND_MESSAGES, deny: 0 };
+    // The editor resends the existing allow bits with the change: accepted.
+    expect(await status('PATCH', `/v1/channels/${c.text}`, owner.token, { overwrites: [legacy] })).toBe(200);
+    expect(await status('PATCH', `/v1/categories/${cat}`, owner.token, { overwrites: [legacy] })).toBe(200);
+    // Newly granting Administrator to another role is still refused.
+    const added = [legacy, { roleId: mods, allow: Permission.ADMINISTRATOR, deny: 0 }];
+    expect(await status('PATCH', `/v1/channels/${c.text}`, owner.token, { overwrites: added })).toBe(400);
+    expect(await status('PATCH', `/v1/categories/${cat}`, owner.token, { overwrites: added })).toBe(400);
+  });
+
   it('a self-assignable role cannot later gain moderation permissions', async () => {
     await start();
     const owner = await registerUser(app);
@@ -675,6 +703,22 @@ describe('realtime connections', () => {
     expect(conn.closed()).toBeNull();
     await database.db.deleteFrom('sessions').execute();
     await vi.waitFor(() => expect(conn.closed()).toBe(4401));
+  });
+
+  it('keeps the session of a connected device alive instead of ending it once a day', async () => {
+    await start({}, { sessionRecheckMs: 50 });
+    const user = await registerUser(app);
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const { port } = app.server.address() as { port: number };
+    const conn = await connect(port, user.token);
+    // The session is near its end (less than half its lifetime left).
+    const soon = new Date(Date.now() + 60_000).toISOString();
+    await database.db.updateTable('sessions').set({ expires_at: soon }).execute();
+    await vi.waitFor(async () => {
+      const row = await database.db.selectFrom('sessions').select('expires_at').executeTakeFirstOrThrow();
+      expect(row.expires_at > new Date(Date.now() + 60 * 60_000).toISOString()).toBe(true);
+    });
+    expect(conn.closed()).toBeNull();
   });
 
   it('deleting a community ends its voice calls', async () => {

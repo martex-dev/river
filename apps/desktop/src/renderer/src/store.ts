@@ -59,6 +59,9 @@ interface RiverState {
   settingsTab: SettingsTab | null;
   openSettings(tab?: SettingsTab): void;
   closeSettings(): void;
+  /** A settings page has edits that are not saved yet (closing or leaving it asks first). */
+  settingsDirty: boolean;
+  setSettingsDirty(dirty: boolean): void;
   /**
    * A design shown before it is saved: while a slider moves ('live', saved a moment later)
    * or while a theme is tried on from the browser ('try', until Apply or Cancel).
@@ -72,6 +75,12 @@ interface RiverState {
   navigate(section: Section): void;
   load(): Promise<void>;
   updateSettings(patch: SettingsPatch): Promise<void>;
+  /** Settings as the client core has them now (it tells the UI about every change). */
+  setSettings(settings: Settings): Promise<void>;
+  /** The first-run screen to open on ("Link this device again" opens on linking). */
+  onboardingStart: 'welcome' | 'link';
+  /** This device was removed from its account and forgot it: show the first-run linking screen. */
+  startRelink(): void;
   setUpdate(status: UpdateStatus): void;
   setStorage(status: StorageStatus): Promise<void>;
   setAccount(status: AccountStatus): Promise<void>;
@@ -90,10 +99,13 @@ export const useRiver = create<RiverState>((set) => ({
   identity: undefined,
   account: { state: 'none' },
   onboarding: false,
+  onboardingStart: 'welcome',
   loadError: null,
   settingsTab: null,
   openSettings: (tab) => set({ settingsTab: tab ?? 'account' }),
-  closeSettings: () => set({ settingsTab: null }),
+  closeSettings: () => set({ settingsTab: null, settingsDirty: false }),
+  settingsDirty: false,
+  setSettingsDirty: (settingsDirty) => set({ settingsDirty }),
   designPreview: null,
   designTrying: false,
   setDesignPreview: (designPreview, trying = false) =>
@@ -140,6 +152,19 @@ export const useRiver = create<RiverState>((set) => ({
     // Some security indicators depend on settings (e.g. the configured server).
     set({ security: await window.river.security.status() });
   },
+  setSettings: async (settings) => {
+    set({ settings });
+    set({ security: await window.river.security.status() });
+  },
+  startRelink: () =>
+    set({
+      identity: null,
+      account: { state: 'none' },
+      onboarding: true,
+      onboardingStart: 'link',
+      settingsTab: null,
+      section: 'home',
+    }),
   setUpdate: (update) => set({ update }),
   setStorage: async (storage) => {
     set({ storage });
@@ -155,7 +180,7 @@ export const useRiver = create<RiverState>((set) => ({
   identityCreated: async (identity) => {
     set({ identity, security: await window.river.security.status() });
   },
-  finishOnboarding: () => set({ onboarding: false, section: 'home' }),
+  finishOnboarding: () => set({ onboarding: false, onboardingStart: 'welcome', section: 'home' }),
   checkForUpdates: async () => {
     set({ update: { state: 'checking' } });
     set({ update: await window.river.updates.check() });

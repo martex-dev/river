@@ -361,8 +361,26 @@ function SignupControls(props: { data: AdminOverview; onChanged(): void }): Reac
     }
     play('success');
     setMade({ username: res.value.username, link: res.value.link });
+    // A new link has not been copied yet.
+    setCopied(false);
     setUsername('');
     props.onChanged();
+  };
+
+  /** Runs an admin change; a failure is said (it never fails silently). */
+  const change = (run: () => Promise<{ ok: true } | { ok: false; message: string }>): void => {
+    setError(null);
+    void run().then(
+      (r) => {
+        if (r.ok) return props.onChanged();
+        play('error');
+        setError(r.message);
+      },
+      (err: unknown) => {
+        play('error');
+        setError((err as Error).message || 'That did not work. Try again.');
+      },
+    );
   };
 
   return (
@@ -378,11 +396,7 @@ function SignupControls(props: { data: AdminOverview; onChanged(): void }): Reac
         </span>
         <button
           className="btn btn--ghost btn--small"
-          onClick={() =>
-            void window.river.admin.setSignupMode(inviteOnly ? 'open' : 'invite').then((r) => {
-              if (r.ok) props.onChanged();
-            })
-          }
+          onClick={() => change(() => window.river.admin.setSignupMode(inviteOnly ? 'open' : 'invite'))}
         >
           {inviteOnly ? 'Allow anyone to join' : 'Make invite-only'}
         </button>
@@ -426,10 +440,16 @@ function SignupControls(props: { data: AdminOverview; onChanged(): void }): Reac
           <button
             className="btn btn--ghost btn--small"
             onClick={() =>
-              void navigator.clipboard.writeText(made.link).then(() => {
-                play('success');
-                setCopied(true);
-              })
+              void navigator.clipboard.writeText(made.link).then(
+                () => {
+                  play('success');
+                  setCopied(true);
+                },
+                () => {
+                  play('error');
+                  setError('Could not copy the link. Select it and copy it yourself.');
+                },
+              )
             }
           >
             {copied ? 'Copied ✓' : 'Copy link'}
@@ -445,11 +465,7 @@ function SignupControls(props: { data: AdminOverview; onChanged(): void }): Reac
               <strong>@{s.username}</strong>
               <button
                 className="btn btn--link btn--small"
-                onClick={() =>
-                  void window.river.admin.deleteSignup(s.username).then((r) => {
-                    if (r.ok) props.onChanged();
-                  })
-                }
+                onClick={() => change(() => window.river.admin.deleteSignup(s.username))}
               >
                 Cancel
               </button>

@@ -348,9 +348,12 @@ export function registerMessagingRoutes(
       const target = parse(riverIdSchema, request.params.riverId);
       const req = parse(sendDirectRequestSchema, request.body);
       const notFound = new HttpError(404, 'not_found', 'No River account with that ID on this server');
-      // A blocked sender is answered exactly like for an account that does not exist, before any
-      // other check: a device mismatch (409) or a full mailbox (429) would otherwise reveal the block.
-      if (target !== me.riverId && (await isBlocked(target, me.riverId))) throw notFound;
+      // A blocked sender's messages are accepted and dropped, before any other check: a device
+      // mismatch (409), a full mailbox (429) or an error would reveal the block, and senders would
+      // retry (scheduled messages) or fail whole group sends because of one blocked member.
+      if (target !== me.riverId && (await isBlocked(target, me.riverId))) {
+        return reply.code(202).send({ ok: true });
+      }
       const devices = await db
         .selectFrom('devices')
         .select((eb) => [

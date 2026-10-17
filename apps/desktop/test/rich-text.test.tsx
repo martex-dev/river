@@ -124,7 +124,8 @@ describe('syntax highlighting', () => {
 });
 
 describe('first link (for previews)', () => {
-  it('finds the first web link outside code', async () => {
+  // Imports the whole chat screen the first time: slow on a busy machine.
+  it('finds the first web link outside code', { timeout: 30_000 }, async () => {
     const { firstLink } = await import('../src/renderer/src/community/ui/Chat.tsx');
     expect(firstLink('see https://example.com/a?b=1, then')).toBe('https://example.com/a?b=1');
     expect(firstLink('`https://code.example` and (https://x.org)')).toBe('https://x.org');

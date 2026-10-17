@@ -40,8 +40,16 @@ server reports `device_mismatch`. What was missing is a way to add a device.
    the display name and the community keys, sealed to the link key with
    libsignal's HPKE (RFC 9180, `PublicKey.seal`), with associated data
    `"river-link-provision-v1|" ‖ id ‖ "|" ‖ secret`.
-5. The new device opens it (`PrivateKey.open`), adopts the identity with its own
+5. The new device opens it (`PrivateKey.open`), shows whose account it is
+   (_Is this you?_) and, once the person agrees, adopts the identity with its own
    registration ID, signs in as its own device and uploads its own prekeys.
+   If the person cancels instead, it posts a **decline** to the mailbox,
+   `PUT /v1/link/:id/decline` with `mac = HMAC-SHA256(secret,
+"river-link-decline-v1|" ‖ deviceId ‖ "|" ‖ authKey)`. The linked device keeps
+   watching the mailbox until it expires; a decline whose `mac` checks out makes
+   it sign a device list without the new device again. The server cannot forge a
+   decline (it lacks the secret) — at most it can withhold one, which leaves the
+   device on the list as before, to be removed by hand.
 
 The mailbox lives ten minutes in the server's memory; each part is written
 once. The server relays public keys and ciphertext only, and because the hello

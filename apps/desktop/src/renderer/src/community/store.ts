@@ -14,7 +14,13 @@ import type {
 } from '../../../shared/community-actions.ts';
 import { playLocally } from './soundboard-player.ts';
 import { alertForReply, setFollowing } from './thread-follow.ts';
-import { effectiveNotify, newReactions, shouldAlert, silenced } from '../../../shared/notify-rules.ts';
+import {
+  countsMention,
+  effectiveNotify,
+  newReactions,
+  shouldAlert,
+  silenced,
+} from '../../../shared/notify-rules.ts';
 import { play } from './sound.ts';
 import { VoiceCall } from './voice.ts';
 import { WebCodecsRelay } from './relay-audio.ts';
@@ -347,6 +353,14 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       }
       case 'message': {
         const m = event.message;
+        // The channel's notification level and mute (its own, its category's, its community's).
+        const category =
+          get()
+            .communities.find((c) => c.id === m.communityId)
+            ?.channels.find((ch) => ch.id === m.channelId)?.parentId ?? null;
+        const notify = settings
+          ? effectiveNotify(settings.notifications, m.communityId, m.channelId, Date.now(), category)
+          : null;
         if (m.threadId) {
           // A reply inside a thread: it belongs to the thread, not the channel.
           const replies = get().threads[m.threadId];
@@ -356,11 +370,15 @@ export const useCommunity = create<CommunityState>((set, get) => ({
             set({ threads: { ...get().threads, [m.threadId]: next } });
           }
           if (event.isNew && m.mine) setFollowing(m.threadId, true);
-          if (event.isNew && !m.mine && m.mentionsMe) play('mention');
-          else if (event.isNew) {
+          // A mention in a thread follows the channel's level like any mention (not under Nothing).
+          if (event.isNew && !m.mine && m.mentionsMe) {
+            if (!notify || shouldAlert(notify, true)) play('mention');
+          } else if (event.isNew) {
             const viewing = get().openThread?.rootId === m.threadId && document.hasFocus();
             const quiet = settings ? silenced(settings) : false;
-            if (!quiet && alertForReply(m.threadId, m.mine, viewing)) {
+            // Followed threads speak up unless the channel is muted or set to Nothing.
+            const allowed = !notify || (!notify.muted && notify.level !== 'nothing');
+            if (!quiet && allowed && alertForReply(m.threadId, m.mine, viewing)) {
               play('message');
               get().notify(`${m.senderName} replied in a thread you follow.`);
             }
@@ -404,14 +422,13 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         }
         if (!viewing) {
           set({ unread: { ...get().unread, [m.channelId]: (get().unread[m.channelId] ?? 0) + 1 } });
-          if (m.mentionsMe) {
+          // No mention badge where you asked for Nothing.
+          if (m.mentionsMe && (!notify || countsMention(notify))) {
             set({ mentions: { ...get().mentions, [m.channelId]: (get().mentions[m.channelId] ?? 0) + 1 } });
           }
         }
         // Muted channels and communities stay quiet; @mentions still come through (unless set to Nothing).
-        const alert = settings
-          ? shouldAlert(effectiveNotify(settings.notifications, m.communityId, m.channelId), m.mentionsMe)
-          : true;
+        const alert = notify ? shouldAlert(notify, m.mentionsMe) : true;
         if (!alert) return;
         if (m.mentionsMe) play('mention');
         else if (!viewing) play('message');
@@ -647,7 +664,14 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       c?.channels.find((ch) => ch.kind === 'text')?.id ??
       c?.channels[0]?.id ??
       null;
-    set({ selectedCommunity: communityId, selectedChannel: channel, replyTo: null, editing: null });
+    // selectChannel switches the channel itself, so it still knows the one you are leaving
+    // (in the other community) and marks it read.
+    set({
+      selectedCommunity: communityId,
+      ...(channel ? {} : { selectedChannel: null }),
+      replyTo: null,
+      editing: null,
+    });
     if (!get().emojis[communityId]) void get().loadEmojis(communityId);
     if (!get().stickers[communityId]) void get().loadStickers(communityId);
     if (get().saved === null) void get().loadSaved();

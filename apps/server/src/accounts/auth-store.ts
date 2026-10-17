@@ -77,6 +77,27 @@ export async function authenticate(
   return row ? { riverId: row.river_id, deviceId: row.device_id } : null;
 }
 
+/**
+ * Keeps a session in use alive (2.10.13): past half its lifetime it is extended to a full one, so a
+ * device that stays connected is never cut off once a day. Signed out, deleted or expired sessions
+ * are not touched (the update matches only a live one).
+ */
+export async function renewSession(
+  db: Kysely<Database>,
+  token: string,
+  now: Date,
+  ttlMs: number,
+): Promise<void> {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return;
+  await db
+    .updateTable('sessions')
+    .set({ expires_at: new Date(now.getTime() + ttlMs).toISOString() })
+    .where('token_hash', '=', sha256(token))
+    .where('expires_at', '>', now.toISOString())
+    .where('expires_at', '<', new Date(now.getTime() + ttlMs / 2).toISOString())
+    .execute();
+}
+
 /** The account's current suspension, or null. */
 export async function suspension(
   db: Kysely<Database>,

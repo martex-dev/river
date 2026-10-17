@@ -30,6 +30,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import { restoreCachedDesign } from './appearance/use-design.ts';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 
 // Paint the last design before React starts, so River never flashes its fallback look.
 restoreCachedDesign();
@@ -38,6 +39,9 @@ const root = document.getElementById('root');
 if (!root) throw new Error('Missing #root');
 createRoot(root).render(
   <StrictMode>
-    <App />
+    {/* A crash anywhere shows "Something went wrong — Reload", never a blank window. */}
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );

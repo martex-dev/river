@@ -80,6 +80,23 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     return503OnClosing: true,
   });
 
+  // RIVER_TRUST_PROXY=true believes only a proxy on this machine (2.10.12). A proxy elsewhere (another
+  // container, the Docker bridge) is no longer believed, so every client would share its address and
+  // its rate limit: say so once, with what to set.
+  if (config.trustProxy === 'loopback') {
+    let warned = false;
+    app.addHook('onRequest', async (request) => {
+      if (warned || !request.headers['x-forwarded-for']) return;
+      const peer = request.socket.remoteAddress ?? '';
+      if (/^(127\.|::1$|::ffff:127\.)/.test(peer)) return;
+      warned = true;
+      app.log.warn(
+        `A proxy at ${peer} forwards client addresses, but RIVER_TRUST_PROXY=true trusts only a proxy on this machine. ` +
+          'Set RIVER_TRUST_PROXY to the address of that proxy or range (for example 172.18.0.0/16), or all clients share one rate limit.',
+      );
+    });
+  }
+
   // River's phone apps run their client in a WebView with its own origin, so they need CORS.
   // The API authenticates with bearer tokens, never cookies: allowing these origins grants nothing
   // a script could not already do with its own token. Preflights are answered before rate limiting.

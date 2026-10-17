@@ -29,6 +29,10 @@ import { UserFacingError, type AccountService } from './account-service.ts';
  */
 
 const POLL_MS = 1500;
+/** After linking, how often the linked device looks whether the new device declined. */
+const WATCH_MS = 3000;
+/** How long "Linked" stays on screen before the panel returns to its usual state. */
+const LINKED_SHOW_MS = 8000;
 const TTL_MS = 10 * 60 * 1000;
 const SECRET_BYTES = 10;
 /** Crockford base32: no I, L, O or U, so a code survives being read out or typed. */
@@ -130,6 +134,11 @@ export function helloMac(secret: Uint8Array, hello: LinkHello): string {
   ).toString('base64url');
 }
 
+/** "No" from the new device: only someone who saw the code could make it, for this device only. */
+export function declineMac(secret: Uint8Array, deviceId: number, authKey: string): string {
+  return hmac(secret, `river-link-decline-v1|${deviceId}|${authKey}`).toString('base64url');
+}
+
 /** The provisioning message is bound to the secret: only someone who saw the code could make it. */
 function provisionAad(secret: Uint8Array, id: string): Buffer {
   return Buffer.concat([Buffer.from(`river-link-provision-v1|${id}|`, 'utf8'), secret]);
@@ -150,6 +159,19 @@ export interface LinkServiceDeps {
   homeServer?: () => Promise<string>;
   /** The new device is linked: remember its server and connect. */
   onLinked(serverUrl: string): void;
+  /** Tests: shorter waits. */
+  timings?: { watchMs?: number; linkedShowMs?: number };
+}
+
+/** A device this one linked, watched until its code runs out in case it declines the account. */
+interface Watch {
+  serverUrl: string;
+  id: string;
+  secret: Buffer;
+  deviceId: number;
+  authKey: string;
+  deviceName: string;
+  expires: number;
 }
 
 export class LinkService {
@@ -166,6 +188,10 @@ export class LinkService {
     expires: number;
     hello: LinkHello | null;
   } | null = null;
+  /** "Link it" is being carried out (a second press must not publish another list). */
+  private confirming = false;
+  private linkedTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly watches = new Set<ReturnType<typeof setTimeout>>();
 
   constructor(deps: LinkServiceDeps) {
     this.deps = deps;
@@ -181,8 +207,18 @@ export class LinkService {
   }
 
   private set(progress: LinkProgress): void {
+    if (this.linkedTimer) clearTimeout(this.linkedTimer);
+    this.linkedTimer = null;
     this.progress = progress;
     for (const l of this.listeners) l(progress);
+    // "Linked" is news, not a state to keep showing: it clears after a little while.
+    if (progress.state === 'linked') {
+      this.linkedTimer = setTimeout(() => {
+        this.linkedTimer = null;
+        if (this.progress === progress) this.set({ state: 'idle' });
+      }, this.deps.timings?.linkedShowMs ?? LINKED_SHOW_MS);
+      this.linkedTimer.unref?.();
+    }
   }
 
   private fail(message: string): void {
@@ -201,6 +237,11 @@ export class LinkService {
   }
 
   cancel(): void {
+    // "Is this you?" → Cancel: the other device already added this one to its account. Tell it
+    // (best effort), so it takes this device off the list again instead of leaving a device
+    // nobody holds.
+    const declining = this.progress.state === 'review' ? this.pendingJoin : null;
+    if (declining) void declining.decline().catch(() => undefined);
     this.stop();
     this.set({ state: 'idle' });
   }
@@ -236,7 +277,10 @@ export class LinkService {
     if (status.state !== 'registered' || !this.deps.account.sessionToken()) {
       throw new UserFacingError('Connect to your server first, then try again.');
     }
+    if (this.confirming) throw new UserFacingError('A device is being linked right now. Wait a moment.');
     this.stop();
+    // This attempt; one started (or a cancel) while the mailbox is being reserved replaces it.
+    const attempt = this.attempt;
     const secret = randomBytes(SECRET_BYTES);
     const id = mailboxId(secret);
     const expires = Date.now() + TTL_MS;
@@ -249,13 +293,14 @@ export class LinkService {
         z.unknown(),
       )
       .catch(() => undefined);
+    // Replaced or cancelled meanwhile: its secret is already wiped; never show it.
+    if (attempt !== this.attempt) return this.progress;
     this.set({
       state: 'offering',
       code: formatLinkCode(status.serverUrl, secret),
       shortCode: encodeSecret(secret),
       expiresAt: new Date(expires).toISOString(),
     });
-    const attempt = this.attempt;
     const poll = async (): Promise<void> => {
       const offer = this.offer;
       if (!offer) return;
@@ -278,6 +323,17 @@ export class LinkService {
 
   /** The person confirmed: add the new device to this account and send it the account. */
   async confirm(): Promise<{ deviceId: number }> {
+    // Pressed twice: the second would publish a list built from the same old version.
+    if (this.confirming) throw new UserFacingError('This device is already being linked.');
+    this.confirming = true;
+    try {
+      return await this.confirmOnce();
+    } finally {
+      this.confirming = false;
+    }
+  }
+
+  private async confirmOnce(): Promise<{ deviceId: number }> {
     const offer = this.offer;
     const hello = offer?.hello;
     if (!offer || !hello) throw new UserFacingError('No device is waiting to be linked.');
@@ -288,6 +344,7 @@ export class LinkService {
       throw new UserFacingError('The link code expired. Start again.');
     }
     const list = await this.deps.account.deviceList();
+    if (this.offer !== offer) throw new UserFacingError('Linking was cancelled.');
     if (list.devices.length >= MAX_DEVICES) {
       throw new UserFacingError(`An account can have ${MAX_DEVICES} devices. Remove one first.`);
     }
@@ -351,9 +408,86 @@ export class LinkService {
     }
     this.deps.log.info(`Linked device ${deviceId}`);
     this.deps.account.setDeviceNames({ [deviceId]: hello.deviceName });
+    this.watch({
+      serverUrl: offer.serverUrl,
+      id: offer.id,
+      secret: Buffer.from(offer.secret),
+      deviceId,
+      authKey: hello.authKey,
+      deviceName: hello.deviceName,
+      expires: offer.expires,
+    });
     this.stop();
-    this.set({ state: 'linked' });
+    this.set({ state: 'linked', deviceName: hello.deviceName });
     return { deviceId };
+  }
+
+  /**
+   * Until the code runs out, looks whether the new device declined the account it was sent
+   * ("Is this you?" → Cancel). If it did — and the answer carries the secret's MAC, so it really
+   * came from that device — the device comes off the list again.
+   */
+  private watch(w: Watch): void {
+    const done = (): void => {
+      w.secret.fill(0);
+    };
+    const tick = async (): Promise<void> => {
+      if (Date.now() > w.expires) return done();
+      const state = await this.mailbox(w.serverUrl, w.id).catch(() => undefined);
+      // Gone (expired, or the server restarted): nothing more will come.
+      if (state === null) return done();
+      if (!state?.declined) return schedule();
+      const expected = Buffer.from(declineMac(w.secret, w.deviceId, w.authKey), 'base64url');
+      const got = Buffer.from(state.declined, 'base64url');
+      if (expected.length !== got.length || !timingSafeEqual(expected, got)) return done();
+      done();
+      await this.removeDeclined(w);
+    };
+    const schedule = (): void => {
+      const timer = setTimeout(() => {
+        this.watches.delete(timer);
+        void tick().catch(() => done());
+      }, this.deps.timings?.watchMs ?? WATCH_MS);
+      timer.unref?.();
+      this.watches.add(timer);
+    };
+    schedule();
+  }
+
+  private async removeDeclined(w: Watch): Promise<void> {
+    try {
+      const list = await this.deps.account.deviceList();
+      if (list.devices.some((d) => d.deviceId === w.deviceId && d.authKey === w.authKey)) {
+        await this.deps.account.publishDeviceList({
+          ...list,
+          version: list.version + 1,
+          devices: list.devices.filter((d) => d.deviceId !== w.deviceId),
+        });
+      }
+      this.deps.log.info(`Device ${w.deviceId} declined the link; removed it again`);
+      if (this.progress.state === 'idle' || this.progress.state === 'linked') {
+        this.set({
+          state: 'failed',
+          message: `${w.deviceName} did not take the account, so it was removed again. Nothing was linked.`,
+        });
+      }
+    } catch {
+      this.deps.log.warn(`Device ${w.deviceId} declined the link, but could not be removed`);
+      if (this.progress.state === 'idle' || this.progress.state === 'linked') {
+        this.set({
+          state: 'failed',
+          message: `${w.deviceName} did not take the account. Remove it from your devices below.`,
+        });
+      }
+    }
+  }
+
+  /** Stops watching linked devices (tests, and when River quits). */
+  dispose(): void {
+    for (const t of this.watches) clearTimeout(t);
+    this.watches.clear();
+    if (this.linkedTimer) clearTimeout(this.linkedTimer);
+    this.linkedTimer = null;
   }
 
   /** This account's devices, for Settings → Account → Devices. */
@@ -387,7 +521,7 @@ export class LinkService {
 
   /** Uses a link code from a device that is already linked. */
   /** A received account waiting for "Is this you?" on the new device. */
-  private pendingJoin: { finish(): Promise<void>; discard(): void } | null = null;
+  private pendingJoin: { finish(): Promise<void>; discard(): void; decline(): Promise<void> } | null = null;
 
   /** On the new device: the person checked whose account it is and wants to link. */
   async accept(): Promise<LinkProgress> {
@@ -483,8 +617,26 @@ export class LinkService {
         device.privateKey.fill(0);
         provision.identityPrivateKey = '';
       };
+      const deviceId = provision.deviceId;
+      const decline = async (): Promise<void> => {
+        await this.deps.requestJson(
+          `${code.serverUrl}${API_PREFIX}/link/${id}/decline`,
+          { method: 'PUT', body: { mac: declineMac(code.secret, deviceId, hello.authKey) } },
+          z.unknown(),
+        );
+      };
+      // After "Link this device again", only the account this device's messages belong to.
+      const expected = this.deps.account.relinkTarget();
+      if (expected && provision.riverId !== expected) {
+        discard();
+        void decline().catch(() => undefined);
+        throw new UserFacingError(
+          'That code is for a different account. This device holds the messages of the account it was removed from: link it with a code from a device of that account.',
+        );
+      }
       this.pendingJoin = {
         discard,
+        decline,
         finish: async () => {
           const privateKey = unb64(provision.identityPrivateKey);
           try {

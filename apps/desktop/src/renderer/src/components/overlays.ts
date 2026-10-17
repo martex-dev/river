@@ -16,8 +16,12 @@ const stack: Layer[] = [];
 let nextId = 0;
 let listening = false;
 
+/** Fields that use Escape themselves (cancel a rename, close suggestions) keep it (2.10.13). */
+export const OWN_ESCAPE = 'data-own-escape';
+
 function onKey(e: KeyboardEvent): void {
   if (e.key !== 'Escape' || e.isComposing || stack.length === 0) return;
+  if (e.target instanceof Element && e.target.closest(`[${OWN_ESCAPE}]`)) return;
   // Before any other Escape handler (window listeners, React's): only the topmost overlay closes.
   e.stopImmediatePropagation();
   e.preventDefault();

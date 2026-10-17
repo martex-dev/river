@@ -107,13 +107,17 @@ describe('backup and restore', { timeout: 60_000 }, () => {
     await bob.dm.action({ a: 'accept', peer: aliceId });
     await bob.dm.action({ a: 'send', peer: aliceId, text: 'got it' });
     await alice.dm.sync();
-    await alice.dm.action({ a: 'setVerified', peer: bobId, verified: true });
+    const { digits } = await alice.dm.action({ a: 'safetyNumber', peer: bobId });
+    await alice.dm.action({ a: 'setVerified', peer: bobId, verified: true, digits });
 
     const phrase = alice.backup.phrase();
     expect(phrase).toHaveLength(18);
-    const file = alice.backup.create();
+    const { file, createdAt } = alice.backup.create();
     expect(Buffer.from(file).toString('latin1')).not.toContain('before the crash');
-    expect(alice.backup.status().lastBackupAt).not.toBeNull();
+    // Made, but not saved anywhere yet (the save dialog may still be cancelled).
+    expect(alice.backup.status().lastBackupAt).toBeNull();
+    alice.backup.saved(createdAt);
+    expect(alice.backup.status().lastBackupAt).toBe(createdAt);
 
     // Alice's computer is gone. On a new one she restores from the file and her phrase.
     const restored = await install('alice-new.db');
@@ -138,6 +142,14 @@ describe('backup and restore', { timeout: 60_000 }, () => {
       name: 'Bob',
       verified: true,
     });
+    // The newest device list version seen for Bob came back too: a server cannot roll it back
+    // after a restore (2.11).
+    const version = (r: { local: { prepare(sql: string): { get(...a: unknown[]): unknown } } }) =>
+      r.local
+        .prepare("SELECT value FROM signal_store WHERE kind = 'meta' AND id = ?")
+        .get(`dm:listVersion:${bobId}`);
+    expect(version(restored)).toBeTruthy();
+    expect(version(restored)).toEqual(version(alice));
     await restored.dm.sync(); // fresh prekeys, then a hello to Bob that gives him a new session
     await bob.dm.sync();
     await bob.dm.action({ a: 'send', peer: aliceId, text: 'welcome back' });
@@ -155,5 +167,21 @@ describe('backup and restore', { timeout: 60_000 }, () => {
 
     // A restore never overwrites an existing identity.
     expect(() => restored.backup.restore(file, phrase.join(' '))).toThrow(/fresh install/);
+    // Whoever restored typed the phrase: they can make backups straight away.
+    expect(restored.backup.status().phraseShown).toBe(true);
+  });
+
+  it('makes no backup before the recovery phrase was shown, and counts only saved ones', async () => {
+    const dee = await install('dee.db', 'Dee');
+    expect(dee.backup.status()).toMatchObject({ phraseShown: false, lastBackupAt: null });
+    expect(() => dee.backup.create()).toThrow(/recovery phrase/);
+    dee.backup.phrase();
+    expect(dee.backup.status().phraseShown).toBe(true);
+    // The save dialog was cancelled (or writing failed): nothing counts as backed up.
+    dee.backup.create();
+    expect(dee.backup.status().lastBackupAt).toBeNull();
+    const { createdAt } = dee.backup.create();
+    dee.backup.saved(createdAt);
+    expect(dee.backup.status().lastBackupAt).toBe(createdAt);
   });
 });

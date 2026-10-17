@@ -1,5 +1,6 @@
 import type { DmEvent } from './dm.ts';
 import type { SocialEvent } from './social.ts';
+import type { Settings } from './settings.ts';
 import {
   IPC,
   type AccountStatus,
@@ -8,6 +9,7 @@ import {
   type SharedContent,
   type HostStatus,
   type LinkProgress,
+  type PhoneCallAction,
   type RiverApi,
   type StorageStatus,
   type UpdateStatus,
@@ -33,17 +35,26 @@ export function createRiverApi(t: RiverTransport): RiverApi {
       setTitleBar: (colors) => t.invoke(IPC.appTitleBar, colors),
       haptic: (kind) => t.send(IPC.appHaptic, kind),
       onPip: (listener) => t.on(IPC.appPip, (...args) => listener(args[0] === true)),
+      phoneStatus: () => t.invoke(IPC.appPhoneStatus),
+      phoneFix: (fix) => t.invoke(IPC.appPhoneFix, fix),
+      onPhoneCall: (listener) =>
+        t.on(IPC.appPhoneCall, (...args) => {
+          const call = args[0] as PhoneCallAction | undefined;
+          if (call && typeof call.callId === 'string') listener(call);
+        }),
       onDeepLink: (listener) => t.on(IPC.appDeepLink, (...args) => listener(args[0] as DeepLink)),
       onShare: (listener) => t.on(IPC.appShare, (...args) => listener(args[0] as SharedContent)),
     },
     settings: {
       get: () => t.invoke(IPC.settingsGet),
       update: (patch) => t.invoke(IPC.settingsUpdate, patch),
+      onChange: (listener) => t.on(IPC.settingsChanged, (...args) => listener(args[0] as Settings)),
     },
     updates: {
       status: () => t.invoke(IPC.updatesStatus),
       check: () => t.invoke(IPC.updatesCheck),
       install: () => t.invoke(IPC.updatesInstall),
+      download: () => t.invoke(IPC.updatesDownload),
       openDownloadPage: () => t.invoke(IPC.updatesOpenDownload),
       onStatus: (listener) => t.on(IPC.updatesStatusChanged, (...args) => listener(args[0] as UpdateStatus)),
     },
@@ -81,6 +92,7 @@ export function createRiverApi(t: RiverTransport): RiverApi {
       setUsername: (username) => t.invoke(IPC.accountSetUsername, username),
       redeemSignup: (link) => t.invoke(IPC.accountRedeemSignup, link),
       startOver: () => t.invoke(IPC.accountStartOver),
+      relink: () => t.invoke(IPC.accountRelink),
       deleteAccount: () => t.invoke(IPC.accountDelete),
       exportData: () => t.invoke(IPC.accountExport),
       onStatus: (listener) => t.on(IPC.accountStatusChanged, (...args) => listener(args[0] as AccountStatus)),

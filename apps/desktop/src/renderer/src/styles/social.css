@@ -263,6 +263,8 @@
   overflow: hidden;
   border-radius: 16px;
   background: linear-gradient(160deg, #1d2440, #0b0f1c);
+  /* Swipes and holds are the viewer's own, not the page's scrolling. */
+  touch-action: none;
   box-shadow: 0 30px 80px -20px #000;
   animation: modal-in var(--dur) var(--ease-spring);
 }
@@ -315,7 +317,8 @@
   display: grid;
   place-items: center;
 }
-.story-viewer__content img {
+.story-viewer__content img,
+.story-viewer__content video {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
@@ -417,11 +420,28 @@
   }
 }
 
+/* Your profile and friends on a narrow window, where the side column does not fit. */
+.social__narrow {
+  display: none;
+}
+
 @media (max-width: 1100px) {
   .social {
     grid-template-columns: minmax(0, 620px);
   }
   .social__side {
     display: none;
+  }
+  .social__narrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .social__narrow .social__me {
+    flex: 1;
+    min-width: 0;
+  }
+  .social__narrow .btn {
+    flex: none;
   }
 }

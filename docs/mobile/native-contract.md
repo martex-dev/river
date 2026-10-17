@@ -36,3 +36,26 @@ Rules:
 
 The app shell side (UI ↔ core messages, dialogs, notifications, files the person
 saves) is described in [`apps/mobile/core/host.ts`](../../apps/mobile/core/host.ts).
+
+## Updater asks (Android)
+
+River for Android's updater ([`apps/mobile/core/updater.ts`](../../apps/mobile/core/updater.ts))
+decides; the shell (`UpdateOps.java`) only does what a WebView cannot. These are
+asks (asynchronous), not `RiverNative` calls:
+
+| Ask               | Arguments          | Answer                                                                    |
+| ----------------- | ------------------ | ------------------------------------------------------------------------- |
+| `update.device`   | —                  | `{abis: Build.SUPPORTED_ABIS, versionCode, sdk}`                          |
+| `update.download` | `{url, path, max}` | `{size, sha256}` (hex, MessageDigest)                                     |
+| `update.progress` | `{path}`           | `{received, total}`                                                       |
+| `update.signers`  | `{path}`           | `{installed, apk, packageName, ownPackage}` (certificate SHA-256s)        |
+| `update.install`  | `{path}`           | `{status: success \| aborted \| conflict \| failed \| permission-needed}` |
+
+- Downloads: HTTPS only, River's GitHub releases (and release list) only, into
+  `files/updates/` only, never more than `max` bytes.
+- Install: only an APK in `files/updates/` and only River's own package
+  (PackageInstaller session with `setAppPackageName`). Android always asks the
+  user to confirm; without the "install unknown apps" permission the shell opens
+  that setting and answers `permission-needed`.
+- The release manifest's signature, the APK's SHA-256 and the signing-certificate
+  comparison are checked in the shared TypeScript before `update.install`.

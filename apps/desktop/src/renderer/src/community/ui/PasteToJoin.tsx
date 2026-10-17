@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { looksLikeInvite, parseFriend, parseSignup } from '../../../../shared/invite-link.ts';
 import type { DeepLink } from '../../../../shared/ipc.ts';
-import { addFriend, GREETING } from '../../dm/friends.ts';
+import { addFriend, addFriendMessage, GREETING } from '../../dm/friends.ts';
 import { useRiver } from '../../store.ts';
 import { useCommunity } from '../store.ts';
 import { Modal } from './common.tsx';
@@ -27,8 +27,10 @@ function offer(link: DeepLink): void {
   }
   if (link.kind === 'friend') {
     const friend = parseFriend(link.link);
-    if (friend?.serverUrl)
-      s.setModal({ kind: 'add-friend', riverId: friend.riverId, serverUrl: friend.serverUrl });
+    // The request goes through your own server: a bare River ID is enough to ask.
+    if (friend)
+      s.setModal({ kind: 'add-friend', riverId: friend.riverId, serverUrl: friend.serverUrl ?? '' });
+    else s.notify('That friend link is not complete. Ask for a new one, or add them by @username.', 'error');
     return;
   }
   // A sign-up link is for someone without an account yet. It names the server the account would
@@ -63,11 +65,12 @@ export function PasteToJoin(): null {
       if (looksLikeInvite(text)) {
         e.preventDefault();
         useCommunity.getState().setModal({ kind: 'join-invite', link: text.trim() });
-      } else if (friend?.serverUrl) {
+      } else if (friend) {
+        // A friend link, or a bare River ID (a link without its server address): River asks first.
         e.preventDefault();
         useCommunity
           .getState()
-          .setModal({ kind: 'add-friend', riverId: friend.riverId, serverUrl: friend.serverUrl });
+          .setModal({ kind: 'add-friend', riverId: friend.riverId, serverUrl: friend.serverUrl ?? '' });
       }
     };
     document.addEventListener('paste', onPaste);
@@ -171,7 +174,8 @@ export function AddFriendDialog(props: { riverId: string; serverUrl: string }): 
   return (
     <Modal title="Add a friend?" onClose={() => s.setModal(null)}>
       <p className="modal__text">
-        You pasted a friend link. River will send them “{GREETING}” as an end-to-end encrypted request.
+        {props.serverUrl ? 'You pasted a friend link.' : 'You pasted a River ID.'}{' '}
+        {`River will send them “${GREETING}” as an end-to-end encrypted request.`}
       </p>
       {(problem ?? error) && <p className="field__error">{problem ?? error}</p>}
       <div className="modal__foot">
@@ -184,11 +188,11 @@ export function AddFriendDialog(props: { riverId: string; serverUrl: string }): 
           disabled={busy || problem !== null}
           onClick={() => {
             setBusy(true);
-            // Already a friend: their chat opens and nothing is sent.
+            // Already a friend: their chat opens and nothing is sent; a request from them is accepted.
             void addFriend(props.riverId).then((result) => {
               setBusy(false);
-              if (result === 'failed') return setError('Could not send the request.');
-              s.notify(result === 'friend' ? 'You are already friends' : 'Friend request sent');
+              if (result === 'failed' || result === 'blocked') return setError(addFriendMessage(result));
+              s.notify(result === 'friend' ? 'You are already friends' : addFriendMessage(result));
               s.setModal(null);
             });
           }}

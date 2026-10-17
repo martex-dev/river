@@ -37,6 +37,14 @@ const TABLES = [
 ] as const;
 /** Contacts' identity keys (trust on first use) and verification marks. */
 const SIGNAL_KINDS = ['identity', 'verified'];
+/**
+ * Protocol facts that guard against a server rolling things back (2.11): the newest device list
+ * version seen for each contact, and community members known to hold a genuine key. Without
+ * them a restored River would accept an older device list again.
+ */
+const SIGNAL_META_PREFIXES = ['dm:listVersion:', 'community:vouched:'];
+const backedUpSignal = (kind: string, id: string): boolean =>
+  SIGNAL_KINDS.includes(kind) || (kind === 'meta' && SIGNAL_META_PREFIXES.some((p) => id.startsWith(p)));
 
 type Cell = string | number | null | { $b64: string };
 interface BackupFile {
@@ -70,9 +78,13 @@ export class BackupService {
     this.require().prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run(key, value);
   }
 
-  status(): { hasPhrase: boolean; lastBackupAt: string | null } {
-    if (!this.db()) return { hasPhrase: false, lastBackupAt: null };
-    return { hasPhrase: this.meta('recovery_secret') !== null, lastBackupAt: this.meta('last_backup_at') };
+  status(): { hasPhrase: boolean; phraseShown: boolean; lastBackupAt: string | null } {
+    if (!this.db()) return { hasPhrase: false, phraseShown: false, lastBackupAt: null };
+    return {
+      hasPhrase: this.meta('recovery_secret') !== null,
+      phraseShown: this.meta('recovery_phrase_shown') !== null,
+      lastBackupAt: this.meta('last_backup_at'),
+    };
   }
 
   private secret(): Uint8Array {
@@ -85,11 +97,24 @@ export class BackupService {
 
   /** The recovery phrase (created on first use). Main-process only until the user asks to see it. */
   phrase(): string[] {
-    return recoveryPhrase(this.secret());
+    const words = recoveryPhrase(this.secret());
+    // Only a phrase the person has seen can open a backup: backups need this first.
+    this.setMeta('recovery_phrase_shown', new Date().toISOString());
+    return words;
   }
 
-  create(): Uint8Array {
+  /**
+   * Encrypts a backup. It counts as made only once the file is written (`saved`): a cancelled or
+   * failed save must not show "Last backup: now". Needs the recovery phrase to have been shown —
+   * without it the file could never be opened.
+   */
+  create(): { file: Uint8Array; createdAt: string } {
     const db = this.require();
+    if (this.meta('recovery_phrase_shown') === null) {
+      throw new BackupError(
+        'Show your recovery phrase and write it down first: without it, no backup can be opened.',
+      );
+    }
     const tables: BackupFile['tables'] = {};
     for (const t of TABLES) {
       const rows = db.prepare(`SELECT * FROM ${t}`).all() as Array<Record<string, unknown>>;
@@ -105,10 +130,17 @@ export class BackupService {
     const signal = (
       db
         .prepare(
-          `SELECT kind, id, value FROM signal_store WHERE kind IN (${SIGNAL_KINDS.map(() => '?').join(', ')})`,
+          `SELECT kind, id, value FROM signal_store WHERE kind IN (${SIGNAL_KINDS.map(() => '?').join(', ')})
+             OR (kind = 'meta' AND (${SIGNAL_META_PREFIXES.map(() => 'id LIKE ?').join(' OR ')}))`,
         )
-        .all(...SIGNAL_KINDS) as Array<{ kind: string; id: string; value: Uint8Array }>
-    ).map((r) => ({ kind: r.kind, id: r.id, value: Buffer.from(r.value).toString('base64') }));
+        .all(...SIGNAL_KINDS, ...SIGNAL_META_PREFIXES.map((p) => `${p}%`)) as Array<{
+        kind: string;
+        id: string;
+        value: Uint8Array;
+      }>
+    )
+      .filter((r) => backedUpSignal(r.kind, r.id))
+      .map((r) => ({ kind: r.kind, id: r.id, value: Buffer.from(r.value).toString('base64') }));
     const file: BackupFile = {
       format: 'river-backup',
       version: 1,
@@ -116,9 +148,13 @@ export class BackupService {
       tables,
       signal,
     };
-    const sealed = sealBackup(this.secret(), file);
-    this.setMeta('last_backup_at', file.createdAt);
-    return sealed;
+    return { file: sealBackup(this.secret(), file), createdAt: file.createdAt };
+  }
+
+  /** The backup made at `createdAt` was written to a file. */
+  saved(createdAt: string): void {
+    if (Number.isNaN(Date.parse(createdAt))) return;
+    this.setMeta('last_backup_at', createdAt);
   }
 
   /** Restores into a fresh River (no identity yet). Throws BackupError with a message for people. */
@@ -151,7 +187,7 @@ export class BackupService {
         }
       }
       for (const s of data.signal ?? []) {
-        if (!SIGNAL_KINDS.includes(s.kind)) continue;
+        if (typeof s.id !== 'string' || !backedUpSignal(s.kind, s.id)) continue;
         db.prepare('INSERT OR REPLACE INTO signal_store (kind, id, value) VALUES (?, ?, ?)').run(
           s.kind,
           s.id,
@@ -159,6 +195,8 @@ export class BackupService {
         );
       }
       this.setMeta('recovery_secret', Buffer.from(secret).toString('hex'));
+      // The person typed the phrase to restore: they have it.
+      this.setMeta('recovery_phrase_shown', new Date().toISOString());
       this.setMeta('last_backup_at', data.createdAt);
     })();
   }

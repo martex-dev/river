@@ -61,10 +61,16 @@ import {
   EMOJI_NAME,
   type SavedOutgoing,
 } from '../../shared/community-actions.ts';
-import { layoutChanges, moveChannel as moveInLayout, sidebarGroups } from '../../shared/layout.ts';
+import {
+  layoutChanges,
+  moveCategory as moveCategoryInLayout,
+  moveChannel as moveInLayout,
+  sidebarGroups,
+} from '../../shared/layout.ts';
+import { roleOrderChanges } from '../../shared/role-order.ts';
 import { communityIconSchema, templateById, type TemplateId } from '../../shared/templates.ts';
 import { describeAudit } from './audit-text.ts';
-import { openSignal, signSignal, type SignalKeys } from './call-signal.ts';
+import { openSignal, signSignal, SignalReplayGuard, type SignalKeys } from './call-signal.ts';
 import type { ServerLocator } from './server-locator.ts';
 import type { PresenceTracker } from '../presence.ts';
 import { readPoll, type Poll } from '../../shared/poll.ts';
@@ -90,13 +96,16 @@ import type { Logger } from '../logger.ts';
 import type { LocalDatabase } from '../storage/database.ts';
 import {
   KeyRing,
+  SEAL_V2_DEFAULT,
   formatInvite,
+  messageBinding,
   newCommunityKey,
   open,
   parseInvite,
   randomId,
   reactionTag,
   seal,
+  sealBound,
 } from './sealed.ts';
 
 /** The shape WebRTC expects for STUN/TURN servers. */
@@ -108,8 +117,30 @@ export interface RTCIceServerLike {
 
 /** Community keys travel inside libsignal direct messages. */
 export type KeyMessage =
-  | { t: 'ckey'; communityId: string; epoch: number; key: string }
-  | { t: 'ckeyReq'; communityId: string; epoch: number };
+  | {
+      t: 'ckey';
+      communityId: string;
+      epoch: number;
+      key: string;
+      /** Proof (2.11): the key sealed under the key of epoch `prev`, the one before it. */
+      wrap?: string;
+      prev?: number;
+    }
+  | {
+      t: 'ckeyReq';
+      communityId: string;
+      epoch: number;
+      /** The newest epoch the requester holds (2.11): the answer chains every key after it. */
+      have?: number;
+    };
+
+/**
+ * Keys from Rivers before 2.11 come without proof that their sender held the previous key. Until
+ * every supported River sends the proof, such keys are still accepted — only from a member whose
+ * sealed profile once opened with a key this device held (see CRYPTOGRAPHY.md §4a). Planned to be
+ * turned off in 2.13.
+ */
+export const ACCEPT_UNPROVEN_KEYS = true;
 
 export class CommunityError extends Error {
   constructor(message: string) {
@@ -174,6 +205,8 @@ export function readCustomStatus(
 
 const AVATAR_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+=*$/;
 
+const NOT_FOUND_TEXT = 'That no longer exists.';
+
 /** Server error codes turned into messages people understand. */
 function explain(err: unknown): never {
   if (err instanceof ApiError) {
@@ -181,7 +214,7 @@ function explain(err: unknown): never {
       throw new CommunityError(err.message || 'You do not have permission to do that.');
     if (err.code === 'banned') throw new CommunityError('You are banned from this community.');
     if (err.code === 'mailbox_full' || err.code === 'quota_exceeded') throw new CommunityError(err.message);
-    if (err.code === 'not_found') throw new CommunityError('That no longer exists.');
+    if (err.code === 'not_found') throw new CommunityError(NOT_FOUND_TEXT);
     if (err.status === 400 && err.message && err.message !== 'Bad request')
       throw new CommunityError(err.message);
   }
@@ -238,6 +271,18 @@ export class CommunityService {
   private readonly keyAnswers = new Map<string, number>();
   /** How long to wait for a rotation in progress before asking for a key (shortened in tests). */
   keyRequestDelayMs = 3000;
+  /** How long nobody may answer a key request before a stuck rotation is redone (tests shorten it). */
+  keyStuckMs = 120_000;
+  /** How long one rotation candidate has before the next one takes over (tests shorten it). */
+  rotateHandoffMs = 30_000;
+  /** Seal new messages and profiles with v2 associated data (off until every River opens v2). */
+  sealV2 = SEAL_V2_DEFAULT;
+  /** When we first asked for a missing key, per community and epoch. */
+  private readonly keyAsked = new Map<string, number>();
+  /** When we first saw a rotation was due, per community and epoch (for the handoff). */
+  private readonly rotationSince = new Map<string, number>();
+  /** Until when this device steps aside as rotator after the server refused its claim. */
+  private readonly rotateBlocked = new Map<string, number>();
   private readonly channelToCommunity = new Map<string, string>();
   private readonly voice = new Map<string, string[]>();
   private readonly voiceStates = new Map<string, VoiceState>();
@@ -298,6 +343,8 @@ export class CommunityService {
   private readonly listeners = new Set<(e: CommunityEvent) => void>();
   private readonly relayListeners = new Set<(from: string, payload: Uint8Array) => void>();
   private readonly rawListeners = new Set<(e: ServerEvent) => void>();
+  /** Identity-bound call signals accepted recently (a replay within their lifetime is refused). */
+  private readonly signalReplay = new SignalReplayGuard();
   /** Identity keys members published inside sealed community profiles. */
   private readonly profileKeys = new Map<string, string>();
   /** Where you stopped reading each channel (from the local database). */
@@ -357,6 +404,15 @@ export class CommunityService {
     return null;
   }
 
+  /** The category a channel is in, if any (for per-category notification settings). */
+  channelParent(channelId: string): string | null {
+    for (const c of this.communities) {
+      const ch = c.channels.find((x) => x.id === channelId);
+      if (ch) return ch.parentId;
+    }
+    return null;
+  }
+
   // ---- Server access -------------------------------------------------------------------------
 
   private server(): string {
@@ -395,12 +451,25 @@ export class CommunityService {
   /** Keys for checking identity-bound call signals (call-signal.ts): libsignal's, never a profile's. */
   private signalKeys(): SignalKeys {
     const db = this.deps.db();
+    const stored = (kind: 'identity' | 'verified', riverId: string): Buffer | null => {
+      const row = db
+        ?.prepare('SELECT value FROM signal_store WHERE kind = ? AND id = ?')
+        .get(kind, riverId) as { value: Uint8Array } | undefined;
+      return row ? Buffer.from(row.value) : null;
+    };
     return {
       sessionKey: (riverId) => {
-        const row = db
-          ?.prepare("SELECT value FROM signal_store WHERE kind = 'identity' AND id = ?")
-          .get(riverId) as { value: Uint8Array } | undefined;
-        return row ? new Uint8Array(row.value) : null;
+        const key = stored('identity', riverId);
+        return key ? new Uint8Array(key) : null;
+      },
+      // A just-changed key (not looked at yet), or one that replaced a key the user verified.
+      keyChanged: (riverId) => {
+        const contact = db?.prepare('SELECT key_changed FROM contacts WHERE river_id = ?').get(riverId) as
+          { key_changed: number } | undefined;
+        if (contact?.key_changed === 1) return true;
+        const mark = stored('verified', riverId);
+        const key = stored('identity', riverId);
+        return !!mark && mark.length > 1 && !!key && !mark.equals(key);
       },
     };
   }
@@ -431,15 +500,54 @@ export class CommunityService {
     this.keyChannel = channel;
   }
 
-  /** The online member with the highest rank (then lowest ID) rotates; avoids everyone trying. */
+  /**
+   * Who replaces the key: online members who accepted the rules (the server refuses epoch claims
+   * from pending members), highest rank first, then lowest ID. If the first candidate does not
+   * manage it, the next one takes over after `rotateHandoffMs`, and so on (see myTurn).
+   */
   private designated(c: CommunityWire, mustHave: number): string[] {
     const view = this.communities.find((x) => x.id === c.id);
     const me = this.me();
+    const pending = new Set(c.members.filter((m) => m.pending).map((m) => m.riverId));
+    const blocked = (this.rotateBlocked.get(c.id) ?? 0) > Date.now();
     return (view?.members ?? [])
       .filter((m) => m.online || m.riverId === me)
-      .filter((m) => m.riverId !== me || this.keys.get(c.id)?.has(mustHave))
+      .filter((m) => !pending.has(m.riverId))
+      .filter((m) => m.riverId !== me || (!blocked && !!this.keys.get(c.id)?.has(mustHave)))
       .sort((a, b) => b.rank - a.rank || a.riverId.localeCompare(b.riverId))
       .map((m) => m.riverId);
+  }
+
+  /** Our turn to rotate: the first candidate at once, each next one a handoff period later. */
+  private myTurn(c: CommunityWire, candidates: string[]): boolean {
+    const i = candidates.indexOf(this.me());
+    if (i < 0) return false;
+    const tag = `${c.id}:${c.keyEpoch}`;
+    let since = this.rotationSince.get(tag);
+    if (since === undefined) {
+      since = Date.now();
+      this.rotationSince.set(tag, since);
+    }
+    const turn = Math.floor((Date.now() - since) / Math.max(1, this.rotateHandoffMs));
+    if (i <= turn) return true;
+    // Nothing else may make River look again: check when it would be our turn.
+    this.refreshLater(c.id, (i - turn) * this.rotateHandoffMs);
+    return false;
+  }
+
+  private readonly keyTimers = new Map<string, NodeJS.Timeout>();
+
+  private refreshLater(communityId: string, ms: number): void {
+    if (this.keyTimers.has(communityId)) return;
+    const timer = setTimeout(
+      () => {
+        this.keyTimers.delete(communityId);
+        if (this.deps.db()) void this.refresh().catch(() => undefined);
+      },
+      Math.max(50, ms),
+    );
+    timer.unref?.();
+    this.keyTimers.set(communityId, timer);
   }
 
   private async maintainKeys(c: CommunityWire): Promise<void> {
@@ -447,22 +555,142 @@ export class CommunityService {
     if (!ring) return;
     if (c.keyEpoch > ring.newest.epoch) {
       await this.requestKey(c);
+      // The server says the key needs replacing and nobody answered our request for the newest
+      // one (a rotation that never reached anyone): replace it, from the newest key we hold.
+      const asked = this.keyAsked.get(`${c.id}:${c.keyEpoch}`);
+      if (!c.rotationNeeded || asked === undefined) return;
+      if ((this.keys.get(c.id)?.newest.epoch ?? -1) >= c.keyEpoch) return;
+      const waited = Date.now() - asked;
+      if (waited < this.keyStuckMs) {
+        this.refreshLater(c.id, this.keyStuckMs - waited);
+        return;
+      }
+      if (this.myTurn(c, this.designated(c, ring.newest.epoch))) await this.rotate(c);
     } else if (
       c.rotationNeeded &&
       ring.newest.epoch === c.keyEpoch &&
-      this.designated(c, c.keyEpoch)[0] === this.me()
+      this.myTurn(c, this.designated(c, c.keyEpoch))
     ) {
       await this.rotate(c);
     }
   }
 
   /**
-   * Replaces the community key after someone left or was removed: claim the next
-   * epoch on the server (only one member wins), seal our profile with the new key,
-   * then hand the key to every remaining member over their libsignal sessions.
+   * Does this member's current sealed profile open with one of these keys (a genuine key), and
+   * name an identity key? The identity key matters: a v1 profile is not bound to its member, so
+   * a server could copy someone's genuine profile into another row. The key in it must then
+   * match the person libsignal talks to — direct messages refuse a server key that disagrees
+   * with it (DmService), and vouched members are compared with it (isVouched).
+   */
+  private profileOpens(
+    ring: KeyRing,
+    communityId: string,
+    member: { riverId: string; profile: string },
+  ): boolean {
+    try {
+      const { value } = ring.openBoundWith<SealedProfile>(
+        communityId,
+        'profile',
+        member.riverId,
+        member.profile,
+      );
+      return typeof value.identityKey === 'string' && value.identityKey.length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Members whose sealed profile opened with a key this device held, with the identity key that
+   * profile named: they held a genuine community key at some point (a member the server adds
+   * without an invite never does). Kept in this device's database so it outlives a restart.
+   */
+  private readonly vouchedCache = new Map<string, string>();
+
+  private vouch(communityId: string, riverId: string, identityKey: string): void {
+    const id = `community:vouched:${communityId}:${riverId}`;
+    if (this.vouchedCache.get(id) === identityKey) return;
+    try {
+      this.db()
+        .prepare("INSERT OR REPLACE INTO signal_store (kind, id, value) VALUES ('meta', ?, ?)")
+        .run(id, Buffer.from(identityKey, 'utf8'));
+      this.vouchedCache.set(id, identityKey);
+    } catch {
+      // storage unavailable: recorded on the next refresh
+    }
+  }
+
+  /** Vouched, and with the identity key libsignal holds for them (the key their message came under). */
+  private isVouched(communityId: string, riverId: string): boolean {
+    const db = this.deps.db();
+    if (!db) return false;
+    const id = `community:vouched:${communityId}:${riverId}`;
+    let vouched = this.vouchedCache.get(id);
+    if (vouched === undefined) {
+      const row = db.prepare("SELECT value FROM signal_store WHERE kind = 'meta' AND id = ?").get(id) as
+        { value: Uint8Array } | undefined;
+      if (!row) return false;
+      vouched = Buffer.from(row.value).toString('utf8');
+      this.vouchedCache.set(id, vouched);
+    }
+    const identity = db
+      .prepare("SELECT value FROM signal_store WHERE kind = 'identity' AND id = ?")
+      .get(riverId) as { value: Uint8Array } | undefined;
+    return !!identity && Buffer.from(identity.value).toString('base64') === vouched;
+  }
+
+  /** The proof that goes with a new key: the key sealed under the key of the epoch before it. */
+  private wrapKey(
+    communityId: string,
+    epoch: number,
+    key: Buffer,
+    prev: { epoch: number; key: Buffer } | null,
+  ): { wrap?: string; prev?: number } {
+    if (!prev || prev.epoch >= epoch) return {};
+    return {
+      wrap: seal(prev.key, communityId, `epoch:${epoch}`, { key: key.toString('base64'), prev: prev.epoch }),
+      prev: prev.epoch,
+    };
+  }
+
+  /**
+   * Is a key for `epoch` proven by its sender? It must come sealed under the newest key this
+   * device holds below that epoch — so only someone who held that genuine key can make it.
+   */
+  private wrapValid(
+    ring: KeyRing,
+    communityId: string,
+    message: Extract<KeyMessage, { t: 'ckey' }>,
+  ): boolean {
+    if (message.wrap === undefined || message.prev === undefined || message.prev >= message.epoch)
+      return false;
+    const below = ring.epochs().filter((e) => e < message.epoch);
+    if (!below.length || Math.max(...below) !== message.prev) return false;
+    const prevKey = ring.keyFor(message.prev);
+    if (!prevKey) return false;
+    try {
+      const inner = open<{ key?: unknown; prev?: unknown }>(
+        prevKey,
+        communityId,
+        `epoch:${message.epoch}`,
+        message.wrap,
+      );
+      return inner.key === message.key && inner.prev === message.prev;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Replaces the community key after someone left or was removed: claim the next epoch on the
+   * server (only one member wins), seal our profile with the new key, then hand the key — sealed
+   * under the previous one as proof — to the members who hold a genuine key, over their
+   * libsignal sessions. Also used when a rotation never reached anyone (from our newest key).
    */
   private async rotate(c: CommunityWire): Promise<void> {
     if (this.rotating.has(c.id) || !this.keyChannel) return;
+    const before = this.keys.get(c.id);
+    if (!before) return;
     this.rotating.add(c.id);
     try {
       let epoch: number;
@@ -470,17 +698,25 @@ export class CommunityService {
         epoch = (
           await this.call(`/communities/${c.id}/epoch`, 'POST', { from: c.keyEpoch }, rotateKeyResponseSchema)
         ).epoch;
-      } catch {
-        return; // someone else rotated first
+      } catch (err) {
+        if (err instanceof ApiError && err.code === 'epoch_conflict') return; // someone else rotated first
+        // Refused (or unreachable): step aside for a while so the next candidate takes over.
+        this.deps.log.warn(`Could not replace a community key: ${(err as Error).message}`);
+        this.rotateBlocked.set(c.id, Date.now() + Math.max(this.rotateHandoffMs * 2, 60_000));
+        return;
       }
+      const prev = before.newest;
+      const me = this.me();
+      // Only members whose current sealed profile opens with a key we held before this rotation
+      // get the new one: a member the server listed without ever holding a key gets nothing.
+      const recipients = c.members.filter((m) => m.riverId !== me && this.profileOpens(before, c.id, m));
       const key = newCommunityKey();
       this.storeKey(c.id, key, epoch);
       await this.publishProfile(c.id);
-      const me = this.me();
-      for (const m of c.members) {
-        if (m.riverId === me) continue;
+      const proof = this.wrapKey(c.id, epoch, key, prev);
+      for (const m of recipients) {
         await this.keyChannel
-          .send(m.riverId, { t: 'ckey', communityId: c.id, epoch, key: key.toString('base64') })
+          .send(m.riverId, { t: 'ckey', communityId: c.id, epoch, key: key.toString('base64'), ...proof })
           .catch((err: unknown) =>
             this.deps.log.warn(`Could not deliver a community key: ${(err as Error).message}`),
           );
@@ -497,9 +733,11 @@ export class CommunityService {
     const tag = `${c.id}:${c.keyEpoch}`;
     if (Date.now() - (this.keyRequests.get(tag) ?? 0) < 30_000) return;
     this.keyRequests.set(tag, Date.now());
+    if (!this.keyAsked.has(tag)) this.keyAsked.set(tag, Date.now());
     // Give a rotation in progress a moment to deliver the key by itself.
     await new Promise((r) => setTimeout(r, this.keyRequestDelayMs));
-    if ((this.keys.get(c.id)?.newest.epoch ?? -1) >= c.keyEpoch) return;
+    const have = this.keys.get(c.id)?.newest.epoch ?? -1;
+    if (have >= c.keyEpoch) return;
     const me = this.me();
     // Online members first (they answer now); otherwise the request waits in mailboxes.
     const view = this.communities.find((x) => x.id === c.id);
@@ -513,13 +751,25 @@ export class CommunityService {
       .map((m) => m.riverId);
     for (const peer of targets) {
       await this.keyChannel
-        .send(peer, { t: 'ckeyReq', communityId: c.id, epoch: c.keyEpoch })
+        .send(peer, { t: 'ckeyReq', communityId: c.id, epoch: c.keyEpoch, ...(have >= 0 ? { have } : {}) })
         .catch(() => undefined);
     }
   }
 
+  /** Key messages are handled one at a time, in order (a chain of keys builds on itself). */
+  private keyQueue: Promise<unknown> = Promise.resolve();
+
   /** Community key messages arriving over direct messages. Inputs are untrusted. */
-  async handleKeyMessage(sender: string, message: KeyMessage): Promise<void> {
+  handleKeyMessage(sender: string, message: KeyMessage): Promise<void> {
+    const run = this.keyQueue.then(
+      () => this.applyKeyMessage(sender, message),
+      () => this.applyKeyMessage(sender, message),
+    );
+    this.keyQueue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async applyKeyMessage(sender: string, message: KeyMessage): Promise<void> {
     const c = this.wires.get(message.communityId);
     const ring = this.keys.get(message.communityId);
     if (!c || !ring) return;
@@ -529,41 +779,74 @@ export class CommunityService {
       if (ring.has(message.epoch)) return;
       const key = Buffer.from(message.key, 'base64');
       if (key.length !== 32) return;
-      // Accept a key only for an epoch the server has reached, and only if the sender's
-      // current profile is sealed with it (so a member cannot slip in a key nobody uses).
+      // Accept a key only for an epoch the server has reached, and only with proof the sender
+      // held the genuine key before it (wrapValid). Keys from Rivers before 2.11 carry no proof:
+      // they are accepted only from a member whose sealed profile once opened with a key we held
+      // and whose current profile is sealed with the offered key (see CRYPTOGRAPHY.md §4a).
       await this.refresh().catch(() => undefined);
       const fresh = this.wires.get(message.communityId);
       const freshSender = fresh?.members.find((m) => m.riverId === sender);
-      if (!fresh || !freshSender || message.epoch > fresh.keyEpoch) return;
-      try {
-        open(key, message.communityId, 'profile', freshSender.profile);
-      } catch {
+      const current = this.keys.get(message.communityId) ?? ring;
+      if (!fresh || !freshSender || message.epoch > fresh.keyEpoch || current.has(message.epoch)) return;
+      let accepted = this.wrapValid(current, message.communityId, message);
+      if (!accepted && ACCEPT_UNPROVEN_KEYS && this.isVouched(message.communityId, sender)) {
+        accepted = this.profileOpens(
+          new KeyRing([{ epoch: message.epoch, key }]),
+          message.communityId,
+          freshSender,
+        );
+      }
+      if (!accepted) {
+        this.deps.log.warn(
+          'Ignored a community key that came without proof its sender held the previous key',
+        );
         return;
       }
       this.storeKey(message.communityId, key, message.epoch);
+      if (message.epoch === fresh.keyEpoch) {
+        // Tell the server the new key arrived (it re-asks for a rotation that reaches nobody),
+        // and seal our profile with it so others can check we hold it. Older servers lack this.
+        await this.call(
+          `/communities/${message.communityId}/epoch/adopted`,
+          'POST',
+          { epoch: message.epoch },
+          z.unknown(),
+        ).catch(() => undefined);
+        await this.publishProfile(message.communityId).catch(() => undefined);
+      }
       await this.refresh().catch(() => undefined);
       return;
     }
     // A key request: answer members who prove they held a genuine key (their profile opens).
     const key = ring.keyFor(message.epoch);
     if (!key) return;
-    try {
-      ring.open(message.communityId, 'profile', senderMember.profile);
-    } catch {
-      return;
-    }
+    if (!this.profileOpens(ring, message.communityId, senderMember)) return;
     const tag = `${sender}:${message.communityId}:${message.epoch}`;
     if (Date.now() - (this.keyAnswers.get(tag) ?? 0) < 60_000) return;
     this.keyAnswers.set(tag, Date.now());
     // Our profile must be sealed with the newest key for the requester to verify it.
     if (ring.newest.epoch === message.epoch)
       await this.publishProfile(message.communityId).catch(() => undefined);
-    await this.keyChannel.send(sender, {
-      t: 'ckey',
-      communityId: message.communityId,
-      epoch: message.epoch,
-      key: key.toString('base64'),
-    });
+    // Every key they are missing, oldest first, each sealed under the one before it: the chain
+    // starts at the newest key they hold (`have`). Older Rivers ask without `have`: one key.
+    const held = ring.epochs().sort((a, b) => a - b);
+    const missing =
+      message.have !== undefined
+        ? held.filter((e) => e > message.have! && e <= message.epoch).slice(-50)
+        : [message.epoch];
+    for (const epoch of missing) {
+      const k = ring.keyFor(epoch)!;
+      const below = held.filter((e) => e < epoch);
+      const prevEpoch = below.length ? below[below.length - 1]! : null;
+      const prev = prevEpoch === null ? null : { epoch: prevEpoch, key: ring.keyFor(prevEpoch)! };
+      await this.keyChannel.send(sender, {
+        t: 'ckey',
+        communityId: message.communityId,
+        epoch,
+        key: k.toString('base64'),
+        ...this.wrapKey(message.communityId, epoch, k, prev),
+      });
+    }
   }
 
   private iceCache: { servers: RTCIceServerLike[]; until: number } | null = null;
@@ -597,6 +880,53 @@ export class CommunityService {
       }
       return explain(err);
     }
+  }
+
+  /**
+   * A call to a route that newer servers have. False (and nothing done) when this server does not
+   * know it yet, so the caller can fall back to the older way.
+   */
+  private async callIfSupported(path: string, method: Method, body: unknown): Promise<boolean> {
+    try {
+      await this.call(path, method, body, z.unknown());
+      return true;
+    } catch (err) {
+      if (err instanceof CommunityError && err.message === NOT_FOUND_TEXT) return false;
+      throw err;
+    }
+  }
+
+  /**
+   * Moves a channel (after `afterId` in `parentId`, null: first) or a category (after `afterId`).
+   * Newer servers work out the positions over the whole list, hidden channels included; older
+   * ones get the full set of changed positions as before.
+   */
+  private async layoutMove(
+    communityId: string,
+    kind: 'channel' | 'category',
+    id: string,
+    parentId: string | null,
+    afterId: string | null,
+  ): Promise<void> {
+    const body = kind === 'channel' ? { kind, id, parentId, afterId } : { kind, id, afterId };
+    if (await this.callIfSupported(`/communities/${communityId}/layout/move`, 'PUT', body)) return;
+    const community = this.requireCommunity(communityId);
+    const groups = sidebarGroups(community.channels, community.categories);
+    let next;
+    if (kind === 'channel') {
+      const target = groups.find((g) => (g.category?.id ?? null) === parentId);
+      const rest = (target?.channels ?? []).filter((c) => c.id !== id);
+      next = moveInLayout(groups, id, parentId, afterId ? rest.findIndex((c) => c.id === afterId) + 1 : 0);
+    } else {
+      const others = groups
+        .slice(1)
+        .map((g) => g.category!.id)
+        .filter((x) => x !== id);
+      next = moveCategoryInLayout(groups, id, afterId ? others.indexOf(afterId) + 1 : 0);
+    }
+    const change = layoutChanges(next);
+    if (change.channels.length || change.categories.length)
+      await this.call(`/communities/${communityId}/layout`, 'PUT', change, z.unknown());
   }
 
   private db(): LocalDatabase {
@@ -675,7 +1005,7 @@ export class CommunityService {
       ...(extras.pronouns ? { pronouns: extras.pronouns } : {}),
       ...(extras.banner !== null ? { banner: extras.banner } : {}),
     };
-    return seal(this.requireKey(communityId), communityId, 'profile', profile);
+    return sealBound(this.requireKey(communityId), communityId, 'profile', this.me(), profile, this.sealV2);
   }
 
   // ---- Decryption ----------------------------------------------------------------------------
@@ -833,8 +1163,11 @@ export class CommunityService {
 
     const members: MemberView[] = c.members.map((m) => {
       let profile: SealedProfile = { name: null };
+      let genuine = false;
       try {
-        profile = ring.open<SealedProfile>(c.id, 'profile', m.profile);
+        // v2 profiles are bound to their member; v1 (older Rivers) are not.
+        profile = ring.openBoundWith<SealedProfile>(c.id, 'profile', m.riverId, m.profile).value;
+        genuine = true;
       } catch {
         // unreadable profile
       }
@@ -845,6 +1178,8 @@ export class CommunityService {
         /^[A-Za-z0-9+/]{43}[A-Za-z0-9+/=]=?$/.test(profile.identityKey)
       ) {
         this.profileKeys.set(m.riverId, profile.identityKey);
+        // Their profile opened with a key we hold: they held a genuine key (see isVouched).
+        if (genuine && m.riverId !== me) this.vouch(c.id, m.riverId, profile.identityKey);
       }
       const avatar =
         typeof profile.avatar === 'string' && AVATAR_RE.test(profile.avatar) ? profile.avatar : null;
@@ -951,6 +1286,8 @@ export class CommunityService {
         return hooks.length ? { webhooks: hooks } : {};
       })(),
       screening: c.screening ?? false,
+      // A key replacement is due or has not reached us: say so instead of implying it is done.
+      ...(c.rotationNeeded || c.keyEpoch > ring.newest.epoch ? { securing: true } : {}),
       selfRoles: (c.selfRoles ?? []).filter((id) => roles.some((r) => r.id === id)),
       myPending: myPending,
     };
@@ -1032,7 +1369,12 @@ export class CommunityService {
       const openMessage = <T>(): { value: T; key: Buffer } =>
         hook
           ? { value: open<T>(hook.key, communityId, `message:${m.channelId}`, m.body), key: hook.key }
-          : ring.openWith<T>(communityId, `message:${m.channelId}`, m.body);
+          : ring.openBoundWith<T>(
+              communityId,
+              `message:${m.channelId}`,
+              messageBinding(m.id, m.sender),
+              m.body,
+            );
       const opened = openMessage<{
         text: string;
         replyTo?: string;
@@ -1212,11 +1554,14 @@ export class CommunityService {
     const body = {
       id,
       meta: seal(key, id, 'meta', { name, icon: template.emoji }),
-      profile: seal(key, id, 'profile', {
-        name: this.myName(),
-        avatar: this.myAvatar(),
-        identityKey: this.myIdentityKey(),
-      }),
+      profile: sealBound(
+        key,
+        id,
+        'profile',
+        this.me(),
+        { name: this.myName(), avatar: this.myAvatar(), identityKey: this.myIdentityKey() },
+        this.sealV2,
+      ),
       channels: groups.flatMap((g) =>
         g.channels.map((ch) => ({
           id: ch.id,
@@ -1447,7 +1792,14 @@ export class CommunityService {
       'POST',
       {
         id,
-        body: seal(key, communityId, `message:${channelId}`, body),
+        body: sealBound(
+          key,
+          communityId,
+          `message:${channelId}`,
+          messageBinding(id, this.me()),
+          body,
+          this.sealV2,
+        ),
         ...(attachments.length ? { attachments: attachments.map((a) => a.id) } : {}),
         ...(threadId ? { threadId } : {}),
         ...(post?.title && !threadId
@@ -1666,15 +2018,16 @@ export class CommunityService {
           : group.channels.filter((c) => c.kind === channel.kind);
         const target = peers[peers.indexOf(channel) + act.direction];
         if (!target) break;
-        const moved = moveInLayout(
-          groups,
+        // Down: right after the next one. Up: right after whatever is before the previous one.
+        const rest = group.channels.filter((c) => c.id !== channel.id);
+        const at = rest.indexOf(target) + (act.direction > 0 ? 1 : 0);
+        await this.layoutMove(
+          community.id,
+          'channel',
           channel.id,
           group.category?.id ?? null,
-          group.channels.indexOf(target),
+          at > 0 ? rest[at - 1]!.id : null,
         );
-        const change = layoutChanges(moved);
-        if (change.channels.length || change.categories.length)
-          await this.call(`/communities/${community.id}/layout`, 'PUT', change, z.unknown());
         break;
       }
       case 'createCategory': {
@@ -1708,6 +2061,9 @@ export class CommunityService {
       case 'deleteCategory':
         await this.call(`/categories/${act.categoryId}`, 'DELETE', undefined, z.unknown());
         break;
+      case 'layoutMove':
+        await this.layoutMove(act.communityId, act.kind, act.id, act.parentId, act.afterId);
+        break;
       case 'layout':
         await this.call(
           `/communities/${act.communityId}/layout`,
@@ -1733,7 +2089,9 @@ export class CommunityService {
         );
         break;
       case 'audit': {
-        const query = act.before ? `?before=${encodeURIComponent(act.before)}` : '';
+        const query = act.before
+          ? `?before=${encodeURIComponent(act.before)}${act.beforeId ? `&beforeId=${encodeURIComponent(act.beforeId)}` : ''}`
+          : '';
         const res = await this.call(
           `/communities/${act.communityId}/audit${query}`,
           'GET',
@@ -1842,26 +2200,20 @@ export class CommunityService {
       case 'moveRole':
       case 'placeRole': {
         const community = this.requireCommunity(act.communityId);
-        const list = community.roles.filter((r) => !r.everyone); // highest first
-        const from = list.findIndex((r) => r.id === act.roleId);
-        if (from < 0) break;
-        if (act.a === 'moveRole') {
-          const to = from - act.direction; // direction 1 = up (higher position)
-          if (to < 0 || to >= list.length) break;
-          [list[from], list[to]] = [list[to]!, list[from]!];
-        } else {
-          const [moving] = list.splice(from, 1);
-          const at = act.aboveId ? list.findIndex((r) => r.id === act.aboveId) : list.length;
-          list.splice(at < 0 ? list.length : at, 0, moving!);
-        }
-        const count = list.length;
-        // Lower roles first, so a role never needs to pass above the mover's own role.
-        for (let i = count - 1; i >= 0; i--) {
-          const role = list[i]!;
-          const position = count - i;
-          if (role.position !== position)
-            await this.call(`/roles/${role.id}`, 'PATCH', { position }, z.unknown());
-        }
+        // Only roles below your own move, among the positions they already have.
+        const changes = roleOrderChanges(
+          community.roles.filter((r) => !r.everyone),
+          community.myRank,
+          act.a === 'moveRole'
+            ? { roleId: act.roleId, direction: act.direction }
+            : { roleId: act.roleId, aboveId: act.aboveId },
+        );
+        if (!changes.length) break;
+        // All at once where the server can (nothing half done); older servers one by one.
+        if (await this.callIfSupported(`/communities/${community.id}/role-order`, 'PUT', { roles: changes }))
+          break;
+        for (const c of changes)
+          await this.call(`/roles/${c.id}`, 'PATCH', { position: c.position }, z.unknown());
         break;
       }
       case 'deleteRole':
@@ -2132,9 +2484,10 @@ export class CommunityService {
           throw new CommunityError('River could not find that message to edit. Scroll to it and try again.');
         if (original.chat.poll) throw new CommunityError('Polls cannot be edited.');
         // The message's own key: its reactions are tagged with it and must keep matching.
-        const opened = ring.openWith<Record<string, unknown>>(
+        const opened = ring.openBoundWith<Record<string, unknown>>(
           communityId,
           `message:${act.channelId}`,
+          messageBinding(act.messageId, this.me()),
           original.sealed,
         );
         const next: Record<string, unknown> = { ...opened.value, text: act.text };
@@ -2142,7 +2495,15 @@ export class CommunityService {
         const embedUrl = (next.embed as { url?: unknown } | undefined)?.url;
         if (next.embed !== undefined && !(typeof embedUrl === 'string' && act.text.includes(embedUrl)))
           delete next.embed;
-        const body = seal(opened.key, communityId, `message:${act.channelId}`, next);
+        // A v2 message stays v2 (bound to its ID and sender); v1 ones change only once v2 is on.
+        const body = sealBound(
+          opened.key,
+          communityId,
+          `message:${act.channelId}`,
+          messageBinding(act.messageId, this.me()),
+          next,
+          this.sealV2 || opened.version === 2,
+        );
         await this.call(`/messages/${act.messageId}`, 'PATCH', { body }, z.unknown());
         break;
       }
@@ -2637,10 +2998,13 @@ export class CommunityService {
   /** Downloads, verifies and decrypts an attachment (kept in a small in-memory cache). */
   async downloadAttachment(raw: AttachmentPointer): Promise<Uint8Array> {
     const pointer = attachmentPointerSchema.parse(raw);
-    const cached = this.attachmentCache.get(pointer.id);
+    // Keyed by the whole pointer, not the blob ID alone: a pointer naming the same ID with
+    // another digest or key must be checked against its own blob, never served a cached file.
+    const cacheKey = `${pointer.id}|${pointer.digest}|${pointer.key}`;
+    const cached = this.attachmentCache.get(cacheKey);
     if (cached) {
-      this.attachmentCache.delete(pointer.id);
-      this.attachmentCache.set(pointer.id, cached);
+      this.attachmentCache.delete(cacheKey);
+      this.attachmentCache.set(cacheKey, cached);
       return cached;
     }
     const blob = await this.fetchBlob(pointer);
@@ -2656,12 +3020,12 @@ export class CommunityService {
     }
     const copy = new Uint8Array(plain);
     // Another download of the same file may have finished meanwhile: count it once.
-    const earlier = this.attachmentCache.get(pointer.id);
+    const earlier = this.attachmentCache.get(cacheKey);
     if (earlier) {
-      this.attachmentCache.delete(pointer.id);
+      this.attachmentCache.delete(cacheKey);
       this.cacheBytes -= earlier.byteLength;
     }
-    this.attachmentCache.set(pointer.id, copy);
+    this.attachmentCache.set(cacheKey, copy);
     this.cacheBytes += copy.byteLength;
     for (const [id, bytes] of this.attachmentCache) {
       if (this.cacheBytes <= 150 * 1024 * 1024) break;
@@ -3092,6 +3456,8 @@ export class CommunityService {
   }
 
   stop(): void {
+    for (const timer of this.keyTimers.values()) clearTimeout(timer);
+    this.keyTimers.clear();
     // An open still waiting for its token gives up when it gets it.
     this.socketGeneration += 1;
     this.opening = false;
@@ -3250,9 +3616,44 @@ export class CommunityService {
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.retryAt = null;
-      this.ensureSocket();
+      try {
+        this.ensureSocket();
+      } catch (err) {
+        // The local database closed meanwhile (River is quitting or locked): nothing to reconnect.
+        this.deps.log.warn(`Reconnect skipped: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }, delay);
     this.backoff = Math.min(this.backoff * 2, 30_000);
+  }
+
+  /** How long `probe` waits for the server to answer its ping (tests shorten it). */
+  probeMs = 10_000;
+
+  /**
+   * Is the connection still alive? Phones (2.11): with the screen off the processor sleeps and
+   * so do the heartbeat's timers, so a connection the network dropped meanwhile may still look
+   * open. Ping now; one that does not answer within `probeMs` is reconnected. No connection at
+   * all: try again now.
+   */
+  probe(): void {
+    const socket = this.socket;
+    if (!socket || this.socketState !== 'online' || socket.readyState !== WebSocket.OPEN) {
+      this.reconnectNow();
+      return;
+    }
+    const sentAt = Date.now();
+    try {
+      socket.send(JSON.stringify({ t: 'ping' }));
+    } catch {
+      this.dropSocket(socket);
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (this.socket !== socket || this.lastHeard >= sentAt) return;
+      this.deps.log.warn('Realtime connection did not answer after the phone woke; reconnecting');
+      this.dropSocket(socket);
+    }, this.probeMs);
+    timer.unref?.();
   }
 
   /**
@@ -3394,7 +3795,7 @@ export class CommunityService {
         try {
           const sealed = ring.open(communityId, `signal:${e.channelId}`, e.data);
           const route = { communityId, channelId: e.channelId, from: e.from, to: this.signalMe() };
-          const opened = openSignal(route, sealed, this.signalKeys());
+          const opened = openSignal(route, sealed, this.signalKeys(), Date.now(), this.signalReplay);
           if (!opened.ok) {
             this.deps.log.warn(`Dropped a call signal: ${opened.reason}`);
             return;

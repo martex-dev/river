@@ -29,16 +29,23 @@ function page(body: string, css: string, script = ''): string {
   );
 }
 
-function barPage(names: readonly string[]): string {
+function barPage(names: readonly string[], stoppedInApp = false): string {
   const who = names.length ? names.map(escapeHtml).join(', ') : 'people in this call';
+  // River's window says sharing stopped. Main cannot see that for itself (ADR 0007), so the bar
+  // stays, but it no longer claims people can see the screen: one click confirms and closes it.
+  const body = stoppedInApp
+    ? `<div class="bar bar--stopped"><span class="text">River says screen sharing stopped</span><a class="stop" href="${STOP_URL}">OK</a></div>`
+    : `<div class="bar"><span class="dot"></span><span class="text">${who} can see your screen</span><a class="stop" href="${STOP_URL}">Stop sharing</a></div>`;
   return page(
-    `<div class="bar"><span class="dot"></span><span class="text">${who} can see your screen</span><a class="stop" href="${STOP_URL}">Stop sharing</a></div>`,
+    body,
     `html,body{margin:0;height:100%;background:transparent;font:13px/1.2 system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-user-select:none;user-select:none;overflow:hidden}
      .bar{box-sizing:border-box;height:100%;display:flex;align-items:center;gap:10px;padding:0 8px 0 14px;border-radius:10px;background:#b3261e;color:#fff;-webkit-app-region:drag}
      .dot{width:10px;height:10px;border-radius:50%;background:#fff;animation:p 1.4s infinite}
      @keyframes p{50%{opacity:.35}}
      .text{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
-     .stop{-webkit-app-region:no-drag;color:#b3261e;background:#fff;border-radius:6px;padding:6px 12px;font-weight:700;text-decoration:none}`,
+     .stop{-webkit-app-region:no-drag;color:#b3261e;background:#fff;border-radius:6px;padding:6px 12px;font-weight:700;text-decoration:none}
+     .bar--stopped{background:#3a3f4b}
+     .bar--stopped .stop{color:#3a3f4b}`,
   );
 }
 
@@ -85,6 +92,16 @@ export class ShareIndicator {
   constructor(onStop: () => void) {
     this.onStop = onStop;
     session.fromPartition(PARTITION).setPermissionRequestHandler((_wc, _p, cb) => cb(false));
+  }
+
+  /**
+   * River's window says sharing stopped while main may still have a screen out: the bar says so
+   * (without claiming anyone can see the screen) until the person confirms with its button.
+   */
+  stoppedInApp(): void {
+    if (!this.bar || this.bar.isDestroyed()) return;
+    this.closeOverlay();
+    void this.bar.loadURL(barPage(this.names, true));
   }
 
   /** Sharing started (or the viewers changed). `displayId` is the shared screen, if a whole screen. */

@@ -1168,7 +1168,18 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           }}
         />
       )}
-      {c.keyChanged && (
+      {c.verifiedChanged && (
+        <div className="dm-banner dm-banner--warn" role="alert">
+          <span>
+            <strong>{c.name}’s safety number changed after you verified it.</strong> River sends them nothing
+            until you compare the new safety number and verify again.
+          </span>
+          <button className="btn btn--ghost btn--small" onClick={props.onSafety}>
+            Verify
+          </button>
+        </div>
+      )}
+      {c.keyChanged && !c.verifiedChanged && (
         <div className="dm-banner dm-banner--warn" role="alert">
           <span>
             <strong>Your safety number with {c.name} changed.</strong> This happens when they reinstall River
@@ -2595,7 +2606,8 @@ function SafetyNumber({ peer, onClose }: { peer: string; onClose(): void }): Rea
             checked={data.verified}
             onChange={(v) => {
               // Shows verified only once River has recorded it.
-              void dm.attempt({ a: 'setVerified', peer, verified: v }).then((ok) => {
+              // River marks only the key behind the number shown here.
+              void dm.attempt({ a: 'setVerified', peer, verified: v, digits: data.digits }).then((ok) => {
                 if (ok) setData({ ...data, verified: v });
               });
             }}

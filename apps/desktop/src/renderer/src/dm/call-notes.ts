@@ -9,11 +9,16 @@ export function duration(sec: number): string {
 }
 
 /** The line shown in a conversation for a call (1.0.29). */
-export function callNote(c: Pick<CallView, 'direction' | 'video' | 'answered' | 'durationSec'>): string {
+export function callNote(
+  c: Pick<CallView, 'direction' | 'video' | 'answered' | 'durationSec'> & Partial<Pick<CallView, 'outcome'>>,
+): string {
   const icon = c.video ? '📹' : '📞';
   const kind = c.video ? 'Video call' : 'Call';
-  if (!c.answered)
+  if (!c.answered) {
+    if (c.outcome === 'declined') return `${icon} ${kind} — declined`;
+    if (c.outcome === 'failed') return `${icon} ${kind} — could not connect`;
     return c.direction === 'in' ? `${icon} Missed ${kind.toLowerCase()}` : `${icon} ${kind} — no answer`;
+  }
   return `${icon} ${kind} · ${duration(c.durationSec)}`;
 }
 

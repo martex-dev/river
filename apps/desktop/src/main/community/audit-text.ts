@@ -120,6 +120,8 @@ export function describeAudit(
         return `changed the role ${role(t)}${changes(d, { name: 'name', color: 'colour', before: 'permissions', position: 'position' })}`;
       case 'role.delete':
         return 'deleted a role';
+      case 'role.reorder':
+        return 'rearranged the roles';
       case 'channel.create':
         return `created ${channel(t)}`;
       case 'channel.update':

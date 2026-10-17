@@ -17,9 +17,13 @@ export const IPC = {
   appShare: 'river:app:share',
   settingsGet: 'river:settings:get',
   settingsUpdate: 'river:settings:update',
+  /** Settings changed in the client core (by River itself, or by another call): the new settings. */
+  settingsChanged: 'river:settings:changed',
   updatesStatus: 'river:updates:status',
   updatesCheck: 'river:updates:check',
   updatesInstall: 'river:updates:install',
+  /** Downloads an available update (when automatic download is off). */
+  updatesDownload: 'river:updates:download',
   updatesOpenDownload: 'river:updates:open-download',
   updatesStatusChanged: 'river:updates:status-changed',
   securityStatus: 'river:security:status',
@@ -64,6 +68,7 @@ export const IPC = {
   accountRemoveDevice: 'river:account:remove-device',
   accountRedeemSignup: 'river:account:redeem-signup',
   accountStartOver: 'river:account:start-over',
+  accountRelink: 'river:account:relink',
   usersLookup: 'river:users:lookup',
   accountStatusChanged: 'river:account:status-changed',
   communityList: 'river:community:list',
@@ -92,6 +97,12 @@ export const IPC = {
   voicePip: 'river:voice:pip',
   /** Android: River went into (true) or out of (false) picture-in-picture. */
   appPip: 'river:app:pip',
+  /** Android: what keeps River reachable while it is closed (Settings → System). */
+  appPhoneStatus: 'river:app:phone-status',
+  /** Android: opens the phone's own screen to fix one of those (battery, full-screen calls…). */
+  appPhoneFix: 'river:app:phone-fix',
+  /** Android: an incoming call was answered or declined on the phone's own call screen. */
+  appPhoneCall: 'river:app:phone-call',
   screenShareStatus: 'river:voice:share-status',
   screenPoint: 'river:voice:point',
   communityEvent: 'river:community:event',
@@ -140,7 +151,11 @@ export type LinkProgress =
   | { state: 'joining' }
   /** The new device received an account: whose it is, before it links (the person confirms). */
   | { state: 'review'; displayName: string; riverId: string; server: string }
-  | { state: 'linked' }
+  /**
+   * Linked. `deviceName` on the device that added the new one (it shows "Linked" for a moment);
+   * absent on the new device itself.
+   */
+  | { state: 'linked'; deviceName?: string }
   | { state: 'failed'; message: string };
 
 /** One device of this account, from its signed device list. */
@@ -164,6 +179,29 @@ export interface AppInfo {
   startupProblem: string | null;
 }
 
+/**
+ * Android (2.11): what River needs to reach you while it is closed, as the phone reports it.
+ * Every value is read from Android when asked; nothing here is assumed.
+ */
+export interface PhoneStatus {
+  /** Settings → System → Stay connected is on and its service runs. */
+  background: boolean;
+  /** Android lets River run in the background without battery optimization delaying it. */
+  batteryExempt: boolean;
+  /** Incoming calls may cover the screen when the phone is locked (Android 14+ asks for this). */
+  fullScreenCalls: boolean;
+  /** River may post notifications (Android 13+ asks for this). */
+  notifications: boolean;
+}
+
+export type PhoneFix = 'battery' | 'fullScreen' | 'notifications';
+
+/** A call answered or declined on Android's own call screen (2.11). */
+export interface PhoneCallAction {
+  callId: string;
+  action: 'answer' | 'decline';
+}
+
 export type UpdateStatus =
   | { state: 'disabled'; reason: string }
   | { state: 'idle' }
@@ -172,7 +210,12 @@ export type UpdateStatus =
   | { state: 'available'; version: string }
   | { state: 'downloading'; version: string; percent: number }
   | { state: 'verifying'; version: string }
-  | { state: 'ready'; version: string }
+  /** Android: `needsPermission` after River was sent to Settings to allow installing updates. */
+  | { state: 'ready'; version: string; needsPermission?: boolean }
+  /** Android: the system installer is open (it asks the user to confirm). */
+  | { state: 'installing'; version: string }
+  /** Android: the release is signed with another key than this install, so only a fresh install gets it. */
+  | { state: 'reinstall-needed'; version: string; message: string }
   | { state: 'manual'; version: string }
   | { state: 'error'; message: string; code?: string };
 
@@ -212,6 +255,11 @@ export type AccountStatus =
       state: 'none';
       /** River is creating your account on River's server but cannot reach it yet; it keeps trying. */
       waiting?: boolean;
+      /**
+       * River's server only accepts people its owner invites: the account needs a sign-up link.
+       * River stopped trying by itself.
+       */
+      needsInvite?: boolean;
     }
   | {
       state: 'registered';
@@ -233,6 +281,13 @@ export type AccountStatus =
        * the device was replaced): signing in cannot work until the account is set up again.
        */
       missing?: boolean;
+      /**
+       * With `missing`: setting the account up again showed it is still on the server, so this
+       * device was removed from it. Only linking it again (from another device) helps.
+       */
+      removed?: boolean;
+      /** With `missing`: this device shared the account with others, so it was most likely removed. */
+      wasLinked?: boolean;
       /** What people find you by (1.0.13); null until you choose one. */
       username: string | null;
       message?: string;
@@ -391,6 +446,11 @@ export interface CommunityView {
   selfRoles: string[];
   /** You have not accepted the rules yet, so you can only read. */
   myPending: boolean;
+  /**
+   * Someone left or was removed and the community key has not been replaced for you yet (2.11):
+   * new messages are still sealed with the previous key, which they also had.
+   */
+  securing?: boolean;
   /** The community's word filter (1.0.28), or null. */
   filter?: WordFilter | null;
   /** A picture (shown instead of the emoji icon) and a banner (1.0.29), as image data URLs. */
@@ -537,12 +597,25 @@ export interface RiverApi {
     haptic(kind: 'tap' | 'select' | 'success' | 'warning'): void;
     /** Android: River went into or out of picture-in-picture (2.10). Never fires on computers. */
     onPip(listener: (on: boolean) => void): () => void;
+    /** Android: what keeps River reachable while closed (2.11); null on other platforms. */
+    phoneStatus(): Promise<PhoneStatus | null>;
+    /** Android: opens the phone's screen to fix one of those, then reports again; null elsewhere. */
+    phoneFix(fix: PhoneFix): Promise<PhoneStatus | null>;
+    /** Android: a call was answered or declined on the phone's own call screen (2.11). */
+    onPhoneCall(listener: (call: PhoneCallAction) => void): () => void;
   };
-  settings: { get(): Promise<Settings>; update(patch: SettingsPatch): Promise<Settings> };
+  settings: {
+    get(): Promise<Settings>;
+    update(patch: SettingsPatch): Promise<Settings>;
+    /** Settings changed in the client core (also when River changed them itself). */
+    onChange(listener: (settings: Settings) => void): () => void;
+  };
   updates: {
     status(): Promise<UpdateStatus>;
     check(): Promise<UpdateStatus>;
     install(): Promise<void>;
+    /** Downloads the available update when automatic download is off. */
+    download(): Promise<void>;
     openDownloadPage(): Promise<void>;
     onStatus(listener: (status: UpdateStatus) => void): () => void;
   };
@@ -590,8 +663,13 @@ export interface RiverApi {
     setUsername(username: string): Promise<Result<AccountStatus>>;
     /** Use an operator's sign-up link (`…/add#s=…`) to create this account. */
     redeemSignup(link: string): Promise<Result<AccountStatus>>;
-    /** The server no longer knows this account: forget it here and create a new one. */
+    /**
+     * The server no longer lets this device sign in: create a new account for this identity
+     * (the old one is forgotten only once that worked).
+     */
     startOver(): Promise<Result<AccountStatus>>;
+    /** This device was removed from its account: forget it here, ready to be linked again. */
+    relink(): Promise<Result<null>>;
     /** Delete your account from its server for good (1.0.18). */
     deleteAccount(): Promise<Result<null>>;
     /** Save a readable copy of your data (1.0.23); false when the save dialog was cancelled. */
@@ -619,7 +697,8 @@ export interface RiverApi {
     lookup(username: string): Promise<Result<{ username: string; riverId: string }>>;
   };
   backup: {
-    status(): Promise<{ hasPhrase: boolean; lastBackupAt: string | null }>;
+    /** `phraseShown`: the person has seen the recovery phrase (backups need it first). */
+    status(): Promise<{ hasPhrase: boolean; phraseShown: boolean; lastBackupAt: string | null }>;
     /** The 18-word recovery phrase (created on first request). */
     phrase(): Promise<string[]>;
     /** Encrypts a backup and asks where to save it. */

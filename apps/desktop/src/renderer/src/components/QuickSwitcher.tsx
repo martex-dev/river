@@ -110,6 +110,27 @@ export function typingSomewhere(target: EventTarget | null): boolean {
   return !!el.closest?.('[role="dialog"], .modal, .popover, [role="menu"]');
 }
 
+/**
+ * Alt+↑/↓ belong to a field, dialog or menu (a select, a date, a list) — except the message box,
+ * where moving between channels while writing is the point (as on Discord).
+ */
+export function keysForField(target: EventTarget | null): boolean {
+  if (!typingSomewhere(target)) return false;
+  const el = target as HTMLElement;
+  return !(el.tagName === 'TEXTAREA' && el.closest?.('.chat__composer'));
+}
+
+/** A focused control that Space presses (a button, link, checkbox, tab…): Space is not typing then. */
+export function activates(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el || !('tagName' in el)) return false;
+  if (['BUTTON', 'A', 'SUMMARY', 'AUDIO', 'VIDEO'].includes(el.tagName)) return true;
+  const role = el.getAttribute?.('role');
+  return (
+    !!role && ['button', 'link', 'checkbox', 'switch', 'tab', 'option', 'menuitem', 'radio'].includes(role)
+  );
+}
+
 const ZOOM_STEPS = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6];
 
 /** The next interface size up or down. */
@@ -167,9 +188,10 @@ export function QuickSwitcher(): ReactElement | null {
         e.preventDefault();
         setOpen((o) => (o === 'shortcuts' ? null : 'shortcuts'));
       } else if (mod && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-        if (stepCommunity(e.key === 'ArrowDown' ? 1 : -1)) e.preventDefault();
+        if (!keysForField(e.target) && stepCommunity(e.key === 'ArrowDown' ? 1 : -1)) e.preventDefault();
       } else if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-        if (stepChannel(e.key === 'ArrowDown' ? 1 : -1, e.shiftKey)) e.preventDefault();
+        if (!keysForField(e.target) && stepChannel(e.key === 'ArrowDown' ? 1 : -1, e.shiftKey))
+          e.preventDefault();
       } else if (mod && !e.altKey && (e.key === '=' || e.key === '+' || e.key === '-' || e.key === '0')) {
         // Interface size, like a browser: Ctrl+= bigger, Ctrl+− smaller, Ctrl+0 back to normal.
         e.preventDefault();
@@ -183,7 +205,7 @@ export function QuickSwitcher(): ReactElement | null {
         // After this key press is fully handled, so other Esc handlers are never disturbed.
         const whole = e.shiftKey;
         window.setTimeout(() => markRead(whole), 0);
-      } else if (isPrintable(e) && !typingSomewhere(e.target)) {
+      } else if (isPrintable(e) && !typingSomewhere(e.target) && !(e.key === ' ' && activates(e.target))) {
         // Start typing anywhere: the letters go into the message box, like on Discord.
         const box = document.querySelector<HTMLTextAreaElement>('.chat__composer textarea');
         if (box && !box.disabled) box.focus();

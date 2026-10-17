@@ -5,7 +5,8 @@ import type { Settings } from './settings.ts';
  * Discord: mute for a while or for good, and choose All messages / Only
  * @mentions / Nothing. Kept on this device in settings.json.
  *
- * Rules: a channel setting beats its community's, which beats the global one.
+ * Rules: a channel setting beats its category's (2.10.13), which beats its community's, which
+ * beats the global one.
  * Muting silences ordinary messages (no notification, no sound, no unread dot)
  * but @mentions still reach you unless the level is Nothing.
  */
@@ -29,12 +30,19 @@ export function effectiveNotify(
   communityId: string | null,
   channelId: string | null,
   now = Date.now(),
+  categoryId: string | null = null,
 ): Effective {
   const ch = channelId ? prefs.overrides[channelId] : undefined;
+  const ca = categoryId ? prefs.overrides[categoryId] : undefined;
   const co = communityId ? prefs.overrides[communityId] : undefined;
-  const level: NotifyLevel =
-    ch && ch.level !== 'default' ? ch.level : co && co.level !== 'default' ? co.level : prefs.mode;
-  return { level, muted: mutedNow(ch, now) || mutedNow(co, now) };
+  const chosen = [ch, ca, co].find((o) => o && o.level !== 'default')?.level;
+  const level: NotifyLevel = chosen && chosen !== 'default' ? chosen : prefs.mode;
+  return { level, muted: [ch, ca, co].some((o) => mutedNow(o, now)) };
+}
+
+/** Whether an @mention should count on the badge: everywhere except where the level is Nothing. */
+export function countsMention(e: Effective): boolean {
+  return e.level !== 'nothing';
 }
 
 /** Whether a new message should notify and make a sound. */

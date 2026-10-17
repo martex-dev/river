@@ -29,6 +29,16 @@ describe('renderer helpers', () => {
     expect(describeUpdate({ state: 'verifying', version: '0.0.2' })).toMatch(/signature/);
     expect(describeUpdate({ state: 'downloading', version: '0.0.2', percent: 40 })).toMatch(/40%/);
     expect(describeUpdate({ state: 'error', message: 'boom' })).toBe('boom');
+    // River for Android: Android's installer, not a restart.
+    expect(describeUpdate({ state: 'ready', version: '0.0.2' }, true)).toMatch(/Install update/);
+    expect(describeUpdate({ state: 'ready', version: '0.0.2' }, true)).not.toMatch(/Restart/);
+    expect(describeUpdate({ state: 'ready', version: '0.0.2', needsPermission: true }, true)).toMatch(
+      /permission/,
+    );
+    expect(describeUpdate({ state: 'installing', version: '0.0.2' }, true)).toMatch(/Confirm/);
+    expect(describeUpdate({ state: 'reinstall-needed', version: '0.0.2', message: 'uninstall first' })).toBe(
+      'uninstall first',
+    );
   });
 });
 

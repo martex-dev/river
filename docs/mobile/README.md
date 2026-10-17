@@ -11,8 +11,21 @@ phone and open it (Android asks to allow installing from the browser once).
 Phones with older 32-bit processors use `River-<version>-android-arm32.apk`.
 Android 8.0 or newer.
 
-Updates: install the newer APK over the old one (same signing key, so your
-data stays). Obtainium can watch the GitHub releases and do it for you.
+Updates: River updates itself (Settings → Updates). It checks GitHub Releases
+at start and about every six hours, takes only a release whose manifest is
+signed by River's release key (Beta and Nightly only if you chose them),
+downloads the APK for your phone's processor, checks its SHA-256 against the
+signed manifest and that it is signed with the same Android key as the River
+you have, then opens Android's installer, which asks you to confirm. The first
+time, Android asks you to allow River to install apps.
+
+A release signed with a different Android key (the early preview builds were)
+cannot be installed as an update: River says so and links the download page.
+Uninstalling deletes River's data on the phone, so make a backup first
+(Settings → Backup). You can still install a newer APK over the old one by
+hand, or let Obtainium watch the releases.
+
+iPhone: a sideloaded app cannot replace itself; install the new IPA as below.
 
 ## Install (iPhone)
 
@@ -49,13 +62,25 @@ decisions) River can go to TestFlight and the App Store instead.
   service.
 - Calls keep going with the screen off on Android, ring while River is in the
   background (1.7), and have a speaker button (2.0.1).
+- Android rings like a phone call (2.11): the phone's ringtone and vibration, a
+  call screen over the lock screen with Answer and Decline, and Android's call
+  notification when another app is in front. Stay connected is on for new
+  installs (existing ones are asked once); a watchdog checks the connection
+  every ~15 minutes with the screen off and the service restarts after a
+  reboot. Settings → System → Calls and notifications shows battery
+  optimization, full-screen calls and notification permission as Android
+  reports them, each with a button to fix it.
+- iPhone: without Apple's push service (it needs a paid Apple developer
+  account) River cannot notify or ring while iOS has paused it; messages and
+  calls wait until River is opened. Settings → System says so.
 - Share → River from other apps (Android); swipe between the list and the
   conversation.
 - Watching and pointing at someone's shared screen (remote assistance).
 - "Open in River" links on invite pages.
 
 Not yet: hosting and sharing your own screen (computer features), the system's
-own incoming-call screen (CallKit / ConnectionService), link previews.
+own telephony integration (CallKit / Telecom ConnectionService: River's call
+screen is its own), link previews.
 
 ## How it is built
 

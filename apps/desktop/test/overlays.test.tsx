@@ -148,7 +148,7 @@ describe('dialogs and menus', () => {
     expect(screen.queryByText('First item')).toBeNull();
   });
 
-  it('opening a menu closes the other one, and scrolling what is under it closes it', async () => {
+  it('opening a menu closes the other one, and scrolling away (not River scrolling) closes it', async () => {
     render(<Menus />);
     fireEvent.click(screen.getByText('Open menu'));
     await settle();
@@ -158,7 +158,26 @@ describe('dialogs and menus', () => {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 320));
     });
+    // River scrolling the chat to a new message (or the keyboard opening) does not close it…
     fireEvent.scroll(screen.getByTestId('msg'));
+    fireEvent.scroll(document);
+    expect(screen.getByText('Other panel')).toBeTruthy();
+    // …the reader scrolling away does.
+    fireEvent.wheel(screen.getByTestId('msg'));
     expect(screen.queryByText('Other panel')).toBeNull();
+  });
+
+  it('leaves Escape to a field that uses it itself (cancelling a rename inside a dialog)', () => {
+    const close = vi.fn();
+    const layer = pushOverlay(close);
+    const input = document.createElement('input');
+    input.setAttribute('data-own-escape', '');
+    document.body.appendChild(input);
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(close).not.toHaveBeenCalled();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(close).toHaveBeenCalledOnce();
+    layer.remove();
+    input.remove();
   });
 });

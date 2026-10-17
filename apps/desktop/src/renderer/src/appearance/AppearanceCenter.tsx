@@ -1031,6 +1031,7 @@ function Profiles({ design }: { design: DesignSettings }): ReactElement {
                   aria-label="New name"
                   value={renaming.name}
                   onChange={(e) => setRenaming({ id: profile.id, name: e.target.value })}
+                  data-own-escape=""
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && renaming.name.trim()) {
                       commitDesign({
