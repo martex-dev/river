@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.11.3] - 2026-10-18
+
+**Connections that recover by themselves, and hosting that tells you what is wrong.**
+
 ### Fixed
 
 - **Messages always arrive.** Mail that came in while River was already
