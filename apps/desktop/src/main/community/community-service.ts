@@ -3552,7 +3552,12 @@ export class CommunityService {
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.retryAt = null;
-      this.ensureSocket();
+      try {
+        this.ensureSocket();
+      } catch (err) {
+        // Storage closed meanwhile (River locked or quitting): nothing to reconnect.
+        this.deps.log.warn(`Not reconnecting: ${(err as Error).message}`);
+      }
     }, delay);
     this.backoff = Math.min(this.backoff * 2, 30_000);
   }
