@@ -3250,9 +3250,44 @@ export class CommunityService {
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.retryAt = null;
-      this.ensureSocket();
+      try {
+        this.ensureSocket();
+      } catch (err) {
+        // The local database closed meanwhile (River is quitting or locked): nothing to reconnect.
+        this.deps.log.warn(`Reconnect skipped: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }, delay);
     this.backoff = Math.min(this.backoff * 2, 30_000);
+  }
+
+  /** How long `probe` waits for the server to answer its ping (tests shorten it). */
+  probeMs = 10_000;
+
+  /**
+   * Is the connection still alive? Phones (2.11): with the screen off the processor sleeps and
+   * so do the heartbeat's timers, so a connection the network dropped meanwhile may still look
+   * open. Ping now; one that does not answer within `probeMs` is reconnected. No connection at
+   * all: try again now.
+   */
+  probe(): void {
+    const socket = this.socket;
+    if (!socket || this.socketState !== 'online' || socket.readyState !== WebSocket.OPEN) {
+      this.reconnectNow();
+      return;
+    }
+    const sentAt = Date.now();
+    try {
+      socket.send(JSON.stringify({ t: 'ping' }));
+    } catch {
+      this.dropSocket(socket);
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (this.socket !== socket || this.lastHeard >= sentAt) return;
+      this.deps.log.warn('Realtime connection did not answer after the phone woke; reconnecting');
+      this.dropSocket(socket);
+    }, this.probeMs);
+    timer.unref?.();
   }
 
   /**
