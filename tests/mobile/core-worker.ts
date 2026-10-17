@@ -9,7 +9,13 @@ import { pathToFileURL } from 'node:url';
  * how a synchronous Android JavaScript interface behaves.
  */
 
-const { bundle, shared } = workerData as { bundle: string; shared: SharedArrayBuffer };
+const { bundle, shared, platform } = workerData as {
+  bundle: string;
+  shared: SharedArrayBuffer;
+  platform?: 'android' | 'ios';
+};
+// The iOS shell says which phone this is before any script runs (platform.ts).
+if (platform) (globalThis as Record<string, unknown>).__riverPlatform = platform;
 const state = new Int32Array(shared, 0, 2);
 const bytes = new Uint8Array(shared, 8);
 

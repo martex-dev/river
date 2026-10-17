@@ -35,6 +35,8 @@ export interface PhoneOptions {
    * leaves the ask to the defaults below; a throw answers it as failed.
    */
   answer?: (kind: string, args: unknown) => unknown;
+  /** The shell the core runs in (the iOS shell sets window.__riverPlatform); Android by default. */
+  platform?: 'android' | 'ios';
 }
 
 const SHARED_BYTES = 64 * 1024 * 1024;
@@ -48,7 +50,9 @@ export async function startPhone(bundle: string, root: string, options: PhoneOpt
   const state = new Int32Array(shared, 0, 2);
   const out = new Uint8Array(shared, 8);
   const native = createNodeNative(root);
-  const worker = new Worker(new URL('./core-worker.ts', import.meta.url), { workerData: { bundle, shared } });
+  const worker = new Worker(new URL('./core-worker.ts', import.meta.url), {
+    workerData: { bundle, shared, platform: options.platform },
+  });
 
   const events: Phone['events'] = [];
   const asks: Phone['asks'] = [];

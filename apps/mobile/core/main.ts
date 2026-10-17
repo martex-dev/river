@@ -454,9 +454,9 @@ async function start(): Promise<void> {
   });
   let lastAccount: AccountStatus | null = account.status();
   account.onStatus((s) => {
-    // Signed out or removed: the account's message notifications go away (Android shell).
-    if (PLATFORM === 'android' && accountGone(lastAccount, s))
-      void ask('clearNotifications', {}).catch(() => undefined);
+    // Signed out or removed: the account's message notifications go away (both shells; 2.12:
+    // the iPhone's stayed readable in Notification Center).
+    if (accountGone(lastAccount, s)) void ask('clearNotifications', {}).catch(() => undefined);
     lastAccount = s;
     if (s.state === 'registered' && s.connection === 'online') community.ensureSocket();
   });

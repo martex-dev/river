@@ -261,9 +261,24 @@ public final class CoreHost: NSObject {
                 if let ask = takeNotification(tag) { answer(ask, value: "dismissed") }
             }
             answer(id, value: nil)
+        case "clearNotifications":
+            // Signed out, or this account was removed (2.12): its notifications go entirely
+            // instead of staying readable in Notification Center. The core stops waiting for them.
+            let center = UNUserNotificationCenter.current()
+            center.removeAllDeliveredNotifications()
+            center.removeAllPendingNotificationRequests()
+            let waiting = Array(notificationAsks.values)
+            notificationAsks = [:]
+            notificationOrder = []
+            for ask in waiting { answer(ask, value: "dismissed") }
+            answer(id, value: nil)
         case "callState":
             inCall = (a["active"] as? Bool) == true
-            if !inCall { earpiece = false }
+            if !inCall {
+                earpiece = false
+                // The call is over: no loudspeaker left set for what plays next (2.12).
+                try? AVAudioSession.sharedInstance().overrideOutputAudioPort(.none)
+            }
             updateProximity()
             answer(id, value: nil)
         case "speaker":
@@ -524,7 +539,8 @@ extension CoreHost: UNUserNotificationCenterDelegate {
         _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        completionHandler([.banner, .sound])
+        // Also kept in Notification Center (2.12): a banner alone was gone once it slid away.
+        completionHandler([.banner, .list, .sound])
     }
 }
 
