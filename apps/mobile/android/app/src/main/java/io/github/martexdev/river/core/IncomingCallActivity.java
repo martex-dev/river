@@ -112,7 +112,9 @@ public final class IncomingCallActivity extends Activity {
     super.onDestroy();
   }
 
-  // ---- the screen ----
+  // ---- the screen (2.11.1: like a phone call — Telegram, Instagram, the phone's own) ----
+
+  private final java.util.List<android.animation.Animator> animations = new java.util.ArrayList<>();
 
   private int dp(float v) {
     return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics()));
@@ -124,14 +126,81 @@ public final class IncomingCallActivity extends Activity {
     t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
     t.setTextColor(color);
     t.setGravity(Gravity.CENTER);
-    if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    if (bold) t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+    t.setShadowLayer(dp(6), 0, dp(1), 0x40000000);
     return t;
   }
 
-  private View button(String label, int color, int icon, View.OnClickListener onClick) {
+  /** Two colours from the caller's name, so each person's call looks a little different. */
+  private static int[] palette(String name) {
+    int[][] colours = {
+      {0xFF1E3C72, 0xFF2A5298},
+      {0xFF42275A, 0xFF734B6D},
+      {0xFF0F3443, 0xFF2E8B6F},
+      {0xFF3A1C71, 0xFFB45A6A},
+      {0xFF134E5E, 0xFF4E8C62},
+      {0xFF232526, 0xFF414345},
+      {0xFF614385, 0xFF516395},
+      {0xFF1F4037, 0xFF3F8F78},
+    };
+    int h = 0;
+    for (int i = 0; i < name.length(); i++) h = h * 31 + name.charAt(i);
+    return colours[Math.floorMod(h, colours.length)];
+  }
+
+  private static String initials(String name) {
+    String[] parts = name.trim().split("\\s+");
+    StringBuilder b = new StringBuilder();
+    int letters = 0;
+    for (String p : parts) {
+      if (p.isEmpty()) continue;
+      b.appendCodePoint(p.codePointAt(0));
+      if (++letters >= 2) break;
+    }
+    String out = b.toString().toUpperCase(java.util.Locale.ROOT);
+    return out.isEmpty() ? "?" : out;
+  }
+
+  /** The caller's picture: initials in a circle, with rings pulsing outward while it rings. */
+  private View avatar(String name) {
+    android.widget.FrameLayout box = new android.widget.FrameLayout(this);
+    box.setClipChildren(false);
+    int size = dp(132);
+    for (int i = 0; i < 2; i++) {
+      View ring = new View(this);
+      GradientDrawable g = new GradientDrawable();
+      g.setShape(GradientDrawable.OVAL);
+      g.setColor(0x33FFFFFF);
+      ring.setBackground(g);
+      box.addView(ring, new android.widget.FrameLayout.LayoutParams(size, size, Gravity.CENTER));
+      android.animation.ObjectAnimator pulse =
+          android.animation.ObjectAnimator.ofPropertyValuesHolder(
+              ring,
+              android.animation.PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.75f),
+              android.animation.PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.75f),
+              android.animation.PropertyValuesHolder.ofFloat(View.ALPHA, 0.9f, 0f));
+      pulse.setDuration(2000);
+      pulse.setStartDelay(i * 1000L);
+      pulse.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+      pulse.setInterpolator(new android.view.animation.DecelerateInterpolator());
+      animations.add(pulse);
+    }
+    TextView face = text(initials(name), 46, Color.WHITE, true);
+    face.setShadowLayer(0, 0, 0, 0);
+    GradientDrawable circle =
+        new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[] {0x66FFFFFF, 0x26FFFFFF});
+    circle.setShape(GradientDrawable.OVAL);
+    circle.setStroke(dp(2), 0x80FFFFFF);
+    face.setBackground(circle);
+    box.addView(face, new android.widget.FrameLayout.LayoutParams(size, size, Gravity.CENTER));
+    return box;
+  }
+
+  private View button(String label, int color, int icon, boolean bounce, View.OnClickListener onClick) {
     LinearLayout column = new LinearLayout(this);
     column.setOrientation(LinearLayout.VERTICAL);
     column.setGravity(Gravity.CENTER_HORIZONTAL);
+    column.setClipChildren(false);
     ImageButton b = new ImageButton(this);
     GradientDrawable round = new GradientDrawable();
     round.setShape(GradientDrawable.OVAL);
@@ -139,42 +208,105 @@ public final class IncomingCallActivity extends Activity {
     b.setBackground(round);
     b.setImageResource(icon);
     b.setImageTintList(ColorStateList.valueOf(Color.WHITE));
-    b.setScaleType(ImageButton.ScaleType.CENTER_INSIDE);
-    b.setPadding(dp(18), dp(18), dp(18), dp(18));
+    b.setScaleType(ImageButton.ScaleType.FIT_CENTER);
+    b.setPadding(dp(20), dp(20), dp(20), dp(20));
+    b.setElevation(dp(8));
     b.setContentDescription(label);
     b.setOnClickListener(onClick);
-    column.addView(b, new LinearLayout.LayoutParams(dp(76), dp(76)));
-    TextView t = text(label, 16, Color.WHITE, false);
-    t.setPadding(0, dp(10), 0, 0);
+    column.addView(b, new LinearLayout.LayoutParams(dp(74), dp(74)));
+    TextView t = text(label, 15, 0xE6FFFFFF, false);
+    t.setPadding(0, dp(12), 0, 0);
     column.addView(t);
+    if (bounce) {
+      // The Answer button nudges, as phone call screens do.
+      android.animation.ObjectAnimator nudge =
+          android.animation.ObjectAnimator.ofPropertyValuesHolder(
+              b,
+              android.animation.PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.1f, 1f),
+              android.animation.PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.1f, 1f));
+      nudge.setDuration(1200);
+      nudge.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+      animations.add(nudge);
+    }
     return column;
   }
 
   private View layout() {
+    for (android.animation.Animator a : animations) a.cancel();
+    animations.clear();
+    String name = IncomingCall.name();
+    boolean video = IncomingCall.video();
+    int[] colours = palette(name);
+    android.widget.FrameLayout frame = new android.widget.FrameLayout(this);
+    frame.setBackground(
+        new GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM, new int[] {colours[0], colours[1], 0xFF05070C}));
+    getWindow().setStatusBarColor(colours[0]);
+    getWindow().setNavigationBarColor(0xFF05070C);
+
     LinearLayout root = new LinearLayout(this);
     root.setOrientation(LinearLayout.VERTICAL);
     root.setGravity(Gravity.CENTER_HORIZONTAL);
-    root.setBackgroundColor(0xFF0F1720);
-    root.setPadding(dp(24), dp(96), dp(24), dp(64));
+    root.setPadding(dp(24), dp(72), dp(24), dp(56));
+    root.setClipChildren(false);
+    frame.addView(
+        root,
+        new android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-    root.addView(text("River", 16, 0xB3FFFFFF, false));
-    TextView who = text(IncomingCall.name(), 34, Color.WHITE, true);
-    who.setPadding(0, dp(28), 0, dp(8));
+    TextView kind = text(video ? "River video call" : "River voice call", 15, 0xCCFFFFFF, false);
+    kind.setLetterSpacing(0.04f);
+    root.addView(kind);
+
+    root.addView(new View(this), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 0.6f));
+    root.addView(avatar(name), new LinearLayout.LayoutParams(dp(240), dp(240)));
+
+    TextView who = text(name, 32, Color.WHITE, true);
+    who.setPadding(0, dp(8), 0, dp(6));
     who.setMaxLines(2);
+    who.setEllipsize(android.text.TextUtils.TruncateAt.END);
     root.addView(who);
-    root.addView(text(IncomingCall.video() ? "Video call" : "Voice call", 18, 0xB3FFFFFF, false));
+    root.addView(text("Ringing…", 17, 0xB3FFFFFF, false));
 
-    View spacer = new View(this);
-    root.addView(spacer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+    root.addView(new View(this), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
     LinearLayout row = new LinearLayout(this);
     row.setOrientation(LinearLayout.HORIZONTAL);
     row.setGravity(Gravity.CENTER);
-    LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    row.setClipChildren(false);
+    LinearLayout.LayoutParams half =
+        new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
     row.addView(
-        button("Decline", 0xFFE5484D, android.R.drawable.ic_menu_close_clear_cancel, v -> decline()), half);
-    row.addView(button("Answer", 0xFF30A46C, android.R.drawable.ic_menu_call, v -> answer()), half);
-    root.addView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-    return root;
+        button("Decline", 0xFFFF3B30, io.github.martexdev.river.R.drawable.ic_call_end, false, v -> decline()),
+        half);
+    row.addView(
+        button(
+            "Answer",
+            0xFF34C759,
+            video
+                ? io.github.martexdev.river.R.drawable.ic_call_video
+                : io.github.martexdev.river.R.drawable.ic_call_answer,
+            true,
+            v -> answer()),
+        half);
+    root.addView(
+        row,
+        new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    for (android.animation.Animator a : animations) a.start();
+    return frame;
+  }
+
+  @Override
+  protected void onStop() {
+    // Off screen: the animations rest (they go on with the screen).
+    for (android.animation.Animator a : animations) a.pause();
+    super.onStop();
+  }
+
+  @Override
+  protected void onStart() {
+    super.onStart();
+    for (android.animation.Animator a : animations) a.resume();
   }
 }

@@ -11,6 +11,7 @@ import {
   HeadphonesOffIcon,
   MicIcon,
   MicOffIcon,
+  PhoneIcon,
   PhoneOffIcon,
   ScreenIcon,
 } from '../community/ui/common.tsx';
@@ -31,48 +32,89 @@ function CallTimer(props: { since: number }): ReactElement {
   return <span className="call-timer">{callClock((now - props.since) / 1000)}</span>;
 }
 
+/** Two colours from a name, so each person's call looks a little different (as on the phone screen). */
+const CALL_COLOURS: Array<[string, string]> = [
+  ['#1e3c72', '#2a5298'],
+  ['#42275a', '#734b6d'],
+  ['#0f3443', '#2e8b6f'],
+  ['#3a1c71', '#b45a6a'],
+  ['#134e5e', '#4e8c62'],
+  ['#232526', '#414345'],
+  ['#614385', '#516395'],
+  ['#1f4037', '#3f8f78'],
+];
+
+export function callColours(name: string): [string, string] {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (Math.imul(h, 31) + name.charCodeAt(i)) | 0;
+  return CALL_COLOURS[((h % CALL_COLOURS.length) + CALL_COLOURS.length) % CALL_COLOURS.length]!;
+}
+
+/**
+ * An incoming 1:1 call (2.11.1): on a phone it fills the screen like a phone call (Telegram,
+ * Instagram, the phone's own) — the caller's picture large, "Ringing…", big Decline and Answer;
+ * on a computer the same as a card.
+ */
 export function IncomingCall(): ReactElement | null {
   const incoming = useDmCall((s) => s.incoming);
   const conv = useDm((d) => d.conversations.find((c) => c.riverId === incoming?.peer));
+  const phone = useRiver((r) => isPhone(r.info?.platform));
   if (!incoming) return null;
   const name = conv?.name ?? 'Someone';
+  const [from, to] = callColours(name);
   return (
-    <div className="incoming-call" role="alertdialog" aria-label={`Incoming call from ${name}`}>
+    <div
+      className={`incoming-call ${phone ? 'incoming-call--full' : ''}`}
+      role="alertdialog"
+      aria-label={`Incoming call from ${name}`}
+      style={{ '--call-from': from, '--call-to': to } as React.CSSProperties}
+    >
+      {conv?.avatar && <img className="incoming-call__photo" src={conv.avatar} alt="" aria-hidden="true" />}
       <div className="incoming-call__card">
+        <span className="incoming-call__kind">River {incoming.video ? 'video' : 'voice'} call</span>
         <div className="incoming-call__avatar">
-          <Avatar id={incoming.peer} name={name} avatar={conv?.avatar} size={88} />
+          <span className="incoming-call__ring" aria-hidden="true" />
+          <span className="incoming-call__ring incoming-call__ring--late" aria-hidden="true" />
+          <Avatar id={incoming.peer} name={name} avatar={conv?.avatar} size={phone ? 128 : 96} />
         </div>
-        <strong>{name}</strong>
-        <span className="muted">
-          Incoming {incoming.video ? 'video' : 'voice'} call · end-to-end encrypted
-        </span>
+        <strong className="incoming-call__name">{name}</strong>
+        <span className="incoming-call__status">Ringing… · end-to-end encrypted</span>
         <div className="incoming-call__actions">
-          <button
-            className="round-btn round-btn--danger"
-            aria-label="Decline"
-            title="Decline"
-            onClick={declineDmCall}
-          >
-            <PhoneOffIcon />
-          </button>
-          <button
-            className="round-btn round-btn--accept"
-            aria-label="Accept"
-            title="Accept with voice"
-            onClick={() => void acceptDmCall(false)}
-          >
-            <MicIcon />
-          </button>
-          {incoming.video && (
+          <div className="incoming-call__action">
             <button
-              className="round-btn round-btn--accept"
-              aria-label="Accept with video"
-              title="Accept with video"
-              onClick={() => void acceptDmCall(true)}
+              className="call-action call-action--decline"
+              aria-label="Decline"
+              title="Decline"
+              onClick={declineDmCall}
             >
-              <CameraIcon />
+              <PhoneOffIcon size={30} />
             </button>
+            <span aria-hidden="true">Decline</span>
+          </div>
+          {incoming.video && (
+            <div className="incoming-call__action">
+              <button
+                className="call-action call-action--answer call-action--nudge"
+                aria-label="Accept with video"
+                title="Answer with video"
+                onClick={() => void acceptDmCall(true)}
+              >
+                <CameraIcon size={30} />
+              </button>
+              <span aria-hidden="true">Video</span>
+            </div>
           )}
+          <div className="incoming-call__action">
+            <button
+              className={`call-action call-action--answer ${incoming.video ? '' : 'call-action--nudge'}`}
+              aria-label="Accept"
+              title={incoming.video ? 'Answer with voice only' : 'Answer'}
+              onClick={() => void acceptDmCall(false)}
+            >
+              <PhoneIcon size={30} />
+            </button>
+            <span aria-hidden="true">{incoming.video ? 'Voice' : 'Answer'}</span>
+          </div>
         </div>
       </div>
     </div>

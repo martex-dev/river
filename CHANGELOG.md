@@ -6,6 +6,37 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.11.1] - 2026-10-17
+
+**Calls that look and behave like phone calls.**
+
+### Fixed
+
+- **A phone no longer keeps ringing after the caller hangs up.** With the
+  screen off the phone went to sleep: the 45-second limit and the connection
+  that brings the caller's hang-up stopped with it, while the ringtone played
+  on until the phone was woken. River now keeps the phone awake exactly while a
+  call rings (never longer than the ring itself).
+- The caller's hang-up (and Answer, Decline and Busy) now waits on the server
+  when the called phone is briefly offline, so it still stops ringing as soon
+  as its connection is back; an invite that arrives after the ring would have
+  ended never rings. Only connection set-up is still never stored.
+- The 45-second limit stops the ringing even if River's background core was
+  restarting at that moment.
+- **Answering or declining on one of your devices stops the call ringing on
+  your other devices** (no "missed call" there).
+
+### Changed
+
+- **The call screen looks like a phone call** (Android's own screen over the
+  lock screen, and River's screen on phones and computers): a colour
+  background or the caller's blurred picture, a large picture with rings
+  pulsing out, the name, "River voice call" or "River video call" and
+  "Ringing…", and big round Decline (red) and Answer (green) buttons with
+  labels; the Answer button nudges. A video call offers Video and Voice.
+- During a call on a phone, the buttons are Instagram-like: see-through round
+  buttons, a white one when something is on, and a red Hang up.
+
 ## [2.11.0] - 2026-10-17
 
 **Phones that ring and notify like phones, updates that install by themselves, and a second bug sweep.**

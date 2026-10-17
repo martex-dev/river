@@ -373,6 +373,13 @@ export function handleCallEvent(e: Extract<DmEvent, { t: 'call' }>): void {
         .notify(e.kind === 'busy' ? `${name} is in another call.` : `${name} declined the call.`);
       void endDmCall();
       return;
+    case 'elsewhere':
+      // Answered or declined on another of your devices: quiet here, nothing missed.
+      if (incoming?.callId === e.callId) {
+        stopRinging();
+        useDmCall.setState({ incoming: null });
+      }
+      return;
     case 'end':
       if (incoming?.callId === e.callId) {
         stopRinging();

@@ -737,6 +737,7 @@ public final class CoreHost {
                 foreground,
                 () -> {
                   if (gen == generation) endIncoming("timeout");
+                  // An older core's ask: IncomingCall stops the ringing itself.
                 });
             break;
           }
