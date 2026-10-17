@@ -10,6 +10,7 @@ Plan: [docs/product/road-to-3.md](docs/product/road-to-3.md). Many releases, one
 - [x] 2.11.2 Call fixes (missed calls, glare, a second call, other devices, speaker and Bluetooth), review fixes
 - [x] 2.11.3 Server, connection and hosting sweep: no double posts after a lost reply, reconnects that back off and notice dead connections, prekeys topped up while connected, PostgreSQL restarts, hosting retries and honest Funnel status
 - [x] 2.12.0 Community messages and profiles bound to their sender (v2 associated data by default), full channel history, community delivery fixes
+- [x] 2.12.1 Phone native sweep: reconnect on network change, Stay connected restart crash, other apps' calls kept, notification ids after a restart, lock screen on Android 8, share and save fixes, iPhone notifications cleared on sign-out
 - [ ] 2.13.0 Phones look like Telegram and Instagram: bottom tabs, chat list, conversation screen with bubbles, communities as a list, calls list, feed, profile
 - [ ] 2.13.x Polish for each phone screen
 - [ ] 2.14.x Easy start: install to first chat in under a minute, one-screen profile, invite links that open the app; community keys need a proof

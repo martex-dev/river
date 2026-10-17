@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.12.1] - 2026-10-18
+
+**Phones that reconnect after a network change, keep their notifications and never cut other apps' calls.**
+
 ### Fixed
 
 - Phones: **River reconnects as soon as the network comes back or changes**
