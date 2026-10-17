@@ -35,6 +35,58 @@ All notable changes to River are documented here. The format follows
 - iPhone: Settings → Updates says plainly that a sideloaded app cannot update
   itself, and no longer shows update settings that do nothing there.
 
+**Android rings and notifies like a phone (maintainer request).** River still
+uses no Google push service: everything depends on River's own connection,
+so Stay connected matters.
+
+### Added
+
+- **Incoming calls on Android** ring like a phone call: the phone's ringtone in
+  a loop and a repeating vibration (silent and vibrate modes and Do Not
+  Disturb respected), a call screen that wakes the phone and covers the lock
+  screen with the caller's name, Voice or Video call, and big Answer and
+  Decline buttons. With another app in front, Android's call notification
+  (Answer / Decline) stays on top. Answer opens River straight into the call;
+  Decline declines without opening River. Ringing stops when the caller hangs
+  up or after 45 seconds. With notification previews hidden, the call screen
+  says "Someone".
+- **The "In a call" notification** is Android's ongoing-call notification with
+  Hang up, naming the person (or "River call" with previews hidden).
+- **Message notifications on Android**: one per conversation with the
+  sender's name (Android's conversation style), sound and vibration; the lock
+  screen shows sender and text only with "Sender and message" previews,
+  otherwise "New message". **Light up the screen for new messages**
+  (Settings → System, on by default) turns a dark screen on for a few seconds,
+  but not during Do Not Disturb or for messages sent without sound.
+- **Stay connected is on for new Android installs**; existing installs are asked
+  once ("Get messages and calls when River is closed?"). Turning it on explains
+  and then lets Android ask to stop battery optimization delaying River.
+- **Settings → System → Calls and notifications** (Android): Stay connected,
+  battery optimization, full-screen calls (Android 14+ asks separately) and
+  notification permission, as Android reports them, each with a button to fix
+  it. A one-time prompt offers the full-screen permission when it is missing.
+- Stay connected keeps working with the screen off: a watchdog wakes the phone
+  about every 15 minutes to check the connection (a ping that must be
+  answered) and reconnect, and the service starts again after a restart of
+  the phone or an update of River.
+
+### Fixed
+
+- Android: when River's core restarted (Android often ends background
+  renderers), every River notification on screen disappeared. They now stay,
+  as plain notifications that open River.
+- Android: an interface renderer that kept crashing could rebuild River's
+  screen in a loop; it is rebuilt at most three times a minute, then closes
+  with a message.
+- Opening River from a ringing call no longer risks answering "busy" to that
+  same call.
+
+### Not on iPhone
+
+- Without Apple's push service (it needs a paid Apple developer account), an
+  iPhone cannot ring or notify while iOS has paused River. Settings → System
+  says so; nothing here pretends otherwise.
+
 ## [2.10.12] - 2026-10-16
 
 **Bug sweep: a review of the whole program — server, phone apps, calls, voice, messages and layout.**

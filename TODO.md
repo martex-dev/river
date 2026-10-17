@@ -33,7 +33,8 @@ Audit and plan: [docs/product/telegram-parity.md](docs/product/telegram-parity.m
 - [ ] Idempotent channel resend: `send` takes the outbox id so a reply lost while going offline cannot post twice (needs server de-duplication)
 - [ ] Channel history: main returns `hasMore` so pages of undecryptable messages do not end the history early (the renderer guesses today)
 - [ ] Decide: bind River IDs to identity keys so an ID cannot be registered first on another server (architecture decision for the maintainer)
-- [ ] Check on real phones: Android Back, picture-in-picture, proximity, lock-screen calls, Stay connected notifications, iPhone core recovery (native code first compiled in CI)
+- [x] Android rings and notifies like a phone: call screen over the lock screen, ringtone, CallStyle notifications, Stay connected on by default, watchdog, restart after reboot, honest Settings state (unreleased)
+- [ ] Check on real phones: Android Back, picture-in-picture, proximity, lock-screen calls, the new call screen and ringtone, Stay connected with the screen off for an hour, battery and full-screen prompts, iPhone core recovery (native code first compiled in CI)
 - [ ] Picture-in-picture for calls on iPhone (needs AVPictureInPictureController with a video call source)
 - [ ] Check the message box stays above the keyboard on Android 15+ (edge-to-edge) on a real phone
 - [ ] More interface languages (English and Bulgarian today)

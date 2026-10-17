@@ -348,7 +348,8 @@ interface DmResults {
   deleteFolder: ChatFolder[];
   schedule: ScheduledView;
   scheduled: ScheduledView[];
-  pendingCall: Extract<DmEvent, { t: 'call' }> | null;
+  /** `answer`: it was answered on the phone's own call screen (Android, 2.11), so the window answers it. */
+  pendingCall: (Extract<DmEvent, { t: 'call' }> & { answer?: boolean }) | null;
 }
 
 export type DmActionResult<A extends DmAction> = A['a'] extends keyof DmResults ? DmResults[A['a']] : null;

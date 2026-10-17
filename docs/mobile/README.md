@@ -62,13 +62,25 @@ decisions) River can go to TestFlight and the App Store instead.
   service.
 - Calls keep going with the screen off on Android, ring while River is in the
   background (1.7), and have a speaker button (2.0.1).
+- Android rings like a phone call (2.11): the phone's ringtone and vibration, a
+  call screen over the lock screen with Answer and Decline, and Android's call
+  notification when another app is in front. Stay connected is on for new
+  installs (existing ones are asked once); a watchdog checks the connection
+  every ~15 minutes with the screen off and the service restarts after a
+  reboot. Settings → System → Calls and notifications shows battery
+  optimization, full-screen calls and notification permission as Android
+  reports them, each with a button to fix it.
+- iPhone: without Apple's push service (it needs a paid Apple developer
+  account) River cannot notify or ring while iOS has paused it; messages and
+  calls wait until River is opened. Settings → System says so.
 - Share → River from other apps (Android); swipe between the list and the
   conversation.
 - Watching and pointing at someone's shared screen (remote assistance).
 - "Open in River" links on invite pages.
 
 Not yet: hosting and sharing your own screen (computer features), the system's
-own incoming-call screen (CallKit / ConnectionService), link previews.
+own telephony integration (CallKit / Telecom ConnectionService: River's call
+screen is its own), link previews.
 
 ## How it is built
 

@@ -418,7 +418,7 @@ export class DmService {
 
   /** Used by notifications: brings a conversation to the front. */
   /** The call invite ringing right now, if any (in memory only). */
-  private ringing: { event: Extract<DmEvent, { t: 'call' }>; at: number } | null = null;
+  private ringing: { event: Extract<DmEvent, { t: 'call' }>; at: number; answer?: boolean } | null = null;
 
   focus(peer: string): void {
     this.emit({ t: 'focus', peer });
@@ -1224,6 +1224,22 @@ export class DmService {
   }
 
   /** How a person appears (contact name, shared community, or their group's records). */
+  /**
+   * Android (2.11): the call ringing now was answered on the phone's own call screen. River's
+   * window, opening because of it, finds it as `pendingCall` with `answer` and answers it.
+   */
+  answerRinging(callId: string): boolean {
+    if (!this.ringing || this.ringing.event.callId !== callId || Date.now() - this.ringing.at > RING_MS)
+      return false;
+    this.ringing.answer = true;
+    return true;
+  }
+
+  /** The call ringing now (in memory only), or null. */
+  ringingCall(): Extract<DmEvent, { t: 'call' }> | null {
+    return this.ringing && Date.now() - this.ringing.at <= RING_MS ? this.ringing.event : null;
+  }
+
   nameOf(riverId: string, g?: GroupRow): string {
     if (riverId === this.me()) return this.deps.identity.get()?.displayName ?? 'You';
     const c = this.contact(riverId);
@@ -1983,7 +1999,7 @@ export class DmService {
         case 'pendingCall': {
           const ringing = this.ringing;
           if (!ringing || Date.now() - ringing.at > RING_MS) return out(null);
-          return out(ringing.event);
+          return out(ringing.answer ? { ...ringing.event, answer: true } : ringing.event);
         }
         case 'safetyNumber': {
           const mine = this.deps.identity.protocolIdentity();
@@ -2103,6 +2119,9 @@ export class DmService {
         case 'call':
           if (act.peer === this.me() || this.contact(act.peer)?.state !== 'accepted')
             throw new CommunityError('You can only call your contacts.');
+          // Answered, declined or ended here: the call no longer rings for a window that opens later.
+          if (act.kind !== 'signal' && act.kind !== 'invite' && this.ringing?.event.callId === act.callId)
+            this.ringing = null;
           await this.sendContent(
             act.peer,
             {

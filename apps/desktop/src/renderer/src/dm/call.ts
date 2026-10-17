@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { DmEvent } from '../../../shared/dm.ts';
+import type { PhoneCallAction } from '../../../shared/ipc.ts';
 import { play } from '../community/sound.ts';
 import { useCommunity } from '../community/store.ts';
 import { VoiceCall, type CallTransport } from '../community/voice.ts';
@@ -72,10 +73,22 @@ function stopRinging(): void {
   ringTimer = undefined;
 }
 
+/**
+ * Android (2.11) rings for an incoming call with the phone's own ringtone and call screen while
+ * River is not on screen: no second ring from here then. It rings here again once River is back.
+ */
+function phoneRingsInstead(): boolean {
+  return useRiver.getState().info?.platform === 'android' && document.visibilityState === 'hidden';
+}
+
 function ring(sound: 'ring' | 'ringback'): void {
   stopRinging();
-  play(sound);
-  ringTimer = window.setInterval(() => play(sound), sound === 'ring' ? 2200 : 3000);
+  const tick = (): void => {
+    if (sound === 'ring' && phoneRingsInstead()) return;
+    play(sound);
+  };
+  tick();
+  ringTimer = window.setInterval(tick, sound === 'ring' ? 2200 : 3000);
 }
 
 function newCallId(): string {
@@ -277,11 +290,37 @@ export async function endDmCall(): Promise<void> {
   }
 }
 
+/** A call answered on Android's call screen before this window knew it was ringing. */
+let answerWanted: { callId: string; at: number } | null = null;
+
+/**
+ * Android (2.11): the phone's own call screen answered or declined a call. Answered: River's
+ * window opened for it and answers it here (the full-screen call shows). Declined: the core
+ * already told the caller and kept the record; it just stops ringing here.
+ */
+export function handlePhoneCall(e: PhoneCallAction): void {
+  const incoming = useDmCall.getState().incoming;
+  if (e.action === 'decline') {
+    if (incoming?.callId !== e.callId) return;
+    stopRinging();
+    useDmCall.setState({ incoming: null });
+    return;
+  }
+  if (incoming?.callId === e.callId) {
+    answerWanted = null;
+    void acceptDmCall(incoming.video);
+  } else if (!useDmCall.getState().active) {
+    answerWanted = { callId: e.callId, at: Date.now() };
+  }
+}
+
 export function handleCallEvent(e: Extract<DmEvent, { t: 'call' }>): void {
   const { active, incoming } = useDmCall.getState();
   const name = useDm.getState().conversations.find((c) => c.riverId === e.peer)?.name ?? 'They';
   switch (e.kind) {
     case 'invite': {
+      // The same call again (River's window found it ringing as it opened): nothing new.
+      if (active?.callId === e.callId || incoming?.callId === e.callId) return;
       // Only another 1:1 call makes you busy; in a voice channel the call rings, and accepting leaves voice.
       if (active || incoming) {
         void send(e.peer, e.callId, 'busy').catch(() => undefined);
@@ -289,6 +328,12 @@ export function handleCallEvent(e: Extract<DmEvent, { t: 'call' }>): void {
       }
       const ringing = { peer: e.peer, callId: e.callId, video: e.video };
       useDmCall.setState({ incoming: ringing });
+      if (answerWanted?.callId === e.callId && Date.now() - answerWanted.at < RING_TIMEOUT_MS) {
+        // Answered on the phone's call screen already: no ringing here, straight into the call.
+        answerWanted = null;
+        void acceptDmCall(e.video);
+        return;
+      }
       ring('ring');
       timeoutTimer = window.setTimeout(() => {
         // Nobody answered here. The caller's own timeout ends later, and its "end" then finds no

@@ -30,6 +30,8 @@ public class MainActivity extends BridgeActivity implements CoreHost.Screen {
   private static final long RING_OVER_LOCK_MS = 60_000;
   /** Android 13+: River asks for notifications once per app start, while its screen is in front. */
   private static boolean askedForNotifications;
+  /** When the interface's renderer last ended: rebuilt up to 3 times a minute (as the core is). */
+  private static final ArrayDeque<Long> uiCrashes = new ArrayDeque<>();
 
   private CoreHost core;
   private AppLock lock;
@@ -102,8 +104,25 @@ public class MainActivity extends BridgeActivity implements CoreHost.Screen {
                 @Override
                 public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
                   // The interface's renderer crashed or was ended to free memory: open River's
-                  // screen again rather than letting Android end River.
-                  handler.post(MainActivity.this::recreate);
+                  // screen again rather than letting Android end River — unless it keeps
+                  // crashing, which would loop: then the screen closes with a word.
+                  long now = android.os.SystemClock.elapsedRealtime();
+                  while (!uiCrashes.isEmpty() && now - uiCrashes.peekFirst() > 60_000) uiCrashes.pollFirst();
+                  uiCrashes.addLast(now);
+                  if (uiCrashes.size() > 3) {
+                    uiCrashes.clear();
+                    handler.post(
+                        () -> {
+                          android.widget.Toast.makeText(
+                                  getApplicationContext(),
+                                  "River's screen stopped several times in a row. Open River again.",
+                                  android.widget.Toast.LENGTH_LONG)
+                              .show();
+                          finish();
+                        });
+                  } else {
+                    handler.post(MainActivity.this::recreate);
+                  }
                   return true;
                 }
               });
