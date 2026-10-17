@@ -12,6 +12,7 @@ import {
 import { useCommunity } from '../store.ts';
 import { ChevronIcon, GearIcon, MenuItem, PlusIcon, Popover, can } from './common.tsx';
 import { ChannelRow } from './Sidebar.tsx';
+import { NotifyMenuSection } from './NotifyMenu.tsx';
 
 type Groups = Array<ChannelGroup<ChannelView, CategoryView>>;
 type Target = { type: 'channel' | 'category' | 'loose'; id: string; after: boolean };
@@ -35,18 +36,82 @@ function saveCollapsed(value: Record<string, boolean>): void {
   }
 }
 
-/** Sends the moves implied by `next`, if any. */
-export async function applyLayout(community: CommunityView, next: Groups): Promise<void> {
+/**
+ * Shows `next` in the sidebar straight away (no snap back while the server answers) and returns
+ * how to undo it. The server's updated list replaces it when it arrives.
+ */
+export function showLayout(communityId: string, next: Groups): () => void {
+  const before = useCommunity.getState().communities.find((c) => c.id === communityId);
+  if (!before) return () => undefined;
+  const change = layoutChanges(next);
+  const channels = new Map(change.channels.map((c) => [c.id, c]));
+  const categories = new Map(change.categories.map((k) => [k.id, k.position]));
+  const shown: CommunityView = {
+    ...before,
+    channels: before.channels.map((ch) => {
+      const c = channels.get(ch.id);
+      return c ? { ...ch, position: c.position, parentId: c.parentId } : ch;
+    }),
+    categories: before.categories.map((k) =>
+      categories.has(k.id) ? { ...k, position: categories.get(k.id)! } : k,
+    ),
+  };
+  const swap = (from: CommunityView, to: CommunityView): void =>
+    useCommunity.setState({
+      communities: useCommunity.getState().communities.map((c) => (c === from ? to : c)),
+    });
+  swap(before, shown);
+  // Only if nothing newer came in meanwhile.
+  return () => swap(shown, before);
+}
+
+/**
+ * Applies a drag and drop: shown at once, then sent as one relative move ("after this one, in
+ * that category"), which the server places among all channels, also those you cannot see.
+ */
+export async function applyLayout(
+  community: CommunityView,
+  next: Groups,
+  moved: { kind: 'channel' | 'category'; id: string },
+): Promise<void> {
   const change = layoutChanges(next);
   if (change.categories.length === 0 && change.channels.length === 0) return;
-  await useCommunity.getState().run({ a: 'layout', communityId: community.id, ...change });
+  let parentId: string | null = null;
+  let afterId: string | null;
+  if (moved.kind === 'channel') {
+    const g = next.find((x) => x.channels.some((c) => c.id === moved.id));
+    if (!g) return;
+    const i = g.channels.findIndex((c) => c.id === moved.id);
+    parentId = g.category?.id ?? null;
+    afterId = i > 0 ? g.channels[i - 1]!.id : null;
+  } else {
+    const cats = next.flatMap((g) => (g.category ? [g.category.id] : []));
+    const i = cats.indexOf(moved.id);
+    afterId = i > 0 ? cats[i - 1]! : null;
+  }
+  const undo = showLayout(community.id, next);
+  const res = await window.river.community.action({
+    a: 'layoutMove',
+    communityId: community.id,
+    kind: moved.kind,
+    id: moved.id,
+    parentId,
+    afterId,
+  });
+  if (!res.ok) {
+    undo();
+    useCommunity.getState().notify(res.message, 'error');
+  }
 }
 
 /** Puts a channel at the end of a category (or of the uncategorised channels). */
 export function moveToCategory(community: CommunityView, channelId: string, parentId: string | null): void {
   const groups = sidebarGroups(community.channels, community.categories);
   const target = groups.find((g) => (g.category?.id ?? null) === parentId);
-  void applyLayout(community, moveChannel(groups, channelId, parentId, target?.channels.length ?? 0));
+  void applyLayout(community, moveChannel(groups, channelId, parentId, target?.channels.length ?? 0), {
+    kind: 'channel',
+    id: channelId,
+  });
 }
 
 /**
@@ -101,7 +166,7 @@ export function ChannelList(props: { community: CommunityView; me: string }): Re
         .filter((id) => id !== d.id);
       next = moveCategory(groups, d.id, others.indexOf(target.id) + (target.after ? 1 : 0));
     }
-    void applyLayout(community, next);
+    void applyLayout(community, next, { kind: d.type, id: d.id });
   };
 
   /** Drag-and-drop handlers for one row or header. */
@@ -256,6 +321,8 @@ export function ChannelList(props: { community: CommunityView; me: string }): Re
                       {tr('Edit category')}
                     </MenuItem>
                   )}
+                  {/* Mute or set a level for every channel in it (a channel's own setting still wins). */}
+                  <NotifyMenuSection id={k.id} kind="category" onDone={() => setCatMenu(null)} />
                 </Popover>
               )}
               <button

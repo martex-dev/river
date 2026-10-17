@@ -239,7 +239,18 @@ export const communityActionSchema = z.discriminatedUnion('a', [
   z
     .object({ a: z.literal('timeout'), communityId: id, riverId, until: z.iso.datetime().nullable() })
     .strict(),
-  z.object({ a: z.literal('audit'), communityId: id, before: z.iso.datetime().optional() }).strict(),
+  z
+    .object({
+      a: z.literal('audit'),
+      communityId: id,
+      before: z.iso.datetime().optional(),
+      /** With `before`: the ID of the last entry seen, so entries sharing its time are not skipped. */
+      beforeId: z
+        .string()
+        .regex(/^[A-Za-z0-9_-]{1,64}$/)
+        .optional(),
+    })
+    .strict(),
   /** A drag and drop in the sidebar: only the categories and channels that moved. */
   z
     .object({
@@ -251,6 +262,20 @@ export const communityActionSchema = z.discriminatedUnion('a', [
           z.object({ id, position: z.number().int().min(0).max(1000), parentId: id.nullable() }).strict(),
         )
         .max(500),
+    })
+    .strict(),
+  /**
+   * One drag and drop (2.10.13): a channel after `afterId` in category `parentId` (null: first,
+   * no category), or a category after `afterId`. Positions are worked out over the whole list.
+   */
+  z
+    .object({
+      a: z.literal('layoutMove'),
+      communityId: id,
+      kind: z.enum(['channel', 'category']),
+      id,
+      parentId: id.nullable(),
+      afterId: id.nullable(),
     })
     .strict(),
   /** Your name in one community (null: use your River name). */

@@ -61,7 +61,13 @@ import {
   EMOJI_NAME,
   type SavedOutgoing,
 } from '../../shared/community-actions.ts';
-import { layoutChanges, moveChannel as moveInLayout, sidebarGroups } from '../../shared/layout.ts';
+import {
+  layoutChanges,
+  moveCategory as moveCategoryInLayout,
+  moveChannel as moveInLayout,
+  sidebarGroups,
+} from '../../shared/layout.ts';
+import { roleOrderChanges } from '../../shared/role-order.ts';
 import { communityIconSchema, templateById, type TemplateId } from '../../shared/templates.ts';
 import { describeAudit } from './audit-text.ts';
 import { openSignal, signSignal, type SignalKeys } from './call-signal.ts';
@@ -174,6 +180,8 @@ export function readCustomStatus(
 
 const AVATAR_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+=*$/;
 
+const NOT_FOUND_TEXT = 'That no longer exists.';
+
 /** Server error codes turned into messages people understand. */
 function explain(err: unknown): never {
   if (err instanceof ApiError) {
@@ -181,7 +189,7 @@ function explain(err: unknown): never {
       throw new CommunityError(err.message || 'You do not have permission to do that.');
     if (err.code === 'banned') throw new CommunityError('You are banned from this community.');
     if (err.code === 'mailbox_full' || err.code === 'quota_exceeded') throw new CommunityError(err.message);
-    if (err.code === 'not_found') throw new CommunityError('That no longer exists.');
+    if (err.code === 'not_found') throw new CommunityError(NOT_FOUND_TEXT);
     if (err.status === 400 && err.message && err.message !== 'Bad request')
       throw new CommunityError(err.message);
   }
@@ -353,6 +361,15 @@ export class CommunityService {
     for (const c of this.communities) {
       const ch = c.channels.find((x) => x.id === channelId);
       if (ch) return ch.name;
+    }
+    return null;
+  }
+
+  /** The category a channel is in, if any (for per-category notification settings). */
+  channelParent(channelId: string): string | null {
+    for (const c of this.communities) {
+      const ch = c.channels.find((x) => x.id === channelId);
+      if (ch) return ch.parentId;
     }
     return null;
   }
@@ -597,6 +614,53 @@ export class CommunityService {
       }
       return explain(err);
     }
+  }
+
+  /**
+   * A call to a route that newer servers have. False (and nothing done) when this server does not
+   * know it yet, so the caller can fall back to the older way.
+   */
+  private async callIfSupported(path: string, method: Method, body: unknown): Promise<boolean> {
+    try {
+      await this.call(path, method, body, z.unknown());
+      return true;
+    } catch (err) {
+      if (err instanceof CommunityError && err.message === NOT_FOUND_TEXT) return false;
+      throw err;
+    }
+  }
+
+  /**
+   * Moves a channel (after `afterId` in `parentId`, null: first) or a category (after `afterId`).
+   * Newer servers work out the positions over the whole list, hidden channels included; older
+   * ones get the full set of changed positions as before.
+   */
+  private async layoutMove(
+    communityId: string,
+    kind: 'channel' | 'category',
+    id: string,
+    parentId: string | null,
+    afterId: string | null,
+  ): Promise<void> {
+    const body = kind === 'channel' ? { kind, id, parentId, afterId } : { kind, id, afterId };
+    if (await this.callIfSupported(`/communities/${communityId}/layout/move`, 'PUT', body)) return;
+    const community = this.requireCommunity(communityId);
+    const groups = sidebarGroups(community.channels, community.categories);
+    let next;
+    if (kind === 'channel') {
+      const target = groups.find((g) => (g.category?.id ?? null) === parentId);
+      const rest = (target?.channels ?? []).filter((c) => c.id !== id);
+      next = moveInLayout(groups, id, parentId, afterId ? rest.findIndex((c) => c.id === afterId) + 1 : 0);
+    } else {
+      const others = groups
+        .slice(1)
+        .map((g) => g.category!.id)
+        .filter((x) => x !== id);
+      next = moveCategoryInLayout(groups, id, afterId ? others.indexOf(afterId) + 1 : 0);
+    }
+    const change = layoutChanges(next);
+    if (change.channels.length || change.categories.length)
+      await this.call(`/communities/${communityId}/layout`, 'PUT', change, z.unknown());
   }
 
   private db(): LocalDatabase {
@@ -1666,15 +1730,16 @@ export class CommunityService {
           : group.channels.filter((c) => c.kind === channel.kind);
         const target = peers[peers.indexOf(channel) + act.direction];
         if (!target) break;
-        const moved = moveInLayout(
-          groups,
+        // Down: right after the next one. Up: right after whatever is before the previous one.
+        const rest = group.channels.filter((c) => c.id !== channel.id);
+        const at = rest.indexOf(target) + (act.direction > 0 ? 1 : 0);
+        await this.layoutMove(
+          community.id,
+          'channel',
           channel.id,
           group.category?.id ?? null,
-          group.channels.indexOf(target),
+          at > 0 ? rest[at - 1]!.id : null,
         );
-        const change = layoutChanges(moved);
-        if (change.channels.length || change.categories.length)
-          await this.call(`/communities/${community.id}/layout`, 'PUT', change, z.unknown());
         break;
       }
       case 'createCategory': {
@@ -1708,6 +1773,9 @@ export class CommunityService {
       case 'deleteCategory':
         await this.call(`/categories/${act.categoryId}`, 'DELETE', undefined, z.unknown());
         break;
+      case 'layoutMove':
+        await this.layoutMove(act.communityId, act.kind, act.id, act.parentId, act.afterId);
+        break;
       case 'layout':
         await this.call(
           `/communities/${act.communityId}/layout`,
@@ -1733,7 +1801,9 @@ export class CommunityService {
         );
         break;
       case 'audit': {
-        const query = act.before ? `?before=${encodeURIComponent(act.before)}` : '';
+        const query = act.before
+          ? `?before=${encodeURIComponent(act.before)}${act.beforeId ? `&beforeId=${encodeURIComponent(act.beforeId)}` : ''}`
+          : '';
         const res = await this.call(
           `/communities/${act.communityId}/audit${query}`,
           'GET',
@@ -1842,26 +1912,20 @@ export class CommunityService {
       case 'moveRole':
       case 'placeRole': {
         const community = this.requireCommunity(act.communityId);
-        const list = community.roles.filter((r) => !r.everyone); // highest first
-        const from = list.findIndex((r) => r.id === act.roleId);
-        if (from < 0) break;
-        if (act.a === 'moveRole') {
-          const to = from - act.direction; // direction 1 = up (higher position)
-          if (to < 0 || to >= list.length) break;
-          [list[from], list[to]] = [list[to]!, list[from]!];
-        } else {
-          const [moving] = list.splice(from, 1);
-          const at = act.aboveId ? list.findIndex((r) => r.id === act.aboveId) : list.length;
-          list.splice(at < 0 ? list.length : at, 0, moving!);
-        }
-        const count = list.length;
-        // Lower roles first, so a role never needs to pass above the mover's own role.
-        for (let i = count - 1; i >= 0; i--) {
-          const role = list[i]!;
-          const position = count - i;
-          if (role.position !== position)
-            await this.call(`/roles/${role.id}`, 'PATCH', { position }, z.unknown());
-        }
+        // Only roles below your own move, among the positions they already have.
+        const changes = roleOrderChanges(
+          community.roles.filter((r) => !r.everyone),
+          community.myRank,
+          act.a === 'moveRole'
+            ? { roleId: act.roleId, direction: act.direction }
+            : { roleId: act.roleId, aboveId: act.aboveId },
+        );
+        if (!changes.length) break;
+        // All at once where the server can (nothing half done); older servers one by one.
+        if (await this.callIfSupported(`/communities/${community.id}/role-order`, 'PUT', { roles: changes }))
+          break;
+        for (const c of changes)
+          await this.call(`/roles/${c.id}`, 'PATCH', { position: c.position }, z.unknown());
         break;
       }
       case 'deleteRole':

@@ -3216,6 +3216,74 @@
     "required": ["id", "publicKey", "signature"],
     "additionalProperties": false
   },
+  "layoutMoveRequestSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "oneOf": [
+      {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "channel"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{22}$"
+          },
+          "parentId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{22}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "afterId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{22}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["kind", "id", "parentId", "afterId"],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "category"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{22}$"
+          },
+          "afterId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{22}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["kind", "id", "afterId"],
+        "additionalProperties": false
+      }
+    ]
+  },
   "layoutRequestSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -4432,6 +4500,35 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "string",
     "pattern": "^[A-Za-z0-9_-]{22}$"
+  },
+  "roleOrderRequestSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "roles": {
+        "minItems": 1,
+        "maxItems": 100,
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{22}$"
+            },
+            "position": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          "required": ["id", "position"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": ["roles"],
+    "additionalProperties": false
   },
   "roleSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
