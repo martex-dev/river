@@ -50,11 +50,7 @@ export const HIDDEN_MARKER_MAX_AGE_MS = 5 * 60 * 1000;
  * starts in the tray again. The marker is removed when the install was refused (crash-loop hold,
  * manual mode), so a later manual launch is not hidden (2.11.2).
  */
-export function installWithHiddenMarker(
-  marker: string,
-  hidden: boolean,
-  installNow: () => boolean,
-): boolean {
+export function installWithHiddenMarker(marker: string, hidden: boolean, installNow: () => boolean): boolean {
   if (hidden) {
     try {
       writeFileSync(marker, String(Date.now()));

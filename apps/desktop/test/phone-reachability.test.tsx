@@ -91,7 +91,9 @@ describe('Settings → System → Calls and notifications (Android)', () => {
     phoneStatus.mockResolvedValue(status({ background: true, fullScreenCalls: false, notifications: true }));
     phone('android', { background: true, backgroundAsked: true });
     render(<PhoneCallsSection />);
-    await screen.findByText('Battery optimization may delay messages and calls, and Android may stop Stay connected.');
+    await screen.findByText(
+      'Battery optimization may delay messages and calls, and Android may stop Stay connected.',
+    );
     expect(screen.getByText('Not allowed: a locked phone only shows a notification for calls.')).toBeTruthy();
     // Not exempt: Android may stop the service, and Settings says so instead of a plain "On".
     expect(screen.getByText(/On for now, but Android may stop it/)).toBeTruthy();

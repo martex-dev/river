@@ -6,6 +6,52 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **"Install verified updates by themselves" also installs an update you
+  downloaded with the Download button** while automatic download is off; the
+  toggle never depended on it. If River could not start the install (crash-loop
+  hold, manual mode) or a silent install failed, the next start no longer hides
+  River in the tray.
+- Android: **Stay connected reads as on right after "Turn on"** (Settings shared
+  no status between its parts and did not read it again), and Settings says
+  plainly that Stay connected needs River allowed in the background to keep
+  running. When Android refuses to restart it from the watchdog, River shows a
+  quiet "River was stopped — tap to reconnect" notification.
+- Android: **an update started while River is in the background** waits behind
+  a "River update ready — tap to install" notification instead of staying at
+  "Installing…" forever; with no answer from Android the update is ready to
+  install again after 2 minutes.
+- Unsaved profile edits are kept when Settings closes without asking
+  (answering a call, an update's Details button), and come back next time.
+- **Existing users can save an encrypted backup again**: installs from before
+  2.11 had a recovery phrase but never the new "phrase shown" mark.
+- A crashed page is drawn again when you pick another community, channel or
+  conversation; a crash in one Settings panel keeps the tabs and Close working.
+- A video story no longer freezes the viewer when it never loads or the phone
+  refuses to play it.
+- Android: message notifications posted again after River's core restarted
+  show "New message — open River" instead of the old text, and signing out or
+  losing the account removes them. Opening an existing install whose settings
+  were lost no longer turns Stay connected on by itself.
+- Server: one account holds at most two given-up usernames (renaming cannot
+  squat a list), renames are atomic, and the operator can give out a removed
+  user's username without waiting 30 days.
+- Server: a refused link reservation no longer deletes the code you are still
+  showing, and many people behind one carrier address (CGNAT) can link devices
+  at once.
+- **A bogus "no" written to the link mailbox can no longer pre-empt the new
+  device's real one**: the server keeps up to three declines and the linked
+  device checks each (additive `declines` field).
+- Server: stuck key rotations are looked for at most once a minute, and asked
+  for again only once another member could have received the key.
+
+### Security
+
+- **A channel moved into a private category becomes private** again (it is
+  synced to the category unless the request says `synced: false`); since 2.11
+  it kept its old public permissions.
+
 ## [2.11.1] - 2026-10-17
 
 **Calls that look and behave like phone calls.**
