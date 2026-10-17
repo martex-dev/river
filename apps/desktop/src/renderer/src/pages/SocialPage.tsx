@@ -173,7 +173,7 @@ export function SocialPage(): ReactElement {
   );
 }
 
-function StoriesRail(props: {
+export function StoriesRail(props: {
   feed: FeedView | null;
   onOpen(group: FeedView['stories'][number]): void;
   onAdd(): void;

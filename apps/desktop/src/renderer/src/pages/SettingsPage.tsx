@@ -12,6 +12,7 @@ import { serverUrlSchema, type Settings } from '../../../shared/settings.ts';
 import { inQuietHours } from '../../../shared/notify-rules.ts';
 import { ExternalIcon } from '../components/Icons.tsx';
 import { Modal, XIcon } from '../community/ui/common.tsx';
+import { BackIcon } from '../phone/icons.tsx';
 import { NotificationSettings, Profile, VoiceSettings } from '../community/ui/UserSettings.tsx';
 import { SecurityPage } from './SecurityPage.tsx';
 import { AppearanceCenter } from '../appearance/AppearanceCenter.tsx';
@@ -140,29 +141,40 @@ export function SettingsOverlay(): ReactElement | null {
   if (!tab) return null;
   return (
     <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="Settings">
-      <nav className="settings-overlay__nav" aria-label="Settings sections">
-        <div className="settings-overlay__nav-inner">
-          {GROUPS.map((g) => (
-            <div key={g.title} className="settings-overlay__group">
-              <div className="settings-overlay__heading">{g.title}</div>
-              {g.tabs
-                .filter((id) => id !== 'hosting' || showHosting)
-                .map((id) => (
-                  <button
-                    key={id}
-                    className={`settings-overlay__tab ${tab === id ? 'is-active' : ''}`}
-                    aria-current={tab === id ? 'page' : undefined}
-                    onClick={() => {
-                      if (id !== tab) leave(() => openSettings(id));
-                    }}
-                  >
-                    {tr(TAB_LABEL[id])}
-                  </button>
-                ))}
-            </div>
-          ))}
-        </div>
-      </nav>
+      {/* On a phone (2.12) each section opens full screen from the Settings tab, with Back. */}
+      {phone && (
+        <header className="settings-overlay__phone-head pchat-head">
+          <button className="pchat-head__back" aria-label="Back" onClick={() => leave(close)}>
+            <BackIcon size={26} />
+          </button>
+          <h1 className="settings-overlay__phone-title">{tr(TAB_LABEL[tab])}</h1>
+        </header>
+      )}
+      {!phone && (
+        <nav className="settings-overlay__nav" aria-label="Settings sections">
+          <div className="settings-overlay__nav-inner">
+            {GROUPS.map((g) => (
+              <div key={g.title} className="settings-overlay__group">
+                <div className="settings-overlay__heading">{g.title}</div>
+                {g.tabs
+                  .filter((id) => id !== 'hosting' || showHosting)
+                  .map((id) => (
+                    <button
+                      key={id}
+                      className={`settings-overlay__tab ${tab === id ? 'is-active' : ''}`}
+                      aria-current={tab === id ? 'page' : undefined}
+                      onClick={() => {
+                        if (id !== tab) leave(() => openSettings(id));
+                      }}
+                    >
+                      {tr(TAB_LABEL[id])}
+                    </button>
+                  ))}
+              </div>
+            ))}
+          </div>
+        </nav>
+      )}
       <section className="settings-overlay__body">
         <div
           className={`settings-overlay__content ${tab === 'appearance' ? 'settings-overlay__content--wide' : ''}`}
@@ -208,12 +220,14 @@ export function SettingsOverlay(): ReactElement | null {
             </>
           )}
         </div>
-        <div className="settings-overlay__close">
-          <button className="settings-overlay__x" aria-label="Close settings" onClick={() => leave(close)}>
-            <XIcon />
-          </button>
-          <span aria-hidden="true">ESC</span>
-        </div>
+        {!phone && (
+          <div className="settings-overlay__close">
+            <button className="settings-overlay__x" aria-label="Close settings" onClick={() => leave(close)}>
+              <XIcon />
+            </button>
+            <span aria-hidden="true">ESC</span>
+          </div>
+        )}
       </section>
     </div>
   );
