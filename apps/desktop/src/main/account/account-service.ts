@@ -320,6 +320,22 @@ export class AccountService {
     ).run(listBytes, Buffer.from(signature), list.version);
   }
 
+  /**
+   * Is this device ID in this account's identity-signed device list? The local copy first; a
+   * device linked since then is looked up in the list the server has (checked against our own
+   * identity key, never older than the local copy).
+   */
+  async ownDeviceListed(deviceId: number): Promise<boolean> {
+    const row = this.row();
+    if (!row) return false;
+    if (parseDeviceList(row.device_list).devices.some((d) => d.deviceId === deviceId)) return true;
+    try {
+      return (await this.deviceList()).devices.some((d) => d.deviceId === deviceId);
+    } catch {
+      return false;
+    }
+  }
+
   /** True if this account is linked on other devices too (from the last device list seen). */
   hasOtherDevices(): boolean {
     const row = this.row();

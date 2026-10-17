@@ -107,7 +107,8 @@ describe('backup and restore', { timeout: 60_000 }, () => {
     await bob.dm.action({ a: 'accept', peer: aliceId });
     await bob.dm.action({ a: 'send', peer: aliceId, text: 'got it' });
     await alice.dm.sync();
-    await alice.dm.action({ a: 'setVerified', peer: bobId, verified: true });
+    const { digits } = await alice.dm.action({ a: 'safetyNumber', peer: bobId });
+    await alice.dm.action({ a: 'setVerified', peer: bobId, verified: true, digits });
 
     const phrase = alice.backup.phrase();
     expect(phrase).toHaveLength(18);
@@ -138,6 +139,14 @@ describe('backup and restore', { timeout: 60_000 }, () => {
       name: 'Bob',
       verified: true,
     });
+    // The newest device list version seen for Bob came back too: a server cannot roll it back
+    // after a restore (2.11).
+    const version = (r: { local: { prepare(sql: string): { get(...a: unknown[]): unknown } } }) =>
+      r.local
+        .prepare("SELECT value FROM signal_store WHERE kind = 'meta' AND id = ?")
+        .get(`dm:listVersion:${bobId}`);
+    expect(version(restored)).toBeTruthy();
+    expect(version(restored)).toEqual(version(alice));
     await restored.dm.sync(); // fresh prekeys, then a hello to Bob that gives him a new session
     await bob.dm.sync();
     await bob.dm.action({ a: 'send', peer: aliceId, text: 'welcome back' });

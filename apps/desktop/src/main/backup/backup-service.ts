@@ -37,6 +37,14 @@ const TABLES = [
 ] as const;
 /** Contacts' identity keys (trust on first use) and verification marks. */
 const SIGNAL_KINDS = ['identity', 'verified'];
+/**
+ * Protocol facts that guard against a server rolling things back (2.11): the newest device list
+ * version seen for each contact, and community members known to hold a genuine key. Without
+ * them a restored River would accept an older device list again.
+ */
+const SIGNAL_META_PREFIXES = ['dm:listVersion:', 'community:vouched:'];
+const backedUpSignal = (kind: string, id: string): boolean =>
+  SIGNAL_KINDS.includes(kind) || (kind === 'meta' && SIGNAL_META_PREFIXES.some((p) => id.startsWith(p)));
 
 type Cell = string | number | null | { $b64: string };
 interface BackupFile {
@@ -105,10 +113,17 @@ export class BackupService {
     const signal = (
       db
         .prepare(
-          `SELECT kind, id, value FROM signal_store WHERE kind IN (${SIGNAL_KINDS.map(() => '?').join(', ')})`,
+          `SELECT kind, id, value FROM signal_store WHERE kind IN (${SIGNAL_KINDS.map(() => '?').join(', ')})
+             OR (kind = 'meta' AND (${SIGNAL_META_PREFIXES.map(() => 'id LIKE ?').join(' OR ')}))`,
         )
-        .all(...SIGNAL_KINDS) as Array<{ kind: string; id: string; value: Uint8Array }>
-    ).map((r) => ({ kind: r.kind, id: r.id, value: Buffer.from(r.value).toString('base64') }));
+        .all(...SIGNAL_KINDS, ...SIGNAL_META_PREFIXES.map((p) => `${p}%`)) as Array<{
+        kind: string;
+        id: string;
+        value: Uint8Array;
+      }>
+    )
+      .filter((r) => backedUpSignal(r.kind, r.id))
+      .map((r) => ({ kind: r.kind, id: r.id, value: Buffer.from(r.value).toString('base64') }));
     const file: BackupFile = {
       format: 'river-backup',
       version: 1,
@@ -151,7 +166,7 @@ export class BackupService {
         }
       }
       for (const s of data.signal ?? []) {
-        if (!SIGNAL_KINDS.includes(s.kind)) continue;
+        if (typeof s.id !== 'string' || !backedUpSignal(s.kind, s.id)) continue;
         db.prepare('INSERT OR REPLACE INTO signal_store (kind, id, value) VALUES (?, ?, ?)').run(
           s.kind,
           s.id,
