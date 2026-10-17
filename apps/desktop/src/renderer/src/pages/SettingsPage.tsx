@@ -47,7 +47,8 @@ const CHANNELS: Array<{ id: ReleaseChannel; name: string; text: string }> = [
   { id: 'nightly', name: 'Nightly', text: 'Development builds. May break. For testers only.' },
 ];
 
-export function describeUpdate(status: UpdateStatus): string {
+/** `phone`: River for Android, where Android's own installer replaces the app. */
+export function describeUpdate(status: UpdateStatus, phone = false): string {
   switch (status.state) {
     case 'disabled':
       return status.reason;
@@ -64,7 +65,16 @@ export function describeUpdate(status: UpdateStatus): string {
     case 'verifying':
       return `Verifying the signature of River ${status.version}…`;
     case 'ready':
-      return `River ${status.version} is downloaded and verified. Restart to finish updating.`;
+      if (status.needsPermission) {
+        return `River ${status.version} is downloaded and verified. Android needs your permission first: turn on “Allow from this source” for River in the settings screen that opened, then come back and tap Install update.`;
+      }
+      return phone
+        ? `River ${status.version} is downloaded and verified. Tap Install update; Android asks you to confirm.`
+        : `River ${status.version} is downloaded and verified. Restart to finish updating.`;
+    case 'installing':
+      return `Installing River ${status.version}… Confirm in Android’s installer. River closes while it updates; open it again afterwards.`;
+    case 'reinstall-needed':
+      return status.message;
     case 'manual':
       return `River ${status.version} is available. On macOS, download it from the release page.`;
     case 'error':
@@ -186,6 +196,10 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
   const update = useRiver((s) => s.update);
   const updateSettings = useRiver((s) => s.updateSettings);
   const check = useRiver((s) => s.checkForUpdates);
+  const openSettings = useRiver((s) => s.openSettings);
+  // Android updates itself (with Android's installer); an iPhone cannot, so it has no update settings.
+  const phone = info?.platform === 'android';
+  const ios = info?.platform === 'ios';
   const busy = ['checking', 'downloading', 'verifying'].includes(update.state);
 
   return (
@@ -197,7 +211,7 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
             River <span className="mono">{info?.version ?? '…'}</span>
             <span className="chip">{info?.channel ?? 'stable'}</span>
           </div>
-          <p className="muted">{describeUpdate(update)}</p>
+          <p className="muted">{describeUpdate(update, phone)}</p>
           {update.state === 'downloading' && (
             <div className="progress" aria-hidden="true">
               <div className="progress__bar" style={{ width: `${update.percent}%` }} />
@@ -205,7 +219,28 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
           )}
         </div>
         <div className="update-status__actions">
-          {update.state === 'ready' ? (
+          {phone && (update.state === 'ready' || update.state === 'installing') ? (
+            // Android: opens Android's installer (again, if it was closed without an answer).
+            <button className="btn btn--primary" onClick={() => void window.river.updates.install()}>
+              Install update
+            </button>
+          ) : phone && update.state === 'available' ? (
+            <button className="btn btn--primary" onClick={() => void window.river.updates.install()}>
+              Download update
+            </button>
+          ) : update.state === 'reinstall-needed' ? (
+            <>
+              <button className="btn btn--ghost" onClick={() => openSettings('backup')}>
+                Back up first
+              </button>
+              <button
+                className="btn btn--primary"
+                onClick={() => void window.river.updates.openDownloadPage()}
+              >
+                Open download page <ExternalIcon size={14} />
+              </button>
+            </>
+          ) : update.state === 'ready' ? (
             <button className="btn btn--primary" onClick={() => void window.river.updates.install()}>
               Restart and update
             </button>
@@ -229,49 +264,63 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
         </div>
       </div>
 
-      <fieldset className="field">
-        <legend className="field__label">Release channel</legend>
-        <div className="choice-grid">
-          {CHANNELS.map((c) => (
-            <label key={c.id} className={`choice ${settings.updates.channel === c.id ? 'is-selected' : ''}`}>
-              <input
-                type="radio"
-                name="channel"
-                value={c.id}
-                checked={settings.updates.channel === c.id}
-                onChange={() => void updateSettings({ updates: { channel: c.id } })}
-              />
-              <span className="choice__name">{c.name}</span>
-              <span className="choice__text">{c.text}</span>
-            </label>
-          ))}
-        </div>
-        {settings.updates.channel !== 'stable' && (
-          <p className="warning-note">
-            You will receive pre-release builds. They are signed like every release, but may contain bugs.
-            Switching back to Stable takes effect at the next stable version newer than the one you have.
-          </p>
-        )}
-      </fieldset>
+      {!ios && (
+        <>
+          <fieldset className="field">
+            <legend className="field__label">Release channel</legend>
+            <div className="choice-grid">
+              {CHANNELS.map((c) => (
+                <label
+                  key={c.id}
+                  className={`choice ${settings.updates.channel === c.id ? 'is-selected' : ''}`}
+                >
+                  <input
+                    type="radio"
+                    name="channel"
+                    value={c.id}
+                    checked={settings.updates.channel === c.id}
+                    onChange={() => void updateSettings({ updates: { channel: c.id } })}
+                  />
+                  <span className="choice__name">{c.name}</span>
+                  <span className="choice__text">{c.text}</span>
+                </label>
+              ))}
+            </div>
+            {settings.updates.channel !== 'stable' && (
+              <p className="warning-note">
+                You will receive pre-release builds. They are signed like every release, but may contain bugs.
+                Switching back to Stable takes effect at the next stable version newer than the one you have.
+              </p>
+            )}
+          </fieldset>
 
-      <Toggle
-        label="Check for updates automatically"
-        hint="Checks GitHub Releases about every four hours."
-        checked={settings.updates.autoCheck}
-        onChange={(v) => void updateSettings({ updates: { autoCheck: v } })}
-      />
-      <Toggle
-        label="Download updates automatically"
-        hint="Every download is verified against River’s release signature before it can be installed."
-        checked={settings.updates.autoDownload}
-        onChange={(v) => void updateSettings({ updates: { autoDownload: v } })}
-      />
-      <Toggle
-        label="Install verified updates by themselves"
-        hint="When River is in the tray or you have not used it for 10 minutes, and never during a call. A PC that hosts River does it at night."
-        checked={settings.updates.installOnQuit}
-        onChange={(v) => void updateSettings({ updates: { installOnQuit: v } })}
-      />
+          <Toggle
+            label="Check for updates automatically"
+            hint={`Checks GitHub Releases about every ${phone ? 'six' : 'four'} hours.`}
+            checked={settings.updates.autoCheck}
+            onChange={(v) => void updateSettings({ updates: { autoCheck: v } })}
+          />
+          <Toggle
+            label="Download updates automatically"
+            hint={
+              phone
+                ? 'Every download is verified against River’s release signature. Android asks you before it installs anything.'
+                : 'Every download is verified against River’s release signature before it can be installed.'
+            }
+            checked={settings.updates.autoDownload}
+            onChange={(v) => void updateSettings({ updates: { autoDownload: v } })}
+          />
+          {/* Android always asks before installing, and River never quits on its own there. */}
+          {!phone && (
+            <Toggle
+              label="Install verified updates by themselves"
+              hint="When River is in the tray or you have not used it for 10 minutes, and never during a call. A PC that hosts River does it at night."
+              checked={settings.updates.installOnQuit}
+              onChange={(v) => void updateSettings({ updates: { installOnQuit: v } })}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }

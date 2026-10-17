@@ -66,6 +66,11 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
+        <!-- River's own updates: Android's installer reports here (River's PendingIntent only). -->
+        <receiver
+            android:name=".core.UpdateInstallReceiver"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -95,6 +100,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- Incoming calls fill the screen when the phone is locked, like any calling app. -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- Updates: River installs its own signed updates; Android asks you to allow it, then to confirm each one. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />

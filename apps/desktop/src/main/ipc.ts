@@ -30,6 +30,7 @@ import {
   type SecurityStatus,
   type StorageStatus,
   type DiagnosticCheck,
+  type UpdateStatus,
 } from '../shared/ipc.ts';
 import type { FetchBytes } from './http.ts';
 import type { Hosting } from './host/hosting.ts';
@@ -54,13 +55,20 @@ import { BackupError } from '@river/crypto';
 import type { SocialAction } from '../shared/social.ts';
 import type { DmAction, DmEvent } from '../shared/dm.ts';
 import { desktopCapturer } from 'electron';
-import type { UpdateService } from './updater/update-service.ts';
 import { releasePageUrl } from './updater/verify-download.ts';
+
+/** What the IPC layer needs of an updater: the desktop's UpdateService, or River for Android's. */
+export interface UpdatesApi {
+  getStatus(): UpdateStatus;
+  check(): Promise<UpdateStatus>;
+  install(): void | Promise<void>;
+  onStatus(listener: (s: UpdateStatus) => void): () => void;
+}
 
 export interface IpcDeps {
   appInfo: () => AppInfo;
   settings: SettingsStore;
-  updates: UpdateService | null;
+  updates: UpdatesApi | null;
   updatesDisabledReason: string;
   devServerUrl: string | undefined;
   /** Size-capped, time-limited fetch used for server checks. */
@@ -605,7 +613,7 @@ Links can lead anywhere. Only open it if you trust where it goes.`,
   });
 }
 
-export function broadcastUpdateStatus(target: WebContents, updates: UpdateService): () => void {
+export function broadcastUpdateStatus(target: WebContents, updates: UpdatesApi): () => void {
   return updates.onStatus((status) => {
     if (!target.isDestroyed()) target.send(IPC.updatesStatusChanged, status);
   });

@@ -15,6 +15,26 @@ All notable changes to River are documented here. The format follows
   never during a call, and River comes back in the tray if that is where it
   was. A PC that hosts River does it at night (3–5 am).
 
+### Added
+
+- **River for Android updates itself** (Settings → Updates). It checks GitHub
+  Releases at start, about every six hours and on demand; takes only a release
+  whose manifest is signed by River's release key (the desktop's verifier) and
+  is newer, on your channel (Beta and Nightly only if you chose them); downloads
+  the APK for the phone's processor; checks its SHA-256 and size against the
+  signed manifest and that it is signed with the same Android key as the
+  installed River; then hands it to Android's installer, which asks you to
+  confirm. The first time, Android asks you to allow River to install apps.
+- A release signed with a different Android key than yours (the early preview
+  builds) is not installed over it: River explains that only a fresh install
+  gets it, that uninstalling deletes River's data on the phone unless you back
+  up first (Settings → Backup), and links the download page.
+
+### Changed
+
+- iPhone: Settings → Updates says plainly that a sideloaded app cannot update
+  itself, and no longer shows update settings that do nothing there.
+
 ## [2.10.12] - 2026-10-16
 
 **Bug sweep: a review of the whole program — server, phone apps, calls, voice, messages and layout.**

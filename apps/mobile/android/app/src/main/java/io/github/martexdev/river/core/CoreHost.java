@@ -707,6 +707,20 @@ public final class CoreHost {
             answer(id, json("running", on));
             break;
           }
+        case "update.device":
+        case "update.download":
+        case "update.progress":
+        case "update.signers":
+        case "update.install":
+          // River's own signed updates (UpdateOps); answers may come later, from another thread.
+          UpdateOps.get(context)
+              .ask(
+                  kind,
+                  a,
+                  reply -> {
+                    if (gen == generation) answerPayload(id, reply);
+                  });
+          break;
         default:
           answerPayload(id, "{\"ok\":false,\"error\":\"not available on this phone\"}");
       }

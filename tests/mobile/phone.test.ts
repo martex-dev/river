@@ -1,10 +1,18 @@
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { generateKeyPairSync } from 'node:crypto';
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { build } from 'vite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { IPC, type CommunityView, type Result } from '../../apps/desktop/src/shared/ipc.ts';
+import { sha256Hex, signManifest } from '@river/release';
+import {
+  IPC,
+  type CommunityView,
+  type Result,
+  type SecurityStatus,
+  type UpdateStatus,
+} from '../../apps/desktop/src/shared/ipc.ts';
 import { AccountService } from '../../apps/desktop/src/main/account/account-service.ts';
 import { CommunityService } from '../../apps/desktop/src/main/community/community-service.ts';
 import { DmService } from '../../apps/desktop/src/main/dm/dm-service.ts';
@@ -213,6 +221,60 @@ describe('River for Android: client core', { timeout: 60_000 }, () => {
     );
     const theirs = await alice.dm.action({ a: 'safetyNumber', peer: p.riverId });
     expect(mine.digits).toBe(theirs.digits);
+  });
+
+  it('checks for signed updates through the shell, and refuses a release not signed by River', async () => {
+    // A release that looks right but is signed with a key this app does not trust.
+    const { privateKey } = generateKeyPairSync('ed25519');
+    const apk = Buffer.from('not River');
+    const manifest = Buffer.from(
+      JSON.stringify({
+        schema: 1,
+        product: 'river-desktop',
+        version: '99.0.0',
+        channel: 'stable',
+        gitCommit: '0'.repeat(40),
+        createdAt: new Date().toISOString(),
+        files: [
+          {
+            name: 'River-99.0.0-android-arm64.apk',
+            size: apk.length,
+            sha256: sha256Hex(apk),
+            sha512: `${'A'.repeat(86)}==`,
+          },
+        ],
+      }),
+    );
+    const sig = Buffer.from(
+      JSON.stringify(signManifest(manifest, privateKey.export({ format: 'pem', type: 'pkcs8' }).toString())),
+    );
+    const p = await startPhone(bundle, mkdtempSync(join(dir, 'phone-')), {
+      answer: (kind, args) => {
+        if (kind === 'update.device') return { abis: ['arm64-v8a'], versionCode: 1 };
+        if (kind !== 'update.download') return undefined;
+        const { url, path } = args as { url: string; path: string };
+        const data = url.endsWith('.sig') ? sig : url.endsWith('.json') ? manifest : apk;
+        writeFileSync(path, data);
+        return { size: data.length, sha256: sha256Hex(data) };
+      },
+    });
+    phones.push(p);
+    // Android has an updater (iOS does not); the Security Center says signatures are enforced.
+    expect(await p.invoke<UpdateStatus>(IPC.updatesStatus)).toEqual({ state: 'idle' });
+    const security = await p.invoke<SecurityStatus>(IPC.securityStatus);
+    expect(security.items.find((i) => i.id === 'updates')).toMatchObject({ indicator: 'active' });
+    expect(await p.invoke<UpdateStatus>(IPC.updatesCheck)).toMatchObject({
+      state: 'error',
+      code: 'manifest-unverified',
+    });
+    const downloads = p.asks
+      .filter((a) => a.kind === 'update.download')
+      .map((a) => (a.args as { url: string }).url);
+    expect(downloads).toEqual([
+      'https://github.com/martex-dev/river/releases/latest/download/river-release-manifest.json',
+      'https://github.com/martex-dev/river/releases/latest/download/river-release-manifest.json.sig',
+    ]);
+    expect(p.asks.some((a) => a.kind === 'update.install')).toBe(false);
   });
 
   it('leaves the call when the UI goes away while the core stays connected', async () => {

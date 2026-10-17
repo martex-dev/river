@@ -174,7 +174,12 @@ export type UpdateStatus =
   | { state: 'available'; version: string }
   | { state: 'downloading'; version: string; percent: number }
   | { state: 'verifying'; version: string }
-  | { state: 'ready'; version: string }
+  /** Android: `needsPermission` after River was sent to Settings to allow installing updates. */
+  | { state: 'ready'; version: string; needsPermission?: boolean }
+  /** Android: the system installer is open (it asks the user to confirm). */
+  | { state: 'installing'; version: string }
+  /** Android: the release is signed with another key than this install, so only a fresh install gets it. */
+  | { state: 'reinstall-needed'; version: string; message: string }
   | { state: 'manual'; version: string }
   | { state: 'error'; message: string; code?: string };
 
