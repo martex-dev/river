@@ -53,6 +53,10 @@ final class Ringer {
         || filter == NotificationManager.INTERRUPTION_FILTER_UNKNOWN) return true;
     if (filter != NotificationManager.INTERRUPTION_FILTER_PRIORITY) return false;
     try {
+      // The person let River's calls through Do Not Disturb (Android's settings, 2.12: they still
+      // stayed silent).
+      android.app.NotificationChannel calls = nm.getNotificationChannel(IncomingCall.CHANNEL);
+      if (calls != null && calls.canBypassDnd()) return true;
       // Priority only: calls ring only when the person allowed calls from anyone (River's callers
       // are not the phone's contacts).
       NotificationManager.Policy policy = nm.getNotificationPolicy();
@@ -71,7 +75,16 @@ final class Ringer {
     if (mode == AudioManager.RINGER_MODE_SILENT) return;
     on = true;
     vibrate();
-    if (mode == AudioManager.RINGER_MODE_NORMAL) play(am);
+    // In another call (the phone's own, or another app's) only vibrate, as a waiting call does on
+    // a phone (2.12: the ringtone played into that call). River's own voice channel still rings.
+    if (mode == AudioManager.RINGER_MODE_NORMAL && !inOtherCall(am)) play(am);
+  }
+
+  private boolean inOtherCall(AudioManager am) {
+    if (am == null) return false;
+    int audio = am.getMode();
+    if (audio == AudioManager.MODE_IN_CALL) return true;
+    return audio == AudioManager.MODE_IN_COMMUNICATION && !CoreHost.get(context).inCall();
   }
 
   private void vibrate() {
