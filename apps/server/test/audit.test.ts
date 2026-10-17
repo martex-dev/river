@@ -677,6 +677,22 @@ describe('realtime connections', () => {
     await vi.waitFor(() => expect(conn.closed()).toBe(4401));
   });
 
+  it('keeps the session of a connected device alive instead of ending it once a day', async () => {
+    await start({}, { sessionRecheckMs: 50 });
+    const user = await registerUser(app);
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const { port } = app.server.address() as { port: number };
+    const conn = await connect(port, user.token);
+    // The session is near its end (less than half its lifetime left).
+    const soon = new Date(Date.now() + 60_000).toISOString();
+    await database.db.updateTable('sessions').set({ expires_at: soon }).execute();
+    await vi.waitFor(async () => {
+      const row = await database.db.selectFrom('sessions').select('expires_at').executeTakeFirstOrThrow();
+      expect(row.expires_at > new Date(Date.now() + 60 * 60_000).toISOString()).toBe(true);
+    });
+    expect(conn.closed()).toBeNull();
+  });
+
   it('deleting a community ends its voice calls', async () => {
     await start();
     const owner = await registerUser(app);

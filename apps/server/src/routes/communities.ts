@@ -67,7 +67,7 @@ import {
   decodeRelayOut,
   encodeRelayIn,
 } from '@river/protocol';
-import { authenticate } from '../accounts/auth-store.ts';
+import { authenticate, renewSession } from '../accounts/auth-store.ts';
 import type { Hub, HubSocket } from '../communities/hub.ts';
 import type { CommunityModel } from '../communities/model.ts';
 import { communityOfChannel, lastMessageTimes, loadCommunity, loadMessages } from '../communities/model.ts';
@@ -2546,12 +2546,16 @@ export async function registerCommunityRoutes(
     const checkSession = (): void => {
       if (!token || checkingSession || closed) return;
       checkingSession = true;
-      void authenticate(db, token, deps.now())
-        .then((session) => {
+      const live = token;
+      void authenticate(db, live, deps.now())
+        .then(async (session) => {
           if (!session && !closed) {
             send({ t: 'error', code: 'unauthorized' });
             socket.close(4401);
+            return;
           }
+          // Still connected and allowed: keep the session alive instead of ending it once a day.
+          if (session) await renewSession(db, live, deps.now(), deps.config.sessionTtlMs);
         })
         .catch(() => undefined)
         .finally(() => {
