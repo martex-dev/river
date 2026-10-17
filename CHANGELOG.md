@@ -6,16 +6,15 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
-### Fixed
+## [2.11.0] - 2026-10-17
 
-- **Updates on computers install by themselves.** Closing River only hides it in
-  the tray, so a downloaded update used to wait for a real quit that rarely came
-  (some people stayed on old versions for weeks). Now a verified update
-  restarts River by itself while River is in the tray or unused for 10 minutes,
-  never during a call, and River comes back in the tray if that is where it
-  was. A PC that hosts River does it at night (3–5 am).
+**Phones that ring and notify like phones, updates that install by themselves, and a second bug sweep.**
 
 ### Added
+
+**Android rings and notifies like a phone (maintainer request).** River still
+uses no Google push service: everything depends on River's own connection,
+so Stay connected matters.
 
 - **River for Android updates itself** (Settings → Updates). It checks GitHub
   Releases at start, about every six hours and on demand; takes only a release
@@ -29,17 +28,6 @@ All notable changes to River are documented here. The format follows
   builds) is not installed over it: River explains that only a fresh install
   gets it, that uninstalling deletes River's data on the phone unless you back
   up first (Settings → Backup), and links the download page.
-
-### Changed
-
-- iPhone: Settings → Updates says plainly that a sideloaded app cannot update
-  itself, and no longer shows update settings that do nothing there.
-
-**Android rings and notifies like a phone (maintainer request).** River still
-uses no Google push service: everything depends on River's own connection,
-so Stay connected matters.
-
-### Added
 
 - **Incoming calls on Android** ring like a phone call: the phone's ringtone in
   a loop and a repeating vibration (silent and vibrate modes and Do Not
@@ -70,7 +58,61 @@ so Stay connected matters.
   answered) and reconnect, and the service starts again after a restart of
   the phone or an update of River.
 
+### Changed
+
+- iPhone: Settings → Updates says plainly that a sideloaded app cannot update
+  itself, and no longer shows update settings that do nothing there.
+
+### Security
+
+Trust audit: what a malicious or compromised server can do to end-to-end
+encryption (CRYPTOGRAPHY.md §4b). Every change works with the previous
+releases on desktop, Android and iPhone.
+
+- A contact's identity key changing on an incoming message is accepted only if
+  the server's bundle carries that key, the device list signed by it lists the
+  sending device, and no shared community names another key. Verification is
+  never cleared silently: a verified contact whose key changed shows "changed
+  since verified" and gets nothing until you compare the new safety number.
+  Marking as verified needs the number that was on screen.
+- Copies from your own devices (sent messages, edits, friends list, groups) are
+  accepted only from devices in your signed device list under your own
+  identity key.
+- Contacts' device lists are checked again at least daily (and when a message
+  comes from a device River does not know); the newest versions seen are in
+  backups, so a restore does not accept an older list.
+- Community keys travel with a proof: sealed under the previous epoch's key.
+  Keys from older Rivers are accepted only from members who held a genuine key
+  before; rotations go only to such members. A rotation that reaches nobody is
+  asked for again by the server and redone, and the app says the community is
+  still on the previous key meanwhile. Pending members are never picked to
+  rotate, and a refused claim hands over to the next member.
+- Community messages and profiles can be sealed bound to their ID and sender
+  (associated data v2); every River now opens them. Sending v2 starts in 2.12.
+- Identity-bound call signals cannot be replayed within their ten minutes;
+  signals from someone whose key just changed are refused until you look at it.
+- The file cache is keyed by the whole file pointer, not the blob ID alone.
+- Server: link-code slots are limited per address and for accounts made today;
+  usernames given up are held 30 days for their owner; a deleted River ID can be
+  registered again only with its own identity key.
+- Docs: the recovery secret is 128 bits (16 Bytewords + 2 checksum words), and
+  sealed sender is not implemented — CRYPTOGRAPHY.md said otherwise.
+
+- **Social privacy**: posts and stories go only to friends who have answered
+  (as the Friends page counts them), never to someone you only opened a chat
+  with or sent a request to; a hand-picked audience is limited to friends too.
+  Comments and reactions are relayed only to people who are still your
+  contacts, comments from people you blocked are not shown on anyone's post,
+  and posts and stories of people you removed leave your feed and their profile.
+
 ### Fixed
+
+- **Updates on computers install by themselves.** Closing River only hides it in
+  the tray, so a downloaded update used to wait for a real quit that rarely came
+  (some people stayed on old versions for weeks). Now a verified update
+  restarts River by itself while River is in the tray or unused for 10 minutes,
+  never during a call, and River comes back in the tray if that is where it
+  was. A PC that hosts River does it at night (3–5 am).
 
 - Android: when River's core restarted (Android often ends background
   renderers), every River notification on screen disappeared. They now stay,
@@ -81,12 +123,47 @@ so Stay connected matters.
 - Opening River from a ringing call no longer risks answering "busy" to that
   same call.
 
-### Not on iPhone
+- Traffic for group conversations you removed is dropped instead of waiting
+  forever; only people you know can have messages wait for a group, at most 20
+  each.
+- Call invites are never kept to be replayed later, and one that waited longer
+  than a ring lasts no longer rings.
 
-- Without Apple's push service (it needs a paid Apple developer account), an
-  iPhone cannot ring or notify while iOS has paused River. Settings → System
-  says so; nothing here pretends otherwise.
-
+- **A crash no longer leaves a blank window**: River shows "Something went
+  wrong" with the error and Reload; a crash on one page leaves the rest of River
+  working (and that page can be tried again).
+- **Stories**: the viewer follows the story you are watching by its ID, so
+  marking it seen no longer jumps to someone else or crashes when stories
+  disappear. Video stories play (muted, inline) and move on when they end; the
+  timer starts once the picture is shown, and holding keeps its progress.
+  Arrow keys and Esc while writing a reply stay in the reply box. On touch
+  screens, a hold pauses, a tap goes back or on, and a swipe down closes.
+- **Posts that did not go out**: a post nobody received is removed instead of
+  staying as if shared (sharing again makes no duplicate); people a post
+  missed, deletes, "seen" receipts and comment relays are sent again later. An
+  offline comment or like is taken back and says so (your comment returns to
+  the box) instead of looking sent and being lost.
+- **Profiles**: a bio that could not be saved is no longer shown as saved, and
+  a new bio reaches your friends (once, a few seconds after the last change).
+  Profiles update after likes, comments and deletes. On narrow windows (phones)
+  your profile, bio and friends are reachable at the top of the feed.
+- Photo previews in the post and story composer are freed when removed, cut
+  off by the limit or closed.
+- **Call history**: calls you decline show as declined and calls that were
+  answered but never connected as "Could not connect", not as missed; new
+  calls appear on the Calls page at once.
+- **Adding a friend** again no longer sends a second greeting ("already sent");
+  adding someone who asked you first accepts their request and says you are
+  now friends; someone you blocked is refused with a reason. Pasting a bare
+  River ID offers to add them instead of doing nothing.
+- **Events**: a half-typed start time no longer crashes the form (Save waits
+  for a valid time), and an event of another length (say 90 minutes) keeps it
+  when edited instead of becoming one hour.
+- **Shortcuts**: Space on a focused button presses it instead of jumping to
+  the message box; Alt+↑/↓ and Ctrl+Alt+↑/↓ no longer switch channels from
+  other fields, menus or dialogs (they still work from the message box).
+- **Admin**: a new sign-up link is no longer shown as already copied, and a
+  failed copy, sign-up mode change or cancelled link says so.
 - Private channels stay private: deleting a category, or moving a channel synced
   to it elsewhere, now gives the channel the category's permissions as its own
   instead of making it public. The delete confirmation says so.
@@ -165,95 +242,11 @@ so Stay connected matters.
     pointing to it, instead of a ~2.7 MB copy in every profile (settings files of
     up to ~80 MB); existing settings are compacted when read.
 
-### Security
+### Not on iPhone
 
-Trust audit: what a malicious or compromised server can do to end-to-end
-encryption (CRYPTOGRAPHY.md §4b). Every change works with the previous
-releases on desktop, Android and iPhone.
-
-- A contact's identity key changing on an incoming message is accepted only if
-  the server's bundle carries that key, the device list signed by it lists the
-  sending device, and no shared community names another key. Verification is
-  never cleared silently: a verified contact whose key changed shows "changed
-  since verified" and gets nothing until you compare the new safety number.
-  Marking as verified needs the number that was on screen.
-- Copies from your own devices (sent messages, edits, friends list, groups) are
-  accepted only from devices in your signed device list under your own
-  identity key.
-- Contacts' device lists are checked again at least daily (and when a message
-  comes from a device River does not know); the newest versions seen are in
-  backups, so a restore does not accept an older list.
-- Community keys travel with a proof: sealed under the previous epoch's key.
-  Keys from older Rivers are accepted only from members who held a genuine key
-  before; rotations go only to such members. A rotation that reaches nobody is
-  asked for again by the server and redone, and the app says the community is
-  still on the previous key meanwhile. Pending members are never picked to
-  rotate, and a refused claim hands over to the next member.
-- Community messages and profiles can be sealed bound to their ID and sender
-  (associated data v2); every River now opens them. Sending v2 starts in 2.12.
-- Identity-bound call signals cannot be replayed within their ten minutes;
-  signals from someone whose key just changed are refused until you look at it.
-- The file cache is keyed by the whole file pointer, not the blob ID alone.
-- Server: link-code slots are limited per address and for accounts made today;
-  usernames given up are held 30 days for their owner; a deleted River ID can be
-  registered again only with its own identity key.
-- Docs: the recovery secret is 128 bits (16 Bytewords + 2 checksum words), and
-  sealed sender is not implemented — CRYPTOGRAPHY.md said otherwise.
-
-### Fixed
-
-- Traffic for group conversations you removed is dropped instead of waiting
-  forever; only people you know can have messages wait for a group, at most 20
-  each.
-- Call invites are never kept to be replayed later, and one that waited longer
-  than a ring lasts no longer rings.
-
-### Security
-
-- **Social privacy**: posts and stories go only to friends who have answered
-  (as the Friends page counts them), never to someone you only opened a chat
-  with or sent a request to; a hand-picked audience is limited to friends too.
-  Comments and reactions are relayed only to people who are still your
-  contacts, comments from people you blocked are not shown on anyone's post,
-  and posts and stories of people you removed leave your feed and their profile.
-
-### Fixed
-
-- **A crash no longer leaves a blank window**: River shows "Something went
-  wrong" with the error and Reload; a crash on one page leaves the rest of River
-  working (and that page can be tried again).
-- **Stories**: the viewer follows the story you are watching by its ID, so
-  marking it seen no longer jumps to someone else or crashes when stories
-  disappear. Video stories play (muted, inline) and move on when they end; the
-  timer starts once the picture is shown, and holding keeps its progress.
-  Arrow keys and Esc while writing a reply stay in the reply box. On touch
-  screens, a hold pauses, a tap goes back or on, and a swipe down closes.
-- **Posts that did not go out**: a post nobody received is removed instead of
-  staying as if shared (sharing again makes no duplicate); people a post
-  missed, deletes, "seen" receipts and comment relays are sent again later. An
-  offline comment or like is taken back and says so (your comment returns to
-  the box) instead of looking sent and being lost.
-- **Profiles**: a bio that could not be saved is no longer shown as saved, and
-  a new bio reaches your friends (once, a few seconds after the last change).
-  Profiles update after likes, comments and deletes. On narrow windows (phones)
-  your profile, bio and friends are reachable at the top of the feed.
-- Photo previews in the post and story composer are freed when removed, cut
-  off by the limit or closed.
-- **Call history**: calls you decline show as declined and calls that were
-  answered but never connected as "Could not connect", not as missed; new
-  calls appear on the Calls page at once.
-- **Adding a friend** again no longer sends a second greeting ("already sent");
-  adding someone who asked you first accepts their request and says you are
-  now friends; someone you blocked is refused with a reason. Pasting a bare
-  River ID offers to add them instead of doing nothing.
-- **Events**: a half-typed start time no longer crashes the form (Save waits
-  for a valid time), and an event of another length (say 90 minutes) keeps it
-  when edited instead of becoming one hour.
-- **Shortcuts**: Space on a focused button presses it instead of jumping to
-  the message box; Alt+↑/↓ and Ctrl+Alt+↑/↓ no longer switch channels from
-  other fields, menus or dialogs (they still work from the message box).
-- **Admin**: a new sign-up link is no longer shown as already copied, and a
-  failed copy, sign-up mode change or cancelled link says so.
+- Without Apple's push service (it needs a paid Apple developer account), an
+  iPhone cannot ring or notify while iOS has paused River. Settings → System
+  says so; nothing here pretends otherwise.
 
 ## [2.10.12] - 2026-10-16
 
