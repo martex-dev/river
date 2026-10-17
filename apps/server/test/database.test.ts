@@ -4,7 +4,13 @@ import { join } from 'node:path';
 import { sql, type Kysely } from 'kysely';
 import type { Migration } from 'kysely/migration';
 import { afterAll, describe, expect, it } from 'vitest';
-import { MIGRATIONS, migrateToLatest, openDatabase, type RiverDatabase } from '../src/db/database.ts';
+import {
+  MIGRATIONS,
+  createPgPool,
+  migrateToLatest,
+  openDatabase,
+  type RiverDatabase,
+} from '../src/db/database.ts';
 import type { Database } from '../src/db/schema.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'river-db-'));
@@ -123,6 +129,20 @@ describe('openDatabase', () => {
     await migrateToLatest(mem.db);
     await mem.close();
     expect(() => openDatabase('mysql://nope')).toThrow(/Unsupported/);
+  });
+
+  it('survives PostgreSQL dropping an idle connection (the pool reports it, the server keeps running)', async () => {
+    const seen: string[] = [];
+    const pool = createPgPool('postgres://river@127.0.0.1:1/river', (err) => seen.push(err.message));
+    // What pg does when the server closes an idle client: without a listener this throws.
+    expect(() =>
+      pool.emit('error', new Error('terminating connection due to administrator command')),
+    ).not.toThrow();
+    expect(seen).toEqual(['terminating connection due to administrator command']);
+    await pool.end();
+    // openDatabase uses the same guarded pool.
+    const database = openDatabase('postgres://river@127.0.0.1:1/river');
+    await database.close();
   });
 });
 

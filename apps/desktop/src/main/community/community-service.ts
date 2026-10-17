@@ -313,6 +313,14 @@ export class CommunityService {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
   private backoff = 1000;
+  /** When the current connection became ready (null: not ready). */
+  private readyAt: number | null = null;
+  /**
+   * A connection must stay up this long before the backoff starts over (tests shorten it). One
+   * the server ends right after "ready" (it restarts in a loop, or closes us for a burst) would
+   * otherwise be retried every second, by every member at once.
+   */
+  stableAfterMs = 30_000;
   private offlineSince: number | null = null;
   private lastFollow = 0;
   private retryAt: number | null = null;
@@ -1762,12 +1770,14 @@ export class CommunityService {
     post?: { title?: string; tags?: string[] },
     embed?: LinkEmbed,
     sticker?: string,
+    messageId?: string,
   ): Promise<ChatMessage> {
     const text =
       attachments.length || sticker ? z.string().max(4000).parse(rawText) : textSchema.parse(rawText);
     const communityId = this.communityOf(channelId);
     const key = this.requireKey(communityId);
-    const id = randomId();
+    // The outbox keeps one ID per message for all its attempts, so a retry cannot post it twice.
+    const id = messageId ?? randomId();
     this.remember(id);
     const body = {
       text,
@@ -1787,31 +1797,58 @@ export class CommunityService {
         return Object.keys(kept).length ? { alts: kept } : {};
       })(),
     };
-    const sent = await this.call(
-      `/channels/${channelId}/messages`,
-      'POST',
-      {
-        id,
-        body: sealBound(
-          key,
-          communityId,
-          `message:${channelId}`,
-          messageBinding(id, this.me()),
-          body,
-          this.sealV2,
-        ),
-        ...(attachments.length ? { attachments: attachments.map((a) => a.id) } : {}),
-        ...(threadId ? { threadId } : {}),
-        ...(post?.title && !threadId
-          ? { thread: { name: seal(key, communityId, `thread:${id}`, { name: post.title }) } }
-          : {}),
-      },
-      messageSchema,
-    );
+    let sent: z.infer<typeof messageSchema>;
+    try {
+      sent = await this.call(
+        `/channels/${channelId}/messages`,
+        'POST',
+        {
+          id,
+          body: sealBound(
+            key,
+            communityId,
+            `message:${channelId}`,
+            messageBinding(id, this.me()),
+            body,
+            this.sealV2,
+          ),
+          ...(attachments.length ? { attachments: attachments.map((a) => a.id) } : {}),
+          ...(threadId ? { threadId } : {}),
+          ...(post?.title && !threadId
+            ? { thread: { name: seal(key, communityId, `thread:${id}`, { name: post.title }) } }
+            : {}),
+        },
+        messageSchema,
+      );
+    } catch (err) {
+      // "That ID exists": an earlier attempt of this same message got through, only its answer was
+      // lost (the connection dropped, the request timed out). It is sent; do not send it again.
+      const earlier =
+        messageId && err instanceof ApiError && err.status === 409
+          ? await this.alreadySent(channelId, id, threadId).catch(() => null)
+          : null;
+      if (!earlier) throw err;
+      this.markRead(channelId);
+      return earlier;
+    }
     // Your own message never makes a channel unread for you.
     if (sent.sentAt > (this.liveLast.get(channelId) ?? '')) this.liveLast.set(channelId, sent.sentAt);
     this.markRead(channelId);
     return this.toChat(communityId, sent)!;
+  }
+
+  /** Our own message `id` in this channel (or thread), if the server has it already. */
+  private async alreadySent(channelId: string, id: string, threadId?: string): Promise<ChatMessage | null> {
+    const communityId = this.communityOf(channelId);
+    const res = await this.call(
+      threadId ? `/threads/${threadId}/messages` : `/channels/${channelId}/messages`,
+      'GET',
+      undefined,
+      messagesResponseSchema,
+    );
+    const wire = res.messages.find((m) => m.id === id);
+    const chat = wire ? this.toChat(communityId, wire) : null;
+    return chat && chat.mine && chat.channelId === channelId ? chat : null;
   }
 
   /** Every other community operation; `raw` comes from the renderer and is validated here. */
@@ -2353,6 +2390,7 @@ export class CommunityService {
           act.title || act.tags ? { title: act.title, tags: act.tags } : undefined,
           act.embed,
           act.sticker,
+          act.messageId,
         )) as CommunityActionResult<A>;
       case 'createThread': {
         const communityId = this.communityOf(act.channelId);
@@ -3515,6 +3553,9 @@ export class CommunityService {
   private dropSocket(socket: WebSocket): void {
     if (this.socket !== socket) return;
     this.socket = null;
+    // A connection that worked for a while starts the backoff over; one that ended at once does not.
+    if (this.readyAt !== null && Date.now() - this.readyAt >= this.stableAfterMs) this.backoff = 1000;
+    this.readyAt = null;
     this.clearConnectTimer();
     this.stopHeartbeat();
     this.voice.clear();
@@ -3662,6 +3703,13 @@ export class CommunityService {
    */
   reconnectNow(): void {
     if (this.deps.account.status().state !== 'registered') return;
+    // "Online", but the network just changed or the computer woke: the old connection may be dead
+    // without knowing it. Ask it; one that does not answer is replaced (instead of up to a minute
+    // of silence before the heartbeat notices).
+    if (!this.opening && this.socket && this.socketState === 'online') {
+      if (this.socket.readyState === WebSocket.OPEN) return this.probe();
+      this.dropSocket(this.socket); // closing already: replace it now
+    }
     if (this.opening || (this.socket && this.socketState !== 'offline')) return;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
@@ -3675,7 +3723,7 @@ export class CommunityService {
     switch (e.t) {
       case 'ready':
         this.clearConnectTimer();
-        this.backoff = 1000;
+        this.readyAt = Date.now();
         this.offlineSince = null;
         this.setSocketState('online');
         this.resumeVoice();

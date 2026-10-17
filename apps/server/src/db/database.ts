@@ -99,9 +99,23 @@ class RiverSqliteDialect extends SqliteDialect {
   }
 }
 
+/**
+ * The PostgreSQL connection pool. An idle connection that PostgreSQL closes (a restart, a
+ * failover, an idle timeout in a proxy) makes the pool emit 'error'; with no listener, Node turns
+ * that into an uncaught exception and the whole server stops. The pool drops the broken
+ * connection by itself and opens a new one for the next query, so the error is only reported.
+ */
+export function createPgPool(url: string, onError: (err: Error) => void = () => undefined): pg.Pool {
+  const pool = new pg.Pool({ connectionString: url, max: 10 });
+  pool.on('error', (err) => onError(err));
+  return pool;
+}
+
 export function openDatabase(url: string): RiverDatabase {
   if (url.startsWith('postgres://') || url.startsWith('postgresql://')) {
-    const pool = new pg.Pool({ connectionString: url, max: 10 });
+    const pool = createPgPool(url, (err) =>
+      process.emitWarning(`PostgreSQL connection lost (${err.message}); reconnecting on the next query`),
+    );
     const db = new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
     return { db, dialect: 'postgres', close: () => db.destroy() };
   }

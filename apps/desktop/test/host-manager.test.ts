@@ -457,4 +457,101 @@ describe('HostManager with a permanent address (Tailscale Funnel)', () => {
     expect(m.status()).toMatchObject({ state: 'online', via: 'quick-tunnel' });
     await m.stop();
   });
+
+  it('tries the permanent address again after hosting is turned off and on while it was waiting', async () => {
+    const funnel = fakeFunnel('ready');
+    const m = manager({ funnel: funnel.provider });
+    m.start();
+    servers[0]!.say({ type: 'ready', port: 8790 });
+    await tick(1);
+    // Waiting for the new address's certificate when the owner turns hosting off and on again.
+    expect(funnel.opened).toHaveLength(1);
+    await m.stop();
+    m.start();
+    servers[1]!.say({ type: 'ready', port: 8790 });
+    routable.add('https://my-pc.tail1234.ts.net');
+    await tick(1);
+    expect(funnel.opened).toHaveLength(2);
+    expect(m.status()).toMatchObject({ state: 'online', via: 'tailscale' });
+    expect(tunnels).toHaveLength(0);
+    await m.stop();
+  });
+
+  it('moves the permanent address to the new port after a crash and a port conflict', async () => {
+    const funnel = fakeFunnel('ready');
+    routable.add('https://my-pc.tail1234.ts.net');
+    const m = manager({ funnel: funnel.provider });
+    m.start();
+    servers[0]!.say({ type: 'ready', port: 8790 });
+    await tick(1);
+    expect(m.status().via).toBe('tailscale');
+    servers[0]!.exit(1);
+    await tick(2_000);
+    // Something took the port meanwhile: the next start picks another one.
+    servers[1]!.say({ type: 'failed', reason: 'port-in-use', message: 'EADDRINUSE' });
+    servers[1]!.exit(1);
+    await tick(2_000);
+    servers[2]!.say({ type: 'ready', port: 51234 });
+    await tick(1);
+    expect(funnel.opened.at(-1)).toBe('http://127.0.0.1:51234');
+    expect(m.status()).toMatchObject({ state: 'online', via: 'tailscale' });
+    await m.stop();
+  });
+
+  it('says why the permanent address is not used, instead of "switching" for ever', async () => {
+    const provider = {
+      check: async () => ({ state: 'ready', address: 'https://my-pc.tail1234.ts.net' }) as const,
+      open: async () => {
+        throw new Error('Tailscale could not open the address: Funnel not available.');
+      },
+      close: async () => undefined,
+    };
+    const m = manager({ funnel: provider });
+    await bringOnline(m);
+    expect(m.status()).toMatchObject({
+      state: 'online',
+      via: 'quick-tunnel',
+      permanent: 'ready',
+      permanentProblem: 'Tailscale could not open the address: Funnel not available.',
+    });
+    await m.stop();
+  });
+});
+
+describe('HostManager and a server process that does not answer', () => {
+  it('still opens the public address when the server never says who it is', async () => {
+    const hanging = (async (input: string, init?: RequestInit) => {
+      if (String(input).endsWith('/v1/instance'))
+        return new Promise((_resolve, reject) =>
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))),
+        );
+      return fakeFetch(input, init);
+    }) as unknown as typeof fetch;
+    const m = manager({ fetch: hanging });
+    m.start();
+    servers[0]!.say({ type: 'ready', port: 8790 });
+    await tick(1);
+    expect(tunnels).toHaveLength(0);
+    await tick(10_000);
+    expect(tunnels).toHaveLength(1);
+    await m.stop();
+  });
+});
+
+describe('HostManager after a port conflict', () => {
+  it('points the quick tunnel at the new port after a crash and a port conflict', async () => {
+    const m = manager();
+    await bringOnline(m);
+    servers[0]!.exit(1);
+    await tick(2_000);
+    servers[1]!.say({ type: 'failed', reason: 'port-in-use', message: 'EADDRINUSE' });
+    servers[1]!.exit(1);
+    await tick(2_000);
+    servers[2]!.say({ type: 'ready', port: 51234 });
+    await tick(1);
+    // Not "online" through a tunnel that still points at the old port.
+    expect(tunnels[0]!.killed).toBe(true);
+    expect(tunnels.at(-1)!.localUrl).toBe('http://127.0.0.1:51234');
+    await m.stop();
+  });
 });

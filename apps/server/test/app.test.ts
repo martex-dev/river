@@ -41,6 +41,20 @@ afterEach(async () => {
   database = undefined;
 });
 
+describe('error bodies', () => {
+  it('are JSON even when the route had set another content type', async () => {
+    const { app } = await start();
+    app.get('/v1/test-download-fails', async (_request, reply) => {
+      void reply.type('application/octet-stream');
+      throw new Error('disk gone');
+    });
+    const res = await app.inject({ method: 'GET', url: '/v1/test-download-fails' });
+    expect(res.statusCode).toBe(500);
+    expect(res.headers['content-type']).toContain('application/json');
+    expect(errorResponseSchema.parse(res.json()).error.code).toBe('internal');
+  });
+});
+
 describe('cross-origin access for the phone apps', () => {
   it('answers preflights and allows River app origins only', async () => {
     const { app } = await start();

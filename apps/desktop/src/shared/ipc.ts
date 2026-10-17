@@ -803,6 +803,8 @@ export interface HostRuntime {
   permanent?: 'missing' | 'signed-out' | 'ready';
   /** Tailscale is waiting for its owner to allow the permanent address. */
   needsApproval?: boolean;
+  /** Tailscale is signed in, but the permanent address could not be opened: why (2.12). */
+  permanentProblem?: string;
 }
 
 /** Hosting communities on this PC, as Settings and the start screen show it. */

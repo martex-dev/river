@@ -55,11 +55,7 @@ mkdirSync(config.dataDir, { recursive: true });
 const log = (line: string): void => {
   const text = `${new Date().toISOString()} ${line}\n`;
   process.stdout.write(text);
-  try {
-    appendFileSync(join(logDir, 'host.log'), text);
-  } catch {
-    // logging must never stop hosting
-  }
+  append('host.log', text);
 };
 
 const local = `http://127.0.0.1:${config.port}`;
@@ -81,46 +77,86 @@ function writeStatus(extra: Record<string, unknown> = {}): void {
   );
 }
 
-/** Runs a child process forever: restarts it with growing pauses if it exits. */
-function keepRunning(name: string, start: () => ChildProcess, onLine?: (line: string) => void): void {
+/**
+ * A line safe to keep in a log: what child processes print (tunnel output can carry text from the
+ * network) loses control characters and is cut to a sensible length.
+ */
+function logSafe(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  const clean = text.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '');
+  return clean.length > 4000 ? `${clean.slice(0, 4000)}…\n` : clean;
+}
+
+/** Appends to a log file; a full disk or a locked file must never stop hosting. */
+function append(file: string, text: string): void {
+  try {
+    appendFileSync(join(logDir, file), logSafe(text));
+  } catch {
+    // logging must never stop hosting
+  }
+}
+
+/**
+ * Runs a child process forever: restarts it with growing pauses if it exits. A program that
+ * cannot be started at all (cloudflared not installed at that path) is retried the same way and
+ * logged; before, its 'error' event went unhandled and took River Host down with it.
+ */
+function keepRunning(
+  name: string,
+  start: () => ChildProcess,
+  onLine?: (line: string) => void,
+  onStarted?: () => void,
+): void {
   let delay = 2000;
   const launch = (): void => {
     if (stopping) return;
     const child = start();
     children.add(child);
     const startedAt = Date.now();
+    let ended = false;
+    const restart = (why: string): void => {
+      if (ended) return;
+      ended = true;
+      children.delete(child);
+      if (stopping) return;
+      // A process that ran for a while gets a fresh, short pause next time.
+      if (Date.now() - startedAt > 60_000) delay = 2000;
+      log(`${name} ${why}; restarting in ${Math.round(delay / 1000)}s`);
+      setTimeout(launch, delay);
+      delay = Math.min(delay * 2, 60_000);
+    };
     const read = (chunk: Buffer): void => {
       for (const line of chunk.toString().split(/\r?\n/)) {
         if (!line.trim()) continue;
-        appendFileSync(join(logDir, `${name}.log`), `${line}\n`);
+        append(`${name}.log`, `${line}\n`);
         onLine?.(line);
       }
     };
     child.stdout?.on('data', read);
     child.stderr?.on('data', read);
-    child.on('exit', (code) => {
-      children.delete(child);
-      if (stopping) return;
-      // A process that ran for a while gets a fresh, short pause next time.
-      if (Date.now() - startedAt > 60_000) delay = 2000;
-      log(`${name} stopped (code ${code}); restarting in ${Math.round(delay / 1000)}s`);
-      setTimeout(launch, delay);
-      delay = Math.min(delay * 2, 60_000);
-    });
-    log(`${name} started (pid ${child.pid})`);
+    child.on('error', (err) => restart(`could not start (${err.message})`));
+    child.on('exit', (code) => restart(`stopped (code ${code})`));
+    if (child.pid !== undefined) {
+      log(`${name} started (pid ${child.pid})`);
+      onStarted?.();
+    }
   };
   launch();
 }
 
-async function waitForServer(): Promise<void> {
-  for (;;) {
-    try {
-      if ((await fetch(`${local}/v1/health`)).ok) return;
-    } catch {
-      // still starting
-    }
-    await new Promise((r) => setTimeout(r, 1000));
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Whether `base` answers River's health check (a hung server or tunnel counts as no). */
+async function healthy(base: string): Promise<boolean> {
+  try {
+    return (await fetch(`${base}/v1/health`, { signal: AbortSignal.timeout(10_000) })).ok;
+  } catch {
+    return false;
   }
+}
+
+async function waitForServer(): Promise<void> {
+  while (!(await healthy(local))) await sleep(1000);
 }
 
 /** Tells the server its public address; the server signs and publishes it for members. */
@@ -129,6 +165,7 @@ async function announce(): Promise<void> {
   try {
     const res = await fetch(`${local}/v1/instance/address`, {
       method: 'POST',
+      signal: AbortSignal.timeout(30_000),
       headers: { 'content-type': 'application/json', authorization: `Bearer ${hostToken}` },
       body: JSON.stringify({ url: publicUrl }),
     });
@@ -143,21 +180,46 @@ async function announce(): Promise<void> {
   }
 }
 
-keepRunning('server', () =>
-  spawn(process.execPath, ['src/main.ts'], {
-    cwd: join(config.appDir, 'apps', 'server'),
-    env: {
-      ...process.env,
-      RIVER_PORT: String(config.port),
-      RIVER_TRUST_PROXY: 'true',
-      RIVER_DATABASE_URL: `sqlite:${join(config.dataDir, 'river.sqlite')}`,
-      RIVER_ATTACHMENT_DIR: join(config.dataDir, 'attachments'),
-      RIVER_HOST_TOKEN: hostToken,
-      ...(config.beaconRelay ? { RIVER_BEACON_RELAY: config.beaconRelay } : {}),
-      ...config.env,
-    },
-    windowsHide: true,
-  }),
+/**
+ * A new quick-tunnel name takes a few seconds to resolve, and asking too early gets a "no such
+ * name" that members' computers then remember for a minute: announce it once it answers.
+ */
+async function announceWhenRoutable(url: string): Promise<void> {
+  await sleep(8000);
+  const deadline = Date.now() + 90_000;
+  while (publicUrl === url && Date.now() < deadline) {
+    if (await healthy(url)) {
+      if (publicUrl === url) await announce();
+      return;
+    }
+    await sleep(2000);
+  }
+  if (publicUrl === url) {
+    log(`public address ${url} did not answer yet; announcing it anyway`);
+    await announce();
+  }
+}
+
+keepRunning(
+  'server',
+  () =>
+    spawn(process.execPath, ['src/main.ts'], {
+      cwd: join(config.appDir, 'apps', 'server'),
+      env: {
+        ...process.env,
+        RIVER_PORT: String(config.port),
+        RIVER_TRUST_PROXY: 'true',
+        RIVER_DATABASE_URL: `sqlite:${join(config.dataDir, 'river.sqlite')}`,
+        RIVER_ATTACHMENT_DIR: join(config.dataDir, 'attachments'),
+        RIVER_HOST_TOKEN: hostToken,
+        ...(config.beaconRelay ? { RIVER_BEACON_RELAY: config.beaconRelay } : {}),
+        ...config.env,
+      },
+      windowsHide: true,
+    }),
+  undefined,
+  // A restarted server has forgotten its public address: tell it again once it answers.
+  () => void waitForServer().then(() => announce()),
 );
 
 void waitForServer().then(() => {
@@ -175,8 +237,7 @@ void waitForServer().then(() => {
         publicUrl = found;
         log(`public address: ${publicUrl}`);
         writeStatus();
-        // Give the tunnel a moment to route before telling anyone about it.
-        setTimeout(() => void announce(), 5000);
+        void announceWhenRoutable(found);
       }
     },
   );

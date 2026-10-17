@@ -1582,3 +1582,74 @@ describe('social: audit fixes', { timeout: 90_000 }, () => {
     ]);
   });
 });
+
+describe('direct messages: delivery', { timeout: 60_000 }, () => {
+  type Drain = { drainMailbox(): Promise<void> };
+
+  it('fetches the mailbox again when asked while a fetch runs, so no message waits for the next reconnect', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await alice.dm.action({ a: 'open', peer: bob.riverId, name: 'Bob' });
+    await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'one' });
+    const api = bob.community.api.bind(bob.community);
+    let first = true;
+    bob.community.api = (async (path: string, method: 'GET', body: unknown, schema: never) => {
+      const res = await api(path, method, body, schema);
+      if (first && path === '/messages' && method === 'GET') {
+        first = false;
+        // While this page is on its way the connection drops and comes back: more mail is stored,
+        // and the reconnect asks for the mailbox again.
+        await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'two' });
+        void (bob.dm as unknown as Drain).drainMailbox();
+      }
+      return res;
+    }) as typeof bob.community.api;
+    await (bob.dm as unknown as Drain).drainMailbox();
+    const texts = (await bob.dm.action({ a: 'messages', peer: alice.riverId })).map((m) => m.text);
+    expect(texts).toEqual(['one', 'two']);
+  });
+
+  it('tops up one-time prekeys while connected, as people start conversations', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const count = async (): Promise<number> =>
+      Number(
+        (
+          await serverDb.db
+            .selectFrom('prekeys')
+            .select((eb) => eb.fn.countAll<number>().as('n'))
+            .where('river_id', '=', bob.riverId)
+            .executeTakeFirst()
+        )?.n ?? 0,
+      );
+    expect(await count()).toBe(100);
+    // Many people wrote to Bob while he stayed connected: almost every one-time key is used up.
+    for (const table of ['prekeys', 'kyber_prekeys'] as const) {
+      const keep = await serverDb.db
+        .selectFrom(table)
+        .select('key_id')
+        .where('river_id', '=', bob.riverId)
+        .orderBy('key_id')
+        .limit(2)
+        .execute();
+      let drop = serverDb.db
+        .deleteFrom(table)
+        .where('river_id', '=', bob.riverId)
+        .where(
+          'key_id',
+          'not in',
+          keep.map((k) => k.key_id),
+        );
+      if (table === 'kyber_prekeys') drop = drop.where('last_resort', '=', 0);
+      await drop.execute();
+    }
+    bob.dm.preKeyCheckMs = 20;
+    await alice.dm.action({ a: 'open', peer: bob.riverId, name: 'Bob' });
+    await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'hello' });
+    expect(await count()).toBe(1);
+    // Bob gets it over his live connection (no reconnect, so no "ready" to top the keys up).
+    await (bob.dm as unknown as Drain).drainMailbox();
+    expect((await bob.dm.action({ a: 'messages', peer: alice.riverId }))[0]?.text).toBe('hello');
+    await until(async () => (await count()) >= 25, 5_000);
+  });
+});

@@ -239,12 +239,14 @@ export function registerAccountRoutes(
     return createSession(db, req.riverId, req.deviceId, deps.config.sessionTtlMs, now);
   });
 
-  app.get(`${API_PREFIX}/accounts/me`, { preHandler: requireSession }, async (request) => {
+  app.get(`${API_PREFIX}/accounts/me`, { preHandler: requireSession }, async (request, reply) => {
     const row = await db
       .selectFrom('accounts')
       .select(['river_id', 'identity_key', 'device_list', 'device_list_signature', 'username'])
       .where('river_id', '=', request.session!.riverId)
-      .executeTakeFirstOrThrow();
+      .executeTakeFirst();
+    // Removed between the session check and here: sign in again, not a server error.
+    if (!row) return fail(reply, 401, 'unauthorized', 'A valid session is required');
     const body: AccountResponse = {
       riverId: row.river_id,
       identityKey: row.identity_key,
