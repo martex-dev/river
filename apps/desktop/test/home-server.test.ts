@@ -5,6 +5,7 @@ import type { AccountStatus } from '../src/shared/ipc.ts';
 import { HOME_SERVER } from '../src/shared/home-server.ts';
 import { HomeAccount, HomeServerUnavailable, locateHomeServer } from '../src/main/home-server.ts';
 import type { RequestJson } from '../src/main/http.ts';
+import { UserFacingError } from '../src/main/account/account-service.ts';
 
 const keys = generateKeyPairSync('ed25519');
 const publicKey = Buffer.from(keys.publicKey.export({ format: 'jwk' }).x!, 'base64url').toString('base64');
@@ -165,6 +166,36 @@ describe('HomeAccount', () => {
     });
     expect(await other.isHomeServer('https://my.server')).toBe(false);
     expect(await home.isHomeServer('https://home.trycloudflare.com/')).toBe(true);
+  });
+
+  it('stops trying when River’s server only takes invited people, and says a sign-up link is needed', async () => {
+    let attempts = 0;
+    const home = new HomeAccount({
+      ...deps(note('https://home.trycloudflare.com', '2026-10-10T12:00:00.000Z'), {}),
+      requestJson: (async () => ({ id: 'home-1', publicKey, beacon: null, address: null })) as never,
+      enabled: true,
+      account: {
+        status: () => ({ state: 'none' }),
+        register: async () => {
+          attempts += 1;
+          throw new UserFacingError('Ask them for a sign-up link.', { code: 'signup_invite_only' });
+        },
+      } as never,
+      ready: () => true,
+      chosenServer: () => null,
+      onRegistered: () => undefined,
+      log: { info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined },
+    });
+    const changes: boolean[] = [];
+    home.onChange(() => changes.push(home.needsInvite()));
+    home.kick();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(home.needsInvite()).toBe(true);
+    expect(home.isWaiting()).toBe(false);
+    // No retry loop: asking again cannot help without a sign-up link.
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(attempts).toBe(1);
+    expect(changes.at(-1)).toBe(true);
   });
 
   it('never touches River’s server from development builds', async () => {

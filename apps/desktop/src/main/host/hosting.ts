@@ -201,7 +201,9 @@ export class Hosting {
     killOrphanTunnel(this.root, this.deps.log);
     this.deps.settings.update({
       hosting: { enabled: true },
-      system: { startAtLogin: true, closeToTray: true },
+      // River cannot start itself with a Linux desktop session: it only keeps running there.
+      system:
+        process.platform === 'linux' ? { closeToTray: true } : { startAtLogin: true, closeToTray: true },
     });
     return this.status();
   }

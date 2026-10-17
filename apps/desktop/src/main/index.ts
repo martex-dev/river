@@ -21,6 +21,7 @@ import {
   broadcastCommunityEvents,
   broadcastDmEvents,
   broadcastLinkStatus,
+  broadcastSettings,
   broadcastHostStatus,
   broadcastSocialEvents,
   broadcastStorageStatus,
@@ -560,6 +561,7 @@ async function start(): Promise<void> {
     }
   });
   broadcastStorageStatus(window.webContents, storage);
+  broadcastSettings(window.webContents, settings);
   broadcastAccountStatus(window.webContents, account, homeAccount);
   broadcastCommunityEvents(window.webContents, community);
   broadcastDmEvents(window.webContents, dm);

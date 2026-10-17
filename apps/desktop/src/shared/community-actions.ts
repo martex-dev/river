@@ -471,7 +471,8 @@ export const communityActionSchema = z.discriminatedUnion('a', [
   z
     .object({
       a: z.literal('setProfile'),
-      name: name.optional(),
+      /** Empty: no display name (it is optional, as when the identity was created). */
+      name: z.string().trim().max(64).optional(),
       avatar: avatarSchema.nullable().optional(),
       /** About me (also your bio on your social profile). */
       bio: z.string().max(190).optional(),

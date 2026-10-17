@@ -188,6 +188,8 @@ export function DevicesPanel(): ReactElement {
   const [devices, setDevices] = useState<LinkedDevice[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  /** "Link a new device" or "Link it" is on its way (a second press would start over or publish twice). */
+  const [busy, setBusy] = useState<'start' | 'confirm' | null>(null);
 
   const load = (): void => {
     void window.river.account.devices().then((res) => {
@@ -198,22 +200,36 @@ export function DevicesPanel(): ReactElement {
   useEffect(() => {
     if (registered) load();
   }, [registered]);
+  // The list changes when a device was linked, or taken off again (it declined).
   useEffect(() => {
-    if (progress.state === 'linked') load();
+    if (registered && (progress.state === 'linked' || progress.state === 'failed')) load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progress]);
   const failure = error ?? (progress.state === 'failed' ? progress.message : null);
 
   if (!registered) return <></>;
 
   const start = async (): Promise<void> => {
+    if (busy) return;
+    setBusy('start');
     setError(null);
     setCopied(false);
-    const res = await window.river.account.link.start();
-    if (!res.ok) setError(res.message);
+    try {
+      const res = await window.river.account.link.start();
+      if (!res.ok) setError(res.message);
+    } finally {
+      setBusy(null);
+    }
   };
   const confirm = async (): Promise<void> => {
-    const res = await window.river.account.link.confirm();
-    if (!res.ok) setError(res.message);
+    if (busy) return;
+    setBusy('confirm');
+    try {
+      const res = await window.river.account.link.confirm();
+      if (!res.ok) setError(res.message);
+    } finally {
+      setBusy(null);
+    }
   };
   const remove = async (d: LinkedDevice): Promise<void> => {
     if (
@@ -293,20 +309,27 @@ export function DevicesPanel(): ReactElement {
             messages and act as you.
           </p>
           <div className="button-row">
-            <button className="btn btn--ghost" onClick={() => void window.river.account.link.cancel()}>
+            <button
+              className="btn btn--ghost"
+              disabled={busy === 'confirm'}
+              onClick={() => void window.river.account.link.cancel()}
+            >
               Don’t link
             </button>
-            <button className="btn btn--primary" onClick={() => void confirm()}>
+            <button className="btn btn--primary" disabled={busy !== null} onClick={() => void confirm()}>
               <CheckIcon size={16} /> Link it
             </button>
           </div>
         </div>
       )}
-      {progress.state === 'linked' && (
-        <p className="muted small">Linked. The new device is setting itself up.</p>
+      {/* Only on the device that added the new one, never on the new device itself. */}
+      {progress.state === 'linked' && progress.deviceName && (
+        <p className="muted small" role="status">
+          Linked {progress.deviceName}. It is setting itself up.
+        </p>
       )}
       {progress.state !== 'offering' && progress.state !== 'request' && (
-        <button className="btn" onClick={() => void start()}>
+        <button className="btn" disabled={busy !== null} onClick={() => void start()}>
           Link a new device
         </button>
       )}

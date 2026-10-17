@@ -48,30 +48,42 @@ export function Profile(): ReactElement {
     });
   }, []);
   const [cropping, setCropping] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
   const set = (patch: Partial<ProfileDraft>): void => setDraft((d) => ({ ...d, ...patch }));
   const dirty = saved !== null && JSON.stringify(draft) !== JSON.stringify(saved);
+  // Settings asks before closing or switching tabs while there are unsaved changes.
+  useEffect(() => {
+    useRiver.getState().setSettingsDirty(dirty);
+  }, [dirty]);
+  useEffect(() => () => useRiver.getState().setSettingsDirty(false), []);
   const save = async (): Promise<void> => {
-    if (!saved) return;
+    if (!saved || saving) return;
     const next = {
       ...draft,
       name: draft.name.trim(),
       bio: draft.bio.trim(),
       pronouns: draft.pronouns.trim(),
     };
-    const res = await window.river.community.action({
-      a: 'setProfile',
-      ...(next.name !== saved.name ? { name: next.name } : {}),
-      ...(next.avatar !== saved.avatar ? { avatar: next.avatar } : {}),
-      ...(next.bio !== saved.bio ? { bio: next.bio } : {}),
-      ...(next.pronouns !== saved.pronouns ? { pronouns: next.pronouns } : {}),
-      ...(next.banner !== saved.banner ? { banner: next.banner } : {}),
-    });
-    if (!res.ok) return s.notify(res.message, 'error');
-    setSaved(next);
-    setDraft(next);
-    const updated = await window.river.identity.get();
-    if (updated) await useRiver.getState().identityCreated(updated);
-    s.notify('Profile saved');
+    setSaving(true);
+    try {
+      const res = await window.river.community.action({
+        a: 'setProfile',
+        // An empty name is allowed (it is optional): River shows you as it does without one.
+        ...(next.name !== saved.name ? { name: next.name } : {}),
+        ...(next.avatar !== saved.avatar ? { avatar: next.avatar } : {}),
+        ...(next.bio !== saved.bio ? { bio: next.bio } : {}),
+        ...(next.pronouns !== saved.pronouns ? { pronouns: next.pronouns } : {}),
+        ...(next.banner !== saved.banner ? { banner: next.banner } : {}),
+      });
+      if (!res.ok) return s.notify(res.message, 'error');
+      setSaved(next);
+      setDraft(next);
+      const updated = await window.river.identity.get();
+      if (updated) await useRiver.getState().identityCreated(updated);
+      s.notify('Profile saved');
+    } finally {
+      setSaving(false);
+    }
   };
   return (
     <div className="settings-page">
@@ -133,7 +145,7 @@ export function Profile(): ReactElement {
         </div>
         <div className="profile-editor__fields">
           <label className="textfield">
-            <span className="field__label">Display name</span>
+            <span className="field__label">Display name (optional)</span>
             <input value={draft.name} maxLength={64} onChange={(e) => set({ name: e.target.value })} />
           </label>
           <label className="textfield">
@@ -191,15 +203,11 @@ export function Profile(): ReactElement {
       {dirty && (
         <div className="save-bar">
           <span>Careful — you have unsaved changes!</span>
-          <button className="btn btn--link" onClick={() => setDraft(saved)}>
+          <button className="btn btn--link" disabled={saving} onClick={() => setDraft(saved)}>
             Reset
           </button>
-          <button
-            className="btn btn--primary btn--small"
-            disabled={draft.name.trim() === ''}
-            onClick={() => void save()}
-          >
-            Save changes
+          <button className="btn btn--primary btn--small" disabled={saving} onClick={() => void save()}>
+            {saving ? 'Saving…' : 'Save changes'}
           </button>
         </div>
       )}
@@ -510,50 +518,32 @@ export function NotificationSettings(): ReactElement {
         checked={n.reactions}
         onChange={(v) => void update({ notifications: { reactions: v } })}
       />
-      <div className="field__label">Notify me about</div>
-      <div className="radio-cards">
-        <label className={`radio-card ${n.mode === 'all' ? 'is-active' : ''}`}>
-          <input
-            type="radio"
-            checked={n.mode === 'all'}
-            onChange={() => void update({ notifications: { mode: 'all' } })}
-          />
-          All messages
-        </label>
-        <label className={`radio-card ${n.mode === 'mentions' ? 'is-active' : ''}`}>
-          <input
-            type="radio"
-            checked={n.mode === 'mentions'}
-            onChange={() => void update({ notifications: { mode: 'mentions' } })}
-          />
-          Only @mentions
-        </label>
-      </div>
-      <div className="field__label">What notifications show</div>
-      <div className="radio-cards">
-        {(
-          [
-            ['none', 'Nothing private', '“New message”'],
-            ['sender', 'Sender & channel', '“Alice · #general”'],
-            ['full', 'Sender & message', 'The message text too'],
-          ] as const
-        ).map(([value, label, help]) => (
-          <label key={value} className={`radio-card ${n.preview === value ? 'is-active' : ''}`}>
+      <fieldset className="field">
+        <legend className="field__label">Notify me about</legend>
+        <div className="radio-cards">
+          <label className={`radio-card ${n.mode === 'all' ? 'is-active' : ''}`}>
             <input
               type="radio"
-              checked={n.preview === value}
-              onChange={() => void update({ notifications: { preview: value } })}
+              name="notify-mode"
+              value="all"
+              checked={n.mode === 'all'}
+              onChange={() => void update({ notifications: { mode: 'all' } })}
             />
-            <span>
-              {label}
-              <span className="muted small"> — {help}</span>
-            </span>
+            All messages
           </label>
-        ))}
-      </div>
-      <p className="muted small">
-        Notification text is shown by your operating system and may be visible on your lock screen.
-      </p>
+          <label className={`radio-card ${n.mode === 'mentions' ? 'is-active' : ''}`}>
+            <input
+              type="radio"
+              name="notify-mode"
+              value="mentions"
+              checked={n.mode === 'mentions'}
+              onChange={() => void update({ notifications: { mode: 'mentions' } })}
+            />
+            Only @mentions
+          </label>
+        </div>
+      </fieldset>
+      {/* What notifications show: Settings → Notifications → Notification preview, below. */}
       <Toggle
         label="Sounds"
         help="Short sounds for messages, voice, calls, friends and the interface."

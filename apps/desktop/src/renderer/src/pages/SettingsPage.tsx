@@ -83,6 +83,15 @@ export function describeUpdate(status: UpdateStatus, phone = false): string {
   }
 }
 
+/** Switches, sliders and buttons are not typed into: Esc there still closes Settings. */
+const NOT_TYPED = new Set(['checkbox', 'radio', 'range', 'button', 'submit', 'reset', 'color', 'file']);
+
+function typingIn(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return true;
+  return target instanceof HTMLInputElement && !NOT_TYPED.has(target.type);
+}
+
 /**
  * Settings (1.0.42): a full-window overlay over whatever is open, like
  * Discord's — your account and profile, security, and the app's own settings,
@@ -102,11 +111,27 @@ export function SettingsOverlay(): ReactElement | null {
   const showHosting =
     !phone && (askedForHosting || tab === 'hosting' || host?.enabled || (host?.legacy ?? 'none') !== 'none');
 
+  // Unsaved edits (the profile's "Careful — you have unsaved changes!") are not thrown away by
+  // closing Settings or switching tabs without asking.
+  const leave = (then: () => void): void => {
+    if (
+      useRiver.getState().settingsDirty &&
+      !window.confirm('You have unsaved changes. Leave without saving them?')
+    )
+      return;
+    useRiver.getState().setSettingsDirty(false);
+    then();
+  };
+
   useEffect(() => {
     if (!tab) return;
     const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
       // A dialog opened from Settings (a crop, a confirmation) closes first.
-      if (e.key === 'Escape' && !document.querySelector('.modal')) close();
+      if (document.querySelector('.modal')) return;
+      // Esc while typing belongs to the field (clearing it, closing a picker, cancelling a rename).
+      if (typingIn(e.target)) return;
+      leave(close);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -127,7 +152,9 @@ export function SettingsOverlay(): ReactElement | null {
                     key={id}
                     className={`settings-overlay__tab ${tab === id ? 'is-active' : ''}`}
                     aria-current={tab === id ? 'page' : undefined}
-                    onClick={() => openSettings(id)}
+                    onClick={() => {
+                      if (id !== tab) leave(() => openSettings(id));
+                    }}
                   >
                     {tr(TAB_LABEL[id])}
                   </button>
@@ -155,7 +182,7 @@ export function SettingsOverlay(): ReactElement | null {
                       className="btn btn--link"
                       onClick={() => {
                         setAskedForHosting(true);
-                        openSettings('hosting');
+                        leave(() => openSettings('hosting'));
                       }}
                     >
                       Run a River server on this PC…
@@ -182,7 +209,7 @@ export function SettingsOverlay(): ReactElement | null {
           )}
         </div>
         <div className="settings-overlay__close">
-          <button className="settings-overlay__x" aria-label="Close settings" onClick={close}>
+          <button className="settings-overlay__x" aria-label="Close settings" onClick={() => leave(close)}>
             <XIcon />
           </button>
           <span aria-hidden="true">ESC</span>
@@ -335,21 +362,36 @@ function UsernameEditor({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const setAccount = useRiver((r) => r.setAccount);
+  // The username as typed, without the @ people often paste with it.
+  const typed = value.trim().replace(/^@+/, '');
+  // The account's username changed (saved here, or elsewhere — the server keeps it in lower
+  // case): show what it is now.
+  const [shown, setShown] = useState(account.username);
+  if (shown !== account.username) {
+    setShown(account.username);
+    setValue(account.username ?? '');
+  }
   const save = async (): Promise<void> => {
+    if (busy) return;
     setBusy(true);
     setMsg(null);
-    const res = await window.river.account.setUsername(value.trim());
-    setBusy(false);
-    if (res.ok) {
-      setAccount(res.value);
-      const name = res.value.state === 'registered' ? (res.value.username ?? value.trim()) : value.trim();
-      setMsg({ ok: true, text: `Saved. People can add you as @${name}.` });
-    } else {
-      play('error');
-      setMsg({ ok: false, text: res.message });
+    try {
+      const res = await window.river.account.setUsername(typed);
+      if (res.ok) {
+        void setAccount(res.value);
+        // What the server saved (it keeps usernames in lower case).
+        const name = res.value.state === 'registered' ? (res.value.username ?? typed) : typed;
+        setValue(name);
+        setMsg({ ok: true, text: `Saved. People can add you as @${name}.` });
+      } else {
+        play('error');
+        setMsg({ ok: false, text: res.message });
+      }
+    } finally {
+      setBusy(false);
     }
   };
-  const changed = value.trim().replace(/^@/, '') !== (account.username ?? '');
+  const changed = typed.toLowerCase() !== (account.username ?? '').toLowerCase();
   return (
     <div className="field">
       <label className="field__label" htmlFor="username">
@@ -362,9 +404,9 @@ function UsernameEditor({
           </span>
           <input
             id="username"
-            value={value.replace(/^@/, '')}
+            value={value}
             onChange={(e) => {
-              setValue(e.target.value);
+              setValue(e.target.value.replace(/^\s*@+/, ''));
               setMsg(null);
             }}
             placeholder="username"
@@ -375,7 +417,7 @@ function UsernameEditor({
         </div>
         <button
           className="btn btn--primary btn--small"
-          disabled={busy || !changed || value.trim().length < 3}
+          disabled={busy || !changed || typed.length < 3}
           onClick={() => void save()}
         >
           {busy ? 'Saving…' : account.username ? 'Change' : 'Set username'}
@@ -432,25 +474,7 @@ function AccountPanel({
           <p className="field__error">{account.message}</p>
         )}
         {account.missing ? (
-          <div className="button-row">
-            <button
-              className="btn btn--primary btn--small"
-              disabled={busy}
-              onClick={() => {
-                setBusy(true);
-                void window.river.account.startOver().then((res) => {
-                  setBusy(false);
-                  if (res.ok) useRiver.getState().setAccount(res.value);
-                  else play('error');
-                });
-              }}
-            >
-              {busy ? 'Setting up…' : 'Set up my account again'}
-            </button>
-            <span className="muted small">
-              Same name and messages on this computer; rejoin communities with an invite.
-            </span>
-          </div>
+          <MissingAccount account={account} />
         ) : (
           !connected && (
             <div className="button-row">
@@ -494,6 +518,105 @@ function AccountPanel({
       <ExportData />
       <DeleteAccount />
     </div>
+  );
+}
+
+/**
+ * The server no longer lets this device sign in. Either the account was removed (set it up
+ * again: a new account for the same identity) or this device was removed from it (link it
+ * again from a device that still has the account). The server does not say which on purpose;
+ * setting up again finds out, and keeps everything as it was if the account is still there.
+ */
+export function MissingAccount({
+  account,
+}: {
+  account: Extract<AccountStatus, { state: 'registered' }>;
+}): ReactElement {
+  const [busy, setBusy] = useState<'setup' | 'relink' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const startOver = async (): Promise<void> => {
+    setBusy('setup');
+    setError(null);
+    try {
+      const res = await window.river.account.startOver();
+      if (res.ok) void useRiver.getState().setAccount(res.value);
+      else {
+        play('error');
+        setError(res.message);
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+  const relink = async (): Promise<void> => {
+    setBusy('relink');
+    setError(null);
+    try {
+      const res = await window.river.account.relink();
+      if (res.ok) useRiver.getState().startRelink();
+      else {
+        play('error');
+        setError(res.message);
+      }
+    } finally {
+      setBusy(null);
+      setConfirming(false);
+    }
+  };
+  const linkFirst = account.removed || account.wasLinked;
+  const linkButton = (
+    <button
+      className={`btn ${linkFirst ? 'btn--primary' : 'btn--ghost'} btn--small`}
+      disabled={busy !== null}
+      onClick={() => setConfirming(true)}
+    >
+      {busy === 'relink' ? 'Preparing…' : 'Link this device again'}
+    </button>
+  );
+  return (
+    <>
+      <div className="button-row">
+        {linkFirst && linkButton}
+        {!account.removed && (
+          <button
+            className={`btn ${linkFirst ? 'btn--ghost' : 'btn--primary'} btn--small`}
+            disabled={busy !== null}
+            onClick={() => void startOver()}
+          >
+            {busy === 'setup' ? 'Setting up…' : 'Set up my account again'}
+          </button>
+        )}
+        {!linkFirst && linkButton}
+      </div>
+      <p className="muted small">
+        {account.removed
+          ? 'On a device that still has your account, open Settings → Account → Devices → Link a new device, then use its code here.'
+          : 'Set up again: a new account for your identity — same name and messages here; rejoin communities with an invite. Link again: if this device was removed, join your account from a device that still has it.'}
+      </p>
+      {error && (
+        <p className="field__error" role="alert">
+          {error}
+        </p>
+      )}
+      {confirming && (
+        <Modal title="Link this device again?" onClose={() => setConfirming(false)}>
+          <p>
+            River forgets the account and identity on this device, then you link it again with a code from a
+            device that still has your account. Your messages and contacts on this device stay, and only work
+            again with the same account.
+          </p>
+          <div className="modal__foot">
+            <button className="btn btn--link" onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+            <button className="btn btn--primary" disabled={busy !== null} onClick={() => void relink()}>
+              {busy === 'relink' ? 'Preparing…' : 'Continue'}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -726,6 +849,9 @@ function ServerSetup({ settings }: { settings: Settings }): ReactElement {
 
 function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
   const updateSettings = useRiver((s) => s.updateSettings);
+  const platform = useRiver((r) => r.info?.platform);
+  const phone = isPhone(platform);
+  const mac = platform === 'darwin';
   const tr = useT();
   const options: Array<{ id: Settings['appearance']['motion']; name: string; text: string }> = [
     { id: 'system', name: 'Follow system', text: 'Use your operating system’s reduced-motion setting.' },
@@ -775,21 +901,27 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
           ))}
         </div>
       </fieldset>
-      <label className="field slider-field">
-        <span className="field__label">
-          Interface size <span className="muted small">{Math.round(settings.appearance.zoom * 100)}%</span>
-        </span>
-        <input
-          type="range"
-          min={0.7}
-          max={1.6}
-          step={0.05}
-          value={settings.appearance.zoom}
-          aria-label="Interface size"
-          onChange={(e) => void updateSettings({ appearance: { zoom: Number(e.target.value) } })}
-        />
-        <span className="muted small">Shortcut: Ctrl+= bigger, Ctrl+− smaller, Ctrl+0 normal.</span>
-      </label>
+      {/* Phones size River with the phone's own display and text size settings; this zooms the window. */}
+      {!phone && (
+        <label className="field slider-field">
+          <span className="field__label">
+            Interface size <span className="muted small">{Math.round(settings.appearance.zoom * 100)}%</span>
+          </span>
+          <input
+            type="range"
+            min={0.7}
+            max={1.6}
+            step={0.05}
+            value={settings.appearance.zoom}
+            aria-label="Interface size"
+            onChange={(e) => void updateSettings({ appearance: { zoom: Number(e.target.value) } })}
+          />
+          <span className="muted small">
+            Shortcut: {mac ? '⌘' : 'Ctrl+'}= bigger, {mac ? '⌘' : 'Ctrl+'}− smaller, {mac ? '⌘' : 'Ctrl+'}0
+            normal.
+          </span>
+        </label>
+      )}
       <label className="field slider-field">
         <span className="field__label">
           Message text size <span className="muted small">{settings.appearance.fontSize}px</span>
@@ -962,12 +1094,15 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
         />
       ) : (
         <>
-          <Toggle
-            label="Start River when I sign in"
-            hint="River opens quietly in the tray, so you get messages and calls right away."
-            checked={settings.system.startAtLogin}
-            onChange={(v) => void updateSettings({ system: { startAtLogin: v } })}
-          />
+          {/* River cannot add itself to Linux desktops' autostart, so it does not offer to. */}
+          {!linux && (
+            <Toggle
+              label="Start River when I sign in"
+              hint="River opens quietly in the tray, so you get messages and calls right away."
+              checked={settings.system.startAtLogin}
+              onChange={(v) => void updateSettings({ system: { startAtLogin: v } })}
+            />
+          )}
           <Toggle
             label="Keep River running when I close the window"
             hint="River stays in the tray. Quit it from the tray icon's menu."
@@ -1019,6 +1154,9 @@ function NotificationsPanel({ settings }: { settings: Settings }): ReactElement 
             </label>
           ))}
         </div>
+        <p className="muted small">
+          Notification text is shown by your operating system and may be visible on your lock screen.
+        </p>
       </fieldset>
       <QuietHours settings={settings} />
       <p className="muted small">

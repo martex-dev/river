@@ -2051,6 +2051,18 @@
     "required": ["id", "channelId", "sealed", "tokenHash"],
     "additionalProperties": false
   },
+  "declineLinkRequestSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mac": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{43}$"
+      }
+    },
+    "required": ["mac"],
+    "additionalProperties": false
+  },
   "deleteAccountRequestSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -3450,6 +3462,17 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 64
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "declined": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$"
           },
           {
             "type": "null"

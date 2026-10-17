@@ -2,7 +2,11 @@ import { useEffect, useState, type ReactElement } from 'react';
 
 /** Settings → Backup: recovery phrase and encrypted backup files. */
 export function BackupPanel(): ReactElement {
-  const [status, setStatus] = useState<{ hasPhrase: boolean; lastBackupAt: string | null } | null>(null);
+  const [status, setStatus] = useState<{
+    hasPhrase: boolean;
+    phraseShown: boolean;
+    lastBackupAt: string | null;
+  } | null>(null);
   const [phrase, setPhrase] = useState<string[] | null>(null);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -11,18 +15,24 @@ export function BackupPanel(): ReactElement {
   useEffect(refresh, []);
 
   const create = async (): Promise<void> => {
+    if (busy) return;
     setBusy(true);
     setMessage(null);
-    const res = await window.river.backup.create();
-    setBusy(false);
-    if (!res.ok) setMessage({ text: res.message, ok: false });
-    else if (res.value)
-      setMessage({
-        text: 'Backup saved. Keep the file and your recovery phrase in different places.',
-        ok: true,
-      });
-    refresh();
+    try {
+      const res = await window.river.backup.create();
+      if (!res.ok) setMessage({ text: res.message, ok: false });
+      else if (res.value)
+        setMessage({
+          text: 'Backup saved. Keep the file and your recovery phrase in different places.',
+          ok: true,
+        });
+    } finally {
+      setBusy(false);
+      refresh();
+    }
   };
+  // A backup without the phrase can never be opened: the phrase comes first.
+  const needsPhrase = status !== null && !status.phraseShown;
 
   return (
     <div className="panel">
@@ -75,7 +85,18 @@ export function BackupPanel(): ReactElement {
             ? `Last backup: ${new Date(status.lastBackupAt).toLocaleString()}. Make a new one now and then — it only contains what existed when you made it.`
             : 'You have no backup yet.'}
         </p>
-        <button className="btn btn--primary" disabled={busy} onClick={() => void create()}>
+        {needsPhrase && (
+          <p className="muted small" id="backup-needs-phrase">
+            Show your recovery phrase (step 1) and write it down first — without it, a backup can never be
+            opened.
+          </p>
+        )}
+        <button
+          className="btn btn--primary"
+          disabled={busy || needsPhrase}
+          aria-describedby={needsPhrase ? 'backup-needs-phrase' : undefined}
+          onClick={() => void create()}
+        >
           {busy ? 'Encrypting…' : 'Save encrypted backup…'}
         </button>
         {message && (

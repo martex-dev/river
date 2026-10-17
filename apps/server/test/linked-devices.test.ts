@@ -299,4 +299,51 @@ describe('linked devices (1.3)', () => {
     });
     expect(twice.statusCode).toBe(409);
   });
+
+  it('passes on a decline from the new device once, and only after provisioning', async () => {
+    const user = await registerUser(app);
+    const phone = generateKeyPair();
+    const id = 'ZyXwVuTsRqPoNmLkJiHgFe';
+    const hello = {
+      authKey: b64(phone.publicKey),
+      registrationId: 778,
+      linkKey: b64(generateKeyPair().publicKey),
+      deviceName: 'Declining phone',
+    };
+    const mac = 'B'.repeat(43);
+    await app.inject({ method: 'PUT', url: `/v1/link/${id}`, payload: { hello, mac: 'A'.repeat(43) } });
+    // Nothing was sent yet: nothing to decline.
+    const early = await app.inject({ method: 'PUT', url: `/v1/link/${id}/decline`, payload: { mac } });
+    expect(early.statusCode).toBe(404);
+    await app.inject({
+      method: 'PUT',
+      url: '/v1/accounts/me/devices',
+      headers: auth(user.token),
+      payload: signed(
+        user,
+        listOf(user, 2, [
+          { deviceId: 2, authKey: hello.authKey, registrationId: 778, addedAt: new Date().toISOString() },
+        ]),
+      ),
+    });
+    await app.inject({
+      method: 'PUT',
+      url: `/v1/link/${id}/provision`,
+      headers: auth(user.token),
+      payload: { deviceId: 2, provision: b64(Buffer.from('sealed')) },
+    });
+    expect((await app.inject({ method: 'GET', url: `/v1/link/${id}` })).json().declined).toBeNull();
+    const bad = await app.inject({ method: 'PUT', url: `/v1/link/${id}/decline`, payload: { mac: 'x' } });
+    expect(bad.statusCode).toBe(400);
+    const declined = await app.inject({ method: 'PUT', url: `/v1/link/${id}/decline`, payload: { mac } });
+    expect(declined.statusCode).toBe(200);
+    expect(declined.json().declined).toBe(mac);
+    const again = await app.inject({
+      method: 'PUT',
+      url: `/v1/link/${id}/decline`,
+      payload: { mac: 'C'.repeat(43) },
+    });
+    expect(again.statusCode).toBe(409);
+    expect((await app.inject({ method: 'GET', url: `/v1/link/${id}` })).json().declined).toBe(mac);
+  });
 });

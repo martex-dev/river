@@ -51,6 +51,7 @@ export function HostingPanel(): ReactElement {
   const status = useHostStatus();
   const keepAwake = useRiver((r) => r.settings?.hosting.keepAwake ?? true);
   const updateSettings = useRiver((r) => r.updateSettings);
+  const linux = useRiver((r) => r.info?.platform === 'linux');
   const [busy, setBusy] = useState<'toggle' | 'backup' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -240,9 +241,11 @@ export function HostingPanel(): ReactElement {
             </span>
           </label>
           <p className="muted small">
-            While hosting is on, River starts with your PC and keeps running in the tray when you close the
-            window. Members can always open River and write: if this PC is off, their messages wait on their
-            devices and arrive when it is back.
+            {linux
+              ? 'While hosting is on, River keeps running in the tray when you close the window. It does not start by itself when you sign in to Linux: open River after restarting this PC.'
+              : 'While hosting is on, River starts with your PC and keeps running in the tray when you close the window.'}{' '}
+            Members can always open River and write: if this PC is off, their messages wait on their devices
+            and arrive when it is back.
           </p>
         </>
       )}

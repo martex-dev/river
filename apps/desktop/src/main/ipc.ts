@@ -102,7 +102,10 @@ export interface IpcDeps {
   /** The "can see your screen" bar and pointing (desktop only; ADR 0007). */
   share?: { status(sharing: boolean, viewers: string[]): void; point(x: number, y: number): void };
   /** Creates the account on River's home server by itself. */
-  homeAccount: Pick<HomeAccount, 'ensure' | 'kick' | 'isWaiting' | 'enabled' | 'locate' | 'isHomeServer'>;
+  homeAccount: Pick<
+    HomeAccount,
+    'ensure' | 'kick' | 'isWaiting' | 'needsInvite' | 'enabled' | 'locate' | 'isHomeServer'
+  >;
   /** Settings → System → Connection check. */
   diagnostics(): Promise<DiagnosticCheck[]>;
   openLogs(): Promise<void>;
@@ -330,7 +333,7 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.backupPhrase, () => deps.backup.phrase());
   handle(IPC.backupCreate, (event) =>
     result(async () => {
-      const file = deps.backup.create();
+      const { file, createdAt } = deps.backup.create();
       const win = BrowserWindow.fromWebContents(event.sender);
       const name = `river-backup-${new Date().toISOString().slice(0, 10)}.riverbackup`;
       const options = {
@@ -340,6 +343,8 @@ export function registerIpc(deps: IpcDeps): void {
       const choice = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
       if (choice.canceled || !choice.filePath) return false;
       await writeFile(choice.filePath, file);
+      // Only a backup that is really on disk counts as "Last backup".
+      deps.backup.saved(createdAt);
       return true;
     }),
   );
@@ -478,11 +483,33 @@ export function registerIpc(deps: IpcDeps): void {
   );
   handle(IPC.accountStartOver, () =>
     result(async () => {
-      const previous = deps.account.forgetMissing();
-      await accountOn(previous);
+      const before = deps.account.status();
+      if (before.state !== 'registered' || !before.missing)
+        throw new UserFacingError('Your account is fine — nothing to set up again.');
+      // The new account is made first; the old one is forgotten only once that worked (a refusal,
+      // such as "the account is still there", leaves this device as it was and says why).
+      if (await deps.homeAccount.isHomeServer(before.serverUrl)) {
+        const url = await deps.homeAccount.locate().catch((err: unknown) => {
+          throw new UserFacingError((err as Error).message, { unreachable: true });
+        });
+        await deps.account.register(url, undefined, { replaceMissing: true });
+        deps.settings.update({ server: { url, autoAccount: true } });
+      } else {
+        await deps.account.register(before.serverUrl, undefined, { replaceMissing: true });
+      }
       deps.community.stop();
       deps.community.ensureSocket();
       return deps.account.status();
+    }),
+  );
+  // This device was removed from its account: forget it here, so it can be linked again.
+  handle(IPC.accountRelink, () =>
+    result(() => {
+      deps.account.forgetForRelink();
+      deps.community.stop();
+      // Fresh protocol state for the device it becomes (like after a restore).
+      deps.dm.afterRestore();
+      return null;
     }),
   );
   handle(IPC.accountRedeemSignup, (_e, link) =>
@@ -624,21 +651,40 @@ Links can lead anywhere. Only open it if you trust where it goes.`,
   });
 }
 
+/**
+ * Every settings change reaches the UI, also the ones River makes itself (the phone turning
+ * app lock off when it has no screen lock, hosting turning on start-at-login, a server move,
+ * deleting the account), so the UI never shows a setting — or a protection — that is not so.
+ */
+export function broadcastSettings(
+  target: WebContents,
+  settings: Pick<SettingsStore, 'onChange'>,
+): () => void {
+  return settings.onChange((s) => {
+    if (!target.isDestroyed()) target.send(IPC.settingsChanged, s);
+  });
+}
+
 export function broadcastUpdateStatus(target: WebContents, updates: UpdatesApi): () => void {
   return updates.onStatus((status) => {
     if (!target.isDestroyed()) target.send(IPC.updatesStatusChanged, status);
   });
 }
 
-function accountView(account: AccountService, home: Pick<HomeAccount, 'isWaiting'>): AccountStatus {
+function accountView(
+  account: AccountService,
+  home: Pick<HomeAccount, 'isWaiting' | 'needsInvite'>,
+): AccountStatus {
   const status = account.status();
-  return status.state === 'none' && home.isWaiting() ? { state: 'none', waiting: true } : status;
+  if (status.state !== 'none') return status;
+  if (home.needsInvite()) return { state: 'none', needsInvite: true };
+  return home.isWaiting() ? { state: 'none', waiting: true } : status;
 }
 
 export function broadcastAccountStatus(
   target: WebContents,
   account: AccountService,
-  home: Pick<HomeAccount, 'isWaiting' | 'onChange'>,
+  home: Pick<HomeAccount, 'isWaiting' | 'needsInvite' | 'onChange'>,
 ): () => void {
   const send = (): void => {
     if (!target.isDestroyed()) target.send(IPC.accountStatusChanged, accountView(account, home));
@@ -774,7 +820,7 @@ export function securityStatus({
         value: serverHost ? `None · ${serverHost}` : 'No server configured',
         detail:
           account.state === 'registered'
-            ? `Your account on ${serverHost} holds only your River ID, your public identity key and your signed device list. It cannot read anything you write: there is no messaging yet, and when it arrives the server will only ever relay encrypted messages.`
+            ? `Your account on ${serverHost} holds your River ID, your @username if you chose one, your public keys and your signed device list. Direct messages, community messages, profiles and files reach it only end-to-end encrypted — it passes them on and keeps them for devices that are offline, but cannot read them. It does see who messages whom and when.`
             : serverHost
               ? `River is set to use ${serverHost}, but you have no account there yet, so the server holds none of your data.`
               : 'River is not set to use any server, so no server holds any of your data.',
@@ -813,7 +859,7 @@ export function securityStatus({
             indicator: 'inactive',
             value: 'This device only',
             detail:
-              'Your device list starts when you create an account. Linking more devices comes later in 0.1.x.',
+              'Your device list starts when you create an account. Then you can link your other phones and computers in Settings → Account → Devices; each one is added to a list signed by your identity key.',
           },
     ],
     releaseKeys: TRUSTED_RELEASE_KEYS.map((k) => ({ keyId: k.keyId, comment: k.comment })),

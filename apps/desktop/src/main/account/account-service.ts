@@ -63,6 +63,12 @@ export class AccountService {
   private token: string | null = null;
   /** Refused signing in although the server answered: it does not know this account. */
   private missing = false;
+  /**
+   * The account is still on its server (setting it up again was refused: it exists), so it is
+   * this device that was removed from it. Learned only by trying: the server's sign-in answer
+   * is the same for both on purpose (it does not reveal which accounts exist).
+   */
+  private removed = false;
   private connection: 'connecting' | 'online' | 'offline' | 'error' = 'offline';
   private message: string | undefined;
   private readonly listeners = new Set<(s: AccountStatus) => void>();
@@ -89,6 +95,8 @@ export class AccountService {
       listVersion: row.device_list_version,
       connection: this.connection,
       ...(this.missing ? { missing: true } : {}),
+      ...(this.missing && this.removed ? { removed: true } : {}),
+      ...(this.missing && wasLinked(row) ? { wasLinked: true } : {}),
       ...(this.message ? { message: this.message } : {}),
     };
   }
@@ -111,11 +119,24 @@ export class AccountService {
     this.token = null;
   }
 
-  async register(rawServerUrl: unknown, signupCode?: string): Promise<AccountStatus> {
+  /**
+   * Creates an account for this identity. `replaceMissing`: the server no longer lets this device
+   * sign in (Settings → Account → Set up again). The old account is replaced only once the new
+   * one exists, so a refusal (the account is still there, registration is closed, no network)
+   * leaves everything as it was.
+   */
+  async register(
+    rawServerUrl: unknown,
+    signupCode?: string,
+    options: { replaceMissing?: boolean } = {},
+  ): Promise<AccountStatus> {
     const db = this.deps.db();
     const signer = this.deps.identity.signer();
     if (!db || !signer) throw new UserFacingError('Create your identity before creating an account.');
-    if (this.row()) throw new UserFacingError('This device already has an account.');
+    const replacing = options.replaceMissing === true;
+    if (replacing && !this.missing)
+      throw new UserFacingError('Your account is fine — nothing to set up again.');
+    if (this.row() && !replacing) throw new UserFacingError('This device already has an account.');
     const parsedUrl = serverUrlSchema.safeParse(rawServerUrl);
     if (!parsedUrl.success) throw new UserFacingError('Set a valid server address first.');
     const server = parsedUrl.data;
@@ -174,29 +195,42 @@ export class AccountService {
       }
 
       try {
-        // A new account may be on another server: forget the identity pinned for the old one.
-        db.prepare('DELETE FROM server_instance').run();
-        db.prepare(
-          `INSERT INTO account (id, server_url, river_id, device_id, device_public_key, device_private_key,
-                                device_list, device_list_signature, device_list_version, registered_at)
-           VALUES (1, ?, ?, 1, ?, ?, ?, ?, 1, ?)`,
-        ).run(
-          server,
-          signer.riverId,
-          Buffer.from(device.publicKey),
-          Buffer.from(device.privateKey),
-          listBytes,
-          Buffer.from(listSignature),
-          now,
-        );
+        db.transaction(() => {
+          // The account this device could no longer sign in to goes only now that its new one exists.
+          if (replacing) db.prepare('DELETE FROM account WHERE id = 1').run();
+          // A new account may be on another server: forget the identity pinned for the old one.
+          db.prepare('DELETE FROM server_instance').run();
+          db.prepare(
+            `INSERT INTO account (id, server_url, river_id, device_id, device_public_key, device_private_key,
+                                  device_list, device_list_signature, device_list_version, registered_at)
+             VALUES (1, ?, ?, 1, ?, ?, ?, ?, 1, ?)`,
+          ).run(
+            server,
+            signer.riverId,
+            Buffer.from(device.publicKey),
+            Buffer.from(device.privateKey),
+            listBytes,
+            Buffer.from(listSignature),
+            now,
+          );
+        })();
       } finally {
         device.privateKey.fill(0);
       }
+      this.missing = false;
+      this.removed = false;
       this.token = res.session.token;
       this.deps.log.info('Account registered');
       this.setConnection('online');
       return this.status();
     } catch (err) {
+      if (replacing && err instanceof ApiError && err.code === 'account_exists') {
+        // The account is still there: it is this device that was removed from it.
+        this.removed = true;
+        this.deps.log.warn('The account still exists; this device was removed from it');
+        this.setConnection('error', REMOVED_MESSAGE);
+        throw new UserFacingError(REMOVED_MESSAGE, { code: 'account_exists' });
+      }
       throw toUserFacing(err);
     }
   }
@@ -260,6 +294,7 @@ export class AccountService {
         this.now().toISOString(),
         account.username ?? null,
       );
+      db.prepare("DELETE FROM meta WHERE key = 'relink_river_id'").run();
       this.token = session.token;
       this.deps.log.info(`Linked as device ${deviceId}`);
       this.setConnection('online');
@@ -468,7 +503,9 @@ export class AccountService {
         this.deps.log.warn('Account not recognised by its server');
         this.setConnection(
           'error',
-          'Your account is no longer on this River server — it may have been removed. Set it up again to keep using River.',
+          wasLinked(row)
+            ? 'This device can no longer sign in to your account — it was probably removed on one of your other devices. Link it again from a device that still has your account, or set up a new account.'
+            : 'Your account is no longer on this River server — it may have been removed. Set it up again to keep using River.',
         );
       } else {
         this.deps.log.warn(`Account connect failed: ${(err as Error).name}`);
@@ -525,6 +562,43 @@ export class AccountService {
     return row.server_url;
   }
 
+  /**
+   * "Link this device again": this device was removed from its account. Forgets the account and
+   * the identity here (both come back from the account's other device when it links this one
+   * again) and the protocol state of the old device, whose sessions and prekeys would not match
+   * the new one. Contacts, messages and settings stay. Returns the River ID the link must bring
+   * back: this device's messages belong to that account.
+   */
+  forgetForRelink(): string {
+    const row = this.row();
+    const db = this.deps.db();
+    if (!row || !db) throw new UserFacingError('There is no account to link again.');
+    if (!this.missing) throw new UserFacingError('Your account is fine — this device is still linked.');
+    db.transaction(() => {
+      db.prepare('DELETE FROM account WHERE id = 1').run();
+      db.prepare('DELETE FROM server_instance').run();
+      db.prepare('DELETE FROM identity WHERE id = 1 AND river_id = ?').run(row.river_id);
+      db.prepare(
+        `DELETE FROM signal_store WHERE kind IN ('session', 'prekey', 'signed', 'kyber')
+            OR (kind = 'meta' AND id IN ('dm:keysUploaded', 'dm:signedAt', 'dm:contactsSynced'))`,
+      ).run();
+      db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('relink_river_id', ?)").run(row.river_id);
+    })();
+    this.token = null;
+    this.missing = false;
+    this.removed = false;
+    this.deps.log.info('Forgot the removed device; it can be linked again');
+    this.setConnection('offline');
+    return row.river_id;
+  }
+
+  /** After "Link this device again": the account this device's messages belong to. */
+  relinkTarget(): string | null {
+    const row = this.deps.db()?.prepare("SELECT value FROM meta WHERE key = 'relink_river_id'").get() as
+      { value: string } | undefined;
+    return row?.value ?? null;
+  }
+
   private signWithDevice(message: Uint8Array): Uint8Array {
     const db = this.deps.db();
     const { device_private_key } = db!
@@ -574,7 +648,8 @@ export class AccountService {
     const row = this.row();
     if (!db || !row) throw new UserFacingError('Create your account first.');
     if (!this.token) throw new UserFacingError('Connect to your server first, then try again.');
-    const username = typeof rawUsername === 'string' ? rawUsername.trim() : '';
+    // "@alice" is how people write it; the username itself has no @.
+    const username = typeof rawUsername === 'string' ? rawUsername.trim().replace(/^@+/, '') : '';
     try {
       const res = await this.deps.requestJson(
         `${row.server_url}${API_PREFIX}/accounts/me/username`,
@@ -617,14 +692,25 @@ export class AccountService {
   }
 }
 
+const REMOVED_MESSAGE =
+  'Your account is still on this server, but this device was removed from it. Link this device again from one of your devices that still has your account.';
+
+/** This device was one of several (or was linked to the account): a refusal most likely means it was removed. */
+function wasLinked(row: AccountRow): boolean {
+  return row.device_id !== 1 || parseDeviceList(row.device_list).devices.length > 1;
+}
+
 /** An error whose message is safe and meaningful to show the user. */
 export class UserFacingError extends Error {
   /** The server could not be reached at all (as opposed to refusing). */
   readonly unreachable: boolean;
-  constructor(message: string, options: { unreachable?: boolean } = {}) {
+  /** The server's error code when it refused (e.g. 'signup_invite_only'). */
+  readonly code: string | undefined;
+  constructor(message: string, options: { unreachable?: boolean; code?: string } = {}) {
     super(message);
     this.name = 'UserFacingError';
     this.unreachable = options.unreachable ?? false;
+    this.code = options.code;
   }
 }
 
@@ -635,23 +721,24 @@ function toUserFacing(err: unknown): UserFacingError {
       unreachable: true,
     });
   if (err instanceof ApiError) {
+    const code = { code: err.code };
     switch (err.code) {
       case 'registration_closed':
-        return new UserFacingError('This server is not accepting new accounts.');
+        return new UserFacingError('This server is not accepting new accounts.', code);
       case 'account_exists':
-        return new UserFacingError('Your identity already has an account on this server.');
+        return new UserFacingError('Your identity already has an account on this server.', code);
       case 'rate_limited':
-        return new UserFacingError('The server is busy. Try again in a minute.');
+        return new UserFacingError('The server is busy. Try again in a minute.', code);
       case 'username_taken':
       case 'bad_username':
       case 'signup_invite_only':
       case 'invalid_signup':
       case 'account_suspended':
-        return new UserFacingError(err.message);
+        return new UserFacingError(err.message, code);
       case 'unauthorized':
-        return new UserFacingError('The server did not recognise this device.');
+        return new UserFacingError('The server did not recognise this device.', code);
       default:
-        return new UserFacingError('The server rejected the request.');
+        return new UserFacingError('The server rejected the request.', code);
     }
   }
   return new UserFacingError('Something went wrong talking to the server.');

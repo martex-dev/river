@@ -193,3 +193,17 @@ describe('design settings are data only', () => {
     expect(parsed.design.prefs.messageStyle).toBe('skin');
   });
 });
+
+describe('background pictures kept once', () => {
+  it('shows the picture a profile or the current look points to', () => {
+    const picture = 'data:image/png;base64,QUJD';
+    const design: DesignSettings = {
+      ...withTheme(DEFAULT_DESIGN.theme, { background: 'image', backgroundImage: 'image:abc' }),
+      images: { abc: picture },
+    };
+    expect(resolveDesign(design).vars['--backdrop']).toContain(`url("${picture}")`);
+    // A reference to nothing shows no picture (never the reference itself).
+    const dangling = { ...design, images: {} };
+    expect(resolveDesign(dangling).vars['--backdrop']).not.toContain('url(');
+  });
+});

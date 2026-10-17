@@ -1,10 +1,11 @@
-import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import type { IdentityInfo } from '../../../shared/ipc.ts';
 import { ArrowIcon, CheckIcon, LockIcon } from './Icons.tsx';
 import { RiverMark } from './RiverMark.tsx';
 import { IdentityFingerprint } from './IdentityFingerprint.tsx';
 import { RestoreForm } from './BackupPanel.tsx';
 import { LinkThisDevice } from './LinkDevice.tsx';
+import { useRiver } from '../store.ts';
 
 type Step = 'welcome' | 'name' | 'creating' | 'username' | 'done' | 'restore' | 'link';
 
@@ -14,7 +15,8 @@ export function Onboarding(props: {
   onCreated(identity: IdentityInfo): void;
   onFinished(): void;
 }): ReactElement {
-  const [step, setStep] = useState<Step>('welcome');
+  // "Link this device again" (Settings → Account) opens straight on linking.
+  const [step, setStep] = useState<Step>(() => useRiver.getState().onboardingStart);
   const [name, setName] = useState('');
   const [identity, setIdentity] = useState<IdentityInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,15 +25,32 @@ export function Onboarding(props: {
   const [needsLink, setNeedsLink] = useState(false);
   const [link, setLink] = useState('');
   const [deviceCode, setDeviceCode] = useState('');
+  // River's server only takes invited people: it said so when River tried to make the account.
+  const needsInvite = useRiver((r) => r.account.state === 'none' && r.account.needsInvite === true);
+  const askForLink = needsLink || needsInvite;
+
+  // Once this device has an identity (being created, or made), a device link code no longer
+  // fits here: it is left for River to explain once the first run is over.
+  const hasIdentity = useRef(false);
+  useEffect(() => {
+    hasIdentity.current = identity !== null || step === 'creating' || step === 'username' || step === 'done';
+  }, [identity, step]);
 
   // A device link code opened from outside (the camera app read the QR code on the other device).
   useEffect(() => {
-    const take = (): void =>
+    const take = (): void => {
+      if (hasIdentity.current) return;
       void window.river.app.takeDeepLink('device').then((pending) => {
         if (!pending) return;
+        // The identity appeared while the link was being taken: it cannot be used here any more.
+        if (hasIdentity.current) {
+          setError('That link code is for a device without River yet. Open it on the device you are adding.');
+          return;
+        }
         setDeviceCode(pending.link);
         setStep('link');
       });
+    };
     take();
     return window.river.app.onDeepLink(take);
   }, []);
@@ -79,6 +98,16 @@ export function Onboarding(props: {
         setStep('done');
         return;
       }
+      // No account yet. River's server only takes invited people: ask for a sign-up link.
+      const account = await window.river.account.status();
+      if (account.state === 'none' && account.needsInvite) {
+        setSavingUser(false);
+        setNeedsLink(true);
+        setError(
+          'River’s server only accepts people its owner invites. Paste the sign-up link they sent you, or skip for now.',
+        );
+        return;
+      }
       // No server yet (you will host your own, or set one in Settings): let them move on.
       if (/create your account first|connect to your server first/i.test(res.message)) {
         setSavingUser(false);
@@ -91,8 +120,8 @@ export function Onboarding(props: {
         continue;
       }
       setSavingUser(false);
+      setError(res.message);
       // Invite-only server: the person needs a sign-up link from whoever runs it.
-      setError(/only accepts people its owner invites/i.test(res.message) ? res.message : res.message);
       setNeedsLink(/only accepts people its owner invites/i.test(res.message));
       return;
     }
@@ -234,7 +263,12 @@ export function Onboarding(props: {
                 {error}
               </p>
             )}
-            {needsLink && (
+            {needsInvite && !error && (
+              <p className="muted small" role="status">
+                River’s server only accepts people its owner invites. Paste the sign-up link they sent you.
+              </p>
+            )}
+            {askForLink && (
               <label className="textfield">
                 <span className="field__label">Paste your sign-up link</span>
                 <input
@@ -248,7 +282,7 @@ export function Onboarding(props: {
             <button type="button" className="btn btn--link" onClick={() => setStep('done')}>
               Skip for now — choose a username later
             </button>
-            {needsLink ? (
+            {askForLink ? (
               <button
                 type="button"
                 className="btn btn--primary lock__submit"

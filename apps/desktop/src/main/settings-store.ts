@@ -4,6 +4,7 @@ import {
   DEFAULT_SETTINGS,
   SETTINGS_SECTIONS,
   applySettingsPatch,
+  normalizeSettings,
   pruneUnknownKeys,
   settingsPatchSchema,
   settingsSchema,
@@ -58,9 +59,17 @@ export class SettingsStore {
         upgradeSettings(JSON.parse(readFileSync(this.path, 'utf8'))),
       );
       const result = settingsSchema.safeParse(raw);
-      if (result.success) return result.data;
+      if (result.success) {
+        const settings = normalizeSettings(result.data);
+        // Older Rivers copied the background picture into every appearance profile: keep it once.
+        if (JSON.stringify(settings.design) !== JSON.stringify(result.data.design)) {
+          this.log.info('Settings: background pictures are now kept once');
+          this.saveQuietly(settings);
+        }
+        return settings;
+      }
       // Keep sections that are still valid instead of discarding everything.
-      const merged = this.salvage(raw);
+      const merged = normalizeSettings(this.salvage(raw));
       this.log.warn('Settings file failed validation; recovered valid sections and kept a backup');
       this.backupInvalid();
       // Save what was recovered: otherwise the next start finds no file and uses defaults.
