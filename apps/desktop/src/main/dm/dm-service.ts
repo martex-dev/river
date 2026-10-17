@@ -356,6 +356,8 @@ interface GroupRow {
 
 const PREKEY_TARGET = 100;
 const PREKEY_LOW = 25;
+/** Prekeys are checked at least this often while connected (2.12). */
+const PREKEY_RECHECK_MS = 6 * 60 * 60 * 1000;
 const SIGNED_ROTATE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** The name of your own notes conversation (2.9). */
@@ -409,7 +411,9 @@ export class DmService {
   private protocolOwner: string | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   private readonly listeners = new Set<(e: DmEvent) => void>();
-  private draining = false;
+  /** The mailbox fetch in progress, and whether another was asked for meanwhile. */
+  private drainRun: Promise<void> | null = null;
+  private drainAgain = false;
   private socialHandler: ((peer: string, content: SocialContent) => void) | null = null;
   /** Set after restoring a backup: contacts need new sessions with us (also kept in meta). */
   private reintroduce = false;
@@ -435,8 +439,12 @@ export class DmService {
     const sweep = setInterval(() => {
       try {
         this.sweepExpired();
-        if (this.deps.account.status().state === 'registered')
+        if (this.deps.account.status().state === 'registered') {
           void this.sendDueScheduled().catch(() => undefined);
+          // A connection can stay up for weeks: the signed prekey still rotates, and the
+          // one-time keys are counted again, without waiting for a reconnect.
+          if (Date.now() - this.preKeysCheckedAt > PREKEY_RECHECK_MS) this.checkPreKeysSoon(0);
+        }
       } catch {
         // storage not open yet (locked): next time
       }
@@ -558,8 +566,30 @@ export class DmService {
     }
   }
 
+  /** How long after a first message (which used up one of our one-time prekeys) to count them again. */
+  preKeyCheckMs = 15_000;
+  private preKeysCheckedAt = Date.now();
+  private preKeyTimer: NodeJS.Timeout | null = null;
+
+  /**
+   * Counts our prekeys on the server again shortly. Every first message someone sends us uses up
+   * a one-time key, and they used to be topped up only when the connection was made again: a
+   * device that stayed online for days ran out, and new conversations then started without one.
+   */
+  private checkPreKeysSoon(delay = this.preKeyCheckMs): void {
+    if (this.preKeyTimer) return;
+    this.preKeyTimer = setTimeout(() => {
+      this.preKeyTimer = null;
+      void this.ensurePreKeys().catch((err: unknown) =>
+        this.deps.log.warn(`Prekeys not topped up: ${(err as Error).message}`),
+      );
+    }, delay);
+    this.preKeyTimer.unref?.();
+  }
+
   /** Keeps enough one-time prekeys on the server; rotates the signed prekey weekly. */
   async ensurePreKeys(): Promise<void> {
+    this.preKeysCheckedAt = Date.now();
     await this.serial(async () => {
       const counts = await this.deps.community.api('/keys', 'GET', undefined, preKeyCountSchema);
       const uploaded = this.meta('keysUploaded') === this.me();
@@ -598,23 +628,43 @@ export class DmService {
     await this.requestContacts();
   }
 
-  private async drainMailbox(): Promise<void> {
-    if (this.draining) return;
-    this.draining = true;
-    try {
-      // Messages decrypted earlier whose applying failed get another go first.
-      await this.serial(async () => this.retryKept());
-      for (let page = 0; page < 50; page++) {
-        const box = await this.deps.community.api('/messages', 'GET', undefined, mailboxResponseSchema);
-        const done: string[] = [];
-        for (const env of box.envelopes) {
-          if (await this.serial(() => this.receive(env))) done.push(env.id);
-        }
-        if (done.length) await this.ack(done);
-        if (!box.more) break;
+  /**
+   * Fetches the mailbox until it is empty. Asked again while a fetch runs (the connection came
+   * back meanwhile, so more mail may be waiting that its last page did not have), it goes round
+   * once more instead of returning: otherwise that mail waited until the next reconnect.
+   */
+  private drainMailbox(): Promise<void> {
+    if (this.drainRun) {
+      this.drainAgain = true;
+      return this.drainRun;
+    }
+    let run: Promise<void> | undefined = undefined;
+    run = (async () => {
+      try {
+        do {
+          this.drainAgain = false;
+          await this.drainOnce();
+        } while (this.drainAgain);
+      } finally {
+        if (this.drainRun === run) this.drainRun = null;
+        this.drainAgain = false;
       }
-    } finally {
-      this.draining = false;
+    })();
+    this.drainRun = run;
+    return run;
+  }
+
+  private async drainOnce(): Promise<void> {
+    // Messages decrypted earlier whose applying failed get another go first.
+    await this.serial(async () => this.retryKept());
+    for (let page = 0; page < 50; page++) {
+      const box = await this.deps.community.api('/messages', 'GET', undefined, mailboxResponseSchema);
+      const done: string[] = [];
+      for (const env of box.envelopes) {
+        if (await this.serial(() => this.receive(env))) done.push(env.id);
+      }
+      if (done.length) await this.ack(done);
+      if (!box.more) break;
     }
   }
 
@@ -660,6 +710,8 @@ export class DmService {
         return true;
       }
       inbound = { sender: env.sender, receivedAt: env.receivedAt, content, keptAt: Date.now(), tries: 0 };
+      // A first message (PreKey type) used one of our one-time keys on the server.
+      if (env.type === 3) this.checkPreKeysSoon();
     }
     return this.process(env.id, inbound);
   }
