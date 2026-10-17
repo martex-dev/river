@@ -31,9 +31,9 @@ Audit and plan: [docs/product/telegram-parity.md](docs/product/telegram-parity.m
 - [x] 2.10.11 Reply privately to group messages
 - [x] 2.10.12 Bug sweep: seven audits (server, DM logic, main process, voice and calls, phone native, messaging UI, phone layout), all fixes released together
 - [x] 2.11.0 Android rings and notifies like a phone (call screen over the lock screen, ringtone, heads-up over other apps, lock-screen message notifications that light the screen, Stay connected on by default with a watchdog); Android updates itself; desktop installs updates by itself when idle; second sweep (social, settings/account, community admin, encryption trust, 2.10.12 regressions)
-- [ ] Maintainer: run `python scripts/release/create-android-key.py` once, so Android updates install over each other (until then every release has a one-off key)
+- [x] Maintainer created the permanent Android signing key (2026-10-17): releases from 2.11.1 install over each other
 - [ ] iPhone ringing and notifications while closed: needs Apple push (PushKit/CallKit) and a paid Apple developer account
-- [ ] Calls answered on another device should stop the others ringing (protocol: send `answered-elsewhere` to own devices)
+- [x] 2.11.1 Calls answered or declined on another device stop the others ringing; ringing stops when the caller hangs up even with the screen off; phone-style call screens
 - [x] Trust audit: identity changes, own-device copies, community key proofs, stuck rotations, v2 associated data (receiving), call-signal replays, username holds and River ID tombstones (CRYPTOGRAPHY.md §4b)
 - [ ] 2.12: seal community messages and profiles with v2 associated data (`SEAL_V2_DEFAULT = true` in `sealed.ts`) once 2.11 is out on every platform
 - [ ] 2.13: refuse community keys without a proof (`ACCEPT_UNPROVEN_KEYS = false` in `community-service.ts`)

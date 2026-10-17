@@ -402,6 +402,31 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     expect(list.some((f) => f.id === id)).toBe(false);
   });
 
+  it('a phone that was offline while it rang still learns the caller hung up', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await alice.dm.action({ a: 'open', peer: bob.riverId, name: 'Bob' });
+    await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'hi' });
+    await bob.dm.sync();
+    await bob.dm.action({ a: 'accept', peer: alice.riverId });
+    await alice.dm.sync();
+    const callId = 'C'.repeat(22);
+    // Bob's phone has no connection while Alice rings and gives up: both wait in his mailbox.
+    await alice.dm.action({ a: 'call', peer: bob.riverId, callId, kind: 'invite', video: false });
+    await alice.dm.action({ a: 'call', peer: bob.riverId, callId, kind: 'end' });
+    await bob.dm.sync();
+    const calls = bob.events
+      .filter((e) => e.t === 'call' && e.callId === callId)
+      .map((e) => (e as { kind: string }).kind);
+    expect(calls).toEqual(['invite', 'end']);
+    // Connection setup is still never stored.
+    await alice.dm.action({ a: 'call', peer: bob.riverId, callId, kind: 'signal', data: { sdp: 'x' } });
+    await bob.dm.sync();
+    expect(
+      bob.events.filter((e) => e.t === 'call' && (e as { kind: string }).kind === 'signal'),
+    ).toHaveLength(0);
+  });
+
   it('searches inside one conversation only', async () => {
     const alice = await person('Alice');
     const bob = await person('Bob');
@@ -806,6 +831,31 @@ const conversationOf = async (p: Person, peer: string) =>
   (await p.dm.action({ a: 'conversations' })).find((c) => c.riverId === peer);
 
 describe('direct messages: audit fixes', { timeout: 60_000 }, () => {
+  it('answering a call on one device stops it ringing on your other devices', async () => {
+    const bob = await person('Bob');
+    const bobPhone = await linkDevice(bob, 'Bob-phone');
+    const alice = await person('Alice');
+    await friends(alice, bob);
+    await until(async () => {
+      await bobPhone.dm.sync();
+      return (await conversationOf(bobPhone, alice.riverId))?.state === 'accepted';
+    });
+    const callId = 'R'.repeat(22);
+    await alice.dm.action({ a: 'call', peer: bob.riverId, callId, kind: 'invite', video: false });
+    await bob.dm.sync();
+    await bobPhone.dm.sync();
+    const kinds = (p: Person) =>
+      p.events.filter((e) => e.t === 'call' && e.callId === callId).map((e) => (e as { kind: string }).kind);
+    expect(kinds(bobPhone)).toContain('invite');
+    // Bob answers on his computer: his phone hears it was handled there, and is not told it missed it.
+    await bob.dm.action({ a: 'call', peer: alice.riverId, callId, kind: 'accept' });
+    await until(async () => {
+      await bobPhone.dm.sync();
+      return kinds(bobPhone).includes('elsewhere');
+    });
+    expect(kinds(bobPhone)).not.toContain('end');
+  });
+
   it('linked devices get groups, timers, disappearing copies, edits, reactions, pins, deletes and reads', async () => {
     const alice = await person('Alice');
     const phone = await linkDevice(alice, 'Alice-phone');

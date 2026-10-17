@@ -150,6 +150,8 @@ const contentSchema = z.discriminatedUnion('t', [
       z.object({ t: z.literal('pin'), id: msgId, pinned: z.boolean() }),
       z.object({ t: z.literal('timer'), seconds: z.number().int().min(0).max(MAX_TIMER) }),
       z.object({ t: z.literal('read'), at: z.iso.datetime() }),
+      /** A call answered or declined on that device (2.11.1): this one stops ringing. */
+      z.object({ t: z.literal('callHandled'), callId: msgId }),
     ]),
   }),
   /** Disappearing messages timer for this conversation (2.4); 0 turns it off. */
@@ -1021,7 +1023,7 @@ export class DmService {
         else if (contact?.state === 'accepted') this.emit({ t: 'typing', peer });
         return null;
       case 'call': {
-        // Only accepted contacts can ring you; call setup is never stored.
+        // Only accepted contacts can ring you; connection setup (signal) is never stored.
         if (contact?.state !== 'accepted') return null;
         if (content.data !== undefined && JSON.stringify(content.data).length > 30_000) return null;
         // An invite that waited in the mailbox (or in storage) longer than a ring lasts is over.
@@ -1559,6 +1561,11 @@ export class DmService {
       if (g.state === 'left' && op.t !== 'read') return null;
     }
     switch (op.t) {
+      case 'callHandled': {
+        if (this.ringing?.event.callId === op.callId) this.ringing = null;
+        this.emit({ t: 'call', peer: conv, callId: op.callId, kind: 'elsewhere', video: false });
+        return null;
+      }
       case 'edit': {
         const row = this.row(op.id);
         if (row && row.peer === conv && row.sender === me && !row.deleted) this.editRow(row, op.text);
@@ -2370,9 +2377,16 @@ export class DmService {
               ...(act.video !== undefined ? { video: act.video } : {}),
               ...(act.data !== undefined ? { data: act.data } : {}),
             },
-            true,
+            // Only connection setup (signal) is never stored. Invite, accept, decline, end and busy
+            // wait in the mailbox (2.11.1): a phone whose connection dropped for a moment while it
+            // rang still learns the caller hung up, instead of ringing on. A late invite never
+            // rings (receive checks its age against the mailbox time).
+            act.kind === 'signal',
           );
           if (act.kind === 'accept') this.callAnswered.set(act.peer, Date.now());
+          // Answered or declined here: this account's other devices stop ringing for it.
+          if (act.kind === 'accept' || act.kind === 'decline')
+            this.syncOp(act.peer, { t: 'callHandled', callId: act.callId });
           return out(null);
       }
     } catch (err) {

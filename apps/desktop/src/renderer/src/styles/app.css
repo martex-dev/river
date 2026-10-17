@@ -2607,3 +2607,183 @@ body:has(.dm-call--full) .popover {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* ---------- Calls that look like phone calls (2.11.1) ---------- */
+.incoming-call {
+  --call-from: #1e3c72;
+  --call-to: #2a5298;
+  overflow: hidden;
+  background: rgba(3, 6, 12, 0.6);
+}
+.incoming-call__photo {
+  position: absolute;
+  inset: -40px;
+  width: calc(100% + 80px);
+  height: calc(100% + 80px);
+  object-fit: cover;
+  filter: blur(36px) brightness(0.55) saturate(1.2);
+  pointer-events: none;
+}
+.incoming-call .incoming-call__card {
+  position: relative;
+  gap: 6px;
+  width: 340px;
+  padding: 26px 24px 26px;
+  border: 0;
+  border-radius: 28px;
+  background: linear-gradient(180deg, var(--call-from), var(--call-to) 70%, #05070c);
+  color: #fff;
+  box-shadow: 0 30px 90px -24px rgba(0, 0, 0, 0.9);
+}
+.incoming-call__kind {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  opacity: 0.8;
+}
+.incoming-call .incoming-call__avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin: 26px 0 14px;
+  animation: none;
+}
+.incoming-call__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  animation: call-ring 2s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+.incoming-call__ring--late {
+  animation-delay: 1s;
+}
+@keyframes call-ring {
+  from {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.75);
+    opacity: 0;
+  }
+}
+.incoming-call .incoming-call__avatar > :not(.incoming-call__ring) {
+  position: relative;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.45);
+  border-radius: 50%;
+}
+.incoming-call .incoming-call__name {
+  font-size: 24px;
+  font-weight: 600;
+  text-align: center;
+}
+.incoming-call__status {
+  font-size: 14px;
+  opacity: 0.75;
+}
+.incoming-call .incoming-call__actions {
+  display: flex;
+  justify-content: space-around;
+  width: 100%;
+  margin-top: 30px;
+  gap: 12px;
+}
+.incoming-call__action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+.call-action {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.6);
+  transition: transform var(--dur-fast);
+}
+.call-action:active {
+  transform: scale(0.94);
+}
+.call-action--decline {
+  background: #ff3b30;
+}
+.call-action--answer {
+  background: #34c759;
+}
+.call-action--nudge {
+  animation: call-nudge 1.2s ease-in-out infinite;
+}
+@keyframes call-nudge {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+.call-action--decline svg {
+  transform: rotate(0deg);
+}
+/* On a phone: the whole screen, like the phone's own call screen. */
+.incoming-call--full {
+  background: linear-gradient(180deg, var(--call-from), var(--call-to) 65%, #05070c);
+}
+.incoming-call--full .incoming-call__card {
+  justify-content: flex-start;
+  width: 100%;
+  height: 100%;
+  padding: calc(env(safe-area-inset-top) + 48px) 24px calc(env(safe-area-inset-bottom) + 48px);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.incoming-call--full .incoming-call__avatar {
+  margin-top: auto;
+}
+.incoming-call--full .incoming-call__name {
+  font-size: 30px;
+}
+.incoming-call--full .incoming-call__actions {
+  margin-top: auto;
+}
+.incoming-call--full .call-action {
+  width: 76px;
+  height: 76px;
+}
+[data-motion='reduced'] .incoming-call__ring,
+[data-motion='reduced'] .call-action--nudge {
+  animation: none;
+}
+
+/* The call itself on a phone: Instagram-like see-through round buttons, hang up in red. */
+.dm-call--full .voice__controls .round-btn {
+  width: 60px;
+  height: 60px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  backdrop-filter: blur(10px);
+}
+.dm-call--full .voice__controls .round-btn--on {
+  background: #fff;
+  color: #111;
+}
+.dm-call--full .voice__controls .round-btn--off {
+  background: rgba(255, 255, 255, 0.85);
+  color: #111;
+}
+.dm-call--full .voice__controls .round-btn--danger {
+  background: #ff3b30;
+  color: #fff;
+}
+.dm-call--full .dm-call__name {
+  font-size: 22px;
+  font-weight: 600;
+}

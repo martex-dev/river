@@ -39,10 +39,20 @@ final class IncomingCall {
   private static Ringer ringer;
   private static Runnable onTimeout;
   private static WeakReference<IncomingCallActivity> screen = new WeakReference<>(null);
+  /** Application context of the call ringing now (for the timeout, which always stops it). */
+  private static Context app;
+  /**
+   * Keeps the processor awake exactly while a call rings (2.11.1): with the screen off the phone
+   * would otherwise sleep, freezing the 45-second timeout and the connection that brings the
+   * caller's hang-up, while the ringtone played on — the call rang until the phone was woken.
+   */
+  private static android.os.PowerManager.WakeLock awake;
   private static final Runnable timeout =
       () -> {
         Runnable r = onTimeout;
         if (r != null) r.run();
+        // Whatever the core does (it may be restarting), the phone stops ringing now.
+        if (callId != null && app != null) stop(app);
       };
 
   private IncomingCall() {}
@@ -81,6 +91,8 @@ final class IncomingCall {
   static void start(
       Context context, String id, String caller, boolean isVideo, boolean foreground, Runnable whenTimedOut) {
     stop(context);
+    app = context.getApplicationContext();
+    keepAwake(app);
     callId = id;
     name = caller == null || caller.isEmpty() ? "Someone" : caller.substring(0, Math.min(caller.length(), 64));
     video = isVideo;
@@ -102,8 +114,33 @@ final class IncomingCall {
     onTimeout = null;
     hide(context);
     callId = null;
+    letSleep();
     // Also a notification left from an earlier run of River (its process ended while it rang).
     NotificationManagerCompat.from(context).cancel(NOTIFICATION);
+  }
+
+  private static void keepAwake(Context context) {
+    letSleep();
+    try {
+      android.os.PowerManager pm = context.getSystemService(android.os.PowerManager.class);
+      if (pm == null) return;
+      awake = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "river:ringing");
+      awake.setReferenceCounted(false);
+      // Released when ringing ends; never held longer than the ringing could last.
+      awake.acquire(RING_MS + 15_000);
+    } catch (RuntimeException e) {
+      awake = null;
+    }
+  }
+
+  private static void letSleep() {
+    android.os.PowerManager.WakeLock w = awake;
+    awake = null;
+    try {
+      if (w != null && w.isHeld()) w.release();
+    } catch (RuntimeException ignored) {
+      // already released by its timeout
+    }
   }
 
   /** A volume button: quiet, still on screen. */

@@ -138,7 +138,8 @@ export type DmEvent =
       t: 'call';
       peer: string;
       callId: string;
-      kind: 'invite' | 'accept' | 'decline' | 'end' | 'signal' | 'busy';
+      /** `elsewhere` (2.11.1): answered or declined on another of your devices — stop ringing here. */
+      kind: 'invite' | 'accept' | 'decline' | 'end' | 'signal' | 'busy' | 'elsewhere';
       video: boolean;
       data?: unknown;
     };
