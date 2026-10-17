@@ -543,6 +543,9 @@ describe('community keys a server cannot inject', { timeout: 90_000 }, () => {
       id,
       seal(newCommunityKey(), id, 'profile', { name: 'Eve', identityKey: 'z'.repeat(44) }),
     );
+    // Only what the rotation sends is checked below: Bob does not ask anyone for the key meanwhile
+    // (on a busy machine his refresh can see the new epoch first, and a request may go to Eve).
+    bob.community.keyRequestDelayMs = 20_000;
     await alice.community.action({ a: 'kick', communityId: id, riverId: carol.riverId });
     await alice.community.refresh();
     await until(() => epochs(alice, id).includes(1));
@@ -652,6 +655,54 @@ describe('community keys a server cannot inject', { timeout: 90_000 }, () => {
       return epochs(dave, id).includes(2);
     }, 20_000);
     expect(epochs(dave, id)).toEqual([0, 1, 2]);
+  });
+});
+
+describe('community key requests from newcomers', { timeout: 60_000 }, () => {
+  it('a member who joined after our last look at the members still gets the key', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Crew');
+    const link = await alice.community.invite(created.id);
+    await bob.community.join(link, async () => undefined);
+    await alice.community.refresh();
+    await alice.community.action({ a: 'kick', communityId: created.id, riverId: bob.riverId });
+    await alice.community.refresh();
+    await until(() => epochs(alice, created.id).includes(1));
+    // Dave joins with the epoch-0 link; Alice has not looked at the member list since.
+    const dave = await person('Dave');
+    await dave.community.join(link, async () => undefined);
+    await dave.community.refresh();
+    await until(async () => {
+      await alice.dm.sync();
+      await dave.dm.sync();
+      return epochs(dave, created.id).includes(1);
+    }, 20_000);
+    expect(keyOf(dave, created.id, 1).equals(keyOf(alice, created.id, 1))).toBe(true);
+  });
+
+  it('the new key goes out even when the rotating member cannot republish its profile', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    const created = await alice.community.create('Crew');
+    const link = await alice.community.invite(created.id);
+    await bob.community.join(link, async () => undefined);
+    await carol.community.join(link, async () => undefined);
+    for (const p of [alice, bob, carol]) await p.community.refresh();
+    // The profile update fails (the server hiccups) right when Alice replaces the key.
+    (alice.community as unknown as { publishProfile(): Promise<void> }).publishProfile = async () => {
+      throw new Error('server hiccup');
+    };
+    await alice.community.action({ a: 'kick', communityId: created.id, riverId: carol.riverId });
+    await alice.community.refresh();
+    await until(() => epochs(alice, created.id).includes(1));
+    await until(async () => {
+      await bob.community.refresh();
+      await bob.dm.sync();
+      return epochs(bob, created.id).includes(1);
+    });
+    expect(keyOf(bob, created.id, 1).equals(keyOf(alice, created.id, 1))).toBe(true);
   });
 });
 

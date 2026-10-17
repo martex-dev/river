@@ -723,7 +723,11 @@ export class CommunityService {
       const recipients = c.members.filter((m) => m.riverId !== me && this.profileOpens(before, c.id, m));
       const key = newCommunityKey();
       this.storeKey(c.id, key, epoch);
-      await this.publishProfile(c.id);
+      // The key goes out even if the profile could not be republished just now (members check the
+      // proof, not the profile; the profile follows on the next start or refresh).
+      await this.publishProfile(c.id).catch((err: unknown) =>
+        this.deps.log.warn(`Could not republish the profile after a key change: ${(err as Error).message}`),
+      );
       const proof = this.wrapKey(c.id, epoch, key, prev);
       for (const m of recipients) {
         await this.keyChannel
@@ -780,12 +784,29 @@ export class CommunityService {
     return run;
   }
 
+  /** When the member list was last fetched again for a key message from someone not on it. */
+  private readonly keyRefreshAt = new Map<string, number>();
+
   private async applyKeyMessage(sender: string, message: KeyMessage): Promise<void> {
-    const c = this.wires.get(message.communityId);
-    const ring = this.keys.get(message.communityId);
-    if (!c || !ring) return;
-    const senderMember = c.members.find((m) => m.riverId === sender);
-    if (!senderMember || !this.keyChannel) return;
+    let c = this.wires.get(message.communityId);
+    let ring = this.keys.get(message.communityId);
+    if (!c || !ring || !this.keyChannel) return;
+    let senderMember = c.members.find((m) => m.riverId === sender);
+    // Someone who joined (or published their profile) after our last look at the members — a
+    // newcomer asking for the key at once, typically. Look again, at most every few seconds per
+    // community, rather than ignore them until something else makes River look.
+    const stale =
+      !senderMember ||
+      (message.t === 'ckeyReq' && !this.profileOpens(ring, message.communityId, senderMember));
+    if (stale && Date.now() - (this.keyRefreshAt.get(message.communityId) ?? 0) > 5_000) {
+      this.keyRefreshAt.set(message.communityId, Date.now());
+      await this.refresh().catch(() => undefined);
+      c = this.wires.get(message.communityId);
+      ring = this.keys.get(message.communityId);
+      if (!c || !ring) return;
+      senderMember = c.members.find((m) => m.riverId === sender);
+    }
+    if (!senderMember) return;
     if (message.t === 'ckey') {
       if (ring.has(message.epoch)) return;
       const key = Buffer.from(message.key, 'base64');
@@ -3772,7 +3793,11 @@ export class CommunityService {
           .catch(() => undefined);
         return;
       case 'message': {
-        const isNew = !this.seen.has(e.message.id);
+        // The server pushes a message again when it changes (an edit, a reaction, a pin, a thread
+        // reply counted on its first message): one this session has not opened yet is new only if
+        // nothing has happened to it since it was sent. Otherwise a reaction to an old message would
+        // ring and notify as a new one.
+        const isNew = !this.seen.has(e.message.id) && unchangedSinceSent(e.message);
         this.remember(e.message.id);
         if (e.message.sentAt > (this.liveLast.get(e.message.channelId) ?? ''))
           this.liveLast.set(e.message.channelId, e.message.sentAt);
@@ -4024,6 +4049,11 @@ export class CommunityService {
     this.communities = this.communities.filter((c) => c.id !== id);
     this.emit({ t: 'communities', communities: this.communities });
   }
+}
+
+/** A message as it was sent: never edited, reacted to, pinned or replied to in a thread. */
+function unchangedSinceSent(m: MessageWire): boolean {
+  return !m.editedAt && !m.pinned && m.reactions.length === 0 && (!m.thread || m.thread.count === 0);
 }
 
 function defaultVoiceState(): VoiceState {

@@ -24,6 +24,20 @@ All notable changes to River are documented here. The format follows
   page was mostly such messages; River now pages on past them, and search,
   jumps to a message and Insights look past them too. Messages sent in the
   same millisecond at the edge of a page are no longer skipped.
+- **A message you sent is never shown as failed when it got through** under
+  slowmode or a timeout that began right after: sending it again now answers
+  "already there" instead of "slow down" or "you cannot send here".
+- **No "new message" alert for old messages.** A reaction, edit or pin on a
+  message, or a thread reply counted on it, no longer rings and notifies as a
+  new message when this session had not opened that channel yet.
+- **Newcomers get the community key sooner.** A member who joined after
+  another member's app last looked at the member list was ignored when asking
+  for the key until something else refreshed that app; and a key replacement
+  no longer stops before handing out the key when the profile update fails.
+- **Server:** a message can carry at most 20 different reactions (joining an
+  existing one always works), and a realtime connection that stops reading is
+  closed (code 4408) once 4 MiB are queued for it instead of growing without
+  end; its app reconnects and catches up.
 - **Messages always arrive.** Mail that came in while River was already
   fetching your mailbox (the connection dropped and came back meanwhile) now
   arrives at once instead of waiting for the next reconnect.
