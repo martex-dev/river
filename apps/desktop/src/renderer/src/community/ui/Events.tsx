@@ -212,7 +212,17 @@ const DURATIONS = [
   { label: 'All day', ms: 24 * 3600_000 },
 ];
 
-function EventForm(props: {
+/** "1 hour 30 minutes", "2 days" — for a length that is not one of the usual choices. */
+export function durationLabel(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const mins = minutes % 60;
+  const part = (n: number, unit: string): string => (n ? `${n} ${unit}${n === 1 ? '' : 's'}` : '');
+  return [part(days, 'day'), part(hours, 'hour'), part(mins, 'minute')].filter(Boolean).join(' ') || '0 minutes';
+}
+
+export function EventForm(props: {
   community: CommunityView;
   event: EventView | null;
   onClose(): void;
@@ -229,16 +239,25 @@ function EventForm(props: {
     d.setMinutes(0, 0, 0);
     return toLocalInput(d.toISOString());
   });
-  const initialDuration = e ? Date.parse(e.endsAt) - Date.parse(e.startsAt) : 3600_000;
-  const [duration, setDuration] = useState(
-    DURATIONS.some((d) => d.ms === initialDuration) ? initialDuration : 3600_000,
-  );
+  const spanned = e ? Date.parse(e.endsAt) - Date.parse(e.startsAt) : 3600_000;
+  const initialDuration = Number.isFinite(spanned) && spanned > 0 ? spanned : 3600_000;
+  // An event of another length (say 90 minutes) keeps it when edited: it is one of the choices.
+  const durations = DURATIONS.some((d) => d.ms === initialDuration)
+    ? DURATIONS
+    : [...DURATIONS, { label: durationLabel(initialDuration), ms: initialDuration }].sort(
+        (a, b) => a.ms - b.ms,
+      );
+  const [duration, setDuration] = useState(initialDuration);
   const [where, setWhere] = useState<string>(e ? (e.channelId ?? 'place') : (voice[0]?.id ?? 'place'));
   const [place, setPlace] = useState(e?.place ?? '');
   const [busy, setBusy] = useState(false);
-  const startsAt = new Date(start).toISOString();
-  const endsAt = new Date(Date.parse(startsAt) + duration).toISOString();
+  // A half-typed date (the field is cleared, or a part is missing) is no time at all: Save waits.
+  const startMs = start ? Date.parse(start) : NaN;
+  const valid = Number.isFinite(startMs);
+  const startsAt = valid ? new Date(startMs).toISOString() : '';
+  const endsAt = valid ? new Date(startMs + duration).toISOString() : '';
   const save = async (): Promise<void> => {
+    if (!valid) return;
     setBusy(true);
     const channelId = where === 'place' ? null : where;
     const res = e
@@ -301,12 +320,14 @@ function EventForm(props: {
               required
               value={start}
               onChange={(ev) => setStart(ev.target.value)}
+              aria-invalid={!valid}
             />
+            {!valid && <span className="field__error">Choose a date and time.</span>}
           </label>
           <label className="textfield">
             <span className="field__label">Lasts</span>
             <select value={duration} onChange={(ev) => setDuration(Number(ev.target.value))}>
-              {DURATIONS.map((d) => (
+              {durations.map((d) => (
                 <option key={d.ms} value={d.ms}>
                   {d.label}
                 </option>
@@ -343,7 +364,7 @@ function EventForm(props: {
           <button type="button" className="btn btn--link" onClick={props.onClose}>
             Back
           </button>
-          <button className="btn btn--primary" disabled={busy || !name.trim()}>
+          <button className="btn btn--primary" disabled={busy || !name.trim() || !valid}>
             {e ? 'Save' : 'Create event'}
           </button>
         </div>
