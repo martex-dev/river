@@ -209,6 +209,10 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
             <button className="btn btn--primary" onClick={() => void window.river.updates.install()}>
               Restart and update
             </button>
+          ) : update.state === 'available' ? (
+            <button className="btn btn--primary" onClick={() => void window.river.updates.download()}>
+              Download {update.version}
+            </button>
           ) : update.state === 'manual' ? (
             <button className="btn btn--primary" onClick={() => void window.river.updates.openDownloadPage()}>
               Open download page <ExternalIcon size={14} />

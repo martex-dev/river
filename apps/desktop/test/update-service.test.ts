@@ -126,6 +126,18 @@ describe('UpdateService', () => {
     expect(updater.quitAndInstall).toHaveBeenCalledWith(true, true);
   });
 
+  it('drops a waiting beta when you go back to the stable channel', async () => {
+    const { updater, service, prefs } = setup({ channel: 'beta' });
+    updater.offer = '0.0.2-beta.1';
+    await service.check();
+    await flush();
+    expect(service.getStatus().state).toBe('ready');
+    prefs.channel = 'stable';
+    service.applyPreferences();
+    expect(service.getStatus().state).toBe('up-to-date');
+    expect(service.installNow()).toBe(false);
+  });
+
   it('refuses to install when signature verification fails', async () => {
     const { updater, service } = setup({
       verify: async () => {

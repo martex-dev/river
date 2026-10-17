@@ -20,6 +20,8 @@ export const IPC = {
   updatesStatus: 'river:updates:status',
   updatesCheck: 'river:updates:check',
   updatesInstall: 'river:updates:install',
+  /** Downloads an available update (when automatic download is off). */
+  updatesDownload: 'river:updates:download',
   updatesOpenDownload: 'river:updates:open-download',
   updatesStatusChanged: 'river:updates:status-changed',
   securityStatus: 'river:security:status',
@@ -543,6 +545,8 @@ export interface RiverApi {
     status(): Promise<UpdateStatus>;
     check(): Promise<UpdateStatus>;
     install(): Promise<void>;
+    /** Downloads the available update when automatic download is off. */
+    download(): Promise<void>;
     openDownloadPage(): Promise<void>;
     onStatus(listener: (status: UpdateStatus) => void): () => void;
   };

@@ -100,6 +100,18 @@ export class UpdateService {
     // Setting `channel` flips allowDowngrade on inside electron-updater; River never downgrades.
     u.allowDowngrade = false;
     u.autoDownload = false;
+    // Back on a channel that does not take the waiting update (a beta, after choosing Stable):
+    // it is not installed (2.10.13).
+    const waiting =
+      this.status.state === 'ready' || this.status.state === 'available' ? this.status.version : null;
+    if (waiting) {
+      if (!acceptsVersion(prefs.channel, waiting)) {
+        this.deps.log.info(`Dropping ${waiting}: not on the ${prefs.channel} channel`);
+        this.verifiedVersion = null;
+        this.pendingVersion = null;
+        this.setStatus({ state: 'up-to-date', checkedAt: this.now() });
+      }
+    }
     // electron-updater would decide this at download time, before River's signature check.
     // River installs on quit itself, and only after verification (see installOnQuit()).
     u.autoInstallOnAppQuit = false;
@@ -261,5 +273,14 @@ function friendlyMessage(code: string, raw: string): string {
       return 'The update download failed. River will try again later.';
     default:
       return 'The update could not be completed. Your current version is unchanged.';
+  }
+}
+
+/** Whether `channel` takes `version` (an unsupported version string is not taken). */
+function acceptsVersion(channel: UpdatePreferences['channel'], version: string): boolean {
+  try {
+    return channelAccepts(channel, channelOfVersion(version));
+  } catch {
+    return false;
   }
 }

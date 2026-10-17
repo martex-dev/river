@@ -44,6 +44,7 @@ export function createRiverApi(t: RiverTransport): RiverApi {
       status: () => t.invoke(IPC.updatesStatus),
       check: () => t.invoke(IPC.updatesCheck),
       install: () => t.invoke(IPC.updatesInstall),
+      download: () => t.invoke(IPC.updatesDownload),
       openDownloadPage: () => t.invoke(IPC.updatesOpenDownload),
       onStatus: (listener) => t.on(IPC.updatesStatusChanged, (...args) => listener(args[0] as UpdateStatus)),
     },

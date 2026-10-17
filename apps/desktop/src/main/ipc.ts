@@ -162,6 +162,7 @@ export function registerIpc(deps: IpcDeps): void {
     deps.updates ? deps.updates.check() : { state: 'disabled', reason: deps.updatesDisabledReason },
   );
   handle(IPC.updatesInstall, () => deps.updates?.install());
+  handle(IPC.updatesDownload, () => deps.updates?.download());
   handle(IPC.updatesOpenDownload, async () => {
     const status = deps.updates?.getStatus();
     if (status && 'version' in status) await shell.openExternal(releasePageUrl(status.version));

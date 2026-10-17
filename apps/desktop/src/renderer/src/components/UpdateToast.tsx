@@ -4,7 +4,7 @@ import { useRiver } from '../store.ts';
 /** Surfaces update states that need the user: ready to install, manual download, or failed verification. */
 export function UpdateToast(): ReactElement | null {
   const update = useRiver((s) => s.update);
-  const navigate = useRiver((s) => s.navigate);
+  const openSettings = useRiver((s) => s.openSettings);
   const [dismissed, setDismissed] = useState<string | null>(null);
 
   const key = 'version' in update ? `${update.state}:${update.version}` : `${update.state}`;
@@ -45,7 +45,7 @@ export function UpdateToast(): ReactElement | null {
           <strong>Update blocked</strong>
           <p>A downloaded update failed signature verification and was not installed.</p>
         </div>
-        <button className="btn btn--ghost btn--small" onClick={() => navigate('settings')}>
+        <button className="btn btn--ghost btn--small" onClick={() => openSettings('updates')}>
           Details
         </button>
       </>
