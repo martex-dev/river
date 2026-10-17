@@ -30,5 +30,15 @@ describe('installing updates by itself', () => {
     expect(shouldAutoInstall({ ...base, hosting: true, hour: 14 })).toBe(false);
     expect(shouldAutoInstall({ ...base, hosting: true, hour: 3 })).toBe(true);
     expect(shouldAutoInstall({ ...base, hosting: true, hour: 5 })).toBe(false);
+    // At night too, not while someone is using River on that PC.
+    expect(
+      shouldAutoInstall({
+        ...base,
+        hosting: true,
+        hour: 3,
+        windowVisible: true,
+        lastFocusAt: base.now - 1000,
+      }),
+    ).toBe(false);
   });
 });

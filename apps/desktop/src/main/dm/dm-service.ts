@@ -12,6 +12,7 @@ import {
 import {
   deviceListMessage,
   deviceListSchema,
+  deviceListResponseSchema,
   keyBundleResponseSchema,
   mailboxResponseSchema,
   preKeyCountSchema,
@@ -173,6 +174,8 @@ const contentSchema = z.discriminatedUnion('t', [
           riverId: z.uuid(),
           state: z.enum(['accepted', 'blocked']),
           name: z.string().max(64).nullable(),
+          /** They wrote back (a friend, not just a chat you opened) — 2.11.2. Absent from older apps. */
+          heard: z.boolean().optional(),
         }),
       )
       .max(2000),
@@ -637,7 +640,9 @@ export class DmService {
       if (env.sender === this.me()) {
         const listed =
           env.senderDevice !== this.deviceId() &&
-          (await this.deps.account.ownDeviceListed(env.senderDevice).catch(() => false));
+          (await this.deps.account.ownDeviceListed(env.senderDevice).catch(() => null));
+        // Not checkable now (no connection): left on the server and tried again, never lost.
+        if (listed === null) return false;
         if (!listed) {
           this.deps.log.warn('Dropped a message claiming to come from a device this account does not have');
           return true;
@@ -1425,8 +1430,15 @@ export class DmService {
   private async shareContacts(): Promise<void> {
     if (!this.deps.account.hasOtherDevices()) return;
     const rows = this.db()
-      .prepare(`SELECT river_id, state, name FROM contacts WHERE state IN ('accepted', 'blocked') LIMIT 2000`)
-      .all() as Array<{ river_id: string; state: 'accepted' | 'blocked'; name: string | null }>;
+      .prepare(
+        `SELECT river_id, state, name, heard_from FROM contacts WHERE state IN ('accepted', 'blocked') LIMIT 2000`,
+      )
+      .all() as Array<{
+      river_id: string;
+      state: 'accepted' | 'blocked';
+      name: string | null;
+      heard_from: number;
+    }>;
     const me = this.me();
     const contacts = rows
       .filter((r) => r.river_id !== me)
@@ -1434,6 +1446,7 @@ export class DmService {
         riverId: r.river_id,
         state: r.state,
         name: r.name ? r.name.slice(0, 64) : null,
+        heard: r.heard_from === 1,
       }));
     try {
       await this.sendContent(this.me(), {
@@ -1453,7 +1466,7 @@ export class DmService {
    * list must never undo a block).
    */
   private applyContacts(
-    contacts: Array<{ riverId: string; state: 'accepted' | 'blocked'; name: string | null }>,
+    contacts: Array<{ riverId: string; state: 'accepted' | 'blocked'; name: string | null; heard?: boolean }>,
   ): void {
     const me = this.me();
     for (const c of contacts) {
@@ -1467,6 +1480,11 @@ export class DmService {
         this.upsertContact(c.riverId, 'accepted', c.name);
       } else if (existing.state === 'request') {
         this.db().prepare(`UPDATE contacts SET state = 'accepted' WHERE river_id = ?`).run(c.riverId);
+      }
+      // A friend on the other device is a friend here too (posts, stories), not a chat waiting for
+      // a reply. Lists from apps older than 2.11.2 do not say: accepted counted as a friend then.
+      if (c.state === 'accepted' && (c.heard ?? true)) {
+        this.db().prepare('UPDATE contacts SET heard_from = 1 WHERE river_id = ?').run(c.riverId);
       }
     }
     this.setMeta('contactsSynced', me);
@@ -1630,8 +1648,11 @@ export class DmService {
     // and sooner when a message arrives from a device it does not have (hintDevice).
     const checkedAt = Number(this.meta(`devicesAt:${peer}`) ?? 0);
     const fresh = Date.now() - checkedAt < DEVICE_LIST_MAX_AGE_MS && checkedAt <= Date.now();
-    if (!force && fresh && cached?.length && cached.every((d) => protocol.hasSession(peer, d.deviceId)))
-      return cached;
+    const sessions = !!cached?.length && cached.every((d) => protocol.hasSession(peer, d.deviceId));
+    if (!force && fresh && sessions) return cached!;
+    // Only due for its daily check: the signed list alone is enough while it names the same
+    // devices under the same key — fetching full bundles would use up their one-time keys.
+    if (!force && sessions && (await this.listStillCurrent(peer, cached!))) return cached!;
 
     const { res, identityKey, list } = await this.verifiedKeys(peer);
     // A server must not bring back a device that was removed by replaying an older signed list.
@@ -1663,6 +1684,55 @@ export class DmService {
     this.setMeta(`devices:${peer}`, JSON.stringify(devices));
     this.setMeta(`devicesAt:${peer}`, String(Date.now()));
     return devices;
+  }
+
+  /**
+   * The daily re-check (2.11.2): true when their identity-signed device list still names exactly
+   * the cached devices under the key River holds (nothing to set up). On an older server without
+   * the list-only lookup, the cached list stays in use until something changes (a message from an
+   * unknown device or a 409 from the server still forces a full look-up).
+   */
+  private async listStillCurrent(
+    peer: string,
+    cached: Array<{ deviceId: number; registrationId: number }>,
+  ): Promise<boolean> {
+    let res;
+    try {
+      res = await this.deps.community.api(
+        `/keys/${peer}/devices`,
+        'GET',
+        undefined,
+        deviceListResponseSchema,
+      );
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404 && /not_found|Not Found/i.test(err.message)) {
+        // An older server (no such route) or the person is gone: the full look-up decides.
+        return false;
+      }
+      return false;
+    }
+    const identityKey = Buffer.from(res.identityKey, 'base64');
+    const stored = peer === this.me() ? null : this.protocol().identityOf(peer);
+    if (stored && !Buffer.from(stored).equals(identityKey)) return false;
+    const fromCommunity = peer === this.me() ? null : this.deps.community.communityIdentityKey(peer);
+    if (fromCommunity && fromCommunity !== res.identityKey) return false;
+    const listBytes = Buffer.from(res.deviceList, 'base64');
+    if (!verify(identityKey, deviceListMessage(listBytes), Buffer.from(res.deviceListSignature, 'base64')))
+      return false;
+    const list = deviceListSchema.parse(JSON.parse(listBytes.toString('utf8')));
+    if (list.riverId !== peer) return false;
+    const seen = Number(this.meta(`listVersion:${peer}`) ?? '0');
+    if (list.version < seen) return false;
+    const wanted = list.devices.filter((d) => !(peer === this.me() && d.deviceId === this.deviceId()));
+    const same =
+      wanted.length === cached.length &&
+      wanted.every((d) =>
+        cached.some((c) => c.deviceId === d.deviceId && c.registrationId === d.registrationId),
+      );
+    if (!same) return false;
+    if (list.version > seen) this.setMeta(`listVersion:${peer}`, String(list.version));
+    this.setMeta(`devicesAt:${peer}`, String(Date.now()));
+    return true;
   }
 
   /**

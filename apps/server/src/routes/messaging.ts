@@ -273,6 +273,30 @@ export function registerMessagingRoutes(
       .where('blocked', '=', other)
       .executeTakeFirst());
 
+  // The signed device list alone (2.11.2): re-checking someone's devices claims none of their keys.
+  app.get<{ Params: { riverId: string } }>(
+    `${API_PREFIX}/keys/:riverId/devices`,
+    { ...authed, config: { rateLimit: { max: 300, timeWindow: '1 minute' } } },
+    async (request) => {
+      const target = parse(riverIdSchema, request.params.riverId);
+      const account = await db
+        .selectFrom('accounts')
+        .select(['identity_key', 'device_list', 'device_list_signature'])
+        .where('river_id', '=', target)
+        .executeTakeFirst();
+      // As for the full bundle: a blocked sender sees "not found".
+      if (!account || (await isBlocked(target, request.session!.riverId))) {
+        throw new HttpError(404, 'not_found', 'No River account with that ID on this server');
+      }
+      return {
+        riverId: target,
+        identityKey: account.identity_key,
+        deviceList: account.device_list,
+        deviceListSignature: account.device_list_signature,
+      };
+    },
+  );
+
   app.get<{ Params: { riverId: string } }>(
     `${API_PREFIX}/keys/:riverId`,
     { ...authed, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },

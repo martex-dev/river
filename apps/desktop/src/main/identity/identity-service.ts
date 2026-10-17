@@ -58,6 +58,12 @@ export class IdentityService {
     if (!db) throw new Error('Local storage is not open');
     const displayName = displayNameSchema.parse(rawDisplayName ?? '');
     if (this.get()) throw new Error('An identity already exists');
+    // A fresh identity instead of "Link this device again": linking is open to any account again.
+    try {
+      db.prepare("DELETE FROM meta WHERE key = 'relink_river_id'").run();
+    } catch {
+      // older databases without the meta table have nothing to clear
+    }
     const keys = createIdentity();
     try {
       db.prepare(

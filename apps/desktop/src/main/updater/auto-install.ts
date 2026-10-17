@@ -26,8 +26,9 @@ export interface AutoInstallState {
 
 export function shouldAutoInstall(s: AutoInstallState): boolean {
   if (!s.ready || !s.allowed || s.inCall) return false;
-  // A PC that hosts River restarts at night, when nobody is likely to be talking.
-  if (s.hosting) return s.hour >= 3 && s.hour < 5;
+  // A PC that hosts River restarts at night, when nobody is likely to be talking — and, like any
+  // PC, only while nobody is using River on it.
+  if (s.hosting && !(s.hour >= 3 && s.hour < 5)) return false;
   if (!s.windowVisible) return true;
   return s.lastFocusAt === null ? false : s.now - s.lastFocusAt >= IDLE_MS;
 }

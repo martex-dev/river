@@ -831,6 +831,49 @@ const conversationOf = async (p: Person, peer: string) =>
   (await p.dm.action({ a: 'conversations' })).find((c) => c.riverId === peer);
 
 describe('direct messages: audit fixes', { timeout: 60_000 }, () => {
+  it('friends synced to a newly linked device are friends there (posts reach them)', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await friends(alice, bob);
+    // Bob writes back: a friend, not only a chat Alice opened.
+    await bob.dm.action({ a: 'send', peer: alice.riverId, text: 'hey' });
+    await alice.dm.sync();
+    expect(alice.dm.friends()).toEqual([bob.riverId]);
+    const laptop = await linkDevice(alice, 'Alice-laptop');
+    // The laptop asks for the friends list; Alice's computer answers it.
+    await until(async () => {
+      await laptop.dm.sync();
+      await alice.dm.sync();
+      await laptop.dm.sync();
+      return laptop.dm.friends().includes(bob.riverId);
+    });
+  });
+
+  it("the daily device check reads the signed list without using up the person's one-time keys", async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await friends(alice, bob);
+    const prekeys = async () =>
+      Number(
+        (
+          await serverDb.db
+            .selectFrom('prekeys')
+            .select((eb) => eb.fn.countAll().as('n'))
+            .where('river_id', '=', bob.riverId)
+            .executeTakeFirstOrThrow()
+        ).n,
+      );
+    const before = await prekeys();
+    // A day later: the cached device list is due for its check.
+    alice.local
+      .prepare("DELETE FROM signal_store WHERE kind = 'meta' AND id = ?")
+      .run(`dm:devicesAt:${bob.riverId}`);
+    await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'a day later' });
+    expect(await prekeys()).toBe(before);
+    await bob.dm.sync();
+    expect((await messagesOf(bob, alice.riverId)).some((m) => m.text === 'a day later')).toBe(true);
+  });
+
   it('answering a call on one device stops it ringing on your other devices', async () => {
     const bob = await person('Bob');
     const bobPhone = await linkDevice(bob, 'Bob-phone');
