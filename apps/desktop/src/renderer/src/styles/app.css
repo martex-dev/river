@@ -2572,4 +2572,37 @@ body:has(.dm-call--full) .lightbox {
 }
 body:has(.dm-call--full) .popover {
   z-index: 870;
+
+/* ---------- Something went wrong (error boundary) ---------- */
+.crash {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px 16px;
+  background: var(--bg, #0b0f1c);
+  color: var(--text);
+}
+.crash--page {
+  min-height: 100%;
+  background: none;
+}
+.crash__card {
+  width: min(520px, 100%);
+  padding: 24px;
+}
+.crash__title {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+.crash__detail {
+  max-height: 160px;
+  margin: 12px 0;
+  padding: 10px;
+  overflow: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

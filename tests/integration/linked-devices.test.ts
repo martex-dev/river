@@ -31,6 +31,8 @@ let server: FastifyInstance;
 let serverDb: RiverDatabase;
 const locals: LocalDatabase[] = [];
 const links: LinkService[] = [];
+
+/** Stopped before their databases close, so no reconnect timer outlives its test. */
 const communities: CommunityService[] = [];
 
 const injectFetch: typeof fetch = async (input, init) => {
@@ -85,6 +87,7 @@ function install(name: string, broken: { when: (url: string) => boolean } = { wh
     timings: { watchMs: 100, linkedShowMs: 3000 },
   });
   links.push(link);
+
   communities.push(community);
   return { identity, account, community, dm, link };
 }
@@ -118,6 +121,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   for (const l of links.splice(0)) l.dispose();
+
   for (const c of communities.splice(0)) c.stop();
   for (const l of locals.splice(0)) l.close();
   await server.close();

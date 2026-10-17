@@ -13,6 +13,7 @@ import { useRiver } from '../src/renderer/src/store.ts';
 import {
   CONNECT_TIMEOUT_MS,
   acceptDmCall,
+  declineDmCall,
   endDmCall,
   handleCallEvent,
   handlePhoneCall,
@@ -143,6 +144,15 @@ describe('1:1 calls', () => {
     expect(useDmCall.getState().incoming).toBeNull();
     expect(logged()).toEqual([expect.objectContaining({ direction: 'in', video: true, answered: false })]);
     expect(useCommunity.getState().toast?.text).toMatch(/Missed call/);
+  });
+
+  it('a call you decline is logged as declined, not missed', () => {
+    invite(true);
+    declineDmCall();
+    expect(logged()).toEqual([
+      expect.objectContaining({ direction: 'in', video: true, answered: false, outcome: 'declined' }),
+    ]);
+    expect(sent('decline')).toHaveLength(1);
   });
 
   it('a video call the caller ends before you answer is logged as a video call', () => {

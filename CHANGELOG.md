@@ -208,6 +208,53 @@ releases on desktop, Android and iPhone.
 - Call invites are never kept to be replayed later, and one that waited longer
   than a ring lasts no longer rings.
 
+### Security
+
+- **Social privacy**: posts and stories go only to friends who have answered
+  (as the Friends page counts them), never to someone you only opened a chat
+  with or sent a request to; a hand-picked audience is limited to friends too.
+  Comments and reactions are relayed only to people who are still your
+  contacts, comments from people you blocked are not shown on anyone's post,
+  and posts and stories of people you removed leave your feed and their profile.
+
+### Fixed
+
+- **A crash no longer leaves a blank window**: River shows "Something went
+  wrong" with the error and Reload; a crash on one page leaves the rest of River
+  working (and that page can be tried again).
+- **Stories**: the viewer follows the story you are watching by its ID, so
+  marking it seen no longer jumps to someone else or crashes when stories
+  disappear. Video stories play (muted, inline) and move on when they end; the
+  timer starts once the picture is shown, and holding keeps its progress.
+  Arrow keys and Esc while writing a reply stay in the reply box. On touch
+  screens, a hold pauses, a tap goes back or on, and a swipe down closes.
+- **Posts that did not go out**: a post nobody received is removed instead of
+  staying as if shared (sharing again makes no duplicate); people a post
+  missed, deletes, "seen" receipts and comment relays are sent again later. An
+  offline comment or like is taken back and says so (your comment returns to
+  the box) instead of looking sent and being lost.
+- **Profiles**: a bio that could not be saved is no longer shown as saved, and
+  a new bio reaches your friends (once, a few seconds after the last change).
+  Profiles update after likes, comments and deletes. On narrow windows (phones)
+  your profile, bio and friends are reachable at the top of the feed.
+- Photo previews in the post and story composer are freed when removed, cut
+  off by the limit or closed.
+- **Call history**: calls you decline show as declined and calls that were
+  answered but never connected as "Could not connect", not as missed; new
+  calls appear on the Calls page at once.
+- **Adding a friend** again no longer sends a second greeting ("already sent");
+  adding someone who asked you first accepts their request and says you are
+  now friends; someone you blocked is refused with a reason. Pasting a bare
+  River ID offers to add them instead of doing nothing.
+- **Events**: a half-typed start time no longer crashes the form (Save waits
+  for a valid time), and an event of another length (say 90 minutes) keeps it
+  when edited instead of becoming one hour.
+- **Shortcuts**: Space on a focused button presses it instead of jumping to
+  the message box; Alt+↑/↓ and Ctrl+Alt+↑/↓ no longer switch channels from
+  other fields, menus or dialogs (they still work from the message box).
+- **Admin**: a new sign-up link is no longer shown as already copied, and a
+  failed copy, sign-up mode change or cancelled link says so.
+
 ## [2.10.12] - 2026-10-16
 
 **Bug sweep: a review of the whole program — server, phone apps, calls, voice, messages and layout.**

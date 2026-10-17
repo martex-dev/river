@@ -19,6 +19,26 @@ const STORY_MS = 24 * 60 * 60 * 1000;
 const RELAY_DELAY_MS = 1500;
 /** How long a comment of ours survives the author's snapshots while they have not relayed it. */
 const PENDING_COMMENT_MS = 7 * 24 * 60 * 60 * 1000;
+/** Social updates that could not be sent are retried for this long, this many times. */
+const OUTBOX_MS = 7 * 24 * 60 * 60 * 1000;
+const OUTBOX_TRIES = 20;
+const OUTBOX_MAX = 1000;
+/** Retries run at most this often (on the feed opening, or when anything social arrives). */
+const OUTBOX_EVERY_MS = 30_000;
+
+/**
+ * Something for one person that has not reached them yet: a post, a delete, a "seen", or
+ * (`relay`) the latest comments and reactions of one of our posts, rebuilt when it is sent.
+ */
+interface OutboxItem {
+  peer: string;
+  postId: string;
+  t: SocialContent['t'];
+  content?: SocialContent;
+  relay?: true;
+  tries: number;
+  at: number;
+}
 
 interface PostRow {
   id: string;
@@ -47,6 +67,9 @@ export class SocialService {
   private readonly deps: Deps;
   private readonly listeners = new Set<(e: SocialEvent) => void>();
   private readonly relayTimers = new Map<string, NodeJS.Timeout>();
+  /** The retry running now, if any (one at a time). */
+  private flushing: Promise<number> | null = null;
+  private lastFlush = 0;
 
   constructor(deps: Deps) {
     this.deps = deps;
@@ -118,6 +141,8 @@ export class SocialService {
 
   private receive(peer: string, c: SocialContent): void {
     const me = this.me();
+    // Something arrived, so we are online: what could not be sent before goes now.
+    this.flushSoon();
     switch (c.t) {
       case 'post': {
         // Only people you accepted can put posts in your feed.
@@ -161,6 +186,8 @@ export class SocialService {
         const post = this.row(c.postId);
         if (!post || post.author !== me) return;
         if (!(JSON.parse(post.audience) as string[]).includes(peer)) return;
+        // Someone you blocked or removed since sharing it no longer comments or reacts.
+        if (this.deps.dm.contactState(peer) !== 'accepted') return;
         if (c.t === 'postReact') this.setReaction(c.postId, peer, c.emoji, c.on);
         else {
           this.db()
@@ -199,6 +226,8 @@ export class SocialService {
         ).run(c.postId, me, JSON.stringify(waiting));
         if (Object.keys(pending).length !== before) this.setPendingComments(pending);
         for (const cm of c.comments) {
+          // Never comments from people you blocked, whoever's post they are on.
+          if (cm.author !== me && this.deps.dm.contactState(cm.author) === 'blocked') continue;
           db.prepare(
             'INSERT OR IGNORE INTO post_comments (id, post_id, author, author_name, text, created_at) VALUES (?, ?, ?, ?, ?, ?)',
           ).run(cm.id, c.postId, cm.author, cm.authorName.slice(0, 64), cm.text, cm.createdAt);
@@ -259,6 +288,28 @@ export class SocialService {
   async relay(postId: string): Promise<void> {
     const post = this.row(postId);
     if (!post || post.author !== this.me()) return;
+    const content = this.activity(post);
+    // Only people who are still your contacts: not someone you blocked or removed since.
+    for (const peer of this.reachable(post)) {
+      try {
+        await this.deps.dm.sendSocial(peer, content);
+        this.unqueue((x) => x.peer === peer && x.postId === postId && x.t === 'postActivity');
+      } catch {
+        this.queue(peer, { postId, t: 'postActivity', relay: true });
+      }
+    }
+  }
+
+  /** The audience of one of our posts who are still accepted contacts. */
+  private reachable(post: PostRow): string[] {
+    return (JSON.parse(post.audience) as string[]).filter(
+      (peer) => this.deps.dm.contactState(peer) === 'accepted',
+    );
+  }
+
+  /** The snapshot of comments and reactions on one of our posts that its audience gets. */
+  private activity(post: PostRow): SocialContent {
+    const postId = post.id;
     const view = this.view(post);
     const reactions: Record<string, string[]> = {};
     for (const r of this.db()
@@ -282,9 +333,101 @@ export class SocialService {
       })),
       reactions,
     };
-    for (const peer of JSON.parse(post.audience) as string[]) {
-      await this.deps.dm.sendSocial(peer, content).catch(() => undefined);
+    return content;
+  }
+
+  // ---- retrying what could not be sent -----------------------------------------------------------
+
+  private outbox(): OutboxItem[] {
+    try {
+      const row = this.db().prepare("SELECT value FROM meta WHERE key = 'social_outbox'").get() as
+        { value: string } | undefined;
+      const parsed: unknown = row ? JSON.parse(row.value) : [];
+      return Array.isArray(parsed) ? (parsed as OutboxItem[]) : [];
+    } catch {
+      return [];
     }
+  }
+
+  private setOutbox(items: OutboxItem[]): void {
+    const cutoff = Date.now() - OUTBOX_MS;
+    const kept = items.filter((x) => x.at > cutoff && x.tries < OUTBOX_TRIES).slice(-OUTBOX_MAX);
+    this.db()
+      .prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('social_outbox', ?)")
+      .run(JSON.stringify(kept));
+  }
+
+  /** Keeps something to send again later (one entry per person, post and kind: the latest wins). */
+  private queue(peer: string, item: Pick<OutboxItem, 'postId' | 't' | 'content' | 'relay'>): void {
+    const rest = this.outbox().filter(
+      (x) => !(x.peer === peer && x.postId === item.postId && x.t === item.t),
+    );
+    this.setOutbox([...rest, { peer, ...item, tries: 0, at: Date.now() }]);
+  }
+
+  private unqueue(match: (x: OutboxItem) => boolean): void {
+    const items = this.outbox();
+    const rest = items.filter((x) => !match(x));
+    if (rest.length !== items.length) this.setOutbox(rest);
+  }
+
+  /**
+   * Tries the outbox again when something waits in it, at most every OUTBOX_EVERY_MS (never
+   * while storage is locked).
+   */
+  private flushSoon(): void {
+    if (this.flushing || Date.now() - this.lastFlush < OUTBOX_EVERY_MS || !this.deps.db()) return;
+    if (!this.outbox().length) return;
+    void this.flushOutbox().catch((err: unknown) =>
+      this.deps.log.warn(`Social retry failed: ${(err as Error).message}`),
+    );
+  }
+
+  /** Sends again what could not be sent before. Returns how many items are still waiting. */
+  async flushOutbox(): Promise<number> {
+    // One at a time: a retry already running finishes first, then this one runs.
+    while (this.flushing) await this.flushing.catch(() => undefined);
+    this.lastFlush = Date.now();
+    const run = this.sendOutbox();
+    this.flushing = run;
+    try {
+      return await run;
+    } finally {
+      this.flushing = null;
+    }
+  }
+
+  private async sendOutbox(): Promise<number> {
+    const items = this.outbox();
+    if (!items.length) return 0;
+    const same = (a: OutboxItem, b: OutboxItem): boolean =>
+      a.peer === b.peer && a.postId === b.postId && a.t === b.t && a.at === b.at;
+    const left: OutboxItem[] = [];
+    for (const item of items) {
+      // Blocked or removed since: nothing more goes to them.
+      if (this.deps.dm.contactState(item.peer) !== 'accepted') continue;
+      let content = item.content;
+      if (item.relay) {
+        const post = this.row(item.postId);
+        if (!post || post.author !== this.me() || !this.reachable(post).includes(item.peer)) continue;
+        content = this.activity(post);
+      } else if (item.t === 'post' && !this.row(item.postId)) continue;
+      if (!content) continue;
+      try {
+        await this.deps.dm.sendSocial(item.peer, content);
+      } catch {
+        left.push({ ...item, tries: item.tries + 1 });
+      }
+    }
+    // Anything queued (or taken back) while this ran is respected.
+    const now = this.outbox();
+    const added = now.filter((x) => !items.some((y) => same(x, y)));
+    const stillQueued = left.filter((x) => now.some((y) => same(x, y)));
+    const replaced = stillQueued.filter(
+      (x) => !added.some((y) => y.peer === x.peer && y.postId === x.postId && y.t === x.t),
+    );
+    this.setOutbox([...replaced, ...added]);
+    return replaced.length + added.length;
   }
 
   // ---- actions -----------------------------------------------------------------------------------
@@ -297,9 +440,18 @@ export class SocialService {
       case 'feed':
         return out(this.feed());
       case 'post': {
-        const audience = act.audience === 'friends' ? this.deps.dm.friends() : [...new Set(act.audience)];
+        // Only ever your friends, also when you pick people (the window's list is not trusted).
+        const friends = this.deps.dm.friends();
+        const audience =
+          act.audience === 'friends'
+            ? friends
+            : [...new Set(act.audience)].filter((p) => friends.includes(p));
         if (!audience.length) {
-          throw new CommunityError('Add some contacts first: posts are shared with people you message.');
+          throw new CommunityError(
+            act.audience === 'friends'
+              ? 'Add some friends first: posts are shared with people who accepted you.'
+              : 'None of the people you chose are your friends.',
+          );
         }
         const id = randomBytes(16).toString('base64url');
         const createdAt = new Date().toISOString();
@@ -329,25 +481,39 @@ export class SocialService {
           ...(expiresAt ? { expiresAt } : {}),
         };
         let delivered = 0;
+        const missed: string[] = [];
         for (const peer of audience) {
           try {
             await this.deps.dm.sendSocial(peer, content);
             delivered++;
           } catch (err) {
+            missed.push(peer);
             this.deps.log.warn(`Post not delivered to one person: ${(err as Error).message}`);
           }
         }
-        if (!delivered) throw new CommunityError('The post could not be delivered to anyone.');
+        if (!delivered) {
+          // Nobody got it: it is not kept as if shared (sharing again does not make a duplicate).
+          this.db().prepare('DELETE FROM posts WHERE id = ?').run(id);
+          this.changed();
+          throw new CommunityError(
+            'The post could not be delivered to anyone. Check your connection and try again.',
+          );
+        }
+        // Those who did not get it yet get it later (a copy they already have is ignored).
+        for (const peer of missed) this.queue(peer, { postId: id, t: 'post', content });
         return out(this.view(this.row(id)!));
       }
       case 'deletePost': {
         const post = this.row(act.postId);
         if (!post) return out(null);
         if (post.author === me) {
+          // Copies not delivered yet never go out; the delete reaches those offline later.
+          this.unqueue((x) => x.postId === post.id);
+          const del: SocialContent = { v: 1, t: 'postDelete', postId: post.id };
           for (const peer of JSON.parse(post.audience) as string[]) {
             await this.deps.dm
-              .sendSocial(peer, { v: 1, t: 'postDelete', postId: post.id })
-              .catch(() => undefined);
+              .sendSocial(peer, del)
+              .catch(() => this.queue(peer, { postId: post.id, t: 'postDelete', content: del }));
           }
         }
         this.db().prepare('DELETE FROM posts WHERE id = ?').run(act.postId);
@@ -356,19 +522,30 @@ export class SocialService {
       }
       case 'react': {
         const post = this.row(act.postId);
-        if (!post) return out(null);
+        if (!post) return out(false);
+        const had = !!this.db()
+          .prepare('SELECT 1 FROM post_reactions WHERE post_id = ? AND author = ? AND emoji = ?')
+          .get(post.id, me, act.emoji);
         this.setReaction(act.postId, me, act.emoji, act.on);
         this.changed();
         if (post.author === me) this.scheduleRelay(post.id);
-        else
-          await this.deps.dm.sendSocial(post.author, {
-            v: 1,
-            t: 'postReact',
-            postId: post.id,
-            emoji: act.emoji,
-            on: act.on,
-          });
-        return out(null);
+        else {
+          try {
+            await this.deps.dm.sendSocial(post.author, {
+              v: 1,
+              t: 'postReact',
+              postId: post.id,
+              emoji: act.emoji,
+              on: act.on,
+            });
+          } catch {
+            // Not sent: it does not stay looking sent.
+            this.setReaction(post.id, me, act.emoji, had);
+            this.changed();
+            throw new CommunityError('Your reaction could not be sent. Check your connection and try again.');
+          }
+        }
+        return out(true);
       }
       case 'comment': {
         const post = this.row(act.postId);
@@ -393,34 +570,48 @@ export class SocialService {
             ...this.pendingComments(),
             [commentId]: { postId: post.id, at: Date.now() },
           });
-          await this.deps.dm.sendSocial(post.author, {
-            v: 1,
-            t: 'postComment',
-            postId: post.id,
-            commentId,
-            text: act.text.trim(),
-          });
+          try {
+            await this.deps.dm.sendSocial(post.author, {
+              v: 1,
+              t: 'postComment',
+              postId: post.id,
+              commentId,
+              text: act.text.trim(),
+            });
+          } catch {
+            // Not sent: it is taken back (and the window keeps what you wrote) instead of looking sent.
+            this.db().prepare('DELETE FROM post_comments WHERE id = ?').run(commentId);
+            const { [commentId]: _gone, ...pending } = this.pendingComments();
+            this.setPendingComments(pending);
+            this.changed();
+            throw new CommunityError('Your comment could not be sent. Check your connection and try again.');
+          }
         }
-        return out(null);
+        return out(commentId);
       }
       case 'seen': {
         const post = this.row(act.postId);
         if (!post || post.kind !== 'story' || post.author === me || post.seen) return out(null);
         this.db().prepare('UPDATE posts SET seen = 1 WHERE id = ?').run(post.id);
         this.changed();
+        // Seen here at once; the author hears it now or, if that fails, later.
+        const seen: SocialContent = { v: 1, t: 'storySeen', postId: post.id };
         await this.deps.dm
-          .sendSocial(post.author, { v: 1, t: 'storySeen', postId: post.id })
-          .catch(() => undefined);
+          .sendSocial(post.author, seen)
+          .catch(() => this.queue(post.author, { postId: post.id, t: 'storySeen', content: seen }));
         return out(null);
       }
       case 'profile': {
         const who = act.riverId ?? me;
         const person = this.deps.dm.person(who);
-        const rows = this.db()
-          .prepare(
-            `SELECT * FROM posts WHERE author = ? AND kind = 'post' ORDER BY created_at DESC LIMIT 200`,
-          )
-          .all(who) as PostRow[];
+        // Posts of someone blocked or removed are not shown (as in the feed).
+        const rows = this.shown(who)
+          ? (this.db()
+              .prepare(
+                `SELECT * FROM posts WHERE author = ? AND kind = 'post' ORDER BY created_at DESC LIMIT 200`,
+              )
+              .all(who) as PostRow[])
+          : [];
         const profile: ProfileView = {
           riverId: who,
           name: person.name,
@@ -433,8 +624,7 @@ export class SocialService {
         return out(profile);
       }
       case 'setBio':
-        this.deps.dm.setMyBio(act.bio);
-        return out(null);
+        return out(this.deps.dm.setMyBio(act.bio));
     }
   }
 
@@ -446,12 +636,16 @@ export class SocialService {
     if (n) this.changed();
   }
 
+  /** Whose posts and stories show: yours and your contacts' (never someone blocked or removed). */
+  private shown(author: string): boolean {
+    return author === this.me() || this.deps.dm.contactState(author) === 'accepted';
+  }
+
   feed(): FeedView {
     this.expireStories();
+    this.flushSoon();
     const me = this.me();
-    // Never anything from people you blocked (older copies included).
-    const shown = (r: PostRow): boolean =>
-      r.author === me || this.deps.dm.contactState(r.author) !== 'blocked';
+    const shown = (r: PostRow): boolean => this.shown(r.author);
     const posts = (
       this.db()
         .prepare(`SELECT * FROM posts WHERE kind = 'post' ORDER BY created_at DESC LIMIT 300`)
@@ -510,14 +704,17 @@ export class SocialService {
         text: string;
         created_at: string;
       }>
-    ).map((c) => ({
-      id: c.id,
-      author: c.author,
-      authorName: c.author === me ? this.deps.dm.person(me).name : c.author_name,
-      text: c.text,
-      createdAt: c.created_at,
-      mine: c.author === me,
-    }));
+    )
+      // Never comments from people you blocked.
+      .filter((c) => c.author === me || this.deps.dm.contactState(c.author) !== 'blocked')
+      .map((c) => ({
+        id: c.id,
+        author: c.author,
+        authorName: c.author === me ? this.deps.dm.person(me).name : c.author_name,
+        text: c.text,
+        createdAt: c.created_at,
+        mine: c.author === me,
+      }));
     const audience = JSON.parse(r.audience) as string[];
     const viewers =
       r.author === me && r.kind === 'story'

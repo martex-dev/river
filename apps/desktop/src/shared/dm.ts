@@ -100,6 +100,9 @@ export interface FileView {
   sentAt: string;
 }
 
+/** How a call ended: answered, missed (no answer), declined, or answered but never connected. */
+export type CallOutcome = 'answered' | 'missed' | 'declined' | 'failed';
+
 export interface CallView {
   id: string;
   peer: string;
@@ -108,6 +111,7 @@ export interface CallView {
   direction: 'in' | 'out';
   video: boolean;
   answered: boolean;
+  outcome: CallOutcome;
   durationSec: number;
   startedAt: string;
 }
@@ -128,6 +132,8 @@ export type DmEvent =
   | { t: 'focus'; peer: string }
   /** The list of messages waiting to be sent later changed (2.5). */
   | { t: 'scheduled' }
+  /** A call was added to the call history. */
+  | { t: 'calls' }
   | {
       t: 'call';
       peer: string;
@@ -301,6 +307,8 @@ export const dmActionSchema = z.discriminatedUnion('a', [
       direction: z.enum(['in', 'out']),
       video: z.boolean(),
       answered: z.boolean(),
+      /** Why an unanswered call ended, when the window knows (a call you declined). */
+      outcome: z.enum(['declined', 'failed']).optional(),
       durationSec: z
         .number()
         .int()

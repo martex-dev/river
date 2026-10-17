@@ -29,6 +29,7 @@ import {
 import { readPoll } from '../../shared/poll.ts';
 import {
   dmActionSchema,
+  type CallOutcome,
   type ConversationView,
   type DirectMessageView,
   type DmAction,
@@ -49,6 +50,17 @@ import type { LocalDatabase } from '../storage/database.ts';
 
 /** How long a call invite rings (the same as the window's ring timeout). */
 const RING_MS = 45_000;
+
+/**
+ * How a call ended, kept in call_log.answered (so older Rivers still read 1 as answered and
+ * anything else as not answered): 0 missed / no answer, 1 answered, 2 declined, 3 failed.
+ */
+const CALL_OUTCOMES: readonly CallOutcome[] = ['missed', 'answered', 'declined', 'failed'];
+const CALL_OUTCOME_CODE: Record<CallOutcome, number> = { missed: 0, answered: 1, declined: 2, failed: 3 };
+/** An answer this recent, for a call logged as never connected, means the call failed after it was answered. */
+const CALL_ANSWER_WINDOW_MS = 10 * 60_000;
+/** A new bio goes to friends this long after the last change. */
+const BIO_SHARE_DELAY_MS = 5_000;
 
 /** A message waiting on this device to be sent later (2.5). */
 interface ScheduledItem {
@@ -408,6 +420,10 @@ export class DmService {
   private readonly undelivered = new Map<string, Inbound>();
   /** Scheduled messages being sent right now, and whether they were cancelled meanwhile. */
   private readonly scheduledInFlight = new Map<string, { cancelled: boolean }>();
+  /** When each person last answered a call with us (either side), so an answered call that then failed is not "missed". */
+  private readonly callAnswered = new Map<string, number>();
+  /** A changed bio goes to friends once typing has settled (not once per save). */
+  private bioShareTimer: NodeJS.Timeout | undefined;
 
   constructor(deps: Deps) {
     this.deps = deps;
@@ -1022,6 +1038,7 @@ export class DmService {
         // An invite is remembered while it rings, so a window that opens because of it can show it.
         if (content.kind === 'invite') this.ringing = { event, at: Date.now() };
         else if (this.ringing?.event.callId === content.callId) this.ringing = null;
+        if (content.kind === 'accept') this.callAnswered.set(peer, Date.now());
         this.emit(event);
         return null;
       }
@@ -1065,7 +1082,8 @@ export class DmService {
   /** Friends get our profile; people we share only groups with get a group-scoped one (no request). */
   private reintroductionTargets(): Array<{ peer: string; groupId?: string }> {
     const me = this.me();
-    const friends = new Set(this.friends());
+    // Also people we wrote to who have not answered yet: their request stays readable.
+    const friends = new Set(this.acceptedContacts(false));
     const targets: Array<{ peer: string; groupId?: string }> = [...friends].map((peer) => ({ peer }));
     const reached = new Set(friends);
     for (const g of this.db()
@@ -1130,10 +1148,22 @@ export class DmService {
     await this.sendContent(peer, content, ephemeral);
   }
 
-  /** People who are accepted contacts (your "friends"). */
+  /**
+   * Your friends: accepted contacts who have answered. A request you sent (or a chat you only
+   * opened) is not a friend yet, so posts and stories never go to them — as on the Friends page.
+   */
   friends(): string[] {
+    return this.acceptedContacts(true);
+  }
+
+  /** Accepted contacts, also those who have not answered yet unless `answered`. */
+  private acceptedContacts(answered: boolean): string[] {
     return (
-      this.db().prepare(`SELECT river_id FROM contacts WHERE state = 'accepted'`).all() as Array<{
+      this.db()
+        .prepare(
+          `SELECT river_id FROM contacts WHERE state = 'accepted'${answered ? ' AND heard_from = 1' : ''}`,
+        )
+        .all() as Array<{
         river_id: string;
       }>
     )
@@ -1161,10 +1191,35 @@ export class DmService {
     return row?.bio ?? '';
   }
 
-  setMyBio(bio: string): void {
+  /**
+   * Saves your bio and returns it as saved. Friends get it a few seconds after the last change
+   * (one profile update however often you save; unchanged profiles are never re-sent).
+   */
+  setMyBio(bio: string): string {
+    const saved = bio.trim().slice(0, 300);
+    const before = this.myBio();
     this.db()
       .prepare('INSERT INTO profile (id, bio) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET bio = excluded.bio')
-      .run(bio.trim().slice(0, 300));
+      .run(saved);
+    if (saved !== before) {
+      clearTimeout(this.bioShareTimer);
+      this.bioShareTimer = setTimeout(() => {
+        this.bioShareTimer = undefined;
+        void this.shareProfileWithFriends().catch(() => undefined);
+      }, BIO_SHARE_DELAY_MS);
+      this.bioShareTimer.unref?.();
+    }
+    return saved;
+  }
+
+  /** Sends your current profile to every friend who has not got it yet (others: next message). */
+  async shareProfileWithFriends(): Promise<void> {
+    if (!this.deps.db() || this.deps.account.status().state !== 'registered') return;
+    for (const peer of this.friends()) {
+      await this.shareProfile(peer).catch((err: unknown) =>
+        this.deps.log.warn(`Could not share the profile with one friend: ${(err as Error).message}`),
+      );
+    }
   }
 
   /** Keeps local copies of files in received posts. */
@@ -1799,7 +1854,16 @@ export class DmService {
           }
           return out(files.sort((a, b) => b.sentAt.localeCompare(a.sentAt)));
         }
-        case 'logCall':
+        case 'logCall': {
+          // Someone answered (we or they) but the call never connected: it failed, it was not missed.
+          const answeredAt = this.callAnswered.get(act.peer);
+          this.callAnswered.delete(act.peer);
+          const outcome: CallOutcome = act.answered
+            ? 'answered'
+            : (act.outcome ??
+              (answeredAt !== undefined && Date.now() - answeredAt < CALL_ANSWER_WINDOW_MS
+                ? 'failed'
+                : 'missed'));
           this.db()
             .prepare(
               'INSERT INTO call_log (id, peer, direction, video, started_at, answered, duration_sec) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -1810,10 +1874,12 @@ export class DmService {
               act.direction,
               act.video ? 1 : 0,
               new Date(Date.now() - act.durationSec * 1000).toISOString(),
-              act.answered ? 1 : 0,
+              CALL_OUTCOME_CODE[outcome],
               act.durationSec,
             );
+          this.emit({ t: 'calls' });
           return out(null);
+        }
         case 'calls':
           return out(
             (
@@ -1834,6 +1900,7 @@ export class DmService {
               direction: c.direction,
               video: c.video === 1,
               answered: c.answered === 1,
+              outcome: CALL_OUTCOMES[c.answered] ?? 'missed',
               durationSec: c.duration_sec,
               startedAt: c.started_at,
             })),
@@ -2305,6 +2372,7 @@ export class DmService {
             },
             true,
           );
+          if (act.kind === 'accept') this.callAnswered.set(act.peer, Date.now());
           return out(null);
       }
     } catch (err) {
