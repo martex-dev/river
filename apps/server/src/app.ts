@@ -160,6 +160,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
 
   app.setErrorHandler((error: Error & { statusCode?: number; validation?: unknown }, request, reply) => {
+    // A route may already have set another type (a file download): error bodies are always JSON.
+    void reply.type('application/json; charset=utf-8');
     if (error instanceof HttpError) {
       void reply.code(error.status).send(errorBody(error.code, error.message));
       return;
