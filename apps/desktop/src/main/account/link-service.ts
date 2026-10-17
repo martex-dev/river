@@ -440,10 +440,17 @@ export class LinkService {
       const state = await this.mailbox(w.serverUrl, w.id).catch(() => undefined);
       // Gone (expired, or the server restarted): nothing more will come.
       if (state === null) return done();
-      if (!state?.declined) return schedule();
+      if (!state) return schedule();
+      // Every decline the server keeps (2.11.2; older servers: just the first). One with a wrong
+      // MAC (not from the new device) is ignored and the watch goes on, so it cannot pre-empt the
+      // new device's real "no".
+      const declines = state.declines ?? (state.declined ? [state.declined] : []);
       const expected = Buffer.from(declineMac(w.secret, w.deviceId), 'base64url');
-      const got = Buffer.from(state.declined, 'base64url');
-      if (expected.length !== got.length || !timingSafeEqual(expected, got)) return done();
+      const genuine = declines.some((d) => {
+        const got = Buffer.from(d, 'base64url');
+        return expected.length === got.length && timingSafeEqual(expected, got);
+      });
+      if (!genuine) return schedule();
       done();
       await this.removeDeclined(w);
     };

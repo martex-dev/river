@@ -49,7 +49,10 @@ server reports `device_mismatch`. What was missing is a way to add a device.
    watching the mailbox until it expires; a decline whose `mac` checks out makes
    it sign a device list without the new device again. The server cannot forge a
    decline (it lacks the secret) — at most it can withhold one, which leaves the
-   device on the list as before, to be removed by hand.
+   device on the list as before, to be removed by hand. Since 2.11.2 the server
+   keeps up to three declines (`declines` in the mailbox state; `declined` is the
+   first, for older apps) and the linked device checks each and keeps watching
+   after a wrong one, so a bogus decline written first cannot shut out the real one.
 
 The mailbox lives ten minutes in the server's memory; each part is written
 once. The server relays public keys and ciphertext only, and because the hello

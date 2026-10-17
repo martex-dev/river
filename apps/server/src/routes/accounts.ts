@@ -9,6 +9,7 @@ import {
   linkIdSchema,
   provisionLinkRequestSchema,
   declineLinkRequestSchema,
+  MAX_LINK_DECLINES,
   putLinkHelloRequestSchema,
   registerRequestSchema,
   registrationMessage,
@@ -472,8 +473,11 @@ export function registerAccountRoutes(
     mac: string | null;
     provision: string | null;
     deviceId: number | null;
-    /** The new device declined the account it was sent (a MAC only the two devices can check). */
-    declined: string | null;
+    /**
+     * The new device declined the account it was sent (a MAC only the two devices can check).
+     * Up to MAX_LINK_DECLINES (2.11.2): a bogus one written first cannot shut out the real one.
+     */
+    declined: string[];
     expires: number;
   }
   const links = new Map<string, PendingLink>();
@@ -498,7 +502,8 @@ export function registerAccountRoutes(
     mac: l.mac,
     provision: l.provision,
     deviceId: l.deviceId,
-    declined: l.declined,
+    declined: l.declined[0] ?? null,
+    declines: [...l.declined],
     expiresAt: new Date(l.expires).toISOString(),
   });
   const notFound = (reply: FastifyReply): FastifyReply =>
@@ -558,7 +563,7 @@ export function registerAccountRoutes(
         mac: null,
         provision: null,
         deviceId: null,
-        declined: null,
+        declined: [],
         expires: deps.now().getTime() + LINK_TTL_MS,
       };
       links.set(id.data, l);
@@ -597,7 +602,7 @@ export function registerAccountRoutes(
       mac: parsed.data.mac,
       provision: null,
       deviceId: null,
-      declined: null,
+      declined: [],
       expires: deps.now().getTime() + LINK_TTL_MS,
     };
     links.set(id.data, l);
@@ -640,7 +645,9 @@ export function registerAccountRoutes(
 
   // The new device was sent the account but declined it ("Is this you?" → Cancel). Its MAC under
   // the link secret is passed on as it is: only the linked device can check it, and then takes the
-  // device it added off its signed list again. Written once, and only after provisioning.
+  // device it added off its signed list again. Only after provisioning. The server cannot tell a
+  // real MAC from a bogus one, so it keeps up to MAX_LINK_DECLINES of them (2.11.2): someone who
+  // writes one first cannot shut out the new device's real "no". The linked device checks each.
   app.put<{ Params: { id: string } }>(`${API_PREFIX}/link/:id/decline`, sensitive, async (request, reply) => {
     sweep();
     const id = linkIdSchema.safeParse(request.params.id);
@@ -648,8 +655,11 @@ export function registerAccountRoutes(
     if (!id.success || !parsed.success) return fail(reply, 400, 'bad_request', 'Bad request');
     const l = links.get(id.data);
     if (!l?.provision) return notFound(reply);
-    if (l.declined !== null) return fail(reply, 409, 'link_in_use', 'This link was already answered.');
-    l.declined = parsed.data.mac;
+    if (l.declined.includes(parsed.data.mac)) return linkState(l);
+    if (l.declined.length >= MAX_LINK_DECLINES) {
+      return fail(reply, 409, 'link_in_use', 'This link was already answered.');
+    }
+    l.declined.push(parsed.data.mac);
     return linkState(l);
   });
 }
