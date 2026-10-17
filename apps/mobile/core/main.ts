@@ -359,8 +359,14 @@ async function start(): Promise<void> {
    */
   const ringOnPhone = (e: Extract<DmEvent, { t: 'call' }>): void => {
     const s = settings.get();
-    // As the desktop's call notification: notifications on, no Do Not Disturb or quiet hours.
-    if (!s.notifications.desktop || silenced(s)) return;
+    // Like a phone call, it rings whatever the message notifications are set to; only Do Not
+    // Disturb and quiet hours keep it quiet (2.11.2).
+    if (silenced(s)) return;
+    // Already in a call: the caller hears "busy", and nothing takes over this screen or its sound.
+    if (activeCall && activeCall.callId !== e.callId) {
+      void dm.action({ a: 'call', peer: e.peer, callId: e.callId, kind: 'busy' }).catch(() => undefined);
+      return;
+    }
     const name = s.notifications.preview === 'none' ? 'Someone' : dm.nameOf(e.peer);
     void ask<string>('incomingCall', { callId: e.callId, name, video: e.video }).then(
       (how) => {
@@ -381,6 +387,7 @@ async function start(): Promise<void> {
               direction: 'in',
               video: e.video,
               answered: false,
+              outcome: 'declined',
               durationSec: 0,
             })
             .catch(() => undefined);

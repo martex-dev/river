@@ -402,7 +402,7 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     expect(list.some((f) => f.id === id)).toBe(false);
   });
 
-  it('a phone that was offline while it rang still learns the caller hung up', async () => {
+  it('a phone whose connection dropped while it rang still learns the caller hung up', async () => {
     const alice = await person('Alice');
     const bob = await person('Bob');
     await alice.dm.action({ a: 'open', peer: bob.riverId, name: 'Bob' });
@@ -418,7 +418,8 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     const calls = bob.events
       .filter((e) => e.t === 'call' && e.callId === callId)
       .map((e) => (e as { kind: string }).kind);
-    expect(calls).toEqual(['invite', 'end']);
+    // The hang-up waited for him; the invite did not (River 2.10 would ring for it hours later).
+    expect(calls).toEqual(['end']);
     // Connection setup is still never stored.
     await alice.dm.action({ a: 'call', peer: bob.riverId, callId, kind: 'signal', data: { sdp: 'x' } });
     await bob.dm.sync();

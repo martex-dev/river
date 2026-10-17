@@ -160,7 +160,14 @@ final class IncomingCall {
     if (showing || callId == null) return;
     createChannel(context);
     NotificationManagerCompat nmc = NotificationManagerCompat.from(context);
-    if (!nmc.areNotificationsEnabled()) return;
+    if (!nmc.areNotificationsEnabled()) {
+      // Notifications are off for River: no call screen can be shown, but the call still rings
+      // (2.11.2) — opening River shows it. Silent and vibrate modes and Do Not Disturb still apply.
+      showing = true;
+      if (ringer == null) ringer = new Ringer(context);
+      ringer.start();
+      return;
+    }
     Person caller = new Person.Builder().setName(name).setImportant(true).build();
     Intent full =
         new Intent(context, IncomingCallActivity.class)

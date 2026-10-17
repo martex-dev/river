@@ -1026,9 +1026,10 @@ export class DmService {
         // Only accepted contacts can ring you; connection setup (signal) is never stored.
         if (contact?.state !== 'accepted') return null;
         if (content.data !== undefined && JSON.stringify(content.data).length > 30_000) return null;
-        // An invite that waited in the mailbox (or in storage) longer than a ring lasts is over.
-        const age = now.getTime() - Date.parse(inbound.receivedAt);
-        if (content.kind === 'invite' && !(age <= RING_MS)) return null;
+        // An invite kept on this device (River was locked when it came) longer than a ring
+        // lasts is over. Measured on this device's own clock: comparing with the server's would
+        // drop every live call on a device whose clock runs ahead of it.
+        if (content.kind === 'invite' && Date.now() - inbound.keptAt > RING_MS) return null;
         const event = {
           t: 'call' as const,
           peer,
@@ -2377,11 +2378,11 @@ export class DmService {
               ...(act.video !== undefined ? { video: act.video } : {}),
               ...(act.data !== undefined ? { data: act.data } : {}),
             },
-            // Only connection setup (signal) is never stored. Invite, accept, decline, end and busy
-            // wait in the mailbox (2.11.1): a phone whose connection dropped for a moment while it
-            // rang still learns the caller hung up, instead of ringing on. A late invite never
-            // rings (receive checks its age against the mailbox time).
-            act.kind === 'signal',
+            // Accept, decline, end and busy wait in the mailbox (2.11.1): a phone whose connection
+            // dropped for a moment while it rang still learns the caller hung up. Invites and
+            // connection setup are never stored (2.11.2): River 2.10 has no age check, so a stored
+            // invite would ring there hours later, for a call long over.
+            act.kind === 'signal' || act.kind === 'invite',
           );
           if (act.kind === 'accept') this.callAnswered.set(act.peer, Date.now());
           // Answered or declined here: this account's other devices stop ringing for it.
