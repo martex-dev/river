@@ -2572,6 +2572,7 @@ body:has(.dm-call--full) .lightbox {
 }
 body:has(.dm-call--full) .popover {
   z-index: 870;
+}
 
 /* ---------- Something went wrong (error boundary) ---------- */
 .crash {
