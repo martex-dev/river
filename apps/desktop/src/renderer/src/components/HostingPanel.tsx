@@ -279,6 +279,24 @@ function PermanentAddress({ status }: { status: HostStatus }): ReactElement | nu
       </div>
     );
   }
+  if (status.permanent === 'ready' && status.permanentProblem) {
+    // Never "Switching…" while nothing is switching: say what went wrong and what River does now.
+    return (
+      <div className="hosting__permanent" role="status">
+        <strong>Your permanent address is not working yet</strong>
+        <p className="small">
+          {status.permanentProblem} Members still reach you at the changing address above; River tries the
+          permanent one again every few minutes. In Tailscale, check that Funnel and HTTPS are allowed for
+          this PC.
+        </p>
+        <div className="button-row">
+          <button className="btn btn--ghost btn--small" disabled={checking} onClick={check}>
+            {checking ? 'Checking…' : 'Try again now'}
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (status.permanent === 'ready') {
     return (
       <div className="hosting__permanent" role="status">

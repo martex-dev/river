@@ -91,7 +91,7 @@ wait and go out automatically.
 
 If the tunnel stops answering for three minutes, or the PC restarts, the
 address changes; members' apps find the new one through the signed address
-note (see "River's home server").
+note (see "Lets members follow the address" above).
 
 ### A permanent address, free (1.0.43)
 
@@ -106,6 +106,9 @@ allow Funnel: Settings → Hosting shows an **Allow in Tailscale** button.
 - Encryption ends on your PC: Tailscale's relays only pass encrypted bytes.
 - Until Funnel answers (and whenever it stops answering), River keeps members
   connected through the quick tunnel and moves them over automatically.
+- If Tailscale is signed in but Funnel cannot be opened (for example Funnel or
+  HTTPS certificates are not allowed in your tailnet), Settings → Hosting says
+  why instead of "Switching…", and River tries again every few minutes.
 - Funnel traffic has bandwidth limits Tailscale does not publish. River's text
   and files are small; calls mostly go directly between members.
 
