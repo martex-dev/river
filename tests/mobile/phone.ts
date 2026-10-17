@@ -25,7 +25,15 @@ export interface Phone {
 
 const SHARED_BYTES = 64 * 1024 * 1024;
 
-export async function startPhone(bundle: string, root: string): Promise<Phone> {
+export interface PhoneOptions {
+  /**
+   * Answers an ask as the Android shell would (e.g. the updater's `update.*`). Returning undefined
+   * leaves the ask to the defaults below; a throw answers it as failed.
+   */
+  answer?: (kind: string, args: unknown) => unknown;
+}
+
+export async function startPhone(bundle: string, root: string, options: PhoneOptions = {}): Promise<Phone> {
   mkdirSync(join(root, 'files'), { recursive: true });
   mkdirSync(join(root, 'cache'), { recursive: true });
   const shared = new SharedArrayBuffer(8 + SHARED_BYTES);
@@ -100,7 +108,25 @@ export async function startPhone(bundle: string, root: string): Promise<Phone> {
           }
           case 'ask': {
             const kind = header.kind ?? '';
-            asks.push({ kind, args: decodeWire(payload) });
+            const askArgs = decodeWire(payload);
+            asks.push({ kind, args: askArgs });
+            if (options.answer) {
+              const id = header.id;
+              let custom: unknown;
+              try {
+                custom = options.answer(kind, askArgs);
+              } catch (err) {
+                call('answer', id, encodeWire({ ok: false, error: (err as Error).message }));
+                break;
+              }
+              if (custom !== undefined) {
+                void Promise.resolve(custom).then(
+                  (value) => call('answer', id, encodeWire({ ok: true, value })),
+                  (err: Error) => call('answer', id, encodeWire({ ok: false, error: err.message })),
+                );
+                break;
+              }
+            }
             // What a person tapping through the Android dialogs would answer.
             const value =
               kind === 'messageBox'

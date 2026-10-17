@@ -14,6 +14,7 @@ import {
   broadcastLinkStatus,
   broadcastSocialEvents,
   broadcastStorageStatus,
+  broadcastUpdateStatus,
   registerIpc,
   type IpcDeps,
 } from '../../desktop/src/main/ipc.ts';
@@ -45,14 +46,16 @@ import {
   uiPresent,
 } from './host.ts';
 import { phonePlatform } from './platform.ts';
+import { AndroidUpdateService, CHECK_INTERVAL_MS, FIRST_CHECK_DELAY_MS } from './updater.ts';
+import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import { parseDeepLink } from '../../desktop/src/main/deep-link.ts';
 import { IPC, type DeepLink } from '../../desktop/src/shared/ipc.ts';
 
 /**
  * River's client core on a phone: the desktop's services (accounts,
  * communities, direct messages, social, backup) and its validated IPC layer,
- * started without the parts only a computer has (hosting, auto-update, tray,
- * screen picker). The UI talks to it exactly as it talks to Electron's main
+ * started without the parts only a computer has (hosting, tray, screen
+ * picker). Android updates itself from signed releases (updater.ts); iOS cannot. The UI talks to it exactly as it talks to Electron's main
  * process; the app shell carries the messages.
  */
 
@@ -65,6 +68,9 @@ const keystore: OsKeystore = {
 };
 
 const PHONE = 'Hosting runs on a computer. Phones join communities hosted elsewhere.';
+/** Sideloaded iPhone apps cannot replace themselves: iOS only installs an IPA that is signed again. */
+const IOS_UPDATES =
+  'River on iPhone cannot update itself: iOS only lets you install a new version by sideloading its IPA again. Get it from the download page.';
 
 /** Hosting is a desktop feature: the phone reports it as off and refuses to start it. */
 const noHosting: IpcDeps['hosting'] = {
@@ -381,11 +387,24 @@ async function start(): Promise<void> {
     startupProblem: null,
   });
   const serverFetch = createFetchBytes(http, { timeoutMs: 10_000 });
+  // Android: signed updates from GitHub Releases, installed by Android's own installer.
+  const updates =
+    PLATFORM === 'android'
+      ? new AndroidUpdateService({
+          currentVersion: app.getVersion(),
+          preferences: () => settings.get().updates,
+          ask: (kind, args) => ask(kind, args),
+          dir: join(userData, 'updates'),
+          trustedKeys: TRUSTED_RELEASE_KEYS,
+          log,
+        })
+      : null;
+  updates?.start();
   registerIpc({
     appInfo,
     settings,
-    updates: null,
-    updatesDisabledReason: 'River on phones updates from its download page.',
+    updates,
+    updatesDisabledReason: IOS_UPDATES,
     devServerUrl: undefined,
     fetchBytes: serverFetch,
     storage,
@@ -436,6 +455,22 @@ async function start(): Promise<void> {
   broadcastDmEvents(target, dm);
   broadcastLinkStatus(target, link);
   broadcastSocialEvents(target, social);
+  if (updates) {
+    broadcastUpdateStatus(target, updates);
+    // As on the desktop: a change to the update settings (automatic checks on, a new channel) checks now.
+    let lastUpdates = JSON.stringify(settings.get().updates);
+    settings.onChange((s) => {
+      const now = JSON.stringify(s.updates);
+      if (now === lastUpdates) return;
+      lastUpdates = now;
+      if (s.updates.autoCheck && updates.getStatus().state === 'up-to-date') void updates.check();
+    });
+    const scheduledCheck = (): void => {
+      if (settings.get().updates.autoCheck) void updates.check();
+    };
+    setTimeout(scheduledCheck, FIRST_CHECK_DELAY_MS);
+    setInterval(scheduledCheck, CHECK_INTERVAL_MS);
+  }
   // Notifications while River is in the background; tapping one brings it forward.
   const window = {
     isDestroyed: () => false,

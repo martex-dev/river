@@ -11,8 +11,21 @@ phone and open it (Android asks to allow installing from the browser once).
 Phones with older 32-bit processors use `River-<version>-android-arm32.apk`.
 Android 8.0 or newer.
 
-Updates: install the newer APK over the old one (same signing key, so your
-data stays). Obtainium can watch the GitHub releases and do it for you.
+Updates: River updates itself (Settings → Updates). It checks GitHub Releases
+at start and about every six hours, takes only a release whose manifest is
+signed by River's release key (Beta and Nightly only if you chose them),
+downloads the APK for your phone's processor, checks its SHA-256 against the
+signed manifest and that it is signed with the same Android key as the River
+you have, then opens Android's installer, which asks you to confirm. The first
+time, Android asks you to allow River to install apps.
+
+A release signed with a different Android key (the early preview builds were)
+cannot be installed as an update: River says so and links the download page.
+Uninstalling deletes River's data on the phone, so make a backup first
+(Settings → Backup). You can still install a newer APK over the old one by
+hand, or let Obtainium watch the releases.
+
+iPhone: a sideloaded app cannot replace itself; install the new IPA as below.
 
 ## Install (iPhone)
 
