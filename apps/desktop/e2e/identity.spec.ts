@@ -2,31 +2,31 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { TEST_NAME, chooseFirstSkin, launchRiver, openSettings } from './launch.ts';
+import { auditA11y } from './axe.ts';
+import { TEST_NAME, launchRiver, openSettings } from './launch.ts';
 
 const userData = mkdtempSync(join(tmpdir(), 'river-e2e-identity-'));
 test.afterAll(() => rmSync(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
 
 test('first run creates an identity whose private key never reaches the UI', async () => {
   const { app, page } = await launchRiver(userData, { completeOnboarding: false });
+  // 2.14: one screen — a name (and an optional photo), then Get started. Nothing technical on it.
   await expect(page.getByRole('heading', { name: 'Welcome to River' })).toBeVisible();
-  await page.getByRole('button', { name: 'Create my identity' }).click();
-  await page.getByPlaceholder('e.g. Alex').fill(`  ${TEST_NAME}  `);
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByText('Creating your keys')).toBeVisible();
-  await page.getByRole('button', { name: /Skip for now/ }).click({ timeout: 15_000 });
-  await expect(page.getByRole('heading', { name: `This is you, ${TEST_NAME}` })).toBeVisible({
-    timeout: 15_000,
-  });
-  const words = await page.locator('.fingerprint__words li').allInnerTexts();
-  expect(words).toHaveLength(16);
+  await expect(page.locator('.onboarding')).not.toContainText(/https?:\/\/|key pair|fingerprint/i);
+  await expect(page.getByRole('button', { name: 'Add a photo (optional)' })).toBeVisible();
+  await auditA11y(page, 'First run');
   if (process.env.RIVER_SCREENSHOTS) await page.screenshot({ path: 'test-results/onboarding.png' });
+  await page.getByLabel('Your name').fill(`  ${TEST_NAME}  `);
+  await page.getByRole('button', { name: /Get started/ }).click();
+  // No username, fingerprint or skin step: River is open.
+  await page.waitForSelector('.workspace', { timeout: 30_000 });
 
   const info = await page.evaluate(() => window.river.identity.get());
   expect(info).not.toBeNull();
   expect(Object.keys(info!).sort()).toEqual(['createdAt', 'displayName', 'fingerprint', 'riverId', 'words']);
   expect(info!.displayName).toBe(TEST_NAME);
   expect(info!.fingerprint).toMatch(/^([0-9A-F]{4} ){7}[0-9A-F]{4}$/);
+  expect(info!.words).toHaveLength(16);
 
   // A second identity cannot be created over the first.
   const second = await page.evaluate(async () => {
@@ -39,9 +39,15 @@ test('first run creates an identity whose private key never reaches the UI', asy
   });
   expect(second).toBe('refused');
 
-  await page.getByRole('button', { name: 'Enter River' }).click();
-  await chooseFirstSkin(page);
   await expect(page.locator('.user-panel')).toContainText(TEST_NAME);
+  // The look is offered, not forced: keeping it makes the card go for good.
+  const look = page.getByRole('region', { name: 'Pick your look' });
+  await expect(look).toBeVisible();
+  await look.getByRole('button', { name: 'Keep this one' }).click();
+  await expect(look).toHaveCount(0);
+  await expect
+    .poll(async () => (await page.evaluate(() => window.river.settings.get())).design.chosen)
+    .toBe(true);
   await openSettings(page, 'Security');
   await expect(page.locator('.identity-card .fingerprint__hex')).toHaveAttribute(
     'aria-label',

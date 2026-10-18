@@ -3,9 +3,11 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 
 /**
  * What someone sees when they open a River invite, friend or sign-up link in a
- * browser: get River for their computer (with what to click past the
- * "unsigned app" warnings), then "Open in River", which hands the link to the
- * app (river://open?link=…) so nothing has to be copied and pasted.
+ * browser: get River for their computer or phone (one download each, with what to
+ * click past the "unsigned app" warnings), then "Open in River", which hands the
+ * link to the app (river://open?link=…) so nothing has to be copied and pasted.
+ * New to River, the app asks only for a name and then goes straight to the
+ * community (2.14).
  *
  * The secret part of an invite is in the URL fragment, which browsers never
  * send to the server; the page reads it in the browser only to build the
@@ -33,7 +35,7 @@ const SCRIPT = `
   document.getElementById('title').textContent = titles[kind];
   document.title = titles[kind];
   var ua = navigator.userAgent;
-  var os = /Windows/i.test(ua) ? 'windows' : /Android|iPhone|iPad|iPod/i.test(ua) ? 'phone' : /Mac/i.test(ua) ? 'mac' : /Linux/i.test(ua) ? 'linux' : 'other';
+  var os = /Windows/i.test(ua) ? 'windows' : /Android/i.test(ua) ? 'android' : /iPhone|iPad|iPod/i.test(ua) ? 'ios' : /Mac/i.test(ua) ? 'mac' : /Linux/i.test(ua) ? 'linux' : 'other';
   var shown = document.querySelectorAll('[data-os]');
   for (var i = 0; i < shown.length; i++) {
     var want = shown[i].getAttribute('data-os').split(' ');
@@ -86,20 +88,23 @@ footer{color:#6f7a96;font-size:.82rem;margin-top:16px}
 <p class="hint">Drag River into Applications. The first time, <b>right-click River → Open</b>. If macOS still refuses: <b>System Settings → Privacy &amp; Security → Open Anyway</b>.</p></div>
 <div data-os="linux"><a class="btn primary" href="${DOWNLOAD}/River-linux.AppImage">AppImage</a><a class="btn ghost" href="${DOWNLOAD}/River-linux.deb">.deb</a><a class="btn ghost" href="${DOWNLOAD}/River-linux.rpm">.rpm</a>
 <p class="hint">AppImage: make it executable (right-click → Properties → Allow executing), then open it.</p></div>
-<div data-os="phone"><p class="hint">River runs on Windows, Mac and Linux computers for now — phones are coming. Open this link on a computer.</p></div>
+<div data-os="android"><a class="btn primary" href="${DOWNLOAD}/River-android.apk">Download for Android</a>
+<p class="hint">Open the downloaded file and tap <b>Install</b>. If Android asks, let your browser <b>install unknown apps</b> — River is not in Google Play yet.</p></div>
+<div data-os="ios"><a class="btn primary" href="${DOWNLOAD}/River-ios-unsigned.ipa">Download for iPhone</a>
+<p class="hint">River is not in the App Store yet, so the iPhone app has to be installed with a sideloading app such as <b>AltStore</b> or <b>Sideloadly</b>. Easier for now: open this link on a computer.</p></div>
 <div data-os="other"><a class="btn primary" href="${RELEASES}">All downloads</a></div>
-<p class="hint" data-os="windows mac linux">Other systems: <a style="color:#4fe3d1" href="${RELEASES}">all downloads</a> · <a style="color:#4fe3d1" href="${REPO}/blob/main/CODE_SIGNING.md">Code signing policy</a>.</p>
+<p class="hint" data-os="windows mac linux android ios">Other systems: <a style="color:#4fe3d1" href="${RELEASES}">all downloads</a> · <a style="color:#4fe3d1" href="${REPO}/blob/main/CODE_SIGNING.md">Code signing policy</a>.</p>
 </div></div></section>
 
 <section class="card"><div class="step"><span class="num">2</span><div>
-<h2>Open River and pick a name</h2>
-<p class="hint" style="margin-top:0">Your account is created by itself — no e-mail, no phone number.</p>
+<h2>Open River and type your name</h2>
+<p class="hint" style="margin-top:0">That's all: your account is created by itself — no e-mail, no phone number.</p>
 </div></div></section>
 
 <section class="card" id="come-in"><div class="step"><span class="num">3</span><div>
 <h2>Come in</h2>
 <a id="open" class="btn primary" href="#">Open in River</a><button id="copy" class="btn ghost" type="button">Copy link</button>
-<p class="hint">Opens River and asks before joining. If nothing happens, copy the link and paste it anywhere in River.</p>
+<p class="hint">New to River: type your name and you're in. Already using it: River asks once, then opens it. If nothing happens, copy the link and paste it anywhere in River.</p>
 </div></div></section>
 
 <footer>The secret part of this link stays in your browser and never reaches this server. Messages are end-to-end encrypted.</footer>

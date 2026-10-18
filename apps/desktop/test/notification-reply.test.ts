@@ -31,7 +31,11 @@ const { startMessageNotifications } = await import('../src/main/notifications.ts
 
 type Listener = (e: unknown) => void;
 
-function setup(preview: 'full' | 'none' = 'full', focused = false) {
+function setup(
+  preview: 'full' | 'sender' | 'none' = 'full',
+  focused = false,
+  contact: string | null = 'accepted',
+) {
   let dmListener: Listener = () => undefined;
   let ringEnd: Listener = () => undefined;
   let ringing: { callId: string } | null = null;
@@ -48,6 +52,7 @@ function setup(preview: 'full' | 'none' = 'full', focused = false) {
     ringingCall: () => ringing,
     focus: vi.fn(),
     nameOf: () => 'Bob',
+    contactState: () => contact,
     action,
   };
   const community = { onEvent: () => () => undefined };
@@ -177,5 +182,35 @@ describe('incoming call notifications (2.11.3)', () => {
     const front = setup('full', true);
     front.ended(callId, 'missed');
     expect(shown).toHaveLength(0);
+  });
+});
+
+describe('friend requests (2.14)', () => {
+  const request = {
+    t: 'message',
+    isNew: true,
+    senderName: 'Bob',
+    message: { mine: false, peer: 'bob-id', text: "Hi! Let's be friends" },
+  };
+
+  it('says it is a friend request, opens the request on click, and offers no reply', () => {
+    const { emit } = setup('full', false, 'request');
+    emit(request);
+    expect(shown).toHaveLength(1);
+    expect(shown[0]!.options).toMatchObject({
+      title: 'Bob',
+      body: "Wants to be your friend: Hi! Let's be friends",
+    });
+    expect(shown[0]!.options.hasReply).toBeUndefined();
+  });
+
+  it('follows the preview setting: no name and no text when previews are off', () => {
+    const { emit } = setup('none', false, 'request');
+    emit(request);
+    expect(shown[0]!.options).toMatchObject({ title: 'River', body: 'New friend request' });
+    shown.length = 0;
+    const named = setup('sender', false, 'request');
+    named.emit(request);
+    expect(shown[0]!.options).toMatchObject({ title: 'Bob', body: 'Wants to be your friend' });
   });
 });
