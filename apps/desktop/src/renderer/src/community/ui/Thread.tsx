@@ -132,7 +132,13 @@ export function ThreadPanel(props: {
               {thread?.archived ? 'Unarchive' : 'Archive'}
             </button>
           )}
-          <button className="icon-btn" aria-label="Close thread" title="Close thread" onClick={close}>
+          <button
+            className="icon-btn"
+            aria-label="Close thread"
+            data-phone-back=""
+            title="Close thread"
+            onClick={close}
+          >
             <XIcon size={18} />
           </button>
         </span>
