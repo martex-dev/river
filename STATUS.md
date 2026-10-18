@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-18 · Current version: **2.12.1** · Stage 1 and Stage 2 complete: Windows, macOS, Linux, Android, iPhone; linked devices; remote assistance (see and point)_
+_Last updated: 2026-10-18 · Current version: **2.13.0** · Stage 1 and Stage 2 complete: Windows, macOS, Linux, Android, iPhone; linked devices; remote assistance (see and point)_
 
 ## Complete
 

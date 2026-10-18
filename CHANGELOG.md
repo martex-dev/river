@@ -6,6 +6,8 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.13.0] - 2026-10-18
+
 **River on a phone now looks and feels like a phone app (Telegram / Instagram),
 not like Discord.** Computers keep their layout exactly as it was.
 
