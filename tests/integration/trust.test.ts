@@ -641,7 +641,7 @@ describe('community keys a server cannot inject', { timeout: 90_000 }, () => {
     expect(carol.riverId).toBeTruthy();
   });
 
-  it('normal rotation after a kick carries a proof; keys from older Rivers still work from trusted members', async () => {
+  it('normal rotation after a kick carries a proof; keys without one are refused, even from trusted members (2.18)', async () => {
     const { alice, bob, carol, id } = await crew();
     const eve = await person('Eve');
     await inject(
@@ -677,7 +677,8 @@ describe('community keys a server cannot inject', { timeout: 90_000 }, () => {
         ).epoch_claimed_at === null,
     );
 
-    // An older River rotates (no proof): Bob accepts it from Alice, whose profile he opened before.
+    // An older River rotates (no proof): refused since 2.18, even from Alice, whose profile Bob
+    // opened before.
     const next = newCommunityKey();
     await alice.community.api(
       `/communities/${id}/epoch`,
@@ -700,7 +701,8 @@ describe('community keys a server cannot inject', { timeout: 90_000 }, () => {
     });
     await bob.community.refresh();
     await bob.dm.sync();
-    await until(() => epochs(bob, id).includes(2));
+    await new Promise((r) => setTimeout(r, 300));
+    expect(epochs(bob, id)).toEqual([0, 1]);
   });
 
   it('a rotation that reaches nobody is asked for again and redone, with an honest notice meanwhile', async () => {

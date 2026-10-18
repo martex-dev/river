@@ -26,6 +26,9 @@ All notable changes to River are documented here. The format follows
 - Calls through the server relay: when someone's voice key arrives again (as
   it does after a reconnect), frames recorded earlier stay refused, so the
   server cannot play back old audio.
+- Communities: a new community key is accepted only with proof that whoever
+  sent it held the key before it (as planned for 2.14). Rivers before 2.11,
+  which send no proof, can no longer hand out community keys.
 
 ## [2.17.0] - 2026-10-18
 
