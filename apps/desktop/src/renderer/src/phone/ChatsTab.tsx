@@ -23,6 +23,7 @@ import {
 } from '../pages/MessagesPage.tsx';
 import { Composer, StoriesRail, StoryViewer, type StoryAt } from '../pages/SocialPage.tsx';
 import { useSocial } from '../social/store.ts';
+import { tr, trn } from '../i18n.ts';
 import { useRiver } from '../store.ts';
 import {
   ArchiveIcon,
@@ -57,24 +58,28 @@ export function ChatsTab({ notices }: { notices?: ReactNode }): ReactElement {
     registered && account.connection !== 'online' ? (
       <span className="pconnecting" role="status">
         <span className="pconnecting__spin" aria-hidden="true" />
-        {account.connection === 'connecting' ? 'Connecting…' : 'Waiting for network…'}
+        {account.connection === 'connecting' ? tr('Connecting…') : tr('Waiting for network…')}
       </span>
     ) : null;
   const requests = dm.conversations.filter((c) => c.state === 'request').length;
 
   return (
     <TabPage
-      title="Chats"
+      title={tr('Chats')}
       subtitle={connecting}
       start={
-        <button className="ptab__btn" aria-label="Friends" onClick={() => phonePush({ kind: 'friends' })}>
+        <button
+          className="ptab__btn"
+          aria-label={tr('Friends')}
+          onClick={() => phonePush({ kind: 'friends' })}
+        >
           <ContactsIcon size={25} />
           {requests > 0 && <span className="ptab__dot" aria-hidden="true" />}
         </button>
       }
       end={
         registered && (
-          <button className="ptab__btn" aria-label="New message" onClick={() => setComposing(true)}>
+          <button className="ptab__btn" aria-label={tr('New message')} onClick={() => setComposing(true)}>
             <ComposeIcon size={25} />
           </button>
         )
@@ -89,26 +94,28 @@ export function ChatsTab({ notices }: { notices?: ReactNode }): ReactElement {
           <div className="pempty__icon" aria-hidden="true">
             💬
           </div>
-          <h2>Setting up your account…</h2>
-          <p>River keeps trying by itself. Your chats appear here as soon as it is ready.</p>
+          <h2>{tr('Setting up your account…')}</h2>
+          <p>{tr('River keeps trying by itself. Your chats appear here as soon as it is ready.')}</p>
         </div>
       ) : account.state === 'none' && account.needsInvite ? (
         <div className="pempty">
           <div className="pempty__icon" aria-hidden="true">
             💬
           </div>
-          <h2>One more step</h2>
-          <p>Paste the sign-up link from whoever runs your River server in the card above.</p>
+          <h2>{tr('One more step')}</h2>
+          <p>{tr('Paste the sign-up link from whoever runs your River server in the card above.')}</p>
         </div>
       ) : (
         <div className="pempty">
           <div className="pempty__icon" aria-hidden="true">
             💬
           </div>
-          <h2>No account yet</h2>
-          <p>Direct messages start once you have an account — join a community with an invite link.</p>
+          <h2>{tr('No account yet')}</h2>
+          <p>
+            {tr('Direct messages start once you have an account — join a community with an invite link.')}
+          </p>
           <button className="pbtn" onClick={() => phoneTab('communities')}>
-            Join a community
+            {tr('Join a community')}
           </button>
         </div>
       )}
@@ -167,8 +174,8 @@ function ChatList({ onCompose }: { onCompose(): void }): ReactElement {
         <SearchIcon size={18} />
         <input
           type="search"
-          placeholder="Search"
-          aria-label="Search chats and messages"
+          placeholder={tr('Search')}
+          aria-label={tr('Search chats and messages')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -177,7 +184,7 @@ function ChatList({ onCompose }: { onCompose(): void }): ReactElement {
           <button
             type="button"
             className="psearch__clear"
-            aria-label="Clear search"
+            aria-label={tr('Clear search')}
             data-phone-back=""
             onClick={() => setQuery('')}
           >
@@ -199,8 +206,11 @@ function ChatList({ onCompose }: { onCompose(): void }): ReactElement {
         />
       )}
       {!searching && !archiveOpen && (
-        <div className="pchips" role="radiogroup" aria-label="Show conversations">
-          {[...CHAT_FILTERS, ...folders.map((f) => ({ id: `folder:${f.id}`, label: f.name }))].map((f) => (
+        <div className="pchips" role="radiogroup" aria-label={tr('Show conversations')}>
+          {[
+            ...CHAT_FILTERS.map((f) => ({ ...f, label: tr(f.label) })),
+            ...folders.map((f) => ({ id: `folder:${f.id}`, label: f.name })),
+          ].map((f) => (
             <button
               key={f.id}
               role="radio"
@@ -214,7 +224,7 @@ function ChatList({ onCompose }: { onCompose(): void }): ReactElement {
           {activeFolder ? (
             <button
               className="pchip pchip--icon"
-              aria-label={`Edit folder ${activeFolder.name}`}
+              aria-label={tr('Edit folder {name}', { name: activeFolder.name })}
               onClick={() => setEditingFolder(activeFolder)}
             >
               ✎
@@ -223,7 +233,7 @@ function ChatList({ onCompose }: { onCompose(): void }): ReactElement {
             folders.length < MAX_FOLDERS && (
               <button
                 className="pchip pchip--icon"
-                aria-label="New chat folder"
+                aria-label={tr('New chat folder')}
                 onClick={() => setEditingFolder('new')}
               >
                 ＋
@@ -246,21 +256,23 @@ function ChatList({ onCompose }: { onCompose(): void }): ReactElement {
       )}
       {archiveOpen && (
         <button className="plist__back" data-phone-back="" onClick={() => setArchiveOpen(false)}>
-          ‹ Archived chats
+          ‹ {tr('Archived chats')}
         </button>
       )}
       {!archiveOpen && requests.length > 0 && (
         <>
-          <h2 className="plist__head">Message requests · {requests.length}</h2>
-          <ul className="plist" aria-label="Message requests">
+          <h2 className="plist__head">
+            {tr('Message requests')} · {requests.length}
+          </h2>
+          <ul className="plist" aria-label={tr('Message requests')}>
             {requests.map((c) => (
               <ChatRow key={c.riverId} c={c} muted={muted(c)} />
             ))}
           </ul>
         </>
       )}
-      {found.length > 0 && <h2 className="plist__head">Chats</h2>}
-      <ul className="plist" aria-label={archiveOpen ? 'Archived chats' : 'Chats'}>
+      {found.length > 0 && <h2 className="plist__head">{tr('Chats')}</h2>}
+      <ul className="plist" aria-label={archiveOpen ? tr('Archived chats') : tr('Chats')}>
         {!searching && !archiveOpen && filter === 'all' && archived.length > 0 && (
           <li>
             <button className="prow prow--special" onClick={() => setArchiveOpen(true)}>
@@ -269,7 +281,7 @@ function ChatList({ onCompose }: { onCompose(): void }): ReactElement {
               </span>
               <span className="prow__main">
                 <span className="prow__top">
-                  <strong className="prow__name">Archived chats</strong>
+                  <strong className="prow__name">{tr('Archived chats')}</strong>
                 </span>
                 <span className="prow__bottom">
                   <span className="prow__preview">
@@ -301,10 +313,10 @@ function ChatList({ onCompose }: { onCompose(): void }): ReactElement {
               </span>
               <span className="prow__main">
                 <span className="prow__top">
-                  <strong className="prow__name">Note to self</strong>
+                  <strong className="prow__name">{tr('Note to self')}</strong>
                 </span>
                 <span className="prow__bottom">
-                  <span className="prow__preview">Notes, links and files for yourself</span>
+                  <span className="prow__preview">{tr('Notes, links and files for yourself')}</span>
                 </span>
               </span>
             </button>
@@ -328,14 +340,14 @@ function ChatList({ onCompose }: { onCompose(): void }): ReactElement {
           <div className="pempty pempty--small">
             <p>
               {archiveOpen
-                ? 'No archived chats.'
+                ? tr('No archived chats.')
                 : filter === 'all'
-                  ? 'No chats yet. Start one with a friend.'
-                  : 'Nothing here.'}
+                  ? tr('No chats yet. Start one with a friend.')
+                  : tr('Nothing here.')}
             </p>
             {!archiveOpen && filter === 'all' && (
               <button className="pbtn" onClick={onCompose}>
-                Start a chat
+                {tr('Start a chat')}
               </button>
             )}
           </div>
@@ -343,8 +355,10 @@ function ChatList({ onCompose }: { onCompose(): void }): ReactElement {
       )}
       {found.length > 0 && (
         <>
-          <h2 className="plist__head">Messages · {found.length}</h2>
-          <ul className="plist" aria-label="Messages found">
+          <h2 className="plist__head">
+            {tr('Messages')} · {found.length}
+          </h2>
+          <ul className="plist" aria-label={tr('Messages found')}>
             {found.map((m) => {
               const conv = dm.conversations.find((c) => c.riverId === m.peer);
               return (
@@ -371,7 +385,7 @@ function ChatList({ onCompose }: { onCompose(): void }): ReactElement {
                       </span>
                       <span className="prow__bottom">
                         <span className="prow__preview">
-                          {m.mine ? 'You: ' : conv?.kind === 'group' ? `${m.senderName}: ` : ''}
+                          {m.mine ? `${tr('You')}: ` : conv?.kind === 'group' ? `${m.senderName}: ` : ''}
                           {m.text ? (
                             <Highlight text={m.text} query={query} max={90} />
                           ) : (
@@ -399,15 +413,15 @@ function ChatList({ onCompose }: { onCompose(): void }): ReactElement {
 
 /** The line under a chat's name: typing, or the last message. */
 export function previewOf(c: ConversationView, typing: boolean): ReactNode {
-  if (typing) return <em className="prow__typing">typing…</em>;
-  if (c.state === 'blocked') return 'Blocked';
-  if (c.state === 'left') return 'You left this group';
-  if (c.state === 'request' && c.kind === 'group') return 'Invited you to a group';
-  if (!c.last) return c.self ? 'Notes, links and files for yourself' : 'No messages yet';
-  const text = c.last.text || 'Attachment';
+  if (typing) return <em className="prow__typing">{tr('typing…')}</em>;
+  if (c.state === 'blocked') return tr('Blocked');
+  if (c.state === 'left') return tr('You left this group');
+  if (c.state === 'request' && c.kind === 'group') return tr('Invited you to a group');
+  if (!c.last) return c.self ? tr('Notes, links and files for yourself') : tr('No messages yet');
+  const text = c.last.text || tr('Attachment');
   return c.last.mine ? (
     <>
-      <span className="prow__you">You: </span>
+      <span className="prow__you">{tr('You')}: </span>
       {text}
     </>
   ) : (
@@ -433,9 +447,9 @@ function ChatRow({ c, muted }: { c: ConversationView; muted: boolean }): ReactEl
   const remove = (): void =>
     useCommunity.getState().setModal({
       kind: 'confirm',
-      title: `Delete conversation with ${c.name}`,
-      body: 'This deletes the messages on this device only. The other person keeps their copy.',
-      action: 'Delete',
+      title: tr('Delete conversation with {name}', { name: c.name }),
+      body: tr('This deletes the messages on this device only. The other person keeps their copy.'),
+      action: tr('Delete'),
       run: async () => {
         await dm.run({ a: 'removeConversation', peer: c.riverId });
       },
@@ -448,23 +462,28 @@ function ChatRow({ c, muted }: { c: ConversationView; muted: boolean }): ReactEl
   };
   const start: RowAction[] = [
     {
-      label: unread ? 'Read' : 'Unread',
+      label: unread ? tr('Read') : tr('Unread'),
       icon: unread ? <ReadIcon size={22} /> : <UnreadIcon size={22} />,
       tone: 'blue',
       run: markRead,
     },
     {
-      label: c.pinned ? 'Unpin' : 'Pin',
+      label: c.pinned ? tr('Unpin') : tr('Pin'),
       icon: <PinnedIcon size={22} />,
       tone: 'green',
       run: () => chatFlags(c.riverId, { pinned: !c.pinned }),
     },
   ];
   const end: RowAction[] = [
-    { label: muted ? 'Unmute' : 'Mute', icon: <MutedIcon size={22} />, tone: 'orange', run: toggleMute },
-    { label: 'Delete', icon: <TrashIcon size={22} />, tone: 'red', run: remove },
     {
-      label: c.archived ? 'Unarchive' : 'Archive',
+      label: muted ? tr('Unmute') : tr('Mute'),
+      icon: <MutedIcon size={22} />,
+      tone: 'orange',
+      run: toggleMute,
+    },
+    { label: tr('Delete'), icon: <TrashIcon size={22} />, tone: 'red', run: remove },
+    {
+      label: c.archived ? tr('Unarchive') : tr('Archive'),
       icon: <ArchiveIcon size={22} />,
       tone: 'gray',
       run: () => chatFlags(c.riverId, { archived: !c.archived }),
@@ -488,12 +507,12 @@ function ChatRow({ c, muted }: { c: ConversationView; muted: boolean }): ReactEl
             <span className="prow__top">
               <strong className="prow__name">{c.name}</strong>
               {c.verified && (
-                <span className="prow__verified" role="img" aria-label="Verified">
+                <span className="prow__verified" role="img" aria-label={tr('Verified')}>
                   ✓
                 </span>
               )}
               {muted && (
-                <span className="prow__flag" role="img" aria-label="Muted">
+                <span className="prow__flag" role="img" aria-label={tr('Muted')}>
                   <MutedIcon size={15} />
                 </span>
               )}
@@ -505,18 +524,18 @@ function ChatRow({ c, muted }: { c: ConversationView; muted: boolean }): ReactEl
                 <span
                   key={c.unread}
                   className={`pbadge ${muted ? 'pbadge--muted' : ''}`}
-                  aria-label={`${c.unread} unread`}
+                  aria-label={trn('{count} unread', c.unread)}
                 >
                   {countLabel(c.unread)}
                 </span>
               ) : c.markedUnread ? (
                 <span
                   className={`pbadge pbadge--dot ${muted ? 'pbadge--muted' : ''}`}
-                  aria-label="Marked unread"
+                  aria-label={tr('Marked unread')}
                 />
               ) : (
                 c.pinned && (
-                  <span className="prow__flag prow__flag--pin" role="img" aria-label="Pinned">
+                  <span className="prow__flag prow__flag--pin" role="img" aria-label={tr('Pinned')}>
                     <PinnedIcon size={16} />
                   </span>
                 )
@@ -533,7 +552,7 @@ function ChatRow({ c, muted }: { c: ConversationView; muted: boolean }): ReactEl
               chatFlags(c.riverId, { pinned: !c.pinned });
             }}
           >
-            {c.pinned ? 'Unpin' : 'Pin to top'}
+            {c.pinned ? tr('Unpin') : tr('Pin to top')}
           </MenuItem>
           <MenuItem
             onClick={() => {
@@ -541,7 +560,7 @@ function ChatRow({ c, muted }: { c: ConversationView; muted: boolean }): ReactEl
               markRead();
             }}
           >
-            {unread ? 'Mark as read' : 'Mark as unread'}
+            {unread ? tr('Mark as read') : tr('Mark as unread')}
           </MenuItem>
           <MenuItem
             onClick={() => {
@@ -549,7 +568,7 @@ function ChatRow({ c, muted }: { c: ConversationView; muted: boolean }): ReactEl
               chatFlags(c.riverId, { archived: !c.archived });
             }}
           >
-            {c.archived ? 'Unarchive' : 'Archive'}
+            {c.archived ? tr('Unarchive') : tr('Archive')}
           </MenuItem>
           <NotifyMenuSection id={c.riverId} kind="conversation" onDone={() => setMenu(null)} />
           <MenuItem
@@ -559,7 +578,7 @@ function ChatRow({ c, muted }: { c: ConversationView; muted: boolean }): ReactEl
               remove();
             }}
           >
-            Delete chat
+            {tr('Delete chat')}
           </MenuItem>
         </Popover>
       )}

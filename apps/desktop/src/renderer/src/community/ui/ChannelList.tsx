@@ -292,7 +292,7 @@ export function ChannelList(props: { community: CommunityView; me: string }): Re
                       toggle(k.id);
                     }}
                   >
-                    {tr(closed ? 'Expand category' : 'Collapse category')}
+                    {closed ? tr('Expand category') : tr('Collapse category')}
                   </MenuItem>
                   {manage && (
                     <MenuItem

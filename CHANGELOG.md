@@ -6,6 +6,20 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Languages: River now speaks German, Spanish, French, Italian, Polish,
+  Portuguese (Brazil), Russian, Turkish and Ukrainian as well as English and
+  Bulgarian, with each language's own plural forms (Russian, Ukrainian and
+  Polish have three). River follows the computer's or phone's language by
+  default; the first screen and Settings → Appearance list every language in its
+  own name. The phone's tabs, chats, calls and settings, the first run, the lock
+  screen, update notices, the status menu, the calls page and notifications
+  (including the phone's call notifications) are translated; other screens are
+  still partly in English, and the language picker says so. The page's `dir`
+  follows the language, ready for right-to-left languages. A test checks that
+  every language has every text, with the same placeholders and plural forms.
+
 ## [2.20.2] - 2026-10-18
 
 **Server hardening: sessions that end, roles in reach, timeouts that hold, limits on mailboxes and disks.**

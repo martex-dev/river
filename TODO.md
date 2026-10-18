@@ -81,7 +81,8 @@ Audit and plan: [docs/product/telegram-parity.md](docs/product/telegram-parity.m
 - [ ] Check on real phones: Android Back, picture-in-picture, proximity, lock-screen calls, the new call screen and ringtone, Stay connected with the screen off for an hour, battery and full-screen prompts, iPhone core recovery (native code first compiled in CI)
 - [ ] Picture-in-picture for calls on iPhone (needs AVPictureInPictureController with a video call source)
 - [ ] Check the message box stays above the keyboard on Android 15+ (edge-to-edge) on a real phone
-- [ ] More interface languages (English and Bulgarian today)
+- [x] More interface languages: German, Spanish, French, Italian, Polish, Portuguese (Brazil), Russian, Turkish and Ukrainian beside English and Bulgarian; River follows the system language by default (unreleased)
+- [ ] Route the remaining screens' texts through the translation (Friends, Social, Files, Admin, community dialogs, most of Settings → Account/Backup/Security/Voice, the phone's native Android/iOS strings and the updater's messages)
 
 ## 1.0.0 — Stage 1 release
 

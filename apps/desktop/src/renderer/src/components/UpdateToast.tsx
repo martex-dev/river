@@ -1,4 +1,5 @@
 import { useState, type ReactElement } from 'react';
+import { tr } from '../i18n.ts';
 import { useRiver } from '../store.ts';
 
 /**
@@ -20,15 +21,15 @@ export function UpdateToast(): ReactElement | null {
     body = (
       <>
         <div>
-          <strong>River {update.version} is ready</strong>
+          <strong>{tr('River {version} is ready', { version: update.version })}</strong>
           <p>
             {update.needsPermission
-              ? 'Allow River to install updates in Android’s settings, then tap Install.'
-              : 'Downloaded and signature-verified. Android asks you to confirm.'}
+              ? tr('Allow River to install updates in Android’s settings, then tap Install.')
+              : tr('Downloaded and signature-verified. Android asks you to confirm.')}
           </p>
         </div>
         <button className="btn btn--primary btn--small" onClick={() => void window.river.updates.install()}>
-          Install
+          {tr('Install')}
         </button>
       </>
     );
@@ -36,11 +37,13 @@ export function UpdateToast(): ReactElement | null {
     body = (
       <>
         <div>
-          <strong>River {update.version} needs a fresh install</strong>
-          <p>It is signed with a new key, so it cannot replace this River. Back up before uninstalling.</p>
+          <strong>{tr('River {version} needs a fresh install', { version: update.version })}</strong>
+          <p>
+            {tr('It is signed with a new key, so it cannot replace this River. Back up before uninstalling.')}
+          </p>
         </div>
         <button className="btn btn--ghost btn--small" onClick={() => openSettings('updates')}>
-          Details
+          {tr('Details')}
         </button>
       </>
     );
@@ -48,11 +51,11 @@ export function UpdateToast(): ReactElement | null {
     body = (
       <>
         <div>
-          <strong>River {update.version} is ready</strong>
-          <p>Downloaded and signature-verified.</p>
+          <strong>{tr('River {version} is ready', { version: update.version })}</strong>
+          <p>{tr('Downloaded and signature-verified.')}</p>
         </div>
         <button className="btn btn--primary btn--small" onClick={() => void window.river.updates.install()}>
-          Restart
+          {tr('Restart')}
         </button>
       </>
     );
@@ -60,14 +63,14 @@ export function UpdateToast(): ReactElement | null {
     body = (
       <>
         <div>
-          <strong>River {update.version} is available</strong>
-          <p>Download it from the release page.</p>
+          <strong>{tr('River {version} is available', { version: update.version })}</strong>
+          <p>{tr('Download it from the release page.')}</p>
         </div>
         <button
           className="btn btn--primary btn--small"
           onClick={() => void window.river.updates.openDownloadPage()}
         >
-          Download
+          {tr('Download')}
         </button>
       </>
     );
@@ -78,11 +81,11 @@ export function UpdateToast(): ReactElement | null {
     body = (
       <>
         <div>
-          <strong>Update blocked</strong>
-          <p>A downloaded update failed signature verification and was not installed.</p>
+          <strong>{tr('Update blocked')}</strong>
+          <p>{tr('A downloaded update failed signature verification and was not installed.')}</p>
         </div>
         <button className="btn btn--ghost btn--small" onClick={() => openSettings('updates')}>
-          Details
+          {tr('Details')}
         </button>
       </>
     );
@@ -96,7 +99,7 @@ export function UpdateToast(): ReactElement | null {
       aria-live="polite"
     >
       {body}
-      <button className="toast__close" aria-label="Dismiss" onClick={() => setDismissed(key)}>
+      <button className="toast__close" aria-label={tr('Dismiss')} onClick={() => setDismissed(key)}>
         ×
       </button>
     </div>

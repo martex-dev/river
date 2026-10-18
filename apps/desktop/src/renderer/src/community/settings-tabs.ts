@@ -1,5 +1,6 @@
 import { Permission } from '@river/protocol/permissions';
 import type { CommunityTab } from './store.ts';
+import { msg } from '../../../shared/i18n/index.ts';
 
 const can = (perms: number, p: number): boolean => (perms & p) === p;
 
@@ -9,23 +10,23 @@ const can = (perms: number, p: number): boolean => (perms & p) === p;
  */
 export function communityTabs(perms: number): Array<[CommunityTab, string, boolean]> {
   return [
-    ['overview', 'Overview', can(perms, Permission.MANAGE_COMMUNITY)],
-    ['onboarding', 'Rules & roles', can(perms, Permission.MANAGE_COMMUNITY)],
-    ['roles', 'Roles', can(perms, Permission.MANAGE_ROLES)],
-    ['members', 'Members', true],
-    ['emoji', 'Emoji', true],
-    ['stickers', 'Stickers', true],
-    ['sounds', 'Soundboard', true],
-    ['bans', 'Bans', can(perms, Permission.BAN_MEMBERS)],
-    ['invites', 'Invites', can(perms, Permission.MANAGE_COMMUNITY)],
-    ['webhooks', 'Webhooks', can(perms, Permission.MANAGE_CHANNELS)],
-    ['reports', 'Reports', can(perms, Permission.MANAGE_MESSAGES)],
+    ['overview', msg('Overview'), can(perms, Permission.MANAGE_COMMUNITY)],
+    ['onboarding', msg('Rules & roles'), can(perms, Permission.MANAGE_COMMUNITY)],
+    ['roles', msg('Roles'), can(perms, Permission.MANAGE_ROLES)],
+    ['members', msg('Members'), true],
+    ['emoji', msg('Emoji'), true],
+    ['stickers', msg('Stickers'), true],
+    ['sounds', msg('Soundboard'), true],
+    ['bans', msg('Bans'), can(perms, Permission.BAN_MEMBERS)],
+    ['invites', msg('Invites'), can(perms, Permission.MANAGE_COMMUNITY)],
+    ['webhooks', msg('Webhooks'), can(perms, Permission.MANAGE_CHANNELS)],
+    ['reports', msg('Reports'), can(perms, Permission.MANAGE_MESSAGES)],
     [
       'insights',
-      'Insights',
+      msg('Insights'),
       can(perms, Permission.MANAGE_COMMUNITY) || can(perms, Permission.VIEW_AUDIT_LOG),
     ],
-    ['audit', 'Audit log', can(perms, Permission.VIEW_AUDIT_LOG)],
+    ['audit', msg('Audit log'), can(perms, Permission.VIEW_AUDIT_LOG)],
   ];
 }
 

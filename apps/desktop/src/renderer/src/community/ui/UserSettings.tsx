@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.ts';
 import { AvatarCropDialog, keepAnimated } from './AvatarCrop.tsx';
 import {
   DEFAULT_KEYBINDS,
@@ -231,12 +232,12 @@ export function Profile(): ReactElement {
       </div>
       {dirty && (
         <div className="save-bar">
-          <span>Careful — you have unsaved changes!</span>
+          <span>{tr('Careful — you have unsaved changes!')}</span>
           <button className="btn btn--link" disabled={saving} onClick={() => setDraft(saved)}>
-            Reset
+            {tr('Reset')}
           </button>
           <button className="btn btn--primary btn--small" disabled={saving} onClick={() => void save()}>
-            {saving ? 'Saving…' : 'Save changes'}
+            {saving ? tr('Saving…') : tr('Save changes')}
           </button>
         </div>
       )}
@@ -473,7 +474,7 @@ export function VoiceSettings(): ReactElement {
             <>
               {' '}
               <button type="button" className="btn btn--link" onClick={() => apply({ outputVolume: null })}>
-                Reset
+                {tr('Reset')}
               </button>
             </>
           )}

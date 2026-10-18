@@ -6,6 +6,7 @@ import { AvatarCropDialog, keepAnimated } from '../community/ui/AvatarCrop.tsx';
 import { joinWithLink } from '../community/ui/StartScreen.tsx';
 import { useCommunity } from '../community/store.ts';
 import { phoneShowCommunity } from '../phone/nav.ts';
+import { LANGUAGES, tr, useLanguage } from '../i18n.ts';
 import { useRiver, type Section } from '../store.ts';
 import { ArrowIcon, LockIcon } from './Icons.tsx';
 import { RiverMark } from './RiverMark.tsx';
@@ -13,6 +14,36 @@ import { RestoreForm } from './BackupPanel.tsx';
 import { LinkThisDevice } from './LinkDevice.tsx';
 
 type Step = 'start' | 'creating' | 'restore' | 'link';
+
+/**
+ * The language, right on the first screen: River follows the computer's language, and whoever
+ * wants another one does not have to find Settings in a language they may not read.
+ */
+function FirstRunLanguage(): ReactElement | null {
+  const setting = useRiver((r) => r.settings?.appearance.language);
+  const update = useRiver((r) => r.updateSettings);
+  useLanguage();
+  if (!setting) return null;
+  return (
+    <label className="onboarding__language">
+      <span aria-hidden="true">🌐</span>
+      <select
+        aria-label={tr('Language')}
+        value={setting}
+        onChange={(e) =>
+          void update({ appearance: { language: e.target.value as typeof setting } }).catch(() => undefined)
+        }
+      >
+        <option value="system">{tr('Follow my system')}</option>
+        {LANGUAGES.map((l) => (
+          <option key={l.id} value={l.id} lang={l.id}>
+            {l.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 /**
  * First run (2.14): one screen. A name (and a photo, if you like), then River sets up your
@@ -55,7 +86,7 @@ export function Onboarding(props: {
           // The identity appeared while the link was being taken: it cannot be used here any more.
           if (hasIdentity.current) {
             setError(
-              'That link code is for a device without River yet. Open it on the device you are adding.',
+              tr('That link code is for a device without River yet. Open it on the device you are adding.'),
             );
             return;
           }
@@ -79,9 +110,9 @@ export function Onboarding(props: {
 
   const start = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
-    if (name.trim().length > 64) return setError('Use 64 characters or fewer.');
+    if (name.trim().length > 64) return setError(tr('Use 64 characters or fewer.'));
     setError(null);
-    setWorking('Setting up River…');
+    setWorking(tr('Setting up River…'));
     setStep('creating');
     hasIdentity.current = true;
     let created: IdentityInfo;
@@ -89,7 +120,7 @@ export function Onboarding(props: {
       created = await window.river.identity.create(name);
     } catch {
       hasIdentity.current = false;
-      setError('River could not set itself up. Please try again.');
+      setError(tr('River could not set itself up. Please try again.'));
       setStep('start');
       return;
     }
@@ -98,11 +129,13 @@ export function Onboarding(props: {
     if (avatar) await window.river.community.action({ a: 'setProfile', avatar }).catch(() => undefined);
     await applyFirstRunLook().catch(() => undefined);
     if (!invite) return props.onFinished();
-    setWorking('Joining the community…');
+    setWorking(tr('Joining the community…'));
     const failed = await joinWithLink(invite);
     if (failed) {
       props.onFinished();
-      useCommunity.getState().notify(`River could not join that community: ${failed}`, 'error');
+      useCommunity
+        .getState()
+        .notify(tr('River could not join that community: {reason}', { reason: failed }), 'error');
       return;
     }
     const joined = useCommunity.getState().selectedCommunity;
@@ -118,21 +151,21 @@ export function Onboarding(props: {
             <div className="lock__mark">
               <RiverMark size={56} />
             </div>
-            <h1 className="onboarding__title">Welcome to River</h1>
+            <h1 className="onboarding__title">{tr('Welcome to River')}</h1>
             {invite ? (
               <p className="onboarding__invite" role="status">
-                You're invited to a community. Pick a name and you're in.
+                {tr("You're invited to a community. Pick a name and you're in.")}
               </p>
             ) : (
               <p className="lock__text">
-                Chats, calls and communities, end-to-end encrypted. No phone number or e-mail needed.
+                {tr('Chats, calls and communities, end-to-end encrypted. No phone number or e-mail needed.')}
               </p>
             )}
             <div className="onboarding__me">
               <button
                 type="button"
                 className="onboarding__photo"
-                aria-label={avatar ? 'Change your photo' : 'Add a photo (optional)'}
+                aria-label={avatar ? tr('Change your photo') : tr('Add a photo (optional)')}
                 onClick={() => fileRef.current?.click()}
               >
                 {avatar ? (
@@ -140,17 +173,17 @@ export function Onboarding(props: {
                 ) : (
                   <span aria-hidden="true" className="onboarding__photo-add">
                     <span className="onboarding__photo-glyph">📷</span>
-                    Photo
+                    {tr('Photo')}
                   </span>
                 )}
               </button>
               <label className="textfield onboarding__name">
-                <span className="field__label">Your name</span>
+                <span className="field__label">{tr('Your name')}</span>
                 <input
                   type="text"
                   autoFocus
                   maxLength={80}
-                  placeholder="e.g. Alex"
+                  placeholder={tr('e.g. Alex')}
                   autoComplete="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -166,7 +199,7 @@ export function Onboarding(props: {
                 const file = e.target.files?.[0];
                 e.target.value = '';
                 if (!file) return;
-                if (file.size > 15 * 1024 * 1024) return setError('That picture is too large.');
+                if (file.size > 15 * 1024 * 1024) return setError(tr('That picture is too large.'));
                 setError(null);
                 void keepAnimated(file).then((gif) => (gif ? setAvatar(gif) : setCropping(file)));
               }}
@@ -187,19 +220,20 @@ export function Onboarding(props: {
               </p>
             )}
             <button type="submit" className="btn btn--primary lock__submit">
-              {invite ? 'Join the community' : 'Get started'} <ArrowIcon size={16} />
+              {invite ? tr('Join the community') : tr('Get started')} <ArrowIcon size={16} />
             </button>
             <p className="muted small onboarding__note">
-              Both are optional, and you can change them any time.
+              {tr('Both are optional, and you can change them any time.')}
             </p>
             <div className="onboarding__other">
               <button type="button" className="btn btn--link" onClick={() => setStep('link')}>
-                I already use River — link this device
+                {tr('I already use River — link this device')}
               </button>
               <button type="button" className="btn btn--link" onClick={() => setStep('restore')}>
-                Restore from a backup
+                {tr('Restore from a backup')}
               </button>
             </div>
+            <FirstRunLanguage />
           </form>
         )}
 
