@@ -27,6 +27,10 @@ All notable changes to River are documented here. The format follows
 - Local data: the encrypted database keeps its temporary working data in
   memory, so large searches and sorts never write unencrypted pieces of your
   messages to temporary files on disk.
+- Direct messages: old signed prekeys are deleted 60 days after they are
+  replaced, instead of being kept forever, so keys taken from a device later
+  cannot open older first messages. A replaced key is no longer deleted too
+  early either, which made some first messages fail to open.
 
 ## [2.20.0] - 2026-10-18
 

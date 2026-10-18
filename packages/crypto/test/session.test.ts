@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createIdentity } from '../src/identity.ts';
 import {
   IdentityChangeRefusedError,
   MAX_PADDED_CONTENT,
+  RETIRED_PREKEY_KEEP_MS,
   RiverProtocol,
   SafetyNumberChangedError,
   pad,
@@ -21,6 +22,8 @@ function memoryStorage(): ProtocolStorage & { dump(): string } {
     put: (kind, id, value) => void map.set(k(kind, id), new Uint8Array(value)),
     delete: (kind, id) => void map.delete(k(kind, id)),
     count: (kind) => [...map.keys()].filter((x) => x.startsWith(`${kind}:`)).length,
+    ids: (kind) =>
+      [...map.keys()].filter((x) => x.startsWith(`${kind}:`)).map((x) => x.slice(kind.length + 1)),
     dump: () => JSON.stringify([...map.keys()]),
   };
 }
@@ -336,6 +339,57 @@ describe('libsignal sessions', () => {
         serve(other.protocol.generatePreKeys({ oneTime: 1, rotate: true }), other.identity.registrationId),
       ),
     ).rejects.toThrow();
+  });
+
+  it('keeps a rotated-out signed and last-resort key for a while, then deletes them (2.20)', async () => {
+    const bob = party();
+    const old = bob.protocol.generatePreKeys({ oneTime: 0, rotate: true });
+    // Two people fetched Bob's keys before he rotated, with no one-time keys left: both use the
+    // last-resort Kyber key. Both first messages open, even after the rotation.
+    const [alice, carol, dave] = [party(), party(), party()];
+    for (const p of [alice, carol, dave])
+      await p.protocol.startSession(
+        bob.identity.riverId,
+        bob.identity.publicKey,
+        serve(old, bob.identity.registrationId, false),
+      );
+    bob.protocol.generatePreKeys({ oneTime: 0, rotate: true });
+    for (const p of [alice, carol]) {
+      const first = await p.protocol.encrypt(bob.identity.riverId, 1, text('hi'));
+      expect(str(await bob.protocol.decrypt(p.identity.riverId, 1, first))).toBe('hi');
+    }
+    expect(bob.storage.get('signed', String(old.signedPreKey.id))).not.toBeNull();
+    expect(bob.storage.get('kyber', String(old.kyberLastResort.id))).not.toBeNull();
+
+    // Two months later, the next rotation deletes them: what an attacker recorded and could open
+    // with a stolen device's keys is limited to recent first messages.
+    const later = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + RETIRED_PREKEY_KEEP_MS + 86_400_000);
+    try {
+      bob.protocol.generatePreKeys({ oneTime: 0, rotate: true });
+    } finally {
+      later.mockRestore();
+    }
+    expect(bob.storage.get('signed', String(old.signedPreKey.id))).toBeNull();
+    expect(bob.storage.get('kyber', String(old.kyberLastResort.id))).toBeNull();
+    expect(bob.storage.count('signed')).toBe(2);
+    const late = await dave.protocol.encrypt(bob.identity.riverId, 1, text('too late'));
+    await expect(bob.protocol.decrypt(dave.identity.riverId, 1, late)).rejects.toThrow();
+  });
+
+  it('retires signed prekeys kept by Rivers before 2.20 the first time it rotates', () => {
+    const bob = party();
+    for (let i = 0; i < 4; i++) bob.protocol.generatePreKeys({ oneTime: 0, rotate: true });
+    bob.storage.delete('meta', 'retiredPreKeys');
+    bob.protocol.generatePreKeys({ oneTime: 0, rotate: true });
+    expect(bob.storage.count('signed')).toBe(5);
+    const later = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + RETIRED_PREKEY_KEEP_MS + 86_400_000);
+    try {
+      bob.protocol.generatePreKeys({ oneTime: 0, rotate: true });
+    } finally {
+      later.mockRestore();
+    }
+    // The current key and the one just replaced (kept for the mail still on its way).
+    expect(bob.storage.count('signed')).toBe(2);
   });
 
   it('never stores keys outside the provided storage', async () => {

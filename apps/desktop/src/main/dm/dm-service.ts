@@ -678,6 +678,10 @@ export class DmService {
       },
       count: (kind) =>
         (db.prepare('SELECT COUNT(*) AS n FROM signal_store WHERE kind = ?').get(kind) as { n: number }).n,
+      ids: (kind) =>
+        (db.prepare('SELECT id FROM signal_store WHERE kind = ?').all(kind) as Array<{ id: string }>).map(
+          (r) => r.id,
+        ),
     };
   }
 
