@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.14.0] - 2026-10-18
+
+**Voice channels for big groups and meetings, and pages that scroll in every skin.**
+
 ### Added
 
 - Voice channels: **large rooms**. Above eight people River sends everyone's
