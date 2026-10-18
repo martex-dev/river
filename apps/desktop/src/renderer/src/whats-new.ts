@@ -3,6 +3,10 @@
  * got, shown once. Fresh installs see nothing; full notes are in the release.
  */
 export const HIGHLIGHTS: Record<string, string[]> = {
+  '2.21.0': [
+    'River speaks eleven languages: English, Bulgarian, German, Spanish, French, Italian, Portuguese, Polish, Russian, Ukrainian and Turkish',
+    'It follows your system language unless you pick one in Settings → Appearance',
+  ],
   '2.20.0': [
     'Big emoji, a preview of the message you reply to, and saved replies behind "/"',
     'Send with an effect: confetti, hearts or fireworks (Calm mode turns them off)',

@@ -125,6 +125,21 @@ function typingIn(target: EventTarget | null): boolean {
  * Discord's — your account and profile, security, and the app's own settings,
  * all in one list. Esc or the close button returns to where you were.
  */
+
+/**
+ * Unsaved edits (the profile's "Careful — you have unsaved changes!") are not thrown away by
+ * closing Settings or switching tabs without asking.
+ */
+function leave(then: () => void): void {
+  if (
+    useRiver.getState().settingsDirty &&
+    !window.confirm(tr('You have unsaved changes. Leave without saving them?'))
+  )
+    return;
+  useRiver.getState().setSettingsDirty(false);
+  then();
+}
+
 export function SettingsOverlay(): ReactElement | null {
   const tr = useT();
   const tab = useRiver((s) => s.settingsTab);
@@ -138,18 +153,6 @@ export function SettingsOverlay(): ReactElement | null {
   const phone = useRiver((r) => isPhone(r.info?.platform));
   const showHosting =
     !phone && (askedForHosting || tab === 'hosting' || host?.enabled || (host?.legacy ?? 'none') !== 'none');
-
-  // Unsaved edits (the profile's "Careful — you have unsaved changes!") are not thrown away by
-  // closing Settings or switching tabs without asking.
-  const leave = (then: () => void): void => {
-    if (
-      useRiver.getState().settingsDirty &&
-      !window.confirm(tr('You have unsaved changes. Leave without saving them?'))
-    )
-      return;
-    useRiver.getState().setSettingsDirty(false);
-    then();
-  };
 
   useEffect(() => {
     if (!tab) return;

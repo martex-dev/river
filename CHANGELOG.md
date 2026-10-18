@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.21.0] - 2026-10-19
+
+**River in eleven languages.**
+
 ### Added
 
 - Languages: River now speaks German, Spanish, French, Italian, Polish,
