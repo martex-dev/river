@@ -1,5 +1,7 @@
 import { createServer as createHttpServer, get, type Server as HttpServer } from 'node:http';
 import { createServer, connect, type AddressInfo, type Server, type Socket } from 'node:net';
+import { PassThrough } from 'node:stream';
+import type { PeerCertificate } from 'node:tls';
 import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket as WsSocket, WebSocketServer } from 'ws';
 import {
@@ -8,6 +10,7 @@ import {
   chromiumProxyConfig,
   connectThroughProxy,
   isLoopbackHost,
+  tunnelTls,
   type ActiveProxy,
 } from '../src/main/proxy.ts';
 import { checkProxy } from '../src/main/proxy-check.ts';
@@ -191,6 +194,30 @@ describe('connections through a proxy', () => {
         timeoutMs: 200,
       }),
     ).rejects.toThrow(/in time/);
+  });
+
+  it('checks the server’s certificate against the server, never the proxy, also for an IP address (2.18)', () => {
+    const tunnel = new PassThrough();
+    const cert = (name: string, alt: string) =>
+      ({ subject: { CN: name }, subjectaltname: alt }) as unknown as PeerCertificate;
+    const byIp = tunnelTls(tunnel, '203.0.113.5');
+    expect(byIp.host).toBe('203.0.113.5');
+    expect(byIp.servername).toBeUndefined();
+    // Node passes the host it would check; River checks the server's address whatever it is.
+    expect(
+      byIp.checkServerIdentity!('proxy.example', cert('203.0.113.5', 'IP Address:203.0.113.5')),
+    ).toBeUndefined();
+    expect(
+      byIp.checkServerIdentity!('proxy.example', cert('proxy.example', 'DNS:proxy.example')),
+    ).toBeInstanceOf(Error);
+    const byName = tunnelTls(tunnel, 'river.example.org');
+    expect(byName.servername).toBe('river.example.org');
+    expect(
+      byName.checkServerIdentity!('proxy.example', cert('proxy.example', 'DNS:proxy.example')),
+    ).toBeInstanceOf(Error);
+    expect(
+      byName.checkServerIdentity!('proxy.example', cert('river.example.org', 'DNS:river.example.org')),
+    ).toBeUndefined();
   });
 
   it('HTTP requests and the realtime WebSocket go through ProxyAgent', async () => {
