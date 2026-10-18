@@ -16,6 +16,7 @@ import type {
 import type { Result } from '../../../shared/ipc.ts';
 import { useCommunity } from '../community/store.ts';
 import { shareByKey } from '../structural.ts';
+import { uiStartup } from '../startup.ts';
 import { celebrate } from '../community/fx.tsx';
 import { play, playNotifySound } from '../community/sound.ts';
 import { useRiver } from '../store.ts';
@@ -77,6 +78,7 @@ export const useDm = create<DmState>((set, get) => ({
       conversations: conversations.ok ? conversations.value : [],
       myId: myId.ok ? myId.value : null,
     });
+    uiStartup.mark('chats');
   },
 
   handle: (e) => {
