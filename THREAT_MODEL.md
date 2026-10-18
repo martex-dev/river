@@ -113,6 +113,18 @@ Photos (JPEG, PNG, WebP) lose Exif, XMP, IPTC, comments, text chunks and
 appended images before they are encrypted (only the orientation is kept).
 Videos and other files are sent as they are, and file names are kept.
 
+### 5p. Server hardening (security audit, 2.20)
+
+- **Sessions end.** A session kept alive by an open connection used to renew
+  forever, so a stolen token stayed good as long as the device stayed
+  connected. Since 2.20 every session ends 90 days after sign-in
+  (`RIVER_SESSION_MAX_DAYS`) however often it was renewed, and the app signs in
+  again with its device key. River signs out when it quits
+  (`DELETE /v1/sessions/current`, which also ends the connections that used the
+  session); removing a device ends its sessions and connection at once. A token
+  stolen from memory of a running River is still good until one of these
+  happens.
+
 ### 5a. Address relay (River Host, 1.0.8)
 
 A server hosted on a home PC behind a quick tunnel posts signed notes of its

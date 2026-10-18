@@ -41,6 +41,8 @@ RIVER_DATABASE_URL=sqlite:/var/lib/river/river.sqlite npm start -w @river/server
 | `RIVER_TURN_SECRET`           | —                                 | coturn `static-auth-secret`                                                                                              |
 | `RIVER_MAX_ATTACHMENT_MB`     | `25`                              | Largest encrypted file accepted                                                                                          |
 | `RIVER_MAILBOX_TTL_DAYS`      | `30`                              | Days undelivered direct messages wait for a device that does not collect them (1–90); delivered ones are deleted at once |
+| `RIVER_SESSION_TTL_HOURS`     | `24`                              | Hours a session lasts without use; a session in use is renewed                                                           |
+| `RIVER_SESSION_MAX_DAYS`      | `90`                              | Days after sign-in a session ends however often it was renewed (1–365); River then signs in again by itself              |
 
 Invalid values stop the server at start-up with a list of every problem.
 

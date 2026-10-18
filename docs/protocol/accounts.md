@@ -53,7 +53,15 @@ versions (rollback) or lists not signed by the identity key (device injection).
    Unknown account/device and bad signature give the same `401` (no account enumeration).
 3. Authenticated requests: `Authorization: Bearer <token>`. The server stores
    only SHA-256 of the token; default lifetime 24 h (`RIVER_SESSION_TTL_HOURS`).
-   Clients keep tokens in memory only.
+   Clients keep tokens in memory only. A session kept in use (the realtime
+   connection) is renewed, but never past 90 days after sign-in
+   (`RIVER_SESSION_MAX_DAYS`, 2.20); then any request answers `401` and the app
+   signs in again with its device key, without asking the person.
+4. `DELETE /v1/sessions/current` (2.20) signs out: the bearer token's session
+   ends at once, and so do realtime connections that signed in with it. Always
+   `200 {ok: true}`, also for an unknown or expired token. River calls it when it
+   quits. Removing a device from the signed device list ends that device's
+   sessions.
 
 ### Account check
 
@@ -65,7 +73,7 @@ signature is valid; otherwise it stops using the server and shows a security err
 
 `accounts`: River ID, identity public key, device-list bytes + signature +
 version, creation **day**. `devices`: device ID, device public key,
-registration ID, creation day. `sessions`: token hash, device, expiry.
+registration ID, creation day. `sessions`: token hash, device, expiry, absolute end.
 `auth_challenges`: challenge hash, purpose, expiry. No IP addresses, names,
 user agents or last-seen times.
 

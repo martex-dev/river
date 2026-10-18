@@ -153,6 +153,55 @@ describe('desktop ↔ server accounts', () => {
     expect(requests - before).toBe(6);
   });
 
+  it('signs out of its server: the session ends there at once (2.20)', async () => {
+    const c = client();
+    c.identity.create('');
+    await c.account.register(SERVER);
+    const token = c.account.sessionToken()!;
+    const me = async (t: string): Promise<number> =>
+      (
+        await server.inject({
+          method: 'GET',
+          url: '/v1/accounts/me',
+          headers: { authorization: `Bearer ${t}` },
+        })
+      ).statusCode;
+    expect(await me(token)).toBe(200);
+    await c.account.signOut();
+    expect(c.account.sessionToken()).toBeNull();
+    expect(await me(token)).toBe(401);
+    expect(await serverDb.db.selectFrom('sessions').selectAll().execute()).toEqual([]);
+    // Signing out again, or offline, never throws; the account stays and signs in again.
+    await c.account.signOut();
+    reachable = false;
+    await c.account.connect();
+    await c.account.signOut();
+    reachable = true;
+    expect(await c.account.connect()).toMatchObject({ state: 'registered', connection: 'online' });
+  });
+
+  it('a session past its absolute lifetime is replaced by signing in again, without asking (2.20)', async () => {
+    const c = client();
+    c.identity.create('');
+    await c.account.register(SERVER);
+    const old = c.account.sessionToken()!;
+    // 90 days on: the server ends the session however recently it was renewed.
+    await serverDb.db
+      .updateTable('sessions')
+      .set({ not_after: new Date(Date.now() - 1000).toISOString() })
+      .execute();
+    const err = await server.inject({
+      method: 'GET',
+      url: '/v1/accounts/me',
+      headers: { authorization: `Bearer ${old}` },
+    });
+    expect(err.statusCode).toBe(401);
+    // The app's answer to a 401 (CommunityService.call, the realtime connection): sign in again.
+    expect(await c.account.connect()).toMatchObject({ state: 'registered', connection: 'online' });
+    expect(c.account.sessionToken()).not.toBe(old);
+    expect(c.account.status()).not.toHaveProperty('missing');
+  });
+
   it('reports offline servers without losing the account', async () => {
     const c = client();
     c.identity.create('');

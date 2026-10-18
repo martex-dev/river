@@ -71,7 +71,7 @@ import {
   decodeRelayAny,
   encodeRelayIn,
 } from '@river/protocol';
-import { authenticate, renewSession } from '../accounts/auth-store.ts';
+import { authenticate, renewSession, sessionHash } from '../accounts/auth-store.ts';
 import type { Hub, HubSocket } from '../communities/hub.ts';
 import type { Transaction } from 'kysely';
 import type { ChannelModel, CommunityModel } from '../communities/model.ts';
@@ -138,6 +138,8 @@ export interface CommunityOps {
   removeEverywhere(riverId: string): Promise<void>;
   /** Deletes a community and tells its members. */
   deleteCommunity(communityId: string): Promise<boolean>;
+  /** A session was signed out: realtime connections that signed in with it end now (2.20). */
+  endSession(tokenHash: string): void;
 }
 
 /**
@@ -2872,8 +2874,12 @@ export async function registerCommunityRoutes(
     });
   };
 
+  /** Open realtime connections by the session they signed in with (hashed), to end on sign-out. */
+  const connectionsBySession = new Map<string, Set<() => void>>();
+
   app.get(`${API_PREFIX}/ws`, { websocket: true }, (socket) => {
     let riverId: string | null = null;
+    let tokenHash: string | null = null;
     let closed = false;
     /** The session this connection signed in with, re-checked now and then (it expires, or is revoked). */
     let token: string | null = null;
@@ -2894,6 +2900,11 @@ export async function registerCommunityRoutes(
       close: (c) => socket.close(c),
     };
     const send = (e: ServerEvent): void => hubSocket.send(JSON.stringify(e));
+    const endedBySignOut = (): void => {
+      if (closed) return;
+      send({ t: 'error', code: 'unauthorized' });
+      socket.close(4401);
+    };
     const authTimer = setTimeout(() => {
       if (!riverId) socket.close(4401);
     }, 10_000);
@@ -2960,6 +2971,12 @@ export async function registerCommunityRoutes(
         }
         clearTimeout(authTimer);
         token = event.token;
+        tokenHash = sessionHash(event.token);
+        if (tokenHash) {
+          const set = connectionsBySession.get(tokenHash) ?? new Set();
+          set.add(endedBySignOut);
+          connectionsBySession.set(tokenHash, set);
+        }
         riverId = session.riverId;
         hubSocket.deviceId = session.deviceId;
         hub.setStatus(riverId, event.status ?? 'online');
@@ -3225,6 +3242,11 @@ export async function registerCommunityRoutes(
       clearTimeout(authTimer);
       clearInterval(heartbeat);
       clearInterval(sessionTimer);
+      if (tokenHash) {
+        const set = connectionsBySession.get(tokenHash);
+        set?.delete(endedBySignOut);
+        if (set?.size === 0) connectionsBySession.delete(tokenHash);
+      }
       if (!riverId) return;
       const gone = riverId;
       const { offline, held } = hub.remove(gone, hubSocket);
@@ -3270,6 +3292,9 @@ export async function registerCommunityRoutes(
       if (!model) return false;
       await deleteCommunity(model);
       return true;
+    },
+    endSession: (hash) => {
+      for (const end of [...(connectionsBySession.get(hash) ?? [])]) end();
     },
   };
 }

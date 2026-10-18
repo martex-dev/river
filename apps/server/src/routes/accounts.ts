@@ -33,6 +33,8 @@ import {
   authenticate,
   consumeChallenge,
   createSession,
+  endSession,
+  sessionHash,
   suspension,
   suspensionMessage,
   issueChallenge,
@@ -74,6 +76,8 @@ export function registerAccountRoutes(
     now: () => Date;
     /** Devices were removed from an account (their live connections must end). */
     onDevicesRemoved?: (riverId: string, deviceIds: number[]) => void;
+    /** A session was signed out (realtime connections that used it must end). */
+    onSessionEnded?: (tokenHash: string) => void;
   },
 ): void {
   const { db } = deps.database;
@@ -207,7 +211,14 @@ export function registerAccountRoutes(
       return fail(reply, 409, 'account_exists', 'An account with this River ID already exists');
     }
 
-    const session = await createSession(db, list.riverId, device.deviceId, deps.config.sessionTtlMs, now);
+    const session = await createSession(
+      db,
+      list.riverId,
+      device.deviceId,
+      deps.config.sessionTtlMs,
+      now,
+      deps.config.sessionMaxMs,
+    );
     const body: RegisterResponse = { riverId: list.riverId, deviceId: device.deviceId, session };
     return reply.code(201).send(body);
   });
@@ -236,7 +247,25 @@ export function registerAccountRoutes(
     }
     const suspended = await suspension(db, req.riverId, now);
     if (suspended) return fail(reply, 403, 'account_suspended', suspensionMessage(suspended));
-    return createSession(db, req.riverId, req.deviceId, deps.config.sessionTtlMs, now);
+    return createSession(
+      db,
+      req.riverId,
+      req.deviceId,
+      deps.config.sessionTtlMs,
+      now,
+      deps.config.sessionMaxMs,
+    );
+  });
+
+  // Sign-out (2.20): the app ends the session it holds when it lets go of it (quitting, or a new
+  // sign-in replacing it). The token itself is the proof, so an expired or unknown one is answered
+  // the same way: nothing is left to end, and nobody learns which tokens exist.
+  app.delete(`${API_PREFIX}/sessions/current`, sensitive, async (request) => {
+    const header = request.headers.authorization ?? '';
+    const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+    const hash = sessionHash(token);
+    if (hash && (await endSession(db, token))) deps.onSessionEnded?.(hash);
+    return { ok: true };
   });
 
   app.get(`${API_PREFIX}/accounts/me`, { preHandler: requireSession }, async (request, reply) => {

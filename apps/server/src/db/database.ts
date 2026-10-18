@@ -32,6 +32,7 @@ import * as m0025 from './migrations/0025_invite_tracking.ts';
 import * as m0026 from './migrations/0026_webhooks.ts';
 import * as m0027 from './migrations/0027_audit_cleanup.ts';
 import * as m0028 from './migrations/0028_trust_audit.ts';
+import * as m0029 from './migrations/0029_session_lifetime.ts';
 import type { Database } from './schema.ts';
 
 export type Dialect = 'sqlite' | 'postgres';
@@ -80,6 +81,7 @@ export const MIGRATIONS: Record<string, Migration> = {
   '0026_webhooks': m0026,
   '0027_audit_cleanup': m0027,
   '0028_trust_audit': m0028,
+  '0029_session_lifetime': m0029,
 };
 
 /**

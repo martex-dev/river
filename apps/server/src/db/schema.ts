@@ -54,6 +54,8 @@ export interface SessionsTable {
   river_id: string;
   device_id: number;
   expires_at: string;
+  /** Absolute end (2.20): renewing never moves `expires_at` past it. Null only before 0029 ran. */
+  not_after: string | null;
 }
 
 export interface AuthChallengesTable {

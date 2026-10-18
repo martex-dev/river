@@ -40,6 +40,11 @@ const envSchema = z.object({
     .min(1)
     .max(24 * 30)
     .default(24),
+  /**
+   * Days after sign-in a session ends however often it is renewed (2.20); the app then signs in
+   * again with its device key, without asking the person.
+   */
+  RIVER_SESSION_MAX_DAYS: z.coerce.number().int().min(1).max(365).default(90),
   /** Where encrypted attachment blobs are stored. */
   RIVER_ATTACHMENT_DIR: z.string().min(1).default('./data/attachments'),
   /** Largest attachment (after encryption) in MiB. */
@@ -82,6 +87,8 @@ export interface ServerConfig {
   publicUrl: string | undefined;
   registration: 'open' | 'closed';
   sessionTtlMs: number;
+  /** Absolute lifetime of a session from sign-in (default 90 days). */
+  sessionMaxMs?: number;
   attachmentDir: string;
   maxAttachmentBytes: number;
   turn: { urls: string[]; secret: string } | null;
@@ -131,6 +138,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     publicUrl: e.RIVER_PUBLIC_URL,
     registration: e.RIVER_REGISTRATION,
     sessionTtlMs: e.RIVER_SESSION_TTL_HOURS * 60 * 60 * 1000,
+    sessionMaxMs: e.RIVER_SESSION_MAX_DAYS * 24 * 60 * 60 * 1000,
     attachmentDir: e.RIVER_ATTACHMENT_DIR,
     maxAttachmentBytes: e.RIVER_MAX_ATTACHMENT_MB * 1024 * 1024,
     attachmentQuotaBytes: e.RIVER_ATTACHMENT_QUOTA_MB * 1024 * 1024,

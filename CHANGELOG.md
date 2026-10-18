@@ -6,6 +6,14 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- Server: sessions no longer renew forever. However often a connected device
+  renews it, a session ends 90 days after sign-in (`RIVER_SESSION_MAX_DAYS`) and
+  River signs in again by itself with its device key. River signs out of its
+  server when it quits (`DELETE /v1/sessions/current`, which also ends the
+  connections that used the session).
+
 ## [2.20.0] - 2026-10-18
 
 **A security audit's fourteen fixes, and messaging that feels like Telegram: big emoji, reply previews, saved replies, effects.**
