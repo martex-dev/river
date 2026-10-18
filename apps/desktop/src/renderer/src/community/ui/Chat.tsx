@@ -19,7 +19,15 @@ import { SavedPanel } from './Saved.tsx';
 import { CreatePollDialog, PollView } from './Poll.tsx';
 import { isVote } from '../../../../shared/poll.ts';
 import { hasCriteria, parseSearch } from '../../../../shared/search-query.ts';
-import { clockDateTime, clockTime } from '../../time.ts';
+import { clockTime, dateLocale, dayLabel, fullWhen, messageWhen } from '../../time.ts';
+import {
+  EMOJI_PICKER,
+  fromBottom,
+  insertIntoBox,
+  nearButton,
+  stopEditing,
+  useStickToBottom,
+} from '../../components/chat-ui.ts';
 import { formatMessageLink } from '../message-link.ts';
 import { ProfileCard } from './Members.tsx';
 import { ForwardDialog } from './Forward.tsx';
@@ -87,15 +95,6 @@ const GROUP_MS = 5 * 60_000;
 
 const timeOf = (iso: string): string => clockTime(iso);
 
-function dayLabel(iso: string): string {
-  const d = new Date(iso);
-  const today = new Date();
-  const yesterday = new Date(Date.now() - 86_400_000);
-  if (d.toDateString() === today.toDateString()) return 'Today';
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-}
-
 /** One shared empty list, so memos do not see a new array every render. */
 const NO_MESSAGES: never[] = [];
 
@@ -107,8 +106,19 @@ export function TextChannel(props: {
   const { community, channel, me } = props;
   const s = useCommunity();
   const messages = useCommunity((x) => x.messages[channel.id]) ?? NO_MESSAGES;
+  // Until the history arrives the channel shows a skeleton, not "This is the start of #channel"
+  // with a Wave button (2.13.1); if it cannot be loaded, Retry.
+  const loaded = useCommunity((x) => x.messages[channel.id] !== undefined);
+  const failed = useCommunity((x) => !!x.historyFailed[channel.id]);
+  useEffect(() => {
+    const state = useCommunity.getState();
+    if (state.messages[channel.id] === undefined && !state.historyFailed[channel.id])
+      void state.loadMessages(channel.id);
+  }, [channel.id]);
   const gallery = useMemo(() => galleryOf(messages.map((m) => m.attachments)), [messages]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Pictures and previews loading below the newest message do not push it out of view.
+  useStickToBottom(scrollRef);
   // Screen readers hear new messages from others as they arrive (1.0.38).
   const [spoken, setSpoken] = useState('');
   const lastShown = useRef<{ channelId: string; message: ChatMessage | undefined } | null>(null);
@@ -350,8 +360,12 @@ export function TextChannel(props: {
           <span className="channel__icon">
             {channel.announcement ? <span aria-hidden="true">📢</span> : <HashIcon size={20} />}
           </span>
-          <strong>{channel.name}</strong>
-          {channel.topic && <span className="chat__topic">{channel.topic}</span>}
+          <strong title={channel.name}>{channel.name}</strong>
+          {channel.topic && (
+            <span className="chat__topic" title={channel.topic}>
+              {channel.topic}
+            </span>
+          )}
           <span className="chat__head-actions">
             {channel.media && (
               <button
@@ -443,11 +457,10 @@ export function TextChannel(props: {
             }
           }}
           onScroll={(e) => {
-            const el = e.currentTarget;
-            const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-            scrollMemory.set(channel.id, fromBottom);
-            setAtBottom(fromBottom < 40);
-            if (fromBottom < 40) setLeftAt(null);
+            const away = fromBottom(e.currentTarget);
+            scrollMemory.set(channel.id, away);
+            setAtBottom(away < 40);
+            if (away < 40) setLeftAt(null);
             else if (leftAt === null) setLeftAt(messages.at(-1)?.sentAt ?? '');
           }}
         >
@@ -469,11 +482,16 @@ export function TextChannel(props: {
                   });
                 }}
               >
-                {loadingOlder ? 'Decrypting…' : 'Load older messages'}
+                {loadingOlder ? tr('Decrypting…') : tr('Load older messages')}
               </button>
             </div>
           )}
-          <div className="chat__welcome" hidden={canLoadOlder(s.noMore, channel.id, messages.length)}>
+          {!loaded &&
+            (failed ? <HistoryFailed onRetry={() => retryChannel(channel.id)} /> : <ChatSkeleton />)}
+          <div
+            className="chat__welcome"
+            hidden={!loaded || canLoadOlder(s.noMore, channel.id, messages.length)}
+          >
             <div className="chat__welcome-icon">
               <HashIcon size={34} />
             </div>
@@ -481,7 +499,7 @@ export function TextChannel(props: {
             <p className="muted">
               This is the start of the #{channel.name} channel.{channel.topic ? ` ${channel.topic}` : ''}
             </p>
-            {messages.length === 0 && <WelcomeActions community={community} channel={channel} />}
+            {loaded && messages.length === 0 && <WelcomeActions community={community} channel={channel} />}
           </div>
           {messages.map((m, i) => {
             const prev = messages[i - 1];
@@ -503,7 +521,7 @@ export function TextChannel(props: {
                 )}
                 {m.id === firstNew?.id && (
                   <div className="chat__new" role="separator" aria-label="New messages">
-                    <span>New</span>
+                    <span>{tr('New')}</span>
                   </div>
                 )}
                 <Message
@@ -534,7 +552,7 @@ export function TextChannel(props: {
             if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
           }}
         >
-          Jump to present
+          {tr('Jump to present')}
           {missed > 0 && <span className="chat__jump-count">{missed}</span>}
         </button>
       )}
@@ -551,6 +569,51 @@ export function TextChannel(props: {
       />
     </div>
   );
+}
+
+/** Grey placeholder messages while a channel's history is decrypted (2.13.1). */
+export function ChatSkeleton(): ReactElement {
+  return (
+    <div className="chat-skeleton">
+      <span className="sr-only">{tr('Loading messages…')}</span>
+      {[62, 38, 80, 45, 70].map((width, i) => (
+        <div key={i} className="chat-skeleton__msg" aria-hidden="true">
+          <span className="chat-skeleton__avatar" />
+          <span className="chat-skeleton__lines">
+            <span className="chat-skeleton__name" />
+            <span className="chat-skeleton__line" style={{ width: `${width}%` }} />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A conversation's history could not be loaded: say so, with Retry. */
+export function HistoryFailed({ onRetry }: { onRetry(): Promise<void> }): ReactElement {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="chat-failed" role="alert">
+      <p>{tr('Could not load the messages.')}</p>
+      <button
+        className="btn btn--small"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          void onRetry().finally(() => setBusy(false));
+        }}
+      >
+        {tr('Retry')}
+      </button>
+    </div>
+  );
+}
+
+/** Asks for a channel's newest messages again after they could not be loaded. */
+function retryChannel(channelId: string): Promise<void> {
+  const { [channelId]: _failed, ...rest } = useCommunity.getState().historyFailed;
+  useCommunity.setState({ historyFailed: rest });
+  return useCommunity.getState().loadMessages(channelId);
 }
 
 /** How far from the newest message each channel was left, for this session. */
@@ -740,7 +803,9 @@ function MessageView(props: {
         )}
         <div className="msg__gutter">
           {props.grouped ? (
-            <time className="msg__hover-time">{timeOf(m.sentAt)}</time>
+            <time className="msg__hover-time" dateTime={m.sentAt} title={fullWhen(m.sentAt)}>
+              {timeOf(m.sentAt)}
+            </time>
           ) : (
             <button
               type="button"
@@ -778,10 +843,11 @@ function MessageView(props: {
               )}
               <time
                 className="muted small msg__time"
-                title={`${new Date(m.sentAt).toLocaleString()} · click to copy a link to this message`}
+                dateTime={m.sentAt}
+                title={`${fullWhen(m.sentAt)} · click to copy a link to this message`}
                 onClick={copyLink}
               >
-                {dayLabel(m.sentAt) === 'Today' ? `Today at ${timeOf(m.sentAt)}` : clockDateTime(m.sentAt)}
+                {messageWhen(m.sentAt)}
               </time>
               {m.pinned && (
                 <span className="msg__pinned" title="Pinned">
@@ -818,13 +884,13 @@ function MessageView(props: {
               )}
               {long && (
                 <button className="btn btn--link msg__more" onClick={() => setExpanded(!expanded)}>
-                  {expanded ? 'Show less' : 'Show more'}
+                  {expanded ? tr('Show less') : tr('Show more')}
                 </button>
               )}
               {m.editedAt && !phone && (
-                <span className="msg__edited" title={new Date(m.editedAt).toLocaleString()}>
+                <span className="msg__edited" title={fullWhen(m.editedAt)}>
                   {' '}
-                  (edited)
+                  ({tr('edited')})
                 </span>
               )}
               {!!m.text && stamp}
@@ -872,7 +938,7 @@ function MessageView(props: {
                 <button
                   className="reaction reaction--add"
                   aria-label="Add reaction"
-                  onClick={(e) => setPicker({ x: e.clientX, y: e.clientY - 320 })}
+                  onClick={(e) => setPicker(nearButton(e.currentTarget, EMOJI_PICKER))}
                 >
                   <SmileIcon size={15} />
                 </button>
@@ -899,7 +965,7 @@ function MessageView(props: {
               className="msg__action"
               aria-label="Add reaction"
               title="Add reaction"
-              onClick={(e) => setPicker({ x: e.clientX - 300, y: e.clientY + 12 })}
+              onClick={(e) => setPicker(nearButton(e.currentTarget, EMOJI_PICKER))}
             >
               <SmileIcon size={17} />
             </button>
@@ -990,7 +1056,7 @@ function MessageView(props: {
                 setPicker({ x: phone ? 8 : menu.x, y: Math.max(8, menu.y - 320) });
               }}
             >
-              Add reaction
+              {tr('Add reaction')}
             </MenuItem>
           )}
           {can(channel.permissions, Permission.SEND_MESSAGES) && (
@@ -1014,7 +1080,7 @@ function MessageView(props: {
                 createThread();
               }}
             >
-              {m.thread ? 'Open thread' : 'Create thread'}
+              {m.thread ? tr('Open thread') : tr('Create thread')}
             </MenuItem>
           )}
           {m.text && (
@@ -1025,7 +1091,7 @@ function MessageView(props: {
                 void navigator.clipboard.writeText(m.text).then(() => play('success'));
               }}
             >
-              Copy text
+              {tr('Copy text')}
             </MenuItem>
           )}
           {m.text && can(channel.permissions, Permission.SEND_MESSAGES) && (
@@ -1036,7 +1102,7 @@ function MessageView(props: {
                 quote();
               }}
             >
-              Quote
+              {tr('Quote')}
             </MenuItem>
           )}
           {m.text && (
@@ -1047,7 +1113,7 @@ function MessageView(props: {
                 setForwarding(true);
               }}
             >
-              Forward
+              {tr('Forward')}
             </MenuItem>
           )}
           {reactions.length > 0 && (
@@ -1058,7 +1124,7 @@ function MessageView(props: {
                 setReactionsAt(menu);
               }}
             >
-              View reactions
+              {tr('View reactions')}
             </MenuItem>
           )}
           <MenuItem
@@ -1118,7 +1184,7 @@ function MessageView(props: {
                 useCommunity.setState({ selecting: { channelId: channel.id, ids: [m.id] } });
               }}
             >
-              Select messages
+              {tr('Select messages')}
             </MenuItem>
           )}
           {!m.mine && (
@@ -1199,6 +1265,7 @@ function MessageView(props: {
 
 function EditBox({ message }: { message: ChatMessage }): ReactElement {
   const [text, setText] = useState(message.text);
+  const close = (): void => stopEditing(() => useCommunity.setState({ editing: null }));
   const save = async (): Promise<void> => {
     const value = text.trim();
     if (!value) return;
@@ -1208,7 +1275,7 @@ function EditBox({ message }: { message: ChatMessage }): ReactElement {
       !(await attempt({ a: 'edit', channelId: message.channelId, messageId: message.id, text: value }))
     )
       return;
-    useCommunity.setState({ editing: null });
+    close();
   };
   return (
     <div className="msg__edit">
@@ -1220,7 +1287,10 @@ function EditBox({ message }: { message: ChatMessage }): ReactElement {
         onChange={(e) => setText(e.target.value)}
         onFocus={(e) => e.currentTarget.setSelectionRange(text.length, text.length)}
         onKeyDown={(e) => {
-          if (e.key === 'Escape') useCommunity.setState({ editing: null });
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            close();
+          }
           if (e.key === 'Enter' && !e.shiftKey && !composing(e)) {
             e.preventDefault();
             void save();
@@ -1228,13 +1298,13 @@ function EditBox({ message }: { message: ChatMessage }): ReactElement {
         }}
       />
       <span className="muted small">
-        escape to{' '}
-        <button className="btn--link" onClick={() => useCommunity.setState({ editing: null })}>
-          cancel
+        {tr('escape to')}{' '}
+        <button className="btn--link" onClick={close}>
+          {tr('cancel')}
         </button>{' '}
-        • enter to{' '}
+        • {tr('enter to')}{' '}
         <button className="btn--link" onClick={() => void save()}>
-          save
+          {tr('save')}
         </button>
       </span>
     </div>
@@ -1280,6 +1350,8 @@ ${shared}`
   );
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
+  /** The text Escape closed the suggestions at: they stay closed until you type on. */
+  const [hushedAt, setHushedAt] = useState<string | null>(null);
   const lastTyping = useRef(0);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1323,22 +1395,32 @@ ${shared}`
       }))
     : [];
   const suggestions: Suggestion[] =
-    slashChoices.length > 0
-      ? slashChoices
-      : mentionChoices.length > 0
-        ? mentionChoices
-        : emojiTrigger && (emojiIndex || customChoices.length)
-          ? [
-              ...customChoices,
-              ...(emojiIndex ? searchEmoji(emojiIndex, emojiTrigger[1]!, 8) : []).map((e) => ({
-                key: `e:${e.emoji}`,
-                insert: e.emoji,
-                symbol: ':' as const,
-                hint: e.label,
-                label: `:${e.shortcodes[0] ?? e.label.replace(/\s+/g, '_')}:`,
-              })),
-            ].slice(0, 8)
-          : [];
+    hushedAt === text
+      ? []
+      : slashChoices.length > 0
+        ? slashChoices
+        : mentionChoices.length > 0
+          ? mentionChoices
+          : emojiTrigger && (emojiIndex || customChoices.length)
+            ? [
+                ...customChoices,
+                ...(emojiIndex ? searchEmoji(emojiIndex, emojiTrigger[1]!, 8) : []).map((e) => ({
+                  key: `e:${e.emoji}`,
+                  insert: e.emoji,
+                  symbol: ':' as const,
+                  hint: e.label,
+                  label: `:${e.shortcodes[0] ?? e.label.replace(/\s+/g, '_')}:`,
+                })),
+              ].slice(0, 8)
+            : [];
+
+  // A new list of suggestions starts with its first one highlighted, not the 5th of the last list.
+  const suggestionKeys = suggestions.map((x) => x.key).join(' ');
+  const [shownKeys, setShownKeys] = useState(suggestionKeys);
+  if (shownKeys !== suggestionKeys) {
+    setShownKeys(suggestionKeys);
+    setMentionIndex(0);
+  }
 
   const complete = (choice: Suggestion): void => {
     if (choice.symbol === '/') setText(`/${choice.insert} `);
@@ -1773,6 +1855,11 @@ ${shared}`
                 complete(suggestions[Math.min(mentionIndex, suggestions.length - 1)]!);
                 return;
               }
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setHushedAt(text);
+                return;
+              }
             }
             if (e.key === 'Escape' && replyTo) useCommunity.setState({ replyTo: null });
             if (e.key === 'ArrowUp' && text === '') {
@@ -1796,7 +1883,9 @@ ${shared}`
           className="icon-btn"
           aria-label="Emoji"
           title="Emoji"
-          onClick={(e) => setPicker({ x: phone ? 8 : e.clientX - 300, y: e.clientY - 330 })}
+          onClick={(e) =>
+            setPicker(phone ? { x: 8, y: e.clientY - 330 } : nearButton(e.currentTarget, EMOJI_PICKER))
+          }
         >
           {phone ? <EmojiIcon size={24} /> : <SmileIcon size={20} />}
         </button>
@@ -1837,11 +1926,7 @@ ${shared}`
               <i />
               <i />
             </span>
-            <span>
-              {typers.length > 3
-                ? 'Several people are typing…'
-                : `${typers.join(', ')} ${typers.length === 1 ? 'is' : 'are'} typing…`}
-            </span>
+            <span>{typingText(typers)}</span>
           </>
         )}
       </div>
@@ -1850,9 +1935,9 @@ ${shared}`
           <EmojiPicker
             custom={s.emojis[community.id]}
             onPick={(e) => {
-              setText(text + e);
+              // At the caret, not always at the end (2.13.1).
+              insertIntoBox(ref.current, text, e, setText);
               setPicker(null);
-              ref.current?.focus();
             }}
           />
         </Popover>
@@ -1869,11 +1954,24 @@ function PinsPanel(props: {
 }): ReactElement {
   const s = useCommunity();
   const [pins, setPins] = useState<ChatMessage[] | null>(null);
-  const messages = useCommunity((x) => x.messages[props.channel.id]);
+  // Asked again when a pin changes in the loaded messages, not on every new message.
+  const pinned = useCommunity((x) =>
+    (x.messages[props.channel.id] ?? [])
+      .filter((m) => m.pinned)
+      .map((m) => m.id)
+      .join(' '),
+  );
   useEffect(() => {
-    void s.run({ a: 'pins', channelId: props.channel.id }).then((p) => setPins(p ?? []));
+    let current = true;
+    void s.run({ a: 'pins', channelId: props.channel.id }).then((p) => {
+      // An answer for a channel you have since left is not shown in this one.
+      if (current) setPins(p ?? []);
+    });
+    return () => {
+      current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.channel.id, messages]);
+  }, [props.channel.id, pinned]);
   return (
     <div className="pins">
       <header className="pins__head">
@@ -1898,7 +1996,9 @@ function PinsPanel(props: {
           />
           <span>
             <strong>{m.senderName}</strong>{' '}
-            <time className="muted small">{new Date(m.sentAt).toLocaleDateString()}</time>
+            <time className="muted small" dateTime={m.sentAt} title={fullWhen(m.sentAt)}>
+              {new Date(m.sentAt).toLocaleDateString(dateLocale())}
+            </time>
             <span className="pins__text">{m.text.slice(0, 200)}</span>
           </span>
         </button>
@@ -1926,17 +2026,21 @@ function SearchPanel(props: { community: CommunityView; onJump(id: string): void
   const [busy, setBusy] = useState(false);
   const [date, setDate] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchSeq = useRef(0);
   const channelName = (id: string): string =>
     props.community.channels.find((c) => c.id === id)?.name ?? 'channel';
   const parsed = parseSearch(query);
   const search = async (q: string): Promise<ChatMessage[] | null> => {
     if (!hasCriteria(parseSearch(q))) return null;
+    const seq = ++searchSeq.current;
     setBusy(true);
     const found = await s.run({
       a: 'search',
       communityId: props.community.id,
       query: q.trim().slice(0, 100),
     });
+    // A newer search started meanwhile: its answer is the one shown.
+    if (seq !== searchSeq.current) return null;
     setBusy(false);
     return found ?? [];
   };
@@ -1951,8 +2055,10 @@ function SearchPanel(props: { community: CommunityView; onJump(id: string): void
   const jumpToDate = async (): Promise<void> => {
     const here = props.community.channels.find((c) => c.id === s.selectedChannel);
     if (!date || !here) return;
-    const found = (await search(`in:"${here.name}" during:${date}`))?.filter((m) => m.channelId === here.id);
-    const first = found?.at(-1);
+    const answer = await search(`in:"${here.name}" during:${date}`);
+    // Replaced by a newer search: that one answers.
+    if (answer === null) return;
+    const first = answer.filter((m) => m.channelId === here.id).at(-1);
     if (first) open(first);
     else s.notify(`No messages in #${here.name} on that day.`);
   };
@@ -2023,7 +2129,7 @@ function SearchPanel(props: { community: CommunityView; onJump(id: string): void
           <span>
             <strong>{m.senderName}</strong>{' '}
             <span className="muted small">
-              #{channelName(m.channelId)} · {new Date(m.sentAt).toLocaleDateString()}
+              #{channelName(m.channelId)} · {new Date(m.sentAt).toLocaleDateString(dateLocale())}
             </span>
             <span className="pins__text">
               {m.text ? (
@@ -2227,17 +2333,17 @@ function OutgoingMessage(props: { item: Outgoing; community: CommunityView; me: 
     <div className={`msg msg--mine msg--outgoing msg--${item.status}`} aria-live="polite">
       <div className="msg__row">
         <div className="msg__gutter">
-          <Avatar id={props.me} name={member?.name ?? 'You'} avatar={member?.avatar} size={40} />
+          <Avatar id={props.me} name={member?.name ?? 'You'} avatar={member?.avatar} size={38} />
         </div>
         <div className="msg__body">
           <div className="msg__meta">
             <strong className="msg__author">{member?.name ?? 'You'}</strong>
             <span className="msg__status">
               {item.status === 'sending'
-                ? 'Sending…'
+                ? tr('Sending…')
                 : item.status === 'waiting'
                   ? 'Waiting for connection — it will send when you are back online'
-                  : 'Not sent'}
+                  : tr('Not sent')}
             </span>
           </div>
           <div className="msg__text">{item.text || `📎 ${item.attachments?.length ?? 0} file(s)`}</div>
@@ -2256,6 +2362,13 @@ function OutgoingMessage(props: { item: Outgoing; community: CommunityView; me: 
       </div>
     </div>
   );
+}
+
+/** "Ana is typing…", "Ana, Bo are typing…", "Several people are typing…". */
+export function typingText(names: string[]): string {
+  if (names.length > 3) return tr('Several people are typing…');
+  if (names.length === 1) return tr('{name} is typing…').replace('{name}', names[0]!);
+  return tr('{names} are typing…').replace('{names}', names.join(', '));
 }
 
 function formatSlowmode(seconds: number): string {
