@@ -1,3 +1,4 @@
+import type { NotifySound } from './notify-sounds.ts';
 import type { Settings } from './settings.ts';
 
 /**
@@ -9,9 +10,18 @@ import type { Settings } from './settings.ts';
  * beats the global one.
  * Muting silences ordinary messages (no notification, no sound, no unread dot)
  * but @mentions still reach you unless the level is Nothing.
+ *
+ * 2.17: the same for each chat (a person or a group), a sound of your own per chat, channel or
+ * community, and a community may say that @everyone and @here do not count as mentioning you.
  */
 export type NotifyLevel = 'all' | 'mentions' | 'nothing';
 export type Override = Settings['notifications']['overrides'][string];
+
+/**
+ * How a message mentions you: by name, through one of your roles, or by replying to you
+ * ("direct"), or only through @everyone or @here ("everyone").
+ */
+export type MentionKind = 'direct' | 'everyone';
 
 /** Muted "until I turn it back on". */
 export const FOREVER = '9999-12-31T00:00:00.000Z';
@@ -19,6 +29,10 @@ export const FOREVER = '9999-12-31T00:00:00.000Z';
 export interface Effective {
   level: NotifyLevel;
   muted: boolean;
+  /** The sound chosen nearest to the message (channel, category, community), or "default". */
+  sound: NotifySound;
+  /** @everyone and @here do not count as mentioning you here. */
+  suppressEveryone: boolean;
 }
 
 function mutedNow(o: Override | undefined, now: number): boolean {
@@ -37,7 +51,56 @@ export function effectiveNotify(
   const co = communityId ? prefs.overrides[communityId] : undefined;
   const chosen = [ch, ca, co].find((o) => o && o.level !== 'default')?.level;
   const level: NotifyLevel = chosen && chosen !== 'default' ? chosen : prefs.mode;
-  return { level, muted: [ch, ca, co].some((o) => mutedNow(o, now)) };
+  return {
+    level,
+    muted: [ch, ca, co].some((o) => mutedNow(o, now)),
+    sound: [ch, ca, co].find((o) => o?.sound && o.sound !== 'default')?.sound ?? 'default',
+    suppressEveryone: [ch, ca, co].some((o) => o?.suppressEveryone === true),
+  };
+}
+
+/**
+ * A chat's settings (2.17): a person's or a group's own override. Chats are personal, so they
+ * notify for every message unless you chose otherwise (the global "only mentions" is for
+ * communities).
+ */
+export function conversationNotify(
+  prefs: Settings['notifications'],
+  conversation: string,
+  now = Date.now(),
+): Effective {
+  const o = prefs.overrides[conversation];
+  return {
+    level: o && o.level !== 'default' ? o.level : 'all',
+    muted: mutedNow(o, now),
+    sound: o?.sound ?? 'default',
+    suppressEveryone: o?.suppressEveryone === true,
+  };
+}
+
+/**
+ * Whether a message mentions you, after "suppress @everyone and @here": a mention only through
+ * @everyone or @here does not count there. Replies to you and your name always do.
+ */
+export function mentionsYou(
+  e: Pick<Effective, 'suppressEveryone'>,
+  m: { mentionsMe?: boolean; mentionKind?: MentionKind | null },
+): boolean {
+  if (!m.mentionsMe) return false;
+  return !(e.suppressEveryone && m.mentionKind === 'everyone');
+}
+
+/**
+ * Whether `text` mentions you by one of your names, or everyone (@everyone, @here). Used for
+ * groups, where everyone may mention everyone; communities check roles and permissions too.
+ */
+export function textMention(text: string, names: Array<string | null | undefined>): MentionKind | null {
+  const lower = text.toLowerCase();
+  for (const name of names) {
+    const n = name?.trim().toLowerCase();
+    if (n && lower.includes(`@${n}`)) return 'direct';
+  }
+  return /(^|\s)@(everyone|here)\b/.test(lower) ? 'everyone' : null;
 }
 
 /** Whether an @mention should count on the badge: everywhere except where the level is Nothing. */
@@ -67,7 +130,11 @@ export function withOverride(
   const next = { ...overrides };
   const merged: Override = { level: 'default', muteUntil: null, ...overrides[id], ...patch };
   if (merged.muteUntil && Date.parse(merged.muteUntil) <= now) merged.muteUntil = null;
-  if (merged.level === 'default' && !merged.muteUntil) delete next[id];
+  // Defaults are not written down.
+  if (!merged.sound || merged.sound === 'default') delete merged.sound;
+  if (!merged.suppressEveryone) delete merged.suppressEveryone;
+  if (merged.level === 'default' && !merged.muteUntil && !merged.sound && !merged.suppressEveryone)
+    delete next[id];
   else next[id] = merged;
   return next;
 }
@@ -76,7 +143,8 @@ export const MUTE_CHOICES: Array<{ label: string; ms: number | null }> = [
   { label: 'For 15 minutes', ms: 15 * 60_000 },
   { label: 'For 1 hour', ms: 3600_000 },
   { label: 'For 8 hours', ms: 8 * 3600_000 },
-  { label: 'For 24 hours', ms: 24 * 3600_000 },
+  { label: 'For 1 day', ms: 24 * 3600_000 },
+  { label: 'For 1 week', ms: 7 * 24 * 3600_000 },
   { label: 'Until I turn it back on', ms: null },
 ];
 

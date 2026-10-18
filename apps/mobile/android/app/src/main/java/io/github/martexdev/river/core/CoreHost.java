@@ -399,6 +399,8 @@ public final class CoreHost {
     notificationAsks.clear();
     notificationTokens.clear();
     messages.restarted();
+    // The plain notifications below stand alone: no group summary over them.
+    summarize();
     if (posted.isEmpty()) return;
     java.util.Set<Integer> showing = new java.util.HashSet<>();
     NotificationManager nm = context.getSystemService(NotificationManager.class);
@@ -518,6 +520,34 @@ public final class CoreHost {
   private void forget(int notification) {
     posted.remove(notification);
     messages.forget(notification);
+    summarize();
+  }
+
+  /** The group summary follows the conversations still showing (2.17). */
+  private void summarize() {
+    Screen s = screen;
+    messages.summarize(context, CHANNEL, s != null ? s.activityClass() : RiverService.ACTIVITY);
+  }
+
+  /**
+   * "Mark as read" on a River notification (2.17): the core marks the conversation read (your
+   * other devices follow), and the notification goes. Main thread.
+   */
+  public void notificationMarkedRead(int notification, String token) {
+    if (!tokenMatches(notification, token)) return;
+    notificationTokens.remove(notification);
+    Integer ask = notificationAsks.remove(notification);
+    NotificationManagerCompat.from(context).cancel(notification);
+    forget(notification);
+    if (ask != null) answer(ask, json("action", "read"));
+  }
+
+  /** The conversation was read (here or on another device): its notification goes (2.17). */
+  private void clearConversation(String conversation) {
+    Integer n = messages.idOf(conversation);
+    if (n == null) return;
+    NotificationManagerCompat.from(context).cancel(n);
+    expire(n);
   }
 
   /** A notification River posted was swiped away (or cleared). Main thread. */
@@ -921,6 +951,11 @@ public final class CoreHost {
           dropMessageNotifications();
           answer(id, (Object) null);
           break;
+        case "notifyClear":
+          // A conversation was read, here or on another device (2.17).
+          clearConversation(a.optString("conversation", ""));
+          answer(id, (Object) null);
+          break;
         case "incomingCall":
           {
             // Rings like a phone call until answered, declined, or it stops ringing (2.11).
@@ -1202,6 +1237,10 @@ public final class CoreHost {
     if (conversation.length() > 200) conversation = conversation.substring(0, 200);
     String sender = a.isNull("sender") ? null : a.optString("sender", "");
     String group = a.isNull("group") ? null : a.optString("group", "");
+    // 2.17: Mark as read next to Reply, the chat's sound, and how many messages it stands for.
+    boolean markRead = a.optBoolean("markRead", false);
+    String sound = a.optString("sound", "default");
+    int count = Math.max(1, Math.min(999, a.optInt("count", 1)));
     if (!mayNotify()) {
       answer(ask, (Object) "denied");
       return;
@@ -1255,8 +1294,10 @@ public final class CoreHost {
     PendingIntent delete =
         PendingIntent.getBroadcast(
             context, n, dismissed, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    // A chat's own sound posts to that sound's channel (MessageNotifications.channelFor).
+    String channel = call ? IncomingCall.CHANNEL : MessageNotifications.channelFor(context, sound, CHANNEL);
     NotificationCompat.Builder b =
-        new NotificationCompat.Builder(context, call ? IncomingCall.CHANNEL : CHANNEL)
+        new NotificationCompat.Builder(context, channel)
             .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
             .setContentTitle(title)
             .setContentText(body)
@@ -1264,6 +1305,8 @@ public final class CoreHost {
             .setContentIntent(tap)
             .setDeleteIntent(delete)
             .setPriority(NotificationCompat.PRIORITY_HIGH);
+    // "No sound" for this chat: it shows, quietly.
+    if (!call && "none".equals(sound)) b.setSilent(true);
     if (call) {
       // Rings for as long as the call does, and fills the screen when the phone is locked.
       b.setCategory(NotificationCompat.CATEGORY_CALL)
@@ -1294,9 +1337,26 @@ public final class CoreHost {
           new NotificationCompat.Action.Builder(0, "Reply", action)
               .addRemoteInput(input)
               .setAllowGeneratedReplies(false)
+              .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY)
               .build());
     }
-    if (!call) messages.style(context, b, CHANNEL, n, conversation, title, body, sender, group, lockScreen);
+    if (markRead && !call) {
+      // Mark as read (2.17): the core marks the conversation read without opening River.
+      Intent read =
+          new Intent(context, NotificationReplyReceiver.class)
+              .setAction(NotificationReplyReceiver.ACTION_READ)
+              .putExtra(EXTRA_NOTIFICATION, n)
+              .putExtra(EXTRA_NOTIFICATION_TOKEN, token);
+      PendingIntent readIntent =
+          PendingIntent.getBroadcast(
+              context, n, read, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+      b.addAction(
+          new NotificationCompat.Action.Builder(0, "Mark as read", readIntent)
+              .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ)
+              .setShowsUserInterface(false)
+              .build());
+    }
+    if (!call) messages.style(context, b, channel, n, conversation, title, body, sender, group, lockScreen, count);
     try {
       NotificationManagerCompat.from(context).notify(n, b.build());
     } catch (SecurityException e) {
@@ -1308,8 +1368,10 @@ public final class CoreHost {
     }
     if (call) return;
     posted.add(n);
+    // Two or more conversations: one group under a summary (2.17).
+    summarize();
     // Settings → System → Light up the screen for new messages (Android, on by default).
-    if (a.optBoolean("wake", false)) MessageNotifications.wake(context, CHANNEL);
+    if (a.optBoolean("wake", false)) MessageNotifications.wake(context, channel);
   }
 
   private void fatal(String details) {

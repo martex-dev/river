@@ -15,6 +15,7 @@ import { HOME_SECTIONS, HomeSidebar } from './components/HomeSidebar.tsx';
 import { LockScreen } from './components/LockScreen.tsx';
 import { Onboarding } from './components/Onboarding.tsx';
 import { UpdateToast } from './components/UpdateToast.tsx';
+import { InAppBanner } from './notify/InAppBanner.tsx';
 import { PLANNED } from './features.ts';
 import { CallAudio } from './community/ui/Voice.tsx';
 import { CommunitiesPage, Overlays, ServerRail, VoiceHotkeys } from './pages/CommunitiesPage.tsx';
@@ -242,6 +243,7 @@ export function App(): ReactElement {
         <SettingsOverlay />
         <TryBar />
         <UpdateToast />
+        <InAppBanner />
         <CallAudio />
         <VoiceHotkeys />
         <Overlays />
@@ -294,6 +296,7 @@ export function App(): ReactElement {
       <SettingsOverlay />
       <TryBar />
       <UpdateToast />
+      <InAppBanner />
       <CallAudio />
       <VoiceHotkeys />
       <Overlays />

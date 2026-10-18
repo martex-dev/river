@@ -20,7 +20,7 @@ Plan: [docs/product/road-to-3.md](docs/product/road-to-3.md). Many releases, one
 - [ ] 2.14.x Easy start: install to first chat in under a minute, one-screen profile, invite links that open the app; community keys need a proof
 - [ ] 2.15.x Group calls, call quality, call links
 - [ ] 2.16.x Voice channels and meetings: bigger rooms, grid and speaker views, raise hand, stage
-- [ ] 2.17.x Notifications: per-chat sounds, mentions-only, grouping
+- [ ] 2.17.x Notifications: per-chat sounds, mentions-only, grouping — built, unreleased (per-chat levels, mutes and sounds, one notification per conversation with Android group summaries, cleared on read anywhere, Mark as read, icon badges, in-app banners, ignore @everyone); still to try on a real Android phone and iPhone
 - [ ] 2.18.x Looks: wallpapers, accent colours, bubble styles, theme editor
 - [ ] 2.19.x Messaging, part 2
 - [ ] 2.20.x Privacy, part 2: less metadata, padding, proxy-friendly connections

@@ -28,6 +28,7 @@ import {
   type AttachmentPointer,
 } from '../../shared/community-actions.ts';
 import { readPoll } from '../../shared/poll.ts';
+import { textMention, type MentionKind } from '../../shared/notify-rules.ts';
 import {
   dmActionSchema,
   type CallOutcome,
@@ -2894,11 +2895,26 @@ export class DmService {
       })),
       expiresAt: r.expires_at ?? null,
       silent: body.silent === true,
+      ...(group && r.sender !== me && !r.deleted
+        ? this.groupMention(String(body.text ?? ''), body.replyTo)
+        : {}),
       poll: r.deleted ? null : readPoll(body.poll),
       embed: r.deleted ? null : this.embedOf(body.embed, String(body.text ?? '')),
       notice: body.notice && typeof body.notice.timer === 'number' ? { timer: body.notice.timer } : null,
       ...(undelivered.length && r.sender === me ? { undeliveredTo: undelivered } : {}),
     };
+  }
+
+  /** A group message that mentions you, or replies to your message (2.17). */
+  private groupMention(
+    text: string,
+    replyTo: string | undefined,
+  ): { mentionsMe: true; mentionKind: MentionKind } | Record<string, never> {
+    const kind: MentionKind | null =
+      typeof replyTo === 'string' && this.row(replyTo)?.sender === this.me()
+        ? 'direct'
+        : textMention(text, [this.deps.identity.get()?.displayName]);
+    return kind ? { mentionsMe: true, mentionKind: kind } : {};
   }
 
   /** A preview only for a link that is really in the message. */

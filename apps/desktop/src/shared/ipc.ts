@@ -505,6 +505,11 @@ export interface ChatMessage {
   /** Descriptions of attached pictures, by attachment ID (1.0.21). */
   alts?: Record<string, string>;
   mentionsMe: boolean;
+  /**
+   * How it mentions you (2.17), when it does: by name, role or a reply ("direct"), or only through
+   * @everyone or @here ("everyone"), which a community's notification settings may ignore.
+   */
+  mentionKind?: 'direct' | 'everyone';
   mine: boolean;
   /** Set on replies inside a thread: the thread's starting message. */
   threadId: string | null;
@@ -567,7 +572,9 @@ export type CommunityEvent =
   /** `retryAt`: when the next reconnection attempt happens (epoch ms), while offline. */
   | { t: 'connection'; state: 'online' | 'offline' | 'connecting'; retryAt?: number }
   /** Unread counts found by catching up on channels (including while River was closed). */
-  | { t: 'catchUp'; unread: Record<string, number>; mentions: Record<string, number> };
+  | { t: 'catchUp'; unread: Record<string, number>; mentions: Record<string, number> }
+  /** A channel was read on this device (2.17): its notification and its badge count go. */
+  | { t: 'channelRead'; channelId: string };
 
 export type Result<T> = { ok: true; value: T } | { ok: false; message: string };
 

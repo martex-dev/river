@@ -21,11 +21,12 @@ import { alertForReply, setFollowing } from './thread-follow.ts';
 import {
   countsMention,
   effectiveNotify,
+  mentionsYou,
   newReactions,
   shouldAlert,
   silenced,
 } from '../../../shared/notify-rules.ts';
-import { play } from './sound.ts';
+import { play, playNotifySound } from './sound.ts';
 import { VoiceCall } from './voice.ts';
 import { WebCodecsRelay } from './relay-audio.ts';
 import { forgetCall, rememberCall } from './rejoin.ts';
@@ -425,6 +426,8 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         const notify = settings
           ? effectiveNotify(settings.notifications, m.communityId, m.channelId, Date.now(), category)
           : null;
+        // @everyone and @here count as mentioning you unless the community says otherwise (2.17).
+        const mention = notify ? mentionsYou(notify, m) : m.mentionsMe;
         if (m.threadId) {
           // A reply inside a thread: it belongs to the thread, not the channel.
           const replies = get().threads[m.threadId];
@@ -435,15 +438,15 @@ export const useCommunity = create<CommunityState>((set, get) => ({
           }
           if (event.isNew && m.mine) setFollowing(m.threadId, true);
           // A mention in a thread follows the channel's level like any mention (not under Nothing).
-          if (event.isNew && !m.mine && m.mentionsMe) {
-            if (!notify || shouldAlert(notify, true)) play('mention');
+          if (event.isNew && !m.mine && mention) {
+            if (!notify || shouldAlert(notify, true)) playNotifySound(notify?.sound, 'mention');
           } else if (event.isNew) {
             const viewing = get().openThread?.rootId === m.threadId && document.hasFocus();
             const quiet = settings ? silenced(settings) : false;
             // Followed threads speak up unless the channel is muted or set to Nothing.
             const allowed = !notify || (!notify.muted && notify.level !== 'nothing');
             if (!quiet && allowed && alertForReply(m.threadId, m.mine, viewing)) {
-              play('message');
+              playNotifySound(notify?.sound, 'message');
               get().notify(`${m.senderName} replied in a thread you follow.`);
             }
           }
@@ -487,15 +490,16 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         if (!viewing) {
           set({ unread: { ...get().unread, [m.channelId]: (get().unread[m.channelId] ?? 0) + 1 } });
           // No mention badge where you asked for Nothing.
-          if (m.mentionsMe && (!notify || countsMention(notify))) {
+          if (mention && (!notify || countsMention(notify))) {
             set({ mentions: { ...get().mentions, [m.channelId]: (get().mentions[m.channelId] ?? 0) + 1 } });
           }
         }
         // Muted channels and communities stay quiet; @mentions still come through (unless set to Nothing).
-        const alert = notify ? shouldAlert(notify, m.mentionsMe) : true;
+        const alert = notify ? shouldAlert(notify, mention) : true;
         if (!alert) return;
-        if (m.mentionsMe) play('mention');
-        else if (!viewing) play('message');
+        // The channel's (or its community's) own sound, if it has one (2.17).
+        if (mention) playNotifySound(notify?.sound, 'mention');
+        else if (!viewing) playNotifySound(notify?.sound, 'message');
         return;
       }
       case 'messageDelete': {

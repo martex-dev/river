@@ -1697,3 +1697,34 @@ describe('direct messages: delivery', { timeout: 60_000 }, () => {
     await until(async () => (await count()) >= 25, 5_000);
   });
 });
+
+describe('mentions in groups (2.17)', () => {
+  it('a group message that names you, replies to you or says @everyone mentions you; chatter does not', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await friends(alice, bob);
+    const group = await alice.dm.action({ a: 'createGroup', name: 'Crew', members: [bob.riverId] });
+    await bob.dm.sync();
+    const mine = await bob.dm.action({ a: 'send', peer: group.riverId, text: 'who is driving?' });
+    await until(async () => {
+      await alice.dm.sync();
+      return (await messagesOf(alice, group.riverId)).some((m) => m.id === mine.id);
+    });
+    await alice.dm.action({ a: 'send', peer: group.riverId, text: 'just chatting' });
+    await alice.dm.action({ a: 'send', peer: group.riverId, text: '@Bob can you?' });
+    await alice.dm.action({ a: 'send', peer: group.riverId, text: 'me', replyTo: mine.id });
+    await alice.dm.action({ a: 'send', peer: group.riverId, text: '@everyone leaving at 8' });
+    const got = await until(async () => {
+      await bob.dm.sync();
+      const list = await messagesOf(bob, group.riverId);
+      return list.some((m) => m.text === '@everyone leaving at 8') ? list : null;
+    });
+    const of = (text: string) => got.find((m) => m.text === text)!;
+    expect(of('just chatting').mentionsMe).toBeUndefined();
+    expect(of('@Bob can you?')).toMatchObject({ mentionsMe: true, mentionKind: 'direct' });
+    expect(of('me')).toMatchObject({ mentionsMe: true, mentionKind: 'direct' });
+    expect(of('@everyone leaving at 8')).toMatchObject({ mentionsMe: true, mentionKind: 'everyone' });
+    // Your own messages never mention you.
+    expect(of('who is driving?').mentionsMe).toBeUndefined();
+  });
+});

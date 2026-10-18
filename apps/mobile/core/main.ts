@@ -24,6 +24,7 @@ import { DmService } from '../../desktop/src/main/dm/dm-service.ts';
 import { SocialService } from '../../desktop/src/main/social/social-service.ts';
 import { BackupService } from '../../desktop/src/main/backup/backup-service.ts';
 import { startMessageNotifications } from '../../desktop/src/main/notifications.ts';
+import { startBadge } from '../../desktop/src/main/badge.ts';
 import { SettingsStore } from '../../desktop/src/main/settings-store.ts';
 import { StorageService } from '../../desktop/src/main/storage/storage-service.ts';
 import type { OsKeystore } from '../../desktop/src/main/storage/key-file.ts';
@@ -613,7 +614,24 @@ async function start(): Promise<void> {
     dm,
     settings: () => settings.get(),
     window: window as unknown as Parameters<typeof startMessageNotifications>[0]['window'],
+    // The shell keeps one notification per conversation (2.11) and takes it away once the
+    // conversation is read, here or on another device (2.17).
+    nativeGrouping: true,
+    clearConversation: (conversation) =>
+      void ask('notifyClear', { conversation: conversation.slice(0, 200) }).catch(() => undefined),
   });
+  // The app icon's unread count (2.17): the iPhone's badge. Android's launcher counts River's
+  // notifications (each says how many messages it stands for).
+  if (PLATFORM === 'ios') {
+    startBadge({
+      dm,
+      community,
+      settings: () => settings.get(),
+      onSettingsChange: (listener) => settings.onChange(listener),
+      conversations: () => dm.conversations(),
+      set: (count) => void ask('badge', { count }).catch(() => undefined),
+    });
+  }
   ready();
 }
 

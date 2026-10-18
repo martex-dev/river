@@ -765,7 +765,28 @@ describe('replies', () => {
     });
     const seen = await alice.community.messages(general.id);
     expect(seen.find((m) => m.text === 'me!')?.mentionsMe).toBe(true);
+    expect(seen.find((m) => m.text === 'me!')?.mentionKind).toBe('direct');
     expect(seen.find((m) => m.text === 'me too, quietly')?.mentionsMe).toBe(false);
+  });
+
+  it('tell @everyone apart from mentions of you (2.17: a community may ignore @everyone)', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Everyone Club');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.name === 'general')!;
+    await bob.community.refresh();
+    await alice.community.send(general.id, '@everyone meeting at 5');
+    await alice.community.send(general.id, '@Bob and @everyone, you too');
+    const seen = await bob.community.messages(general.id);
+    expect(seen.find((m) => m.text === '@everyone meeting at 5')).toMatchObject({
+      mentionsMe: true,
+      mentionKind: 'everyone',
+    });
+    expect(seen.find((m) => m.text === '@Bob and @everyone, you too')).toMatchObject({
+      mentionsMe: true,
+      mentionKind: 'direct',
+    });
   });
 });
 
