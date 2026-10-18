@@ -107,8 +107,15 @@ const SOCKET_BURST = 400;
 const SESSION_RECHECK_MS = 5 * 60_000;
 /** A claimed key epoch nobody else reports having in this long is asked for again (2.11). */
 const ROTATION_ADOPT_MS = 10 * 60_000;
-/** How often a rotation that reached nobody is asked for again before the server gives up. */
+/**
+ * How often a rotation that reached nobody is asked for again at ROTATION_ADOPT_MS; after that
+ * the wait doubles each time (up to ROTATION_MAX_WAIT_MS) instead of the server giving up, which
+ * left a claim that never reached anyone in place for good (2.20).
+ */
 const ROTATION_MAX_RETRIES = 3;
+const ROTATION_MAX_WAIT_MS = 24 * 60 * 60_000;
+/** Members remembered as having stalled a rotation, per community. */
+const MAX_STALLED = 1000;
 /** Stuck rotations are looked for at most this often per process (2.11.2). */
 const ROTATION_RECHECK_MS = 60_000;
 /** How long the server remembers that a member used River (for stuck rotations). */
@@ -2326,6 +2333,18 @@ export async function registerCommunityRoutes(
       if (model.pending(me(request))) throw forbidden('Accept the rules first');
       if (!model.rotationNeeded && !model.can(me(request), Permission.MANAGE_COMMUNITY))
         throw forbidden('The community key does not need replacing');
+      // A member whose last claim reached nobody stands aside while someone else could rotate
+      // (2.20), so one member cannot keep claiming epochs whose key they never hand out. The owner
+      // is not held back (they can delete the community anyway). Apps step aside on this refusal.
+      const stalled = await stalledBy(model.id);
+      if (
+        me(request) !== model.ownerId &&
+        stalled.has(me(request)) &&
+        model.members.some(
+          (m) => m.riverId !== me(request) && !stalled.has(m.riverId) && !model.pending(m.riverId),
+        )
+      )
+        throw forbidden('Another member replaces the community key this time');
       const req = parse(rotateKeyRequestSchema, request.body);
       const res = await db
         .updateTable('communities')
@@ -2359,9 +2378,10 @@ export async function registerCommunityRoutes(
     async (request) => {
       const model = await community(request.params.id, me(request));
       const req = parse(rotateKeyResponseSchema.strict(), request.body);
+      // The rotation reached someone: done, and whoever stalled earlier ones may rotate again.
       await db
         .updateTable('communities')
-        .set({ epoch_claimed_at: null, epoch_claimed_by: null })
+        .set({ epoch_claimed_at: null, epoch_claimed_by: null, rotation_stalled: '[]', rotation_retries: 0 })
         .where('id', '=', model.id)
         .where('key_epoch', '=', req.epoch)
         .where('epoch_claimed_by', '!=', me(request))
@@ -2376,6 +2396,26 @@ export async function registerCommunityRoutes(
    * community does not stay on a key a removed member still has.
    */
   let lastRecheck = Number.NEGATIVE_INFINITY;
+  /** Members whose claims reached nobody since the last rotation that succeeded (2.20). */
+  const stalledBy = async (communityId: string): Promise<Set<string>> => {
+    const row = await db
+      .selectFrom('communities')
+      .select('rotation_stalled')
+      .where('id', '=', communityId)
+      .executeTakeFirst();
+    try {
+      const list = JSON.parse(row?.rotation_stalled ?? '[]') as unknown;
+      return new Set(Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : []);
+    } catch {
+      return new Set();
+    }
+  };
+  /** How long a claim may go unreported before it is asked for again: longer after each retry. */
+  const adoptWindow = (retries: number): number =>
+    Math.min(
+      ROTATION_MAX_WAIT_MS,
+      (deps.rotationAdoptMs ?? ROTATION_ADOPT_MS) * 2 ** Math.max(0, retries - (ROTATION_MAX_RETRIES - 1)),
+    );
   const recheckRotations = async (): Promise<void> => {
     // At most once a minute per process (2.11.2): GET /communities runs it too, and it scans
     // every community.
@@ -2386,12 +2426,21 @@ export async function registerCommunityRoutes(
     const cutoff = new Date(nowMs - (deps.rotationAdoptMs ?? ROTATION_ADOPT_MS)).toISOString();
     const stuck = await db
       .selectFrom('communities')
-      .select(['id', 'key_epoch', 'epoch_claimed_at', 'epoch_claimed_by'])
+      .select([
+        'id',
+        'key_epoch',
+        'epoch_claimed_at',
+        'epoch_claimed_by',
+        'rotation_retries',
+        'rotation_stalled',
+      ])
       .where('epoch_claimed_at', 'is not', null)
       .where('epoch_claimed_at', '<', cutoff)
-      .where('rotation_retries', '<', ROTATION_MAX_RETRIES)
       .execute();
     for (const c of stuck) {
+      // Past the first few retries the wait grows, but a claim never stays forever (2.20).
+      const expiredBefore = new Date(nowMs - adoptWindow(c.rotation_retries)).toISOString();
+      if ((c.epoch_claimed_at ?? '') >= expiredBefore) continue;
       const members = (
         await db.selectFrom('community_members').select('river_id').where('community_id', '=', c.id).execute()
       ).map((m) => m.river_id);
@@ -2405,6 +2454,16 @@ export async function registerCommunityRoutes(
           id !== c.epoch_claimed_by && (hub.isOnline(id) || (lastActive.get(id) ?? -Infinity) >= claimedAt),
       );
       if (!alone && !someoneCould) continue;
+      // Whoever claimed it stands aside next time, so another member rotates (2.20).
+      const stalled = ((): string[] => {
+        try {
+          const list = JSON.parse(c.rotation_stalled) as unknown;
+          return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : [];
+        } catch {
+          return [];
+        }
+      })();
+      if (c.epoch_claimed_by && !stalled.includes(c.epoch_claimed_by)) stalled.push(c.epoch_claimed_by);
       const res = await db
         .updateTable('communities')
         .set((eb) => ({
@@ -2412,10 +2471,11 @@ export async function registerCommunityRoutes(
           epoch_claimed_at: null,
           epoch_claimed_by: null,
           rotation_retries: eb('rotation_retries', '+', 1),
+          rotation_stalled: JSON.stringify(stalled.slice(-MAX_STALLED)),
         }))
         .where('id', '=', c.id)
         .where('key_epoch', '=', c.key_epoch)
-        .where('epoch_claimed_at', '<', cutoff)
+        .where('epoch_claimed_at', '=', c.epoch_claimed_at)
         .executeTakeFirst();
       if (!alone && Number(res.numUpdatedRows) === 1) {
         const model = await loadCommunity(db, c.id);

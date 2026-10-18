@@ -738,6 +738,38 @@ describe('community keys a server cannot inject', { timeout: 90_000 }, () => {
     expect(views.find((c) => c.id === id)?.securing).toBeFalsy();
   });
 
+  it('a member who keeps claiming rotations without handing out the key cannot stall them (2.20)', async () => {
+    const { alice, bob, carol, id } = await crew();
+    for (const p of [alice, bob]) {
+      p.community.keyStuckMs = 0;
+      p.community.rotateHandoffMs = 50;
+    }
+    const z = (await import('zod')).z;
+    // A rotation is due (someone left); Carol claims it first and never hands out the key.
+    await serverDb.db.updateTable('communities').set({ rotation_needed: 1 }).where('id', '=', id).execute();
+    await carol.community.api(`/communities/${id}/epoch`, 'POST', { from: 0 }, z.unknown());
+    await serverDb.db
+      .updateTable('communities')
+      .set({ epoch_claimed_at: new Date(Date.now() - 11 * 60_000).toISOString() })
+      .where('id', '=', id)
+      .execute();
+    await bob.community.refresh(); // ten minutes on: the server asks for the rotation again
+    // Carol is first again, but this time she has to stand aside …
+    await expect(
+      carol.community.api(`/communities/${id}/epoch`, 'POST', { from: 1 }, z.unknown()),
+    ).rejects.toThrow(/Another member/);
+    // … so the others replace the key, and it reaches everyone who holds a genuine one.
+    await until(async () => {
+      await alice.community.refresh();
+      await bob.community.refresh();
+      await alice.dm.sync();
+      await bob.dm.sync();
+      await carol.dm.sync();
+      return [alice, bob, carol].every((p) => epochs(p, id).includes(2));
+    }, 30_000);
+    expect(keyOf(alice, id, 2).equals(keyOf(bob, id, 2))).toBe(true);
+  });
+
   it('late joiners get every missing key as a chain, each sealed under the one before', async () => {
     const { alice, bob, carol, id, link } = await crew();
     await alice.community.action({ a: 'kick', communityId: id, riverId: carol.riverId });

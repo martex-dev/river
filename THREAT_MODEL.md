@@ -161,6 +161,16 @@ Videos and other files are sent as they are, and file names are kept.
   hour from another; further fetches get the signed and last-resort keys only,
   with which sessions still start. Many accounts can still use them up
   together; the app tops them up when it next connects.
+- **Key rotation cannot be stalled by one member.** A member could claim each
+  new community epoch and never hand out its key; after three retries the
+  server stopped asking, and the community stayed on a key nobody else had.
+  Since 2.20 a member whose claim reached nobody stands aside (the server
+  refuses their next claim while another member could rotate) until a rotation
+  succeeds, and a stuck claim always expires, after a wait that doubles past
+  the third retry (at most a day). Keys still need the proof they did before
+  (CRYPTOGRAPHY.md §4a). Several accounts working together can still delay a
+  rotation by one round each, and a member's second account could report the
+  key as received when it was not.
 
 ### 5a. Address relay (River Host, 1.0.8)
 

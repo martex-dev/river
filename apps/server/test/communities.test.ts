@@ -1117,7 +1117,7 @@ describe('communities', () => {
       expect((await claim()).epoch_claimed_at).toBeNull();
 
       // A claimed rotation that nobody reports in ten minutes reached nobody: asked for again,
-      // at most three times.
+      // three times after ten minutes each; after that the wait doubles (2.20: it used to stop).
       for (let retry = 1; retry <= 4; retry++) {
         const from = (await fetchCommunity(a, owner.token, cid)).keyEpoch;
         expect(await status(a, 'POST', `/v1/communities/${cid}/epoch`, owner.token, { from })).toBe(200);
@@ -1130,6 +1130,92 @@ describe('communities', () => {
         expect(c.rotationNeeded).toBe(retry <= 3);
         if (retry <= 3) expect((await claim()).rotation_retries).toBe(retry);
       }
+      // The fourth claim is not left in place for good: after twenty minutes it is asked for again.
+      await database.db
+        .updateTable('communities')
+        .set({ epoch_claimed_at: new Date(Date.now() - 21 * 60_000).toISOString() })
+        .where('id', '=', cid)
+        .execute();
+      expect((await fetchCommunity(a, owner.token, cid)).rotationNeeded).toBe(true);
+      expect((await claim()).rotation_retries).toBe(4);
+    });
+
+    it('a member whose claims reach nobody stands aside for another, and claims always expire (2.20)', async () => {
+      const a = await start({ rotationRecheckMs: 0 });
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const mallory = await join(a, owner.token, cid);
+      const honest = await join(a, owner.token, cid);
+      const leaver = await join(a, owner.token, cid);
+      await status(a, 'POST', `/v1/communities/${cid}/leave`, leaver.token);
+      const row = async () =>
+        await database.db
+          .selectFrom('communities')
+          .select([
+            'rotation_needed',
+            'rotation_retries',
+            'epoch_claimed_by',
+            'rotation_stalled',
+            'key_epoch',
+          ])
+          .where('id', '=', cid)
+          .executeTakeFirstOrThrow();
+      const claim = async (token: string) =>
+        status(a, 'POST', `/v1/communities/${cid}/epoch`, token, { from: (await row()).key_epoch });
+      const age = async (minutes: number) => {
+        await database.db
+          .updateTable('communities')
+          .set({ epoch_claimed_at: new Date(Date.now() - minutes * 60_000).toISOString() })
+          .where('id', '=', cid)
+          .execute();
+        await fetchCommunity(a, owner.token, cid); // the owner uses River: someone could have it
+      };
+
+      // Mallory claims every rotation and never hands the key out.
+      expect(await claim(mallory.token)).toBe(200);
+      await age(11);
+      expect(await row()).toMatchObject({ rotation_needed: 1, epoch_claimed_by: null });
+      expect(JSON.parse((await row()).rotation_stalled)).toEqual([mallory.riverId]);
+      // Next time Mallory has to stand aside (her app steps back on this refusal) …
+      expect(await claim(mallory.token)).toBe(403);
+      // … and another member rotates.
+      expect(await claim(honest.token)).toBe(200);
+      expect((await row()).epoch_claimed_by).toBe(honest.riverId);
+      // That one reaches nobody either: both stand aside now, the owner may still rotate.
+      await age(11);
+      expect(JSON.parse((await row()).rotation_stalled).sort()).toEqual(
+        [mallory.riverId, honest.riverId].sort(),
+      );
+      expect(await claim(mallory.token)).toBe(403);
+      expect(await claim(honest.token)).toBe(403);
+      expect(await claim(owner.token)).toBe(200);
+
+      // However many retries it took, a claim nobody received still expires (later each time).
+      await database.db
+        .updateTable('communities')
+        .set({ rotation_retries: 20 })
+        .where('id', '=', cid)
+        .execute();
+      await age(23 * 60);
+      expect(await row()).toMatchObject({ rotation_needed: 0, epoch_claimed_by: owner.riverId });
+      await age(25 * 60);
+      expect(await row()).toMatchObject({ rotation_needed: 1, epoch_claimed_by: null, rotation_retries: 21 });
+
+      // A rotation that reaches someone ends it: nobody stands aside any more.
+      expect(await claim(owner.token)).toBe(200);
+      const epoch = (await row()).key_epoch;
+      expect(await status(a, 'POST', `/v1/communities/${cid}/epoch/adopted`, honest.token, { epoch })).toBe(
+        200,
+      );
+      expect(await row()).toMatchObject({
+        epoch_claimed_by: null,
+        rotation_stalled: '[]',
+        rotation_retries: 0,
+      });
+      // Someone leaves again: Mallory may be the one to rotate this time.
+      const other = await join(a, owner.token, cid);
+      await status(a, 'POST', `/v1/communities/${cid}/leave`, other.token);
+      expect(await claim(mallory.token)).toBe(200);
     });
 
     it('a stuck rotation is asked for again only once another member could have received it', async () => {

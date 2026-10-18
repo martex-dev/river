@@ -166,8 +166,11 @@ than per-member sender keys:
   and a check value sealed with their key.
 - **A rotation that reaches nobody (2.11)**: the server remembers when and by
   whom an epoch was claimed until another member reports having its key. If
-  nobody does within ten minutes it asks for a rotation again (at most three
-  times). A member still missing the key after asking for it replaces it from
+  nobody does within ten minutes it asks for a rotation again (three times;
+  since 2.20 after that the wait doubles each time, up to a day, instead of
+  stopping, and the member whose claim reached nobody stands aside until a
+  rotation succeeds, so one member cannot stall it). A member still missing the
+  key after asking for it replaces it from
   the newest key it holds. Meanwhile the app says so: "Securing this community
   after a member left… messages here are still protected with the previous
   key". Pending members (rules not accepted) are never picked to rotate; a

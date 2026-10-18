@@ -35,6 +35,10 @@ All notable changes to River are documented here. The format follows
   one-time prekeys. One account takes at most ten of another's an hour;
   further fetches get keys that still start a conversation (apps need no
   change).
+- Communities: one member can no longer stall a key rotation by claiming it
+  and never handing out the key. Their next claim is refused while someone else
+  can rotate, and a claim that reaches nobody always runs out (the server used
+  to stop asking after three tries).
 
 ## [2.20.0] - 2026-10-18
 
