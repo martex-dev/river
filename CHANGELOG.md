@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.13.1] - 2026-10-18
+
+**Linking a phone finishes.**
+
 ### Fixed
 
 - **Joining a voice channel no longer shows "connecting…" first.** Someone who
