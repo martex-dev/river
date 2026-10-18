@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.20.0] - 2026-10-18
+
+**A security audit's fourteen fixes, and messaging that feels like Telegram: big emoji, reply previews, saved replies, effects.**
+
 ### Security
 
 - Android: a call answered on the lock screen shows only the call there. Chats,
