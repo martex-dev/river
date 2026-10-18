@@ -1238,6 +1238,9 @@
   gap: 10px;
   width: 100%;
   padding: 5px 8px;
+  /* A community of 1000: rows out of view skip layout and paint (they stay in the a11y tree). */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 42px;
   border: 0;
   border-radius: 8px;
   background: none;
@@ -2883,6 +2886,9 @@ input.switch:disabled {
   gap: 10px;
   width: 100%;
   padding: 7px 8px;
+  /* Hundreds of chats: rows out of view skip layout and paint (they stay in the a11y tree). */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 46px;
   border: 0;
   border-radius: 8px;
   background: none;

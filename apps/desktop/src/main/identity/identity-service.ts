@@ -7,7 +7,7 @@ import {
 } from '@river/crypto';
 import { z } from 'zod';
 import type { IdentityInfo } from '../../shared/ipc.ts';
-import type { LocalDatabase } from '../storage/database.ts';
+import { statement, type LocalDatabase } from '../storage/database.ts';
 
 export const displayNameSchema = z
   .string()
@@ -46,10 +46,29 @@ export class IdentityService {
   get(): IdentityInfo | null {
     const db = this.db();
     if (!db) return null;
-    const row = db
-      .prepare('SELECT river_id, public_key, display_name, created_at FROM identity WHERE id = 1')
-      .get() as IdentityRow | undefined;
-    return row ? toInfo(row) : null;
+    const row = statement(
+      db,
+      'SELECT river_id, public_key, display_name, created_at FROM identity WHERE id = 1',
+    ).get() as IdentityRow | undefined;
+    return row ? this.toInfo(row) : null;
+  }
+
+  /** The fingerprint and words of the last public key seen (get() runs on every message shown). */
+  private derived: { key: string; fingerprint: string; words: IdentityInfo['words'] } | null = null;
+
+  private toInfo(row: IdentityRow): IdentityInfo {
+    const key = Buffer.from(row.public_key).toString('base64');
+    if (this.derived?.key !== key) {
+      const fp = identityFingerprint(new Uint8Array(row.public_key));
+      this.derived = { key, fingerprint: formatFingerprint(fp), words: verificationWords(fp) };
+    }
+    return {
+      riverId: row.river_id,
+      displayName: row.display_name,
+      fingerprint: this.derived.fingerprint,
+      words: [...this.derived.words],
+      createdAt: row.created_at,
+    };
   }
 
   /** Creates the identity once. Throws if storage is not open or an identity already exists. */
@@ -186,15 +205,4 @@ export class IdentityService {
     );
     return this.get()!;
   }
-}
-
-function toInfo(row: IdentityRow): IdentityInfo {
-  const fp = identityFingerprint(new Uint8Array(row.public_key));
-  return {
-    riverId: row.river_id,
-    displayName: row.display_name,
-    fingerprint: formatFingerprint(fp),
-    words: verificationWords(fp),
-    createdAt: row.created_at,
-  };
 }

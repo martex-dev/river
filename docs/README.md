@@ -13,3 +13,5 @@
 
 Top-level documents: [ARCHITECTURE](../ARCHITECTURE.md) · [THREAT_MODEL](../THREAT_MODEL.md) ·
 [CRYPTOGRAPHY](../CRYPTOGRAPHY.md) · [PRIVACY](../PRIVACY.md) · [ROADMAP](../ROADMAP.md) · [STATUS](../STATUS.md)
+
+Measurements and benchmarks: [performance.md](performance.md).

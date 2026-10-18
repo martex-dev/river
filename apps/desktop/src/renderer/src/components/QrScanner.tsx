@@ -1,4 +1,4 @@
-import jsQR from 'jsqr';
+import type jsQRFn from 'jsqr';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Modal } from '../community/ui/common.tsx';
 import { haptic } from './gestures.ts';
@@ -17,12 +17,21 @@ function nativeDetector(): Detector | null {
   }
 }
 
+/** jsQR (a large decoder) loads only when a scanner opens without the browser's own reader. */
+type JsQr = typeof jsQRFn;
+let jsQrLoad: Promise<JsQr> | null = null;
+function loadJsQr(): Promise<JsQr> {
+  jsQrLoad ??= import('jsqr').then((m) => m.default);
+  return jsQrLoad;
+}
+
 async function decode(
   detector: Detector | null,
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
 ): Promise<string | null> {
   if (detector) return (await detector.detect(canvas))[0]?.rawValue ?? null;
+  const jsQR = await loadJsQr();
   const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
   return jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' })?.data ?? null;
 }
@@ -53,6 +62,7 @@ export function QrScanner(props: {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const detector = nativeDetector();
+    if (!detector) void loadJsQr().catch(() => undefined);
     let lastWrong = '';
 
     const scan = async (): Promise<void> => {
