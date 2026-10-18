@@ -24,7 +24,7 @@ import { CallsPage } from './pages/CallsPage.tsx';
 import { FriendsPage } from './pages/FriendsPage.tsx';
 import { FilesPage } from './pages/FilesPage.tsx';
 import { onSocialChanged } from './social/store.ts';
-import { totalUnread, useDm } from './dm/store.ts';
+import { totalUnread, useDm, windowTitle } from './dm/store.ts';
 import { handleCallEvent, handlePhoneCall } from './dm/call.ts';
 import { useCommunity } from './community/store.ts';
 import { PlannedPage } from './pages/PlannedPage.tsx';
@@ -352,7 +352,14 @@ function ConnectionPill(): ReactElement {
 function HomeButton(): ReactElement {
   const section = useRiver((r) => r.section);
   const navigate = useRiver((r) => r.navigate);
-  const unread = useDm((d) => totalUnread(d.conversations));
+  const notifications = useRiver((r) => r.settings?.notifications);
+  // Muted conversations stay out of the count, as on the phone (2.13.1).
+  const unread = useDm((d) => totalUnread(d.conversations, notifications));
+  // The window title (taskbar, Alt+Tab) shows what waits: "(3) River".
+  const mentions = useCommunity((c) => Object.values(c.mentions).reduce((n, x) => n + x, 0));
+  useEffect(() => {
+    document.title = windowTitle(unread, mentions);
+  }, [unread, mentions]);
   const active = HOME_SECTIONS.includes(section);
   return (
     <div className={`community__server-wrap ${active ? 'is-active' : ''}`}>

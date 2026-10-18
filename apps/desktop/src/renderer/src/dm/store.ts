@@ -195,6 +195,21 @@ export function isTyping(peer: string): boolean {
   return at !== undefined && Date.now() - at < TYPING_MS;
 }
 
-export function totalUnread(conversations: ConversationView[]): number {
-  return conversations.filter((c) => c.state !== 'blocked').reduce((n, c) => n + c.unread, 0);
+/**
+ * Unread messages for the Home badge: not blocked people, and (2.13.1) not muted conversations,
+ * which counted on computers although they stay quiet (the phone's Chats badge already skipped them).
+ */
+export function totalUnread(
+  conversations: ConversationView[],
+  notifications?: Parameters<typeof isMuted>[0],
+): number {
+  return conversations
+    .filter((c) => c.state !== 'blocked' && !(notifications && isMuted(notifications, c.riverId)))
+    .reduce((n, c) => n + c.unread, 0);
+}
+
+/** The window's title: "(3) River" while direct messages or mentions wait, like other messengers. */
+export function windowTitle(unread: number, mentions: number): string {
+  const n = unread + mentions;
+  return n > 0 ? `(${n > 99 ? '99+' : n}) River` : 'River';
 }

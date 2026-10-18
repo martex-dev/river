@@ -17,7 +17,7 @@ import { MenuItem, Modal, Popover } from '../src/renderer/src/community/ui/commo
 import { TextChannel, typingText } from '../src/renderer/src/community/ui/Chat.tsx';
 import { Toast } from '../src/renderer/src/pages/CommunitiesPage.tsx';
 import { holdToast, useCommunity } from '../src/renderer/src/community/store.ts';
-import { useDm } from '../src/renderer/src/dm/store.ts';
+import { totalUnread, useDm, windowTitle } from '../src/renderer/src/dm/store.ts';
 import { useRiver } from '../src/renderer/src/store.ts';
 import { dateLocale, dayLabel, messageWhen } from '../src/renderer/src/time.ts';
 
@@ -455,5 +455,25 @@ describe('toasts', () => {
     expect(screen.getByRole('status').textContent).toMatch('Saved.');
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' }));
     expect(screen.queryByRole('status')).toBeNull();
+  });
+});
+
+describe('unread counts', () => {
+  it('the Home badge leaves out muted and blocked conversations, as the phone does', () => {
+    const conversations = [
+      { riverId: 'a', state: 'accepted', unread: 2 },
+      { riverId: 'muted', state: 'accepted', unread: 5 },
+      { riverId: 'b', state: 'blocked', unread: 7 },
+    ] as never;
+    const later = new Date(Date.now() + 3_600_000).toISOString();
+    const notifications = { overrides: { muted: { muteUntil: later } } } as never;
+    expect(totalUnread(conversations)).toBe(7);
+    expect(totalUnread(conversations, notifications)).toBe(2);
+  });
+
+  it('the window title shows what waits', () => {
+    expect(windowTitle(0, 0)).toBe('River');
+    expect(windowTitle(2, 1)).toBe('(3) River');
+    expect(windowTitle(150, 0)).toBe('(99+) River');
   });
 });

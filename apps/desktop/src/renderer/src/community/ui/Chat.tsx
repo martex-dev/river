@@ -19,7 +19,15 @@ import { SavedPanel } from './Saved.tsx';
 import { CreatePollDialog, PollView } from './Poll.tsx';
 import { isVote } from '../../../../shared/poll.ts';
 import { hasCriteria, parseSearch } from '../../../../shared/search-query.ts';
-import { clockTime, dateLocale, dayLabel, fullWhen, messageWhen } from '../../time.ts';
+import {
+  clockDateTime,
+  clockTime,
+  dateLocale,
+  dayLabel,
+  fullWhen,
+  isToday,
+  messageWhen,
+} from '../../time.ts';
 import {
   EMOJI_PICKER,
   fromBottom,
@@ -428,7 +436,9 @@ export function TextChannel(props: {
       {firstNew && (
         <div className="chat__new-bar" role="status">
           <button className="chat__new-bar-jump" onClick={() => jumpTo(firstNew.id)}>
-            {newCount} new {newCount === 1 ? 'message' : 'messages'} since {timeOf(dividerAfter!)}
+            {newCount} new {newCount === 1 ? 'message' : 'messages'} since{' '}
+            {/* Unread since an earlier day: that day too, not only a time that reads like today's. */}
+            {isToday(dividerAfter!) ? timeOf(dividerAfter!) : clockDateTime(dividerAfter!)}
           </button>
           <button className="chat__new-bar-read" onClick={() => useCommunity.setState({ divider: null })}>
             Mark as read
