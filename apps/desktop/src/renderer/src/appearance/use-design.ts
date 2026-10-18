@@ -3,6 +3,7 @@ import { DEFAULT_DESIGN, type DesignSettings } from '../../../shared/design.ts';
 import { useRiver } from '../store.ts';
 import { mix } from './color.ts';
 import { applyDesign, resolveDesign, type Resolved } from './engine.ts';
+import { applyAppWallpaper, publishLook, useWallpaperLayers } from './use-wallpaper.ts';
 
 const CACHE_KEY = 'river.design.v1';
 
@@ -53,6 +54,15 @@ export function useDesignEngine(): Resolved {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
+  // Chat wallpapers (2.18) are drawn in the look's colours, outside the engine (photos load later).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => publishLook(resolved.vars, resolved.mode), [key]);
+  const wallpaper = useWallpaperLayers(design, design.prefs.wallpaper);
+  useEffect(() => applyAppWallpaper(wallpaper, document.documentElement), [wallpaper]);
+  const calm = useRiver((r) => r.settings?.appearance.calm ?? false);
+  useEffect(() => {
+    document.documentElement.dataset.calm = calm ? 'on' : 'off';
+  }, [calm]);
   return resolved;
 }
 

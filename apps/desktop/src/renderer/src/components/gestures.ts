@@ -42,8 +42,8 @@ interface Options {
   onReply?: () => void;
   /** Absent: no menu on hold. */
   onHold?: (x: number, y: number) => void;
-  /** Two quick taps (2.10.1): a quick reaction on messages. */
-  onDoubleTap?: () => void;
+  /** Two quick taps (2.10.1): a quick reaction on messages. Gets where the finger was (2.18). */
+  onDoubleTap?: (x: number, y: number) => void;
   disabled?: boolean;
 }
 
@@ -188,7 +188,7 @@ export function useMessageGestures(options: Options): Handlers {
       if (prev && now - prev.at < DOUBLE_TAP_MS && Math.hypot(s.x - prev.x, s.y - prev.y) < DOUBLE_TAP_PX) {
         lastTap.current = null;
         haptic('tap');
-        latest.current.onDoubleTap();
+        latest.current.onDoubleTap(s.x, s.y);
       } else lastTap.current = { at: now, x: s.x, y: s.y };
     },
     onTouchCancel(e) {

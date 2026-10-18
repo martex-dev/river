@@ -25,8 +25,13 @@ const dataImage = z
 const IMAGE_KEY = /^[a-z0-9]{1,32}$/;
 /** A reference to a picture kept in DesignSettings.images. */
 export const IMAGE_REF = /^image:[a-z0-9]{1,32}$/;
-/** Pictures kept at most: one per profile (30) and the current look. */
-export const MAX_DESIGN_IMAGES = 31;
+/**
+ * Pictures kept at most: one per profile (30) and the current look, plus chat wallpaper photos
+ * (2.18; those are shrunk to a few hundred kilobytes before they are kept).
+ */
+export const MAX_DESIGN_IMAGES = 64;
+/** Chat wallpaper photos kept at most (each chat may point to one; the same photo is kept once). */
+export const MAX_WALLPAPER_PHOTOS = 24;
 
 /** Colours a person may set themselves (each replaces the theme's own). */
 export const COLOR_ROLES = [
@@ -51,6 +56,63 @@ export type ColorRole = (typeof COLOR_ROLES)[number];
 export const colorOverridesSchema = z.partialRecord(z.enum(COLOR_ROLES), hex);
 
 const unit = (min: number, max: number, def: number) => z.number().min(min).max(max).default(def);
+
+/**
+ * Chat wallpapers (2.18): what shows behind the messages of a conversation or channel. Built-in
+ * doodle patterns and gradients are drawn by River (CSS and SVG, nothing downloaded) in the
+ * theme's colours, light or dark; a photo is the person's own and never leaves this device.
+ */
+export const WALLPAPER_PATTERNS = [
+  'doodles',
+  'hearts',
+  'space',
+  'leaves',
+  'geometry',
+  'waves',
+  'music',
+  'paws',
+] as const;
+export const WALLPAPER_GRADIENTS = [
+  'theme',
+  'dawn',
+  'lagoon',
+  'dusk',
+  'mint',
+  'peach',
+  'ocean',
+  'berry',
+  'forest',
+  'mono',
+] as const;
+export type WallpaperPattern = (typeof WALLPAPER_PATTERNS)[number];
+export type WallpaperGradient = (typeof WALLPAPER_GRADIENTS)[number];
+
+export const wallpaperSchema = z.object({
+  /** 'none': the conversation's own colour (River before 2.18). */
+  kind: z.enum(['none', 'pattern', 'gradient', 'solid', 'photo']).default('none'),
+  pattern: z.enum(WALLPAPER_PATTERNS).default('doodles'),
+  /** The colours under a pattern, or the gradient itself. */
+  gradient: z.enum(WALLPAPER_GRADIENTS).default('theme'),
+  /** A solid colour, or the doodles' tint (null: the accent). Kept readable behind text. */
+  color: hex.nullable().default(null),
+  /** The person's photo: `image:<key>` pointing into DesignSettings.images. */
+  photo: z
+    .union([z.string().regex(IMAGE_REF), dataImage])
+    .nullable()
+    .default(null),
+  /** 0–1: how strongly the doodles show. */
+  strength: unit(0, 1, 0.5),
+  /** Photo only: blur in pixels, and how much the conversation colour covers it. */
+  blur: unit(0, 24, 0),
+  dim: unit(0, 0.85, 0.35),
+});
+export type Wallpaper = z.infer<typeof wallpaperSchema>;
+export const DEFAULT_WALLPAPER: Wallpaper = wallpaperSchema.parse({});
+
+/** A chat a wallpaper belongs to: `dm:<conversation>` or `ch:<channel>`. */
+export const CHAT_KEY = /^(dm|ch):[A-Za-z0-9_.:-]{1,96}$/;
+/** Chats with their own wallpaper, at most. */
+export const MAX_CHAT_WALLPAPERS = 300;
 
 export const designPrefsSchema = z.object({
   /** 'theme' follows the theme; 'light'/'dark' pick the matching sibling theme when the skin has one. */
@@ -149,6 +211,10 @@ export const designPrefsSchema = z.object({
   scrollbars: z.enum(['thin', 'normal', 'hidden']).default('thin'),
   badges: z.enum(['filled', 'outline', 'dot']).default('filled'),
   tabs: z.enum(['skin', 'pill', 'underline', 'block']).default('skin'),
+  /** 2.18: the shape of message bubbles (phones, and the Bubbles message style on computers). */
+  bubbles: z.enum(['rounded', 'square', 'outlined']).default('rounded'),
+  /** 2.18: the wallpaper behind every conversation and channel (each chat may have its own). */
+  wallpaper: wallpaperSchema.prefault({}),
   // --- motion ---
   motionSpeed: unit(0.5, 2, 1),
   hoverEffects: z.boolean().default(true),
@@ -191,6 +257,11 @@ export const designSettingsSchema = z.object({
   images: z
     .record(z.string().regex(IMAGE_KEY), dataImage)
     .refine((images) => Object.keys(images).length <= MAX_DESIGN_IMAGES, 'Too many pictures')
+    .default({}),
+  /** 2.18: chats with a wallpaper of their own (kept on this device only). */
+  chatWallpapers: z
+    .record(z.string().regex(CHAT_KEY), wallpaperSchema)
+    .refine((w) => Object.keys(w).length <= MAX_CHAT_WALLPAPERS, 'Too many chat wallpapers')
     .default({}),
 });
 export type DesignSettings = z.infer<typeof designSettingsSchema>;
@@ -240,12 +311,18 @@ export function compactDesignImages(design: DesignSettings): DesignSettings {
     images[key] = value;
     return `image:${key}`;
   };
-  const prefs = { ...design.prefs, backgroundImage: keep(design.prefs.backgroundImage) };
-  const profiles = design.profiles.map((p) => ({
-    ...p,
-    prefs: { ...p.prefs, backgroundImage: keep(p.prefs.backgroundImage) },
-  }));
-  return { ...design, prefs, profiles, images };
+  const keepPrefs = (prefs: DesignPrefs): DesignPrefs => {
+    const out = { ...prefs, backgroundImage: keep(prefs.backgroundImage) };
+    // Settings written before 2.18 have no wallpaper yet (the schema adds the default).
+    if (prefs.wallpaper) out.wallpaper = { ...prefs.wallpaper, photo: keep(prefs.wallpaper.photo) };
+    return out;
+  };
+  const prefs = keepPrefs(design.prefs);
+  const profiles = design.profiles.map((p) => ({ ...p, prefs: keepPrefs(p.prefs) }));
+  const chatWallpapers: Record<string, Wallpaper> = {};
+  for (const [key, w] of Object.entries(design.chatWallpapers ?? {}))
+    chatWallpapers[key] = { ...w, photo: keep(w.photo) };
+  return { ...design, prefs, profiles, images, chatWallpapers };
 }
 
 /** Shown only until the person chooses a skin (River asks first). */
@@ -262,6 +339,7 @@ export const DEFAULT_DESIGN: DesignSettings = {
   activeProfile: null,
   chosen: false,
   images: {},
+  chatWallpapers: {},
 };
 
 /** What an appearance export file contains (import validates against this). */
@@ -275,3 +353,20 @@ export const designExportSchema = z.object({
   profiles: z.array(designProfileSchema).max(30).default([]),
 });
 export type DesignExport = z.infer<typeof designExportSchema>;
+
+/**
+ * A theme shared as a short code (2.18): its name, the built-in theme it starts from and the
+ * colours changed — only data, checked here before anything uses it. Nothing in it can run.
+ */
+export const sharedThemeSchema = z
+  .object({
+    kind: z.literal('river-theme'),
+    v: z.literal(1),
+    name,
+    base: id,
+    colors: colorOverridesSchema,
+  })
+  .strict();
+export type SharedTheme = z.infer<typeof sharedThemeSchema>;
+/** A theme code is never longer than this (a whole theme is well under 1 KB). */
+export const MAX_THEME_CODE = 2000;

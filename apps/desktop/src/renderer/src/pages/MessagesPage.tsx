@@ -1,6 +1,9 @@
 import type { CallView } from '../../../shared/dm.ts';
 import { VoiceRecorder } from '../components/VoiceMessage.tsx';
 import { fromOverlay, haptic, useMessageGestures } from '../components/gestures.ts';
+import { burst } from '../appearance/delight.tsx';
+import { ChatWallpaperDialog, useChatWallpaper } from '../appearance/ChatWallpaper.tsx';
+import { dmKey } from '../appearance/wallpaper.ts';
 import { composing, enterSends } from '../components/keys.ts';
 import { isPhone } from '../../../shared/platform.ts';
 import { localDay, newSince } from '../components/unread.ts';
@@ -739,6 +742,8 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
   const [profileOpen, setProfileOpen] = useState(false);
   const [timerOpen, setTimerOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
+  const [wallpaperOpen, setWallpaperOpen] = useState(false);
+  const wallpaper = useChatWallpaper(dmKey(c.riverId));
   const [polling, setPolling] = useState(false);
   const gallery = useMemo(() => galleryOf(messages.map((m) => m.attachments)), [messages]);
   const selection = useSelection();
@@ -1122,8 +1127,23 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
               Disappearing messages{c.timer ? ` · ${timerLabel(c.timer)}` : ''}
             </MenuItem>
           )}
+          <MenuItem
+            onClick={() => {
+              setMenu(null);
+              setWallpaperOpen(true);
+            }}
+          >
+            🖼️ Wallpaper
+          </MenuItem>
           <NotifyMenuSection id={c.riverId} kind="conversation" onDone={() => setMenu(null)} />
         </Popover>
+      )}
+      {wallpaperOpen && (
+        <ChatWallpaperDialog
+          chatKey={dmKey(c.riverId)}
+          name={c.name}
+          onClose={() => setWallpaperOpen(false)}
+        />
       )}
       {timerOpen && <TimerDialog conversation={c} onClose={() => setTimerOpen(false)} />}
       {profileOpen && (
@@ -1277,6 +1297,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
       <GalleryContext.Provider value={gallery}>
         <div
           className="chat__messages"
+          {...wallpaper}
           ref={scrollRef}
           onScroll={(e) => {
             const bottom = fromBottom(e.currentTarget) < 80;
@@ -1642,8 +1663,9 @@ function DmMessage(props: {
     onHold: (x, y) => setMenu({ x, y }),
     ...(canReply
       ? {
-          onDoubleTap: () => {
+          onDoubleTap: (x, y) => {
             const heart = m.reactions.find((r) => r.emoji === QUICK_REACTION);
+            if (!heart?.mine) burst(QUICK_REACTION, x, y, true);
             react(QUICK_REACTION, !heart?.mine);
           },
         }

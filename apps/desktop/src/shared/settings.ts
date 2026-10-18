@@ -100,6 +100,11 @@ export const settingsSchema = z.object({
     language: z.enum(['system', 'en', 'bg']),
     /** Added in 1.0.23: add previews to links you send (River fetches the page from your computer). */
     linkPreviews: z.boolean(),
+    /**
+     * Added in 2.18: Calm mode — no confetti, bursts or bouncing; messages simply appear.
+     * Reduced motion (system or River's) goes further and stops every non-essential animation.
+     */
+    calm: z.boolean(),
   }),
   /** Added in 1.0.45: skins, themes, personalisation and appearance profiles. */
   design: designSettingsSchema,
@@ -268,6 +273,7 @@ export const DEFAULT_SETTINGS: Settings = {
     contrast: 'system',
     linkPreviews: false,
     language: 'en',
+    calm: false,
   },
   design: structuredClone(DEFAULT_DESIGN),
   notifications: {

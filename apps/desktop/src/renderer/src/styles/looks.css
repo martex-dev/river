@@ -1,0 +1,615 @@
+/*
+ * Looks (2.18): chat wallpapers, bubble shapes, the Appearance live preview, the accent picker
+ * and little moments of delight. Decoration only: html[data-motion='reduced'] (base.css) stops
+ * the animations, and Calm mode (html[data-calm='on']) turns the playful ones off.
+ */
+
+/* ---------- Chat wallpapers ---------- */
+/* The app's wallpaper is --wp-bg on <html>; a chat with its own sets it on its messages area. */
+.chat__messages {
+  background: var(--wp-bg, none);
+}
+.chat__messages[data-wp='none'] {
+  background: none;
+}
+/* Over a photo (which cannot be measured for contrast), text sits on the conversation colour. */
+:is(html[data-wp-plate='on'] .chat__messages:not([data-wp]), .chat__messages[data-wp-plate]) .msg__body {
+  padding: 4px 10px 5px;
+  border-radius: var(--radius-m);
+  background-color: color-mix(in srgb, var(--layer-2) 90%, transparent);
+}
+:is(html[data-wp-plate='on'] .chat__messages:not([data-wp]), .chat__messages[data-wp-plate])
+  :is(.chat__day span, .chat__welcome, .chat__notice, .call-note, .typing) {
+  border-radius: 12px;
+  background-color: color-mix(in srgb, var(--layer-2) 90%, transparent);
+}
+:is(html[data-wp-plate='on'] .chat__messages:not([data-wp]), .chat__messages[data-wp-plate]) .chat__day span {
+  padding: 2px 10px;
+}
+/* Bubbles over any wallpaper are solid, so their text keeps the theme's contrast. */
+html[data-msg='bubbles']
+  :is(
+    html[data-wallpaper]:not([data-wallpaper='none']) .chat__messages:not([data-wp]),
+    .chat__messages[data-wp]:not([data-wp='none'])
+  )
+  .msg
+  .msg__body {
+  background: var(--layer-3);
+}
+html[data-msg='bubbles']
+  :is(
+    html[data-wallpaper]:not([data-wallpaper='none']) .chat__messages:not([data-wp]),
+    .chat__messages[data-wp]:not([data-wp='none'])
+  )
+  .msg--mine
+  .msg__body {
+  background: color-mix(in srgb, var(--accent) 16%, var(--layer-2));
+}
+
+/* ---------- Bubble shapes ---------- */
+/* Computers (the Bubbles message style). */
+html[data-msg='bubbles'][data-bubbles='square'] .msg .msg__body {
+  border-radius: 6px;
+}
+html[data-msg='bubbles'][data-bubbles='outlined'] .msg .msg__body {
+  background: var(--layer-2);
+  border: 1.5px solid var(--border-strong);
+}
+html[data-msg='bubbles'][data-bubbles='outlined'] .msg.msg--mine .msg__body {
+  background: var(--layer-2);
+  border-color: var(--accent);
+}
+/* Phones (Telegram's bubbles, phone.css). */
+:root[data-bubbles='square'] .pshell .chat__messages .msg .msg__body {
+  border-radius: 7px !important;
+}
+:root[data-bubbles='square'] .pshell .chat__messages .msg .msg__body::after,
+:root[data-bubbles='outlined'] .pshell .chat__messages .msg .msg__body::after {
+  display: none;
+}
+:root[data-bubbles='outlined'] .shell--phone {
+  --p-bubble-in: var(--layer-2);
+  --p-bubble-out: var(--layer-2);
+  --p-bubble-out-ink: var(--text);
+}
+:root[data-bubbles='outlined'] .pshell .chat__messages .msg .msg__body {
+  border: 1.5px solid rgb(var(--line-rgb) / 0.3);
+  border-bottom-left-radius: 18px;
+  box-shadow: none;
+}
+:root[data-bubbles='outlined'] .pshell .chat__messages .msg.msg--mine .msg__body {
+  border-color: var(--accent);
+  border-bottom-right-radius: 18px;
+}
+/* Chat text size follows the setting on phones too (2 px larger than on a computer). */
+:root .pshell .chat__messages .msg .msg__text {
+  font-size: calc(var(--chat-font-size, 14px) + 2px);
+}
+
+/* ---------- Bubbles appear ---------- */
+/* A new bubble grows from its corner with a little spring (yours from the right). */
+.pshell .chat__messages .msg__body,
+html[data-msg='bubbles'] .chat__messages .msg__body {
+  transform-origin: 0 100%;
+  animation: bubble-in 300ms var(--ease-spring) both;
+}
+.pshell .chat__messages .msg--mine .msg__body,
+html[data-msg='bubbles'][data-own='right'] .chat__messages .msg--mine .msg__body {
+  transform-origin: 100% 100%;
+}
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: scale(0.86) translateY(6px);
+  }
+}
+
+/* ---------- Typing ---------- */
+.typing__dots {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--layer-3);
+}
+.typing__dots i {
+  background: var(--accent-text);
+  animation-name: typing-wave;
+}
+@keyframes typing-wave {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0) scale(0.85);
+    opacity: 0.55;
+  }
+  30% {
+    transform: translateY(-4px) scale(1.1);
+    opacity: 1;
+  }
+}
+
+/* ---------- Reaction bursts and the double-tap heart ---------- */
+.bursts {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  pointer-events: none;
+  overflow: hidden;
+}
+.burst-fx {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+.burst-fx__piece {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  animation: burst-piece 900ms cubic-bezier(0.2, 0.8, 0.3, 1) var(--d) forwards;
+}
+.burst-fx--big .burst-fx__piece {
+  font-size: 22px;
+}
+@keyframes burst-piece {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(var(--s)) rotate(var(--r));
+  }
+}
+.burst-fx__hero {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 84px;
+  line-height: 1;
+  filter: drop-shadow(0 8px 18px rgb(0 0 0 / 0.3));
+  transform: translate(-50%, -50%);
+  animation: burst-hero 1000ms var(--ease-spring) forwards;
+}
+@keyframes burst-hero {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2);
+  }
+  25% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.25);
+  }
+  45% {
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -90%) scale(0.9);
+  }
+}
+/* Your reaction pops when it lights up. */
+.reaction.is-mine .reaction__emoji {
+  display: inline-block;
+  animation: reaction-pop 420ms var(--ease-spring);
+}
+@keyframes reaction-pop {
+  0% {
+    transform: scale(0.6);
+  }
+  50% {
+    transform: scale(1.35) rotate(-8deg);
+  }
+}
+/* Confetti in more shapes. */
+.burst__piece--dot {
+  height: var(--w);
+  border-radius: 50%;
+}
+.burst__piece--ribbon {
+  width: calc(var(--w) * 0.4);
+  height: calc(var(--w) * 1.6);
+  border-radius: 3px;
+}
+
+/* ---------- Calm mode ---------- */
+html[data-calm='on'] :is(.msg, .msg__body, .reaction__count, .reaction__emoji, .badge, .chat, .lp__bubble) {
+  animation: none !important;
+}
+html[data-calm='on'] .typing__dots i {
+  animation-name: typing-calm;
+}
+@keyframes typing-calm {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ---------- Appearance: the live preview ---------- */
+.design__now {
+  grid-template-columns: minmax(260px, 380px) minmax(0, 1fr);
+}
+.lp {
+  display: flex;
+  flex-direction: column;
+  height: 226px;
+  overflow: hidden;
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--layer-2);
+  color: var(--text);
+  font-family: var(--font-ui);
+  box-shadow: var(--shadow-1);
+}
+.lp__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--layer-1);
+  font-size: 13px;
+}
+.lp__who {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.lp__status {
+  color: var(--accent-text);
+  font-size: 11.5px;
+}
+.lp__av {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f59e0b, #ec4899);
+}
+.lp__av--me {
+  background: var(--accent-grad);
+}
+.lp[data-avatar='rounded'] .lp__av {
+  border-radius: 30%;
+}
+.lp[data-avatar='square'] .lp__av {
+  border-radius: 3px;
+}
+.lp[data-avatar='hexagon'] .lp__av {
+  border-radius: 0;
+  clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0 50%);
+}
+.lp__chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px 10px;
+  background: var(--lp-wp, none);
+  font-size: var(--lp-font, 14px);
+  line-height: 1.32;
+}
+/* Classic, cards, terminal: one line per message, as in the conversation. */
+.lp:not([data-msg='bubbles']) :is(.lp__meta, .lp__day) {
+  display: none;
+}
+.lp:not([data-msg='bubbles']) .lp__msg {
+  align-items: flex-start;
+}
+.lp[data-density='compact'] .lp__chat {
+  gap: 3px;
+}
+.lp__day {
+  align-self: center;
+  padding: 1px 9px;
+  border-radius: 10px;
+  background: var(--layer-3);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+}
+.lp__msg {
+  display: flex;
+  align-items: flex-end;
+  gap: 7px;
+}
+.lp__bubble {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 82%;
+  animation: bubble-in 320ms var(--ease-spring) both;
+  transform-origin: 0 100%;
+}
+.lp__name {
+  color: var(--accent-text);
+  font-size: 0.86em;
+}
+.lp__meta {
+  align-self: flex-end;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.lp__reaction {
+  align-self: flex-start;
+  margin-top: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid rgb(var(--accent-rgb) / 0.5);
+  background: var(--layer-3);
+  color: var(--text);
+  font-size: 12px;
+}
+.lp__msg--typing .lp__bubble {
+  padding: 8px 10px;
+}
+.lp__dots {
+  display: inline-flex;
+  gap: 3px;
+}
+.lp__dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-text);
+  animation: typing-wave 1.2s infinite ease-in-out;
+}
+.lp__dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.lp__dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.lp[data-calm='on'] .lp__dots i {
+  animation-name: typing-calm;
+}
+.lp[data-calm='on'] .lp__bubble {
+  animation: none;
+}
+/* Classic and other flat styles: rows of text. Over a photo, a plate. */
+.lp[data-wp-plate] .lp__bubble {
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--layer-2) 90%, transparent);
+}
+/* Bubbles. */
+.lp[data-msg='bubbles'] .lp__msg--mine {
+  flex-direction: row-reverse;
+}
+.lp[data-msg='bubbles'][data-own='left'] .lp__msg--mine {
+  flex-direction: row;
+}
+.lp[data-msg='bubbles'] .lp__msg--mine .lp__av,
+.lp[data-msg='bubbles'] .lp__msg--mine .lp__name {
+  display: none;
+}
+.lp[data-msg='bubbles'] .lp__bubble {
+  padding: 5px 10px 5px;
+  border-radius: 16px;
+  border-bottom-left-radius: 5px;
+  background: var(--layer-3);
+  box-shadow: 0 1px 1px rgb(0 0 0 / 0.12);
+}
+.lp[data-msg='bubbles'] .lp__msg--mine .lp__bubble {
+  border-radius: 16px;
+  border-bottom-right-radius: 5px;
+  background: var(--accent);
+  color: var(--accent-solid-ink);
+  transform-origin: 100% 100%;
+}
+.lp[data-msg='bubbles'] .lp__msg--mine .lp__meta {
+  color: inherit;
+}
+.lp[data-bubbles='square'] .lp__bubble,
+.lp[data-msg='bubbles'][data-bubbles='square'] .lp__msg--mine .lp__bubble {
+  border-radius: 6px;
+}
+.lp[data-msg='bubbles'][data-bubbles='outlined'] .lp__bubble,
+.lp[data-msg='bubbles'][data-bubbles='outlined'] .lp__msg--mine .lp__bubble {
+  border: 1.5px solid rgb(var(--line-rgb) / 0.3);
+  background: var(--layer-2);
+  color: var(--text);
+  box-shadow: none;
+}
+.lp[data-msg='bubbles'][data-bubbles='outlined'] .lp__msg--mine .lp__bubble {
+  border-color: var(--accent);
+}
+.lp[data-msg='bubbles'][data-bubbles='outlined'] .lp__msg--mine .lp__meta {
+  color: var(--text-faint);
+}
+.lp__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--layer-1);
+}
+.lp__input {
+  flex: 1;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--layer-3);
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.lp__send {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-solid-ink);
+  font-size: 12px;
+}
+@media (max-width: 720px) {
+  .design__head {
+    position: static;
+  }
+  .design__now {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lp {
+    height: 190px;
+  }
+}
+
+/* ---------- Wallpaper picker ---------- */
+.wp-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.wp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 8px;
+}
+.wp-tile {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 3 / 4;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-m);
+  color: var(--text-dim);
+  font-size: 20px;
+  cursor: pointer;
+}
+.wp-tile--none {
+  background: var(--layer-2) !important;
+}
+.wp-tile:hover {
+  border-color: var(--border-strong);
+}
+.wp-tile.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgb(var(--accent-rgb) / 0.35);
+}
+.wp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.wp-chip {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.wp-chip.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgb(var(--accent-rgb) / 0.35);
+}
+.wp-dialog {
+  width: min(560px, 100%);
+}
+.wp-dialog .wp-picker {
+  margin: 12px 0 8px;
+}
+.wp-dialog__preview {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 6px;
+  height: 120px;
+  padding: 10px;
+  border-radius: var(--radius-m);
+  background: var(--wp-bg, var(--layer-2));
+}
+.wp-dialog__preview[data-wp='none'] {
+  background: var(--layer-2);
+}
+.wp-dialog__bubble {
+  align-self: flex-start;
+  padding: 5px 10px;
+  border-radius: 14px;
+  background: var(--layer-3);
+  color: var(--text);
+  font-size: 14px;
+}
+.wp-dialog__bubble--mine {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--accent-solid-ink);
+}
+
+/* ---------- Accent picker and theme codes ---------- */
+.accent-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.accent-picker__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.accent-swatch {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--layer-2);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--border-strong);
+  cursor: pointer;
+}
+.accent-swatch.is-selected {
+  box-shadow:
+    0 0 0 2px var(--layer-2),
+    0 0 0 4px var(--text);
+}
+.accent-swatch--theme {
+  background: conic-gradient(var(--accent), var(--accent-2), var(--accent));
+}
+.accent-swatch--any {
+  overflow: hidden;
+  background: conic-gradient(#e5484d, #e8b100, #3fb950, #12b5a5, #3390ec, #8e5cf7, #e05297, #e5484d);
+}
+.accent-swatch--any input {
+  position: absolute;
+  inset: -6px;
+  width: calc(100% + 12px);
+  height: calc(100% + 12px);
+  opacity: 0;
+  cursor: pointer;
+}
+.accent-picker__check {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-dim);
+}
+.accent-picker__sample {
+  padding: 2px 8px;
+  border-radius: var(--radius-button);
+  font-weight: 700;
+}
+.design-start {
+  max-width: 320px;
+}
+.design-io--code {
+  min-height: 64px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
