@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -34,9 +34,10 @@ function textsInSource(): { texts: Map<string, string>; counted: Map<string, str
   const texts = new Map<string, string>();
   const counted = new Map<string, string>();
   const walk = (dir: string): void => {
-    for (const name of readdirSync(dir)) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const name = entry.name;
       const path = join(dir, name);
-      if (statSync(path).isDirectory()) {
+      if (entry.isDirectory()) {
         // The dictionaries themselves (and i18n's own helpers).
         if (name !== 'i18n' && name !== 'node_modules') walk(path);
         continue;
