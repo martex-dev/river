@@ -94,8 +94,13 @@ final class AppLock {
             button.centerXAnchor.constraint(equalTo: box.centerXAnchor),
             button.centerYAnchor.constraint(equalTo: box.centerYAnchor),
         ])
+        // Covered is not enough (2.18): VoiceOver reads only the cover (not River's interface
+        // under it), and a keyboard no longer types into a focused message box.
+        box.accessibilityViewIsModal = true
+        view.endEditing(true)
         view.addSubview(box)
         cover = box
+        UIAccessibility.post(notification: .screenChanged, argument: button)
     }
 
     @objc private func tap() { prompt() }

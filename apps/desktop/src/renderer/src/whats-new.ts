@@ -3,6 +3,11 @@
  * got, shown once. Fresh installs see nothing; full notes are in the release.
  */
 export const HIGHLIGHTS: Record<string, string[]> = {
+  '2.20.0': [
+    'Big emoji, a preview of the message you reply to, and saved replies behind "/"',
+    'Send with an effect: confetti, hearts or fireworks (Calm mode turns them off)',
+    'A security audit: fourteen fixes, including what shows over a locked phone during a call',
+  ],
   '2.19.0': [
     'Group calls: call a whole group chat, voice or video, up to 50 people, end-to-end encrypted',
     'Join a call already going on from the bar at the top of the group',

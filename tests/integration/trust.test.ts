@@ -42,6 +42,8 @@ let server: FastifyInstance;
 let serverDb: RiverDatabase;
 const locals: LocalDatabase[] = [];
 const services: CommunityService[] = [];
+/** A malicious server changing its answers (a test sets it; cleared after each test). */
+let rewrite: ((path: string, body: Buffer) => Buffer) | null = null;
 
 const injectFetch: typeof fetch = async (input, init) => {
   const url = new URL(String(input));
@@ -53,7 +55,8 @@ const injectFetch: typeof fetch = async (input, init) => {
       ? { payload: init.body instanceof Uint8Array ? Buffer.from(init.body) : String(init.body) }
       : {}),
   });
-  return new Response(res.rawPayload.length ? new Uint8Array(res.rawPayload) : null, {
+  const payload = rewrite ? rewrite(url.pathname, res.rawPayload) : res.rawPayload;
+  return new Response(payload.length ? new Uint8Array(payload) : null, {
     status: res.statusCode,
     headers: res.headers as Record<string, string>,
   });
@@ -204,6 +207,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  rewrite = null;
   for (const s of services.splice(0)) s.stop();
   for (const l of locals.splice(0)) l.close();
   await server.close();
@@ -475,6 +479,108 @@ describe('community keys a server cannot inject', { timeout: 90_000 }, () => {
       .execute();
   }
 
+  it('an invite answered with the ID of a community you are in adds no key to it (2.18)', async () => {
+    const { alice, bob, id } = await crew();
+    const eve = await person('Eve');
+    const bait = await eve.community.create('Bait');
+    const baitLink = await eve.community.invite(bait.id);
+    const baitKey = keyOf(eve, bait.id, 0);
+    // The server answers Alice's join of Eve's invite as if it were for Crew, with a check value
+    // sealed (under the key in Eve's link, which the server knows) for the next epoch of Crew.
+    rewrite = (path, body) => {
+      if (!path.endsWith('/invites/join')) return body;
+      const res = JSON.parse(body.toString('utf8')) as Record<string, unknown>;
+      return Buffer.from(
+        JSON.stringify({ ...res, id, inviteCheck: seal(baitKey, id, 'invite', { epoch: 1 }) }),
+      );
+    };
+    await serverDb.db.updateTable('communities').set({ key_epoch: 1 }).where('id', '=', id).execute();
+    await alice.community.join(baitLink, async () => undefined).catch(() => undefined);
+    rewrite = null;
+    expect(epochs(alice, id)).toEqual([0]);
+    expect(keyOf(alice, id, 0).equals(keyOf(bob, id, 0))).toBe(true);
+    // A link to a community you are already in still just opens it.
+    const crewLink = await alice.community.invite(id);
+    expect((await bob.community.join(crewLink, async () => undefined)).id).toBe(id);
+    expect(epochs(bob, id)).toEqual([0]);
+  });
+
+  it('a channel listed under another community is not sealed with that community’s key (2.18)', async () => {
+    const { alice, id } = await crew();
+    const eve = await person('Eve');
+    const bait = await eve.community.create('Bait');
+    await alice.community.join(await eve.community.invite(bait.id), async () => undefined);
+    const general = (await alice.community.refresh())
+      .find((c) => c.id === id)!
+      .channels.find((c) => c.kind === 'text')!;
+    // The server (which knows Bait's key: Eve made it) lists Crew's channel under Bait, first.
+    rewrite = (path, body) => {
+      if (!path.endsWith('/communities')) return body;
+      const res = JSON.parse(body.toString('utf8')) as {
+        communities: Array<{ id: string; channels: Array<{ id: string }> }>;
+      };
+      const crewWire = res.communities.find((c) => c.id === id)!;
+      const baitWire = res.communities.find((c) => c.id === bait.id)!;
+      baitWire.channels.push(crewWire.channels.find((ch) => ch.id === general.id)!);
+      res.communities = [baitWire, crewWire];
+      return Buffer.from(JSON.stringify(res));
+    };
+    const views = await alice.community.refresh();
+    expect(views.find((c) => c.id === bait.id)!.channels.map((c) => c.id)).not.toContain(general.id);
+    expect(views.find((c) => c.id === id)!.channels.map((c) => c.id)).toContain(general.id);
+    const sent = await alice.community.send(general.id, 'for Crew only');
+    rewrite = null;
+    const row = await serverDb.db
+      .selectFrom('messages')
+      .select('body')
+      .where('id', '=', sent.id)
+      .executeTakeFirstOrThrow();
+    const purpose = `message:${general.id}` as const;
+    const binding = messageBinding(sent.id, alice.riverId);
+    expect(openBound(keyOf(alice, id, 0), id, purpose, binding, row.body).value).toMatchObject({
+      text: 'for Crew only',
+    });
+    expect(() => openBound(keyOf(eve, bait.id, 0), bait.id, purpose, binding, row.body)).toThrow();
+  });
+
+  it('an old unbound profile copied into a fake member gets no key, even with a community in common (2.18)', async () => {
+    const { alice, bob, id } = await crew();
+    const eve = await person('Eve');
+    // Eve and Bob share a community of Eve's, where Eve's genuine profile names her own key.
+    const zed = await eve.community.create('Zed');
+    await bob.community.join(await eve.community.invite(zed.id), async () => undefined);
+    // The server lists Eve in Crew with a v1 profile of Alice's (as Rivers before 2.12 sealed them).
+    const aliceRow = await serverDb.db
+      .selectFrom('community_members')
+      .select('profile')
+      .where('community_id', '=', id)
+      .where('river_id', '=', alice.riverId)
+      .executeTakeFirstOrThrow();
+    const crewKey = keyOf(alice, id, 0);
+    const aliceProfile = openBound<{ identityKey: string }>(
+      crewKey,
+      id,
+      'profile',
+      alice.riverId,
+      aliceRow.profile,
+    ).value;
+    await inject(eve, id, seal(crewKey, id, 'profile', aliceProfile));
+    // ... and orders Zed last, so the key Bob last read for Eve is her own.
+    rewrite = (path, body) => {
+      if (!path.endsWith('/communities')) return body;
+      const res = JSON.parse(body.toString('utf8')) as { communities: Array<{ id: string }> };
+      res.communities.sort((a, b) => Number(a.id === zed.id) - Number(b.id === zed.id));
+      return Buffer.from(JSON.stringify(res));
+    };
+    await bob.community.refresh();
+    await internals(eve).sendContent(bob.riverId, { v: 1, t: 'ckeyReq', communityId: id, epoch: 0 });
+    await bob.dm.sync();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(
+      await serverDb.db.selectFrom('mailbox').selectAll().where('recipient', '=', eve.riverId).execute(),
+    ).toEqual([]);
+  });
+
   it('a key from a member who never held one is refused, with or without a made-up proof', async () => {
     const { alice, bob, id } = await crew();
     const eve = await person('Eve');
@@ -535,7 +641,7 @@ describe('community keys a server cannot inject', { timeout: 90_000 }, () => {
     expect(carol.riverId).toBeTruthy();
   });
 
-  it('normal rotation after a kick carries a proof; keys from older Rivers still work from trusted members', async () => {
+  it('normal rotation after a kick carries a proof; keys without one are refused, even from trusted members (2.18)', async () => {
     const { alice, bob, carol, id } = await crew();
     const eve = await person('Eve');
     await inject(
@@ -571,7 +677,8 @@ describe('community keys a server cannot inject', { timeout: 90_000 }, () => {
         ).epoch_claimed_at === null,
     );
 
-    // An older River rotates (no proof): Bob accepts it from Alice, whose profile he opened before.
+    // An older River rotates (no proof): refused since 2.18, even from Alice, whose profile Bob
+    // opened before.
     const next = newCommunityKey();
     await alice.community.api(
       `/communities/${id}/epoch`,
@@ -594,7 +701,8 @@ describe('community keys a server cannot inject', { timeout: 90_000 }, () => {
     });
     await bob.community.refresh();
     await bob.dm.sync();
-    await until(() => epochs(bob, id).includes(2));
+    await new Promise((r) => setTimeout(r, 300));
+    expect(epochs(bob, id)).toEqual([0, 1]);
   });
 
   it('a rotation that reaches nobody is asked for again and redone, with an honest notice meanwhile', async () => {

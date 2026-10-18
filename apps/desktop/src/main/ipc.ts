@@ -584,7 +584,8 @@ export function registerIpc(deps: IpcDeps): void {
     // Previews fetch the page from this computer, not through the proxy: none while one is on.
     if (deps.settings.get().privacy.proxy.mode !== 'off') return null;
     const url = safeExternalUrl(raw);
-    if (!url || !deps.previewDeps) return null;
+    // Only web pages have previews (not an email address or phone number).
+    if (!url || !/^https?:$/.test(url.protocol) || !deps.previewDeps) return null;
     return fetchPreview(url.toString(), deps.previewDeps).catch(() => null);
   });
   handle(IPC.usersLookup, (_e, username) =>
@@ -658,6 +659,27 @@ export function registerIpc(deps: IpcDeps): void {
     const url = safeExternalUrl(raw);
     if (!url) return false;
     const window = BrowserWindow.fromWebContents(event.sender);
+    // An email address or phone number (2.19): the mail or phone app, after the same question.
+    if (url.protocol === 'mailto:' || url.protocol === 'tel:') {
+      const mail = url.protocol === 'mailto:';
+      const ask = {
+        type: 'question' as const,
+        title: mail ? 'Write an email' : 'Call a number',
+        message: mail ? 'Write to this address in your mail app?' : 'Call this number with your phone app?',
+        detail: `${url.pathname}
+
+Only do this if you trust the person who sent it.`,
+        buttons: [mail ? 'Open mail app' : 'Call', 'Cancel'],
+        defaultId: 0,
+        cancelId: 1,
+      };
+      const { response } = window
+        ? await dialog.showMessageBox(window, ask)
+        : await dialog.showMessageBox(ask);
+      if (response !== 0) return false;
+      await shell.openExternal(url.href);
+      return true;
+    }
     const warnings = linkWarnings(url);
     const options = {
       type: warnings.some((w) => w.startsWith('⚠')) ? ('warning' as const) : ('question' as const),
@@ -896,15 +918,30 @@ export function securityStatus({
   };
 }
 
-/** A link from a message that may be offered to the browser: http(s) only, no embedded credentials. */
+/**
+ * A link from a message that may be offered to the browser: http(s) only, no embedded credentials.
+ * Since 2.19 also an email address (mailto:) or a phone number (tel:) for the mail or phone app —
+ * only a plain address or number: no ?subject=, ?body= or ?attach= a link could fill in for you.
+ */
 export function safeExternalUrl(raw: unknown): URL | null {
   if (typeof raw !== 'string' || raw.length > 2048) return null;
   try {
     const url = new URL(raw);
+    if (url.protocol === 'mailto:' || url.protocol === 'tel:') return plainContactUrl(url);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
     if (url.username || url.password) return null;
     return url;
   } catch {
     return null;
   }
+}
+
+const MAIL_ADDRESS = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63})+$/;
+const PHONE_NUMBER = /^\+?[0-9][0-9.-]{2,30}$/;
+
+function plainContactUrl(url: URL): URL | null {
+  if (url.search || url.hash || url.username || url.password || url.host) return null;
+  const path = url.pathname;
+  if (url.protocol === 'mailto:') return MAIL_ADDRESS.test(path) && path.length <= 254 ? url : null;
+  return PHONE_NUMBER.test(path) ? url : null;
 }

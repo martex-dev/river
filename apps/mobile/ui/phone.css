@@ -75,3 +75,33 @@ html:is([data-platform='android'], [data-platform='ios']) .toast {
   bottom: calc(env(safe-area-inset-bottom) + 64px);
   max-width: none;
 }
+
+/*
+ * Over a locked phone (Android, 2.18: a call answered on the lock screen; ui/shell.ts) only the
+ * full-screen call shows, without its "back to the conversation" button. Everything else of River
+ * (chats, settings, menus and dialogs) is hidden from sight, touch and screen readers until the
+ * phone is unlocked.
+ */
+html[data-over-lock] body > * {
+  visibility: hidden !important;
+}
+html[data-over-lock] .dm-call--full {
+  visibility: visible !important;
+}
+html[data-over-lock] .dm-call--full .dm-call__min {
+  visibility: hidden !important;
+}
+html[data-over-lock] body::after {
+  content: 'Unlock your phone to use River.';
+  position: fixed;
+  inset: 0;
+  /* Below everything River draws: the call shows above it wherever it is in the page. */
+  z-index: -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  background: #05080f;
+  color: #fff;
+}

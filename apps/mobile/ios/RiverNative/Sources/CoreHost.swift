@@ -229,7 +229,8 @@ public final class CoreHost: NSObject {
         case "messageBox":
             messageBox(id: id, a)
         case "openUrl":
-            if let s = a["url"] as? String, let url = URL(string: s), ["https", "http"].contains(url.scheme ?? "") {
+            // mailto: and tel: (2.19) are checked by the core first: a plain address or number only.
+            if let s = a["url"] as? String, let url = URL(string: s), ["https", "http", "mailto", "tel"].contains(url.scheme ?? "") {
                 UIApplication.shared.open(url)
             }
             answer(id, value: nil)

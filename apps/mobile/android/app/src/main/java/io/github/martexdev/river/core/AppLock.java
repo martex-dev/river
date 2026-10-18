@@ -171,13 +171,33 @@ public final class AppLock {
     box.addView(title);
     box.addView(unlock);
     FrameLayout root = activity.findViewById(android.R.id.content);
+    // Covered is not enough (2.18): what lies under the cover (River's interface) is also taken
+    // away from screen readers (TalkBack reads and taps views a cover only hides from sight) and
+    // from a keyboard, which would still type into a focused message box.
+    hiddenFromAccessibility.clear();
+    for (int i = 0; i < root.getChildCount(); i++) {
+      View under = root.getChildAt(i);
+      hiddenFromAccessibility.put(under, under.getImportantForAccessibility());
+      under.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+    }
+    View focused = activity.getCurrentFocus();
+    if (focused != null) focused.clearFocus();
     root.addView(box, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    box.setFocusable(true);
+    box.setFocusableInTouchMode(true);
+    box.requestFocus();
     cover = box;
   }
+
+  /** What the views under the cover were for screen readers before it went up. */
+  private final java.util.Map<View, Integer> hiddenFromAccessibility = new java.util.HashMap<>();
 
   private void hide() {
     if (cover == null) return;
     ((ViewGroup) cover.getParent()).removeView(cover);
     cover = null;
+    for (java.util.Map.Entry<View, Integer> e : hiddenFromAccessibility.entrySet())
+      e.getKey().setImportantForAccessibility(e.getValue());
+    hiddenFromAccessibility.clear();
   }
 }

@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { handleBack, HoldTap, isTextField, keyboardInset } from '../../mobile/ui/shell.ts';
+import {
+  handleBack,
+  HoldTap,
+  isOverLock,
+  isTextField,
+  keyboardInset,
+  setOverLock,
+} from '../../mobile/ui/shell.ts';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -48,6 +55,27 @@ describe("the phone's Back button", () => {
     const chats = env(0);
     expect(handleBack(chats.env)).toBe(false);
     expect(chats.back).toHaveBeenCalledOnce();
+  });
+
+  it('over a locked phone puts River away instead of leaving the call for the chats (2.18)', () => {
+    document.body.innerHTML =
+      '<div class="dm-call dm-call--full"><button class="dm-call__min">⌄</button></div>';
+    const min = vi.fn();
+    document.querySelector('.dm-call__min')!.addEventListener('click', min);
+    const close = vi.fn(() => true);
+    const { env: e, back } = env(1, close);
+    setOverLock(document.documentElement, true);
+    try {
+      expect(isOverLock(document)).toBe(true);
+      expect(handleBack(e)).toBe(false);
+      expect(min).not.toHaveBeenCalled();
+      expect(close).not.toHaveBeenCalled();
+      expect(back).not.toHaveBeenCalled();
+    } finally {
+      setOverLock(document.documentElement, false);
+    }
+    expect(isOverLock(document)).toBe(false);
+    expect(handleBack(e)).toBe(true);
   });
 });
 

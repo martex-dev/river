@@ -118,7 +118,11 @@ than per-member sender keys:
   ciphertext between communities, channels or fields.
 - The key travels only in the invite link's URL fragment (`#c=…&k=…`), which
   browsers and River never send to a server. Joining verifies the key opens the
-  community metadata before it is stored.
+  community metadata before it is stored. The community ID comes from the
+  server's answer, so since 2.18 an invite never adds a key to a community the
+  device already holds keys for (a server could otherwise answer any invite
+  with the ID of a community you are in and a key it made); keys missed there
+  arrive with a proof, as for any member.
 - **Reactions**: the server groups identical reactions by a tag
   `HMAC-SHA256(HKDF-SHA256(communityKey, info="river-reaction-tag-v1|<communityId>"), messageId‖"|"‖emoji)`
   truncated to 128 bits; the emoji itself is sealed. Clients show a reaction
@@ -144,7 +148,10 @@ than per-member sender keys:
   epoch with a compare-and-set, generates a fresh 32-byte key, seals its own
   profile with it and sends it inside libsignal messages to the remaining
   members whose sealed profile opens with a key it held before (2.11; a member
-  the server lists without ever holding a key gets nothing). Since 2.11 the
+  the server lists without ever holding a key gets nothing). Since 2.18 a
+  profile sealed v1 (not bound to its member, see below) counts for this, and
+  for answering key requests, only when the identity key it names is the one
+  libsignal holds for that member; a v2 profile is bound to its member. Since 2.11 the
   key travels with a **proof**: the new key sealed (AES-256-GCM, purpose
   `epoch:<n>`) under the key of the epoch before it. New content is sealed with
   the newest key; members keep older keys to read history (a value is opened
@@ -170,6 +177,9 @@ than per-member sender keys:
   removed, not what they could already read, and there is no per-message forward
   secrecy inside a community. Until the rotating member's message reaches
   everyone, a member may still seal a few messages with the previous key.
+  An edit, and a reaction, is sealed with the key of the message it belongs to
+  (its reaction tags depend on that key), so editing a message from before a
+  rotation leaves the new text readable to someone who held that older key.
   Rotation needs members on 0.5.0+ (it travels over direct-message sessions).
   The server decides who is a member: a member who was removed but whom the
   server keeps listing still receives the next key from the rotator and can
@@ -228,7 +238,7 @@ every change is readable by the previous releases and accepts what they send:
 
 | Change                   | 2.11 sends                                                                 | 2.11 accepts                                                                                                                                                                                                                                                      | Later release                                                                         |
 | ------------------------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Community key proof      | `ckey` with `wrap`/`prev` (ignored by older Rivers); `ckeyReq` with `have` | proven keys; unproven keys (older Rivers) only from a member whose sealed profile opened with a key held before, naming the identity key that member's messages use, and only if the sender's current profile opens with the offered key (`ACCEPT_UNPROVEN_KEYS`) | **2.14**: stop accepting unproven keys (`ACCEPT_UNPROVEN_KEYS = false`)               |
+| Community key proof      | `ckey` with `wrap`/`prev` (ignored by older Rivers); `ckeyReq` with `have` | proven keys; unproven keys (older Rivers) only from a member whose sealed profile opened with a key held before, naming the identity key that member's messages use, and only if the sender's current profile opens with the offered key (`ACCEPT_UNPROVEN_KEYS`) | **2.18 (done)**: unproven keys refused (`ACCEPT_UNPROVEN_KEYS = false`)               |
 | Associated data v2       | v1 (`SEAL_V2_DEFAULT = false`)                                             | v2 and v1                                                                                                                                                                                                                                                         | **2.12 (done)**: send v2 (`SEAL_V2_DEFAULT = true`); v1 stays readable for old values |
 | Rotation adoption report | `POST …/epoch/adopted` (older servers: ignored)                            | —                                                                                                                                                                                                                                                                 | none                                                                                  |
 | Verification marks       | the verified key (33 bytes)                                                | the verified key, and the one-byte mark of older versions (treated as "the stored key was verified")                                                                                                                                                              | none                                                                                  |
@@ -236,7 +246,8 @@ every change is readable by the previous releases and accepts what they send:
 
 What stays possible during the transition: a member who held a genuine key at
 some point (including someone removed whom the server keeps listing) can, with
-the server, hand an unproven key to others until 2.14; v1-sealed messages and
+the server, hand an unproven key to others until 2.18, when River stopped
+accepting them (Rivers before 2.11 can no longer hand out keys); v1-sealed messages and
 profiles can still be re-attributed or swapped: since 2.12 only values sealed
 v1 before then, or by Rivers that have not updated (v1 stays readable, so the
 server can still re-attribute or replay those).

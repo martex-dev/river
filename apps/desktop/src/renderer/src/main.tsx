@@ -27,6 +27,7 @@ import './styles/skins.css';
 import './styles/design.css';
 import './styles/motion.css';
 import './styles/looks.css';
+import './styles/messaging.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';

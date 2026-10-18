@@ -6,6 +6,91 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.20.0] - 2026-10-18
+
+**A security audit's fourteen fixes, and messaging that feels like Telegram: big emoji, reply previews, saved replies, effects.**
+
+### Security
+
+- Android: a call answered on the lock screen shows only the call there. Chats,
+  settings and the rest of River need the phone unlocked. River no longer shows
+  over the lock screen because another app or a web page asks it to; it does
+  that only for a call it knows about.
+- Lock River (Android and iPhone): while River is locked, screen readers and a
+  keyboard can no longer reach the interface under the lock cover.
+- Communities: opening an invite link never changes the key of a community you
+  are already in, so a server cannot slip a key it knows into one that way.
+- Communities: a channel stays with the community it belongs to. A server that
+  lists it under another community can no longer make River seal what you
+  write there with that other community's key.
+- Communities: keys are handed only to members whose profile is really theirs.
+  An old-style profile (from before 2.12) now counts only when it names the
+  identity key River holds for that person, so a server cannot get keys by
+  copying someone's old profile into an account of its own.
+- Calls through the server relay: when someone's voice key arrives again (as
+  it does after a reconnect), frames recorded earlier stay refused, so the
+  server cannot play back old audio.
+- Communities: a new community key is accepted only with proof that whoever
+  sent it held the key before it (as planned for 2.14). Rivers before 2.11,
+  which send no proof, can no longer hand out community keys.
+- Server: server mute (and a stage's audience) and server deafen now also hold
+  for voice that goes through the server relay, not only in the muted
+  person's own app.
+- Server: only a signed-in file upload may send a large body. Other requests,
+  and uploads without a valid session, are refused before the server reads
+  them.
+- Server: connecting no longer tells a member who is talking in voice channels
+  they cannot see.
+- Proxy (computers): through a proxy, River's live connection to a server
+  given by IP address checked the server's certificate against the proxy's
+  name instead of the server's. It now always checks it against the server.
+- Updates (computers): a test version that was still downloading when you
+  switched back to Stable is no longer installed.
+- Android: River's interface can no longer read River's own files (its
+  encrypted database, key file or logs) through the app framework's file
+  access; only River's client core reaches its storage.
+
+**Messaging, part 2: big emoji, reply previews, saved replies, tags, effects.**
+
+### Added
+
+- **Big emoji**: a message of only one to three emoji shows large and without a
+  bubble, as in Telegram, in direct messages, groups and channels, on phones and
+  computers.
+- **Reply previews**: the bar above the message box says who you are answering
+  and shows the message in one line ("Photo", "Voice message", "Poll: …" when it
+  has no text; spoilers stay hidden). Tap it, or the quote above a reply, to go to
+  that message (direct messages, groups and channels).
+- **Saved replies**: save text you send often and type / and its shortcut in any
+  message box (direct messages, groups and channels), or use the saved-replies
+  button. Kept encrypted on this device only: River has no way yet to copy
+  settings like these to your other devices.
+- **Tags for Note to self and saved messages**: give notes and saved channel
+  messages up to five tags and show only the ones with a tag. Kept encrypted on
+  this device only.
+- **Message effects**: send a message with confetti, hearts or fireworks from the
+  send menu (⏰ on computers, hold Send on phones). It plays once for the sender
+  and for each reader the first time they see it, and never with Calm mode or
+  reduced motion. The effect's name travels inside the end-to-end encrypted
+  message; River 2.17 and 2.18 ignore it and show the message as always.
+- **Count archived chats** (Settings → Notifications), off by default: archived
+  chats and message requests no longer count on the phone's Chats badge, the
+  computer's Home badge, the window title and River's icon (Telegram behaviour).
+- **Forward without the sender's name**: the Forward dialog has "Show sender's
+  name" (on by default); off, only the text is sent.
+- **Email addresses and phone numbers**: `mailto:` and `tel:` links in messages
+  open the mail or phone app after a question — only a plain address or number,
+  never with a subject, body or attachment filled in.
+
+### Changed
+
+- **Long links are shortened in messages** (the site name always shows); hover
+  for the whole address, or right-click / long-press for a sheet with the whole
+  address, Open and Copy.
+- **Phone Calls tab: the chosen All / Missed segment is an accent pill** that
+  stands out at least 3:1 in every theme; in dark themes it was almost invisible.
+- The ⏰ button next to Send is now called "More ways to send".
+
 ## [2.19.0] - 2026-10-18
 
 **Group calls in group chats, and call links.**

@@ -98,6 +98,25 @@ public class MainActivity extends BridgeActivity implements CoreHost.Screen {
               }
             });
     if (getBridge() != null) {
+      // The interface's WebView reads River's interface files and nothing else (2.18, UiPaths).
+      getBridge()
+          .setWebViewClient(
+              new com.getcapacitor.BridgeWebViewClient(getBridge()) {
+                @Override
+                public android.webkit.WebResourceResponse shouldInterceptRequest(
+                    WebView view, android.webkit.WebResourceRequest request) {
+                  if (UiPaths.refused(request.getUrl().getPath())) {
+                    return new android.webkit.WebResourceResponse(
+                        "text/plain",
+                        "utf-8",
+                        404,
+                        "Not Found",
+                        new java.util.HashMap<>(),
+                        new java.io.ByteArrayInputStream(new byte[0]));
+                  }
+                  return super.shouldInterceptRequest(view, request);
+                }
+              });
       getBridge()
           .addWebViewListener(
               new WebViewListener() {
@@ -225,6 +244,7 @@ public class MainActivity extends BridgeActivity implements CoreHost.Screen {
     if (on) handler.postDelayed(ringTimeout, RING_OVER_LOCK_MS);
     if (on == overLock) return;
     overLock = on;
+    reportOverLock();
     if (android.os.Build.VERSION.SDK_INT >= 27) {
       setShowWhenLocked(on);
       setTurnScreenOn(on);
@@ -301,18 +321,48 @@ public class MainActivity extends BridgeActivity implements CoreHost.Screen {
           .start();
       return;
     }
-    if (intent.getBooleanExtra(CoreHost.EXTRA_CALL, false)) showOverLock(true);
     int notification = intent.getIntExtra(CoreHost.EXTRA_NOTIFICATION, 0);
-    if (notification > 0) {
-      core.notificationTapped(notification, intent.getStringExtra(CoreHost.EXTRA_NOTIFICATION_TOKEN));
-    }
+    boolean tapped =
+        notification > 0
+            && core.notificationTapped(notification, intent.getStringExtra(CoreHost.EXTRA_NOTIFICATION_TOKEN));
+    // Over the lock screen only for a call River knows of (2.18): its own call notification (the
+    // token matched), or a call answered on its call screen or on now. MainActivity is exported, so
+    // the extra alone may come from any app or web page.
+    if (intent.getBooleanExtra(CoreHost.EXTRA_CALL, false) && (tapped || core.callMayShowOverLock()))
+      showOverLock(true);
     Uri data = intent.getData();
     if (data != null && "river".equals(data.getScheme())) core.deepLink(data.toString());
   }
 
-  private void shareToUi(String event) {
+  private boolean shareToUi(String event) {
     com.getcapacitor.PluginHandle handle = getBridge() == null ? null : getBridge().getPlugin("RiverCore");
-    if (handle != null && handle.getInstance() instanceof RiverCorePlugin plugin) plugin.onEvent(event);
+    if (handle != null && handle.getInstance() instanceof RiverCorePlugin plugin) {
+      plugin.onEvent(event);
+      return true;
+    }
+    return false;
+  }
+
+  /** What the interface was last told: River shows over a locked phone (2.18). */
+  private boolean reportedOverLock;
+
+  /**
+   * Tells the interface whether River shows over a locked phone (2.18). Then it shows only the
+   * call (apps/mobile/ui/phone.css): chats, settings and linking a device need the phone unlocked,
+   * so someone holding a locked phone cannot use River through a call answered on it.
+   */
+  private void reportOverLock() {
+    android.app.KeyguardManager keyguard = getSystemService(android.app.KeyguardManager.class);
+    boolean locked = overLock && (keyguard == null || keyguard.isKeyguardLocked());
+    if (locked == reportedOverLock) return;
+    if (shareToUi("{\"channel\":\"river:app:overLock\",\"args\":[" + locked + "]}")) reportedOverLock = locked;
+  }
+
+  @Override
+  public void onWindowFocusChanged(boolean hasFocus) {
+    super.onWindowFocusChanged(hasFocus);
+    // The phone was unlocked while River showed over it (or locked again).
+    reportOverLock();
   }
 
   @Override
@@ -328,6 +378,7 @@ public class MainActivity extends BridgeActivity implements CoreHost.Screen {
   public void onResume() {
     super.onResume();
     lock.onResume();
+    reportOverLock();
     askForNotifications();
   }
 

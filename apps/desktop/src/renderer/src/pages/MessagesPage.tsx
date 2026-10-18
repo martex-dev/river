@@ -39,7 +39,29 @@ import {
   type ScheduledView,
   type ChatFolder,
   MAX_FOLDERS,
+  MESSAGE_EFFECTS,
+  type MessageEffect,
 } from '../../../shared/dm.ts';
+import { bigEmojiCount, replyPreview } from '../components/message-kinds.ts';
+import { EFFECT_LABELS, markEffectSeen, playEffect, useMessageEffects } from '../appearance/effects.tsx';
+import { quiet } from '../appearance/delight.tsx';
+import {
+  matchReplies,
+  savedReplyQuery,
+  SavedRepliesMenu,
+  SavedReplySuggestions,
+  useSavedReplyList,
+} from '../dm/saved-replies.tsx';
+import {
+  hasTag,
+  noteTagKey,
+  TagChips,
+  TagDialog,
+  TagFilter,
+  tagsIn,
+  useMessageTags,
+  useTags,
+} from '../dm/tags.tsx';
 import { play } from '../community/sound.ts';
 import { useCommunity } from '../community/store.ts';
 import {
@@ -763,6 +785,20 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
     });
   }, [c.riverId, c.kind, callBusy]);
   const pinned = messages.filter((m) => m.pinned);
+  // A received message's effect plays the first time you see it (2.19).
+  useMessageEffects(messages);
+  // Note to self (2.19): show only the notes with one tag.
+  const tags = useTags();
+  const [tagFilter, setTagFilter] = useState<{ peer: string; tag: string } | null>(null);
+  const noteTags = c.self
+    ? tagsIn(
+        tags,
+        messages.map((m) => noteTagKey(m.id)),
+      )
+    : [];
+  const activeTag =
+    c.self && tagFilter?.peer === c.riverId && noteTags.includes(tagFilter.tag) ? tagFilter.tag : null;
+  const shown = activeTag ? messages.filter((m) => hasTag(tags, noteTagKey(m.id), activeTag)) : messages;
   const myName = useRiver((r) => r.identity?.displayName) ?? 'You';
   const myId = dm.myId ?? '';
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1308,6 +1344,13 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
       {selection.peer === c.riverId && (
         <SelectionToolbar conversation={c} messages={messages} myName={myName} />
       )}
+      {c.self && (
+        <TagFilter
+          tags={noteTags}
+          value={activeTag}
+          onChange={(tag) => setTagFilter(tag === null ? null : { peer: c.riverId, tag })}
+        />
+      )}
       <GalleryContext.Provider value={gallery}>
         <div
           className="chat__messages"
@@ -1333,8 +1376,8 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
               This is the beginning of your conversation with {c.name}. Messages are end-to-end encrypted.
             </p>
           </div>
-          {messages.map((m, i) => {
-            const prev = messages[i - 1];
+          {shown.map((m, i) => {
+            const prev = shown[i - 1];
             const between = callsBetween(calls, prev?.sentAt ?? null, m.sentAt);
             // The day changes after whatever came last: the previous message, or a call after it.
             const before = between.at(-1)?.startedAt ?? prev?.sentAt;
@@ -1369,7 +1412,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                     myName={myName}
                     myId={myId}
                     replied={m.replyTo ? messages.find((x) => x.id === m.replyTo) : undefined}
-                    last={i === messages.length - 1}
+                    last={i === shown.length - 1}
                   />
                 )}
               </div>
@@ -1663,6 +1706,51 @@ function CallNote({ call }: { call: CallView }): ReactElement {
 /** Double-tap a message for this reaction (2.10.1). */
 const QUICK_REACTION = '❤️';
 
+/** Scrolls a message into the middle of the conversation and lights it up for a moment. */
+function flashMessage(el: HTMLElement): void {
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.add('is-flash');
+  window.setTimeout(() => el.classList.remove('is-flash'), 1600);
+}
+
+/**
+ * Goes to a message in a conversation (search results, replies, the reply bar — 2.19): at once if
+ * it is on screen, else after loading the conversation back to it.
+ */
+export function jumpToDmMessage(peer: string, m: { id: string; sentAt: string }): void {
+  const el = document.getElementById(`dm-${m.id}`);
+  if (el) return flashMessage(el);
+  const whenShown = (tries: number): void => {
+    const found = document.getElementById(`dm-${m.id}`);
+    if (found) return flashMessage(found);
+    if (tries > 0) window.requestAnimationFrame(() => whenShown(tries - 1));
+  };
+  void useDm
+    .getState()
+    .loadSince(peer, m.sentAt)
+    .then(() => whenShown(20));
+}
+
+/** The effect a message was sent with (2.19): a tap plays it again (not with Calm mode or reduced motion). */
+function EffectReplay({ effect }: { effect: MessageEffect }): ReactElement | null {
+  const label = EFFECT_LABELS[effect];
+  if (quiet()) return null;
+  return (
+    <button
+      type="button"
+      className="msg__effect"
+      aria-label={`Play the ${label.name.toLowerCase()} effect again`}
+      title={`Sent with ${label.name.toLowerCase()}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        playEffect(effect);
+      }}
+    >
+      {label.emoji}
+    </button>
+  );
+}
+
 function DmMessage(props: {
   m: DirectMessageView;
   grouped: boolean;
@@ -1678,6 +1766,8 @@ function DmMessage(props: {
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   const [forwarding, setForwarding] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [tagging, setTagging] = useState(false);
+  const myTags = useMessageTags((s) => (c.self ? s.tags?.[noteTagKey(m.id)] : undefined));
   const selecting = useSelection((s) => s.peer === c.riverId);
   const selected = useSelection((s) => s.peer === c.riverId && s.ids.includes(m.id));
   const name = m.mine ? props.myName : c.kind === 'group' ? m.senderName : c.name;
@@ -1735,24 +1825,35 @@ function DmMessage(props: {
     });
   };
 
+  // The message it answers (2.19): who and a one-line preview; a tap goes to it.
+  const replied = props.replied;
   const reply = m.replyTo ? (
-    <div className="msg__reply">
-      <ReplyIcon size={13} />
-      {props.replied ? (
-        <>
-          <strong>{props.replied.mine ? props.myName : props.replied.senderName}</strong>
-          <span className="msg__reply-text">{props.replied.text.slice(0, 120) || 'Attachment'}</span>
-        </>
-      ) : (
+    replied ? (
+      <button
+        type="button"
+        className="msg__reply"
+        title="Show the message this replies to"
+        onClick={() => jumpToDmMessage(c.riverId, replied)}
+      >
+        <ReplyIcon size={13} />
+        <strong>{replied.mine ? props.myName : replied.senderName}</strong>
+        <span className="msg__reply-text">{replyPreview(replied)}</span>
+      </button>
+    ) : (
+      <div className="msg__reply">
+        <ReplyIcon size={13} />
         <span className="muted">Original message not available</span>
-      )}
-    </div>
+      </div>
+    )
   ) : null;
+  // Only 1–3 emoji (2.19): big, without a bubble.
+  const jumbo =
+    !m.deleted && !editing && !m.attachments.length && !m.poll && !m.embed ? bigEmojiCount(m.text) : 0;
 
   return (
     <div
       id={`dm-${m.id}`}
-      className={`msg ${props.grouped ? 'msg--grouped' : ''} ${m.mine ? 'msg--mine' : ''} ${editing ? 'is-editing' : ''} ${selected ? 'is-selected' : ''}`}
+      className={`msg ${props.grouped ? 'msg--grouped' : ''} ${m.mine ? 'msg--mine' : ''} ${editing ? 'is-editing' : ''} ${selected ? 'is-selected' : ''} ${jumbo ? `msg--jumbo msg--jumbo-${jumbo}` : ''}`}
       aria-selected={selecting ? selected : undefined}
       {...touch}
       onClickCapture={(e) => {
@@ -1822,7 +1923,7 @@ function DmMessage(props: {
               {phone && <Stamp m={m} />}
             </div>
           ) : (
-            <div className="msg__text">
+            <div className={`msg__text ${jumbo ? 'msg__text--jumbo' : ''}`}>
               {m.text && (
                 <RichText
                   text={m.text}
@@ -1831,9 +1932,11 @@ function DmMessage(props: {
                 />
               )}
               {m.editedAt && !phone && <span className="msg__edited"> (edited)</span>}
+              {m.effect && <EffectReplay effect={m.effect} />}
               {phone && !!m.text && <Stamp m={m} />}
             </div>
           )}
+          {c.self && <TagChips tags={myTags} />}
           {!m.deleted && !m.mine && m.text && <InviteCard text={m.text} />}
           {m.embed && <LinkCard embed={m.embed} />}
           {m.poll && (
@@ -1945,6 +2048,7 @@ function DmMessage(props: {
       {forwarding && (
         <ForwardDialog text={m.text} from={{ name, channel: '' }} onClose={() => setForwarding(false)} />
       )}
+      {tagging && <TagDialog tagKey={noteTagKey(m.id)} onClose={() => setTagging(false)} />}
       {menu && (
         <Popover x={menu.x} y={menu.y} onClose={() => setMenu(null)} className="menu">
           {phone && canReply && (
@@ -2005,6 +2109,17 @@ function DmMessage(props: {
               }}
             >
               Forward
+            </MenuItem>
+          )}
+          {c.self && (
+            <MenuItem
+              icon={<span aria-hidden="true">#</span>}
+              onClick={() => {
+                setMenu(null);
+                setTagging(true);
+              }}
+            >
+              {myTags?.length ? 'Edit tags…' : 'Add tags…'}
             </MenuItem>
           )}
           {c.kind === 'group' && !m.mine && !m.deleted && (
@@ -2376,26 +2491,14 @@ function ConversationSearch(props: { peer: string; onClose(): void }): ReactElem
     return () => window.clearTimeout(t);
   }, [query, props.peer]);
   const [date, setDate] = useState('');
-  const flash = (el: HTMLElement): void => {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    el.classList.add('is-flash');
-    window.setTimeout(() => el.classList.remove('is-flash'), 1600);
-  };
   /** Waits (briefly) for a message to be on screen after loading older ones. */
   const whenShown = (id: string, tries = 20): void => {
     const el = document.getElementById(`dm-${id}`);
-    if (el) return flash(el);
+    if (el) return flashMessage(el);
     if (tries > 0) window.requestAnimationFrame(() => whenShown(id, tries - 1));
   };
-  const jump = (m: DirectMessageView): void => {
-    const el = document.getElementById(`dm-${m.id}`);
-    if (el) return flash(el);
-    // Older than what is shown: load back to it first (2.10.7).
-    void useDm
-      .getState()
-      .loadSince(props.peer, m.sentAt)
-      .then(() => whenShown(m.id));
-  };
+  // Older than what is shown: loaded back to it first (2.10.7).
+  const jump = (m: DirectMessageView): void => jumpToDmMessage(props.peer, m);
   /** Jump to the first message on or after a day (2.10.7). */
   const jumpToDate = async (day: string): Promise<void> => {
     const start = new Date(`${day}T00:00:00`);
@@ -2536,6 +2639,19 @@ ${shared}`
   const [later, setLater] = useState<{ x: number; y: number } | null>(null);
   const [scheduling, setScheduling] = useState(false);
   const phone = useRiver((r) => isPhone(r.info?.platform));
+  // Saved replies (2.19): "/" and a shortcut, or the button.
+  const replies = useSavedReplyList();
+  const [repliesMenu, setRepliesMenu] = useState<{ x: number; y: number } | null>(null);
+  const [hushed, setHushed] = useState<string | null>(null);
+  const [replyIndex, setReplyIndex] = useState(0);
+  const replyQuery = hushed === text ? null : savedReplyQuery(text);
+  const replyChoices = replyQuery === null ? [] : matchReplies(replies, replyQuery);
+  const activeReply = Math.min(replyIndex, Math.max(0, replyChoices.length - 1));
+  const pickReply = (r: { text: string }): void => {
+    setText(r.text);
+    setReplyIndex(0);
+    ref.current?.focus();
+  };
   // Whether the box is still there, for when a send fails later.
   useGrowToFit(ref, text, phone);
   const draftKey = `d:${c.riverId}`;
@@ -2561,7 +2677,9 @@ ${shared}`
     }
     setText((now) => (now.trim() ? `${value}\n${now}` : value));
   };
-  const send = async (options: { silent?: boolean; sendAt?: string } = {}): Promise<void> => {
+  const send = async (
+    options: { silent?: boolean; sendAt?: string; effect?: MessageEffect } = {},
+  ): Promise<void> => {
     const value = text.trim();
     const files = props.pending;
     if ((!value && !files.length) || uploading) return;
@@ -2612,6 +2730,7 @@ ${shared}`
       ...(attachments ? { attachments } : {}),
       ...(options.silent ? { silent: true } : {}),
       ...(embed ? { embed } : {}),
+      ...(options.effect ? { effect: options.effect } : {}),
     });
     setUploading(null);
     if (!sent) restore(value, replyTo);
@@ -2619,6 +2738,11 @@ ${shared}`
       play('send');
       props.onPending([]);
       dm.handle({ t: 'message', message: sent, isNew: false, senderName: '' });
+      // You see your own effect as it goes (2.19).
+      if (options.effect) {
+        markEffectSeen([sent.id]);
+        playEffect(options.effect);
+      }
     }
   };
 
@@ -2670,7 +2794,32 @@ ${shared}`
           >
             🕓 Schedule message…
           </MenuItem>
+          {MESSAGE_EFFECTS.map((effect) => (
+            <MenuItem
+              key={effect}
+              onClick={() => {
+                setLater(null);
+                void send({ effect });
+              }}
+            >
+              {EFFECT_LABELS[effect].emoji} Send with {EFFECT_LABELS[effect].name.toLowerCase()}
+            </MenuItem>
+          ))}
         </Popover>
+      )}
+      {repliesMenu && (
+        <SavedRepliesMenu
+          x={repliesMenu.x}
+          y={repliesMenu.y}
+          onClose={() => setRepliesMenu(null)}
+          onPick={(r) => {
+            setRepliesMenu(null);
+            pickReply(r);
+          }}
+        />
+      )}
+      {replyChoices.length > 0 && (
+        <SavedReplySuggestions choices={replyChoices} active={activeReply} onPick={pickReply} />
       )}
       {scheduling && (
         <ScheduleDialog
@@ -2683,9 +2832,18 @@ ${shared}`
       )}
       {replyTo && (
         <div className="reply-bar">
-          <span>
-            Replying to <strong>{replyTo.mine ? 'yourself' : replyTo.senderName || c.name}</strong>
-          </span>
+          {/* Who and what you are answering (2.19); a tap shows that message. */}
+          <button
+            type="button"
+            className="reply-bar__jump"
+            title="Show the message"
+            onClick={() => jumpToDmMessage(c.riverId, replyTo)}
+          >
+            <span>
+              Replying to <strong>{replyTo.mine ? 'yourself' : replyTo.senderName || c.name}</strong>
+            </span>
+            <span className="reply-bar__preview">{replyPreview(replyTo)}</span>
+          </button>
           <button
             className="icon-btn"
             aria-label="Cancel reply"
@@ -2758,6 +2916,25 @@ ${shared}`
             }
           }}
           onKeyDown={(e) => {
+            // Choosing a saved reply: arrows move, Enter or Tab picks, Escape closes the list.
+            if (replyChoices.length > 0) {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                const d = e.key === 'ArrowDown' ? 1 : -1;
+                setReplyIndex((activeReply + d + replyChoices.length) % replyChoices.length);
+                return;
+              }
+              if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                pickReply(replyChoices[activeReply]!);
+                return;
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setHushed(text);
+                return;
+              }
+            }
             if (e.key === 'Escape' && replyTo) useDm.setState({ replyTo: null });
             if (e.key === 'ArrowUp' && text === '') {
               // Your last message with text to edit (not a timer notice, a file or a voice message).
@@ -2792,6 +2969,17 @@ ${shared}`
           {phone ? <EmojiIcon size={24} /> : <SmileIcon size={20} />}
         </button>
         {!text.trim() && props.pending.length === 0 && (
+          <button
+            type="button"
+            className="icon-btn composer__replies"
+            aria-label="Saved replies"
+            title={phone ? undefined : 'Saved replies (or type /)'}
+            onClick={(e) => setRepliesMenu(nearButton(e.currentTarget, { width: 340, height: 360 }))}
+          >
+            <span aria-hidden="true">💬</span>
+          </button>
+        )}
+        {!text.trim() && props.pending.length === 0 && (
           <MyStickersButton disabled={!!uploading} onPick={(file) => void sendVoice(file)} />
         )}
         {/* Always there, so typing (or a shared file arriving) never ends a recording. */}
@@ -2804,8 +2992,8 @@ ${shared}`
           <button
             type="button"
             className="icon-btn"
-            aria-label="Send later or without sound"
-            title="Send later or without sound"
+            aria-label="More ways to send"
+            title="Send later, without sound or with an effect"
             onClick={(e) => setLater({ x: e.clientX - 200, y: e.clientY - 110 })}
           >
             ⏰

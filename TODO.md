@@ -20,7 +20,9 @@ Plan: [docs/product/road-to-3.md](docs/product/road-to-3.md). Many releases, one
 - [x] 2.18.0 Looks: wallpapers, accent picker, bubble shapes, theme codes, live preview, delight with Calm mode
 - [x] 2.18.1 Phone audit: 18 fixes (Back inside screens, editing on phones, growing composer, menus, opaque call screen, picture-in-picture, voice lobby, tap targets, phone wording)
 - [x] 2.19.0 Group calls in group chats (up to 50, community voice engine), Join bar, call links with Ask to join
-- [ ] 2.19.x Polish for each phone screen
+- [x] 2.20.0 Security audit (14 fixes) and messaging part 2 (big emoji, reply previews, saved replies, tags, effects, badge without archived chats, safe mailto/tel)
+- [ ] Owed: a dedicated audit of direct messages, linking and backups (the 2.20 audit only spot-checked them)
+- [ ] 2.20.x Polish for each phone screen
 - [ ] 2.14.x Easy start: install to first chat in under a minute, one-screen profile, invite links that open the app; community keys need a proof
 - [ ] 2.15.x Group calls, call quality, call links — group calls in group chats and call links built, unreleased (ring with "Group call · N people", Join bar, leave and rejoin, mesh up to 8 then the encrypted relay, call history, Ask to join / Let in); still to try with real phones (ringing screen, picture-in-picture) and with many people on a real network
 - [ ] 2.16.x Voice channels and meetings: bigger rooms, grid and speaker views, raise hand, stage
@@ -29,6 +31,9 @@ Plan: [docs/product/road-to-3.md](docs/product/road-to-3.md). Many releases, one
   - [x] Chat wallpapers (app and per chat; doodles, gradients, colour, photo), accent picker, bubble shapes, theme codes, live preview, reaction bursts, Calm mode
   - [ ] Alternative app icons — skipped for now: Android launcher aliases can drop home-screen shortcuts and restart the app; Windows taskbars show the pinned shortcut's icon
 - [ ] 2.19.x Messaging, part 2
+  - [x] Big emoji, reply previews with jump, saved replies (/ and a button, this device only), tags for Note to self and saved messages, message effects (Calm mode and reduced motion respected; 2.18 apps ignore them), Count archived chats, Calls segment contrast, shortened links with the whole address, safe mailto:/tel:, forward without the sender's name
+  - [ ] Copy saved replies and tags to linked devices (needs a sync path for settings)
+  - [ ] Richer editor, more sticker and emoji tools
 - [ ] 2.20.x Privacy, part 2: less metadata, padding, proxy-friendly connections
 - [ ] 2.21.x Whole-app sweep
 
@@ -65,7 +70,7 @@ Audit and plan: [docs/product/telegram-parity.md](docs/product/telegram-parity.m
 - [x] 2.11.1 Calls answered or declined on another device stop the others ringing; ringing stops when the caller hangs up even with the screen off; phone-style call screens
 - [x] Trust audit: identity changes, own-device copies, community key proofs, stuck rotations, v2 associated data (receiving), call-signal replays, username holds and River ID tombstones (CRYPTOGRAPHY.md §4b)
 - [x] 2.12: seal community messages and profiles with v2 associated data (`SEAL_V2_DEFAULT = true` in `sealed.ts`) once 2.11 is out on every platform
-- [ ] 2.14: refuse community keys without a proof (`ACCEPT_UNPROVEN_KEYS = false` in `community-service.ts`)
+- [x] 2.14: refuse community keys without a proof (`ACCEPT_UNPROVEN_KEYS = false` in `community-service.ts`; done in 2.18)
 - [ ] Idempotent channel resend: `send` takes the outbox id so a reply lost while going offline cannot post twice (needs server de-duplication)
 - [x] Channel history: main returns `hasMore` (and where the next page starts) so pages of undecryptable messages do not end the history early; messages sharing a time at a page boundary are no longer skipped
 - [ ] Decide: bind River IDs to identity keys so an ID cannot be registered first on another server (architecture decision for the maintainer)

@@ -1,7 +1,7 @@
 import { Agent as HttpAgent, type ClientRequestArgs } from 'node:http';
 import { connect as netConnect, isIP, type Socket } from 'node:net';
 import type { Duplex } from 'node:stream';
-import { connect as tlsConnect } from 'node:tls';
+import { checkServerIdentity, connect as tlsConnect, type ConnectionOptions } from 'node:tls';
 import type { ProxySettings } from '../shared/settings.ts';
 
 /**
@@ -226,6 +226,22 @@ export async function connectThroughProxy(
 }
 
 /**
+ * TLS to the server inside a proxy tunnel. The certificate is checked against the server's own
+ * name or address (2.18): for a server given by IP address Node would otherwise check it against
+ * the host the tunnel socket was opened to, which is the proxy, so whoever ran the proxy could
+ * have answered with a certificate for the proxy's own name.
+ */
+export function tunnelTls(tunnel: Duplex, server: string): ConnectionOptions {
+  return {
+    socket: tunnel,
+    host: server,
+    ...(isIP(server) ? {} : { servername: server }),
+    checkServerIdentity: (_host, cert) => checkServerIdentity(server, cert),
+    ALPNProtocols: ['http/1.1'],
+  };
+}
+
+/**
  * A Node HTTP(S) agent whose every connection is a tunnel through the proxy (for the `ws`
  * WebSocket client and the proxy check). `secure`: TLS to the server inside the tunnel, with the
  * usual certificate checks.
@@ -252,12 +268,7 @@ export class ProxyAgent extends HttpAgent {
     connectThroughProxy(this.proxy, host, port).then(
       (tunnel) => {
         if (!this.secure) return callback?.(null, tunnel);
-        const secured = tlsConnect({
-          socket: tunnel,
-          ...(isIP(servername) ? {} : { servername }),
-          ALPNProtocols: ['http/1.1'],
-        });
-        callback?.(null, secured);
+        callback?.(null, tlsConnect(tunnelTls(tunnel, servername)));
       },
       (err: Error) => callback?.(err, undefined as unknown as Duplex),
     );

@@ -15,6 +15,12 @@ import { nullLogger } from '../../apps/desktop/src/main/logger.ts';
 import { migrateDatabase, type LocalDatabase } from '../../apps/desktop/src/main/storage/database.ts';
 import { newDatabaseKey } from '../../apps/desktop/src/main/storage/key-file.ts';
 import { CLIENT_MIGRATIONS } from '../../apps/desktop/src/main/storage/migrations.ts';
+import { z } from 'zod';
+import {
+  attachmentPointerSchema,
+  linkEmbedSchema,
+  pollInputSchema,
+} from '../../apps/desktop/src/shared/community-actions.ts';
 import type { DmEvent } from '../../apps/desktop/src/shared/dm.ts';
 import type { LinkProgress } from '../../apps/desktop/src/shared/ipc.ts';
 import { tally, voteEmoji } from '../../apps/desktop/src/shared/poll.ts';
@@ -1726,5 +1732,156 @@ describe('mentions in groups (2.17)', () => {
     expect(of('@everyone leaving at 8')).toMatchObject({ mentionsMe: true, mentionKind: 'everyone' });
     // Your own messages never mention you.
     expect(of('who is driving?').mentionsMe).toBeUndefined();
+  });
+});
+
+/**
+ * The 'msg' and 'sync' contents exactly as River 2.17 and 2.18 parse them (dm-service.ts at
+ * v2.18.1, frozen here): what newer apps send must still be read by them.
+ */
+const v218 = (() => {
+  const msgId = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
+  const messageFields = {
+    id: msgId,
+    text: z.string().max(4000),
+    replyTo: msgId.optional(),
+    attachments: z.array(attachmentPointerSchema).max(10).optional(),
+    sentAt: z.iso.datetime(),
+    groupId: msgId.optional(),
+    expiresIn: z
+      .number()
+      .int()
+      .min(1)
+      .max(28 * 86_400)
+      .optional(),
+    silent: z.boolean().optional(),
+    poll: pollInputSchema.optional(),
+    embed: linkEmbedSchema.optional(),
+  };
+  return z.discriminatedUnion('t', [
+    z.object({ v: z.literal(1), t: z.literal('msg'), ...messageFields }),
+    z.object({
+      v: z.literal(1),
+      t: z.literal('sync'),
+      conv: z.string().min(1).max(64),
+      message: z.object(messageFields).strict(),
+    }),
+  ]);
+})();
+
+describe('messaging, part 2 (2.19)', { timeout: 60_000 }, () => {
+  it('a message effect travels sealed in the message; 2.18 apps and linked devices still read it', async () => {
+    const alice = await person('Alice');
+    const phone = await linkDevice(alice, 'Alice-phone');
+    const bob = await person('Bob');
+    await friends(alice, bob);
+    // Everything Alice's app encrypts from now on, as it was before encryption.
+    const wire: Array<{ t: string } & Record<string, unknown>> = [];
+    const i = internals(alice);
+    const send = i.sendContent.bind(alice.dm);
+    i.sendContent = (peer, content, ephemeral) => {
+      wire.push(content as { t: string });
+      return send(peer, content, ephemeral);
+    };
+
+    const sent = await alice.dm.action({
+      a: 'send',
+      peer: bob.riverId,
+      text: 'Congrats!',
+      effect: 'confetti',
+    });
+    expect(sent.effect).toBe('confetti');
+    const got = await until(async () => {
+      await bob.dm.sync();
+      return (await messagesOf(bob, alice.riverId)).find((m) => m.id === sent.id);
+    });
+    expect(got).toMatchObject({ text: 'Congrats!', effect: 'confetti' });
+    // Alice's phone gets her message — without the effect, which only plays for the people it went to.
+    const copy = await until(async () => {
+      await phone.dm.sync();
+      return (await messagesOf(phone, bob.riverId)).find((m) => m.id === sent.id);
+    });
+    expect(copy.text).toBe('Congrats!');
+    expect(copy.effect).toBeUndefined();
+
+    // What went out parses as it did in 2.18: the message with its text, the effect simply dropped,
+    // and the copy for linked devices (strict there) without anything 2.18 would refuse.
+    const messages = wire.filter((c) => c.t === 'msg' || c.t === 'sync');
+    expect(messages.map((c) => c.t).sort()).toEqual(['msg', 'sync']);
+    for (const c of messages) {
+      const old = v218.safeParse(c);
+      expect(old.success, JSON.stringify(c)).toBe(true);
+      expect(old.data).not.toHaveProperty('effect');
+      if (old.data?.t === 'sync') expect(old.data.message).not.toHaveProperty('effect');
+    }
+    expect(wire.find((c) => c.t === 'msg')).toMatchObject({ effect: 'confetti' });
+  });
+
+  it('an effect this app does not know (from a newer one) never drops the message', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await friends(alice, bob);
+    const id = 'future-effect-message1';
+    await internals(alice).sendContent(bob.riverId, {
+      v: 1,
+      t: 'msg',
+      id,
+      text: 'from the future',
+      sentAt: new Date().toISOString(),
+      effect: 'snowstorm',
+    });
+    const got = await until(async () => {
+      await bob.dm.sync();
+      return (await messagesOf(bob, alice.riverId)).find((m) => m.id === id);
+    });
+    expect(got.text).toBe('from the future');
+    expect(got.effect).toBeUndefined();
+  });
+
+  it('saved replies and tags stay on this device: kept, checked, and never sent anywhere', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    await friends(alice, bob);
+    const wire: unknown[] = [];
+    const i = internals(alice);
+    const send = i.sendContent.bind(alice.dm);
+    i.sendContent = (peer, content, ephemeral) => {
+      wire.push(content);
+      return send(peer, content, ephemeral);
+    };
+
+    let list = await alice.dm.action({ a: 'saveReply', shortcut: 'thanks', text: 'Thank you!' });
+    expect(list).toEqual([expect.objectContaining({ shortcut: 'thanks', text: 'Thank you!' })]);
+    await expect(alice.dm.action({ a: 'saveReply', shortcut: 'THANKS', text: 'again' })).rejects.toThrow(
+      /already have a saved reply/,
+    );
+    list = await alice.dm.action({ a: 'saveReply', id: list[0]!.id, shortcut: 'ty', text: 'Thanks!' });
+    expect(await alice.dm.action({ a: 'savedReplies' })).toEqual([
+      { id: list[0]!.id, shortcut: 'ty', text: 'Thanks!' },
+    ]);
+    await expect(alice.dm.action({ a: 'saveReply', shortcut: 'two words', text: 'x' })).rejects.toThrow();
+
+    const note = await alice.dm.action({ a: 'noteToSelf' });
+    const n = await alice.dm.action({ a: 'send', peer: note.riverId, text: 'buy milk' });
+    const before = wire.length;
+    expect(
+      await alice.dm.action({ a: 'tagMessage', key: `d:${n.id}`, tags: ['home', 'Home', 'errands'] }),
+    ).toEqual({
+      [`d:${n.id}`]: ['home', 'errands'],
+    });
+    await alice.dm.action({ a: 'tagMessage', key: `c:${'x'.repeat(22)}`, tags: ['trip'] });
+    expect(Object.keys(await alice.dm.action({ a: 'messageTags' }))).toHaveLength(2);
+    expect(await alice.dm.action({ a: 'tagMessage', key: `c:${'x'.repeat(22)}`, tags: [] })).toEqual({
+      [`d:${n.id}`]: ['home', 'errands'],
+    });
+    await expect(
+      alice.dm.action({ a: 'tagMessage', key: `d:${n.id}`, tags: ['a', 'b', 'c', 'd', 'e', 'f'] }),
+    ).rejects.toThrow();
+    await expect(alice.dm.action({ a: 'tagMessage', key: 'x:nope', tags: ['a'] })).rejects.toThrow();
+    // Tagging and saving replies sent nothing at all, to anyone.
+    expect(wire.length).toBe(before);
+    await alice.dm.action({ a: 'deleteReply', id: list[0]!.id });
+    expect(await alice.dm.action({ a: 'savedReplies' })).toEqual([]);
+    expect(wire.length).toBe(before);
   });
 });

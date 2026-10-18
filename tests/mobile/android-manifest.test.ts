@@ -71,6 +71,49 @@ describe('River for Android: manifest', () => {
   });
 });
 
+describe('River over a locked phone (Android, 2.18)', () => {
+  it('shows only the full-screen call there, without its way back to the chats', () => {
+    const css = readFileSync(resolve(import.meta.dirname, '../../apps/mobile/ui/phone.css'), 'utf8');
+    expect(css).toMatch(/html\[data-over-lock\] body > \* \{\s*visibility: hidden !important;/);
+    expect(css).toMatch(/html\[data-over-lock\] \.dm-call--full \{\s*visibility: visible !important;/);
+    expect(css).toMatch(
+      /html\[data-over-lock\] \.dm-call--full \.dm-call__min \{\s*visibility: hidden !important;/,
+    );
+    const shell = readFileSync(resolve(import.meta.dirname, '../../apps/mobile/ui/shell.ts'), 'utf8');
+    expect(shell).toContain("OVER_LOCK_CHANNEL = 'river:app:overLock'");
+  });
+
+  it('is told so by Android, which shows River there only for a call it knows of', () => {
+    const main = java('MainActivity.java');
+    expect(main).toContain('river:app:overLock');
+    // The "call" extra of an intent any app can send is not enough on its own.
+    expect(main).not.toMatch(/getBooleanExtra\(CoreHost\.EXTRA_CALL, false\)\)\s*showOverLock\(true\)/);
+    expect(main).toMatch(
+      /getBooleanExtra\(CoreHost\.EXTRA_CALL, false\) && \(tapped \|\| core\.callMayShowOverLock\(\)\)\)\s*showOverLock\(true\)/,
+    );
+    expect(java('core/CoreHost.java')).toMatch(
+      /public boolean callMayShowOverLock\(\) \{\s*return overLockForCall \|\| inCall;/,
+    );
+  });
+});
+
+describe('Lock River (2.18)', () => {
+  it('hides River under its cover from screen readers and the keyboard, not only from sight', () => {
+    const lock = java('core/AppLock.java');
+    expect(lock).toContain('IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS');
+    expect(lock).toMatch(/focused\.clearFocus\(\)/);
+    expect(lock).toMatch(/box\.requestFocus\(\)/);
+    // and gives them back when River is unlocked
+    expect(lock).toMatch(/private void hide\(\) \{[\s\S]*setImportantForAccessibility\(e\.getValue\(\)\)/);
+    const ios = readFileSync(
+      resolve(import.meta.dirname, '../../apps/mobile/ios/RiverNative/Sources/AppLock.swift'),
+      'utf8',
+    );
+    expect(ios).toContain('box.accessibilityViewIsModal = true');
+    expect(ios).toContain('view.endEditing(true)');
+  });
+});
+
 describe('River for Android: notification numbers', () => {
   /** The fixed notification numbers River's own notifications use (service, call, ringing, notices). */
   const fixed = (): Map<string, number> => {

@@ -12,6 +12,8 @@ import { tr } from '../../i18n.ts';
 import { MediaGallery } from './MediaGallery.tsx';
 import { setFollowing } from '../thread-follow.ts';
 import { muteLength, parseSlash, slashText, suggestCommands, type ParsedSlash } from '../slash.ts';
+import { bigEmojiCount, plainLine, replyPreview } from '../../components/message-kinds.ts';
+import { matchReplies, savedReplyQuery, useSavedReplyList } from '../../dm/saved-replies.tsx';
 import { muteUntil, withOverride } from '../../../../shared/notify-rules.ts';
 import { GifButton } from './Favorites.tsx';
 import { StickerButton, StickerImage } from './Stickers.tsx';
@@ -719,6 +721,11 @@ function MessageView(props: {
   const canManage = can(channel.permissions, Permission.MANAGE_MESSAGES);
   // The community's word filter (1.0.28): readers' apps fold such messages away.
   const filtered = community.filter ? findFiltered(m.text, community.filter.words) : null;
+  // Only 1–3 emoji (2.19): big, without a bubble, as in Telegram.
+  const jumbo =
+    !editing && !filtered && !m.attachments.length && !m.poll && !m.embed && !m.sticker
+      ? bigEmojiCount(m.text)
+      : 0;
   const [revealed, setRevealed] = useState(false);
   const canPin = canManage || can(channel.permissions, Permission.PIN_MESSAGES);
   const canReact = can(channel.permissions, Permission.ADD_REACTIONS);
@@ -804,7 +811,7 @@ function MessageView(props: {
     <div
       id={`msg-${m.id}`}
       {...touch}
-      className={`msg ${props.grouped ? 'msg--grouped' : ''} ${m.mine ? 'msg--mine' : ''} ${m.mentionsMe ? 'msg--mention' : ''} ${editing ? 'is-editing' : ''} ${selecting ? 'is-selecting' : ''} ${selected ? 'is-selected' : ''}`}
+      className={`msg ${props.grouped ? 'msg--grouped' : ''} ${m.mine ? 'msg--mine' : ''} ${m.mentionsMe ? 'msg--mention' : ''} ${editing ? 'is-editing' : ''} ${selecting ? 'is-selecting' : ''} ${selected ? 'is-selected' : ''} ${jumbo ? `msg--jumbo msg--jumbo-${jumbo}` : ''}`}
       onClickCapture={(e) => {
         if (guardClick(e)) return;
         // Clicks in a menu or dialog opened from this message are theirs.
@@ -826,7 +833,7 @@ function MessageView(props: {
           {props.replied ? (
             <>
               <strong>{props.replied.senderName}</strong>
-              <span className="msg__reply-text">{props.replied.text.slice(0, 120)}</span>
+              <span className="msg__reply-text">{replyPreview(props.replied)}</span>
             </>
           ) : (
             <span className="muted">Original message was deleted or is older</span>
@@ -901,7 +908,7 @@ function MessageView(props: {
           {editing ? (
             <EditBox message={m} />
           ) : (
-            <div className="msg__text">
+            <div className={`msg__text ${jumbo ? 'msg__text--jumbo' : ''}`}>
               {filtered && !canManage && !revealed ? (
                 <span className="msg__filtered muted">
                   Hidden by this community&apos;s word filter.{' '}
@@ -1457,15 +1464,30 @@ ${shared}`
     : [];
   // Slash commands: "/" at the start, before the first space.
   const slashTrigger = /^\/([a-z]*)$/i.exec(text);
-  const slashChoices: Suggestion[] = slashTrigger
-    ? suggestCommands(slashTrigger[1]!).map((c) => ({
-        key: `s:${c.name}`,
-        insert: c.name,
-        symbol: '/' as const,
-        hint: c.help,
-        label: `/${c.name}${c.args ? ` ${c.args}` : ''}`,
-      }))
-    : [];
+  // …and your saved replies (2.19): "/" and a shortcut puts the reply's text in the box.
+  const savedReplies = useSavedReplyList();
+  const replyQuery = savedReplyQuery(text);
+  const slashChoices: Suggestion[] = [
+    ...(slashTrigger
+      ? suggestCommands(slashTrigger[1]!).map((c) => ({
+          key: `s:${c.name}`,
+          insert: c.name,
+          symbol: '/' as const,
+          hint: c.help,
+          label: `/${c.name}${c.args ? ` ${c.args}` : ''}`,
+        }))
+      : []),
+    ...(replyQuery !== null
+      ? matchReplies(savedReplies, replyQuery, 5).map((r) => ({
+          key: `r:${r.id}`,
+          insert: r.shortcut,
+          symbol: '/' as const,
+          hint: plainLine(r.text),
+          label: `/${r.shortcut}`,
+          replaceWith: r.text,
+        }))
+      : []),
+  ].slice(0, 10);
   const suggestions: Suggestion[] =
     hushedAt === text
       ? []
@@ -1495,7 +1517,8 @@ ${shared}`
   }
 
   const complete = (choice: Suggestion): void => {
-    if (choice.symbol === '/') setText(`/${choice.insert} `);
+    if (choice.replaceWith !== undefined) setText(choice.replaceWith);
+    else if (choice.symbol === '/') setText(`/${choice.insert} `);
     else if (choice.symbol === ':') setText(text.replace(/:([a-z0-9_+-]*)$/i, `${choice.insert} `));
     else setText(text.replace(/([@#])([^\s@#]*)$/, `$1${choice.insert} `));
     setMentionIndex(0);
@@ -1757,9 +1780,20 @@ ${shared}`
       )}
       {replyTo && (
         <div className="reply-bar">
-          <span>
-            Replying to <strong>{replyTo.senderName}</strong>
-          </span>
+          {/* Who and what you are answering (2.19); a tap shows that message. */}
+          <button
+            type="button"
+            className="reply-bar__jump"
+            title="Show the message"
+            onClick={() =>
+              useCommunity.setState({ pendingJump: { channelId: replyTo.channelId, messageId: replyTo.id } })
+            }
+          >
+            <span>
+              Replying to <strong>{replyTo.senderName}</strong>
+            </span>
+            <span className="reply-bar__preview">{replyPreview(replyTo)}</span>
+          </button>
           {!replyTo.mine && (
             <button
               type="button"
@@ -2334,6 +2368,8 @@ interface Suggestion {
   hint: string;
   color?: number;
   member?: { riverId: string; name: string; avatar: string | null };
+  /** A saved reply (2.19): the whole box becomes this text. */
+  replaceWith?: string;
 }
 
 /** What can be mentioned here, best matches first, at most 8. */
