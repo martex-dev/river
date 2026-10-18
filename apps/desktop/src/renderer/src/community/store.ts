@@ -34,6 +34,10 @@ import { resumeAudio } from './peer-audio.ts';
 import { phoneShellActive } from '../phone/mode.ts';
 import { withLiveMessages } from '../components/unread.ts';
 
+/** A 1:1 call (`dm:`) or a group call (`gcall:`, 2.18): not a voice channel of a community. */
+const privateCall = (channelId: string): boolean =>
+  channelId.startsWith('dm:') || channelId.startsWith('gcall:');
+
 export type Modal =
   | { kind: 'community-settings'; communityId: string; tab?: CommunityTab }
   | { kind: 'channel-settings'; channelId: string }
@@ -575,7 +579,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         return;
       case 'voiceRefused': {
         const call = get().call;
-        if (call && !call.channelId.startsWith('dm:')) {
+        if (call && !privateCall(call.channelId)) {
           set({ call: null });
           forgetCall();
           void call.leave();
@@ -591,6 +595,8 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         const call = get().call;
         if (!call) return;
         if (call.channelId.startsWith('dm:')) void import('../dm/call.ts').then((m) => m.endDmCall());
+        else if (call.channelId.startsWith('gcall:'))
+          void import('../dm/group-call.ts').then((m) => m.leaveGroupCall());
         else void get().leaveVoice();
         return;
       }
@@ -602,7 +608,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       case 'voiceDisconnect': {
         const call = get().call;
         // About a voice channel only: a 1:1 call is not in one, and ends only by its own signals.
-        if (!call || call.channelId.startsWith('dm:')) return;
+        if (!call || privateCall(call.channelId)) return;
         set({ call: null });
         // A moderator ended it: do not offer to rejoin.
         forgetCall();
@@ -906,6 +912,9 @@ async function joinVoiceNow(channelId: string, me: string, token: { cancelled: b
   // Joining voice ends a 1:1 call properly (also one still starting): its panel, pill and "busy" go too.
   const dm = await import('../dm/call.ts');
   if (dm.useDmCall.getState().active || get().call?.channelId.startsWith('dm:')) await dm.endDmCall();
+  // A group call too (2.18): one call at a time.
+  const group = await import('../dm/group-call.ts');
+  if (group.useGroupCall.getState().active) await group.leaveGroupCall();
   await get().call?.leave();
   if (token.cancelled) return;
   const voice = useRiver.getState().settings?.voice;
@@ -968,7 +977,7 @@ async function joinVoiceNow(channelId: string, me: string, token: { cancelled: b
   }
   // Disconnected (or replaced) while joining: start() released the microphone and did not join.
   if (call.closed || get().call !== call) return;
-  if (!channelId.startsWith('dm:')) rememberCall(channelId);
+  if (!privateCall(channelId)) rememberCall(channelId);
   play('selfJoin');
   sendVoiceState();
   // Your entrance sound for this community, if you picked one (1.0.26).
@@ -1028,7 +1037,7 @@ setInterval(() => {
   const s = useCommunity.getState();
   const call = s.call;
   const minutes = useRiver.getState().settings?.voice.leaveAloneMinutes ?? 0;
-  if (!call || call.channelId.startsWith('dm:') || minutes <= 0) {
+  if (!call || privateCall(call.channelId) || minutes <= 0) {
     aloneSince = null;
     return;
   }

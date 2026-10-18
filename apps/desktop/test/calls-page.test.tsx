@@ -28,7 +28,8 @@ beforeEach(() => {
   listener = null;
   (window as unknown as { river: unknown }).river = {
     dm: {
-      action: vi.fn(async () => ({ ok: true, value: calls })),
+      // The history; the call links list (2.18) is empty.
+      action: vi.fn(async (a: { a: string }) => ({ ok: true, value: a.a === 'callLinks' ? [] : calls })),
       onEvent: (l: (e: DmEvent) => void) => {
         listener = l;
         return () => {

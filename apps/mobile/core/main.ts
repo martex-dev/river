@@ -273,8 +273,11 @@ async function start(): Promise<void> {
   let inCall = false;
   /** The 1:1 call the UI started or accepted, so the core can end it if the UI goes away. */
   let activeCall: { peer: string; callId: string } | null = null;
+  /** The group or call-link call the UI joined (2.18), so the core can leave it if the UI goes away. */
+  let activeGroupCall: { callId: string; groupId?: string } | null = null;
   /** Who the "In a call" notification names: the person (unless previews hide names) or voice. */
   const callTitle = (): string => {
+    if (activeGroupCall) return 'River group call';
     if (!activeCall) return 'Voice channel';
     return settings.get().notifications.preview === 'none' ? 'River call' : dm.nameOf(activeCall.peer);
   };
@@ -288,6 +291,18 @@ async function start(): Promise<void> {
     activeCall = null;
     if (call)
       void dm.action({ a: 'call', peer: call.peer, callId: call.callId, kind: 'end' }).catch(() => undefined);
+    // A group call has nobody to tell: leaving its room is leaving the call (the others hear it).
+    const group = activeGroupCall;
+    activeGroupCall = null;
+    if (group)
+      void dm
+        .action({
+          a: 'groupCall',
+          kind: 'leave',
+          callId: group.callId,
+          ...(group.groupId ? { groupId: group.groupId } : {}),
+        })
+        .catch(() => undefined);
     if (!inCall) return;
     community.voiceLeave();
     community.callRoom(null);
@@ -302,7 +317,16 @@ async function start(): Promise<void> {
   };
   onInvoke((channel, args) => {
     if (channel !== IPC.dmAction) return;
-    const a = args[0] as { a?: unknown; kind?: unknown; peer?: unknown; callId?: unknown } | null | undefined;
+    const a = args[0] as
+      { a?: unknown; kind?: unknown; peer?: unknown; callId?: unknown; groupId?: unknown } | null | undefined;
+    if (a?.a === 'groupCall' && typeof a.callId === 'string') {
+      const groupId = typeof a.groupId === 'string' ? a.groupId : undefined;
+      if (a.kind === 'join' || a.kind === 'ring')
+        activeGroupCall = { callId: a.callId, ...(groupId ? { groupId } : {}) };
+      else if (a.kind === 'leave' && activeGroupCall?.callId === a.callId) activeGroupCall = null;
+      if (a.kind === 'join' || a.kind === 'decline') ringOver(a.callId);
+      return;
+    }
     if (!a || a.a !== 'call' || typeof a.peer !== 'string' || typeof a.callId !== 'string') return;
     if (a.kind === 'invite' || a.kind === 'accept') activeCall = { peer: a.peer, callId: a.callId };
     else if (a.kind === 'end' || a.kind === 'decline' || a.kind === 'busy') {
@@ -373,11 +397,22 @@ async function start(): Promise<void> {
     // Disturb and quiet hours keep it quiet (2.11.2).
     if (silenced(s)) return;
     // Already in a call: the caller hears "busy", and nothing takes over this screen or its sound.
-    if (activeCall && activeCall.callId !== e.callId) {
-      void dm.action({ a: 'call', peer: e.peer, callId: e.callId, kind: 'busy' }).catch(() => undefined);
+    // (A group call rings nobody busy: the group shows "Join" instead.)
+    const busy = (activeCall && activeCall.callId !== e.callId) || activeGroupCall !== null;
+    if (busy) {
+      if (!e.group)
+        void dm.action({ a: 'call', peer: e.peer, callId: e.callId, kind: 'busy' }).catch(() => undefined);
       return;
     }
-    const name = s.notifications.preview === 'none' ? 'Someone' : dm.nameOf(e.peer);
+    const hidden = s.notifications.preview === 'none';
+    // A group call (2.18) rings with the group's name: "Group call · Climbing (5 people)".
+    const name = e.group
+      ? hidden
+        ? 'Group call'
+        : `Group call · ${e.group.name} (${e.group.people} people)`
+      : hidden
+        ? 'Someone'
+        : dm.nameOf(e.peer);
     void ask<string>('incomingCall', { callId: e.callId, name, video: e.video }).then(
       (how) => {
         if (ringing !== e.callId) return;
@@ -387,13 +422,25 @@ async function start(): Promise<void> {
           dm.answerRinging(e.callId);
           emit(IPC.appPhoneCall, [{ callId: e.callId, action: 'answer' }]);
         } else if (how === 'decline') {
-          void dm
-            .action({ a: 'call', peer: e.peer, callId: e.callId, kind: 'decline' })
-            .catch(() => undefined);
+          if (e.group)
+            void dm
+              .action({
+                a: 'groupCall',
+                kind: 'decline',
+                callId: e.callId,
+                groupId: e.group.id,
+                to: [e.peer],
+              })
+              .catch(() => undefined);
+          else
+            void dm
+              .action({ a: 'call', peer: e.peer, callId: e.callId, kind: 'decline' })
+              .catch(() => undefined);
           void dm
             .action({
               a: 'logCall',
-              peer: e.peer,
+              peer: e.group ? e.group.id : e.peer,
+              ...(e.group ? { kind: 'group' as const } : {}),
               direction: 'in',
               video: e.video,
               answered: false,
@@ -427,10 +474,12 @@ async function start(): Promise<void> {
     // record; without it the core does, so the call history shows it (and a notification says so:
     // notifications.ts). Answered on the call screen but never taken: it could not connect.
     if (end.how !== 'missed' || uiPresent()) return;
+    const group = end.event.group;
     void dm
       .action({
         a: 'logCall',
-        peer: end.event.peer,
+        peer: group ? group.id : end.event.peer,
+        ...(group ? { kind: 'group' as const } : {}),
         direction: 'in',
         video: end.event.video,
         answered: false,

@@ -32,7 +32,13 @@ export function lastCall(now = Date.now()): LastCall | null {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<LastCall> | null;
     if (!v || typeof v.channelId !== 'string' || typeof v.at !== 'number') return null;
-    if (v.channelId.startsWith('dm:') || now - v.at > REJOIN_WITHIN_MS || v.at > now) return null;
+    if (
+      v.channelId.startsWith('dm:') ||
+      v.channelId.startsWith('gcall:') ||
+      now - v.at > REJOIN_WITHIN_MS ||
+      v.at > now
+    )
+      return null;
     return { channelId: v.channelId, at: v.at };
   } catch {
     return null;

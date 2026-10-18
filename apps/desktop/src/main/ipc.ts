@@ -13,7 +13,7 @@ import {
   type WebContents,
 } from 'electron';
 import { z } from 'zod';
-import { MAX_RELAY_PAYLOAD, MAX_RELAY_RECIPIENTS } from '@river/protocol';
+import { MAX_RELAY_PAYLOAD, MAX_RELAY_RECIPIENTS, MAX_WATCHED_CALL_ROOMS } from '@river/protocol';
 import { createCommunityOptionsSchema } from '../shared/templates.ts';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import {
@@ -169,7 +169,7 @@ export function registerIpc(deps: IpcDeps): void {
 
   handle(IPC.appInfo, () => deps.appInfo());
   handle(IPC.appTakeDeepLink, (_e, kind) =>
-    deps.takeDeepLink(z.enum(['invite', 'friend', 'signup', 'device']).optional().parse(kind)),
+    deps.takeDeepLink(z.enum(['invite', 'friend', 'signup', 'device', 'call']).optional().parse(kind)),
   );
   handle(IPC.appPhoneStatus, () => deps.phone?.status() ?? null);
   handle(IPC.appPhoneFix, (_e, fix) => {
@@ -421,9 +421,18 @@ export function registerIpc(deps: IpcDeps): void {
       // invalid or untrusted: dropped
     }
   });
-  handle(IPC.voiceRelayInfo, () => ({ all: deps.community.relayAllSupported }));
+  handle(IPC.voiceRelayInfo, () => ({
+    all: deps.community.relayAllSupported,
+    groupCalls: deps.community.groupCallsSupported,
+  }));
   handle(IPC.voiceCallRoom, (_e, room) => {
     deps.community.callRoom(room === null ? null : z.string().max(64).parse(room));
+  });
+  handle(IPC.voiceGroupCallRoom, (_e, room) => {
+    deps.community.groupCallRoom(room === null ? null : z.string().max(64).parse(room));
+  });
+  handle(IPC.voiceWatchCallRooms, (_e, rooms) => {
+    deps.community.watchCallRooms(z.array(z.string().max(64)).max(MAX_WATCHED_CALL_ROOMS).parse(rooms));
   });
   handle(IPC.diagnosticsRun, () => deps.diagnostics());
   handle(IPC.privacyProxyCheck, async (_e, raw) => {

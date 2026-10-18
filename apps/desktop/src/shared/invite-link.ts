@@ -66,3 +66,28 @@ export function parseSignup(text: string): { serverUrl: string; code: string } |
     return null;
   }
 }
+
+/**
+ * A call link (2.18): `<server>/call#h=<host's River ID>&l=<link ID>`. The link ID is a random
+ * secret that only names the link: it is not the call's own secret, which the host gives only
+ * to the people they let in. Like every River link, the part after # never reaches a server.
+ */
+export function callLink(serverUrl: string, host: string, link: string): string {
+  return `${serverUrl.replace(/\/+$/, '')}/call#h=${host}&l=${link}`;
+}
+
+export function parseCallLink(text: string): { serverUrl: string; host: string; link: string } | null {
+  try {
+    const url = new URL(text.trim());
+    if (!/^https?:$/.test(url.protocol) || !url.pathname.endsWith('/call')) return null;
+    const m = /^h=([0-9a-fA-F-]{36})&l=([A-Za-z0-9_-]{22})$/.exec(url.hash.slice(1));
+    if (!m || !RIVER_ID.test(m[1]!) || !SIGNUP_CODE.test(m[2]!)) return null;
+    return {
+      serverUrl: `${url.origin}${url.pathname.slice(0, -'/call'.length)}`,
+      host: m[1]!.toLowerCase(),
+      link: m[2]!,
+    };
+  } catch {
+    return null;
+  }
+}

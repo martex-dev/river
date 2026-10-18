@@ -2,8 +2,9 @@ import { useEffect, useState, type ReactElement } from 'react';
 import type { CallView } from '../../../shared/dm.ts';
 import { Avatar } from '../community/ui/common.tsx';
 import { startDmCall, useDmCall } from '../dm/call.ts';
+import { createCallLink, startGroupCall, useGroupCall } from '../dm/group-call.ts';
 import { useDm } from '../dm/store.ts';
-import { callOutcome } from '../pages/CallsPage.tsx';
+import { callOutcome, callTitle } from '../pages/CallsPage.tsx';
 import { useRiver } from '../store.ts';
 import { clockTime } from '../time.ts';
 import { useCallHistory } from './calls.ts';
@@ -39,7 +40,8 @@ function describe(c: CallView): string {
 export function CallsTab(): ReactElement {
   const history = useCallHistory();
   const account = useRiver((r) => r.account);
-  const busy = useDmCall((s) => !!s.active || !!s.incoming);
+  const inGroupCall = useGroupCall((s) => !!s.active);
+  const busy = useDmCall((s) => !!s.active || !!s.incoming) || inGroupCall;
   const [only, setOnly] = useState<'all' | 'missed'>('all');
   const conversations = useDm((d) => d.conversations);
   useEffect(() => {
@@ -51,9 +53,11 @@ export function CallsTab(): ReactElement {
   const calls = (history.calls ?? []).filter(
     (c) => only === 'all' || (c.direction === 'in' && callOutcome(c) === 'missed'),
   );
-  const call = (peer: string, video: boolean): void => {
-    openPhoneChat(peer);
-    void startDmCall(peer, video);
+  const call = (c: CallView): void => {
+    openPhoneChat(c.peer);
+    // A group call (2.18) calls the group again.
+    if (c.kind === 'group') void startGroupCall(c.peer, c.video);
+    else void startDmCall(c.peer, c.video);
   };
   return (
     <TabPage title="Calls">
@@ -67,6 +71,11 @@ export function CallsTab(): ReactElement {
         </div>
       ) : (
         <>
+          <div className="pcall__links">
+            <button className="btn btn--ghost btn--small" onClick={() => void createCallLink(false)}>
+              🔗 Create call link
+            </button>
+          </div>
           <div className="psegment" role="radiogroup" aria-label="Show calls">
             {(['all', 'missed'] as const).map((id) => (
               <button
@@ -103,7 +112,7 @@ export function CallsTab(): ReactElement {
                       <Avatar id={c.peer} name={c.name} avatar={c.avatar} size={44} />
                       <span className="prow__main">
                         <span className="prow__top">
-                          <strong className="prow__name">{c.name}</strong>
+                          <strong className="prow__name">{callTitle(c)}</strong>
                           <time className="prow__time">{callWhen(c.startedAt)}</time>
                         </span>
                         <span className="prow__bottom">
@@ -119,8 +128,12 @@ export function CallsTab(): ReactElement {
                     <button
                       className="pcall__back"
                       aria-label={`${c.video ? 'Video call' : 'Call'} ${c.name}`}
-                      disabled={busy || !conversations.some((x) => x.riverId === c.peer)}
-                      onClick={() => call(c.peer, c.video)}
+                      disabled={
+                        busy ||
+                        c.kind === 'link' ||
+                        !conversations.some((x) => x.riverId === c.peer && x.state !== 'left')
+                      }
+                      onClick={() => call(c)}
                     >
                       {c.video ? <VideoIcon size={24} /> : <PhoneCallIcon size={23} />}
                     </button>

@@ -3,6 +3,11 @@
  * got, shown once. Fresh installs see nothing; full notes are in the release.
  */
 export const HIGHLIGHTS: Record<string, string[]> = {
+  '2.19.0': [
+    'Group calls: call a whole group chat, voice or video, up to 50 people, end-to-end encrypted',
+    'Join a call already going on from the bar at the top of the group',
+    'Call links: share a link, and let people in when they ask',
+  ],
   '2.18.0': [
     'Chat wallpapers: doodles, gradients or your own photo, for every chat or just one',
     'Any accent colour, three bubble shapes, text size and density in Settings → Appearance → Chat',

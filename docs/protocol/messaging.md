@@ -62,6 +62,8 @@ JSON with `v: 1` and a type `t`:
 | `groupLeave`       | The sender left the group                                                        |
 | `ckey` / `ckeyReq` | A community key for an epoch / a request for one (see CRYPTOGRAPHY §4a)          |
 | `call`             | 1:1 call setup: invite, accept, decline, busy, end, WebRTC signal (ephemeral)    |
+| `gcall`            | Group or call-link call (2.18): ring, decline, WebRTC signal, allow (ephemeral)  |
+| `clink`            | Call link (2.18): knock (ask to join), admit (with the call ID), deny, gone      |
 
 Receivers validate every field; edits and deletes are applied only to messages
 from the same sender. Messages from people you have not accepted arrive as
@@ -76,7 +78,9 @@ receivers accept them only from current members of a group they are in. Only
 admins (initially the creator) change the name or membership; removed people
 stop receiving messages because nobody encrypts to them any more. A group from
 someone you have not accepted arrives as a request; your name is shared with
-the group only once you accept. Groups have no read receipts or calls yet.
+the group only once you accept. Groups have no read receipts. Group calls
+(2.18) ring the other members with `gcall` (`groupId`, the call's secret ID);
+see CRYPTOGRAPHY.md §8a.
 
 ## Social (posts and stories)
 

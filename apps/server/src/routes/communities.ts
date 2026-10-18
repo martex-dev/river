@@ -65,6 +65,7 @@ import {
   type ServerEvent,
   type OverwriteWire,
   MAX_CALL_ROOM,
+  MAX_GROUP_CALL_ROOM,
   RELAY_BURST,
   RELAY_FRAMES_PER_SECOND,
   decodeRelayAny,
@@ -255,6 +256,7 @@ export async function registerCommunityRoutes(
    * Records an administrative action. Only IDs and numbers go in: the server
    * never has names or content. Entries older than 90 days are dropped.
    */
+  let auditSeq = 0;
   const audit = async (
     communityId: string,
     actor: string,
@@ -263,10 +265,13 @@ export async function registerCommunityRoutes(
     details: Record<string, unknown> = {},
   ): Promise<void> => {
     const at = deps.now();
+    // A counter first in the ID: entries made in the same millisecond still list newest first
+    // (the log is ordered by time, then ID; a random ID put them in any order).
+    const seq = (auditSeq = (auditSeq + 1) % 36 ** 6);
     await db
       .insertInto('audit_log')
       .values({
-        id: randomBytes(16).toString('base64url'),
+        id: `${seq.toString(36).padStart(6, '0')}${randomBytes(12).toString('base64url')}`,
         community_id: communityId,
         actor,
         action,
@@ -2959,7 +2964,7 @@ export async function registerCommunityRoutes(
         hubSocket.deviceId = session.deviceId;
         hub.setStatus(riverId, event.status ?? 'online');
         const cameOnline = hub.add(riverId, hubSocket);
-        send({ t: 'ready', riverId, relayAll: true });
+        send({ t: 'ready', riverId, relayAll: true, groupCalls: true });
         const rows = await db
           .selectFrom('community_members')
           .select('community_id')
@@ -2992,6 +2997,15 @@ export async function registerCommunityRoutes(
           if (event.room === null) hub.leaveRoom(self);
           else if (!hub.joinRoom(self, event.room, MAX_CALL_ROOM, hubSocket))
             send({ t: 'error', code: 'room_full' });
+          return;
+        case 'call.group':
+          // Group calls and call links (2.18): the room's members and watchers learn who is in it.
+          if (event.room === null) hub.leaveRoom(self);
+          else if (!hub.joinRoom(self, event.room, MAX_GROUP_CALL_ROOM, hubSocket, true))
+            send({ t: 'error', code: 'room_full' });
+          return;
+        case 'call.watch':
+          hub.watch(hubSocket, event.rooms);
           return;
         case 'voice.sound': {
           const channelId = hub.voiceChannelOf(self);

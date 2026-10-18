@@ -342,6 +342,52 @@ of types are shown inline; everything else is saved only when the user chooses.
   as before; River does not use the identity key in a community profile for
   this, because a profile is not bound to the person it describes.
 
+### 8a. Group calls and call links (2.18)
+
+No new cryptography: a group call is the voice-channel engine above (WebRTC
+mesh with DTLS-SRTP up to eight people, the sealed relay with per-call sender
+keys above that) with its call setup inside libsignal messages, as in 1:1 calls.
+
+- **The call ID is the secret.** Starting a call picks 128 random bits (the
+  call ID) and rings the group's other members with a `gcall` message — pairwise
+  libsignal, live only (never stored on the server, like a 1:1 invite). The
+  call's room on the server is `base64url(SHA-256("river-call-room:" ‖ call ID))`,
+  the same derivation as a 1:1 call's relay room. The server sees only the room
+  ID, never the call ID, a key or a frame it can decrypt.
+- **Membership is proven by knowing the room ID.** `call.group` joins a room
+  (at most `MAX_GROUP_CALL_ROOM` = 50 people); `call.watch` lets a member who is
+  not in the call see who is (the group's "Join" bar). The server tells who is in
+  a group call room only to connections that presented its room ID (members and
+  watchers), never to anyone else, and forgets the room when the last person
+  leaves. It relays voice frames only between people in the same room, as for
+  1:1 calls. The room ID is unguessable (256 bits derived from a 128-bit
+  secret) and is only ever given out inside end-to-end encrypted messages.
+- **Who may take part is checked on every device, not by the server.** Call
+  setup (`gcall` signal) is accepted only from, and sent only to, people who may
+  be in the call: the group's current members, or for a call link its host and
+  the people the host let in. Who the server says is in the room is filtered
+  the same way, so a server that adds someone to a room's list cannot make
+  anyone connect to them or send them a key; a removed member's setup is no
+  longer accepted. Relay sender keys travel inside that setup, as before.
+- **Call links.** A link is `https://<server>/call#h=<host's River ID>&l=<link ID>`
+  (`river://open?link=…` in the app), the link ID another 128 random bits. It
+  never contains the call ID. Someone with the link asks to join (`clink`
+  knock, libsignal, with the name they give — shown as theirs, not checked, and
+  marked when they are not your friend). Only when the host taps **Let in** does
+  the host's River send them the call ID and the list of people let in (`clink`
+  admit), and tell everyone let in before (`gcall` allow) — accepted only from
+  the host. Until then they cannot find the room or learn who is in the call.
+  Links work for 7 days or until the host stops them; the link list is kept in
+  the host's encrypted database. The part after `#` never reaches a server.
+- **What the server learns** that it did not before: that a set of accounts is
+  in a call together and when people join and leave (it already saw this for
+  voice channels and relayed 1:1 calls), and which accounts watch a call's room.
+  It does not learn the group, the call's name, or anything said or shown.
+- **Compatibility.** Apps before 2.18 drop `gcall` and `clink` messages (an
+  unknown message kind), so they are not rung; nothing they do changes. Servers
+  before 2.18 do not announce `groupCalls` in `ready`, and River says group
+  calls need an updated server rather than falling back to anything weaker.
+
 ## 9. What River will never do
 
 - Invent or modify a cipher, hash, MAC, KDF, signature scheme or key exchange.

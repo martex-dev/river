@@ -87,6 +87,8 @@ export const IPC = {
   voiceRelayAll: 'river:voice:relay-all',
   voiceRelayInfo: 'river:voice:relay-info',
   voiceCallRoom: 'river:voice:call-room',
+  voiceGroupCallRoom: 'river:voice:group-call-room',
+  voiceWatchCallRooms: 'river:voice:watch-call-rooms',
   voiceRelayIn: 'river:voice:relay-in',
   diagnosticsRun: 'river:diagnostics:run',
   /** Settings → Privacy → Proxy → Test connection (2.13, computers). */
@@ -574,7 +576,11 @@ export type CommunityEvent =
   /** Unread counts found by catching up on channels (including while River was closed). */
   | { t: 'catchUp'; unread: Record<string, number>; mentions: Record<string, number> }
   /** A channel was read on this device (2.17): its notification and its badge count go. */
-  | { t: 'channelRead'; channelId: string };
+  | { t: 'channelRead'; channelId: string }
+  /** Who is in a group call room this app is in or watches (2.18); empty: the call is over. */
+  | { t: 'callRoster'; room: string; participants: string[] }
+  /** The server turned this app away from a group call room: it is full (2.18). */
+  | { t: 'callRoomFull' };
 
 export type Result<T> = { ok: true; value: T } | { ok: false; message: string };
 
@@ -774,10 +780,17 @@ export interface RiverApi {
     relay(to: string[], payload: Uint8Array): void;
     /** Sends an encrypted voice frame through the server to everyone else in the call (large rooms). */
     relayAll(payload: Uint8Array): void;
-    /** Whether the server takes frames for everyone in the call (relayAll); older servers do not. */
-    relayInfo(): Promise<{ all: boolean }>;
+    /**
+     * Whether the server takes frames for everyone in the call (relayAll), and whether it has
+     * group call rooms (groupCalls, 2.18); older servers have neither.
+     */
+    relayInfo(): Promise<{ all: boolean; groupCalls?: boolean }>;
     /** Joins (null: leaves) a 1:1 call's private relay room. */
     callRoom(room: string | null): Promise<void>;
+    /** Joins (null: leaves) a group call's room (2.18): its members hear who is in it. */
+    groupCallRoom(room: string | null): Promise<void>;
+    /** Watches these group call rooms for who is in them (2.18); replaces the rooms watched before. */
+    watchCallRooms(rooms: string[]): Promise<void>;
     onRelay(listener: (from: string, payload: Uint8Array) => void): () => void;
   };
   storage: {
@@ -845,7 +858,7 @@ export interface SharedContent {
 
 /** A River link the operating system handed to River (river://open?link=…, river://link?…). */
 export interface DeepLink {
-  kind: 'invite' | 'friend' | 'signup' | 'device';
+  kind: 'invite' | 'friend' | 'signup' | 'device' | 'call';
   /** The https invite, friend or sign-up link itself; for 'device', the river://link?… link code. */
   link: string;
 }

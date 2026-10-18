@@ -182,7 +182,13 @@ function PhoneVoiceBar(): ReactElement | null {
     const top = s.stack.at(-1);
     return top?.kind === 'channel' ? top.channelId : null;
   });
-  if (!callChannel || callChannel.startsWith('dm:') || callChannel === openChannel) return null;
+  if (
+    !callChannel ||
+    callChannel.startsWith('dm:') ||
+    callChannel.startsWith('gcall:') ||
+    callChannel === openChannel
+  )
+    return null;
   return (
     <div className="pvoice">
       <VoicePanel me={me} />

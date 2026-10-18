@@ -6,6 +6,49 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.19.0] - 2026-10-18
+
+**Group calls in group chats, and call links.**
+
+### Added
+
+- **Group calls in group chats.** Start a voice or video call in any group:
+  everyone else in it rings ("Group call · 5 people", the phone's call screen on
+  Android) and can join or decline. Joined late, or left? The group shows
+  **Call in progress** with who is in it, and **Join**. People leave and rejoin
+  as they like; the call ends when the last person leaves (and for you after a
+  minute if nobody came, or two minutes alone). **Ring** reaches members who
+  missed it. Up to eight people talk directly to each other; bigger calls (up to
+  50) send voice through your server, still end-to-end encrypted. Camera,
+  screen sharing, picture-in-picture and the phone's full-screen call work as in
+  1:1 calls; the call history names the group and how many were in it.
+- **Call links.** Calls → **Create call link** makes a link anyone can use to
+  ask to join (on your server); you see who asks — marked when they are not your
+  friend — and **Let in** or **Deny**. The link never contains the call's own
+  secret: people get it only when you let them in. Links work for 7 days or
+  until you stop them. Opening one in a browser offers "Open in River".
+
+### Security
+
+- Group call setup travels inside libsignal messages and is accepted only from
+  the group's current members (or the people a call link's host let in); who
+  the server says is in a call is checked the same way, so the server cannot
+  add anyone to a call. The server's new call rooms (`call.group`, `call.watch`,
+  `call.roster`) are named by a hash of the call's secret ID and tell who is in
+  a call only to people who know that ID (CRYPTOGRAPHY.md §8a).
+
+### Compatibility
+
+- Group calls need a River server from this version (it says `groupCalls` when
+  you connect); with an older server River says so instead of starting one.
+  River 2.17 and older ignore group-call messages: people on them are not rung.
+  1:1 calls are unchanged.
+
+### Fixed
+
+- Server: a community's audit log lists actions made in the same millisecond
+  newest first (their order was random).
+
 ## [2.18.1] - 2026-10-18
 
 **Eighteen phone fixes: Back, editing, menus, calls and layout.**

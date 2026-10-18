@@ -322,6 +322,100 @@ describe('voice survives dropped connections', () => {
     await bobDm.action({ a: 'call', peer: alice.riverId, callId, kind: 'end' });
     await vi.waitFor(async () => expect(await aliceDm.action({ a: 'pendingCall' })).toBeNull());
   }, 20_000);
+
+  it('group calls (2.18): a live ring, who is in the call from its room, voice relayed inside it, rejoining after a drop', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    const people = [alice, bob, carol];
+    const [aliceDm, bobDm, carolDm] = await Promise.all(people.map((p) => p.dm()));
+    for (const p of people) p.community.ensureSocket();
+    for (const p of people) await vi.waitFor(online(p.community), { timeout: 5000 });
+    expect(alice.community.groupCallsSupported).toBe(true);
+    for (const [other, otherDm] of [
+      [bob, bobDm],
+      [carol, carolDm],
+    ] as const) {
+      await aliceDm!.action({ a: 'open', peer: other.riverId, name: 'Friend' });
+      await aliceDm!.action({ a: 'send', peer: other.riverId, text: 'hi' });
+      await otherDm!.sync();
+      await otherDm!.action({ a: 'accept', peer: alice.riverId });
+    }
+    await aliceDm!.sync();
+    const group = await aliceDm!.action({
+      a: 'createGroup',
+      name: 'Climb',
+      members: [bob.riverId, carol.riverId],
+    });
+    await bobDm!.sync();
+    await carolDm!.sync();
+
+    // The room is a hash of the call's secret ID, as River's window makes it.
+    const callId = 'G'.repeat(22);
+    const { createHash } = await import('node:crypto');
+    const room = createHash('sha256').update(`river-call-room:${callId}`).digest('base64url');
+    const rosters = (p: (typeof people)[number]) =>
+      p.events
+        .filter((e): e is Extract<CommunityEvent, { t: 'callRoster' }> => e.t === 'callRoster')
+        .filter((e) => e.room === room)
+        .map((e) => e.participants);
+
+    // Alice starts it: in its room first, then the group rings — live, never stored.
+    alice.community.groupCallRoom(room);
+    await vi.waitFor(() => expect(rosters(alice).at(-1)).toEqual([alice.riverId]));
+    await aliceDm!.action({ a: 'groupCall', kind: 'ring', callId, groupId: group.riverId, video: false });
+    await vi.waitFor(async () =>
+      expect(await bobDm!.action({ a: 'pendingCall' })).toMatchObject({
+        callId,
+        group: { id: group.riverId, name: 'Climb', people: 3 },
+      }),
+    );
+    // Carol lets it ring and watches the call from the group ("Join" with who is in it).
+    carol.community.watchCallRooms([room]);
+    await vi.waitFor(() => expect(rosters(carol).at(-1)).toEqual([alice.riverId]));
+
+    // Bob answers: everyone in the call and watching it sees him in it.
+    await bobDm!.action({ a: 'groupCall', kind: 'join', callId, groupId: group.riverId });
+    bob.community.groupCallRoom(room);
+    await vi.waitFor(() =>
+      expect(rosters(alice).at(-1)?.sort()).toEqual([alice.riverId, bob.riverId].sort()),
+    );
+    await vi.waitFor(() => expect(rosters(carol).at(-1)).toHaveLength(2));
+    expect(bob.calls).toEqual([true]);
+
+    // Voice to everyone in the call reaches Bob, not Carol who only watches.
+    const atBob: number[][] = [];
+    const atCarol: number[][] = [];
+    bob.community.onRelay((_from, payload) => atBob.push([...payload]));
+    carol.community.onRelay((_from, payload) => atCarol.push([...payload]));
+    alice.community.relaySendAll(new Uint8Array([1, 2]));
+    await vi.waitFor(() => expect(atBob).toEqual([[1, 2]]));
+
+    // Bob's connection drops: he is held in the call, comes back into its room by himself.
+    bob.sockets.at(-1)!.close();
+    await vi.waitFor(() => expect(bob.sockets.length).toBe(2), { timeout: 10_000 });
+    await vi.waitFor(online(bob.community), { timeout: 10_000 });
+    await new Promise((r) => setTimeout(r, 100));
+    alice.community.relaySendAll(new Uint8Array([3]));
+    await vi.waitFor(() => expect(atBob.at(-1)).toEqual([3]));
+    // Carol's watch survives her own reconnect too.
+    const seen = rosters(carol).length;
+    carol.sockets.at(-1)!.close();
+    await vi.waitFor(() => expect(carol.sockets.length).toBe(2), { timeout: 10_000 });
+    await vi.waitFor(online(carol.community), { timeout: 10_000 });
+    await vi.waitFor(() => expect(rosters(carol).length).toBeGreaterThan(seen));
+    expect(rosters(carol).at(-1)).toHaveLength(2);
+    expect(atCarol).toEqual([]);
+
+    // Bob leaves and rejoins; then both leave: the call is over for everyone watching.
+    bob.community.groupCallRoom(null);
+    await vi.waitFor(() => expect(rosters(carol).at(-1)).toEqual([alice.riverId]));
+    bob.community.groupCallRoom(room);
+    await vi.waitFor(() => expect(rosters(carol).at(-1)).toHaveLength(2));
+    bob.community.groupCallRoom(null);
+    alice.community.groupCallRoom(null);
+    await vi.waitFor(() => expect(rosters(carol).at(-1)).toEqual([]));
+  }, 40_000);
 });
 
 describe('the realtime connection', () => {

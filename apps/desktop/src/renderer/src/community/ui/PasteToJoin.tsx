@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactElement } from 'react';
-import { looksLikeInvite, parseFriend, parseSignup } from '../../../../shared/invite-link.ts';
+import { looksLikeInvite, parseCallLink, parseFriend, parseSignup } from '../../../../shared/invite-link.ts';
 import type { DeepLink } from '../../../../shared/ipc.ts';
 import { addFriend, addFriendMessage, GREETING } from '../../dm/friends.ts';
+import { offerCallLink } from '../../dm/group-call.ts';
 import { useRiver } from '../../store.ts';
 import { useCommunity } from '../store.ts';
 import { Modal } from './common.tsx';
@@ -18,6 +19,11 @@ function offer(link: DeepLink): void {
       'That is a link code for a new device. Open it on the device you are adding, on its welcome screen.',
       'error',
     );
+    return;
+  }
+  if (link.kind === 'call') {
+    // A call link (2.18): "Ask to join"; nothing is sent until the person asks.
+    offerCallLink(link.link);
     return;
   }
   if (link.kind === 'invite') {
@@ -66,7 +72,10 @@ export function PasteToJoin(): null {
       if (editable(e.target) || editable(document.activeElement)) return;
       const text = e.clipboardData?.getData('text') ?? '';
       const friend = parseFriend(text);
-      if (looksLikeInvite(text)) {
+      if (parseCallLink(text)) {
+        e.preventDefault();
+        offerCallLink(text);
+      } else if (looksLikeInvite(text)) {
         e.preventDefault();
         useCommunity.getState().setModal({ kind: 'join-invite', link: text.trim() });
       } else if (friend) {
