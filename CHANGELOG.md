@@ -6,6 +6,13 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Admin page scrolls again** (and Friends, Social, Calls and Files with
+  long content) in the Aurora, Synthwave and Holo skins: their floating frame
+  clipped the page column, so everything below the window could not be reached
+  with the mouse wheel or a scrollbar.
+
 ## [2.13.0] - 2026-10-18
 
 **River on a phone now looks and feels like a phone app (Telegram / Instagram),
