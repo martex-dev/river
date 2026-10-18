@@ -27,6 +27,10 @@ settings.design ──────┘                                  ▲
 | `src/renderer/src/styles/tokens.css`                                   | Fallback values of every token (before the engine runs)                                      |
 | `src/renderer/src/styles/skins.css`                                    | Structure from attributes: message layouts, avatars, buttons, tabs, layout, skin decorations |
 | `src/renderer/src/styles/design.css`                                   | The appearance centre and theme previews                                                     |
+| `src/renderer/src/appearance/wallpaper.ts`, `use-wallpaper.ts`         | Chat wallpapers (2.18): doodles, gradients, colour, photo; kept readable behind text         |
+| `src/renderer/src/appearance/share.ts`                                 | Theme codes (2.18): `river-theme:` + base64url JSON, read with zod                           |
+| `src/renderer/src/appearance/delight.tsx`, `community/fx.tsx`          | Reaction bursts, the double-tap heart, confetti; off with reduced motion and Calm mode       |
+| `src/renderer/src/styles/looks.css`                                    | Wallpapers, bubble shapes, the live preview, accent picker, bursts, Calm mode                |
 
 ## Tokens (what components may use)
 
@@ -57,7 +61,22 @@ channel with alpha. Shadows may use plain black.
 `data-buttons`, `data-tabs`, `data-scrollbars`, `data-badges`, `data-nav`,
 `data-members`, `data-chat`, `data-titlebar`, `data-focusmode`, `data-glass`,
 `data-glowing`, `data-hover`, `data-ambient`, `data-tabular`, `data-pattern`,
-`data-backdrop`.
+`data-backdrop`, `data-bubbles` (rounded/square/outlined, 2.18). Outside the
+engine: `data-wallpaper` and `data-wp-plate` (the app's wallpaper, with
+`--wp-bg`), `data-calm` (Calm mode), `data-motion`, `data-density`.
+
+## Chat wallpapers (2.18)
+
+`prefs.wallpaper` is the app's wallpaper; `design.chatWallpapers` holds a chat's
+own (`dm:<conversation>` or `ch:<channel>`, at most 300). Both are drawn by
+`wallpaperLayers()` from the theme's colours, so each has a light and a dark
+version. Every colour a wallpaper puts behind text keeps 4.6:1 with the text,
+secondary text and accent text (`test/looks.test.tsx` checks every theme); a
+photo cannot be measured, so it is always partly covered by the conversation
+colour and messages over it get a backing plate. Photos are shrunk to 1600 px
+JPEG before they are kept (once, in `design.images`), blurred in memory, and
+never leave the device. There is no settings sync between devices, so
+wallpapers are per device; exports leave photos out.
 
 ## Add a theme
 
@@ -103,6 +122,10 @@ WCAG AA. `test/design-engine.test.ts` checks every theme automatically.
 
 ## Known limits
 
-- Per-community or per-activity appearance (contextual themes) is not built.
+- Per-community or per-activity appearance (contextual themes) is not built;
+  per-chat wallpapers are (2.18).
+- Alternative app icons are not offered: Android launcher aliases can drop
+  home-screen shortcuts and restart the app, and on Windows the taskbar shows
+  the pinned shortcut's icon whatever the window says.
 - Icon families are not swappable (stroke and size are).
 - Glass and blur cost GPU; they are opt-in per skin and adjustable to 0.

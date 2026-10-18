@@ -333,6 +333,7 @@ export function resolveDesign(
     mode,
     msg: prefs.messageStyle === 'skin' ? skin.messageStyle : prefs.messageStyle,
     own: prefs.ownMessages,
+    bubbles: prefs.bubbles ?? 'rounded',
     avatar: avatars,
     buttons,
     tabs: prefs.tabs === 'skin' ? skin.tabs : prefs.tabs,

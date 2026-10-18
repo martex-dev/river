@@ -119,6 +119,8 @@ describe('message gestures', () => {
     vi.advanceTimersByTime(120);
     tap(104, 102);
     expect(onDoubleTap).toHaveBeenCalledOnce();
+    // Where the finger was (2.18): the big heart bursts there.
+    expect(onDoubleTap).toHaveBeenCalledWith(104, 102);
     tap(100, 100);
     vi.advanceTimersByTime(600);
     tap(100, 100);

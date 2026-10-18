@@ -40,6 +40,9 @@ import { formatMessageLink } from '../message-link.ts';
 import { ProfileCard } from './Members.tsx';
 import { ForwardDialog } from './Forward.tsx';
 import { useRiver } from '../../store.ts';
+import { burst } from '../../appearance/delight.tsx';
+import { ChatWallpaperDialog, useChatWallpaper } from '../../appearance/ChatWallpaper.tsx';
+import { channelKey } from '../../appearance/wallpaper.ts';
 import { phonePop } from '../../phone/nav.ts';
 import { BackIcon, ClipIcon, EmojiIcon, MoreIcon, SearchIcon, SendIcon } from '../../phone/icons.tsx';
 import { replaceCustomShortcodes, replaceShortcodes, searchEmoji, useEmojiIndex } from '../emoji-data.ts';
@@ -158,6 +161,8 @@ export function TextChannel(props: {
   // Phones (2.12): a Telegram-style header with Back; the panels move into its menu.
   const phone = useRiver((r) => isPhone(r.info?.platform));
   const [headMenu, setHeadMenu] = useState<{ x: number; y: number } | null>(null);
+  const [wallpaperOpen, setWallpaperOpen] = useState(false);
+  const wallpaper = useChatWallpaper(channelKey(channel.id));
   useCommunity((x) => x.typing[channel.id]);
   const typingNow = phone ? typingNames(channel.id, community, me) : [];
   const canAttach = can(channel.permissions, Permission.ATTACH_FILES | Permission.SEND_MESSAGES);
@@ -361,7 +366,22 @@ export function TextChannel(props: {
               {view === 'gallery' ? '💬 Show as chat' : '🖼️ Show as gallery'}
             </MenuItem>
           )}
+          <MenuItem
+            onClick={() => {
+              setHeadMenu(null);
+              setWallpaperOpen(true);
+            }}
+          >
+            🎨 Wallpaper
+          </MenuItem>
         </Popover>
+      )}
+      {wallpaperOpen && (
+        <ChatWallpaperDialog
+          chatKey={channelKey(channel.id)}
+          name={`#${channel.name}`}
+          onClose={() => setWallpaperOpen(false)}
+        />
       )}
       {!phone && (
         <header className="chat__head">
@@ -427,6 +447,14 @@ export function TextChannel(props: {
             >
               <UsersIcon size={18} />
             </button>
+            <button
+              className="icon-btn"
+              aria-label="Channel wallpaper"
+              title="Wallpaper for this channel"
+              onClick={() => setWallpaperOpen(true)}
+            >
+              <span aria-hidden="true">🎨</span>
+            </button>
           </span>
         </header>
       )}
@@ -458,6 +486,7 @@ export function TextChannel(props: {
       <GalleryContext.Provider value={gallery}>
         <div
           className="chat__messages"
+          {...wallpaper}
           hidden={view === 'gallery'}
           ref={scrollRef}
           onMouseDown={() => {
@@ -751,8 +780,9 @@ function MessageView(props: {
     onHold: (x, y) => setMenu({ x, y }),
     ...(canReact
       ? {
-          onDoubleTap: () => {
+          onDoubleTap: (x, y) => {
             const heart = reactions.find((r) => r.emoji === '❤️');
+            if (!heart?.mine) burst('❤️', x, y, true);
             react('❤️', !heart?.mine);
           },
         }
