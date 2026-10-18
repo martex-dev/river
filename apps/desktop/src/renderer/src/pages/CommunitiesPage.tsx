@@ -14,7 +14,8 @@ import {
 } from '../community/ui/PasteToJoin.tsx';
 import { StartScreen } from '../community/ui/StartScreen.tsx';
 import { ThreadPanel } from '../community/ui/Thread.tsx';
-import { useCommunity } from '../community/store.ts';
+import { holdToast, useCommunity } from '../community/store.ts';
+import { tr } from '../i18n.ts';
 import { canOpenCommunitySettings } from '../community/settings-tabs.ts';
 import { play } from '../community/sound.ts';
 import { pttKeyIsTyping } from '../community/ptt.ts';
@@ -225,12 +226,31 @@ function Modals({ me }: { me: string }): ReactElement | null {
   }
 }
 
-function Toast(): ReactElement | null {
+export function Toast(): ReactElement | null {
   const toast = useCommunity((s) => s.toast);
   if (!toast) return null;
+  // Errors are announced at once (alert); the rest politely (status). The pointer on it keeps it
+  // up, and × closes it (2.13.1).
   return (
-    <div className={`river-toast river-toast--${toast.tone}`} role="status">
-      {toast.text}
+    <div
+      className={`river-toast river-toast--${toast.tone}`}
+      role={toast.tone === 'error' ? 'alert' : 'status'}
+      onMouseEnter={() => holdToast(true)}
+      onMouseLeave={() => holdToast(false)}
+    >
+      <span className="river-toast__text">{toast.text}</span>
+      <button
+        type="button"
+        className="river-toast__close"
+        aria-label="Dismiss notification"
+        title={tr('Dismiss')}
+        onClick={() => {
+          holdToast(true);
+          useCommunity.setState({ toast: null });
+        }}
+      >
+        ×
+      </button>
     </div>
   );
 }

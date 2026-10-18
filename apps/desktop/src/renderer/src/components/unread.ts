@@ -13,6 +13,22 @@ export function newSince(messages: ReadonlyArray<{ mine: boolean; sentAt: string
   return n;
 }
 
+/**
+ * The newest messages as main sent them, plus what arrived live while that answer was on its way
+ * (2.13.1): a message newer than the answer's newest that the answer does not have is kept, not
+ * dropped until the conversation is opened again.
+ */
+export function withLiveMessages<T extends { id: string; sentAt: string }>(
+  loaded: T[],
+  current: readonly T[] | undefined,
+): T[] {
+  if (!current?.length) return loaded;
+  const newest = loaded.at(-1)?.sentAt ?? '';
+  const known = new Set(loaded.map((m) => m.id));
+  const live = current.filter((m) => !known.has(m.id) && m.sentAt > newest);
+  return live.length ? [...loaded, ...live] : loaded;
+}
+
 /** A date as YYYY-MM-DD in this device's time zone (what a date picker shows). */
 export function localDay(d: Date): string {
   const pad = (n: number): string => String(n).padStart(2, '0');

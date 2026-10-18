@@ -400,6 +400,11 @@ interface Deps {
   log: Logger;
   /** Privacy choices (2.6): read receipts and typing indicators, both ways. Default: on. */
   privacy?: () => { readReceipts: boolean; typing: boolean };
+  /**
+   * What this device keeps (2.13): messages older than `historyDays` are deleted here (0 = keep
+   * them), and chats you start get the `newChatTimer` disappearing-messages timer (0 = off).
+   */
+  keep?: () => { historyDays: number; newChatTimer: number };
 }
 
 interface MessageRow {
@@ -464,6 +469,8 @@ export class DmService {
   private ownCall: { peer: string; callId: string; outgoing: boolean; answered: boolean; at: number } | null =
     null;
   private readonly ringEndListeners = new Set<(end: RingEnd) => void>();
+  /** When old history was last looked for (Settings → Privacy → Keep messages). */
+  private historySweptAt = 0;
   /** A changed bio goes to friends once typing has settled (not once per save). */
   private bioShareTimer: NodeJS.Timeout | undefined;
 
@@ -475,6 +482,11 @@ export class DmService {
     const sweep = setInterval(() => {
       try {
         this.sweepExpired();
+        // Old history goes within minutes; a full look at every message is not needed each time.
+        if (Date.now() - this.historySweptAt > 5 * 60_000) {
+          this.historySweptAt = Date.now();
+          this.sweepHistory();
+        }
         if (this.deps.account.status().state === 'registered') {
           void this.sendDueScheduled().catch(() => undefined);
           // A connection can stay up for weeks: the signed prekey still rotates, and the
@@ -2555,6 +2567,7 @@ export class DmService {
           };
           this.saveGroup(g);
           await this.sendGroupState(g);
+          await this.startWithDefaultTimer(g.id);
           this.emitConversations();
           return out(this.conversations().find((c) => c.riverId === g.id)!);
         }
@@ -2701,6 +2714,7 @@ export class DmService {
     const earlier = reuseId ? this.row(reuseId) : undefined;
     const reuse = !!earlier && earlier.sender === me && earlier.peer === act.peer;
     const id = reuseId && (!earlier || reuse) ? reuseId : randomBytes(16).toString('base64url');
+    if (!reuse) await this.startWithDefaultTimer(act.peer);
     const sentAt = new Date().toISOString();
     const body = {
       text: act.text,
@@ -3075,12 +3089,59 @@ export class DmService {
       ).map((r) => r.id),
     );
   }
+  /**
+   * A chat you start (the first message to someone, or a new group) gets the disappearing-messages
+   * timer chosen in Settings → Privacy (2.13), as if you had set it: both sides are told, and
+   * every message carries it anyway, so it disappears on their side even before they accept.
+   * Chats that already have messages or a timer are never changed.
+   */
+  private async startWithDefaultTimer(conv: string): Promise<void> {
+    const seconds = this.deps.keep?.().newChatTimer ?? 0;
+    if (!seconds || seconds > MAX_TIMER || this.timerOf(conv)) return;
+    const any = this.db().prepare('SELECT 1 FROM dm_messages WHERE peer = ? LIMIT 1').get(conv);
+    if (any) return;
+    this.applyTimer(conv, seconds, this.me());
+    this.syncOp(conv, { t: 'timer', seconds });
+    try {
+      await this.deliver(conv, {
+        v: 1,
+        t: 'timer',
+        seconds,
+        ...(isGroupId(conv) ? { groupId: conv } : {}),
+      });
+    } catch (err) {
+      // The messages themselves carry the timer; the notice can be missed.
+      this.deps.log.warn(`The disappearing-messages timer was not sent: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Settings → Privacy → Keep messages on this device (2.13): deletes this device's direct and
+   * group messages older than the chosen number of days. Only here: other devices, and the
+   * people you talk to, keep their own copies. Returns how many.
+   */
+  sweepHistory(now = new Date()): number {
+    const days = this.deps.keep?.().historyDays ?? 0;
+    if (!days) return 0;
+    const cutoff = new Date(now.getTime() - days * 86_400_000).toISOString();
+    return this.removeRows(
+      this.db()
+        .prepare('SELECT id, peer, body FROM dm_messages WHERE COALESCE(received_at, sent_at) < ?')
+        .all(cutoff) as Array<{ id: string; peer: string; body: string }>,
+    );
+  }
+
   /** Deletes this device's copies of messages whose time is up (2.4). Returns how many. */
   sweepExpired(now = new Date()): number {
+    return this.removeRows(
+      this.db()
+        .prepare('SELECT id, peer, body FROM dm_messages WHERE expires_at IS NOT NULL AND expires_at <= ?')
+        .all(now.toISOString()) as Array<{ id: string; peer: string; body: string }>,
+    );
+  }
+
+  private removeRows(rows: Array<{ id: string; peer: string; body: string }>): number {
     const db = this.db();
-    const rows = db
-      .prepare('SELECT id, peer, body FROM dm_messages WHERE expires_at IS NOT NULL AND expires_at <= ?')
-      .all(now.toISOString()) as Array<{ id: string; peer: string; body: string }>;
     for (const r of rows) {
       db.prepare('DELETE FROM dm_messages WHERE id = ?').run(r.id);
       try {

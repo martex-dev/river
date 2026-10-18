@@ -37,6 +37,38 @@ export const serverUrlSchema = z
     return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
   });
 
+/**
+ * A proxy's host: a name or IPv4 address, or an IPv6 address in brackets. No scheme, port,
+ * credentials or path (those would be parsed differently by Chromium and by River's own code).
+ */
+export const proxyHostSchema = z
+  .string()
+  .trim()
+  .max(253)
+  .regex(
+    /^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*|\[[0-9A-Fa-f:.]{2,45}\])$/,
+    {
+      message: 'Enter a host name or address, like 127.0.0.1',
+    },
+  );
+
+/** Settings → Privacy → Proxy (2.13): where River's connections go first. */
+export const proxySettingsSchema = z
+  .object({
+    /** off: connect directly. socks5: e.g. Tor (127.0.0.1:9050) or Tor Browser (9150). http: HTTP CONNECT. */
+    mode: z.enum(['off', 'socks5', 'http']),
+    host: proxyHostSchema,
+    port: z.number().int().min(1).max(65_535),
+  })
+  .strict();
+export type ProxySettings = z.infer<typeof proxySettingsSchema>;
+
+/** The longest disappearing-messages timer: MAX_TIMER in dm.ts (not imported: dm.ts → settings.ts). */
+const MAX_NEW_CHAT_TIMER = 28 * 86_400;
+
+/** Keep direct messages and groups on this device only this many days (0 = keep them). */
+export const HISTORY_DAY_CHOICES = [0, 1, 7, 30, 90, 365] as const;
+
 const keyCombo = z
   .string()
   .max(64)
@@ -203,6 +235,14 @@ export const settingsSchema = z.object({
     /** Added in 2.6.0: show "typing…" (off: you also do not see other people typing). */
     typingIndicators: z.boolean(),
   }),
+  /** Added in 2.13: connections, and what this device keeps. */
+  privacy: z.object({
+    proxy: proxySettingsSchema,
+    /** Delete this device's direct messages and group messages older than this many days (0 = never). */
+    historyDays: z.number().int().min(0).max(3650),
+    /** Disappearing-messages timer for chats you start from now on (seconds, 0 = off). */
+    newChatTimer: z.number().int().min(0).max(MAX_NEW_CHAT_TIMER),
+  }),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -268,6 +308,11 @@ export const DEFAULT_SETTINGS: Settings = {
     readReceipts: true,
     typingIndicators: true,
   },
+  privacy: {
+    proxy: { mode: 'off', host: '127.0.0.1', port: 9050 },
+    historyDays: 0,
+    newChatTimer: 0,
+  },
 };
 
 export const SETTINGS_SECTIONS = [
@@ -281,6 +326,7 @@ export const SETTINGS_SECTIONS = [
   'hosting',
   'rail',
   'presence',
+  'privacy',
 ] as const;
 
 /**
@@ -356,6 +402,7 @@ export const settingsPatchSchema = z
     hosting: settingsSchema.shape.hosting.partial().strict().optional(),
     presence: settingsSchema.shape.presence.partial().strict().optional(),
     rail: settingsSchema.shape.rail.partial().strict().optional(),
+    privacy: settingsSchema.shape.privacy.partial().strict().optional(),
   })
   .strict();
 
@@ -383,5 +430,6 @@ function applyPatch(current: Settings, patch: z.output<typeof settingsPatchSchem
     hosting: { ...current.hosting, ...patch.hosting },
     presence: { ...current.presence, ...patch.presence },
     rail: { ...current.rail, ...patch.rail },
+    privacy: { ...current.privacy, ...patch.privacy },
   });
 }

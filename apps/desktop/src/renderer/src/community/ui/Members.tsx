@@ -46,7 +46,11 @@ export function MemberList({ community, me }: { community: CommunityView; me: st
             >
               <Avatar id={m.riverId} name={m.name} avatar={m.avatar} size={32} status={presenceOf(m)} />
               <span className="member__text">
-                <span className="member__name" style={m.color ? { color: hex(m.color) } : undefined}>
+                <span
+                  className="member__name"
+                  title={m.name}
+                  style={m.color ? { color: hex(m.color) } : undefined}
+                >
                   {m.name}
                   {m.roleIcon && (
                     <span className="role-icon" aria-hidden="true">

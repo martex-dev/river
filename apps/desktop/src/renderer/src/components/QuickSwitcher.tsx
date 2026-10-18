@@ -205,7 +205,13 @@ export function QuickSwitcher(): ReactElement | null {
         // After this key press is fully handled, so other Esc handlers are never disturbed.
         const whole = e.shiftKey;
         window.setTimeout(() => markRead(whole), 0);
-      } else if (isPrintable(e) && !typingSomewhere(e.target) && !(e.key === ' ' && activates(e.target))) {
+      } else if (
+        isPrintable(e) &&
+        !typingSomewhere(e.target) &&
+        !(e.key === ' ' && activates(e.target)) &&
+        // Not while a dialog or menu is open: the letters must not land in the chat behind it.
+        !somethingOpen()
+      ) {
         // Start typing anywhere: the letters go into the message box, like on Discord.
         const box = document.querySelector<HTMLTextAreaElement>('.chat__composer textarea');
         if (box && !box.disabled) box.focus();

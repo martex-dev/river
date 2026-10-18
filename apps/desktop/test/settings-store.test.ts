@@ -140,6 +140,8 @@ describe('SettingsStore', () => {
       hosting: { enabled: false, keepAwake: true },
       presence: DEFAULT_SETTINGS.presence,
       rail: DEFAULT_SETTINGS.rail,
+      // 2.13: no proxy, history kept, no timer for new chats.
+      privacy: DEFAULT_SETTINGS.privacy,
     });
     // A clean upgrade is not treated as corruption.
     expect(readdirSync(dir).some((n) => n.includes('.invalid-'))).toBe(false);

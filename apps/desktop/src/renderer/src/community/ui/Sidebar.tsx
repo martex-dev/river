@@ -66,7 +66,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
           setMenu({ x: r.left + 8, y: r.bottom + 4 });
         }}
       >
-        <strong>{community.name}</strong>
+        <strong title={community.name}>{community.name}</strong>
         <ChevronIcon size={16} />
       </button>
       {menu && (
@@ -297,7 +297,9 @@ export function ChannelRow(props: {
               <HashIcon size={17} />
             )}
           </span>
-          <span className="channel__name">{ch.name}</span>
+          <span className="channel__name" title={ch.name}>
+            {ch.name}
+          </span>
           {ch.nsfw && (
             <span className="channel__nsfw" title="Age-restricted (18+)">
               18+
@@ -559,7 +561,9 @@ export function UserPanel({ me, community }: { me: string; community?: Community
           speaking={s.call?.speaking.has(me)}
         />
         <span className="user-panel__text">
-          <strong>{member?.name ?? identity?.displayName ?? 'You'}</strong>
+          <strong title={member?.name ?? identity?.displayName ?? 'You'}>
+            {member?.name ?? identity?.displayName ?? 'You'}
+          </strong>
           <span className="muted small">
             {s.connection !== 'online'
               ? 'Offline'

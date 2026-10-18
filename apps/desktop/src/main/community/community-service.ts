@@ -72,6 +72,7 @@ import {
 import { roleOrderChanges } from '../../shared/role-order.ts';
 import { communityIconSchema, templateById, type TemplateId } from '../../shared/templates.ts';
 import { describeAudit } from './audit-text.ts';
+import { stripImageMetadata } from '../image-metadata.ts';
 import { openSignal, signSignal, SignalReplayGuard, type SignalKeys } from './call-signal.ts';
 import type { ServerLocator } from './server-locator.ts';
 import type { PresenceTracker } from '../presence.ts';
@@ -3071,7 +3072,8 @@ export class CommunityService {
     retain?: 'dm',
   ): Promise<AttachmentPointer> {
     const requestBytes = this.requireBytes();
-    const enc = encryptAttachment(file.bytes);
+    // Photos lose their location, camera and other hidden metadata first (2.13).
+    const enc = encryptAttachment(stripImageMetadata(file.bytes, file.mime));
     const url = `${this.server()}${API_PREFIX}/attachments${retain ? `?retain=${retain}` : ''}`;
     const post = async (): Promise<Uint8Array> =>
       requestBytes(url, { method: 'POST', body: enc.blob, token: await this.token(), maxBytes: 4096 });
@@ -3532,7 +3534,13 @@ export class CommunityService {
   /** Every 30 s: tell the app when an event you are interested in starts. */
   private watchEvents(): void {
     if (this.eventTimer) return;
-    this.eventTimer = setInterval(() => this.remindEvents(), 30_000);
+    this.eventTimer = setInterval(() => {
+      try {
+        this.remindEvents();
+      } catch {
+        // Storage closed (locked, signed out, quitting): no reminders until it is open again.
+      }
+    }, 30_000);
     this.eventTimer.unref?.();
   }
 
@@ -3570,6 +3578,8 @@ export class CommunityService {
   }
 
   stop(): void {
+    if (this.eventTimer) clearInterval(this.eventTimer);
+    this.eventTimer = null;
     for (const timer of this.keyTimers.values()) clearTimeout(timer);
     this.keyTimers.clear();
     // An open still waiting for its token gives up when it gets it.

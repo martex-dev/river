@@ -31,6 +31,7 @@ import { WebCodecsRelay } from './relay-audio.ts';
 import { forgetCall, rememberCall } from './rejoin.ts';
 import { resumeAudio } from './peer-audio.ts';
 import { phoneShellActive } from '../phone/mode.ts';
+import { withLiveMessages } from '../components/unread.ts';
 
 export type Modal =
   | { kind: 'community-settings'; communityId: string; tab?: CommunityTab }
@@ -110,6 +111,8 @@ interface CommunityState {
   markUnreadFrom(message: ChatMessage): void;
   /** Channels whose older history is exhausted. */
   noMore: Record<string, boolean>;
+  /** Channels whose newest messages could not be loaded (2.13.1): the chat offers Retry. */
+  historyFailed: Record<string, boolean>;
   /** A message to scroll to and flash once its channel shows it (message links, search). */
   pendingJump: { channelId: string; messageId: string } | null;
   /** Opens a message: its community and channel, then scrolls to it. False if you cannot see it. */
@@ -158,6 +161,15 @@ interface CommunityState {
 let toastTimer: number | undefined;
 
 /**
+ * Keeps the toast on screen while the pointer is on it (it is being read, or its text selected)
+ * and gives it a little longer once the pointer leaves (2.13.1).
+ */
+export function holdToast(hold: boolean): void {
+  window.clearTimeout(toastTimer);
+  if (!hold) toastTimer = window.setTimeout(() => useCommunity.setState({ toast: null }), 2500);
+}
+
+/**
  * The voice join underway, if any. Set synchronously when Join is pressed, so a
  * second click while the first is still opening the microphone does nothing.
  * Disconnect while joining marks it cancelled; it stays set until that join has
@@ -166,6 +178,9 @@ let toastTimer: number | undefined;
 let joining: { cancelled: boolean } | null = null;
 /** Whether you were muted before deafening, so undeafening puts that back. */
 let mutedBeforeDeafen = false;
+
+/** Requests for a channel's newest page on their way (opening it twice at once asks once). */
+const newestInFlight = new Map<string, Promise<void>>();
 
 /** "Load older" requests on their way, per channel. */
 const olderInFlight = new Map<string, Promise<number>>();
@@ -275,6 +290,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     if (res.ok) set({ threads: { ...get().threads, [rootId]: res.value as ChatMessage[] } });
   },
   noMore: {},
+  historyFailed: {},
 
   selecting: null,
   stickers: {},
@@ -760,25 +776,12 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     void get().loadMessages(channelId);
   },
 
-  loadMessages: async (channelId) => {
-    const c = get().communities.find((x) => x.channels.some((ch) => ch.id === channelId));
-    if (c?.channels.find((ch) => ch.id === channelId)?.kind !== 'text') return;
-    const res = await window.river.community.action({ a: 'historyPage', channelId });
-    const page = res.ok ? (res.value as HistoryPage | null) : null;
-    if (!page || !Array.isArray(page.messages)) return;
-    // The newest page replaces what was loaded, so older history can be loaded again; whether
-    // there is any is main's answer, not a guess from how many messages could be opened.
-    olderCursor.delete(channelId);
-    if (page.before)
-      olderCursor.set(channelId, {
-        before: page.before,
-        ...(page.beforeId ? { beforeId: page.beforeId } : {}),
-        anchor: page.messages[0]?.id ?? null,
-      });
-    set({
-      messages: { ...get().messages, [channelId]: page.messages },
-      noMore: { ...get().noMore, [channelId]: !page.hasMore },
-    });
+  loadMessages: (channelId) => {
+    const pending = newestInFlight.get(channelId);
+    if (pending) return pending;
+    const promise = loadNewest(channelId).finally(() => newestInFlight.delete(channelId));
+    newestInFlight.set(channelId, promise);
+    return promise;
   },
 
   joinVoice: async (channelId, me) => {
@@ -847,7 +850,8 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     if (tone === 'error') play('error');
     window.clearTimeout(toastTimer);
     set({ toast: { text, tone } });
-    toastTimer = window.setTimeout(() => set({ toast: null }), 4500);
+    // Errors stay longer: they usually say what to do.
+    toastTimer = window.setTimeout(() => set({ toast: null }), tone === 'error' ? 7000 : 4500);
   },
 
   run: async (action) => {
@@ -859,6 +863,37 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     return res.value;
   },
 }));
+
+/** The body of loadMessages: the channel's newest page from main. */
+async function loadNewest(channelId: string): Promise<void> {
+  const get = useCommunity.getState;
+  const set = useCommunity.setState;
+  const c = get().communities.find((x) => x.channels.some((ch) => ch.id === channelId));
+  if (c?.channels.find((ch) => ch.id === channelId)?.kind !== 'text') return;
+  const res = await window.river.community.action({ a: 'historyPage', channelId });
+  const page = res.ok ? (res.value as HistoryPage | null) : null;
+  if (!page || !Array.isArray(page.messages)) {
+    // Shown in the channel with Retry, instead of an empty channel or a skeleton forever.
+    if (!get().messages[channelId]) set({ historyFailed: { ...get().historyFailed, [channelId]: true } });
+    return;
+  }
+  const { [channelId]: _failed, ...historyFailed } = get().historyFailed;
+  const messages = withLiveMessages(page.messages, get().messages[channelId]);
+  // The newest page replaces what was loaded, so older history can be loaded again; whether
+  // there is any is main's answer, not a guess from how many messages could be opened.
+  olderCursor.delete(channelId);
+  if (page.before)
+    olderCursor.set(channelId, {
+      before: page.before,
+      ...(page.beforeId ? { beforeId: page.beforeId } : {}),
+      anchor: messages[0]?.id ?? null,
+    });
+  set({
+    messages: { ...get().messages, [channelId]: messages },
+    noMore: { ...get().noMore, [channelId]: !page.hasMore },
+    historyFailed,
+  });
+}
 
 /** The body of joinVoice, once the join is under way (see `joining`). */
 async function joinVoiceNow(channelId: string, me: string, token: { cancelled: boolean }): Promise<void> {

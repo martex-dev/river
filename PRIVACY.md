@@ -41,7 +41,26 @@ privacy policy applies to these requests.
 ## What River keeps on your computer
 
 Your identity key pair, messages, display name and settings, inside River's
-encrypted local database.
+encrypted local database. In **Settings → System → Privacy** you can have this
+device delete direct and group messages older than a day, a week, 30 days, 90
+days or a year, and give chats you start a disappearing-messages timer by
+default (2.13).
+
+## Hiding your IP address (computers, 2.13)
+
+**Settings → System → Privacy → Connect through a proxy** sends River's
+connections (to your server, the address relay and update checks) through a
+SOCKS5 proxy such as Tor (`127.0.0.1:9050`, or `9150` for Tor Browser) or an
+HTTP proxy. The server then sees the proxy's address instead of yours; it still
+sees your account and who you talk to. Calls never connect directly while it is
+on, link previews are off, and River does not connect at all when the proxy is
+down. **Test connection** checks that your server answers through it.
+
+## Photos
+
+Before a JPEG, PNG or WebP picture is encrypted and sent, River removes its
+hidden metadata (location, camera, time, descriptions), keeping only which way
+up it is. Videos and other files are sent as they are.
 
 ## What a River server stores (from 0.1.0)
 
