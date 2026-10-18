@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.21.1] - 2026-10-19
+
+**Faster everywhere: the chat list in milliseconds with big accounts, quicker servers, smaller start-up.**
+
 ### Changed
 
 - Faster with big accounts: the chat list (built again on every message) is
