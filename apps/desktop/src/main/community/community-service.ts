@@ -1727,7 +1727,13 @@ export class CommunityService {
       throw new CommunityError('This invite link is damaged: its key does not match the community.');
     }
     if (!Number.isInteger(epoch) || epoch < 0) epoch = 0;
-    this.storeKey(res.id, invite.key, epoch);
+    // The community ID comes from the server, not from the link. A community this device already
+    // holds keys for never takes a key from an invite (2.18): otherwise a server could answer any
+    // invite with the ID of a community you are in and hand you a key it made, which you would
+    // then seal with and pass on to the other members as the next epoch. Keys you miss there
+    // arrive as for any member, each with a proof sealed under the key before it.
+    if (!this.keys.has(res.id)) this.loadKeys();
+    if (!this.keys.has(res.id)) this.storeKey(res.id, invite.key, epoch);
     await this.publishProfile(res.id);
     await this.refresh();
     this.ensureSocket();

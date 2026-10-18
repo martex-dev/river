@@ -118,7 +118,11 @@ than per-member sender keys:
   ciphertext between communities, channels or fields.
 - The key travels only in the invite link's URL fragment (`#c=…&k=…`), which
   browsers and River never send to a server. Joining verifies the key opens the
-  community metadata before it is stored.
+  community metadata before it is stored. The community ID comes from the
+  server's answer, so since 2.18 an invite never adds a key to a community the
+  device already holds keys for (a server could otherwise answer any invite
+  with the ID of a community you are in and a key it made); keys missed there
+  arrive with a proof, as for any member.
 - **Reactions**: the server groups identical reactions by a tag
   `HMAC-SHA256(HKDF-SHA256(communityKey, info="river-reaction-tag-v1|<communityId>"), messageId‖"|"‖emoji)`
   truncated to 128 bits; the emoji itself is sealed. Clients show a reaction

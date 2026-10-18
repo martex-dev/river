@@ -42,6 +42,8 @@ let server: FastifyInstance;
 let serverDb: RiverDatabase;
 const locals: LocalDatabase[] = [];
 const services: CommunityService[] = [];
+/** A malicious server changing its answers (a test sets it; cleared after each test). */
+let rewrite: ((path: string, body: Buffer) => Buffer) | null = null;
 
 const injectFetch: typeof fetch = async (input, init) => {
   const url = new URL(String(input));
@@ -53,7 +55,8 @@ const injectFetch: typeof fetch = async (input, init) => {
       ? { payload: init.body instanceof Uint8Array ? Buffer.from(init.body) : String(init.body) }
       : {}),
   });
-  return new Response(res.rawPayload.length ? new Uint8Array(res.rawPayload) : null, {
+  const payload = rewrite ? rewrite(url.pathname, res.rawPayload) : res.rawPayload;
+  return new Response(payload.length ? new Uint8Array(payload) : null, {
     status: res.statusCode,
     headers: res.headers as Record<string, string>,
   });
@@ -204,6 +207,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  rewrite = null;
   for (const s of services.splice(0)) s.stop();
   for (const l of locals.splice(0)) l.close();
   await server.close();
@@ -474,6 +478,32 @@ describe('community keys a server cannot inject', { timeout: 90_000 }, () => {
       })
       .execute();
   }
+
+  it('an invite answered with the ID of a community you are in adds no key to it (2.18)', async () => {
+    const { alice, bob, id } = await crew();
+    const eve = await person('Eve');
+    const bait = await eve.community.create('Bait');
+    const baitLink = await eve.community.invite(bait.id);
+    const baitKey = keyOf(eve, bait.id, 0);
+    // The server answers Alice's join of Eve's invite as if it were for Crew, with a check value
+    // sealed (under the key in Eve's link, which the server knows) for the next epoch of Crew.
+    rewrite = (path, body) => {
+      if (!path.endsWith('/invites/join')) return body;
+      const res = JSON.parse(body.toString('utf8')) as Record<string, unknown>;
+      return Buffer.from(
+        JSON.stringify({ ...res, id, inviteCheck: seal(baitKey, id, 'invite', { epoch: 1 }) }),
+      );
+    };
+    await serverDb.db.updateTable('communities').set({ key_epoch: 1 }).where('id', '=', id).execute();
+    await alice.community.join(baitLink, async () => undefined).catch(() => undefined);
+    rewrite = null;
+    expect(epochs(alice, id)).toEqual([0]);
+    expect(keyOf(alice, id, 0).equals(keyOf(bob, id, 0))).toBe(true);
+    // A link to a community you are already in still just opens it.
+    const crewLink = await alice.community.invite(id);
+    expect((await bob.community.join(crewLink, async () => undefined)).id).toBe(id);
+    expect(epochs(bob, id)).toEqual([0]);
+  });
 
   it('a key from a member who never held one is refused, with or without a made-up proof', async () => {
     const { alice, bob, id } = await crew();

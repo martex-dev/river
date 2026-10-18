@@ -14,6 +14,8 @@ All notable changes to River are documented here. The format follows
   that only for a call it knows about.
 - Lock River (Android and iPhone): while River is locked, screen readers and a
   keyboard can no longer reach the interface under the lock cover.
+- Communities: opening an invite link never changes the key of a community you
+  are already in, so a server cannot slip a key it knows into one that way.
 
 ## [2.17.0] - 2026-10-18
 
