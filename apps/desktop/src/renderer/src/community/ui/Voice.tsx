@@ -11,6 +11,8 @@ import {
 import { tr } from '../../i18n.ts';
 import { SCREEN_QUALITIES, saveQuality, savedQuality, type ScreenQuality } from '../screen-quality.ts';
 import { StagePanel } from './Stage.tsx';
+import { MeetingBar, useMeetingView, useSpeakerFocus } from './Meeting.tsx';
+import { encryptionNote } from '../meeting.ts';
 import { priorityFactor } from '../priority-speaker.ts';
 import { SoundboardButton } from './Soundboard.tsx';
 import { describeLink, linkQuality, type LinkStats } from '../link-stats.ts';
@@ -52,6 +54,7 @@ export function VoiceChannel(props: {
   const [picker, setPicker] = useState<ScreenSource[] | null>(null);
   const [quality, setQuality] = useState<ScreenQuality>(savedQuality);
   const [focus, setFocus] = useState<string | null>(null);
+  const [view, setView] = useMeetingView();
   const placesTaken = (community.voice[channel.id] ?? []).length;
   const full =
     channel.userLimit > 0 &&
@@ -67,7 +70,20 @@ export function VoiceChannel(props: {
     : [];
   // On a stage only the speakers get tiles; the audience is listed in the stage panel.
   const shownTiles = channel.stage ? tiles.filter((t) => !community.voiceStates[t.id]?.serverMuted) : tiles;
-  const focused = focus && shownTiles.some((t) => t.id === focus) ? focus : null;
+  // Speaker view (2.13) shows whoever talks or shares large; a tile you clicked stays large.
+  const auto = useSpeakerFocus(
+    inThisCall ? call : null,
+    me,
+    shownTiles.map((t) => t.id),
+    view,
+  );
+  const focused = focus && shownTiles.some((t) => t.id === focus) ? focus : auto;
+  const note = encryptionNote({
+    inCall: inThisCall,
+    others: remotes.length,
+    relayed: remotes.filter((r) => r.relayed).length,
+    large: inThisCall && call.largeRoom,
+  });
 
   return (
     <div className="voice">
@@ -77,7 +93,7 @@ export function VoiceChannel(props: {
         </span>
         <strong>{channel.name}</strong>
         <span className="chat__topic">
-          {participants.length} in channel · encrypted directly between devices (DTLS-SRTP)
+          {participants.length} in channel · {note}
         </span>
       </header>
 
@@ -122,9 +138,23 @@ export function VoiceChannel(props: {
       ) : (
         <>
           {channel.stage && <StagePanel community={community} channel={channel} me={me} />}
+          {!phone && (
+            <MeetingBar
+              call={call}
+              community={community}
+              channel={channel}
+              me={me}
+              view={view}
+              onView={(v) => {
+                setView(v);
+                setFocus(null);
+              }}
+            />
+          )}
           <div
             className={`voice__grid ${focused ? 'voice__grid--focus' : ''}`}
             data-count={shownTiles.length}
+            data-size={shownTiles.length > 12 ? 'large' : undefined}
           >
             {shownTiles.map((t) =>
               t.self ? (
@@ -140,6 +170,7 @@ export function VoiceChannel(props: {
                   screen={call.localTrack('screen')}
                   focused={focused === me}
                   onClick={() => setFocus(focused === me ? null : me)}
+                  hand={call.hand !== null}
                   self
                 />
               ) : (
@@ -363,6 +394,7 @@ function Tile(props: {
   focused: boolean;
   onClick(): void;
   self?: boolean;
+  hand?: boolean;
 }): ReactElement {
   return (
     <div
@@ -392,7 +424,17 @@ function Tile(props: {
         {props.muted ? ' · muted' : ''}
       </span>
       {props.screen && <span className="live-badge tile__live">LIVE</span>}
+      {props.hand && <HandBadge />}
     </div>
+  );
+}
+
+/** ✋ on the tile of someone whose hand is up (2.13). */
+function HandBadge(): ReactElement {
+  return (
+    <span className="tile__hand" title="Hand raised" role="img" aria-label="Hand raised">
+      ✋
+    </span>
   );
 }
 
@@ -470,7 +512,10 @@ function RemoteTile(props: {
   const label = member?.name ?? 'Someone';
   const state = community.voiceStates[peer.id];
   // Relayed voice works while the direct connection is still being set up.
-  const connecting = peer.state !== 'connected' && !peer.relayed;
+  // A join takes a moment to connect (the server carries voice after 1.5 s if the direct way is
+  // slow): only someone still not reachable after JOIN_GRACE_MS shows "connecting…".
+  const settling = useJoinGrace(peer.since, peer.reconnecting);
+  const connecting = peer.state !== 'connected' && !peer.relayed && !settling;
   return (
     <div
       className={`tile ${connecting ? 'tile--connecting' : ''} ${peer.screenOn ? 'tile--screen' : ''} ${props.speaking ? 'is-speaking' : ''} ${props.focused ? 'is-focused' : ''}`}
@@ -514,6 +559,7 @@ function RemoteTile(props: {
             : ''}
       </span>
       {peer.screenOn && <span className="live-badge tile__live">LIVE</span>}
+      {peer.hand ? <HandBadge /> : null}
     </div>
   );
 }
@@ -644,4 +690,22 @@ function SpeakingWaves(): ReactElement {
       <i />
     </span>
   );
+}
+
+/** How long a newly joined person is shown without "connecting…" while their link comes up. */
+export const JOIN_GRACE_MS = 3000;
+
+/** True during the first JOIN_GRACE_MS after `since` (never while reconnecting); re-renders when it ends. */
+export function useJoinGrace(since: number | undefined, reconnecting: boolean): boolean {
+  const until = since === undefined || reconnecting ? 0 : since + JOIN_GRACE_MS;
+  /** The grace that has run out (its end time); the one for `until` is over once they match. */
+  const [ended, setEnded] = useState(0);
+  useEffect(() => {
+    if (!until) return;
+    const t = setTimeout(() => setEnded(until), Math.max(0, until - Date.now()));
+    return () => clearTimeout(t);
+  }, [until]);
+  // A grace that was over before this tile appeared (an old join) never shows.
+  const [shownAt] = useState(() => Date.now());
+  return until > shownAt && ended !== until;
 }

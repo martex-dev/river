@@ -83,6 +83,9 @@ export const IPC = {
   voiceSignal: 'river:voice:signal',
   voiceIceServers: 'river:voice:ice-servers',
   voiceRelay: 'river:voice:relay',
+  /** A relayed voice frame to everyone in the call (servers from 2.13). */
+  voiceRelayAll: 'river:voice:relay-all',
+  voiceRelayInfo: 'river:voice:relay-info',
   voiceCallRoom: 'river:voice:call-room',
   voiceRelayIn: 'river:voice:relay-in',
   diagnosticsRun: 'river:diagnostics:run',
@@ -760,6 +763,10 @@ export interface RiverApi {
     point(x: number, y: number): void;
     /** Sends an encrypted voice frame through the server to people we cannot reach directly. */
     relay(to: string[], payload: Uint8Array): void;
+    /** Sends an encrypted voice frame through the server to everyone else in the call (large rooms). */
+    relayAll(payload: Uint8Array): void;
+    /** Whether the server takes frames for everyone in the call (relayAll); older servers do not. */
+    relayInfo(): Promise<{ all: boolean }>;
     /** Joins (null: leaves) a 1:1 call's private relay room. */
     callRoom(room: string | null): Promise<void>;
     onRelay(listener: (from: string, payload: Uint8Array) => void): () => void;

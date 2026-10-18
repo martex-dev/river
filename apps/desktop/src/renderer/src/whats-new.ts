@@ -3,6 +3,11 @@
  * got, shown once. Fresh installs see nothing; full notes are in the release.
  */
 export const HIGHLIGHTS: Record<string, string[]> = {
+  '2.14.0': [
+    'Voice channels for big groups: everyone heard, still end-to-end encrypted',
+    'Meetings: Grid or Speaker view, Raise hand in order, a quick noise-suppression switch',
+    'Someone joining voice is heard at once instead of showing "connecting…"',
+  ],
   '2.13.0': [
     'On phones, River now looks like a phone app: tabs at the bottom, a chat list, full-screen chats with bubbles',
     'Swipe a chat for quick actions; hold a message to react, reply or forward',

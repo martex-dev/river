@@ -6,6 +6,60 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.14.0] - 2026-10-18
+
+**Voice channels for big groups and meetings, and pages that scroll in every skin.**
+
+### Added
+
+- Voice channels: **large rooms**. Above eight people River sends everyone's
+  voice through your server, still end-to-end encrypted, once per frame however
+  big the room is and only while you talk; the server passes on at most six
+  people talking at once. Direct connections are then made only with people
+  sharing a camera or screen. The channel header says how voice travels
+  (directly, partly or fully through your server) instead of always claiming a
+  direct connection.
+- Voice channels on computers: a **meeting bar** with **Grid / Speaker view**
+  (speaker view shows whoever is talking or sharing large), **Raise hand** with
+  everyone's raised hands listed in the order they went up (also shown on the
+  tiles), a quick **Noise suppression** switch and a "who is talking" line.
+
+### Changed
+
+- Better sound on bad networks: direct calls ask Opus for error correction,
+  silence suppression, mono and 32 kbit/s, and voice goes ahead of video when
+  the network is tight; relayed voice lowers its bitrate while listeners miss
+  frames, its playout buffer grows on jittery connections and shrinks again
+  when calm, and gaps fade instead of clicking. Video bandwidth is shared out
+  between the people watching.
+
+### Fixed
+
+- **Joining a voice channel no longer shows "connecting…" first.** Someone who
+  just joined is heard at once: when the direct connection takes more than
+  1.5 s (it waited 6 s before), their voice goes through the server meanwhile,
+  encrypted as always, and the direct connection takes over when it comes up.
+  "connecting…" only shows for someone still unreachable after 3 seconds.
+- **The Admin page scrolls again** (and Friends, Social, Calls and Files with
+  long content) in the Aurora, Synthwave and Holo skins: their floating frame
+  clipped the page column, so everything below the window could not be reached
+  with the mouse wheel or a scrollbar.
+- Voice: **a headset plugged in mid-call is used** when you use the system's
+  default microphone, and an unplugged microphone is replaced by another one;
+  with none left, the call says so instead of sending silence.
+- Voice: **a network change (Wi-Fi to cable, VPN, waking from sleep) restarts
+  connections in place** without leaving the channel; the sidebar shows
+  "Reconnecting…" only while the server is unreachable and no voice arrives.
+- Voice: someone reached only through the server now **sees at once who is
+  muted, sharing or has a hand up** (they saw everyone unmuted until something
+  changed); speaking rings for relayed people respect their mute.
+- Voice: relayed voice no longer goes silent for good after a damaged packet
+  or an encoder failure, its frames can no longer arrive out of order, the
+  audio engine is resumed after sleep, and nothing about people who left is
+  kept for the rest of a long call.
+- Server: relayed voice goes only to the device that is in the call, not to the
+  account's other devices (a phone in a pocket downloaded every voice frame).
+
 ## [2.13.1] - 2026-10-18
 
 **Linking a phone finishes.**

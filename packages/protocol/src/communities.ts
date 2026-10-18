@@ -677,7 +677,12 @@ export const clientEventSchema = z.discriminatedUnion('t', [
 export type ClientEvent = z.infer<typeof clientEventSchema>;
 
 export const serverEventSchema = z.discriminatedUnion('t', [
-  z.object({ t: z.literal('ready'), riverId: riverIdSchema }),
+  z.object({
+    t: z.literal('ready'),
+    riverId: riverIdSchema,
+    /** The server takes voice relay frames "to everyone in my call" (RELAY_FRAME_ALL, 2.13). */
+    relayAll: z.literal(true).optional(),
+  }),
   z.object({ t: z.literal('message'), communityId: communityIdSchema, message: messageSchema }),
   z.object({
     t: z.literal('message.delete'),

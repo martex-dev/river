@@ -1,4 +1,10 @@
-import type { ChosenStatus, PresenceStatus, ServerEvent, VoiceState } from '@river/protocol';
+import {
+  RelaySpeakers,
+  type ChosenStatus,
+  type PresenceStatus,
+  type ServerEvent,
+  type VoiceState,
+} from '@river/protocol';
 
 export interface HubSocket {
   send(data: string | Buffer): void;
@@ -40,6 +46,8 @@ export class Hub {
    */
   private readonly voiceSocket = new Map<string, HubSocket>();
   private readonly roomSocket = new Map<string, HubSocket>();
+  /** Whose relayed voice is forwarded right now, per voice channel or call room (2.13). */
+  private readonly relaySpeakers = new Map<string, RelaySpeakers>();
 
   constructor(options: HubOptions = {}) {
     this.graceMs = options.voiceGraceMs ?? VOICE_GRACE_MS;
@@ -126,7 +134,46 @@ export class Hub {
     this.roomOf.delete(riverId);
     const members = this.callRooms.get(room);
     members?.delete(riverId);
+    this.forgetSpeaker(`room:${room}`, riverId, !members || members.size === 0);
     if (members && members.size === 0) this.callRooms.delete(room);
+  }
+
+  private forgetSpeaker(scope: string, riverId: string, empty: boolean): void {
+    if (empty) this.relaySpeakers.delete(scope);
+    else this.relaySpeakers.get(scope)?.forget(riverId);
+  }
+
+  /** The voice channel (or call room) whose relay `riverId` takes part in. */
+  private relayScope(riverId: string): string | null {
+    const ch = this.voiceOf.get(riverId);
+    if (ch) return ch;
+    const room = this.roomOf.get(riverId);
+    return room ? `room:${room}` : null;
+  }
+
+  /**
+   * Whether a relayed voice frame from `sender` is forwarded now: only while they are in a call,
+   * and only from the first few people of that call talking at once (RelaySpeakers).
+   */
+  admitRelay(sender: string, now: number): boolean {
+    const scope = this.relayScope(sender);
+    if (!scope) return false;
+    let speakers = this.relaySpeakers.get(scope);
+    if (!speakers) this.relaySpeakers.set(scope, (speakers = new RelaySpeakers()));
+    return speakers.admit(sender, now);
+  }
+
+  /** Everyone `riverId` may relay voice to: the others in their voice channel, else in their call room. */
+  callPeers(riverId: string): string[] {
+    const ch = this.voiceOf.get(riverId);
+    if (ch) return this.participants(ch).filter((id) => id !== riverId);
+    const room = this.roomOf.get(riverId);
+    return room ? [...(this.callRooms.get(room) ?? [])].filter((id) => id !== riverId) : [];
+  }
+
+  /** Calls whose relay state the hub keeps (tests: nothing lingers after everyone left). */
+  get relayScopes(): number {
+    return this.relaySpeakers.size;
   }
 
   /**
@@ -228,6 +275,20 @@ export class Hub {
     for (const s of this.sockets.get(riverId) ?? []) s.send(frame);
   }
 
+  /**
+   * A relayed voice frame from `sender` to `to`: only to the connection of `to` that is in the call
+   * with them (2.13). Their other devices (a phone in a pocket) are not in the call and would only
+   * spend data and battery on it. Seats taken without a known connection go to every connection.
+   */
+  sendRelay(sender: string, to: string, frame: Buffer): void {
+    const ch = this.voiceOf.get(sender);
+    const owner = ch && this.voiceOf.get(to) === ch ? this.voiceSocket.get(to) : this.roomSocket.get(to);
+    const sockets = this.sockets.get(to);
+    if (owner && sockets?.has(owner)) owner.send(frame);
+    else if (!owner) this.sendBinaryTo(to, frame);
+    // A known connection that dropped: nothing (the seat is held until that device is back).
+  }
+
   joinVoice(
     riverId: string,
     communityId: string,
@@ -254,6 +315,7 @@ export class Hub {
     this.voiceOf.delete(riverId);
     const room = this.voice.get(channelId);
     room?.members.delete(riverId);
+    this.forgetSpeaker(channelId, riverId, !room || room.members.size === 0);
     if (room && room.members.size === 0) this.voice.delete(channelId);
     const { serverMuted = false, serverDeafened = false } = this.states.get(riverId) ?? {};
     // Server mute and deafen stick across reconnects within the server's lifetime; the rest resets.
