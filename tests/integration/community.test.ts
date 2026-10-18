@@ -232,8 +232,10 @@ describe('polls', () => {
     const stored =
       JSON.stringify(await serverDb.db.selectFrom('messages').selectAll().execute()) +
       JSON.stringify(await serverDb.db.selectFrom('message_reactions').selectAll().execute());
-    expect(stored).not.toContain('Movie');
-    expect(stored).not.toContain('poll');
+    // Words as they would appear if any plaintext reached the server: after a quote or a space.
+    // (Bare substrings can turn up by chance in base64 ciphertext, e.g. "…Fpollh3F…".)
+    expect(stored).not.toMatch(/["\s]Movie/);
+    expect(stored).not.toMatch(/["\s]poll/i);
     await expect(
       alice.community.action({ a: 'edit', channelId: general.id, messageId: sent.id, text: 'changed' }),
     ).rejects.toThrow(/cannot be edited/);

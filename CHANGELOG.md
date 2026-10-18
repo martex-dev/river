@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.21.2] - 2026-10-19
+
+**Messages are told apart by who sent them, so nobody can take over someone else's message.**
+
 ### Security
 
 - Message IDs are per sender (2.20.1 audit): in a group, a member who saw
