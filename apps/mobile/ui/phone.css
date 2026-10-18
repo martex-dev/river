@@ -57,6 +57,11 @@ html:is([data-platform='android'], [data-platform='ios']) .dm-row,
 html:is([data-platform='android'], [data-platform='ios']) .home-nav__item {
   min-height: 44px;
 }
+/* Where to forward a message (2.19): rows a finger can pick. */
+html:is([data-platform='android'], [data-platform='ios']) .forward__item {
+  min-height: 44px;
+  align-items: center;
+}
 html:is([data-platform='android'], [data-platform='ios']) input,
 html:is([data-platform='android'], [data-platform='ios']) textarea,
 html:is([data-platform='android'], [data-platform='ios']) select {
@@ -78,17 +83,19 @@ html:is([data-platform='android'], [data-platform='ios']) .toast {
 
 /*
  * Over a locked phone (Android, 2.18: a call answered on the lock screen; ui/shell.ts) only the
- * full-screen call shows, without its "back to the conversation" button. Everything else of River
+ * full-screen call (a 1:1 call or a group call) shows, without its "back to the conversation" button. Everything else of River
  * (chats, settings, menus and dialogs) is hidden from sight, touch and screen readers until the
  * phone is unlocked.
  */
 html[data-over-lock] body > * {
   visibility: hidden !important;
 }
-html[data-over-lock] .dm-call--full {
+html[data-over-lock] .dm-call--full,
+html[data-over-lock] .gcall--full {
   visibility: visible !important;
 }
-html[data-over-lock] .dm-call--full .dm-call__min {
+html[data-over-lock] .dm-call--full .dm-call__min,
+html[data-over-lock] .gcall--full .dm-call__min {
   visibility: hidden !important;
 }
 html[data-over-lock] body::after {

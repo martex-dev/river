@@ -113,6 +113,7 @@ import {
   EmojiIcon,
   MoreIcon,
   PhoneCallIcon,
+  SavedRepliesIcon,
   SendIcon,
   TickIcon,
   VideoIcon,
@@ -782,7 +783,9 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
   useEffect(() => {
     if (c.kind === 'group') return;
     void window.river.dm.action({ a: 'calls' }).then((r) => {
-      if (r.ok) setCalls((r.value as CallView[]).filter((x) => x.peer === c.riverId));
+      // Only 1:1 calls: a call through a call link names its host, which put your own link's
+      // calls into Note to self (and a host's link call into your chat with them).
+      if (r.ok) setCalls((r.value as CallView[]).filter((x) => x.peer === c.riverId && !x.kind));
     });
   }, [c.riverId, c.kind, callBusy]);
   const pinned = messages.filter((m) => m.pinned);
@@ -2982,11 +2985,12 @@ ${shared}`
             title={phone ? undefined : 'Saved replies (or type /)'}
             onClick={(e) => setRepliesMenu(nearButton(e.currentTarget, { width: 340, height: 360 }))}
           >
-            <span aria-hidden="true">💬</span>
+            {/* On a phone a line icon like its neighbours (an emoji there looked greyed out). */}
+            {phone ? <SavedRepliesIcon size={24} /> : <span aria-hidden="true">💬</span>}
           </button>
         )}
         {!text.trim() && props.pending.length === 0 && (
-          <MyStickersButton disabled={!!uploading} onPick={(file) => void sendVoice(file)} />
+          <MyStickersButton disabled={!!uploading} phone={phone} onPick={(file) => void sendVoice(file)} />
         )}
         {/* Always there, so typing (or a shared file arriving) never ends a recording. */}
         <VoiceRecorder

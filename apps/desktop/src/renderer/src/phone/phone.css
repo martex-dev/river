@@ -1017,6 +1017,15 @@ html[data-keyboard='open'] .ptabs {
   font-size: max(16px, var(--chat-font-size, 16px));
   line-height: 1.34;
 }
+/* @names and #channels in the theme's colours (River's fixed pale lilac vanished on light bubbles). */
+:root .pshell .chat__messages .msg:not(.msg--mine) .mention:not(.mention--role) {
+  background: rgb(var(--accent-2-rgb) / 0.16);
+  color: var(--accent-2-text);
+}
+:root .pshell .chat__messages .msg:not(.msg--mine) .mention.mention--me {
+  background: rgb(var(--warn-rgb) / 0.24);
+  color: var(--text);
+}
 :root .pshell .chat__messages .msg--mine .msg__text a,
 :root .pshell .chat__messages .msg--mine .mention {
   color: inherit;
@@ -1501,6 +1510,52 @@ html[data-keyboard='open'] .pshell .chat__composer-wrap {
   opacity: 0.35;
 }
 .pcall__back:active {
+  background: var(--p-fill);
+}
+/* Call links (2.19): "Create call link" and your links, above the history, as in Telegram. */
+.pcall-links {
+  margin-bottom: 12px;
+}
+.pcall-links .prow {
+  min-height: 62px;
+}
+.pcall-links__new .prow__name {
+  color: var(--accent-text);
+}
+.pcall-links__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgb(var(--accent-rgb) / 0.14);
+  color: var(--accent-text);
+}
+.pcall-links__link .prow__main {
+  padding-right: 0;
+}
+.pcall-links__action {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 22px;
+  background: none;
+  color: var(--accent-text);
+}
+.pcall-links__action:last-child {
+  margin-right: 6px;
+}
+.pcall-links__action--danger {
+  color: var(--danger);
+}
+.pcall-links__action:disabled {
+  opacity: 0.35;
+}
+.pcall-links__action:active {
   background: var(--p-fill);
 }
 
