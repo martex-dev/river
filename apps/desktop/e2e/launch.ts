@@ -5,6 +5,8 @@ import { _electron as electron, type ElectronApplication, type Page } from '@pla
 
 export const TEST_PASSPHRASE = 'river end-to-end test passphrase';
 export const TEST_NAME = 'E2E Tester';
+/** Chromium's interface language for test apps (navigator.language, app.getLocale()). */
+export const E2E_LANG = ['--lang=en-US'];
 
 /**
  * Launches the built app exactly as the packaged app loads it (river:// + CSP)
@@ -22,7 +24,9 @@ export async function launchRiver(
   } = {},
 ): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
-    args: [resolve(__dirname, '..'), `--user-data-dir=${userData}`, ...(options.args ?? [])],
+    // English whatever the machine's language: River follows the system language by default, and
+    // the tests find buttons by their English names.
+    args: [resolve(__dirname, '..'), `--user-data-dir=${userData}`, ...E2E_LANG, ...(options.args ?? [])],
     env: {
       ...process.env,
       ELECTRON_RENDERER_URL: '',

@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { tr } from '../i18n.ts';
 
 interface Props {
   children: ReactNode;
@@ -42,21 +43,21 @@ export class ErrorBoundary extends Component<Props, State> {
     return (
       <div className={`crash ${area ? 'crash--page' : ''}`} role="alert">
         <div className="crash__card glass">
-          <h1 className="crash__title">Something went wrong</h1>
+          <h1 className="crash__title">{tr('Something went wrong')}</h1>
           <p className="muted">
             {area
-              ? `${area} could not be shown. The rest of River still works.`
-              : 'River ran into a problem while drawing this window. Your messages and keys are safe.'}
+              ? tr('{area} could not be shown. The rest of River still works.', { area })
+              : tr('River ran into a problem while drawing this window. Your messages and keys are safe.')}
           </p>
           {error.message && <pre className="crash__detail">{error.message}</pre>}
           <div className="button-row">
             {area && (
               <button className="btn btn--ghost" onClick={() => this.setState({ error: null })}>
-                Try again
+                {tr('Try again')}
               </button>
             )}
             <button className="btn btn--primary" onClick={() => window.location.reload()}>
-              Reload
+              {tr('Reload')}
             </button>
           </div>
         </div>

@@ -1,4 +1,5 @@
-import { resolveLanguage, tr } from './i18n.ts';
+import { isLanguage } from '../../shared/i18n/languages.ts';
+import { languageInfo, resolveLanguage, tr, trn } from './i18n.ts';
 import { useRiver } from './store.ts';
 
 /**
@@ -11,9 +12,11 @@ export function dateLocale(
   system = typeof navigator === 'undefined' ? 'en' : navigator.language,
 ): string[] {
   // Following the system (the default): the computer's own formats, whatever its language.
-  if (setting !== 'en' && setting !== 'bg') return [];
+  if (!isLanguage(setting)) return [];
   const lang = resolveLanguage(setting, system);
-  return system.toLowerCase().startsWith(lang) ? [] : [lang === 'bg' ? 'bg-BG' : 'en'];
+  // The computer is in that language already (en-GB for English, pt-PT for Portuguese): its own.
+  const primary = (tag: string): string => tag.toLowerCase().split('-')[0] ?? '';
+  return primary(system) === primary(lang) ? [] : [languageInfo(lang).locale];
 }
 
 /** 12- or 24-hour clock from Settings → Appearance (undefined: the locale decides). */
@@ -46,13 +49,10 @@ export function clockDateTime(when: string | number | Date): string {
 export function relativeTime(when: string | number | Date, now = Date.now()): string {
   const t = new Date(when).getTime();
   const s = Math.max(0, Math.round((now - t) / 1000));
-  if (s < 60) return 'just now';
-  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
-  if (s < 86_400) return `${Math.floor(s / 3600)} h ago`;
-  if (s < 7 * 86_400) {
-    const d = Math.floor(s / 86_400);
-    return `${d} day${d === 1 ? '' : 's'} ago`;
-  }
+  if (s < 60) return tr('just now');
+  if (s < 3600) return trn('{count} min ago', Math.floor(s / 60));
+  if (s < 86_400) return trn('{count} h ago', Math.floor(s / 3600));
+  if (s < 7 * 86_400) return trn('{count} days ago', Math.floor(s / 86_400));
   return new Date(t).toLocaleDateString(dateLocale());
 }
 

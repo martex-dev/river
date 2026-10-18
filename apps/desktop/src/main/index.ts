@@ -638,7 +638,13 @@ async function start(): Promise<void> {
   broadcastLinkStatus(window.webContents, link);
   broadcastSocialEvents(window.webContents, social);
   broadcastHostStatus(window.webContents, hosting);
-  startMessageNotifications({ community, dm, settings: () => settings.get(), window });
+  startMessageNotifications({
+    community,
+    dm,
+    settings: () => settings.get(),
+    window,
+    locale: () => app.getLocale(),
+  });
   // The unread count on River's icon (2.17): Windows' taskbar overlay, the macOS dock, Linux launchers.
   startBadge({
     dm,

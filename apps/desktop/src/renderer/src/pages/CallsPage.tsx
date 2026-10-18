@@ -5,6 +5,8 @@ import { useCommunity } from '../community/store.ts';
 import { startDmCall, useDmCall } from '../dm/call.ts';
 import { createCallLink, startGroupCall, startLinkCall, useGroupCall } from '../dm/group-call.ts';
 import { useDm } from '../dm/store.ts';
+import { tr, trn } from '../i18n.ts';
+import { dateLocale } from '../time.ts';
 import { useRiver } from '../store.ts';
 
 const duration = (s: number): string =>
@@ -28,22 +30,25 @@ export function callLabel(
   const arrow = c.direction === 'in' ? '↙' : '↗';
   switch (callOutcome(c)) {
     case 'answered':
-      return `${arrow} ${c.direction === 'in' ? 'Incoming' : 'Outgoing'}`;
+      return `${arrow} ${c.direction === 'in' ? tr('Incoming') : tr('Outgoing')}`;
     case 'declined':
-      return `${arrow} Declined`;
+      return `${arrow} ${tr('Declined')}`;
     case 'failed':
-      return `${arrow} Could not connect`;
+      return `${arrow} ${tr('Could not connect')}`;
     case 'busy':
-      return `${arrow} Busy`;
+      return `${arrow} ${tr('Busy')}`;
     case 'missed':
-      return c.direction === 'in' ? `${arrow} Missed` : `${arrow} No answer`;
+      return `${arrow} ${c.direction === 'in' ? tr('Missed') : tr('No answer')}`;
   }
 }
 
 /** "Group call · Climbing", "Call link · Alice": what a call-history row is (2.18). */
 export function callTitle(c: Pick<CallView, 'name' | 'kind' | 'people'>): string {
-  if (c.kind === 'group') return `${c.name} · group call${c.people && c.people > 1 ? ` (${c.people})` : ''}`;
-  if (c.kind === 'link') return `${c.name} · call link`;
+  if (c.kind === 'group')
+    return c.people && c.people > 1
+      ? tr('{name} · group call ({count})', { name: c.name, count: c.people })
+      : tr('{name} · group call', { name: c.name });
+  if (c.kind === 'link') return tr('{name} · call link', { name: c.name });
   return c.name;
 }
 
@@ -58,44 +63,46 @@ function CallLinks(props: { busy: boolean }): ReactElement {
     });
   }, [made]);
   return (
-    <section className="glass calls__people" aria-label="Call links">
-      <h2 className="contacts__title">Call links</h2>
+    <section className="glass calls__people" aria-label={tr('Call links')}>
+      <h2 className="contacts__title">{tr('Call links')}</h2>
       <p className="muted small">
-        Anyone with a call link can ask to join; you let each person in. Good for calls with people outside a
-        group.
+        {tr(
+          'Anyone with a call link can ask to join; you let each person in. Good for calls with people outside a group.',
+        )}
       </p>
       <div className="call-row">
         <button className="btn btn--primary btn--small" onClick={() => void createCallLink(false)}>
-          Create call link
+          {tr('Create call link')}
         </button>
         <button className="btn btn--ghost btn--small" onClick={() => void createCallLink(true)}>
-          Video call link
+          {tr('Video call link')}
         </button>
       </div>
       {links.map((l) => (
         <div key={l.id} className="call-row">
           <span className="dm-row__text">
-            <strong>{l.title ?? (l.video ? 'Video call link' : 'Call link')}</strong>
+            <strong>{l.title ?? (l.video ? tr('Video call link') : tr('Call link'))}</strong>
             <span className="muted small">
-              Works until {new Date(l.expiresAt).toLocaleDateString()} · {l.admitted.length} let in
+              {tr('Works until {date}', { date: new Date(l.expiresAt).toLocaleDateString(dateLocale()) })} ·{' '}
+              {trn('{count} let in', l.admitted.length)}
             </span>
           </span>
           <button
             className="icon-btn"
-            aria-label="Copy call link"
-            title="Copy the link"
+            aria-label={tr('Copy call link')}
+            title={tr('Copy the link')}
             onClick={() =>
               void navigator.clipboard
                 .writeText(l.url)
-                .then(() => notify('Call link copied.'))
-                .catch(() => notify('Could not copy the link.', 'error'))
+                .then(() => notify(tr('Call link copied.')))
+                .catch(() => notify(tr('Could not copy the link.'), 'error'))
             }
           >
             🔗
           </button>
           <button
             className="icon-btn"
-            aria-label="Start the call of this link"
+            aria-label={tr('Start the call of this link')}
             disabled={props.busy}
             onClick={() => void startLinkCall(l)}
           >
@@ -103,8 +110,8 @@ function CallLinks(props: { busy: boolean }): ReactElement {
           </button>
           <button
             className="icon-btn"
-            aria-label="Stop this call link"
-            title="Stop this link working"
+            aria-label={tr('Stop this call link')}
+            title={tr('Stop this link working')}
             onClick={() =>
               void window.river.dm
                 .action({ a: 'revokeCallLink', link: l.id })
@@ -169,21 +176,22 @@ export function CallsPage(): ReactElement {
   return (
     <div className="page calls">
       <header className="page__header">
-        <div className="eyebrow">Calls</div>
-        <h1 className="page__title">Calls</h1>
+        <div className="eyebrow">{tr('Calls')}</div>
+        <h1 className="page__title">{tr('Calls')}</h1>
         <p className="page__lead">
-          Voice and video calls go directly between devices, encrypted with DTLS-SRTP; call setup travels
-          inside end-to-end encrypted messages. Your call history is kept only on this computer.
+          {tr(
+            'Voice and video calls go directly between devices, encrypted with DTLS-SRTP; call setup travels inside end-to-end encrypted messages. Your call history is kept only on this computer.',
+          )}
         </p>
       </header>
       {account.state !== 'registered' ? (
-        <p className="muted">Calls need an account on a River server.</p>
+        <p className="muted">{tr('Calls need an account on a River server.')}</p>
       ) : (
         <div className="calls__layout">
-          <section className="glass calls__history" aria-label="Recent calls">
-            <h2 className="contacts__title">Recent</h2>
-            {calls === null && <p className="muted">Loading…</p>}
-            {calls?.length === 0 && <p className="muted small">No calls yet.</p>}
+          <section className="glass calls__history" aria-label={tr('Recent calls')}>
+            <h2 className="contacts__title">{tr('Recent')}</h2>
+            {calls === null && <p className="muted">{tr('Loading…')}</p>}
+            {calls?.length === 0 && <p className="muted small">{tr('No calls yet.')}</p>}
             {calls?.map((c) => (
               <div key={c.id} className="call-row">
                 <Avatar id={c.peer} name={c.name} avatar={c.avatar} size={36} />
@@ -195,14 +203,17 @@ export function CallsPage(): ReactElement {
                   </strong>
                   <span className="muted small">
                     {callLabel(c)}
-                    {c.video ? ' video' : ''} ·{' '}
-                    {new Date(c.startedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                    {c.video ? ` ${tr('video')}` : ''} ·{' '}
+                    {new Date(c.startedAt).toLocaleString(dateLocale(), {
+                      dateStyle: 'short',
+                      timeStyle: 'short',
+                    })}
                     {c.answered ? ` · ${duration(c.durationSec)}` : ''}
                   </span>
                 </span>
                 <button
                   className="icon-btn"
-                  aria-label={`Call ${c.name}`}
+                  aria-label={tr('Call {name}', { name: c.name })}
                   disabled={busy || !canCallBack(c)}
                   onClick={() => call(c.peer, false, c.kind)}
                 >
@@ -210,7 +221,7 @@ export function CallsPage(): ReactElement {
                 </button>
                 <button
                   className="icon-btn"
-                  aria-label={`Video call ${c.name}`}
+                  aria-label={tr('Video call {name}', { name: c.name })}
                   disabled={busy || !canCallBack(c)}
                   onClick={() => call(c.peer, true, c.kind)}
                 >
@@ -220,9 +231,9 @@ export function CallsPage(): ReactElement {
             ))}
           </section>
           <CallLinks busy={busy} />
-          <section className="glass calls__people" aria-label="Call a contact">
-            <h2 className="contacts__title">Call a contact</h2>
-            {friends.length === 0 && <p className="muted small">Your contacts appear here.</p>}
+          <section className="glass calls__people" aria-label={tr('Call a contact')}>
+            <h2 className="contacts__title">{tr('Call a contact')}</h2>
+            {friends.length === 0 && <p className="muted small">{tr('Your contacts appear here.')}</p>}
             {friends.map((f) => (
               <div key={f.riverId} className="call-row">
                 <Avatar id={f.riverId} name={f.name} avatar={f.avatar} size={32} />
@@ -231,7 +242,7 @@ export function CallsPage(): ReactElement {
                 </span>
                 <button
                   className="icon-btn"
-                  aria-label={`Call ${f.name}`}
+                  aria-label={tr('Call {name}', { name: f.name })}
                   disabled={busy}
                   onClick={() => call(f.riverId, false)}
                 >
@@ -239,7 +250,7 @@ export function CallsPage(): ReactElement {
                 </button>
                 <button
                   className="icon-btn"
-                  aria-label={`Video call ${f.name}`}
+                  aria-label={tr('Video call {name}', { name: f.name })}
                   disabled={busy}
                   onClick={() => call(f.riverId, true)}
                 >

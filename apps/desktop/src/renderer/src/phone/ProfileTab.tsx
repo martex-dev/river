@@ -4,6 +4,7 @@ import { useCommunity } from '../community/store.ts';
 import { Avatar, memberOf } from '../community/ui/common.tsx';
 import { useDm } from '../dm/store.ts';
 import { copyText } from '../pages/MessagesPage.tsx';
+import { msg, tr } from '../i18n.ts';
 import { useRiver, type SettingsTab } from '../store.ts';
 import { ChevronRightIcon, CopyIcon, Glyph } from './icons.tsx';
 import { openPhoneChat, phonePush } from './nav.ts';
@@ -45,7 +46,7 @@ export function ProfileTab(): ReactElement {
   const [statusMenu, setStatusMenu] = useState<{ x: number; y: number } | null>(null);
   const me = identity?.riverId ?? '';
   const member = communities.map((c) => memberOf(c, me)).find((m) => m !== undefined && m !== null);
-  const name = member?.name ?? identity?.displayName ?? 'You';
+  const name = member?.name ?? identity?.displayName ?? tr('You');
   const registered = account.state === 'registered';
   const username = registered ? account.username : null;
   const presence = myPresence(settings, online);
@@ -54,7 +55,7 @@ export function ProfileTab(): ReactElement {
   const groups: Row[][] = [
     [
       {
-        label: 'Note to self',
+        label: msg('Note to self'),
         icon: Glyph.bookmark,
         tone: 'blue',
         open: () => {
@@ -69,29 +70,40 @@ export function ProfileTab(): ReactElement {
               });
         },
       },
-      { label: 'Friends', icon: Glyph.people, tone: 'orange', open: () => phonePush({ kind: 'friends' }) },
-      { label: 'Files', icon: Glyph.folder, tone: 'teal', open: () => phonePush({ kind: 'files' }) },
+      {
+        label: msg('Friends'),
+        icon: Glyph.people,
+        tone: 'orange',
+        open: () => phonePush({ kind: 'friends' }),
+      },
+      { label: msg('Files'), icon: Glyph.folder, tone: 'teal', open: () => phonePush({ kind: 'files' }) },
     ],
     [
-      { label: 'My profile', icon: Glyph.account, tone: 'red', open: 'profile' },
+      { label: msg('My profile'), icon: Glyph.account, tone: 'red', open: 'profile' },
       {
-        label: 'Account',
+        label: msg('Account'),
         icon: Glyph.account,
         tone: 'blue',
         open: 'account',
-        hint: registered ? account.server : 'Not set up',
+        hint: registered ? account.server : tr('Not set up'),
       },
-      { label: 'Devices', icon: Glyph.devices, tone: 'orange', open: 'account', focus: '.devices' },
-      { label: 'Privacy and security', icon: Glyph.lock, tone: 'gray', open: 'security' },
-      { label: 'Data and backup', icon: Glyph.data, tone: 'green', open: 'backup' },
+      { label: msg('Devices'), icon: Glyph.devices, tone: 'orange', open: 'account', focus: '.devices' },
+      { label: msg('Privacy and security'), icon: Glyph.lock, tone: 'gray', open: 'security' },
+      { label: msg('Data and backup'), icon: Glyph.data, tone: 'green', open: 'backup' },
     ],
     [
-      { label: 'Notifications and sounds', icon: Glyph.bell, tone: 'red', open: 'notifications' },
-      { label: 'Appearance', icon: Glyph.brush, tone: 'teal', open: 'appearance' },
-      { label: 'Calls, voice and video', icon: Glyph.phone, tone: 'green', open: 'voice' },
-      { label: 'Language', icon: Glyph.globe, tone: 'purple', open: 'appearance', focus: '.language-field' },
+      { label: msg('Notifications and sounds'), icon: Glyph.bell, tone: 'red', open: 'notifications' },
+      { label: msg('Appearance'), icon: Glyph.brush, tone: 'teal', open: 'appearance' },
+      { label: msg('Calls, voice and video'), icon: Glyph.phone, tone: 'green', open: 'voice' },
       {
-        label: 'Phone and battery',
+        label: msg('Language'),
+        icon: Glyph.globe,
+        tone: 'purple',
+        open: 'appearance',
+        focus: '.language-field',
+      },
+      {
+        label: msg('Phone and battery'),
         icon: Glyph.gear,
         tone: 'gray',
         open: 'system',
@@ -102,31 +114,35 @@ export function ProfileTab(): ReactElement {
     [
       ...(platform === 'ios'
         ? []
-        : [{ label: 'Updates', icon: Glyph.update, tone: 'indigo' as const, open: 'updates' as const }]),
-      { label: 'Help and about River', icon: Glyph.help, tone: 'orange', open: 'about' },
+        : [{ label: msg('Updates'), icon: Glyph.update, tone: 'indigo' as const, open: 'updates' as const }]),
+      { label: msg('Help and about River'), icon: Glyph.help, tone: 'orange', open: 'about' },
     ],
   ];
 
   return (
-    <TabPage title="Settings" className="ptab--settings">
-      <section className="pme" aria-label="You">
-        <button className="pme__avatar" aria-label="Edit your profile" onClick={() => openSection('profile')}>
+    <TabPage title={tr('Settings')} className="ptab--settings">
+      <section className="pme" aria-label={tr('You')}>
+        <button
+          className="pme__avatar"
+          aria-label={tr('Edit your profile')}
+          onClick={() => openSection('profile')}
+        >
           <Avatar id={me || 'me'} name={name} avatar={member?.avatar} size={96} />
         </button>
         <h2 className="pme__name">{name}</h2>
         <div className="pme__line">
-          {username ? `@${username}` : registered ? 'No username yet' : 'Local only · no account yet'}
+          {username ? `@${username}` : registered ? tr('No username yet') : tr('Local only · no account yet')}
         </div>
         {me && (
-          <button className="pme__id" aria-label="Copy your River ID" onClick={() => copyText(me)}>
-            <span className="pme__id-text">River ID {me.slice(0, 8)}…</span>
+          <button className="pme__id" aria-label={tr('Copy your River ID')} onClick={() => copyText(me)}>
+            <span className="pme__id-text">{tr('River ID {id}', { id: `${me.slice(0, 8)}…` })}</span>
             <CopyIcon size={15} />
           </button>
         )}
         <button
           className="pme__status"
           aria-haspopup="menu"
-          aria-label="Set your status"
+          aria-label={tr('Set your status')}
           onClick={(e) => {
             const r = e.currentTarget.getBoundingClientRect();
             setStatusMenu({ x: r.left, y: r.bottom + 6 });
@@ -134,10 +150,10 @@ export function ProfileTab(): ReactElement {
         >
           <span className={`pme__dot pme__dot--${presence}`} aria-hidden="true" />
           {!online
-            ? 'Offline'
+            ? tr('Offline')
             : custom
               ? `${settings!.presence.customEmoji} ${settings!.presence.customText}`.trim()
-              : CHOSEN_LABEL[settings?.presence.status ?? 'online']}
+              : tr(CHOSEN_LABEL[settings?.presence.status ?? 'online'])}
         </button>
         {statusMenu && (
           <StatusMenu
@@ -161,7 +177,7 @@ export function ProfileTab(): ReactElement {
                 <span className={`pgroup__icon pgroup__icon--${row.tone}`} aria-hidden="true">
                   <row.icon size={19} />
                 </span>
-                <span className="pgroup__label">{row.label}</span>
+                <span className="pgroup__label">{tr(row.label)}</span>
                 {row.hint && <span className="pgroup__hint">{row.hint}</span>}
                 <ChevronRightIcon size={18} className="pgroup__chevron" />
               </button>

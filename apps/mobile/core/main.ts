@@ -1,5 +1,13 @@
 import { join } from 'node:path';
 import { app } from 'electron';
+import {
+  resolveLanguage,
+  systemLanguage,
+  translate,
+  translatePlural,
+  type Language,
+  type Vars,
+} from '../../desktop/src/shared/i18n/index.ts';
 import { channelOfVersion } from '@river/release/channels';
 import type { AccountStatus, AppInfo, HostStatus } from '../../desktop/src/shared/ipc.ts';
 import type { DmEvent } from '../../desktop/src/shared/dm.ts';
@@ -156,6 +164,10 @@ async function start(): Promise<void> {
 
   const settingsPath = join(userData, 'settings.json');
   const settings = new SettingsStore(settingsPath, log);
+  /** What the core says itself (a call's notification) is in River's language, as the screens are. */
+  const lang = (): Language => resolveLanguage(settings.get().appearance.language, systemLanguage());
+  const t = (text: string, vars?: Vars): string => translate(lang(), text, vars);
+  const tn = (key: string, count: number, vars?: Vars): string => translatePlural(lang(), key, count, vars);
   // Android (2.11): a new install stays connected, so messages and calls reach you while River is
   // closed (a visible "River is connected" notification shows meanwhile; Settings → System turns it
   // off). Existing installs are asked once instead (the UI's "Get messages and calls…" prompt).
@@ -277,9 +289,9 @@ async function start(): Promise<void> {
   let activeGroupCall: { callId: string; groupId?: string } | null = null;
   /** Who the "In a call" notification names: the person (unless previews hide names) or voice. */
   const callTitle = (): string => {
-    if (activeGroupCall) return 'River group call';
-    if (!activeCall) return 'Voice channel';
-    return settings.get().notifications.preview === 'none' ? 'River call' : dm.nameOf(activeCall.peer);
+    if (activeGroupCall) return t('River group call');
+    if (!activeCall) return t('Voice channel');
+    return settings.get().notifications.preview === 'none' ? t('River call') : dm.nameOf(activeCall.peer);
   };
   /**
    * The UI's WebView carries a call's media: when it is gone (River's screen closed while the
@@ -408,10 +420,10 @@ async function start(): Promise<void> {
     // A group call (2.18) rings with the group's name: "Group call · Climbing (5 people)".
     const name = e.group
       ? hidden
-        ? 'Group call'
-        : `Group call · ${e.group.name} (${e.group.people} people)`
+        ? t('Group call')
+        : tn('Group call · {group} ({count} people)', e.group.people, { group: e.group.name })
       : hidden
-        ? 'Someone'
+        ? t('Someone')
         : dm.nameOf(e.peer);
     void ask<string>('incomingCall', { callId: e.callId, name, video: e.video }).then(
       (how) => {
@@ -663,6 +675,8 @@ async function start(): Promise<void> {
     dm,
     settings: () => settings.get(),
     window: window as unknown as Parameters<typeof startMessageNotifications>[0]['window'],
+    // The phone's own language, for notifications when River follows it (the default).
+    locale: systemLanguage,
     // The shell keeps one notification per conversation (2.11) and takes it away once the
     // conversation is read, here or on another device (2.17).
     nativeGrouping: true,

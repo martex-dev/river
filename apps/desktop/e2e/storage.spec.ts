@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { _electron as electron, expect, test } from '@playwright/test';
-import { TEST_PASSPHRASE, launchRiver, openSettings } from './launch.ts';
+import { E2E_LANG, TEST_PASSPHRASE, launchRiver, openSettings } from './launch.ts';
 
 const userData = mkdtempSync(join(tmpdir(), 'river-e2e-storage-'));
 test.afterAll(() => rmSync(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
@@ -23,7 +23,7 @@ test('creates an encrypted local database and reopens it after restart', async (
   if (keyFile.protection === 'passphrase') {
     // No OS keyring (Linux CI): the second start must ask to unlock, and reject a wrong passphrase.
     const app = await electron.launch({
-      args: [resolve(__dirname, '..'), `--user-data-dir=${userData}`],
+      args: [resolve(__dirname, '..'), `--user-data-dir=${userData}`, ...E2E_LANG],
       env: { ...process.env, ELECTRON_RENDERER_URL: '' },
     });
     const page = await app.firstWindow();

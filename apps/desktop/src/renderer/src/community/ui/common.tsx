@@ -12,6 +12,7 @@ import {
   type SVGProps,
   type MouseEvent as ReactMouseEvent,
 } from 'react';
+import { msg, tr } from '../../i18n.ts';
 import { createPortal } from 'react-dom';
 import { placeWithin, pushOverlay, safeInsets, visibleBox } from '../../components/overlays.ts';
 import { menuItems, nextMenuItem, restoreFocus, trapTab } from '../../components/focus.ts';
@@ -83,10 +84,10 @@ export function nameOf(community: CommunityView | null | undefined, id: string):
 
 export type Presence = 'online' | 'idle' | 'dnd' | 'offline';
 export const PRESENCE_LABEL: Record<Presence, string> = {
-  online: 'Online',
-  idle: 'Idle',
-  dnd: 'Do Not Disturb',
-  offline: 'Offline',
+  online: msg('Online'),
+  idle: msg('Idle'),
+  dnd: msg('Do Not Disturb'),
+  offline: msg('Offline'),
 };
 
 /** How a member appears: offline, or online / idle / do not disturb. */
@@ -202,8 +203,8 @@ export function Avatar(props: {
         <span
           className={`avatar__status avatar__status--${props.status}`}
           role="img"
-          aria-label={PRESENCE_LABEL[props.status]}
-          title={PRESENCE_LABEL[props.status]}
+          aria-label={tr(PRESENCE_LABEL[props.status])}
+          title={tr(PRESENCE_LABEL[props.status])}
         />
       )}
     </span>

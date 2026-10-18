@@ -1,5 +1,6 @@
 import { isPhone } from '../../../shared/platform.ts';
-import { LANGUAGES, useT } from '../i18n.ts';
+import { LANGUAGES, languageInfo, msg, resolveLanguage, tr, useLanguage, useT } from '../i18n.ts';
+import { dateLocale } from '../time.ts';
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { BackupPanel } from '../components/BackupPanel.tsx';
 import { ErrorBoundary } from '../components/ErrorBoundary.tsx';
@@ -31,31 +32,31 @@ import { play, playNotifySound } from '../community/sound.ts';
 import { NOTIFY_SOUND_LABELS, NOTIFY_TONES } from '../../../shared/notify-sounds.ts';
 
 const TAB_LABEL: Record<SettingsTab, string> = {
-  account: 'Account',
-  profile: 'Profile',
-  security: 'Security',
-  backup: 'Backup',
-  appearance: 'Appearance',
-  voice: 'Voice & video',
-  notifications: 'Notifications',
-  system: 'System',
-  updates: 'Updates',
-  hosting: 'Hosting',
-  about: 'About',
+  account: msg('Account'),
+  profile: msg('Profile'),
+  security: msg('Security'),
+  backup: msg('Backup'),
+  appearance: msg('Appearance'),
+  voice: msg('Voice & video'),
+  notifications: msg('Notifications'),
+  system: msg('System'),
+  updates: msg('Updates'),
+  hosting: msg('Hosting'),
+  about: msg('About'),
 };
 
 const GROUPS: Array<{ title: string; tabs: SettingsTab[] }> = [
-  { title: 'User settings', tabs: ['account', 'profile', 'security', 'backup'] },
+  { title: msg('User settings'), tabs: ['account', 'profile', 'security', 'backup'] },
   {
-    title: 'App settings',
+    title: msg('App settings'),
     tabs: ['appearance', 'voice', 'notifications', 'system', 'updates', 'hosting', 'about'],
   },
 ];
 
 const CHANNELS: Array<{ id: ReleaseChannel; name: string; text: string }> = [
-  { id: 'stable', name: 'Stable', text: 'Tested releases. Recommended for everyone.' },
-  { id: 'beta', name: 'Beta', text: 'New features a little earlier. Occasional rough edges.' },
-  { id: 'nightly', name: 'Nightly', text: 'Development builds. May break. For testers only.' },
+  { id: 'stable', name: msg('Stable'), text: msg('Tested releases. Recommended for everyone.') },
+  { id: 'beta', name: msg('Beta'), text: msg('New features a little earlier. Occasional rough edges.') },
+  { id: 'nightly', name: msg('Nightly'), text: msg('Development builds. May break. For testers only.') },
 ];
 
 /** `phone`: River for Android, where Android's own installer replaces the app. */
@@ -64,30 +65,47 @@ export function describeUpdate(status: UpdateStatus, phone = false): string {
     case 'disabled':
       return status.reason;
     case 'idle':
-      return 'Not checked yet.';
+      return tr('Not checked yet.');
     case 'checking':
-      return 'Checking for updates…';
+      return tr('Checking for updates…');
     case 'up-to-date':
-      return `River is up to date. Last checked ${new Date(status.checkedAt).toLocaleTimeString()}.`;
+      return tr('River is up to date. Last checked {time}.', {
+        time: new Date(status.checkedAt).toLocaleTimeString(dateLocale()),
+      });
     case 'available':
-      return `River ${status.version} is available.`;
+      return tr('River {version} is available.', { version: status.version });
     case 'downloading':
-      return `Downloading River ${status.version}… ${status.percent}%`;
+      return tr('Downloading River {version}… {percent}%', {
+        version: status.version,
+        percent: status.percent,
+      });
     case 'verifying':
-      return `Verifying the signature of River ${status.version}…`;
+      return tr('Verifying the signature of River {version}…', { version: status.version });
     case 'ready':
       if (status.needsPermission) {
-        return `River ${status.version} is downloaded and verified. Android needs your permission first: turn on “Allow from this source” for River in the settings screen that opened, then come back and tap Install update.`;
+        return tr(
+          'River {version} is downloaded and verified. Android needs your permission first: turn on “Allow from this source” for River in the settings screen that opened, then come back and tap Install update.',
+          { version: status.version },
+        );
       }
       return phone
-        ? `River ${status.version} is downloaded and verified. Tap Install update; Android asks you to confirm.`
-        : `River ${status.version} is downloaded and verified. Restart to finish updating.`;
+        ? tr('River {version} is downloaded and verified. Tap Install update; Android asks you to confirm.', {
+            version: status.version,
+          })
+        : tr('River {version} is downloaded and verified. Restart to finish updating.', {
+            version: status.version,
+          });
     case 'installing':
-      return `Installing River ${status.version}… Confirm in Android’s installer. River closes while it updates; open it again afterwards.`;
+      return tr(
+        'Installing River {version}… Confirm in Android’s installer. River closes while it updates; open it again afterwards.',
+        { version: status.version },
+      );
     case 'reinstall-needed':
       return status.message;
     case 'manual':
-      return `River ${status.version} is available. On macOS, download it from the release page.`;
+      return tr('River {version} is available. On macOS, download it from the release page.', {
+        version: status.version,
+      });
     case 'error':
       return status.message;
   }
@@ -126,7 +144,7 @@ export function SettingsOverlay(): ReactElement | null {
   const leave = (then: () => void): void => {
     if (
       useRiver.getState().settingsDirty &&
-      !window.confirm('You have unsaved changes. Leave without saving them?')
+      !window.confirm(tr('You have unsaved changes. Leave without saving them?'))
     )
       return;
     useRiver.getState().setSettingsDirty(false);
@@ -149,22 +167,22 @@ export function SettingsOverlay(): ReactElement | null {
 
   if (!tab) return null;
   return (
-    <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="Settings">
+    <div className="settings-overlay" role="dialog" aria-modal="true" aria-label={tr('Settings')}>
       {/* On a phone (2.12) each section opens full screen from the Settings tab, with Back. */}
       {phone && (
         <header className="settings-overlay__phone-head pchat-head">
-          <button className="pchat-head__back" aria-label="Back" onClick={() => leave(close)}>
+          <button className="pchat-head__back" aria-label={tr('Back')} onClick={() => leave(close)}>
             <BackIcon size={26} />
           </button>
           <h1 className="settings-overlay__phone-title">{tr(TAB_LABEL[tab])}</h1>
         </header>
       )}
       {!phone && (
-        <nav className="settings-overlay__nav" aria-label="Settings sections">
+        <nav className="settings-overlay__nav" aria-label={tr('Settings sections')}>
           <div className="settings-overlay__nav-inner">
             {GROUPS.map((g) => (
               <div key={g.title} className="settings-overlay__group">
-                <div className="settings-overlay__heading">{g.title}</div>
+                <div className="settings-overlay__heading">{tr(g.title)}</div>
                 {g.tabs
                   .filter((id) => id !== 'hosting' || showHosting)
                   .map((id) => (
@@ -193,7 +211,7 @@ export function SettingsOverlay(): ReactElement | null {
           {/* One panel crashing replaces only that panel (2.11.2): the tabs and Close keep working. */}
           <ErrorBoundary area={tr(TAB_LABEL[tab])} resetKey={tab}>
             {!settings ? (
-              <p className="muted">Loading…</p>
+              <p className="muted">{tr('Loading…')}</p>
             ) : (
               <>
                 {tab === 'account' && (
@@ -208,7 +226,7 @@ export function SettingsOverlay(): ReactElement | null {
                           leave(() => openSettings('hosting'));
                         }}
                       >
-                        Run a River server on this PC…
+                        {tr('Run a River server on this PC…')}
                       </button>
                     )}
                   </>
@@ -236,7 +254,11 @@ export function SettingsOverlay(): ReactElement | null {
         </div>
         {!phone && (
           <div className="settings-overlay__close">
-            <button className="settings-overlay__x" aria-label="Close settings" onClick={() => leave(close)}>
+            <button
+              className="settings-overlay__x"
+              aria-label={tr('Close settings')}
+              onClick={() => leave(close)}
+            >
               <XIcon />
             </button>
             <span aria-hidden="true">ESC</span>
@@ -260,7 +282,7 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
 
   return (
     <div className="panel">
-      <h2 className="panel__title">Updates</h2>
+      <h2 className="panel__title">{tr('Updates')}</h2>
       <div className="update-status" data-state={update.state} role="status" aria-live="polite">
         <div>
           <div className="update-status__version">
@@ -278,35 +300,35 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
           {phone && (update.state === 'ready' || update.state === 'installing') ? (
             // Android: opens Android's installer (again, if it was closed without an answer).
             <button className="btn btn--primary" onClick={() => void window.river.updates.install()}>
-              Install update
+              {tr('Install update')}
             </button>
           ) : phone && update.state === 'available' ? (
             <button className="btn btn--primary" onClick={() => void window.river.updates.install()}>
-              Download update
+              {tr('Download update')}
             </button>
           ) : update.state === 'reinstall-needed' ? (
             <>
               <button className="btn btn--ghost" onClick={() => openSettings('backup')}>
-                Back up first
+                {tr('Back up first')}
               </button>
               <button
                 className="btn btn--primary"
                 onClick={() => void window.river.updates.openDownloadPage()}
               >
-                Open download page <ExternalIcon size={14} />
+                {tr('Open download page')} <ExternalIcon size={14} />
               </button>
             </>
           ) : update.state === 'ready' ? (
             <button className="btn btn--primary" onClick={() => void window.river.updates.install()}>
-              Restart and update
+              {tr('Restart and update')}
             </button>
           ) : update.state === 'available' ? (
             <button className="btn btn--primary" onClick={() => void window.river.updates.download()}>
-              Download {update.version}
+              {tr('Download {version}', { version: update.version })}
             </button>
           ) : update.state === 'manual' ? (
             <button className="btn btn--primary" onClick={() => void window.river.updates.openDownloadPage()}>
-              Open download page <ExternalIcon size={14} />
+              {tr('Open download page')} <ExternalIcon size={14} />
             </button>
           ) : (
             <button
@@ -314,7 +336,7 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
               disabled={busy || update.state === 'disabled'}
               onClick={() => void check()}
             >
-              Check now
+              {tr('Check now')}
             </button>
           )}
         </div>
@@ -323,7 +345,7 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
       {!ios && (
         <>
           <fieldset className="field">
-            <legend className="field__label">Release channel</legend>
+            <legend className="field__label">{tr('Release channel')}</legend>
             <div className="choice-grid">
               {CHANNELS.map((c) => (
                 <label
@@ -337,31 +359,40 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
                     checked={settings.updates.channel === c.id}
                     onChange={() => void updateSettings({ updates: { channel: c.id } })}
                   />
-                  <span className="choice__name">{c.name}</span>
-                  <span className="choice__text">{c.text}</span>
+                  <span className="choice__name">{tr(c.name)}</span>
+                  <span className="choice__text">{tr(c.text)}</span>
                 </label>
               ))}
             </div>
             {settings.updates.channel !== 'stable' && (
               <p className="warning-note">
-                You will receive pre-release builds. They are signed like every release, but may contain bugs.
-                Switching back to Stable takes effect at the next stable version newer than the one you have.
+                {tr(
+                  'You will receive pre-release builds. They are signed like every release, but may contain bugs. Switching back to Stable takes effect at the next stable version newer than the one you have.',
+                )}
               </p>
             )}
           </fieldset>
 
           <Toggle
-            label="Check for updates automatically"
-            hint={`Checks GitHub Releases about every ${phone ? 'six' : 'four'} hours.`}
+            label={tr('Check for updates automatically')}
+            hint={
+              phone
+                ? tr('Checks GitHub Releases about every six hours.')
+                : tr('Checks GitHub Releases about every four hours.')
+            }
             checked={settings.updates.autoCheck}
             onChange={(v) => void updateSettings({ updates: { autoCheck: v } })}
           />
           <Toggle
-            label="Download updates automatically"
+            label={tr('Download updates automatically')}
             hint={
               phone
-                ? 'Every download is verified against River’s release signature. Android asks you before it installs anything.'
-                : 'Every download is verified against River’s release signature before it can be installed.'
+                ? tr(
+                    'Every download is verified against River’s release signature. Android asks you before it installs anything.',
+                  )
+                : tr(
+                    'Every download is verified against River’s release signature before it can be installed.',
+                  )
             }
             checked={settings.updates.autoDownload}
             onChange={(v) => void updateSettings({ updates: { autoDownload: v } })}
@@ -369,8 +400,10 @@ function UpdatesPanel({ settings }: { settings: Settings }): ReactElement {
           {/* Android always asks before installing, and River never quits on its own there. */}
           {!phone && (
             <Toggle
-              label="Install verified updates by themselves"
-              hint="When River is in the tray or you have not used it for 10 minutes, and never during a call. A PC that hosts River does it at night."
+              label={tr('Install verified updates by themselves')}
+              hint={tr(
+                'When River is in the tray or you have not used it for 10 minutes, and never during a call. A PC that hosts River does it at night.',
+              )}
               checked={settings.updates.installOnQuit}
               onChange={(v) => void updateSettings({ updates: { installOnQuit: v } })}
             />
@@ -410,7 +443,7 @@ function UsernameEditor({
         // What the server saved (it keeps usernames in lower case).
         const name = res.value.state === 'registered' ? (res.value.username ?? typed) : typed;
         setValue(name);
-        setMsg({ ok: true, text: `Saved. People can add you as @${name}.` });
+        setMsg({ ok: true, text: tr('Saved. People can add you as @{name}.', { name }) });
       } else {
         play('error');
         setMsg({ ok: false, text: res.message });
@@ -423,7 +456,7 @@ function UsernameEditor({
   return (
     <div className="field">
       <label className="field__label" htmlFor="username">
-        Username — how people add you
+        {tr('Username — how people add you')}
       </label>
       <div className="username-row">
         <div className="textfield username-field">
@@ -437,7 +470,7 @@ function UsernameEditor({
               setValue(e.target.value.replace(/^\s*@+/, ''));
               setMsg(null);
             }}
-            placeholder="username"
+            placeholder={tr('username')}
             autoCapitalize="none"
             spellCheck={false}
             maxLength={32}
@@ -448,7 +481,7 @@ function UsernameEditor({
           disabled={busy || !changed || typed.length < 3}
           onClick={() => void save()}
         >
-          {busy ? 'Saving…' : account.username ? 'Change' : 'Set username'}
+          {busy ? tr('Saving…') : account.username ? tr('Change') : tr('Set username')}
         </button>
       </div>
       {msg && (
@@ -467,10 +500,10 @@ function ServerPanel({ settings }: { settings: Settings }): ReactElement {
 }
 
 const CONNECTION_LABEL = {
-  connecting: 'Connecting…',
-  online: 'Connected',
-  offline: 'Offline',
-  error: 'Problem',
+  connecting: msg('Connecting…'),
+  online: msg('Connected'),
+  offline: msg('Offline'),
+  error: msg('Problem'),
 } as const;
 
 function AccountPanel({
@@ -482,19 +515,19 @@ function AccountPanel({
   const connected = account.connection === 'online';
   const status =
     account.connection === 'online'
-      ? 'Connected'
+      ? tr('Connected')
       : account.connection === 'connecting'
-        ? 'Connecting…'
-        : "Offline — you'll reconnect automatically";
+        ? tr('Connecting…')
+        : tr("Offline — you'll reconnect automatically");
   return (
     <div className="panel">
-      <h2 className="panel__title">Account</h2>
+      <h2 className="panel__title">{tr('Account')}</h2>
       <UsernameEditor account={account} />
       <div className={`account-card is-${account.connection}`} role="status">
         <div className="account-card__head">
-          <strong>{account.username ? `@${account.username}` : 'Your account'}</strong>
+          <strong>{account.username ? `@${account.username}` : tr('Your account')}</strong>
           <span className={`chip chip--${account.connection}`}>
-            {connected ? 'Connected' : CONNECTION_LABEL[account.connection]}
+            {connected ? tr('Connected') : tr(CONNECTION_LABEL[account.connection])}
           </span>
         </div>
         <p className="muted small">{status}</p>
@@ -514,33 +547,38 @@ function AccountPanel({
                   void window.river.account.connect().finally(() => setBusy(false));
                 }}
               >
-                Try now
+                {tr('Try now')}
               </button>
             </div>
           )
         )}
       </div>
       <details className="account-tech">
-        <summary>Technical details</summary>
+        <summary>{tr('Technical details')}</summary>
         <dl className="about-grid">
           <div>
-            <dt>Account ID</dt>
+            <dt>{tr('Account ID')}</dt>
             <dd className="mono small">{account.riverId}</dd>
           </div>
           <div>
-            <dt>This device</dt>
+            <dt>{tr('This device')}</dt>
             <dd>
-              Device {account.deviceId} of {account.devices} · list v{account.listVersion}
+              {tr('Device {device} of {devices} · list v{version}', {
+                device: account.deviceId,
+                devices: account.devices,
+                version: account.listVersion,
+              })}
             </dd>
           </div>
           <div>
-            <dt>Connection</dt>
+            <dt>{tr('Connection')}</dt>
             <dd className="mono small">{account.serverUrl}</dd>
           </div>
         </dl>
         <p className="muted small">
-          River stores your account ID, your public keys and which devices you use — never your messages or
-          your name.
+          {tr(
+            'River stores your account ID, your public keys and which devices you use — never your messages or your name.',
+          )}
         </p>
       </details>
       <ExportData />
@@ -881,10 +919,17 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
   const phone = isPhone(platform);
   const mac = platform === 'darwin';
   const tr = useT();
+  const current = languageInfo(useLanguage());
+  // "Follow my system (Deutsch)": what following the system gives right now.
+  const systemName = languageInfo(resolveLanguage('system')).name;
   const options: Array<{ id: Settings['appearance']['motion']; name: string; text: string }> = [
-    { id: 'system', name: 'Follow system', text: 'Use your operating system’s reduced-motion setting.' },
-    { id: 'reduced', name: 'Reduced', text: 'Minimal animation everywhere.' },
-    { id: 'full', name: 'Full', text: 'All animations, including the network field.' },
+    {
+      id: 'system',
+      name: tr('Follow system'),
+      text: tr('Use your operating system’s reduced-motion setting.'),
+    },
+    { id: 'reduced', name: tr('Reduced'), text: tr('Minimal animation everywhere.') },
+    { id: 'full', name: tr('Full'), text: tr('All animations, including the network field.') },
   ];
   return (
     <div className="panel">
@@ -899,17 +944,23 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
             })
           }
         >
-          <option value="system">{tr('Follow my system')}</option>
+          <option value="system">
+            {tr('Follow my system')}
+            {systemName ? ` (${systemName})` : ''}
+          </option>
           {LANGUAGES.map((l) => (
-            <option key={l.id} value={l.id}>
+            // Each language in its own name, so whoever reads it can find theirs.
+            <option key={l.id} value={l.id} lang={l.id} title={l.english}>
               {l.name}
-              {l.beta ? ' (beta — partly translated)' : ''}
             </option>
           ))}
         </select>
+        {current.beta && (
+          <span className="muted small">{tr('Partly translated: some screens are still in English.')}</span>
+        )}
       </label>
       <fieldset className="field">
-        <legend className="field__label">Motion</legend>
+        <legend className="field__label">{tr('Motion')}</legend>
         <div className="choice-grid">
           {options.map((o) => (
             <label
@@ -933,7 +984,8 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
       {!phone && (
         <label className="field slider-field">
           <span className="field__label">
-            Interface size <span className="muted small">{Math.round(settings.appearance.zoom * 100)}%</span>
+            {tr('Interface size')}{' '}
+            <span className="muted small">{Math.round(settings.appearance.zoom * 100)}%</span>
           </span>
           <input
             type="range"
@@ -941,18 +993,17 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
             max={1.6}
             step={0.05}
             value={settings.appearance.zoom}
-            aria-label="Interface size"
+            aria-label={tr('Interface size')}
             onChange={(e) => void updateSettings({ appearance: { zoom: Number(e.target.value) } })}
           />
           <span className="muted small">
-            Shortcut: {mac ? '⌘' : 'Ctrl+'}= bigger, {mac ? '⌘' : 'Ctrl+'}− smaller, {mac ? '⌘' : 'Ctrl+'}0
-            normal.
+            {tr('Shortcut: {key}= bigger, {key}− smaller, {key}0 normal.', { key: mac ? '⌘' : 'Ctrl+' })}
           </span>
         </label>
       )}
       <label className="field slider-field">
         <span className="field__label">
-          Message text size <span className="muted small">{settings.appearance.fontSize}px</span>
+          {tr('Message text size')} <span className="muted small">{settings.appearance.fontSize}px</span>
         </span>
         <input
           type="range"
@@ -960,21 +1011,21 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
           max={22}
           step={1}
           value={settings.appearance.fontSize}
-          aria-label="Message text size"
+          aria-label={tr('Message text size')}
           onChange={(e) => void updateSettings({ appearance: { fontSize: Number(e.target.value) } })}
         />
         <span className="msg__text slider-field__preview" style={{ fontSize: settings.appearance.fontSize }}>
-          The quick brown fox says hi 👋
+          {tr('The quick brown fox says hi 👋')}
         </span>
       </label>
       <fieldset className="field">
-        <legend className="field__label">Clock</legend>
+        <legend className="field__label">{tr('Clock')}</legend>
         <div className="choice-grid">
           {(
             [
-              ['system', 'Automatic', 'Follow your language settings.'],
-              ['12h', '12-hour', '2:05 PM'],
-              ['24h', '24-hour', '14:05'],
+              ['system', msg('Automatic'), msg('Follow your language settings.')],
+              ['12h', msg('12-hour'), '2:05 PM'],
+              ['24h', msg('24-hour'), '14:05'],
             ] as const
           ).map(([id, name, text]) => (
             <label key={id} className={`choice ${settings.appearance.clock === id ? 'is-selected' : ''}`}>
@@ -985,20 +1036,28 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
                 checked={settings.appearance.clock === id}
                 onChange={() => void updateSettings({ appearance: { clock: id } })}
               />
-              <span className="choice__name">{name}</span>
-              <span className="choice__text">{text}</span>
+              <span className="choice__name">{tr(name)}</span>
+              <span className="choice__text">{tr(text)}</span>
             </label>
           ))}
         </div>
       </fieldset>
       <fieldset className="field">
-        <legend className="field__label">Contrast</legend>
+        <legend className="field__label">{tr('Contrast')}</legend>
         <div className="choice-grid">
           {(
             [
-              ['system', 'Follow system', 'Use high contrast when your system asks for more contrast.'],
-              ['normal', 'Standard', 'River’s usual colours.'],
-              ['high', 'High contrast', 'Brighter text, clearer borders and strong focus outlines.'],
+              [
+                'system',
+                msg('Follow system'),
+                msg('Use high contrast when your system asks for more contrast.'),
+              ],
+              ['normal', msg('Standard'), msg('River’s usual colours.')],
+              [
+                'high',
+                msg('High contrast'),
+                msg('Brighter text, clearer borders and strong focus outlines.'),
+              ],
             ] as const
           ).map(([id, name, text]) => (
             <label key={id} className={`choice ${settings.appearance.contrast === id ? 'is-selected' : ''}`}>
@@ -1009,25 +1068,27 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
                 checked={settings.appearance.contrast === id}
                 onChange={() => void updateSettings({ appearance: { contrast: id } })}
               />
-              <span className="choice__name">{name}</span>
-              <span className="choice__text">{text}</span>
+              <span className="choice__name">{tr(name)}</span>
+              <span className="choice__text">{tr(text)}</span>
             </label>
           ))}
         </div>
       </fieldset>
       <Toggle
-        label="Add previews to links I send"
-        hint="River fetches the page from your computer (the site sees your address) and adds its title and description to your encrypted message. People reading it never contact the site."
+        label={tr('Add previews to links I send')}
+        hint={tr(
+          'River fetches the page from your computer (the site sees your address) and adds its title and description to your encrypted message. People reading it never contact the site.',
+        )}
         checked={settings.appearance.linkPreviews}
         onChange={(linkPreviews) => void updateSettings({ appearance: { linkPreviews } })}
       />
       <fieldset className="field">
-        <legend className="field__label">Message density</legend>
+        <legend className="field__label">{tr('Message density')}</legend>
         <div className="choice-grid">
           {(
             [
-              ['cozy', 'Cozy', 'Larger avatars and more space between messages.'],
-              ['compact', 'Compact', 'More messages on screen: small avatars, tight spacing.'],
+              ['cozy', msg('Cozy'), msg('Larger avatars and more space between messages.')],
+              ['compact', msg('Compact'), msg('More messages on screen: small avatars, tight spacing.')],
             ] as const
           ).map(([id, name, text]) => (
             <label key={id} className={`choice ${settings.appearance.density === id ? 'is-selected' : ''}`}>
@@ -1038,8 +1099,8 @@ function AppearancePanel({ settings }: { settings: Settings }): ReactElement {
                 checked={settings.appearance.density === id}
                 onChange={() => void updateSettings({ appearance: { density: id } })}
               />
-              <span className="choice__name">{name}</span>
-              <span className="choice__text">{text}</span>
+              <span className="choice__name">{tr(name)}</span>
+              <span className="choice__text">{tr(text)}</span>
             </label>
           ))}
         </div>
@@ -1055,26 +1116,32 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
   const linux = platform === 'linux';
   return (
     <div className="panel">
-      <h2 className="panel__title">Privacy</h2>
+      <h2 className="panel__title">{tr('Privacy')}</h2>
       <Toggle
-        label="Read receipts"
-        hint="Let people see when you have read their direct messages. If you turn this off, you will not see when they read yours either."
+        label={tr('Read receipts')}
+        hint={tr(
+          'Let people see when you have read their direct messages. If you turn this off, you will not see when they read yours either.',
+        )}
         checked={settings.presence.readReceipts}
         onChange={(v) => void updateSettings({ presence: { readReceipts: v } })}
       />
       <Toggle
-        label="Typing indicators"
-        hint="Show “typing…” while you write. If you turn this off, you will not see others typing either."
+        label={tr('Typing indicators')}
+        hint={tr(
+          'Show “typing…” while you write. If you turn this off, you will not see others typing either.',
+        )}
         checked={settings.presence.typingIndicators}
         onChange={(v) => void updateSettings({ presence: { typingIndicators: v } })}
       />
       {!linux && platform !== 'ios' && (
         <Toggle
-          label="Screen security"
+          label={tr('Screen security')}
           hint={
             phone
-              ? 'Block screenshots and screen recording of River, and show it blank in the app switcher.'
-              : 'Keep River out of screenshots and screen recordings (including screen sharing of this window).'
+              ? tr('Block screenshots and screen recording of River, and show it blank in the app switcher.')
+              : tr(
+                  'Keep River out of screenshots and screen recordings (including screen sharing of this window).',
+                )
           }
           checked={settings.system.screenSecurity}
           onChange={(v) => void updateSettings({ system: { screenSecurity: v } })}
@@ -1082,13 +1149,15 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
       )}
       <PrivacySettings settings={settings} phone={phone} />
       <h2 className="panel__title" id="settings-system">
-        System
+        {tr('System')}
       </h2>
       {phone && platform === 'android' && (
         <>
           <Toggle
-            label="Stay connected"
-            hint={`New messages and calls notify you even when River is closed. Android shows a quiet “River is connected” notification while it runs, and it uses some battery. River does not use Google’s push service. ${BATTERY_WHY}`}
+            label={tr('Stay connected')}
+            hint={`${tr(
+              'New messages and calls notify you even when River is closed. Android shows a quiet “River is connected” notification while it runs, and it uses some battery. River does not use Google’s push service.',
+            )} ${BATTERY_WHY}`}
             checked={settings.system.background}
             onChange={(v) =>
               void updateSettings({ system: { background: v, backgroundAsked: true } }).then(async () => {
@@ -1107,8 +1176,10 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
             }
           />
           <Toggle
-            label="Light up the screen for new messages"
-            hint="When the screen is off, a new message turns it on for a few seconds. Not during Do Not Disturb, and not for messages sent without sound."
+            label={tr('Light up the screen for new messages')}
+            hint={tr(
+              'When the screen is off, a new message turns it on for a few seconds. Not during Do Not Disturb, and not for messages sent without sound.',
+            )}
             checked={settings.system.wakeScreen}
             onChange={(v) => void updateSettings({ system: { wakeScreen: v } })}
           />
@@ -1117,15 +1188,17 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
       )}
       {platform === 'ios' && (
         <p className="muted small">
-          On iPhone, River gets messages and calls only while it is open or was just in use. River does not
-          use Apple’s push service yet (it needs a paid Apple developer account), so once iOS pauses River,
-          new messages and calls wait until you open it again. Calls do not ring while River is closed.
+          {tr(
+            'On iPhone, River gets messages and calls only while it is open or was just in use. River does not use Apple’s push service yet (it needs a paid Apple developer account), so once iOS pauses River, new messages and calls wait until you open it again. Calls do not ring while River is closed.',
+          )}
         </p>
       )}
       {phone ? (
         <Toggle
-          label="Lock River"
-          hint="Ask for your fingerprint, face or screen lock whenever River opens. Needs a screen lock on this phone. Your messages are encrypted on the phone either way; this keeps out someone holding your unlocked phone."
+          label={tr('Lock River')}
+          hint={tr(
+            'Ask for your fingerprint, face or screen lock whenever River opens. Needs a screen lock on this phone. Your messages are encrypted on the phone either way; this keeps out someone holding your unlocked phone.',
+          )}
           checked={settings.system.appLock}
           onChange={(v) => void updateSettings({ system: { appLock: v } })}
         />
@@ -1134,15 +1207,15 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
           {/* River cannot add itself to Linux desktops' autostart, so it does not offer to. */}
           {!linux && (
             <Toggle
-              label="Start River when I sign in"
-              hint="River opens quietly in the tray, so you get messages and calls right away."
+              label={tr('Start River when I sign in')}
+              hint={tr('River opens quietly in the tray, so you get messages and calls right away.')}
               checked={settings.system.startAtLogin}
               onChange={(v) => void updateSettings({ system: { startAtLogin: v } })}
             />
           )}
           <Toggle
-            label="Keep River running when I close the window"
-            hint="River stays in the tray. Quit it from the tray icon's menu."
+            label={tr('Keep River running when I close the window')}
+            hint={tr("River stays in the tray. Quit it from the tray icon's menu.")}
             checked={settings.system.closeToTray}
             onChange={(v) => void updateSettings({ system: { closeToTray: v } })}
           />
@@ -1156,7 +1229,7 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
 function HostingTab(): ReactElement {
   return (
     <div className="panel">
-      <h2 className="panel__title">Host on this PC</h2>
+      <h2 className="panel__title">{tr('Host on this PC')}</h2>
       <HostingPanel />
     </div>
   );
@@ -1165,14 +1238,14 @@ function HostingTab(): ReactElement {
 function NotificationsPanel({ settings }: { settings: Settings }): ReactElement {
   const updateSettings = useRiver((s) => s.updateSettings);
   const options: Array<{ id: Settings['notifications']['preview']; name: string; text: string }> = [
-    { id: 'none', name: 'Hidden', text: '“New River message” — no name, no content.' },
-    { id: 'sender', name: 'Sender only', text: '“New message from Alex”.' },
-    { id: 'full', name: 'Sender and message', text: 'Shows a preview of the message.' },
+    { id: 'none', name: tr('Hidden'), text: tr('“New River message” — no name, no content.') },
+    { id: 'sender', name: tr('Sender only'), text: tr('“New message from Alex”.') },
+    { id: 'full', name: tr('Sender and message'), text: tr('Shows a preview of the message.') },
   ];
   return (
     <div className="panel">
       <fieldset className="field">
-        <legend className="field__label">Notification preview</legend>
+        <legend className="field__label">{tr('Notification preview')}</legend>
         <div className="choice-grid">
           {options.map((o) => (
             <label
@@ -1192,16 +1265,20 @@ function NotificationsPanel({ settings }: { settings: Settings }): ReactElement 
           ))}
         </div>
         <p className="muted small">
-          Notification text is shown by your operating system and may be visible on your lock screen.
+          {tr('Notification text is shown by your operating system and may be visible on your lock screen.')}
         </p>
       </fieldset>
       <QuietHours settings={settings} />
       <p className="muted small">
         {phoneShellActive()
-          ? 'Long-press a chat, or open a community’s menu, to mute it for an hour, 8 hours, a day or until you turn it back on, to choose All messages, Only @mentions or Nothing just for it, and to give it a sound of its own. A community can also ignore @everyone and @here. Mentions of you and replies to you still come through a muted chat or channel unless it is set to Nothing. Do Not Disturb (your status in Settings) silences everything except your own sounds.'
-          : 'Right-click a chat, community, category or channel to mute it for an hour, 8 hours, a day or until you turn it back on, to choose All messages, Only @mentions or Nothing just for it, and to give it a sound of its own. A community can also ignore @everyone and @here. Mentions of you and replies to you still come through a muted chat or channel unless it is set to Nothing. Do Not Disturb (click your name) silences everything except your own sounds.'}
+          ? tr(
+              'Long-press a chat, or open a community’s menu, to mute it for an hour, 8 hours, a day or until you turn it back on, to choose All messages, Only @mentions or Nothing just for it, and to give it a sound of its own. A community can also ignore @everyone and @here. Mentions of you and replies to you still come through a muted chat or channel unless it is set to Nothing. Do Not Disturb (your status in Settings) silences everything except your own sounds.',
+            )
+          : tr(
+              'Right-click a chat, community, category or channel to mute it for an hour, 8 hours, a day or until you turn it back on, to choose All messages, Only @mentions or Nothing just for it, and to give it a sound of its own. A community can also ignore @everyone and @here. Mentions of you and replies to you still come through a muted chat or channel unless it is set to Nothing. Do Not Disturb (click your name) silences everything except your own sounds.',
+            )}
       </p>
-      <div className="sound-group__previews" aria-label="Chat sounds">
+      <div className="sound-group__previews" aria-label={tr('Chat sounds')}>
         {NOTIFY_TONES.map((tone) => (
           <button
             key={tone}
@@ -1226,11 +1303,11 @@ function QuietHours({ settings }: { settings: Settings }): ReactElement {
   return (
     <div className="field quiet-hours">
       <Toggle
-        label="Quiet hours"
+        label={tr('Quiet hours')}
         hint={
           inQuietHours(q)
-            ? 'On now: no pop-ups or notification sounds until it ends.'
-            : 'Every day, no pop-ups or notification sounds between these times.'
+            ? tr('On now: no pop-ups or notification sounds until it ends.')
+            : tr('Every day, no pop-ups or notification sounds between these times.')
         }
         checked={q.enabled}
         onChange={(enabled) => save({ enabled })}
@@ -1238,7 +1315,7 @@ function QuietHours({ settings }: { settings: Settings }): ReactElement {
       {q.enabled && (
         <div className="quiet-hours__times">
           <label>
-            From{' '}
+            {tr('From')}{' '}
             <input
               type="time"
               value={q.start}
@@ -1246,7 +1323,7 @@ function QuietHours({ settings }: { settings: Settings }): ReactElement {
             />
           </label>
           <label>
-            to{' '}
+            {tr('to')}{' '}
             <input
               type="time"
               value={q.end}
@@ -1262,20 +1339,21 @@ function QuietHours({ settings }: { settings: Settings }): ReactElement {
 function AboutPanel(): ReactElement {
   const info = useRiver((s) => s.info);
   const rows: Array<[string, ReactNode]> = [
-    ['Version', <span className="mono">{info?.version}</span>],
-    ['Channel', info?.channel],
-    ['Platform', `${info?.platform ?? ''} ${info?.arch ?? ''}`],
+    [tr('Version'), <span className="mono">{info?.version}</span>],
+    [tr('Channel'), info?.channel],
+    [tr('Platform'), `${info?.platform ?? ''} ${info?.arch ?? ''}`],
     ['Electron', <span className="mono">{info?.versions.electron}</span>],
     ['Chromium', <span className="mono">{info?.versions.chrome}</span>],
     ['Node.js', <span className="mono">{info?.versions.node}</span>],
-    ['License', 'GNU AGPL v3.0'],
+    [tr('License'), 'GNU AGPL v3.0'],
   ];
   return (
     <div className="panel">
-      <h2 className="panel__title">About River</h2>
+      <h2 className="panel__title">{tr('About River')}</h2>
       <p className="muted">
-        River is free, open-source software. Anyone can read, audit and build the code that runs on your
-        device.
+        {tr(
+          'River is free, open-source software. Anyone can read, audit and build the code that runs on your device.',
+        )}
       </p>
       <dl className="about-grid">
         {rows.map(([k, v]) => (
@@ -1287,16 +1365,16 @@ function AboutPanel(): ReactElement {
       </dl>
       <div className="linkrow">
         <button className="btn btn--link" onClick={() => void window.river.links.open('source')}>
-          Source code <ExternalIcon size={14} />
+          {tr('Source code')} <ExternalIcon size={14} />
         </button>
         <button className="btn btn--link" onClick={() => void window.river.links.open('releases')}>
-          Releases <ExternalIcon size={14} />
+          {tr('Releases')} <ExternalIcon size={14} />
         </button>
         <button className="btn btn--link" onClick={() => void window.river.links.open('issues')}>
-          Report a problem <ExternalIcon size={14} />
+          {tr('Report a problem')} <ExternalIcon size={14} />
         </button>
         <button className="btn btn--link" onClick={() => void window.river.links.open('license')}>
-          License <ExternalIcon size={14} />
+          {tr('License')} <ExternalIcon size={14} />
         </button>
       </div>
     </div>

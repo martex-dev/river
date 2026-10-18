@@ -1013,6 +1013,24 @@ html[data-platform='darwin'] .topbar {
   align-items: center;
   gap: 2px;
 }
+.onboarding__language {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.onboarding__language select {
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
 .setup-card__field {
   flex: 1;
   min-width: 200px;

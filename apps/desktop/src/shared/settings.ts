@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { RELEASE_CHANNELS } from '@river/release/channels';
 import { DEFAULT_DESIGN, compactDesignImages, designSettingsSchema } from './design.ts';
 import { NOTIFY_SOUNDS } from './notify-sounds.ts';
+import { LANGUAGE_IDS } from './i18n/languages.ts';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
@@ -96,8 +97,8 @@ export const settingsSchema = z.object({
     clock: z.enum(['system', '12h', '24h']),
     /** Stronger text and borders; 'system' follows the OS high-contrast preference. */
     contrast: z.enum(['system', 'normal', 'high']),
-    /** Added in 1.0.27: interface language ('system' follows the computer). */
-    language: z.enum(['system', 'en', 'bg']),
+    /** Added in 1.0.27: interface language ('system', the default, follows the computer or phone). */
+    language: z.enum(['system', ...LANGUAGE_IDS]),
     /** Added in 1.0.23: add previews to links you send (River fetches the page from your computer). */
     linkPreviews: z.boolean(),
     /**
@@ -277,7 +278,7 @@ export const DEFAULT_SETTINGS: Settings = {
     clock: 'system',
     contrast: 'system',
     linkPreviews: false,
-    language: 'en',
+    language: 'system',
     calm: false,
   },
   design: structuredClone(DEFAULT_DESIGN),
