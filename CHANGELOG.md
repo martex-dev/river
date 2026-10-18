@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.19.0] - 2026-10-18
+
+**Group calls in group chats, and call links.**
+
 ### Added
 
 - **Group calls in group chats.** Start a voice or video call in any group:
@@ -39,6 +43,11 @@ All notable changes to River are documented here. The format follows
   you connect); with an older server River says so instead of starting one.
   River 2.17 and older ignore group-call messages: people on them are not rung.
   1:1 calls are unchanged.
+
+### Fixed
+
+- Server: a community's audit log lists actions made in the same millisecond
+  newest first (their order was random).
 
 ## [2.18.1] - 2026-10-18
 

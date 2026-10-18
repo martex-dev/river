@@ -256,6 +256,7 @@ export async function registerCommunityRoutes(
    * Records an administrative action. Only IDs and numbers go in: the server
    * never has names or content. Entries older than 90 days are dropped.
    */
+  let auditSeq = 0;
   const audit = async (
     communityId: string,
     actor: string,
@@ -264,10 +265,13 @@ export async function registerCommunityRoutes(
     details: Record<string, unknown> = {},
   ): Promise<void> => {
     const at = deps.now();
+    // A counter first in the ID: entries made in the same millisecond still list newest first
+    // (the log is ordered by time, then ID; a random ID put them in any order).
+    const seq = (auditSeq = (auditSeq + 1) % 36 ** 6);
     await db
       .insertInto('audit_log')
       .values({
-        id: randomBytes(16).toString('base64url'),
+        id: `${seq.toString(36).padStart(6, '0')}${randomBytes(12).toString('base64url')}`,
         community_id: communityId,
         actor,
         action,
