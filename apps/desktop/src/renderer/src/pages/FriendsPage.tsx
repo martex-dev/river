@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react';
+import { create } from 'zustand';
 import type { ConversationView } from '../../../shared/dm.ts';
 import { friendLink, parseFriend } from '../../../shared/invite-link.ts';
 import { play } from '../community/sound.ts';
@@ -10,8 +11,24 @@ import { useDm } from '../dm/store.ts';
 import { useRiver } from '../store.ts';
 import { QrCode } from '../components/QrCode.tsx';
 import { QrScanner } from '../components/QrScanner.tsx';
+import { JoinCommunityCard } from '../components/GetStarted.tsx';
+import { isPhone } from '../../../shared/platform.ts';
+import { phonePush } from '../phone/nav.ts';
 
 type Tab = 'online' | 'all' | 'pending' | 'blocked' | 'add';
+
+/** Which list Friends shows, and whether your QR code is open: other places open them (2.14). */
+const useFriendsView = create<{ tab: Tab; qr: boolean }>(() => ({ tab: 'online', qr: false }));
+
+/**
+ * Friends → Add friend, from anywhere (a first-run card, the phone's empty chat list): one tap
+ * to the username field, or (`qr`) straight to your own QR code and link.
+ */
+export function openAddFriend(options: { qr?: boolean } = {}): void {
+  useFriendsView.setState({ tab: 'add', qr: options.qr ?? false });
+  if (isPhone(useRiver.getState().info?.platform)) phonePush({ kind: 'friends' });
+  else useRiver.getState().navigate('contacts');
+}
 
 /** Where a person is online and which communities you share, from your communities' member lists. */
 function usePresence(): (riverId: string) => { online: boolean; mutual: string[] } {
@@ -38,7 +55,8 @@ export function FriendsPage(): ReactElement {
   const dm = useDm();
   const account = useRiver((r) => r.account);
   const presence = usePresence();
-  const [tab, setTab] = useState<Tab>('online');
+  const tab = useFriendsView((v) => v.tab);
+  const setTab = (next: Tab): void => useFriendsView.setState({ tab: next, qr: false });
   const [query, setQuery] = useState('');
 
   useEffect(() => {
@@ -47,19 +65,25 @@ export function FriendsPage(): ReactElement {
   }, [account.state]);
 
   if (account.state !== 'registered') {
+    // River makes your account by itself (2.0): while it does, say so rather than ask for work.
     return (
       <div className="page">
         <header className="page__header">
           <div className="eyebrow">Friends</div>
           <h1 className="page__title">Your people</h1>
-          <p className="page__lead">
-            Friends need an account on a River server. Join or create a community first — it only takes a
-            moment.
+          <p className="page__lead" role={account.waiting ? 'status' : undefined}>
+            {account.waiting
+              ? 'Setting up your account… River keeps trying by itself, and friends can be added as soon as it is ready.'
+              : account.needsInvite
+                ? 'Your account needs the sign-up link from whoever runs your River server — paste it in the card above.'
+                : 'Friends need an account on a River server. Join or create a community first — it only takes a moment.'}
           </p>
         </header>
-        <button className="btn btn--primary" onClick={() => useRiver.getState().navigate('communities')}>
-          Go to Communities
-        </button>
+        {!account.waiting && !account.needsInvite && (
+          <button className="btn btn--primary" onClick={() => useRiver.getState().navigate('communities')}>
+            Go to Communities
+          </button>
+        )}
       </div>
     );
   }
@@ -80,6 +104,9 @@ export function FriendsPage(): ReactElement {
   ];
   const shown =
     tab === 'add' ? [] : lists[tab].filter((c) => c.name.toLowerCase().includes(query.trim().toLowerCase()));
+  // Nobody yet (2.14): Online and All show how to add someone instead of an empty list.
+  const firstFriend =
+    dm.loaded && friends.length === 0 && lists.pending.length === 0 && (tab === 'online' || tab === 'all');
 
   return (
     <div className="page friends">
@@ -117,11 +144,13 @@ export function FriendsPage(): ReactElement {
         </button>
       </nav>
 
-      {tab === 'add' ? (
+      {tab === 'add' || firstFriend ? (
         <AddFriend
+          key={tab}
           serverUrl={account.shareUrl}
           myId={account.riverId}
           myUsername={account.username}
+          firstRun={firstFriend}
           onSent={() => setTab('all')}
         />
       ) : (
@@ -295,6 +324,8 @@ function AddFriend(props: {
   serverUrl: string;
   myId: string;
   myUsername: string | null;
+  /** No friends yet: joining a community is offered next to adding a friend. */
+  firstRun?: boolean;
   onSent(): void;
 }): ReactElement {
   const notify = useCommunity((s) => s.notify);
@@ -303,7 +334,7 @@ function AddFriend(props: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [showQr, setShowQr] = useState(false);
+  const [showQr, setShowQr] = useState(() => useFriendsView.getState().qr);
   const [scanning, setScanning] = useState(false);
   const myLink = friendLink(props.serverUrl, props.myId);
 
@@ -405,7 +436,7 @@ function AddFriend(props: {
           onClose={() => setScanning(false)}
         />
       )}
-      <div className="glass card">
+      <div className="glass card" id="my-friend-link">
         <h2 className="card__title">You are {props.myUsername ? `@${props.myUsername}` : 'on River'}</h2>
         <p className="muted small">
           {props.myUsername
@@ -436,6 +467,7 @@ function AddFriend(props: {
           </div>
         )}
       </div>
+      {props.firstRun && <JoinCommunityCard />}
     </div>
   );
 }

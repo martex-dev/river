@@ -181,6 +181,14 @@ export function phoneBack(): boolean {
   return false;
 }
 
+/**
+ * The community you just joined from the first screen (2.14): the Communities tab with it open,
+ * set up before the phone shell is on screen (it follows later changes by itself).
+ */
+export function phoneShowCommunity(id: string): void {
+  setStack([{ kind: 'community', id }], 'tab', 'communities');
+}
+
 /** Opens a conversation (selecting it in River's store). */
 export function openPhoneChat(peer: string): void {
   useDm.getState().select(peer);

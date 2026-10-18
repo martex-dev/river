@@ -12,7 +12,11 @@ Plan: [docs/product/road-to-3.md](docs/product/road-to-3.md). Many releases, one
 - [x] 2.12.0 Community messages and profiles bound to their sender (v2 associated data by default), full channel history, community delivery fixes
 - [x] 2.12.1 Phone native sweep: reconnect on network change, Stay connected restart crash, other apps' calls kept, notification ids after a restart, lock screen on Android 8, share and save fixes, iPhone notifications cleared on sign-out
 - [x] 2.13.0 Phones look like Telegram and Instagram: bottom tabs, chat list, conversation screen with bubbles, communities as a list, calls list, feed, profile
-- [ ] 2.13.x Polish for each phone screen
+- [x] 2.13.1 Linking a phone finishes (core timers in a worker)
+- [x] 2.14.0 Voice channels for big groups and meetings; joining is heard at once; pages scroll in every skin
+- [x] 2.15.0 Privacy part 2 (padding, photo metadata, proxy, retention, local history) and the desktop polish sweep
+- [x] 2.16.0 Easy start: one-screen first run, invite links straight in
+- [ ] 2.16.x Polish for each phone screen
 - [ ] 2.14.x Easy start: install to first chat in under a minute, one-screen profile, invite links that open the app; community keys need a proof
 - [ ] 2.15.x Group calls, call quality, call links
 - [ ] 2.16.x Voice channels and meetings: bigger rooms, grid and speaker views, raise hand, stage

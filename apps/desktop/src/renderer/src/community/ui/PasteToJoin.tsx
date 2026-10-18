@@ -48,7 +48,11 @@ function offer(link: DeepLink): void {
  * Nothing is read from the clipboard unless you paste.
  */
 export function PasteToJoin(): null {
+  // River draws its shell for a moment before it knows whether this is the first run: a link
+  // that opened River waits until there is an identity (the first screen takes invites itself).
+  const ready = useRiver((r) => r.storage.state === 'open' && !!r.identity && !r.onboarding);
   useEffect(() => {
+    if (!ready) return;
     // Links from the browser: taken once, whichever comes first (on start, or as they arrive).
     const take = (): void =>
       void window.river.app.takeDeepLink().then((link) => {
@@ -56,7 +60,7 @@ export function PasteToJoin(): null {
       });
     take();
     return window.river.app.onDeepLink(take);
-  }, []);
+  }, [ready]);
   useEffect(() => {
     const onPaste = (e: ClipboardEvent): void => {
       if (editable(e.target) || editable(document.activeElement)) return;
@@ -165,8 +169,12 @@ export function AddFriendDialog(props: { riverId: string; serverUrl: string }): 
   const account = useRiver((r) => r.account);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const problem =
-    account.state !== 'registered'
+  // Just past the first screen (2.14), River may still be making your account: the request
+  // can go as soon as it is ready, without leaving this dialog.
+  const settingUp = account.state === 'none' && account.waiting === true;
+  const problem = settingUp
+    ? null
+    : account.state !== 'registered'
       ? 'You need an account first: join or create a community.'
       : account.riverId === props.riverId
         ? "That's your own friend link."
@@ -174,10 +182,15 @@ export function AddFriendDialog(props: { riverId: string; serverUrl: string }): 
   return (
     <Modal title="Add a friend?" onClose={() => s.setModal(null)}>
       <p className="modal__text">
-        {props.serverUrl ? 'You pasted a friend link.' : 'You pasted a River ID.'}{' '}
+        {props.serverUrl ? 'This is a River friend link.' : 'You pasted a River ID.'}{' '}
         {`River will send them “${GREETING}” as an end-to-end encrypted request.`}
       </p>
       {(problem ?? error) && <p className="field__error">{problem ?? error}</p>}
+      {settingUp && (
+        <p className="muted small" role="status">
+          Setting up your account… The button works as soon as it is ready.
+        </p>
+      )}
       <div className="modal__foot">
         <button className="btn btn--link" onClick={() => s.setModal(null)}>
           Not now
@@ -185,7 +198,7 @@ export function AddFriendDialog(props: { riverId: string; serverUrl: string }): 
         <button
           className="btn btn--primary"
           autoFocus
-          disabled={busy || problem !== null}
+          disabled={busy || settingUp || problem !== null}
           onClick={() => {
             setBusy(true);
             // Already a friend: their chat opens and nothing is sent; a request from them is accepted.

@@ -10,14 +10,13 @@ export const TEST_NAME = 'E2E Tester';
  * Launches the built app exactly as the packaged app loads it (river:// + CSP)
  * and walks through first-run steps so tests reach the main UI:
  * passphrase setup/unlock (systems without an OS keyring, e.g. Linux CI) and
- * identity creation.
+ * the one-screen first run (2.14: a name, then Get started).
  */
 export async function launchRiver(
   userData: string,
   options: {
     completeOnboarding?: boolean;
     name?: string;
-    username?: string;
     args?: string[];
     env?: Record<string, string>;
   } = {},
@@ -34,31 +33,17 @@ export async function launchRiver(
     },
   });
   const page = await app.firstWindow();
-  await page.waitForSelector('.workspace, .lock, .onboarding, .skin-gate');
+  await page.waitForSelector('.workspace, .lock, .onboarding');
   if (await page.locator('.lock').isVisible()) {
     const inputs = page.locator('.lock input[type=password]');
     const count = await inputs.count();
     for (let i = 0; i < count; i++) await inputs.nth(i).fill(TEST_PASSPHRASE);
     await page.locator('.lock button[type=submit]').click();
-    await page.waitForSelector('.workspace, .onboarding, .skin-gate', { timeout: 30_000 });
+    await page.waitForSelector('.workspace, .onboarding', { timeout: 30_000 });
   }
   if (options.completeOnboarding !== false && (await page.locator('.onboarding').isVisible())) {
-    await page.getByRole('button', { name: 'Create my identity' }).click();
-    await page.getByPlaceholder('e.g. Alex').fill(options.name ?? TEST_NAME);
-    await page.getByRole('button', { name: 'Continue' }).click();
-    // Username step (1.0.13): set it if a username was asked for, otherwise skip.
-    const skip = page.getByRole('button', { name: /Skip for now/ });
-    await skip.waitFor({ timeout: 15_000 });
-    if (options.username) {
-      await page.getByLabel('Username', { exact: true }).fill(options.username);
-      await page.getByRole('button', { name: 'Continue' }).click();
-    } else {
-      await skip.click();
-    }
-    await page.getByRole('button', { name: 'Enter River' }).click({ timeout: 15_000 });
+    await completeFirstRun(page, options.name ?? TEST_NAME);
   }
-  // 1.0.46: River asks for a skin before anything else.
-  if (options.completeOnboarding !== false) await chooseFirstSkin(page);
   return { app, page };
 }
 
@@ -110,14 +95,15 @@ export async function openHome(page: Page, place?: string): Promise<void> {
   if (place) await page.locator('.home-nav').getByRole('button', { name: place, exact: true }).click();
 }
 
-/** Passes River's first-run skin chooser (Specter · Specter) if it is showing. */
-export async function chooseFirstSkin(page: Page, skin = 'Specter', palette = 'Specter'): Promise<void> {
-  await page.waitForSelector('.workspace, .skin-gate', { timeout: 30_000 });
-  if (!(await page.locator('.skin-gate').isVisible())) return;
-  await page.getByRole('radio', { name: `${skin} skin` }).click();
-  await page.getByRole('radio', { name: `${palette} palette` }).click();
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await page.waitForSelector('.workspace', { timeout: 15_000 });
+/** The first run (2.14): one screen — a name, then Get started — and River is open. */
+export async function completeFirstRun(
+  page: Page,
+  name: string,
+  button: RegExp = /Get started/,
+): Promise<void> {
+  await page.getByLabel('Your name').fill(name);
+  await page.getByRole('button', { name: button }).click();
+  await page.waitForSelector('.workspace', { timeout: 30_000 });
 }
 
 /** Settings → Appearance → a skin, then one of its palettes. */

@@ -7,7 +7,7 @@ import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { startNavHistory } from './nav-history.ts';
 import { useDesignEngine } from './appearance/use-design.ts';
 import { TryBar } from './appearance/TryBar.tsx';
-import { SkinGate } from './appearance/SkinGate.tsx';
+import { SetupCards } from './components/SetupCards.tsx';
 import { resolveLanguage, useT } from './i18n.ts';
 import { RiverMark } from './components/RiverMark.tsx';
 import { AdminIcon, LockIcon } from './components/Icons.tsx';
@@ -207,25 +207,13 @@ export function App(): ReactElement {
     return (
       <>
         <div className="backdrop" aria-hidden="true" />
-        <Onboarding
-          reducedMotion={reducedMotion}
-          onCreated={(id) => void identityCreated(id)}
-          onFinished={finishOnboarding}
-        />
+        <Onboarding onCreated={(id) => void identityCreated(id)} onFinished={finishOnboarding} />
       </>
     );
   }
 
-  // 1.0.46: no built-in look — everyone picks a skin first (once).
-  if (settings && !settings.design.chosen) {
-    return (
-      <>
-        <div className="backdrop" aria-hidden="true" />
-        <SkinGate />
-      </>
-    );
-  }
-
+  // 2.14: no skin chooser in the way any more. River starts with a good look for the platform
+  // and offers "Pick your look" as one of the cards below (SetupCards).
   const notices = (
     <div className="notices">
       {info?.startupProblem && (
@@ -233,7 +221,7 @@ export function App(): ReactElement {
           {info.startupProblem}
         </div>
       )}
-      <UsernamePrompt />
+      <SetupCards />
       <WhatsNew />
       <StayConnectedPrompt />
       {loadError && (
@@ -401,74 +389,6 @@ function AdminButton(): ReactElement {
       >
         <AdminIcon size={22} />
       </button>
-    </div>
-  );
-}
-
-/** Nudges people who have an account but no @username yet to choose one. */
-function UsernamePrompt(): ReactElement | null {
-  const account = useRiver((r) => r.account);
-  const setAccount = useRiver((r) => r.setAccount);
-  const navigate = useRiver((r) => r.navigate);
-  const [value, setValue] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [dismissed, setDismissed] = useState(false);
-  if (dismissed || account.state !== 'registered' || account.connection !== 'online' || account.username) {
-    return null;
-  }
-  const save = async (): Promise<void> => {
-    setBusy(true);
-    setError(null);
-    const res = await window.river.account.setUsername(value.trim());
-    setBusy(false);
-    if (res.ok) {
-      setAccount(res.value);
-      setDismissed(true);
-    } else setError(res.message);
-  };
-  return (
-    <div className="username-prompt glass" role="region" aria-label="Choose a username">
-      <div>
-        <strong>Pick a username</strong>
-        <p className="muted small">It's how friends add you — like @alex. You can change it later.</p>
-      </div>
-      <div className="username-row">
-        <div className="textfield username-field">
-          <span className="username-field__at" aria-hidden="true">
-            @
-          </span>
-          <input
-            value={value.replace(/^@/, '')}
-            onChange={(e) => {
-              setValue(e.target.value);
-              setError(null);
-            }}
-            placeholder="username"
-            autoCapitalize="none"
-            spellCheck={false}
-            maxLength={32}
-            aria-label="Username"
-          />
-        </div>
-        <button
-          className="btn btn--primary btn--small"
-          disabled={busy || value.trim().length < 3}
-          onClick={() => void save()}
-        >
-          {busy ? 'Saving…' : 'Save'}
-        </button>
-        <button
-          className="btn btn--link btn--small"
-          onClick={() => {
-            setDismissed(true);
-            navigate('settings');
-          }}
-        >
-          Later
-        </button>
-      </div>
-      {error && <p className="field__error">{error}</p>}
     </div>
   );
 }

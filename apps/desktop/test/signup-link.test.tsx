@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PasteToJoin, SignupDialog } from '../src/renderer/src/community/ui/PasteToJoin.tsx';
 import { useCommunity } from '../src/renderer/src/community/store.ts';
@@ -33,7 +33,13 @@ beforeEach(() => {
     account: { redeemSignup },
     security: { status: async () => ({}) },
   };
-  useRiver.setState({ account: { state: 'none' } });
+  // River is open with an identity (links that opened River wait for that, 2.14).
+  useRiver.setState({
+    account: { state: 'none' },
+    storage: { state: 'open' } as never,
+    identity: { riverId: '3f2b8c1e-5d4a-4e7b-9a10-0c6d2f8e4b71' } as never,
+    onboarding: false,
+  });
   useCommunity.setState({ modal: null });
 });
 afterEach(() => {
@@ -58,6 +64,16 @@ describe('sign-up links from outside River', () => {
     await waitFor(() => expect(takeDeepLink).toHaveBeenCalled());
     expect(useCommunity.getState().modal).toBeNull();
     expect(redeemSignup).not.toHaveBeenCalled();
+  });
+
+  it('waits while River is still starting or on its first screen (that screen takes invites itself)', async () => {
+    takeDeepLink.mockResolvedValue({ kind: 'signup', link: ATTACKER_LINK });
+    useRiver.setState({ onboarding: true });
+    render(<PasteToJoin />);
+    await act(async () => undefined);
+    expect(takeDeepLink).not.toHaveBeenCalled();
+    act(() => useRiver.setState({ onboarding: false }));
+    await waitFor(() => expect(takeDeepLink).toHaveBeenCalled());
   });
 
   it('names the server and creates the account only when confirmed', async () => {

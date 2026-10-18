@@ -3,6 +3,11 @@
  * got, shown once. Fresh installs see nothing; full notes are in the release.
  */
 export const HIGHLIGHTS: Record<string, string[]> = {
+  '2.16.0': [
+    'Starting River takes one screen: your name, then Get started',
+    'An invite link opens straight into its community, even on a new computer or phone',
+    'Friends and Chats show how to add a friend or join a community right away',
+  ],
   '2.15.0': [
     'Message lengths are hidden from the server, and photos lose their location and other hidden data before sending',
     'Settings → System → Privacy: connect through Tor or another proxy, keep messages on this device only for a while, a disappearing timer for new chats',

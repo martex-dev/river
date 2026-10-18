@@ -4,6 +4,7 @@ import { isPhone } from '../../../shared/platform.ts';
 import { useRiver } from '../store.ts';
 import { ArrowIcon, CheckIcon } from './Icons.tsx';
 import { QrCode } from './QrCode.tsx';
+import { QrScanner } from './QrScanner.tsx';
 
 /** Live link progress from the client core. */
 function useLinkProgress(): LinkProgress {
@@ -34,6 +35,7 @@ export function LinkThisDevice(props: {
   const [name, setName] = useState(phone ? 'My phone' : 'My computer');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
   const failure = error ?? (progress.state === 'failed' ? progress.message : null);
   // A whole link names the server whose account this device would join: show it before joining.
@@ -55,13 +57,24 @@ export function LinkThisDevice(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progress]);
 
-  const submit = async (e: FormEvent): Promise<void> => {
-    e.preventDefault();
+  const join = async (value: string): Promise<void> => {
     setBusy(true);
     setError(null);
-    const res = await window.river.account.link.join(code.trim(), name.trim());
+    const res = await window.river.account.link.join(value.trim(), name.trim());
     setBusy(false);
     if (!res.ok) setError(res.message);
+  };
+  const submit = (e: FormEvent): void => {
+    e.preventDefault();
+    void join(code);
+  };
+  /** The QR code your other device shows (2.14): read with this device's camera, then "Is this you?". */
+  const scanned = (text: string): true | string => {
+    if (!/^river:\/\/link\?/i.test(text.trim())) return 'That QR code is not a River link code.';
+    setScanning(false);
+    setCode(text.trim());
+    void join(text);
+    return true;
   };
 
   if (progress.state === 'review') {
@@ -132,12 +145,23 @@ export function LinkThisDevice(props: {
   }
 
   return (
-    <form className="lock__form" onSubmit={(e) => void submit(e)}>
+    <form className="lock__form" onSubmit={submit}>
       <h1 className="onboarding__title">Link this device</h1>
       <p className="lock__text">
         On a device where you already use River, open <strong>Settings → Account → Devices</strong> and choose{' '}
-        <strong>Link a new device</strong>. Enter the code it shows.
+        <strong>Link a new device</strong>. Scan the QR code it shows, or type its code.
       </p>
+      <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => setScanning(true)}>
+        📷 Scan the QR code
+      </button>
+      {scanning && (
+        <QrScanner
+          title="Scan your other device's QR code"
+          hint="On your other device: Settings → Account → Devices → Link a new device."
+          onResult={scanned}
+          onClose={() => setScanning(false)}
+        />
+      )}
       <label className="textfield">
         <span className="field__label">Link code</span>
         <input
@@ -145,7 +169,7 @@ export function LinkThisDevice(props: {
           autoFocus
           autoCapitalize="characters"
           spellCheck={false}
-          placeholder="XXXX-XXXX-XXXX-XXXX or river://link?…"
+          placeholder="XXXX-XXXX-XXXX-XXXX"
           value={code}
           onChange={(e) => setCode(e.target.value)}
         />
@@ -278,8 +302,8 @@ export function DevicesPanel(): ReactElement {
       {progress.state === 'offering' && (
         <div className="devices__offer" role="status" aria-live="polite">
           <p>
-            New phone: scan this with its camera. Another computer: choose “I already use River — link this
-            device” and enter the code below.
+            On the new device, choose “I already use River — link this device” and scan this QR code (or point
+            a phone’s camera app at it). Or type the code below.
           </p>
           <QrCode value={progress.code} label="Link code as a QR code" />
           <p className="devices__code mono" aria-label="Link code">

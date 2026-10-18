@@ -672,42 +672,6 @@
   flex: none;
 }
 
-/* The first-run chooser */
-.skin-gate {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  overflow-y: auto;
-  background: var(--backdrop);
-  color: var(--text);
-}
-.skin-gate__inner {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 48px 24px 120px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-.skin-gate__head {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.skin-gate__foot {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px max(24px, calc((100% - 1180px) / 2 + 24px));
-  background: var(--layer-1);
-  border-top: 1px solid var(--border);
-  box-shadow: var(--shadow-pop);
-}
 @media (max-width: 760px) {
   .skin-grid {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));

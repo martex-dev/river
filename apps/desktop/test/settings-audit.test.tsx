@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BackupPanel } from '../src/renderer/src/components/BackupPanel.tsx';
 import { DevicesPanel } from '../src/renderer/src/components/LinkDevice.tsx';
 import { LockScreen } from '../src/renderer/src/components/LockScreen.tsx';
-import { Onboarding } from '../src/renderer/src/components/Onboarding.tsx';
 import { MissingAccount, SettingsOverlay } from '../src/renderer/src/pages/SettingsPage.tsx';
 import { useRiver } from '../src/renderer/src/store.ts';
 import type { AccountStatus, AppInfo, LinkProgress } from '../src/shared/ipc.ts';
@@ -332,35 +331,5 @@ describe('Lock screen', () => {
     fireEvent.click(screen.getByRole('button', { name: /Set passphrase/ }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/at most 1024/);
     expect(storage.setupPassphrase).not.toHaveBeenCalled();
-  });
-});
-
-describe('First run', () => {
-  it('asks for a sign-up link on an invite-only server, and ignores device links once the identity exists', async () => {
-    let deepLink: () => void = () => undefined;
-    const app = river.app as Record<string, unknown>;
-    app.onDeepLink = (l: () => void) => {
-      deepLink = l;
-      return () => undefined;
-    };
-    const take = app.takeDeepLink as ReturnType<typeof vi.fn>;
-    (river.identity!.create as ReturnType<typeof vi.fn>).mockResolvedValue({
-      riverId: REGISTERED.riverId,
-      displayName: null,
-      fingerprint: 'AAAA BBBB',
-      words: [],
-      createdAt: '2026-10-17T00:00:00.000Z',
-    });
-    useRiver.setState({ account: { state: 'none', needsInvite: true } });
-    render(<Onboarding reducedMotion onCreated={() => undefined} onFinished={() => undefined} />);
-    fireEvent.click(screen.getByRole('button', { name: /Create my identity/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
-    await screen.findByText('Pick a username');
-    // Invite-only: the sign-up link field is there without trying a username first.
-    expect(screen.getByLabelText('Paste your sign-up link')).toBeTruthy();
-    take.mockClear();
-    act(() => deepLink());
-    expect(take).not.toHaveBeenCalled();
-    expect(screen.getByText('Pick a username')).toBeTruthy();
   });
 });

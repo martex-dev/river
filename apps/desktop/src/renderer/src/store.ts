@@ -85,7 +85,8 @@ interface RiverState {
   setStorage(status: StorageStatus): Promise<void>;
   setAccount(status: AccountStatus): Promise<void>;
   identityCreated(identity: IdentityInfo): Promise<void>;
-  finishOnboarding(): void;
+  /** The first run is over: Home, or where it led (the community an invite joined). */
+  finishOnboarding(section?: Section): void;
   checkForUpdates(): Promise<void>;
 }
 
@@ -180,7 +181,8 @@ export const useRiver = create<RiverState>((set) => ({
   identityCreated: async (identity) => {
     set({ identity, security: await window.river.security.status() });
   },
-  finishOnboarding: () => set({ onboarding: false, onboardingStart: 'welcome', section: 'home' }),
+  finishOnboarding: (section) =>
+    set({ onboarding: false, onboardingStart: 'welcome', section: section ?? 'home' }),
   checkForUpdates: async () => {
     set({ update: { state: 'checking' } });
     set({ update: await window.river.updates.check() });
