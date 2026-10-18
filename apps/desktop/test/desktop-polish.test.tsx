@@ -151,6 +151,16 @@ describe('the newest message stays in view', () => {
     fireEvent.load(img);
     expect(box.top).toBe(100);
   });
+
+  it('a jump to the "New" line just before a picture loads is kept (scroll events come a frame late)', () => {
+    const box = { height: 1000, client: 200, top: 800 };
+    render(<Log box={box} />);
+    // River scrolls to the first unread message; no scroll event has arrived yet.
+    box.top = 300;
+    box.height = 1400;
+    fireEvent.load(screen.getByAltText('cat'));
+    expect(box.top).toBe(300);
+  });
 });
 
 describe('history and live messages', () => {

@@ -76,24 +76,37 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, threshold =
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    let pinned = fromBottom(el) < threshold;
-    const onScroll = (): void => {
-      pinned = fromBottom(el) < threshold;
+    // The box as it was last measured: whether the reader was at the newest message is judged
+    // against that (before the picture grew it), with where they are now. Not a flag set by scroll
+    // events, which arrive a frame late: a jump to the "New" line just before must count.
+    let height = el.scrollHeight;
+    let client = el.clientHeight;
+    const measure = (): void => {
+      height = el.scrollHeight;
+      client = el.clientHeight;
     };
     const stick = (): void => {
-      if (pinned && fromBottom(el) > 0) el.scrollTop = el.scrollHeight;
+      const wasAtBottom = height - el.scrollTop - client < threshold;
+      if (wasAtBottom && fromBottom(el) > 0) el.scrollTop = el.scrollHeight;
+      measure();
     };
+    const onScroll = measure;
     el.addEventListener('scroll', onScroll, { passive: true });
     // Media load events do not bubble, but they can be caught on the way down.
     el.addEventListener('load', stick, true);
     el.addEventListener('loadedmetadata', stick, true);
     const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(stick);
     resize?.observe(el);
+    // Something added inside (a message, a link preview, a poll): the same check, right after
+    // React drew it and before anything scrolls, so the height measured next is the new one.
+    const added = typeof MutationObserver === 'undefined' ? null : new MutationObserver(stick);
+    added?.observe(el, { childList: true, subtree: true });
     return () => {
       el.removeEventListener('scroll', onScroll);
       el.removeEventListener('load', stick, true);
       el.removeEventListener('loadedmetadata', stick, true);
       resize?.disconnect();
+      added?.disconnect();
     };
   }, [ref, threshold]);
 }
