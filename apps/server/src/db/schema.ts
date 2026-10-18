@@ -255,6 +255,8 @@ export interface MailboxTable {
   type: number;
   body: string;
   received_at: string;
+  /** Stored size of `body` (2.20), for the per-device and per-sender caps. */
+  size: Generated<number>;
 }
 
 export interface BlocksTable {

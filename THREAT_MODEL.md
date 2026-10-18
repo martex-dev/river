@@ -144,6 +144,16 @@ Videos and other files are sent as they are, and file names are kept.
   in stayed in it. Since 2.20 the server ends their seat at once and tells
   their app, as for a deleted channel; a temporary role that runs out is
   noticed within a minute.
+- **Mailboxes and disks have limits per sender.** One sender could fill a
+  device's mailbox (5000 envelopes of up to 128 KB) and so shut everyone else
+  out, and uploads could fill the disk. Since 2.20 one sender may have at most
+  2500 envelopes and half of 100 MB waiting for one device
+  (`RIVER_MAILBOX_PER_SENDER`, `RIVER_MAILBOX_MAX_MB`; the size counts for the
+  device as a whole too), and uploads are refused while less than 1 GB would
+  stay free (`RIVER_MIN_FREE_DISK_MB`) or past an optional server-wide total
+  (`RIVER_ATTACHMENT_TOTAL_MB`). Many accounts working together can still fill
+  a mailbox up to its cap; the 30-day expiry and the device's next collection
+  empty it.
 
 ### 5a. Address relay (River Host, 1.0.8)
 

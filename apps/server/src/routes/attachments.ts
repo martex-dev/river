@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, rename, rm, stat, statfs, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Kysely, Transaction } from 'kysely';
@@ -15,6 +15,8 @@ import { HttpError } from '../http-error.ts';
 const UNLINKED_TTL_MS = 24 * 60 * 60 * 1000;
 const GC_INTERVAL_MS = 60 * 60 * 1000;
 const DM_RETAIN_MS = 31 * 24 * 60 * 60 * 1000;
+/** Default for RIVER_MIN_FREE_DISK_MB: uploads leave at least this much free on the disk (2.20). */
+const MIN_FREE_DISK = 1024 * 1024 * 1024;
 /** Smallest possible encrypted attachment: IV + one AES block + MAC. */
 const MIN_BLOB = 16 + 16 + 32;
 
@@ -24,12 +26,35 @@ const MIN_BLOB = 16 + 16 + 32;
  */
 export async function registerAttachmentRoutes(
   app: FastifyInstance,
-  deps: { config: ServerConfig; database: RiverDatabase; now: () => Date },
+  deps: {
+    config: ServerConfig;
+    database: RiverDatabase;
+    now: () => Date;
+    /** Free bytes on the attachment folder's disk (tests replace it). */
+    diskFree?: (dir: string) => Promise<number>;
+  },
 ): Promise<void> {
   const { db } = deps.database;
   const dir = resolve(deps.config.attachmentDir);
   await mkdir(dir, { recursive: true });
   const fileOf = (id: string): string => join(dir, id);
+  /** Free space for uploads; null when the system cannot say (then only the totals apply). */
+  const diskFree = async (): Promise<number | null> => {
+    try {
+      if (deps.diskFree) return await deps.diskFree(dir);
+      const s = await statfs(dir);
+      return Number(s.bavail) * Number(s.bsize);
+    } catch {
+      return null;
+    }
+  };
+  const outOfSpace = (): HttpError =>
+    // quota_exceeded: apps since 1.0 show its message as it is.
+    new HttpError(
+      507,
+      'quota_exceeded',
+      'This River server is out of space for files right now. Ask whoever runs it to free some up.',
+    );
 
   // The parser serves every route, so it keeps the server's small default limit (2.18): only the
   // upload route below allows attachment-sized bodies, and only after the session checked out.
@@ -68,15 +93,19 @@ export async function registerAttachmentRoutes(
         throw new HttpError(400, 'bad_request', 'That is not an encrypted River attachment');
       }
       const uploader = request.session!.riverId;
+      // A full disk would take the database (and every message) down with it (2.20).
+      const free = await diskFree();
+      if (free !== null && free - body.length < (deps.config.minFreeDiskBytes ?? MIN_FREE_DISK))
+        throw outOfSpace();
       const id = randomBytes(16).toString('base64url');
       const tmp = `${fileOf(id)}.part`;
       await writeFile(tmp, body, { flag: 'wx' });
       // The quota check and the insert happen in one transaction. On PostgreSQL the uploader's
       // account row is locked first, so parallel uploads by one person are counted one after
       // another; SQLite runs one write transaction at a time. The sum uses attachments_by_uploader.
-      let fits = false;
+      let fits: boolean | 'server' = false;
       try {
-        fits = await db.transaction().execute(async (trx) => {
+        fits = await db.transaction().execute(async (trx): Promise<boolean | 'server'> => {
           if (deps.database.dialect === 'postgres') {
             await trx
               .selectFrom('accounts')
@@ -91,6 +120,15 @@ export async function registerAttachmentRoutes(
             .where('uploader', '=', uploader)
             .executeTakeFirst();
           if (Number(used?.total ?? 0) + body.length > deps.config.attachmentQuotaBytes) return false;
+          // Every file on the server together, when the operator set a total (2.20).
+          const total = deps.config.attachmentTotalBytes ?? 0;
+          if (total > 0) {
+            const all = await trx
+              .selectFrom('attachments')
+              .select((eb) => eb.fn.sum<number>('size').as('total'))
+              .executeTakeFirst();
+            if (Number(all?.total ?? 0) + body.length > total) return 'server' as const;
+          }
           await trx
             .insertInto('attachments')
             .values({
@@ -108,10 +146,11 @@ export async function registerAttachmentRoutes(
             .execute();
           return true;
         });
-        if (fits) await rename(tmp, fileOf(id));
+        if (fits === true) await rename(tmp, fileOf(id));
       } finally {
-        if (!fits) await rm(tmp, { force: true });
+        if (fits !== true) await rm(tmp, { force: true });
       }
+      if (fits === 'server') throw outOfSpace();
       if (!fits) {
         throw new HttpError(413, 'quota_exceeded', 'You have reached your storage limit on this server');
       }

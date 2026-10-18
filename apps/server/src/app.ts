@@ -52,6 +52,8 @@ export interface AppDeps {
   rotationRecheckMs?: number;
   /** Bytes a realtime connection may have queued before it is closed (tests lower it). */
   maxEventBuffer?: number;
+  /** Free bytes on the attachment folder's disk (tests replace it). */
+  diskFree?: (dir: string) => Promise<number>;
 }
 
 function errorBody(code: string, message: string): ErrorResponse {
@@ -226,7 +228,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     now,
     ...(deps.fetch ? { fetch: deps.fetch } : {}),
   });
-  await registerAttachmentRoutes(app, { config, database: deps.database, now });
+  await registerAttachmentRoutes(app, {
+    config,
+    database: deps.database,
+    now,
+    ...(deps.diskFree ? { diskFree: deps.diskFree } : {}),
+  });
 
   return app;
 }

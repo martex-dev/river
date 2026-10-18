@@ -266,7 +266,7 @@ describe('TURN credentials', () => {
 });
 
 describe('abuse limits', () => {
-  const custom = async (env: Record<string, string>) => {
+  const custom = async (env: Record<string, string>, diskFree?: () => Promise<number>) => {
     database = openDatabase('sqlite::memory:');
     await migrateToLatest(database.db);
     app = await buildApp({
@@ -277,8 +277,121 @@ describe('abuse limits', () => {
         ...env,
       }),
       database,
+      ...(diskFree ? { diskFree } : {}),
     });
   };
+  const sendTo = (
+    from: { token: string },
+    to: { riverId: string; identity: { registrationId: number } },
+    body: string,
+  ) =>
+    app.inject({
+      method: 'POST',
+      url: `/v1/messages/${to.riverId}`,
+      headers: auth(from.token),
+      payload: { messages: [{ deviceId: 1, registrationId: to.identity.registrationId, type: 2, body }] },
+    });
+
+  it('one sender cannot fill a mailbox for everyone else; collecting makes room (2.20)', async () => {
+    await custom({ RIVER_MAILBOX_LIMIT: '300', RIVER_MAILBOX_PER_SENDER: '100' });
+    const alice = await client(app);
+    const bob = await client(app);
+    const carol = await client(app);
+    const body = Buffer.from('x'.repeat(40)).toString('base64');
+    for (let i = 0; i < 100; i++) expect((await sendTo(alice, bob, body)).statusCode).toBe(202);
+    const over = await sendTo(alice, bob, body);
+    expect(over.statusCode).toBe(429);
+    expect(over.json().error).toMatchObject({
+      code: 'mailbox_full',
+      message: expect.stringMatching(/not collected/),
+    });
+    // Bob is not shut out for everyone else.
+    expect((await sendTo(carol, bob, body)).statusCode).toBe(202);
+    // Once Bob collects his mail, Alice may write again.
+    const page = mailboxResponseSchema.parse(
+      (await app.inject({ method: 'GET', url: '/v1/messages', headers: auth(bob.token) })).json(),
+    );
+    await app.inject({
+      method: 'POST',
+      url: '/v1/messages/ack',
+      headers: auth(bob.token),
+      payload: { ids: page.envelopes.map((e) => e.id) },
+    });
+    expect((await sendTo(alice, bob, body)).statusCode).toBe(202);
+  });
+
+  it('caps the stored size of a mailbox, and one sender’s share of it (2.20)', async () => {
+    await custom({ RIVER_MAILBOX_MAX_MB: '10' });
+    const alice = await client(app);
+    const bob = await client(app);
+    const carol = await client(app);
+    // The largest envelope there is: about 128 KB as stored.
+    const big = Buffer.alloc(96 * 1024, 7).toString('base64');
+    let sent = 0;
+    for (; sent < 100; sent++) {
+      const res = await sendTo(alice, bob, big);
+      if (res.statusCode !== 202) {
+        expect(res.statusCode).toBe(429);
+        expect(res.json().error.code).toBe('mailbox_full');
+        break;
+      }
+    }
+    // Half of 10 MiB from one sender, and no more.
+    expect(sent).toBe(Math.floor((5 * 1024 * 1024) / big.length));
+    let more = 0;
+    for (; more < 100; more++) {
+      const res = await sendTo(carol, bob, big);
+      if (res.statusCode !== 202) {
+        expect(res.statusCode).toBe(507);
+        expect(res.json().error.code).toBe('mailbox_full');
+        break;
+      }
+    }
+    expect(sent + more).toBe(Math.floor((10 * 1024 * 1024) / big.length));
+    // Never more than the cap is stored.
+    const stored = await database.db
+      .selectFrom('mailbox')
+      .select((eb) => eb.fn.sum<number>('size').as('n'))
+      .executeTakeFirstOrThrow();
+    expect(Number(stored.n)).toBeLessThanOrEqual(10 * 1024 * 1024);
+  });
+
+  it('the defaults let thousands of messages wait for an offline friend', () => {
+    const config = loadConfig({});
+    expect(config.mailboxPerSender).toBeGreaterThanOrEqual(2000);
+    expect(config.mailboxLimit).toBeGreaterThan(config.mailboxPerSender!);
+    // 2500 typical messages (a few KB each as stored) are far below a sender's share of the size cap.
+    expect(config.mailboxPerSender! * 4096).toBeLessThan(config.mailboxMaxBytes! / 2);
+  });
+
+  it('refuses uploads when the disk is nearly full or the server-wide total is reached (2.20)', async () => {
+    let free = 500 * 1024 * 1024;
+    await custom({ RIVER_ATTACHMENT_TOTAL_MB: '10', RIVER_MAX_ATTACHMENT_MB: '25' }, async () => free);
+    const alice = await client(app);
+    const bob = await client(app);
+    const upload = (token: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/v1/attachments',
+        headers: { ...auth(token), 'content-type': 'application/octet-stream' },
+        payload: Buffer.alloc(16 + 6 * 1024 * 1024 + 32),
+      });
+    // Less than RIVER_MIN_FREE_DISK_MB (1 GiB) would be left: refused, nothing kept.
+    const low = await upload(alice.token);
+    expect(low.statusCode).toBe(507);
+    expect(low.json().error).toMatchObject({
+      code: 'quota_exceeded',
+      message: expect.stringMatching(/out of space/),
+    });
+    expect(await database.db.selectFrom('attachments').selectAll().execute()).toEqual([]);
+    free = 50 * 1024 * 1024 * 1024;
+    expect((await upload(alice.token)).statusCode).toBe(201);
+    // Bob is within his own quota, but all files together would pass the server's 10 MiB.
+    const total = await upload(bob.token);
+    expect(total.statusCode).toBe(507);
+    expect(total.json().error.code).toBe('quota_exceeded');
+    expect(await database.db.selectFrom('attachments').selectAll().execute()).toHaveLength(1);
+  });
 
   it('refuses mail for a device whose mailbox is full', async () => {
     await custom({ RIVER_MAILBOX_LIMIT: '100' });

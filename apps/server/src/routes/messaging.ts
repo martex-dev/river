@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { Selectable, Transaction } from 'kysely';
+import { sql, type Selectable, type Transaction } from 'kysely';
 import { verify } from '@river/crypto';
 import {
   API_PREFIX,
@@ -21,6 +21,9 @@ import { HttpError } from '../http-error.ts';
 /** Undelivered envelopes are kept this long, then deleted. */
 /** Default for RIVER_MAILBOX_TTL_DAYS. */
 const MAILBOX_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+/** Defaults for RIVER_MAILBOX_PER_SENDER and RIVER_MAILBOX_MAX_MB (2.20). */
+const MAILBOX_PER_SENDER = 2500;
+const MAILBOX_MAX_BYTES = 100 * 1024 * 1024;
 const PAGE = 100;
 
 const b = (s: string): Buffer => Buffer.from(s, 'base64');
@@ -266,6 +269,42 @@ export function registerMessagingRoutes(
     return undefined;
   }
 
+  /**
+   * What each of these devices holds undelivered: envelopes and their stored size, in all and from
+   * `sender` (one query, answered from the mailbox_usage index).
+   */
+  const mailboxUsage = async (
+    recipient: string,
+    deviceIds: number[],
+    sender: string,
+  ): Promise<Map<number, { count: number; bytes: number; mine: number; mineBytes: number }>> => {
+    if (!deviceIds.length) return new Map();
+    const rows = await db
+      .selectFrom('mailbox')
+      .select((eb) => [
+        'recipient_device',
+        eb.fn.countAll<number>().as('count'),
+        eb.fn.sum<number>('size').as('bytes'),
+        eb.fn.sum<number>(sql<number>`case when sender = ${sender} then 1 else 0 end`).as('mine'),
+        eb.fn.sum<number>(sql<number>`case when sender = ${sender} then size else 0 end`).as('mineBytes'),
+      ])
+      .where('recipient', '=', recipient)
+      .where('recipient_device', 'in', [...new Set(deviceIds)])
+      .groupBy('recipient_device')
+      .execute();
+    return new Map(
+      rows.map((r) => [
+        r.recipient_device,
+        {
+          count: Number(r.count ?? 0),
+          bytes: Number(r.bytes ?? 0),
+          mine: Number(r.mine ?? 0),
+          mineBytes: Number(r.mineBytes ?? 0),
+        },
+      ]),
+    );
+  };
+
   const isBlocked = async (owner: string, other: string): Promise<boolean> =>
     !!(await db
       .selectFrom('blocks')
@@ -431,20 +470,43 @@ export function registerMessagingRoutes(
       }
       let messages = req.messages;
       if (!req.ephemeral) {
-        // A device that never collects its mail cannot be used to fill the server's disk. Its copy
-        // is dropped; the person's other devices still get theirs.
-        const full = new Set<number>();
+        // A device that never collects its mail cannot be used to fill the server's disk, and
+        // since 2.20 one sender cannot fill a device's mailbox for everyone else: a sender may
+        // keep at most RIVER_MAILBOX_PER_SENDER envelopes, and half the stored size, waiting for
+        // one device (your own devices are not counted against you). A copy over a cap is dropped;
+        // the person's other devices still get theirs.
+        const refused = new Map<number, 'full' | 'size' | 'sender'>();
+        const usage = await mailboxUsage(
+          target,
+          req.messages.map((m) => m.deviceId),
+          me.riverId,
+        );
+        const perSender = deps.config.mailboxPerSender ?? MAILBOX_PER_SENDER;
+        const maxBytes = deps.config.mailboxMaxBytes ?? MAILBOX_MAX_BYTES;
         for (const m of req.messages) {
-          const queued = await db
-            .selectFrom('mailbox')
-            .select((eb) => eb.fn.countAll<number>().as('n'))
-            .where('recipient', '=', target)
-            .where('recipient_device', '=', m.deviceId)
-            .executeTakeFirst();
-          if (Number(queued?.n ?? 0) >= deps.config.mailboxLimit) full.add(m.deviceId);
+          const u = usage.get(m.deviceId) ?? { count: 0, bytes: 0, mine: 0, mineBytes: 0 };
+          const size = m.body.length;
+          if (u.count >= deps.config.mailboxLimit) refused.set(m.deviceId, 'full');
+          else if (u.bytes + size > maxBytes) refused.set(m.deviceId, 'size');
+          else if (target !== me.riverId && (u.mine >= perSender || u.mineBytes + size > maxBytes / 2))
+            refused.set(m.deviceId, 'sender');
         }
-        messages = req.messages.filter((m) => !full.has(m.deviceId));
+        messages = req.messages.filter((m) => !refused.has(m.deviceId));
         if (!messages.length) {
+          const why = new Set(refused.values());
+          // The code stays mailbox_full (apps since 1.0 show its message); the status says which.
+          if (why.has('sender'))
+            throw new HttpError(
+              429,
+              'mailbox_full',
+              'This person has not collected the many messages you already sent them. Try again once they are back online.',
+            );
+          if (why.has('size'))
+            throw new HttpError(
+              507,
+              'mailbox_full',
+              'This person’s mailbox on the server is full. Try again once they are back online.',
+            );
           throw new HttpError(
             429,
             'mailbox_full',
@@ -475,6 +537,7 @@ export function registerMessagingRoutes(
               type: e.type,
               body: e.body,
               received_at: e.receivedAt,
+              size: e.body.length,
             })),
           )
           .execute();
