@@ -1,6 +1,6 @@
 import { DEFAULT_KEYBINDS } from './keybinds.ts';
 import { z } from 'zod';
-import { RELEASE_CHANNELS } from '@river/release/channels';
+import { RELEASE_CHANNELS } from '@river/release/channel-names';
 import { DEFAULT_DESIGN, compactDesignImages, designSettingsSchema } from './design.ts';
 import { NOTIFY_SOUNDS } from './notify-sounds.ts';
 import { LANGUAGE_IDS } from './i18n/languages.ts';

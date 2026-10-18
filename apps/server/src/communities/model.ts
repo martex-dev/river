@@ -66,6 +66,8 @@ export class CommunityModel {
   readonly selfRoles: string[];
   readonly art: string | null;
   readonly webhooks: WebhookWire[];
+  /** Members by River ID: every permission check looks one up (for each member a message goes to). */
+  private readonly byMember = new Map<string, MemberModel>();
 
   constructor(init: {
     id: string;
@@ -92,6 +94,7 @@ export class CommunityModel {
     this.channels = init.channels;
     this.categories = init.categories ?? [];
     this.members = init.members;
+    for (const m of this.members) if (!this.byMember.has(m.riverId)) this.byMember.set(m.riverId, m);
     this.onboarding = init.onboarding ?? null;
     this.screening = init.screening ?? false;
     this.selfRoles = init.selfRoles ?? [];
@@ -110,7 +113,7 @@ export class CommunityModel {
   }
 
   member(riverId: string): MemberModel | undefined {
-    return this.members.find((m) => m.riverId === riverId);
+    return this.byMember.get(riverId);
   }
 
   channel(id: string): ChannelModel | undefined {
@@ -325,6 +328,13 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
         .execute(),
       db.selectFrom('webhooks').selectAll().where('community_id', '=', id).orderBy('created_at').execute(),
     ]);
+  // Each member's roles, grouped once (in the order read) instead of searched for per member.
+  const rolesOf = new Map<string, typeof memberRoles>();
+  for (const r of memberRoles) {
+    const list = rolesOf.get(r.river_id);
+    if (list) list.push(r);
+    else rolesOf.set(r.river_id, [r]);
+  }
   const categoryModels: CategoryModel[] = categories.map((k) => ({
     id: k.id,
     name: k.name,
@@ -391,11 +401,9 @@ export async function loadCommunity(db: Kysely<Database>, id: string): Promise<C
     members: members.map((m) => ({
       riverId: m.river_id,
       legacyRole: m.role as 'owner' | 'admin' | 'member',
-      roles: memberRoles.filter((r) => r.river_id === m.river_id).map((r) => r.role_id),
+      roles: (rolesOf.get(m.river_id) ?? []).map((r) => r.role_id),
       roleExpiry: Object.fromEntries(
-        memberRoles
-          .filter((r) => r.river_id === m.river_id && r.expires_at)
-          .map((r) => [r.role_id, r.expires_at!]),
+        (rolesOf.get(m.river_id) ?? []).filter((r) => r.expires_at).map((r) => [r.role_id, r.expires_at!]),
       ),
       profile: m.profile,
       timeoutUntil: m.timeout_until,
@@ -411,13 +419,21 @@ export async function lastMessageTimes(
   channelIds: string[],
 ): Promise<Map<string, string>> {
   if (channelIds.length === 0) return new Map();
+  // One newest-message lookup per channel (an index seek on messages_by_channel), rather than a
+  // GROUP BY that reads every message of every channel.
   const rows = await db
-    .selectFrom('messages')
-    .select((eb) => ['channel_id', eb.fn.max('sent_at').as('last')])
-    .where('channel_id', 'in', channelIds)
-    .groupBy('channel_id')
+    .selectFrom('channels')
+    .select((eb) => [
+      'channels.id as channel_id',
+      eb
+        .selectFrom('messages')
+        .select((m) => m.fn.max('messages.sent_at').as('m'))
+        .whereRef('messages.channel_id', '=', 'channels.id')
+        .as('last'),
+    ])
+    .where('channels.id', 'in', channelIds)
     .execute();
-  return new Map(rows.map((r) => [r.channel_id, String(r.last)]));
+  return new Map(rows.filter((r) => r.last !== null).map((r) => [r.channel_id, String(r.last)]));
 }
 
 export async function communityOfChannel(db: Kysely<Database>, channelId: string): Promise<string | null> {

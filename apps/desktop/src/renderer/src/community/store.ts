@@ -7,6 +7,7 @@ import type {
 } from '../../../shared/community-actions.ts';
 import type { ChatMessage, CommunityEvent, CommunityView, Result } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
+import { shareByKey, shareEqual } from '../structural.ts';
 import { setMessageLinkOpener } from './message-link.ts';
 import type {
   EmojiView,
@@ -1000,8 +1001,21 @@ export function sendVoiceState(): void {
   });
 }
 
-function applyCommunities(communities: CommunityView[]): void {
+/** One community shared with its earlier version; members by River ID (someone joining moves the rest). */
+function shareCommunity(old: CommunityView | undefined, next: CommunityView): CommunityView {
+  if (!old) return next;
+  const members = shareByKey(old.members, next.members, (m) => m.riverId);
+  const { members: _oldMembers, ...oldRest } = old;
+  const { members: _nextMembers, ...nextRest } = next;
+  const rest = shareEqual(oldRest, nextRest);
+  return rest === oldRest && members === old.members ? old : { ...rest, members };
+}
+
+function applyCommunities(incoming: CommunityView[]): void {
   const s = useCommunity.getState();
+  // Main sends every community whole on each change: unchanged communities and members keep their
+  // objects, so a presence change in a big community draws one member row again, not all of them.
+  const communities = shareByKey(s.communities, incoming, (c) => c.id, shareCommunity);
   useCommunity.setState({ communities });
   const current = communities.find((c) => c.id === s.selectedCommunity);
   // On a phone (2.12) a community opens on its channel list: nothing is opened (or read) for you.

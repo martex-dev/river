@@ -12,6 +12,7 @@ import type { ServerConfig } from './config.ts';
 import type { RiverDatabase } from './db/database.ts';
 import { registerAccountRoutes } from './routes/accounts.ts';
 import { HttpError } from './http-error.ts';
+import { compressJson } from './compress.ts';
 import { Hub } from './communities/hub.ts';
 import { registerSelfRoutes } from './routes/self.ts';
 import { registerAttachmentRoutes } from './routes/attachments.ts';
@@ -146,6 +147,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     reply.removeHeader('x-powered-by');
     return payload;
   });
+  // Large JSON answers to GET requests are gzipped for clients that ask (compress.ts).
+  app.addHook('onSend', compressJson);
 
   app.addHook('onResponse', async (request, reply) => {
     request.log.info(

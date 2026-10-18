@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { memo, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import {
   MAX_FOLDERS,
   type ChatFolder,
@@ -429,8 +429,8 @@ export function previewOf(c: ConversationView, typing: boolean): ReactNode {
   );
 }
 
-function ChatRow({ c, muted }: { c: ConversationView; muted: boolean }): ReactElement {
-  const dm = useDm();
+/** Memoised, and not subscribed to the whole DM store: a long list draws only the rows that changed. */
+const ChatRow = memo(function ChatRow({ c, muted }: { c: ConversationView; muted: boolean }): ReactElement {
   useDm((x) => x.typing[c.riverId]);
   const typing = isTyping(c.riverId);
   const update = useRiver((r) => r.updateSettings);
@@ -451,7 +451,7 @@ function ChatRow({ c, muted }: { c: ConversationView; muted: boolean }): ReactEl
       body: tr('This deletes the messages on this device only. The other person keeps their copy.'),
       action: tr('Delete'),
       run: async () => {
-        await dm.run({ a: 'removeConversation', peer: c.riverId });
+        await useDm.getState().run({ a: 'removeConversation', peer: c.riverId });
       },
     });
   const toggleMute = (): void => {
@@ -584,4 +584,4 @@ function ChatRow({ c, muted }: { c: ConversationView; muted: boolean }): ReactEl
       )}
     </li>
   );
-}
+});

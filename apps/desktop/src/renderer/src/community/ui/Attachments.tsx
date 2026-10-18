@@ -207,7 +207,14 @@ function ImageAttachment({
       >
         {pointer.thumb && !url && <img className="attachment-image__thumb" src={pointer.thumb} alt="" />}
         {url && (
-          <img className="attachment-image__full" src={url} alt={alt || pointer.name} draggable={false} />
+          // Decoded off the main thread: a big photo arriving never stalls scrolling.
+          <img
+            className="attachment-image__full"
+            src={url}
+            alt={alt || pointer.name}
+            draggable={false}
+            decoding="async"
+          />
         )}
         {alt && (
           <span className="attachment-image__alt" title={alt}>

@@ -1,4 +1,5 @@
 import semver from 'semver';
+import { RELEASE_CHANNELS, type ReleaseChannel } from './channel-names.ts';
 
 /**
  * User-facing release channels.
@@ -8,8 +9,7 @@ import semver from 'semver';
  * `1.2.3-alpha.N` → nightly (`alpha`). electron-builder only understands the
  * latest/beta/alpha hierarchy, so nightly builds use the `alpha` tag.
  */
-export const RELEASE_CHANNELS = ['stable', 'beta', 'nightly'] as const;
-export type ReleaseChannel = (typeof RELEASE_CHANNELS)[number];
+export { RELEASE_CHANNELS, type ReleaseChannel };
 
 export const UPDATER_CHANNEL_NAME: Record<ReleaseChannel, 'latest' | 'beta' | 'alpha'> = {
   stable: 'latest',

@@ -15,6 +15,8 @@ import type {
 } from '../../../shared/dm.ts';
 import type { Result } from '../../../shared/ipc.ts';
 import { useCommunity } from '../community/store.ts';
+import { shareByKey } from '../structural.ts';
+import { uiStartup } from '../startup.ts';
 import { celebrate } from '../community/fx.tsx';
 import { play, playNotifySound } from '../community/sound.ts';
 import { useRiver } from '../store.ts';
@@ -76,6 +78,7 @@ export const useDm = create<DmState>((set, get) => ({
       conversations: conversations.ok ? conversations.value : [],
       myId: myId.ok ? myId.value : null,
     });
+    uiStartup.mark('chats');
   },
 
   handle: (e) => {
@@ -86,7 +89,11 @@ export const useDm = create<DmState>((set, get) => ({
         const isFriend = (c: ConversationView): boolean => c.state === 'accepted' && !c.awaitingReply;
         const before = new Map(get().conversations.map((c) => [c.riverId, c]));
         const loaded = get().conversations.length > 0 || get().loadedOnce;
-        set({ conversations: e.conversations, loadedOnce: true });
+        // Unchanged chats keep their objects, so only the rows that changed draw again.
+        set({
+          conversations: shareByKey(get().conversations, e.conversations, (c) => c.riverId),
+          loadedOnce: true,
+        });
         if (!loaded) return;
         if (
           e.conversations.some((c) => c.kind === 'direct' && c.state === 'request' && !before.has(c.riverId))
