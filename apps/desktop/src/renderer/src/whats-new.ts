@@ -3,6 +3,11 @@
  * got, shown once. Fresh installs see nothing; full notes are in the release.
  */
 export const HIGHLIGHTS: Record<string, string[]> = {
+  '2.18.0': [
+    'Chat wallpapers: doodles, gradients or your own photo, for every chat or just one',
+    'Any accent colour, three bubble shapes, text size and density in Settings → Appearance → Chat',
+    'Share your theme as a code; reactions burst, a double tap shows a big heart (Calm mode turns effects off)',
+  ],
   '2.17.0': [
     'Each chat can have its own notifications: mute for a while, only @mentions, or its own sound',
     'Notifications are grouped per chat, with Mark as read, and the app icon shows how many chats wait for you',

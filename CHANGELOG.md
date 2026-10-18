@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.18.0] - 2026-10-18
+
+**Make River yours: chat wallpapers, any accent colour, bubble shapes, theme codes.**
+
 ### Added
 
 - **Chat wallpapers** on computers and phones: eight Telegram-like doodle
