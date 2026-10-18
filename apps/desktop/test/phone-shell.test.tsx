@@ -1,6 +1,16 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { handleBack, HoldTap, isTextField, keyboardInset } from '../../mobile/ui/shell.ts';
+import {
+  handleBack,
+  HoldTap,
+  isOverLock,
+  isTextField,
+  keyboardInset,
+  OVER_LOCK_CHANNEL,
+  setOverLock,
+} from '../../mobile/ui/shell.ts';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -48,6 +58,57 @@ describe("the phone's Back button", () => {
     const chats = env(0);
     expect(handleBack(chats.env)).toBe(false);
     expect(chats.back).toHaveBeenCalledOnce();
+  });
+
+  it('over a locked phone puts River away instead of leaving the call for the chats (2.18)', () => {
+    document.body.innerHTML =
+      '<div class="dm-call dm-call--full"><button class="dm-call__min">⌄</button></div>';
+    const min = vi.fn();
+    document.querySelector('.dm-call__min')!.addEventListener('click', min);
+    const close = vi.fn(() => true);
+    const { env: e, back } = env(1, close);
+    setOverLock(document.documentElement, true);
+    try {
+      expect(isOverLock(document)).toBe(true);
+      expect(handleBack(e)).toBe(false);
+      expect(min).not.toHaveBeenCalled();
+      expect(close).not.toHaveBeenCalled();
+      expect(back).not.toHaveBeenCalled();
+    } finally {
+      setOverLock(document.documentElement, false);
+    }
+    expect(isOverLock(document)).toBe(false);
+    expect(handleBack(e)).toBe(true);
+  });
+});
+
+describe('River over a locked phone (Android, 2.18)', () => {
+  const css = readFileSync(resolve(import.meta.dirname, '../../mobile/ui/phone.css'), 'utf8');
+  const java = (file: string): string =>
+    readFileSync(
+      resolve(import.meta.dirname, '../../mobile/android/app/src/main/java/io/github/martexdev/river', file),
+      'utf8',
+    );
+
+  it('shows only the full-screen call, without its way back to the chats', () => {
+    expect(css).toMatch(/html\[data-over-lock\] body > \* \{\s*visibility: hidden !important;/);
+    expect(css).toMatch(/html\[data-over-lock\] \.dm-call--full \{\s*visibility: visible !important;/);
+    expect(css).toMatch(
+      /html\[data-over-lock\] \.dm-call--full \.dm-call__min \{\s*visibility: hidden !important;/,
+    );
+  });
+
+  it('is told so by Android, which shows River over the lock screen only for a call it knows of', () => {
+    const main = java('MainActivity.java');
+    expect(main).toContain(OVER_LOCK_CHANNEL);
+    // The "call" extra of an intent any app can send is not enough on its own.
+    expect(main).not.toMatch(/getBooleanExtra\(CoreHost\.EXTRA_CALL, false\)\)\s*showOverLock\(true\)/);
+    expect(main).toMatch(
+      /getBooleanExtra\(CoreHost\.EXTRA_CALL, false\) && \(tapped \|\| core\.callMayShowOverLock\(\)\)\)\s*showOverLock\(true\)/,
+    );
+    expect(java('core/CoreHost.java')).toMatch(
+      /public boolean callMayShowOverLock\(\) \{\s*return overLockForCall \|\| inCall;/,
+    );
   });
 });
 
