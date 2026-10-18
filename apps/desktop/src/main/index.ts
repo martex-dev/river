@@ -199,9 +199,14 @@ async function start(): Promise<void> {
       }),
     );
   };
-  await applyProxy().catch((err: unknown) =>
-    log.error(`Proxy settings not applied: ${(err as Error).message}`),
-  );
+  // Without a proxy, Chromium's sessions already use the system's settings (their default) and
+  // nothing has connected yet: setting that again cost up to most of a second at every start.
+  if (activeProxy(settings.get().privacy.proxy)) {
+    await applyProxy().catch((err: unknown) =>
+      log.error(`Proxy settings not applied: ${(err as Error).message}`),
+    );
+  }
+  startup.mark('network');
   /**
    * With a proxy, calls never send UDP outside it (Chromium's disable_non_proxied_udp): no direct
    * peer-to-peer media, so the other people in a call do not see this computer's address. Calls then
