@@ -255,6 +255,9 @@ function readTags(raw: unknown, max: number): string[] {
   return out;
 }
 
+/** Presence changes arriving within this long reach the window as one update. */
+const PRESENCE_BATCH_MS = 150;
+
 export class CommunityService {
   private readonly deps: Deps;
   private communities: CommunityView[] = [];
@@ -319,6 +322,9 @@ export class CommunityService {
   connectTimeoutMs = 20_000;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
+  /** People whose presence changed since the window was last told (see flushPresence). */
+  private presenceDirty = new Set<string>();
+  private presenceTimer: NodeJS.Timeout | null = null;
   private backoff = 1000;
   /** When the current connection became ready (null: not ready). */
   private readyAt: number | null = null;
@@ -1617,6 +1623,28 @@ export class CommunityService {
     void this.catchUp().catch(() => undefined);
     this.emit({ t: 'communities', communities: this.communities });
     return this.communities;
+  }
+
+  /** Applies the presence changes of the last moment to the members and tells the window once. */
+  private flushPresence(): void {
+    this.presenceTimer = null;
+    const dirty = this.presenceDirty;
+    this.presenceDirty = new Set();
+    if (!dirty.size) return;
+    this.communities = this.communities.map((c) =>
+      c.members.some((m) => dirty.has(m.riverId))
+        ? {
+            ...c,
+            members: c.members.map((m) => {
+              if (!dirty.has(m.riverId)) return m;
+              const status = this.statuses.get(m.riverId);
+              const { status: _old, ...rest } = m;
+              return { ...rest, online: this.online.get(m.riverId) ?? false, ...(status ? { status } : {}) };
+            }),
+          }
+        : c,
+    );
+    this.emit({ t: 'communities', communities: this.communities });
   }
 
   private scheduleRefresh(): void {
@@ -3918,15 +3946,13 @@ export class CommunityService {
         this.online.set(e.riverId, e.online);
         const status = e.online && e.status && e.status !== 'online' ? e.status : undefined;
         this.statuses.set(e.riverId, status);
-        this.communities = this.communities.map((c) => ({
-          ...c,
-          members: c.members.map((m) => {
-            if (m.riverId !== e.riverId) return m;
-            const { status: _old, ...rest } = m;
-            return { ...rest, online: e.online, ...(status ? { status } : {}) };
-          }),
-        }));
-        this.emit({ t: 'communities', communities: this.communities });
+        // Presence comes in bursts (everyone at once after a reconnect): one update for the burst
+        // instead of every community sent to the window once per person.
+        this.presenceDirty.add(e.riverId);
+        if (!this.presenceTimer) {
+          this.presenceTimer = setTimeout(() => this.flushPresence(), PRESENCE_BATCH_MS);
+          this.presenceTimer.unref?.();
+        }
         return;
       }
       case 'voice': {
