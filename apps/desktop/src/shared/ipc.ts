@@ -6,7 +6,7 @@ import type { CreateCommunityOptions } from './templates.ts';
 import type { AttachmentPointer, CommunityAction, CommunityActionResult } from './community-actions.ts';
 import type { DmAction, DmActionResult, DmEvent } from './dm.ts';
 import type { SocialAction, SocialActionResult, SocialEvent } from './social.ts';
-import type { Settings, SettingsPatch } from './settings.ts';
+import type { ProxySettings, Settings, SettingsPatch } from './settings.ts';
 
 /** Every IPC channel River uses. Main validates every payload; nothing else is exposed. */
 export const IPC = {
@@ -86,6 +86,8 @@ export const IPC = {
   voiceCallRoom: 'river:voice:call-room',
   voiceRelayIn: 'river:voice:relay-in',
   diagnosticsRun: 'river:diagnostics:run',
+  /** Settings → Privacy → Proxy → Test connection (2.13, computers). */
+  privacyProxyCheck: 'river:privacy:proxy-check',
   diagnosticsOpenLogs: 'river:diagnostics:open-logs',
   screenSources: 'river:voice:screen-sources',
   screenSelect: 'river:voice:screen-select',
@@ -781,6 +783,10 @@ export interface RiverApi {
     /** Server, relay and connection checks (the renderer adds network and microphone checks). */
     run(): Promise<DiagnosticCheck[]>;
     openLogs(): Promise<void>;
+  };
+  privacy: {
+    /** Can River reach its server through this proxy (not saved; computers only)? */
+    checkProxy(proxy: ProxySettings): Promise<DiagnosticCheck[]>;
   };
 }
 

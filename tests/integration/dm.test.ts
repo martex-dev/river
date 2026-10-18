@@ -47,8 +47,10 @@ const injectFetch: typeof fetch = async (input, init) => {
 };
 const deadSocket = (): WebSocket => ({ send() {}, close() {}, readyState: 0 }) as unknown as WebSocket;
 
+type Keep = () => { historyDays: number; newChatTimer: number };
+
 /** One install of River (no identity yet): its own local database and services. */
-function install(name: string, privacy?: { readReceipts: boolean; typing: boolean }) {
+function install(name: string, privacy?: { readReceipts: boolean; typing: boolean }, keep?: Keep) {
   const local = migrateDatabase(join(dir, `${name}.db`), newDatabaseKey(), CLIENT_MIGRATIONS).db;
   locals.push(local);
   const identity = new IdentityService(() => local);
@@ -75,6 +77,7 @@ function install(name: string, privacy?: { readReceipts: boolean; typing: boolea
     community,
     log: nullLogger,
     ...(privacy ? { privacy: () => privacy } : {}),
+    ...(keep ? { keep } : {}),
   });
   const social = new SocialService({ db: () => local, identity, dm, log: nullLogger });
   const link = new LinkService({
@@ -91,8 +94,8 @@ function install(name: string, privacy?: { readReceipts: boolean; typing: boolea
   return { identity, account, dm, community, social, link, events, local };
 }
 
-async function person(name: string, privacy?: { readReceipts: boolean; typing: boolean }) {
-  const x = install(name, privacy);
+async function person(name: string, privacy?: { readReceipts: boolean; typing: boolean }, keep?: Keep) {
+  const x = install(name, privacy, keep);
   const me = x.identity.create(name);
   await x.account.register(SERVER);
   await x.dm.sync();
@@ -394,7 +397,8 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     expect(back[0]!.text).toBe('#50');
     // A recent date still shows the usual latest 500.
     expect(await alice.dm.action({ a: 'messages', peer: bob.riverId, since: at(690) })).toHaveLength(500);
-  });
+    // Three pages of 500+ messages take ~10 s alone and several times that while the whole suite runs.
+  }, 120_000);
 
   it('chat folders: kept on the device, edited, deleted, at most ten', async () => {
     const alice = await person('Alice');
@@ -491,6 +495,42 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     await alice.dm.sync();
     const kept = await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'stays' });
     expect(kept.expiresAt).toBeNull();
+  });
+
+  it('chats you start get the default timer; old history is deleted on this device only (2.13)', async () => {
+    let keep = { historyDays: 0, newChatTimer: 3600 };
+    const alice = await person('Alice', undefined, () => keep);
+    const bob = await person('Bob');
+    await alice.dm.action({ a: 'open', peer: bob.riverId, name: 'Bob' });
+    const first = await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'hello' });
+    expect(first.expiresAt).toBeTruthy();
+    const conv = (await alice.dm.action({ a: 'conversations' })).find((c) => c.riverId === bob.riverId)!;
+    expect(conv.timer).toBe(3600);
+    // The message carries the timer: it disappears on Bob's side too, even before he accepts.
+    await bob.dm.sync();
+    const got = (await bob.dm.action({ a: 'messages', peer: alice.riverId })).find((m) => m.text === 'hello');
+    expect(got?.expiresAt).toBeTruthy();
+
+    // A chat that already exists is never changed: turned off, it stays off.
+    await alice.dm.action({ a: 'setTimer', peer: bob.riverId, seconds: 0 });
+    const second = await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'kept' });
+    expect(second.expiresAt).toBeNull();
+    // A new group starts with it as well.
+    const group = await alice.dm.action({ a: 'createGroup', name: 'Trip', members: [bob.riverId] });
+    expect(group.timer).toBe(3600);
+
+    // Keep 7 days: nothing goes before then; after that, Alice's copies go, Bob keeps his.
+    keep = { historyDays: 7, newChatTimer: 0 };
+    expect(alice.dm.sweepHistory(new Date(Date.now() + 6 * 86_400_000))).toBe(0);
+    expect(alice.dm.sweepHistory(new Date(Date.now() + 8 * 86_400_000))).toBeGreaterThanOrEqual(2);
+    expect(await alice.dm.action({ a: 'messages', peer: bob.riverId })).toEqual([]);
+    expect((await bob.dm.action({ a: 'messages', peer: alice.riverId })).map((m) => m.text)).toContain(
+      'hello',
+    );
+    // Off: nothing is deleted.
+    keep = { historyDays: 0, newChatTimer: 0 };
+    await bob.dm.sync();
+    expect(bob.dm.sweepHistory(new Date(Date.now() + 365 * 86_400_000))).toBe(0);
   });
 
   it('send without sound, and messages scheduled on this device go out on time', async () => {

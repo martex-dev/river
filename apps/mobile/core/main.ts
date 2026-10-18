@@ -343,6 +343,10 @@ async function start(): Promise<void> {
       readReceipts: settings.get().presence.readReceipts,
       typing: settings.get().presence.typingIndicators,
     }),
+    keep: () => ({
+      historyDays: settings.get().privacy.historyDays,
+      newChatTimer: settings.get().privacy.newChatTimer,
+    }),
   });
   const link = new LinkService({
     identity,

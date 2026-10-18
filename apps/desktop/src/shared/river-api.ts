@@ -170,5 +170,8 @@ export function createRiverApi(t: RiverTransport): RiverApi {
       run: () => t.invoke(IPC.diagnosticsRun),
       openLogs: () => t.invoke(IPC.diagnosticsOpenLogs),
     },
+    privacy: {
+      checkProxy: (proxy) => t.invoke(IPC.privacyProxyCheck, proxy),
+    },
   };
 }

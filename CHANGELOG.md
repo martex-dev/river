@@ -14,6 +14,25 @@ All notable changes to River are documented here. The format follows
   ones), and long direct messages now use the same buckets as community values
   instead of 160-byte steps. Older Rivers (2.11, 2.12) read padded messages as
   before.
+- **Photos no longer carry where they were taken.** Before a JPEG, PNG or WebP
+  picture is sent, River removes its location, camera, time and other hidden
+  details (it stays the right way up).
+- Servers keep less: expired sign-in sessions, sign-up codes and username holds
+  are deleted every hour and at start (a server restarted often, like a home
+  PC, could keep expired mail before), and operators can keep undelivered
+  messages for fewer days (`RIVER_MAILBOX_TTL_DAYS`, 1–90, default 30).
+
+### Added
+
+- Computers: **Settings → System → Privacy → Connect through a proxy** — send
+  River's connections through Tor or another SOCKS5 or HTTP proxy, so your
+  server does not see your IP address, with **Test connection**. Calls then
+  never connect directly (voice goes through a relay), link previews are off,
+  and River never falls back to connecting without the proxy.
+- **Keep messages on this device**: delete direct and group messages older than
+  a day, a week, 30 or 90 days or a year from this device.
+- **Disappearing messages for new chats**: chats you start get the timer you
+  choose.
 
 ## [2.12.1] - 2026-10-18
 
