@@ -1,7 +1,7 @@
 import { WhatsNew } from './components/WhatsNew.tsx';
 import { StayConnectedPrompt } from './components/PhoneReachability.tsx';
 import { ShareSheet } from './components/ShareSheet.tsx';
-import { useEffect, useState, type ReactElement } from 'react';
+import { Suspense, lazy, useEffect, useState, type ReactElement } from 'react';
 import { QuickSwitcher } from './components/QuickSwitcher.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { startNavHistory } from './nav-history.ts';
@@ -31,11 +31,13 @@ import { handleGroupCallEvent, handleRoomFull, handleRoster } from './dm/group-c
 import { useCommunity } from './community/store.ts';
 import { PlannedPage } from './pages/PlannedPage.tsx';
 import { SettingsOverlay } from './pages/SettingsPage.tsx';
-import { AdminPage } from './pages/AdminPage.tsx';
 import { useHostStatus } from './components/HostingPanel.tsx';
 import { useRiver, type Section } from './store.ts';
 import { isPhone } from '../../shared/platform.ts';
 import { PhoneShell } from './phone/PhoneShell.tsx';
+
+/** Only computers that host a River server open it: loaded the first time it is. */
+const AdminPage = lazy(() => import('./pages/AdminPage.tsx').then((m) => ({ default: m.AdminPage })));
 
 const LABELS: Record<Section, string> = {
   home: 'Friends',
@@ -296,7 +298,11 @@ export function App(): ReactElement {
             {section === 'social' && <SocialPage />}
             {section === 'calls' && <CallsPage />}
             {section === 'files' && <FilesPage />}
-            {section === 'admin' && <AdminPage />}
+            {section === 'admin' && (
+              <Suspense fallback={<p className="muted">Loading…</p>}>
+                <AdminPage />
+              </Suspense>
+            )}
             {planned && <PlannedPage section={section} feature={planned} />}
           </ErrorBoundary>
         </main>

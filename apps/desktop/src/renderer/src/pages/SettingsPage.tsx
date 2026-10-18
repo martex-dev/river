@@ -1,6 +1,6 @@
 import { isPhone } from '../../../shared/platform.ts';
 import { LANGUAGES, useT } from '../i18n.ts';
-import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { BackupPanel } from '../components/BackupPanel.tsx';
 import { ErrorBoundary } from '../components/ErrorBoundary.tsx';
 import { DevicesPanel } from '../components/LinkDevice.tsx';
@@ -22,13 +22,17 @@ import { Modal, XIcon } from '../community/ui/common.tsx';
 import { BackIcon } from '../phone/icons.tsx';
 import { NotificationSettings, Profile, VoiceSettings } from '../community/ui/UserSettings.tsx';
 import { SecurityPage } from './SecurityPage.tsx';
-import { AppearanceCenter } from '../appearance/AppearanceCenter.tsx';
 import { TryBar } from '../appearance/TryBar.tsx';
 import { useCommunity } from '../community/store.ts';
 import { phoneShellActive } from '../phone/mode.ts';
 import { useRiver, type SettingsTab } from '../store.ts';
 import { play, playNotifySound } from '../community/sound.ts';
 import { NOTIFY_SOUND_LABELS, NOTIFY_TONES } from '../../../shared/notify-sounds.ts';
+
+/** The appearance centre (skins, themes, wallpapers, the theme editor): loaded when first opened. */
+const AppearanceCenter = lazy(() =>
+  import('../appearance/AppearanceCenter.tsx').then((m) => ({ default: m.AppearanceCenter })),
+);
 
 const TAB_LABEL: Record<SettingsTab, string> = {
   account: 'Account',
@@ -217,7 +221,9 @@ export function SettingsOverlay(): ReactElement | null {
                 {tab === 'security' && <SecurityPage />}
                 {tab === 'backup' && <BackupPanel />}
                 {tab === 'appearance' && (
-                  <AppearanceCenter general={<AppearancePanel settings={settings} />} />
+                  <Suspense fallback={<p className="muted">Loading…</p>}>
+                    <AppearanceCenter general={<AppearancePanel settings={settings} />} />
+                  </Suspense>
                 )}
                 {tab === 'voice' && <VoiceSettings />}
                 {tab === 'notifications' && (
