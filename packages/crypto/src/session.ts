@@ -172,6 +172,12 @@ export class RiverProtocol {
    * key, the key sealed in a shared community). Without a decision the change is refused.
    */
   approveIdentityChange: (change: IncomingIdentityChange) => Promise<boolean> = async () => false;
+  /**
+   * Decides whether an incoming message may set up the first identity key River stores for a
+   * contact (trust on first use). The caller refuses a key that contradicts what the server cannot
+   * forge on its own (the key sealed in a shared community profile). Default: accepted.
+   */
+  acceptNewIdentity: (riverId: string, identityKey: Uint8Array) => boolean = () => true;
   /** Registration IDs claimed by PreKey messages being decrypted right now, by address. */
   private readonly incomingRegistration = new Map<string, number>();
 
@@ -212,6 +218,7 @@ export class RiverProtocol {
     })();
 
     const approve = (change: IncomingIdentityChange): Promise<boolean> => this.approveIdentityChange(change);
+    const acceptNew = (riverId: string, key: Uint8Array): boolean => this.acceptNewIdentity(riverId, key);
     const claimedRegistration = (address: string): number | null =>
       this.incomingRegistration.get(address) ?? null;
     const ownKey = Buffer.from(local.publicKey);
@@ -254,7 +261,10 @@ export class RiverProtocol {
           if (mark && existing) return serialized.equals(Buffer.from(existing));
           return true;
         }
-        if (!existing || Buffer.from(existing).equals(serialized)) return true;
+        // A first message from someone River holds no key for yet: trust on first use, unless the
+        // key contradicts one the caller knows from elsewhere.
+        if (!existing) return acceptNew(name.name(), new Uint8Array(serialized));
+        if (Buffer.from(existing).equals(serialized)) return true;
         // An incoming message under a new identity key: accepted only when the caller confirmed it.
         return approve({
           riverId: name.name(),

@@ -219,6 +219,12 @@ A3) wherever a check is possible without new primitives:
   Without verification and without a shared community a server can still
   substitute a key — trust on first use cannot prevent that — but the change
   is shown.
+- **First messages (2.20).** A first message from someone River holds no key
+  for yet is accepted under trust on first use, except when a shared
+  community profile names a different identity key for them: then it is
+  dropped and no key is stored, as a first message _to_ them already was
+  (`acceptNewIdentity` in `session.ts`). A server can no longer write to you
+  first "as" a community member under a key of its own.
 - **Copies from this account's own devices** (sent messages, edits, the friends
   list, groups) are accepted only from another device in the account's
   identity-signed device list, and libsignal accepts only the account's own

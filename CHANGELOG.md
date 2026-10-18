@@ -6,6 +6,12 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- Direct messages: a first message "from" someone you share a community with
+  must use the safety key their community profile names. A server can no
+  longer write to you first as a community member under a key of its own.
+
 ## [2.20.0] - 2026-10-18
 
 **A security audit's fourteen fixes, and messaging that feels like Telegram: big emoji, reply previews, saved replies, effects.**

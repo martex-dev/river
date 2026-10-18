@@ -693,6 +693,12 @@ export class DmService {
       this.emitConversations();
     };
     protocol.approveIdentityChange = (change) => this.confirmIdentityChange(change);
+    // A first message "from" someone in a shared community must come under the identity key their
+    // sealed profile names (the server cannot forge that), as for a first message sent to them.
+    protocol.acceptNewIdentity = (riverId, key) => {
+      const fromCommunity = this.deps.community.communityIdentityKey(riverId);
+      return !fromCommunity || fromCommunity === Buffer.from(key).toString('base64');
+    };
     this.protocolCache = protocol;
     this.protocolOwner = identity.riverId;
     return protocol;
