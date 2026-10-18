@@ -187,6 +187,14 @@ export function resolveDesign(
   const hover = rgba(text, light ? 0.06 : 0.07);
   const active = colors.selection ? rgba(colors.selection, 0.28) : rgba(text, light ? 0.1 : 0.13);
   const focus = colors.focus ?? readableOn(accent, 3);
+  // The chosen segment of a segmented control (2.19, the phone's Calls "All | Missed"): an accent
+  // pill that stands out at least 3:1 from its track (text at 7% over the panel) and the panel.
+  const segmentTrack = mix(surface, text, 0.07);
+  const segment = [segmentTrack, surface, base, segmentTrack].reduce(
+    (c, bgc) => ensureContrast(c, bgc, 3),
+    accent,
+  );
+  const segmentInk = inkOn(segment);
   const grad =
     g > 0.02
       ? `linear-gradient(135deg, ${accent} 0%, ${mix(accent, accent2, Math.min(1, 0.55 * g))} 55%, ${mix(accent, accent2, Math.min(1, g))} 100%)`
@@ -262,6 +270,8 @@ export function resolveDesign(
       glow > 0.02 ? `0 0 ${Math.round(24 * glow)}px ${rgba(accent, 0.35 * Math.min(1, glow))}` : 'none',
     '--glow': String(glow),
     '--focus': focus,
+    '--segment-on': segment,
+    '--segment-ink': segmentInk,
     '--selection': colors.selection ?? rgba(accent, 0.32),
     '--ok': ok,
     '--warn': warn,
