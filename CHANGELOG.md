@@ -17,6 +17,8 @@ All notable changes to River are documented here. The format follows
 - Message requests: files from people you have not accepted are no longer
   downloaded in the background. They are fetched when you open them, or all at
   once when you accept the request.
+- Groups: people you blocked no longer see when you are typing in a group you
+  share with them.
 
 ## [2.20.0] - 2026-10-18
 

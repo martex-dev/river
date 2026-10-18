@@ -896,6 +896,31 @@ const conversationOf = async (p: Person, peer: string) =>
   (await p.dm.action({ a: 'conversations' })).find((c) => c.riverId === peer);
 
 describe('direct messages: audit fixes', { timeout: 60_000 }, () => {
+  it('typing in a group is not sent to members you blocked (2.20)', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    const group = await alice.dm.action({
+      a: 'createGroup',
+      name: 'Book club',
+      members: [bob.riverId, carol.riverId],
+    });
+    await alice.dm.action({ a: 'block', peer: bob.riverId });
+    const typedTo: string[] = [];
+    const inner = alice.dm as unknown as {
+      sendContent(peer: string, content: { t: string }, ephemeral?: boolean): Promise<void>;
+    };
+    const send = inner.sendContent.bind(alice.dm);
+    inner.sendContent = async (peer, content, ephemeral) => {
+      if (content.t === 'typing') typedTo.push(peer);
+      return send(peer, content, ephemeral);
+    };
+    await alice.dm.action({ a: 'typing', peer: group.riverId });
+    for (let i = 0; i < 100 && !typedTo.length; i++) await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, 200));
+    expect(typedTo).toEqual([carol.riverId]);
+  });
+
   it('friends synced to a newly linked device are friends there (posts reach them)', async () => {
     const alice = await person('Alice');
     const bob = await person('Bob');

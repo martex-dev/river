@@ -67,7 +67,8 @@ JSON with `v: 1` and a type `t`:
 
 Receivers validate every field; edits and deletes are applied only to messages
 from the same sender. Messages from people you have not accepted arrive as
-**requests**: no delivery or read receipts, no typing, no calls until accepted.
+**requests**: no delivery or read receipts, no typing, no calls until accepted,
+and their files are not fetched in the background (2.20).
 
 ## Groups
 
@@ -78,7 +79,8 @@ receivers accept them only from current members of a group they are in. Only
 admins (initially the creator) change the name or membership; removed people
 stop receiving messages because nobody encrypts to them any more. A group from
 someone you have not accepted arrives as a request; your name is shared with
-the group only once you accept. Groups have no read receipts. Group calls
+the group only once you accept. Groups have no read receipts, and typing is
+not sent to members you blocked (2.20). Group calls
 (2.18) ring the other members with `gcall` (`groupId`, the call's secret ID);
 see CRYPTOGRAPHY.md §8a.
 

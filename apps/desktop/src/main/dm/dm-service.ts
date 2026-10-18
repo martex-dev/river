@@ -1606,7 +1606,10 @@ export class DmService {
     if (!g || g.state === 'left') throw new CommunityError('You are not in this group.');
     const me = this.me();
     const failed: string[] = [];
-    const others = this.list(g.members).filter((m) => m !== me);
+    // Typing goes to nobody you blocked (they still get the group's messages, or the group breaks).
+    const others = this.list(g.members).filter(
+      (m) => m !== me && !(content.t === 'typing' && this.contact(m)?.state === 'blocked'),
+    );
     for (const m of others) {
       // Our group-scoped profile is a nicety: the message still goes if sharing it fails.
       if (!ephemeral) {
