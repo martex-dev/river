@@ -6,6 +6,36 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Android: a group call answered on a locked phone now shows over the lock screen
+  (it showed only "Unlock your phone to use River", with no way to hang up), as
+  1:1 calls do.
+- Android: Back during a full-screen group call shrinks the call into its group,
+  as for 1:1 calls, instead of closing the conversation and the call screen.
+- Phones: big emoji (one to three alone) are big in chats and channels; the
+  phone's message text size made them ordinary-sized.
+- Phones: the Calls tab lists your call links, to copy one again, start its call
+  or stop it working (once its dialog closed a link was out of reach), and
+  "Create call link" is a row like the others.
+- Phones: tapping a call made through a call link in Calls no longer opens Note
+  to self (or an empty chat); and your call links' calls no longer show as call
+  lines in Note to self (or in your chat with a link's host) on any device.
+- Phones: the saved-replies and stickers buttons in the message box are line
+  icons like the buttons beside them (the emoji looked greyed out).
+- A long saved reply stays inside the saved-replies menu, cut short with "…"
+  (it ran off the side of a phone).
+- Tags show as you typed them ("#home", not "#HOME"); on phones the tag filter
+  is one row of thumb-sized chips.
+- A menu row's current value (Notifications: "All messages", Sound…) stays
+  readable while the row is highlighted, as a phone leaves it after a tap.
+- Phones: the wallpaper dialog keeps its preview and "Set wallpaper" in sight
+  while you scroll the wallpapers.
+- Phones: @names and #channels in messages use the theme's colours (they were
+  nearly invisible on light themes).
+- Phones: forwarding no longer opens the keyboard over the list of chats, and
+  its rows and a message's effect button are big enough to tap.
+
 ## [2.20.2] - 2026-10-18
 
 **Server hardening: sessions that end, roles in reach, timeouts that hold, limits on mailboxes and disks.**

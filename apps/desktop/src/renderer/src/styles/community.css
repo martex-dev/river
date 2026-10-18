@@ -4166,6 +4166,11 @@ input.switch:disabled {
   padding-left: 22px;
   color: var(--text-dim);
 }
+/* On the highlighted row (a phone keeps it after a tap) they take its readable ink. */
+.menu-item:hover:not(:disabled) :is(.menu__hint, .menu__indent),
+.menu-item:focus-visible :is(.menu__hint, .menu__indent) {
+  color: inherit;
+}
 .channel.is-muted .channel__name,
 .channel.is-muted .channel__icon {
   opacity: 0.45;
