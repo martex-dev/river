@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createIdentity } from '../src/identity.ts';
 import {
   IdentityChangeRefusedError,
+  MAX_PADDED_CONTENT,
   RiverProtocol,
   SafetyNumberChangedError,
   pad,
@@ -58,6 +59,53 @@ describe('libsignal sessions', () => {
       expect(Buffer.from(unpad(p))).toEqual(Buffer.from(data));
     }
     expect(() => unpad(new Uint8Array(160))).toThrow();
+  });
+
+  it('pads long content to Padmé buckets (2.13), never past MAX_PADDED_CONTENT', () => {
+    const sizes = new Set<number>();
+    for (let n = 3000; n < 60_000; n += 13) sizes.add(pad(new Uint8Array(n)).length);
+    // Signal's 160-byte blocks would leave ~360 different sizes here.
+    expect(sizes.size).toBeLessThan(120);
+    for (const n of [2559, 2560, 2561, 10_000, 50_000]) {
+      const p = pad(new Uint8Array(n).fill(1));
+      expect(p.length).toBeGreaterThan(n);
+      expect(p.length).toBeLessThanOrEqual(Math.ceil((n + 1) * 1.12));
+    }
+    expect(pad(new Uint8Array(MAX_PADDED_CONTENT - 100)).length).toBe(MAX_PADDED_CONTENT);
+    expect(pad(new Uint8Array(MAX_PADDED_CONTENT + 5)).length).toBe(MAX_PADDED_CONTENT + 6);
+  });
+
+  it('2.11 and 2.12 read the new padding: their unpad (copied as released) finds the same content', () => {
+    // apps 2.11.0 – 2.12.1, packages/crypto/src/session.ts, unchanged:
+    const unpad212 = (padded: Uint8Array): Uint8Array => {
+      for (let i = padded.length - 1; i >= 0; i--) {
+        if (padded[i] === 0x80) return padded.subarray(0, i);
+        if (padded[i] !== 0) break;
+      }
+      throw new Error('invalid padding');
+    };
+    for (const n of [0, 1, 159, 2600, 9000, 70_000, MAX_PADDED_CONTENT]) {
+      const data = new Uint8Array(n).map((_, i) => (i * 7) & 0xff);
+      expect(Buffer.from(unpad212(pad(data)))).toEqual(Buffer.from(data));
+      expect(Buffer.from(unpad(pad(data)))).toEqual(Buffer.from(data));
+    }
+  });
+
+  it('a message of the largest padded size still fits an envelope (PreKey message included)', async () => {
+    const alice = party();
+    const bob = party();
+    const keys = bob.protocol.generatePreKeys({ oneTime: 1, rotate: true });
+    await alice.protocol.startSession(
+      bob.identity.riverId,
+      bob.identity.publicKey,
+      serve(keys, bob.identity.registrationId),
+    );
+    const big = new Uint8Array(MAX_PADDED_CONTENT - 200).fill(0x61);
+    const env = await alice.protocol.encrypt(bob.identity.riverId, 1, big);
+    expect(env.type).toBe(3);
+    // MAX_ENVELOPE_BYTES (packages/protocol/src/messaging.ts) is 96 KiB.
+    expect(Buffer.from(env.body, 'base64').length).toBeLessThanOrEqual(96 * 1024);
+    expect(Buffer.from(await bob.protocol.decrypt(alice.identity.riverId, 1, env))).toEqual(Buffer.from(big));
   });
 
   it('establishes a PQXDH session and ratchets in both directions', async () => {

@@ -6,6 +6,15 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- **The server can no longer tell how long your messages are.** Community
+  messages, profiles, names, reactions and call setup are padded before they
+  are encrypted (160-byte blocks for short ones, at most 12 % more for long
+  ones), and long direct messages now use the same buckets as community values
+  instead of 160-byte steps. Older Rivers (2.11, 2.12) read padded messages as
+  before.
+
 ## [2.12.1] - 2026-10-18
 
 **Phones that reconnect after a network change, keep their notifications and never cut other apps' calls.**

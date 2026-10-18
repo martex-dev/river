@@ -93,7 +93,17 @@ about. This prevents the server from silently adding an eavesdropping device.
   (one ciphertext per message, distribution over 1:1 sessions, new key on every
   membership change) remain a later optimisation for larger groups. Wire
   details: [docs/protocol/messaging.md](docs/protocol/messaging.md#groups).
-- Content padding to fixed buckets before encryption to blur length.
+- **Length padding** (`packages/crypto/src/session.ts`, `padding.ts`): before
+  libsignal encrypts it, content gets `0x80` and zeros (Signal's scheme). Up
+  to 2560 bytes the result is a multiple of 160 bytes, so every short message,
+  receipt, reaction or typing signal looks the same; since 2.13 longer content
+  is padded to a **Padmé** bucket (Nikitin et al., PETS 2019: at most 12 % more,
+  leaving only about log log n bits of the length) instead of the next 160
+  bytes, and never past 92 KiB (`MAX_PADDED_CONTENT`), so a message never grows
+  too large for the server's 96 KiB envelope. Receivers strip everything after
+  the last `0x80`, which is how every River has read it: 2.11 and 2.12 read
+  the longer padding unchanged (tested with their code as released). Padding
+  hides lengths, not timing, counts, or who talks to whom.
 
 ### 4a. Communities today (implemented, 0.2.0 / 0.3.0)
 
@@ -113,10 +123,20 @@ than per-member sender keys:
   `HMAC-SHA256(HKDF-SHA256(communityKey, info="river-reaction-tag-v1|<communityId>"), messageId‖"|"‖emoji)`
   truncated to 128 bits; the emoji itself is sealed. Clients show a reaction
   only when its decrypted emoji reproduces its tag.
+- **Length padding (2.13)**: every value sealed with the community key is JSON
+  followed by spaces up to a size bucket (`padJson`, the same buckets as
+  above: 160-byte blocks to 2560 bytes, then Padmé), never past the size the
+  server accepts for that kind of value (`SEALED_*` in `@river/protocol`; key
+  proofs stay under the 400 characters 2.11 accepts). JSON allows whitespace
+  after a value, so every River that opens these values with `JSON.parse` —
+  2.11 and 2.12 included — reads them exactly as before; values sealed earlier,
+  and webhook posts sealed by outside services, are simply unpadded. The
+  server sees bucket sizes instead of exact message, profile, name, emoji and
+  call-signal lengths. Pictures and sounds are padded too, within their limits.
 - **What the server learns** (needed to enforce permissions and relay): who is
   a member, channel kinds and order, role permission bits, **role colours**,
   role positions and who holds which role, channel permission overwrites,
-  bans, message timing/size/sender, edit and pin state, reaction counts per tag,
+  bans, message timing/padded size/sender, edit and pin state, reaction counts per tag,
   typing and online presence, voice participants and their mute/deafen/streaming
   flags. It never sees names, topics, profiles, avatars, message text or emoji.
 - **Key epochs (0.6.0)**: when someone leaves or is removed, the server flags
@@ -212,6 +232,7 @@ every change is readable by the previous releases and accepts what they send:
 | Associated data v2       | v1 (`SEAL_V2_DEFAULT = false`)                                             | v2 and v1                                                                                                                                                                                                                                                         | **2.12 (done)**: send v2 (`SEAL_V2_DEFAULT = true`); v1 stays readable for old values |
 | Rotation adoption report | `POST …/epoch/adopted` (older servers: ignored)                            | —                                                                                                                                                                                                                                                                 | none                                                                                  |
 | Verification marks       | the verified key (33 bytes)                                                | the verified key, and the one-byte mark of older versions (treated as "the stored key was verified")                                                                                                                                                              | none                                                                                  |
+| Length padding (2.13)    | Signal padding to 160 bytes (DMs); unpadded community values               | any amount of `0x80`/zero padding and trailing JSON whitespace (they always did)                                                                                                                                                                                  | none: 2.13 pads longer DMs (Padmé) and all community values                           |
 
 What stays possible during the transition: a member who held a genuine key at
 some point (including someone removed whom the server keeps listing) can, with

@@ -28,6 +28,7 @@ import {
   signalDecryptPreKey,
   signalEncrypt,
 } from '@signalapp/libsignal-client';
+import { paddedLengthCapped } from './padding.ts';
 
 /**
  * End-to-end encrypted 1:1 messaging with libsignal: X3DH + ML-KEM (PQXDH)
@@ -81,9 +82,21 @@ export interface Envelope {
   body: string;
 }
 
-/** Signal-style padding: 0x80 then zeros up to a multiple of 160 bytes, hiding message length. */
-export function pad(plaintext: Uint8Array): Uint8Array<ArrayBuffer> {
-  const size = Math.ceil((plaintext.length + 1) / 160) * 160;
+/**
+ * The largest padded content River produces (bytes): what is left of a 96 KB envelope
+ * (MAX_ENVELOPE_BYTES) after libsignal's framing, Kyber ciphertext and MAC. Padding never makes
+ * a message too large to send.
+ */
+export const MAX_PADDED_CONTENT = 92 * 1024;
+
+/**
+ * Signal-style padding: 0x80 then zeros, hiding message length. Up to 2560 bytes the result is a
+ * multiple of 160 bytes (as in Signal); since 2.13 longer content is padded to a Padmé bucket
+ * (padding.ts), at most `max` bytes. Every River's `unpad` — which only looks for the last 0x80
+ * after the zeros — reads any amount of padding, so 2.11 and 2.12 read the longer padding too.
+ */
+export function pad(plaintext: Uint8Array, max = MAX_PADDED_CONTENT): Uint8Array<ArrayBuffer> {
+  const size = paddedLengthCapped(plaintext.length + 1, max);
   const out = new Uint8Array(size);
   out.set(plaintext);
   out[plaintext.length] = 0x80;

@@ -4,3 +4,4 @@ export * from './signing.ts';
 export * from './attachment.ts';
 export * from './session.ts';
 export * from './backup.ts';
+export * from './padding.ts';
