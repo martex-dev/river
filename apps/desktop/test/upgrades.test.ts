@@ -96,6 +96,12 @@ describe('upgrading from every release', () => {
       if (version >= 6) {
         expect(db.prepare('SELECT name, bio FROM contacts').get()).toEqual({ name: 'Sam', bio: null });
         expect(db.prepare('SELECT body FROM dm_messages').get()).toEqual({ body: '{"text":"hi"}' });
+        // Per-sender message IDs (migration 26): the message keeps its ID as its wire ID.
+        expect(db.prepare('SELECT id, msg_id, sender FROM dm_messages').get()).toEqual({
+          id: 'BBBBBBBBBBBBBBBBBBBBBB',
+          msg_id: 'BBBBBBBBBBBBBBBBBBBBBB',
+          sender: 'b3f1c2d4-1111-4222-8333-944455556666',
+        });
       }
       // Every table the current version needs exists.
       const tables = (

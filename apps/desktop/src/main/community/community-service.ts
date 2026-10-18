@@ -1460,6 +1460,7 @@ export class CommunityService {
       const opened = openMessage<{
         text: string;
         replyTo?: string;
+        replyToSender?: unknown;
         noPing?: unknown;
         poll?: unknown;
         attachments?: unknown[];
@@ -1498,6 +1499,11 @@ export class CommunityService {
       });
       const replyTo =
         typeof body.replyTo === 'string' && /^[A-Za-z0-9_-]{22}$/.test(body.replyTo) ? body.replyTo : null;
+      // Whose message it quotes (sealed by the replier; absent from apps before per-sender IDs).
+      const replyToSender =
+        replyTo && typeof body.replyToSender === 'string' && z.uuid().safeParse(body.replyToSender).success
+          ? body.replyToSender
+          : null;
       const alts: Record<string, string> = {};
       if (body.alts && typeof body.alts === 'object') {
         for (const a of attachments) {
@@ -1519,6 +1525,7 @@ export class CommunityService {
         pinned: m.pinned,
         reactions,
         replyTo,
+        ...(replyToSender ? { replyToSender } : {}),
         attachments,
         ...(Object.keys(alts).length ? { alts } : {}),
         ...((): { tags?: string[] } => {
@@ -1543,6 +1550,7 @@ export class CommunityService {
                   community,
                   m.sender,
                   body.noPing === true ? undefined : (replyTo ?? undefined),
+                  replyToSender ?? undefined,
                 );
           return kind ? { mentionsMe: true, mentionKind: kind } : { mentionsMe: false };
         })(),
@@ -1586,8 +1594,15 @@ export class CommunityService {
     community: CommunityView | undefined,
     sender: string,
     replyTo?: string,
+    replyToSender?: string,
   ): 'direct' | 'everyone' | null {
-    if (replyTo && this.messageSenders.get(replyTo) === this.me()) return 'direct';
+    // A reply to your message (the one under that ID now, and the one the replier quoted).
+    if (
+      replyTo &&
+      this.messageSenders.get(replyTo) === this.me() &&
+      (replyToSender === undefined || replyToSender === this.me())
+    )
+      return 'direct';
     const lower = text.toLowerCase();
     const senderMember = community?.members.find((m) => m.riverId === sender);
     const senderPerms = senderMember
@@ -1914,9 +1929,13 @@ export class CommunityService {
     // The outbox keeps one ID per message for all its attempts, so a retry cannot post it twice.
     const id = messageId ?? randomId();
     this.remember(id);
+    // Whose message the reply quotes, sealed with it: a message posted later under that ID (the
+    // original deleted, its ID free on the server again) is not taken for the quoted one.
+    const replyToSender = replyTo ? this.messageSenders.get(replyTo) : undefined;
     const body = {
       text,
       ...(replyTo ? { replyTo } : {}),
+      ...(replyToSender ? { replyToSender } : {}),
       ...(replyTo && noPing ? { noPing: true } : {}),
       ...(poll ? { poll } : {}),
       ...(post?.tags?.length ? { tags: post.tags } : {}),

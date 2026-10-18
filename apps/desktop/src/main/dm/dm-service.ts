@@ -163,8 +163,22 @@ const messageFields = {
   effect: z.string().max(24).optional(),
 };
 
+/**
+ * Per-sender message IDs: a message is identified by its sender and its ID, so a reference to
+ * someone else's message names whose it is. Optional: apps before this change neither send nor
+ * read it (unknown fields are stripped), and a reference without it means the copy this device
+ * stored first in that conversation (see `resolveRef`).
+ */
+const author = z.uuid().optional();
+
 const contentSchema = z.discriminatedUnion('t', [
-  z.object({ v: z.literal(1), t: z.literal('msg'), ...messageFields }),
+  z.object({
+    v: z.literal(1),
+    t: z.literal('msg'),
+    ...messageFields,
+    /** Whose message `replyTo` is (per-sender message IDs). */
+    replyToSender: author,
+  }),
   /**
    * Linked devices (1.3): a message this account sent from another of its devices, so every
    * device shows the whole conversation. Accepted only from this account's own devices.
@@ -175,6 +189,11 @@ const contentSchema = z.discriminatedUnion('t', [
     /** The conversation: a person's River ID or a group ID. */
     conv: z.string().min(1).max(64),
     message: z.object(messageFields).strict(),
+    /**
+     * Whose message `message.replyTo` is. Beside `message`, not in it: linked apps before this
+     * change read `message` strictly and would drop the whole copy.
+     */
+    replyToSender: author,
   }),
   /**
    * Linked devices: an edit, delete for everyone, reaction, pin, timer change or read made on
@@ -187,8 +206,14 @@ const contentSchema = z.discriminatedUnion('t', [
     op: z.discriminatedUnion('t', [
       z.object({ t: z.literal('edit'), id: msgId, text: z.string().min(1).max(4000) }),
       z.object({ t: z.literal('delete'), id: msgId }),
-      z.object({ t: z.literal('react'), id: msgId, emoji: z.string().min(1).max(32), on: z.boolean() }),
-      z.object({ t: z.literal('pin'), id: msgId, pinned: z.boolean() }),
+      z.object({
+        t: z.literal('react'),
+        id: msgId,
+        emoji: z.string().min(1).max(32),
+        on: z.boolean(),
+        author,
+      }),
+      z.object({ t: z.literal('pin'), id: msgId, pinned: z.boolean(), author }),
       z.object({ t: z.literal('timer'), seconds: z.number().int().min(0).max(MAX_TIMER) }),
       z.object({ t: z.literal('read'), at: z.iso.datetime() }),
       /** A call answered or declined on that device (2.11.1): this one stops ringing. */
@@ -237,6 +262,8 @@ const contentSchema = z.discriminatedUnion('t', [
     id: msgId,
     pinned: z.boolean(),
     groupId: msgId.optional(),
+    /** Whose message it is (per-sender message IDs). */
+    author,
   }),
   z.object({
     v: z.literal(1),
@@ -245,6 +272,8 @@ const contentSchema = z.discriminatedUnion('t', [
     emoji: z.string().min(1).max(32),
     on: z.boolean(),
     groupId: msgId.optional(),
+    /** Whose message it is (per-sender message IDs). */
+    author,
   }),
   z.object({
     v: z.literal(1),
@@ -425,7 +454,14 @@ interface Deps {
 }
 
 interface MessageRow {
+  /** This device's handle for the row: the window and every local reference use it. */
   id: string;
+  /**
+   * The message's ID on the wire. Unique per sender, not overall (migration 26): another sender's
+   * message under the same ID is a different message. Usually equal to `id`; a later copy whose
+   * ID is taken here gets a fresh `id`. Null only in rows written by older code paths (fixed up).
+   */
+  msg_id?: string | null;
   peer: string;
   sender: string;
   body: string;
@@ -657,6 +693,13 @@ export class DmService {
         db.prepare(`UPDATE dm_messages SET status = 'failed' WHERE status = 'sending'`).run();
       } catch (err) {
         this.deps.log.warn(`Could not check for unsent messages: ${(err as Error).message}`);
+      }
+      // Rows without a wire ID (restored from a backup made before per-sender message IDs) keep
+      // their own ID as it.
+      try {
+        db.prepare('UPDATE OR IGNORE dm_messages SET msg_id = id WHERE msg_id IS NULL').run();
+      } catch (err) {
+        this.deps.log.warn(`Could not check message IDs: ${(err as Error).message}`);
       }
     }
     return db;
@@ -1060,7 +1103,7 @@ export class DmService {
     if (peer === me) {
       switch (content.t) {
         case 'sync':
-          return this.applySync(content.conv, content.message);
+          return this.applySync(content.conv, content.message, content.replyToSender);
         case 'syncOp':
           return this.applySyncOp(content.conv, content.op);
         case 'contactsReq':
@@ -1171,24 +1214,33 @@ export class DmService {
         const sentAt = new Date(
           Math.min(Math.max(claimed, received - 30 * 86_400_000), received + 60_000) || now.getTime(),
         ).toISOString();
-        const exists = this.db().prepare('SELECT 1 FROM dm_messages WHERE id = ?').get(content.id);
-        if (exists) return null;
+        // A copy we have of this sender's message. Another sender's message under the same ID is a
+        // different message: both are kept (per-sender message IDs).
+        if (this.bySender(peer, content.id)) return null;
         // A disappearing message's time starts when it reaches this device; this device's own
         // timer for the conversation applies too (the longer of the two).
         const ttl = Math.max(this.timerOf(conv), content.expiresIn ?? 0);
         const expiresAt = ttl ? new Date(now.getTime() + ttl * 1000).toISOString() : null;
+        const localId = this.localIdFor(content.id);
+        // Whose message it replies to: as the sender says, or (an app from before) the copy this
+        // device has — decided now, so a copy arriving later never changes what it quotes.
+        const replyToSender =
+          content.replyTo &&
+          (content.replyToSender ?? this.resolveRef(conv, content.replyTo)?.sender ?? undefined);
         this.db()
           .prepare(
-            `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions, expires_at, received_at)
-             VALUES (?, ?, ?, ?, ?, 'received', '{}', ?, ?)`,
+            `INSERT INTO dm_messages (id, msg_id, peer, sender, body, sent_at, status, reactions, expires_at, received_at)
+             VALUES (?, ?, ?, ?, ?, ?, 'received', '{}', ?, ?)`,
           )
           .run(
+            localId,
             content.id,
             conv,
             peer,
             JSON.stringify({
               text: content.text,
               replyTo: content.replyTo,
+              ...(replyToSender ? { replyToSender } : {}),
               attachments: content.attachments,
               ...(content.silent ? { silent: true } : {}),
               ...(content.poll ? { poll: content.poll } : {}),
@@ -1200,7 +1252,7 @@ export class DmService {
             now.toISOString(),
           );
         this.db().prepare('UPDATE contacts SET heard_from = 1 WHERE river_id = ?').run(peer);
-        this.emitMessage(content.id, true);
+        this.emitMessage(localId, true);
         this.emitConversations();
         // Keep our own (encrypted) copies of files before the server's copy expires — but not for
         // a message request: nothing from someone you have not accepted is fetched on its own
@@ -1217,32 +1269,33 @@ export class DmService {
         }
         return null;
       }
+      // Edits and deletes reach only the sender's own message: it is looked up by (sender, ID).
       case 'edit': {
-        const row = this.row(content.id);
-        if (row && row.peer === conv && row.sender === peer && !row.deleted) this.editRow(row, content.text);
+        const row = this.bySender(peer, content.id);
+        if (row && row.peer === conv && !row.deleted) this.editRow(row, content.text);
         return null;
       }
       case 'pin': {
-        const row = this.row(content.id);
-        if (row && row.peer === conv && !row.deleted) this.setPinned(row, content.pinned);
+        const row = this.resolveRef(conv, content.id, content.author);
+        if (row && !row.deleted) this.setPinned(row, content.pinned);
         return null;
       }
       case 'delete': {
-        const row = this.row(content.id);
-        if (row && row.peer === conv && row.sender === peer) {
+        const row = this.bySender(peer, content.id);
+        if (row && row.peer === conv) {
           this.db()
             .prepare(
               `UPDATE dm_messages SET deleted = 1, body = '{"text":""}', reactions = '{}' WHERE id = ?`,
             )
-            .run(content.id);
-          this.emitMessage(content.id, false);
+            .run(row.id);
+          this.emitMessage(row.id, false);
           this.emitConversations();
         }
         return null;
       }
       case 'react': {
-        const row = this.row(content.id);
-        if (row && row.peer === conv) this.applyReaction(row, peer, content.emoji, content.on);
+        const row = this.resolveRef(conv, content.id, content.author);
+        if (row) this.applyReaction(row, peer, content.emoji, content.on);
         return null;
       }
       case 'receipt': {
@@ -1250,11 +1303,12 @@ export class DmService {
         if (content.kind === 'read' && !this.privacy().readReceipts) return null;
         const rank = { sending: 0, failed: 0, sent: 1, delivered: 2, read: 3 } as Record<string, number>;
         for (const id of content.ids) {
-          const row = this.row(id);
-          if (!row || row.peer !== peer || row.sender !== me) continue;
+          // Receipts are for our own messages only.
+          const row = this.bySender(me, id);
+          if (!row || row.peer !== peer) continue;
           if ((rank[content.kind] ?? 0) > (rank[row.status] ?? 0)) {
-            this.db().prepare('UPDATE dm_messages SET status = ? WHERE id = ?').run(content.kind, id);
-            this.emitMessage(id, false);
+            this.db().prepare('UPDATE dm_messages SET status = ? WHERE id = ?').run(content.kind, row.id);
+            this.emitMessage(row.id, false);
           }
         }
         return null;
@@ -1765,8 +1819,12 @@ export class DmService {
   private async syncToMyDevices(
     conv: string,
     message: z.infer<z.ZodObject<typeof messageFields>>,
+    replyToSender?: string,
   ): Promise<void> {
-    await this.toMyDevices({ v: 1, t: 'sync', conv, message }, 'A sent message');
+    await this.toMyDevices(
+      { v: 1, t: 'sync', conv, message, ...(replyToSender ? { replyToSender } : {}) },
+      'A sent message',
+    );
   }
 
   /** Copies an edit, delete, reaction, pin, timer or read to this account's other devices. */
@@ -1877,8 +1935,14 @@ export class DmService {
   }
 
   /** A message this account sent from another device: show it as ours. */
-  private applySync(conv: string, message: z.infer<z.ZodObject<typeof messageFields>>): string | null {
-    if (this.db().prepare('SELECT 1 FROM dm_messages WHERE id = ?').get(message.id)) return null;
+  private applySync(
+    conv: string,
+    message: z.infer<z.ZodObject<typeof messageFields>>,
+    quotedSender?: string,
+  ): string | null {
+    const me = this.me();
+    // Our own message under this ID; someone else's under it is a different message.
+    if (this.bySender(me, message.id)) return null;
     if (isGroupId(conv)) {
       const g = this.group(conv);
       if (!g) return this.mayWaitForGroup(this.me(), conv) ? conv : null;
@@ -1890,18 +1954,23 @@ export class DmService {
     const now = new Date();
     const ttl = Math.max(this.timerOf(conv), message.expiresIn ?? 0);
     const expiresAt = ttl ? new Date(now.getTime() + ttl * 1000).toISOString() : null;
+    const localId = this.localIdFor(message.id);
+    const replyToSender =
+      message.replyTo && (quotedSender ?? this.resolveRef(conv, message.replyTo)?.sender ?? undefined);
     this.db()
       .prepare(
-        `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions, expires_at, received_at)
-         VALUES (?, ?, ?, ?, ?, 'sent', '{}', ?, ?)`,
+        `INSERT INTO dm_messages (id, msg_id, peer, sender, body, sent_at, status, reactions, expires_at, received_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'sent', '{}', ?, ?)`,
       )
       .run(
+        localId,
         message.id,
         conv,
-        this.me(),
+        me,
         JSON.stringify({
           text: message.text,
           replyTo: message.replyTo,
+          ...(replyToSender ? { replyToSender } : {}),
           attachments: message.attachments,
           ...(message.poll ? { poll: message.poll } : {}),
           ...(message.embed ? { embed: message.embed } : {}),
@@ -1910,7 +1979,7 @@ export class DmService {
         expiresAt,
         now.toISOString(),
       );
-    this.emitMessage(message.id, false);
+    this.emitMessage(localId, false);
     this.emitConversations();
     return null;
   }
@@ -1933,28 +2002,28 @@ export class DmService {
         return null;
       }
       case 'edit': {
-        const row = this.row(op.id);
-        if (row && row.peer === conv && row.sender === me && !row.deleted) this.editRow(row, op.text);
+        const row = this.bySender(me, op.id);
+        if (row && row.peer === conv && !row.deleted) this.editRow(row, op.text);
         return null;
       }
       case 'delete': {
         // Deleted for everyone on another device: that device removed its copy, so does this one.
-        const row = this.row(op.id);
-        if (row && row.peer === conv && row.sender === me) {
-          this.db().prepare('DELETE FROM dm_messages WHERE id = ?').run(op.id);
-          this.emit({ t: 'remove', peer: conv, id: op.id });
+        const row = this.bySender(me, op.id);
+        if (row && row.peer === conv) {
+          this.db().prepare('DELETE FROM dm_messages WHERE id = ?').run(row.id);
+          this.emit({ t: 'remove', peer: conv, id: row.id });
           this.emitConversations();
         }
         return null;
       }
       case 'react': {
-        const row = this.row(op.id);
-        if (row && row.peer === conv) this.applyReaction(row, me, op.emoji, op.on);
+        const row = this.resolveRef(conv, op.id, op.author);
+        if (row) this.applyReaction(row, me, op.emoji, op.on);
         return null;
       }
       case 'pin': {
-        const row = this.row(op.id);
-        if (row && row.peer === conv && !row.deleted) this.setPinned(row, op.pinned);
+        const row = this.resolveRef(conv, op.id, op.author);
+        if (row && !row.deleted) this.setPinned(row, op.pinned);
         return null;
       }
       case 'timer':
@@ -2479,29 +2548,32 @@ export class DmService {
           const row = this.row(act.id);
           if (!row || row.sender !== this.me() || row.peer !== act.peer)
             throw new CommunityError('You can only edit your own messages.');
+          // The window names this device's handle; the wire carries the message's own ID.
+          const wire = this.wireId(row);
           await this.deliver(act.peer, {
             v: 1,
             t: 'edit',
-            id: act.id,
+            id: wire,
             text: act.text,
             ...(isGroupId(act.peer) ? { groupId: act.peer } : {}),
           });
           this.editRow(row, act.text);
-          this.syncOp(act.peer, { t: 'edit', id: act.id, text: act.text });
+          this.syncOp(act.peer, { t: 'edit', id: wire, text: act.text });
           return out(null);
         }
         case 'pin': {
           const row = this.row(act.id);
           if (!row || row.peer !== act.peer || row.deleted) throw new CommunityError('That message is gone.');
+          const ref = { id: this.wireId(row), author: row.sender };
           await this.deliver(act.peer, {
             v: 1,
             t: 'pin',
-            id: act.id,
+            ...ref,
             pinned: act.pinned,
             ...(isGroupId(act.peer) ? { groupId: act.peer } : {}),
           });
           this.setPinned(row, act.pinned);
-          this.syncOp(act.peer, { t: 'pin', id: act.id, pinned: act.pinned });
+          this.syncOp(act.peer, { t: 'pin', ...ref, pinned: act.pinned });
           return out(null);
         }
         case 'delete': {
@@ -2513,10 +2585,10 @@ export class DmService {
             await this.deliver(act.peer, {
               v: 1,
               t: 'delete',
-              id: act.id,
+              id: this.wireId(row),
               ...(isGroupId(act.peer) ? { groupId: act.peer } : {}),
             });
-            this.syncOp(act.peer, { t: 'delete', id: act.id });
+            this.syncOp(act.peer, { t: 'delete', id: this.wireId(row) });
           }
           this.db().prepare('DELETE FROM dm_messages WHERE id = ?').run(act.id);
           this.emit({ t: 'remove', peer: act.peer, id: act.id });
@@ -2526,16 +2598,17 @@ export class DmService {
         case 'react': {
           const row = this.row(act.id);
           if (!row || row.peer !== act.peer) return out(null);
+          const ref = { id: this.wireId(row), author: row.sender };
           await this.deliver(act.peer, {
             v: 1,
             t: 'react',
-            id: act.id,
+            ...ref,
             emoji: act.emoji,
             on: act.on,
             ...(isGroupId(act.peer) ? { groupId: act.peer } : {}),
           });
           this.applyReaction(row, this.me(), act.emoji, act.on);
-          this.syncOp(act.peer, { t: 'react', id: act.id, emoji: act.emoji, on: act.on });
+          this.syncOp(act.peer, { t: 'react', ...ref, emoji: act.emoji, on: act.on });
           return out(null);
         }
         case 'schedule': {
@@ -2626,7 +2699,7 @@ export class DmService {
           // Unread means arrived on this device after you last read (not the sender's claimed time).
           const unread = this.db()
             .prepare(
-              `SELECT id FROM dm_messages WHERE peer = ? AND sender ${group ? '!=' : '='} ?
+              `SELECT COALESCE(msg_id, id) AS id FROM dm_messages WHERE peer = ? AND sender ${group ? '!=' : '='} ?
                  AND COALESCE(received_at, sent_at) > ? AND deleted = 0 ORDER BY sent_at`,
             )
             .all(act.peer, group ? this.me() : act.peer, (group ?? contact)?.last_read ?? '') as Array<{
@@ -2996,12 +3069,23 @@ export class DmService {
     const me = this.me();
     const earlier = reuseId ? this.row(reuseId) : undefined;
     const reuse = !!earlier && earlier.sender === me && earlier.peer === act.peer;
-    const id = reuseId && (!earlier || reuse) ? reuseId : randomBytes(16).toString('base64url');
+    // `id` is this device's handle for the row, `wire` the message's ID on the wire (the same,
+    // unless another sender's message has that handle here already).
+    const wire =
+      earlier && reuse
+        ? this.wireId(earlier)
+        : reuseId && !earlier
+          ? reuseId
+          : randomBytes(16).toString('base64url');
+    const id = earlier && reuse ? earlier.id : this.localIdFor(wire);
     if (!reuse) await this.startWithDefaultTimer(act.peer);
     const sentAt = new Date().toISOString();
+    // The window names the quoted message by its handle here; the wire names it by its own ID and
+    // its author, so nobody else's message under that ID is taken for it.
+    const reply = this.replyRef(act.peer, act.replyTo);
     const body = {
       text: act.text,
-      replyTo: act.replyTo,
+      ...reply,
       attachments: act.attachments,
       ...(act.poll ? { poll: act.poll } : {}),
       ...(act.embed ? { embed: act.embed } : {}),
@@ -3019,10 +3103,10 @@ export class DmService {
     } else {
       this.db()
         .prepare(
-          `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions, expires_at, received_at)
-           VALUES (?, ?, ?, ?, ?, 'sending', '{}', ?, ?)`,
+          `INSERT INTO dm_messages (id, msg_id, peer, sender, body, sent_at, status, reactions, expires_at, received_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'sending', '{}', ?, ?)`,
         )
-        .run(id, act.peer, me, JSON.stringify(body), sentAt, expiresAt, sentAt);
+        .run(id, wire, act.peer, me, JSON.stringify(body), sentAt, expiresAt, sentAt);
     }
     this.emitMessage(id, false);
     try {
@@ -3030,9 +3114,10 @@ export class DmService {
       const undelivered = await this.deliver(act.peer, {
         v: 1,
         t: 'msg',
-        id,
+        id: wire,
         text: act.text,
-        ...(act.replyTo ? { replyTo: act.replyTo } : {}),
+        ...(reply.replyTo ? { replyTo: reply.replyTo } : {}),
+        ...(reply.replyToSender ? { replyToSender: reply.replyToSender } : {}),
         ...(act.attachments?.length ? { attachments: act.attachments } : {}),
         sentAt,
         ...(group ? { groupId: group.id } : {}),
@@ -3050,17 +3135,21 @@ export class DmService {
           .run(JSON.stringify({ ...body, undelivered }), id);
       }
       this.db().prepare(`UPDATE dm_messages SET status = 'sent' WHERE id = ? AND status = 'sending'`).run(id);
-      void this.syncToMyDevices(act.peer, {
-        id,
-        text: act.text,
-        ...(act.replyTo ? { replyTo: act.replyTo } : {}),
-        ...(act.attachments?.length ? { attachments: act.attachments } : {}),
-        sentAt,
-        ...(group ? { groupId: group.id } : {}),
-        ...(ttl ? { expiresIn: ttl } : {}),
-        ...(act.poll ? { poll: act.poll } : {}),
-        ...(act.embed ? { embed: act.embed } : {}),
-      });
+      void this.syncToMyDevices(
+        act.peer,
+        {
+          id: wire,
+          text: act.text,
+          ...(reply.replyTo ? { replyTo: reply.replyTo } : {}),
+          ...(act.attachments?.length ? { attachments: act.attachments } : {}),
+          sentAt,
+          ...(group ? { groupId: group.id } : {}),
+          ...(ttl ? { expiresIn: ttl } : {}),
+          ...(act.poll ? { poll: act.poll } : {}),
+          ...(act.embed ? { embed: act.embed } : {}),
+        },
+        reply.replyToSender,
+      );
     } catch (err) {
       this.db().prepare(`UPDATE dm_messages SET status = 'failed' WHERE id = ?`).run(id);
       this.emitMessage(id, false);
@@ -3111,8 +3200,72 @@ export class DmService {
     }
   }
 
+  /** A row by this device's handle (what the window refers to). */
   private row(id: string): MessageRow | undefined {
     return statement(this.db(), 'SELECT * FROM dm_messages WHERE id = ?').get(id) as MessageRow | undefined;
+  }
+
+  /** The message's ID on the wire. */
+  private wireId(row: MessageRow): string {
+    return row.msg_id ?? row.id;
+  }
+
+  /**
+   * Message `msgId` from `sender`: messages are identified by both (per-sender message IDs), so
+   * someone reusing another person's message ID never reaches that person's message.
+   */
+  private bySender(sender: string, msgId: string): MessageRow | undefined {
+    return statement(this.db(), 'SELECT * FROM dm_messages WHERE msg_id = ? AND sender = ?').get(
+      msgId,
+      sender,
+    ) as MessageRow | undefined;
+  }
+
+  /**
+   * The message in `conv` that a reference (a reply, reaction or pin) to `msgId` means. With its
+   * author (apps with per-sender message IDs say whose message it is): only that author's
+   * message, or nothing while it has not arrived. Without (apps from before, and replies stored
+   * before): the copy of that ID this device stored first in this conversation — the one those
+   * apps showed here, since the first copy won there. An impostor can only reuse an ID after
+   * seeing the genuine message, so on an honest server the genuine copy is the earlier one; never
+   * a message from another conversation.
+   */
+  private resolveRef(conv: string, msgId: string, author?: string): MessageRow | undefined {
+    if (author) {
+      const row = this.bySender(author, msgId);
+      return row?.peer === conv ? row : undefined;
+    }
+    return statement(
+      this.db(),
+      'SELECT * FROM dm_messages WHERE msg_id = ? AND peer = ? ORDER BY rowid LIMIT 1',
+    ).get(msgId, conv) as MessageRow | undefined;
+  }
+
+  /**
+   * The handle for a new row of wire ID `msgId`: the ID itself, or a fresh one when another
+   * sender's message already has it here (both are kept; neither replaces the other).
+   */
+  private localIdFor(msgId: string): string {
+    return this.row(msgId) ? randomBytes(16).toString('base64url') : msgId;
+  }
+
+  /** What a reply to the local message `replyTo` in `conv` carries on the wire. */
+  private replyRef(conv: string, replyTo: string | undefined): { replyTo?: string; replyToSender?: string } {
+    if (!replyTo) return {};
+    const target = this.row(replyTo);
+    // Not here (any more): the reference goes as it was, without an author.
+    if (!target || target.peer !== conv) return { replyTo };
+    return { replyTo: this.wireId(target), replyToSender: target.sender };
+  }
+
+  /** The row a stored reply quotes (bodies keep the wire ID and, when known, its author). */
+  private quoted(conv: string, body: { replyTo?: unknown; replyToSender?: unknown }): MessageRow | undefined {
+    if (typeof body.replyTo !== 'string') return undefined;
+    return this.resolveRef(
+      conv,
+      body.replyTo,
+      typeof body.replyToSender === 'string' ? body.replyToSender : undefined,
+    );
   }
 
   private applyReaction(row: MessageRow, who: string, emoji: string, on: boolean): void {
@@ -3143,6 +3296,7 @@ export class DmService {
     const body = JSON.parse(r.body) as {
       text?: string;
       replyTo?: string;
+      replyToSender?: string;
       attachments?: AttachmentPointer[];
       pinned?: unknown;
       notice?: { timer?: unknown };
@@ -3153,6 +3307,14 @@ export class DmService {
       effect?: unknown;
     };
     const me = l.me;
+    // The window finds the quoted message by its handle here. One that has not arrived (or is gone)
+    // keeps the wire ID, unless that is another message's handle here (an impostor's, perhaps).
+    const quoted = this.quoted(r.peer, body);
+    const replyTo = quoted
+      ? quoted.id
+      : typeof body.replyTo === 'string' && !this.row(body.replyTo)
+        ? body.replyTo
+        : null;
     const reactions = JSON.parse(r.reactions) as Record<string, string[]>;
     const undelivered = Array.isArray(body.undelivered)
       ? body.undelivered.filter((x): x is string => typeof x === 'string')
@@ -3165,7 +3327,7 @@ export class DmService {
       senderName: this.nameOf(r.sender, group, l),
       mine: r.sender === me,
       text: r.deleted ? '' : String(body.text ?? ''),
-      replyTo: body.replyTo ?? null,
+      replyTo,
       attachments: r.deleted ? [] : (body.attachments ?? []),
       sentAt: r.sent_at,
       editedAt: r.edited_at,
@@ -3181,7 +3343,7 @@ export class DmService {
       expiresAt: r.expires_at ?? null,
       silent: body.silent === true,
       ...(group && r.sender !== me && !r.deleted
-        ? this.groupMention(String(body.text ?? ''), body.replyTo, l)
+        ? this.groupMention(String(body.text ?? ''), quoted, l)
         : {}),
       poll: r.deleted ? null : readPoll(body.poll),
       embed: r.deleted ? null : this.embedOf(body.embed, String(body.text ?? '')),
@@ -3194,13 +3356,10 @@ export class DmService {
   /** A group message that mentions you, or replies to your message (2.17). */
   private groupMention(
     text: string,
-    replyTo: string | undefined,
+    quoted: MessageRow | undefined,
     l: Lookups,
   ): { mentionsMe: true; mentionKind: MentionKind } | Record<string, never> {
-    const kind: MentionKind | null =
-      typeof replyTo === 'string' && this.row(replyTo)?.sender === l.me
-        ? 'direct'
-        : textMention(text, [l.myName]);
+    const kind: MentionKind | null = quoted?.sender === l.me ? 'direct' : textMention(text, [l.myName]);
     return kind ? { mentionsMe: true, mentionKind: kind } : {};
   }
 
@@ -3255,10 +3414,10 @@ export class DmService {
     const now = new Date().toISOString();
     this.db()
       .prepare(
-        `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions, received_at)
-         VALUES (?, ?, ?, ?, ?, 'received', '{}', ?)`,
+        `INSERT INTO dm_messages (id, msg_id, peer, sender, body, sent_at, status, reactions, received_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'received', '{}', ?)`,
       )
-      .run(id, conv, by, JSON.stringify({ text: '', notice: { timer: seconds } }), now, now);
+      .run(id, id, conv, by, JSON.stringify({ text: '', notice: { timer: seconds } }), now, now);
     this.emitMessage(id, true);
     this.emitConversations();
   }

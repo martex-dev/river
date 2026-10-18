@@ -576,7 +576,13 @@ export function TextChannel(props: {
                   myName={myName}
                   names={names}
                   refs={refs}
-                  replied={m.replyTo ? messages.find((x) => x.id === m.replyTo) : undefined}
+                  replied={
+                    m.replyTo
+                      ? messages.find(
+                          (x) => x.id === m.replyTo && (!m.replyToSender || x.sender === m.replyToSender),
+                        )
+                      : undefined
+                  }
                   onJump={jumpTo}
                 />
               </div>

@@ -769,6 +769,48 @@ describe('replies', () => {
     expect(seen.find((m) => m.text === 'me too, quietly')?.mentionsMe).toBe(false);
   });
 
+  it("name whose message they quote: a message posted later under a deleted one's ID is not it", async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const mallory = await person('Mallory');
+    const created = await alice.community.create('Quote Club');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    await mallory.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.name === 'general')!;
+    await bob.community.refresh();
+    await mallory.community.refresh();
+    const original = await alice.community.send(general.id, 'pizza on friday?');
+    await bob.community.messages(general.id);
+    const reply = await bob.community.action({
+      a: 'send',
+      channelId: general.id,
+      text: 'yes!',
+      replyTo: original.id,
+    });
+    expect(reply).toMatchObject({ replyTo: original.id, replyToSender: alice.riverId });
+    // The server refuses the ID while the message exists…
+    await expect(
+      mallory.community.action({ a: 'send', channelId: general.id, text: 'mine', messageId: original.id }),
+    ).rejects.toThrow();
+    // …but once Alice deletes it, the ID is free there again and Mallory posts under it.
+    await alice.community.action({ a: 'deleteMessage', messageId: original.id });
+    await mallory.community.action({
+      a: 'send',
+      channelId: general.id,
+      text: 'pineapple on everything',
+      messageId: original.id,
+    });
+    const seen = await mallory.community.messages(general.id);
+    const quoted = seen.find((m) => m.id === original.id)!;
+    const yes = seen.find((m) => m.text === 'yes!')!;
+    expect(quoted.sender).toBe(mallory.riverId);
+    // Bob's reply still says it quotes Alice's message, so it is not shown quoting Mallory's,
+    // and it is no reply to Mallory (no ping).
+    expect(yes.replyToSender).toBe(alice.riverId);
+    expect(yes.replyToSender).not.toBe(quoted.sender);
+    expect(yes.mentionsMe).toBe(false);
+  });
+
   it('tell @everyone apart from mentions of you (2.17: a community may ignore @everyone)', async () => {
     const alice = await person('Alice');
     const bob = await person('Bob');

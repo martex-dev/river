@@ -414,4 +414,22 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 26,
+    name: '0026_per_sender_message_ids',
+    up(db) {
+      // Security (after the 2.20.1 audit): a message is identified by its sender and its ID, not by the ID alone.
+      // Before, the first copy of an ID won: a group member who saw someone else's message ID
+      // first could send their own message under it, and the genuine one was then dropped.
+      // `msg_id` is the ID on the wire; `id` stays this device's own handle for the row (the
+      // window and every local reference use it). Existing rows keep their ID in both, with the
+      // sender they already had. (No trigger here: the phone's SQLite runs scripts statement by
+      // statement, split at semicolons.)
+      db.exec(`
+        ALTER TABLE dm_messages ADD COLUMN msg_id TEXT;
+        UPDATE dm_messages SET msg_id = id;
+        CREATE UNIQUE INDEX dm_messages_by_sender ON dm_messages (msg_id, sender);
+      `);
+    },
+  },
 ];
