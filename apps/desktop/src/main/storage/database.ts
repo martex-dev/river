@@ -4,6 +4,29 @@ import Database from 'better-sqlite3-multiple-ciphers';
 
 export type LocalDatabase = Database.Database;
 
+const statements = new WeakMap<LocalDatabase, Map<string, Database.Statement>>();
+
+/**
+ * A prepared statement kept for this database connection. Hot paths (the chat list, every
+ * message shown, libsignal's store) run the same few statements thousands of times, and
+ * compiling the SQL again each time is most of their cost. The cache lives as long as the
+ * connection (a reopened database starts afresh). Never change a cached statement's mode
+ * (pluck, raw, expand): every caller shares it.
+ */
+export function statement(db: LocalDatabase, sql: string): Database.Statement {
+  let cache = statements.get(db);
+  if (!cache) {
+    cache = new Map();
+    statements.set(db, cache);
+  }
+  let stmt = cache.get(sql);
+  if (!stmt) {
+    stmt = db.prepare(sql);
+    cache.set(sql, stmt);
+  }
+  return stmt;
+}
+
 export class WrongKeyError extends Error {
   constructor() {
     super('The local database could not be decrypted with this key');

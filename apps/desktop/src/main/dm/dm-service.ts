@@ -55,7 +55,7 @@ import { ApiError } from '../http.ts';
 import type { IdentityService } from '../identity/identity-service.ts';
 import { clinkContent, gcallContent, GroupCalls } from './group-calls.ts';
 import type { Logger } from '../logger.ts';
-import type { LocalDatabase } from '../storage/database.ts';
+import { statement, type LocalDatabase } from '../storage/database.ts';
 
 /** How long a call invite rings (the same as the window's ring timeout). */
 const RING_MS = 45_000;
@@ -439,6 +439,19 @@ interface MessageRow {
   received_at?: string | null;
 }
 
+type GroupProfiles = Record<string, { name?: string | null; avatar?: string | null } | undefined>;
+
+/** See DmService.lookups(). */
+interface Lookups {
+  me: string;
+  myName: string | null;
+  contacts: Map<string, ContactRow | undefined>;
+  /** Every contact is in `contacts` (anyone missing is not a contact). */
+  allContacts?: boolean;
+  groups: Map<string, GroupRow | undefined>;
+  profiles: Map<GroupRow, GroupProfiles>;
+}
+
 interface ContactRow {
   river_id: string;
   name: string | null;
@@ -662,24 +675,26 @@ export class DmService {
     const db = this.db();
     return {
       get: (kind: StoreKind, id: string) => {
-        const row = db.prepare('SELECT value FROM signal_store WHERE kind = ? AND id = ?').get(kind, id) as
-          { value: Uint8Array } | undefined;
+        const row = statement(db, 'SELECT value FROM signal_store WHERE kind = ? AND id = ?').get(
+          kind,
+          id,
+        ) as { value: Uint8Array } | undefined;
         return row ? new Uint8Array(row.value) : null;
       },
       put: (kind, id, value) => {
-        db.prepare('INSERT OR REPLACE INTO signal_store (kind, id, value) VALUES (?, ?, ?)').run(
+        statement(db, 'INSERT OR REPLACE INTO signal_store (kind, id, value) VALUES (?, ?, ?)').run(
           kind,
           id,
           Buffer.from(value),
         );
       },
       delete: (kind, id) => {
-        db.prepare('DELETE FROM signal_store WHERE kind = ? AND id = ?').run(kind, id);
+        statement(db, 'DELETE FROM signal_store WHERE kind = ? AND id = ?').run(kind, id);
       },
       count: (kind) =>
-        (db.prepare('SELECT COUNT(*) AS n FROM signal_store WHERE kind = ?').get(kind) as { n: number }).n,
+        (statement(db, 'SELECT COUNT(*) AS n FROM signal_store WHERE kind = ?').get(kind) as { n: number }).n,
       ids: (kind) =>
-        (db.prepare('SELECT id FROM signal_store WHERE kind = ?').all(kind) as Array<{ id: string }>).map(
+        (statement(db, 'SELECT id FROM signal_store WHERE kind = ?').all(kind) as Array<{ id: string }>).map(
           (r) => r.id,
         ),
     };
@@ -1531,7 +1546,7 @@ export class DmService {
   }
 
   private group(id: string): GroupRow | undefined {
-    return this.db().prepare('SELECT * FROM dm_groups WHERE id = ?').get(id) as GroupRow | undefined;
+    return statement(this.db(), 'SELECT * FROM dm_groups WHERE id = ?').get(id) as GroupRow | undefined;
   }
 
   private saveGroup(g: GroupRow): void {
@@ -1679,25 +1694,59 @@ export class DmService {
     return this.liveRinging()?.event ?? null;
   }
 
-  nameOf(riverId: string, g?: GroupRow): string {
-    if (riverId === this.me()) return this.deps.identity.get()?.displayName ?? 'You';
-    const c = this.contact(riverId);
+  nameOf(riverId: string, g?: GroupRow, l: Lookups = this.lookups()): string {
+    if (riverId === l.me) return l.myName ?? 'You';
+    const c = this.contactIn(l, riverId);
     if (c?.name) return c.name;
     if (g) {
-      const p = (JSON.parse(g.profiles) as Record<string, { name: string | null }>)[riverId];
+      const p = this.profilesIn(l, g)[riverId];
       if (p?.name) return p.name;
     }
     return this.deps.community.knownProfile(riverId)?.name ?? `River ${riverId.slice(0, 8)}`;
   }
 
-  private avatarOf(riverId: string, g?: GroupRow): string | null {
-    const c = this.contact(riverId);
+  private avatarOf(riverId: string, g?: GroupRow, l: Lookups = this.lookups()): string | null {
+    const c = this.contactIn(l, riverId);
     if (c?.avatar) return c.avatar;
     if (g) {
-      const p = (JSON.parse(g.profiles) as Record<string, { avatar: string | null }>)[riverId];
+      const p = this.profilesIn(l, g)[riverId];
       if (p?.avatar) return p.avatar;
     }
     return this.deps.community.knownProfile(riverId)?.avatar ?? null;
+  }
+
+  /**
+   * Lookups shared while many messages or conversations are turned into views at once: who you
+   * are, and each contact, group and group's profiles read once instead of once per message.
+   */
+  private lookups(): Lookups {
+    const me = this.deps.identity.get();
+    return {
+      me: me?.riverId ?? '',
+      myName: me?.displayName ?? null,
+      contacts: new Map(),
+      groups: new Map(),
+      profiles: new Map(),
+    };
+  }
+
+  private contactIn(l: Lookups, riverId: string): ContactRow | undefined {
+    if (!l.allContacts && !l.contacts.has(riverId)) l.contacts.set(riverId, this.contact(riverId));
+    return l.contacts.get(riverId);
+  }
+
+  private groupIn(l: Lookups, id: string): GroupRow | undefined {
+    if (!l.groups.has(id)) l.groups.set(id, this.group(id));
+    return l.groups.get(id);
+  }
+
+  private profilesIn(l: Lookups, g: GroupRow): GroupProfiles {
+    let p = l.profiles.get(g);
+    if (!p) {
+      p = JSON.parse(g.profiles) as GroupProfiles;
+      l.profiles.set(g, p);
+    }
+    return p;
   }
 
   // ---- sending ---------------------------------------------------------------------------------
@@ -2265,12 +2314,13 @@ export class DmService {
         case 'files': {
           const files: FileView[] = [];
           const convs = new Map(this.conversations().map((c) => [c.riverId, c.name]));
+          const l = this.lookups();
           for (const r of this.db()
             .prepare(
               `SELECT * FROM dm_messages WHERE deleted = 0 AND json_array_length(json_extract(body, '$.attachments')) > 0 ORDER BY sent_at DESC LIMIT 2000`,
             )
             .all() as MessageRow[]) {
-            const v = this.view(r);
+            const v = this.view(r, l);
             for (const p of v.attachments) {
               files.push({
                 pointer: p,
@@ -2391,7 +2441,8 @@ export class DmService {
                ORDER BY sent_at DESC LIMIT 100`,
             )
             .all(act.peer ?? null, act.peer ?? null, like, like) as MessageRow[];
-          return out(rows.map((r) => this.view(r)));
+          const l = this.lookups();
+          return out(rows.map((r) => this.view(r, l)));
         }
         case 'conversations':
           return out(this.conversations());
@@ -2411,7 +2462,8 @@ export class DmService {
                 .all(act.peer, act.since) as MessageRow[])
             : [];
           if (rows.length < 500) rows = latest();
-          return out(rows.map((r) => this.view(r)));
+          const l = this.lookups();
+          return out(rows.map((r) => this.view(r, l)));
         }
         case 'open': {
           if (act.peer === this.me()) throw new CommunityError('That is your own River ID.');
@@ -3035,7 +3087,7 @@ export class DmService {
   // ---- local state -----------------------------------------------------------------------------
 
   private contact(riverId: string): ContactRow | undefined {
-    return this.db().prepare('SELECT * FROM contacts WHERE river_id = ?').get(riverId) as
+    return statement(this.db(), 'SELECT * FROM contacts WHERE river_id = ?').get(riverId) as
       ContactRow | undefined;
   }
 
@@ -3060,7 +3112,7 @@ export class DmService {
   }
 
   private row(id: string): MessageRow | undefined {
-    return this.db().prepare('SELECT * FROM dm_messages WHERE id = ?').get(id) as MessageRow | undefined;
+    return statement(this.db(), 'SELECT * FROM dm_messages WHERE id = ?').get(id) as MessageRow | undefined;
   }
 
   private applyReaction(row: MessageRow, who: string, emoji: string, on: boolean): void {
@@ -3087,7 +3139,7 @@ export class DmService {
     this.emitMessage(row.id, false);
   }
 
-  private view(r: MessageRow): DirectMessageView {
+  private view(r: MessageRow, l: Lookups = this.lookups()): DirectMessageView {
     const body = JSON.parse(r.body) as {
       text?: string;
       replyTo?: string;
@@ -3100,17 +3152,17 @@ export class DmService {
       undelivered?: unknown;
       effect?: unknown;
     };
-    const me = this.me();
+    const me = l.me;
     const reactions = JSON.parse(r.reactions) as Record<string, string[]>;
     const undelivered = Array.isArray(body.undelivered)
       ? body.undelivered.filter((x): x is string => typeof x === 'string')
       : [];
-    const group = isGroupId(r.peer) ? this.group(r.peer) : undefined;
+    const group = isGroupId(r.peer) ? this.groupIn(l, r.peer) : undefined;
     return {
       id: r.id,
       peer: r.peer,
       sender: r.sender,
-      senderName: this.nameOf(r.sender, group),
+      senderName: this.nameOf(r.sender, group, l),
       mine: r.sender === me,
       text: r.deleted ? '' : String(body.text ?? ''),
       replyTo: body.replyTo ?? null,
@@ -3129,7 +3181,7 @@ export class DmService {
       expiresAt: r.expires_at ?? null,
       silent: body.silent === true,
       ...(group && r.sender !== me && !r.deleted
-        ? this.groupMention(String(body.text ?? ''), body.replyTo)
+        ? this.groupMention(String(body.text ?? ''), body.replyTo, l)
         : {}),
       poll: r.deleted ? null : readPoll(body.poll),
       embed: r.deleted ? null : this.embedOf(body.embed, String(body.text ?? '')),
@@ -3143,11 +3195,12 @@ export class DmService {
   private groupMention(
     text: string,
     replyTo: string | undefined,
+    l: Lookups,
   ): { mentionsMe: true; mentionKind: MentionKind } | Record<string, never> {
     const kind: MentionKind | null =
-      typeof replyTo === 'string' && this.row(replyTo)?.sender === this.me()
+      typeof replyTo === 'string' && this.row(replyTo)?.sender === l.me
         ? 'direct'
-        : textMention(text, [this.deps.identity.get()?.displayName]);
+        : textMention(text, [l.myName]);
     return kind ? { mentionsMe: true, mentionKind: kind } : {};
   }
 
@@ -3157,12 +3210,10 @@ export class DmService {
     return e.success && text.includes(e.data.url) ? e.data : null;
   }
 
-  private lastOf(conv: string): ConversationView['last'] {
-    const last = this.db()
-      .prepare('SELECT * FROM dm_messages WHERE peer = ? ORDER BY sent_at DESC LIMIT 1')
-      .get(conv) as MessageRow | undefined;
+  /** A group's last message as the chat list shows it. */
+  private groupLast(conv: string, last: MessageRow | undefined, l: Lookups): ConversationView['last'] {
     if (!last) return null;
-    const v = this.view(last);
+    const v = this.view(last, l);
     const text = v.deleted
       ? 'Message deleted'
       : v.text || (v.attachments.length ? `📎 ${v.attachments[0]!.name}` : '');
@@ -3392,8 +3443,14 @@ export class DmService {
 
   private removeRows(rows: Array<{ id: string; peer: string; body: string }>): number {
     const db = this.db();
+    // One transaction (one journal write) however many go, before anyone is told.
+    if (rows.length) {
+      const del = statement(db, 'DELETE FROM dm_messages WHERE id = ?');
+      db.transaction(() => {
+        for (const r of rows) del.run(r.id);
+      })();
+    }
     for (const r of rows) {
-      db.prepare('DELETE FROM dm_messages WHERE id = ?').run(r.id);
       try {
         const body = JSON.parse(r.body) as { attachments?: Array<{ id: string }> };
         for (const a of body.attachments ?? []) void this.deps.community.forgetAttachment?.(a.id);
@@ -3487,34 +3544,80 @@ export class DmService {
     this.setChatPrefs({ ...prefs, [peer]: { ...prefs[peer], unread: false } });
   }
 
+  /**
+   * The chat list. A fixed handful of queries however many chats there are (it is built again
+   * on every new message): every chat's last message and unread count come from one query each,
+   * through dm_messages_by_peer and dm_messages_unread, instead of two queries per chat.
+   */
   conversations(): ConversationView[] {
     const prefs = this.chatPrefs();
+    const timers = this.timers();
+    const timerOf = (id: string): number => {
+      const t = timers[id];
+      return typeof t === 'number' && t > 0 && t <= MAX_TIMER ? t : 0;
+    };
     const flags = (id: string): Pick<ConversationView, 'pinned' | 'archived' | 'markedUnread' | 'timer'> => ({
       pinned: !!prefs[id]?.pinnedAt,
       archived: !!prefs[id]?.archived,
       markedUnread: !!prefs[id]?.unread,
-      timer: this.timerOf(id),
+      timer: timerOf(id),
     });
-    const contacts = this.db().prepare('SELECT * FROM contacts').all() as ContactRow[];
-    const groups = this.db().prepare('SELECT * FROM dm_groups').all() as GroupRow[];
+    const db = this.db();
+    const contacts = statement(db, 'SELECT * FROM contacts').all() as ContactRow[];
+    const groups = statement(db, 'SELECT * FROM dm_groups').all() as GroupRow[];
     const protocol = this.deps.identity.protocolIdentity() ? this.protocol() : null;
-    const me = this.me();
+    const l = this.lookups();
+    const me = l.me;
+    for (const c of contacts) l.contacts.set(c.river_id, c);
+    l.allContacts = true;
+    for (const g of groups) l.groups.set(g.id, g);
+    // The newest message of every chat (the same row "ORDER BY sent_at DESC LIMIT 1" picks).
+    const lastRows = new Map(
+      (
+        statement(
+          db,
+          `SELECT * FROM dm_messages WHERE rowid IN (
+             SELECT (SELECT rowid FROM dm_messages WHERE peer = x.id ORDER BY sent_at DESC LIMIT 1)
+             FROM (SELECT river_id AS id FROM contacts UNION ALL SELECT id FROM dm_groups) AS x)`,
+        ).all() as MessageRow[]
+      ).map((r) => [r.peer, r]),
+    );
+    // Unread: their messages (in a group: everyone else's) stored after you last read the chat.
+    const unreadOf = new Map(
+      (
+        statement(
+          db,
+          `SELECT c.river_id AS id,
+             (SELECT COUNT(*) FROM dm_messages m WHERE m.peer = c.river_id AND m.sender = c.river_id
+                AND COALESCE(m.received_at, m.sent_at) > COALESCE(c.last_read, '') AND m.deleted = 0) AS n
+           FROM contacts c
+           UNION ALL
+           SELECT g.id AS id,
+             (SELECT COUNT(*) FROM dm_messages m WHERE m.peer = g.id AND m.sender != ?
+                AND COALESCE(m.received_at, m.sent_at) > COALESCE(g.last_read, '') AND m.deleted = 0) AS n
+           FROM dm_groups g`,
+        ).all(me) as Array<{ id: string; n: number }>
+      ).map((r) => [r.id, r.n]),
+    );
+    // Only people you verified have a mark; everyone else is unverified without asking libsignal.
+    const marked = new Set(
+      protocol
+        ? (
+            statement(db, "SELECT id FROM signal_store WHERE kind = 'verified'").all() as Array<{
+              id: string;
+            }>
+          ).map((r) => r.id)
+        : [],
+    );
     const groupViews: ConversationView[] = groups.map((g) => {
       const admins = this.list(g.admins);
-      const unread = (
-        this.db()
-          .prepare(
-            'SELECT COUNT(*) AS n FROM dm_messages WHERE peer = ? AND sender != ? AND COALESCE(received_at, sent_at) > ? AND deleted = 0',
-          )
-          .get(g.id, me, g.last_read ?? '') as { n: number }
-      ).n;
       return {
         riverId: g.id,
         kind: 'group',
         members: this.list(g.members).map((m) => ({
           riverId: m,
-          name: this.nameOf(m, g),
-          avatar: this.avatarOf(m, g),
+          name: this.nameOf(m, g, l),
+          avatar: this.avatarOf(m, g, l),
           admin: admins.includes(m),
         })),
         isAdmin: admins.includes(me),
@@ -3522,8 +3625,8 @@ export class DmService {
         avatar: null,
         icon: g.icon ?? null,
         state: g.state,
-        last: this.lastOf(g.id),
-        unread,
+        last: this.groupLast(g.id, lastRows.get(g.id), l),
+        unread: unreadOf.get(g.id) ?? 0,
         verified: false,
         keyChanged: false,
         awaitingReply: false,
@@ -3533,19 +3636,13 @@ export class DmService {
     return [
       ...groupViews,
       ...contacts.map((c) => {
-        const last = this.db()
-          .prepare('SELECT * FROM dm_messages WHERE peer = ? ORDER BY sent_at DESC LIMIT 1')
-          .get(c.river_id) as MessageRow | undefined;
-        const unread = (
-          this.db()
-            .prepare(
-              'SELECT COUNT(*) AS n FROM dm_messages WHERE peer = ? AND sender = ? AND COALESCE(received_at, sent_at) > ? AND deleted = 0',
-            )
-            .get(c.river_id, c.river_id, c.last_read ?? '') as { n: number }
-        ).n;
+        const last = lastRows.get(c.river_id);
+        const unread = unreadOf.get(c.river_id) ?? 0;
         const known = this.deps.community.knownProfile(c.river_id);
-        const lastView = last ? this.view(last) : null;
+        const lastView = last ? this.view(last, l) : null;
         const self = c.river_id === me;
+        const verification =
+          !self && protocol && marked.has(c.river_id) ? protocol.verificationState(c.river_id) : 'unverified';
         return {
           riverId: c.river_id,
           kind: 'direct' as const,
@@ -3568,11 +3665,9 @@ export class DmService {
               }
             : null,
           unread: self ? 0 : unread,
-          verified: !self && (protocol?.isVerified(c.river_id) ?? false),
+          verified: verification === 'verified',
           keyChanged: !self && c.key_changed === 1,
-          ...(!self && protocol?.verificationState(c.river_id) === 'changed'
-            ? { verifiedChanged: true }
-            : {}),
+          ...(verification === 'changed' ? { verifiedChanged: true } : {}),
           awaitingReply: !self && c.state === 'accepted' && c.heard_from === 0,
           ...flags(c.river_id),
         };
@@ -3586,6 +3681,19 @@ export class DmService {
     });
   }
 
+  /** The name the chat list shows for a conversation, or null if there is no such conversation. */
+  private conversationName(conv: string): { name: string; group: boolean } | null {
+    const g = this.group(conv);
+    if (g) return { name: g.name, group: true };
+    const c = this.contact(conv);
+    if (!c) return null;
+    if (c.river_id === this.me()) return { name: NOTE_TO_SELF, group: false };
+    return {
+      name: c.name ?? this.deps.community.knownProfile(c.river_id)?.name ?? `River ${c.river_id.slice(0, 8)}`,
+      group: false,
+    };
+  }
+
   private emitConversations(): void {
     this.emit({ t: 'conversations', conversations: this.conversations() });
   }
@@ -3594,8 +3702,8 @@ export class DmService {
     const row = this.row(id);
     if (!row) return;
     const view = this.view(row);
-    const conv = this.conversations().find((c) => c.riverId === row.peer);
-    const name = conv?.kind === 'group' ? `${view.senderName} · ${conv.name}` : (conv?.name ?? 'Someone');
+    const conv = this.conversationName(row.peer);
+    const name = conv?.group ? `${view.senderName} · ${conv.name}` : (conv?.name ?? 'Someone');
     this.emit({ t: 'message', message: view, isNew, senderName: name });
   }
 }
