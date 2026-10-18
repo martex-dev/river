@@ -25,6 +25,11 @@ export const SERVER_CAPABILITIES = [
   'linked-devices',
   /** 2.13: voice relay frames to everyone in a call (RELAY_FRAME_ALL) and the active-speaker cap. */
   'voice-relay-all',
+  /**
+   * 2.18: group calls and call links — `call.group` (a call room whose members are told who is in
+   * it), `call.watch` and the `call.roster` event (packages/protocol/src/communities.ts).
+   */
+  'group-calls',
 ] as const;
 export type ServerCapability = (typeof SERVER_CAPABILITIES)[number];
 

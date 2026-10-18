@@ -65,6 +65,7 @@ import {
   type ServerEvent,
   type OverwriteWire,
   MAX_CALL_ROOM,
+  MAX_GROUP_CALL_ROOM,
   RELAY_BURST,
   RELAY_FRAMES_PER_SECOND,
   decodeRelayAny,
@@ -2959,7 +2960,7 @@ export async function registerCommunityRoutes(
         hubSocket.deviceId = session.deviceId;
         hub.setStatus(riverId, event.status ?? 'online');
         const cameOnline = hub.add(riverId, hubSocket);
-        send({ t: 'ready', riverId, relayAll: true });
+        send({ t: 'ready', riverId, relayAll: true, groupCalls: true });
         const rows = await db
           .selectFrom('community_members')
           .select('community_id')
@@ -2992,6 +2993,15 @@ export async function registerCommunityRoutes(
           if (event.room === null) hub.leaveRoom(self);
           else if (!hub.joinRoom(self, event.room, MAX_CALL_ROOM, hubSocket))
             send({ t: 'error', code: 'room_full' });
+          return;
+        case 'call.group':
+          // Group calls and call links (2.18): the room's members and watchers learn who is in it.
+          if (event.room === null) hub.leaveRoom(self);
+          else if (!hub.joinRoom(self, event.room, MAX_GROUP_CALL_ROOM, hubSocket, true))
+            send({ t: 'error', code: 'room_full' });
+          return;
+        case 'call.watch':
+          hub.watch(hubSocket, event.rooms);
           return;
         case 'voice.sound': {
           const channelId = hub.voiceChannelOf(self);

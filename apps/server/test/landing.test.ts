@@ -12,7 +12,7 @@ function scriptOf(html: string): string {
 }
 
 describe('invite landing page', () => {
-  for (const path of ['/join', '/add']) {
+  for (const path of ['/join', '/add', '/call']) {
     it(`${path}: a page that gets River and opens the link in it`, async () => {
       const { app } = await startServer();
       const res = await app.inject({ method: 'GET', url: path });

@@ -966,6 +966,45 @@
         "properties": {
           "t": {
             "type": "string",
+            "const": "call.group"
+          },
+          "room": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{22,64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["t", "room"]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "t": {
+            "type": "string",
+            "const": "call.watch"
+          },
+          "rooms": {
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{22,64}$"
+            }
+          }
+        },
+        "required": ["t", "rooms"]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "t": {
+            "type": "string",
             "const": "voice.sound"
           },
           "soundId": {
@@ -4739,6 +4778,10 @@
           "relayAll": {
             "type": "boolean",
             "const": true
+          },
+          "groupCalls": {
+            "type": "boolean",
+            "const": true
           }
         },
         "required": ["t", "riverId"]
@@ -5382,6 +5425,28 @@
           }
         },
         "required": ["t", "riverId", "online"]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "t": {
+            "type": "string",
+            "const": "call.roster"
+          },
+          "room": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{22,64}$"
+          },
+          "participants": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            }
+          }
+        },
+        "required": ["t", "room", "participants"]
       },
       {
         "type": "object",
