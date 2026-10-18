@@ -1142,6 +1142,10 @@ export class CommunityService {
     };
 
     const channels: ChannelView[] = c.channels
+      // A channel belongs to the community it was first seen in (2.18). What you write in a channel
+      // is sealed with the key of the community it belongs to, so a server listing a channel of one
+      // community under another (whose key it may know) must not move it there.
+      .filter((ch) => (this.channelToCommunity.get(ch.id) ?? c.id) === c.id)
       .map((ch) => {
         let name = 'channel';
         let topic = '';
@@ -4090,6 +4094,8 @@ export class CommunityService {
     this.deps.db()?.prepare('DELETE FROM communities WHERE id = ?').run(id);
     this.keys.delete(id);
     this.wires.delete(id);
+    for (const [channelId, owner] of this.channelToCommunity)
+      if (owner === id) this.channelToCommunity.delete(channelId);
     for (const [messageId, r] of this.recent) if (r.chat.communityId === id) this.recent.delete(messageId);
     this.communities = this.communities.filter((c) => c.id !== id);
     this.emit({ t: 'communities', communities: this.communities });

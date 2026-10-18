@@ -505,6 +505,44 @@ describe('community keys a server cannot inject', { timeout: 90_000 }, () => {
     expect(epochs(bob, id)).toEqual([0]);
   });
 
+  it('a channel listed under another community is not sealed with that community’s key (2.18)', async () => {
+    const { alice, id } = await crew();
+    const eve = await person('Eve');
+    const bait = await eve.community.create('Bait');
+    await alice.community.join(await eve.community.invite(bait.id), async () => undefined);
+    const general = (await alice.community.refresh())
+      .find((c) => c.id === id)!
+      .channels.find((c) => c.kind === 'text')!;
+    // The server (which knows Bait's key: Eve made it) lists Crew's channel under Bait, first.
+    rewrite = (path, body) => {
+      if (!path.endsWith('/communities')) return body;
+      const res = JSON.parse(body.toString('utf8')) as {
+        communities: Array<{ id: string; channels: Array<{ id: string }> }>;
+      };
+      const crewWire = res.communities.find((c) => c.id === id)!;
+      const baitWire = res.communities.find((c) => c.id === bait.id)!;
+      baitWire.channels.push(crewWire.channels.find((ch) => ch.id === general.id)!);
+      res.communities = [baitWire, crewWire];
+      return Buffer.from(JSON.stringify(res));
+    };
+    const views = await alice.community.refresh();
+    expect(views.find((c) => c.id === bait.id)!.channels.map((c) => c.id)).not.toContain(general.id);
+    expect(views.find((c) => c.id === id)!.channels.map((c) => c.id)).toContain(general.id);
+    const sent = await alice.community.send(general.id, 'for Crew only');
+    rewrite = null;
+    const row = await serverDb.db
+      .selectFrom('messages')
+      .select('body')
+      .where('id', '=', sent.id)
+      .executeTakeFirstOrThrow();
+    const purpose = `message:${general.id}` as const;
+    const binding = messageBinding(sent.id, alice.riverId);
+    expect(openBound(keyOf(alice, id, 0), id, purpose, binding, row.body).value).toMatchObject({
+      text: 'for Crew only',
+    });
+    expect(() => openBound(keyOf(eve, bait.id, 0), bait.id, purpose, binding, row.body)).toThrow();
+  });
+
   it('a key from a member who never held one is refused, with or without a made-up proof', async () => {
     const { alice, bob, id } = await crew();
     const eve = await person('Eve');

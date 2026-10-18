@@ -16,6 +16,9 @@ All notable changes to River are documented here. The format follows
   keyboard can no longer reach the interface under the lock cover.
 - Communities: opening an invite link never changes the key of a community you
   are already in, so a server cannot slip a key it knows into one that way.
+- Communities: a channel stays with the community it belongs to. A server that
+  lists it under another community can no longer make River seal what you
+  write there with that other community's key.
 
 ## [2.17.0] - 2026-10-18
 
