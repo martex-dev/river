@@ -6,7 +6,8 @@ import { useRiver } from '../../store.ts';
 import { friendState, sendFriendRequest } from '../../dm/friends.ts';
 import { useDm } from '../../dm/store.ts';
 import { useCommunity } from '../store.ts';
-import { Avatar, CrownIcon, CustomStatus, Popover, can, hex, presenceOf } from './common.tsx';
+import { phoneShellActive } from '../../phone/mode.ts';
+import { Avatar, CrownIcon, CustomStatus, Popover, XIcon, can, hex, presenceOf } from './common.tsx';
 
 export function MemberList({ community, me }: { community: CommunityView; me: string }): ReactElement {
   const [card, setCard] = useState<{ member: MemberView; x: number; y: number } | null>(null);
@@ -27,6 +28,20 @@ export function MemberList({ community, me }: { community: CommunityView; me: st
 
   return (
     <aside className="community__members" aria-label="Members">
+      {phoneShellActive() && (
+        // On a phone the list covers the channel: a way back to it (Back closes it too).
+        <header className="pins__head members__head">
+          <strong>Members · {community.members.length}</strong>
+          <button
+            className="icon-btn"
+            aria-label="Close members"
+            data-phone-back=""
+            onClick={() => useCommunity.setState({ showMembers: false })}
+          >
+            <XIcon size={14} />
+          </button>
+        </header>
+      )}
       {groups.map((g) => (
         <div key={g.key} className="member-group">
           <div className="channel-group__head">

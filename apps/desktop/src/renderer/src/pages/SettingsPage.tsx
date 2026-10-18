@@ -25,6 +25,7 @@ import { SecurityPage } from './SecurityPage.tsx';
 import { AppearanceCenter } from '../appearance/AppearanceCenter.tsx';
 import { TryBar } from '../appearance/TryBar.tsx';
 import { useCommunity } from '../community/store.ts';
+import { phoneShellActive } from '../phone/mode.ts';
 import { useRiver, type SettingsTab } from '../store.ts';
 import { play, playNotifySound } from '../community/sound.ts';
 import { NOTIFY_SOUND_LABELS, NOTIFY_TONES } from '../../../shared/notify-sounds.ts';
@@ -1080,7 +1081,9 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
         />
       )}
       <PrivacySettings settings={settings} phone={phone} />
-      <h2 className="panel__title">System</h2>
+      <h2 className="panel__title" id="settings-system">
+        System
+      </h2>
       {phone && platform === 'android' && (
         <>
           <Toggle
@@ -1194,11 +1197,9 @@ function NotificationsPanel({ settings }: { settings: Settings }): ReactElement 
       </fieldset>
       <QuietHours settings={settings} />
       <p className="muted small">
-        Right-click (or long-press) a chat, community, category or channel to mute it for an hour, 8 hours, a
-        day or until you turn it back on, to choose All messages, Only @mentions or Nothing just for it, and
-        to give it a sound of its own. A community can also ignore @everyone and @here. Mentions of you and
-        replies to you still come through a muted chat or channel unless it is set to Nothing. Do Not Disturb
-        (click your name) silences everything except your own sounds.
+        {phoneShellActive()
+          ? 'Long-press a chat, or open a community’s menu, to mute it for an hour, 8 hours, a day or until you turn it back on, to choose All messages, Only @mentions or Nothing just for it, and to give it a sound of its own. A community can also ignore @everyone and @here. Mentions of you and replies to you still come through a muted chat or channel unless it is set to Nothing. Do Not Disturb (your status in Settings) silences everything except your own sounds.'
+          : 'Right-click a chat, community, category or channel to mute it for an hour, 8 hours, a day or until you turn it back on, to choose All messages, Only @mentions or Nothing just for it, and to give it a sound of its own. A community can also ignore @everyone and @here. Mentions of you and replies to you still come through a muted chat or channel unless it is set to Nothing. Do Not Disturb (click your name) silences everything except your own sounds.'}
       </p>
       <div className="sound-group__previews" aria-label="Chat sounds">
         {NOTIFY_TONES.map((tone) => (

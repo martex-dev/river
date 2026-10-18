@@ -1,4 +1,5 @@
 import { useEffect, type ReactElement } from 'react';
+import { phoneShellActive } from '../../phone/mode.ts';
 import { clockDateTime } from '../../time.ts';
 import { useCommunity } from '../store.ts';
 import { XIcon } from './common.tsx';
@@ -23,6 +24,7 @@ export function SavedPanel(): ReactElement {
         <button
           className="icon-btn"
           aria-label="Close saved messages"
+          data-phone-back=""
           onClick={() => useCommunity.setState({ showSaved: false })}
         >
           <XIcon size={14} />
@@ -30,7 +32,10 @@ export function SavedPanel(): ReactElement {
       </header>
       {saved === null && <p className="muted small">Loading…</p>}
       {saved?.length === 0 && (
-        <p className="muted small">Right-click a message and choose Save message to keep it here.</p>
+        <p className="muted small">
+          {phoneShellActive() ? 'Long-press' : 'Right-click'} a message and choose Save message to keep it
+          here.
+        </p>
       )}
       {saved?.map((m) => (
         <div key={m.messageId} className="pins__item saved__item">

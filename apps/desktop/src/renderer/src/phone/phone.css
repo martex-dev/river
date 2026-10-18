@@ -333,26 +333,42 @@ html[data-keyboard='open'] .ptabs {
 .psearch input::placeholder {
   color: var(--text-faint);
 }
+/* River's own clear button instead (Back clears the search too). */
 .psearch input::-webkit-search-cancel-button {
-  filter: grayscale(1);
+  display: none;
+  -webkit-appearance: none;
+}
+.psearch__clear {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 38px;
+  margin-right: -10px;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  font-size: 15px;
 }
 .pchips {
   display: flex;
-  gap: 8px;
-  padding: 0 16px 10px;
+  gap: 0;
+  padding: 0 12px 6px;
   overflow-x: auto;
   scrollbar-width: none;
 }
 .pchips::-webkit-scrollbar {
   display: none;
 }
+/* 32px to look at, 40px to tap: the transparent border is part of the button, not the pill. */
 .pchip {
   flex: none;
-  height: 32px;
+  height: 40px;
   padding: 0 14px;
-  border: 0;
-  border-radius: 16px;
+  border: 4px solid transparent;
+  border-radius: 20px;
   background: var(--p-fill);
+  background-clip: padding-box;
   color: var(--text-dim);
   font-size: 14.5px;
   font-weight: 600;
@@ -363,7 +379,7 @@ html[data-keyboard='open'] .ptabs {
   color: var(--accent-solid-ink);
 }
 .pchip--icon {
-  width: 32px;
+  width: 40px;
   padding: 0;
   font-weight: 500;
 }
@@ -376,7 +392,7 @@ html[data-keyboard='open'] .ptabs {
 }
 .psegment__item {
   flex: 1;
-  height: 30px;
+  height: 36px;
   border: 0;
   border-radius: 7px;
   background: none;
@@ -1414,6 +1430,27 @@ html[data-keyboard='open'] .pshell .chat__composer-wrap {
   margin: 0;
   border-radius: 12px;
 }
+/* Big enough for a thumb: Disconnect, and the channel's name that opens it. */
+.pvoice .voice-panel__actions .icon-btn {
+  width: 40px;
+  height: 40px;
+}
+.pvoice .voice-panel__where {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  margin: -11px 0;
+}
+/* A voice channel's own header repeats the screen's bar: only its encryption note stays. */
+:root .pshell .pchannel .voice > .chat__head > .channel__icon,
+:root .pshell .pchannel .voice > .chat__head > strong {
+  display: none;
+}
+:root .pshell .pchannel .voice > .chat__head .chat__topic {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
 
 /* ---------- Calls ---------- */
 .pcall {
@@ -1499,8 +1536,9 @@ html[data-keyboard='open'] .pshell .chat__composer-wrap {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-top: 2px;
-  padding: 4px 10px;
+  min-height: 40px;
+  margin-top: -4px;
+  padding: 4px 12px;
   border: 0;
   border-radius: 12px;
   background: none;
@@ -1515,10 +1553,11 @@ html[data-keyboard='open'] .pshell .chat__composer-wrap {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  margin-top: 4px;
-  padding: 6px 14px;
+  min-height: 40px;
+  margin-top: 2px;
+  padding: 6px 16px;
   border: 0;
-  border-radius: 16px;
+  border-radius: 20px;
   background: var(--layer-1);
   color: var(--text);
   font-size: 14.5px;
@@ -1791,9 +1830,33 @@ html:is([data-platform='android'], [data-platform='ios']) .popover.menu {
   border-radius: 14px;
   font-size: 16px;
 }
-html:is([data-platform='android'], [data-platform='ios']) .popover.menu .menu__item {
+html:is([data-platform='android'], [data-platform='ios']) .popover.menu .menu-item {
   min-height: 44px;
   font-size: 16px;
+}
+
+/* The emoji picker fits a narrow phone: every column shows, the category row scrolls. */
+html:is([data-platform='android'], [data-platform='ios']) .emoji-picker {
+  width: min(340px, calc(100vw - 24px));
+  max-width: 100%;
+}
+html:is([data-platform='android'], [data-platform='ios']) .emoji-picker__tabs {
+  flex: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+html:is([data-platform='android'], [data-platform='ios']) .emoji-picker__tab {
+  flex: none;
+  width: 40px;
+  height: 40px;
+}
+html:is([data-platform='android'], [data-platform='ios']) .emoji-picker__grid {
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+}
+html:is([data-platform='android'], [data-platform='ios']) .emoji-picker__emoji {
+  min-width: 0;
+  height: 40px;
+  padding: 0;
 }
 
 /* The text and its time share the last line, as in Telegram. */
@@ -1809,4 +1872,50 @@ html:is([data-platform='android'], [data-platform='ios']) .popover.menu .menu__i
   margin-right: 0;
   padding-left: 0;
   padding-right: 0;
+}
+
+/* Editing a message: the box takes the bubble's width, with Cancel and Save under it. */
+:root .pshell .chat__messages .msg__edit {
+  min-width: min(260px, 68vw);
+}
+:root .pshell .msg__edit textarea {
+  max-height: 40vh;
+  font-size: 16px;
+}
+.msg__edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+/* On the box's own colour, so they read on any bubble (your own are the accent colour). */
+.msg__edit-actions .btn {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--border-strong);
+  background: rgb(var(--shade-rgb) / 0.7);
+  color: var(--text);
+  box-shadow: none;
+}
+.msg__edit-actions .btn--primary {
+  font-weight: 700;
+}
+
+/* A voice message fits its bubble on a narrow phone: the bar gives way, not the bubble. */
+:root .pshell .voice-note {
+  max-width: 100%;
+  min-width: 0;
+}
+:root .pshell .voice-note__bar {
+  min-width: 0;
+}
+
+/* Buttons a thumb can hit: 40px at least on a phone (the computer keeps its compact ones). */
+html:is([data-platform='android'], [data-platform='ios']) .btn:not(.btn--link) {
+  min-height: 40px;
+  justify-content: center;
+}
+html:is([data-platform='android'], [data-platform='ios']) .icon-btn {
+  min-width: 40px;
+  min-height: 40px;
 }

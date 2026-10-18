@@ -172,8 +172,21 @@ function ChatList({ onCompose }: { onCompose(): void }): ReactElement {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
+        {query && (
+          // Back clears the search too, as in Telegram.
+          <button
+            type="button"
+            className="psearch__clear"
+            aria-label="Clear search"
+            data-phone-back=""
+            onClick={() => setQuery('')}
+          >
+            ✕
+          </button>
+        )}
       </div>
-      {!searching && stories.length > 0 && (
+      {/* The archive is a list of its own: no stories or message requests over it. */}
+      {!searching && !archiveOpen && stories.length > 0 && (
         <StoriesRail
           feed={feed}
           onOpen={(g) => {
@@ -232,11 +245,11 @@ function ChatList({ onCompose }: { onCompose(): void }): ReactElement {
         />
       )}
       {archiveOpen && (
-        <button className="plist__back" onClick={() => setArchiveOpen(false)}>
+        <button className="plist__back" data-phone-back="" onClick={() => setArchiveOpen(false)}>
           ‹ Archived chats
         </button>
       )}
-      {requests.length > 0 && (
+      {!archiveOpen && requests.length > 0 && (
         <>
           <h2 className="plist__head">Message requests · {requests.length}</h2>
           <ul className="plist" aria-label="Message requests">
