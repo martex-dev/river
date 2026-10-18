@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { CallView, ConversationView } from '../../../shared/dm.ts';
-import { isMuted } from '../../../shared/notify-rules.ts';
+import { countsOnBadge, isMuted } from '../../../shared/notify-rules.ts';
 import type { Settings } from '../../../shared/settings.ts';
 import { callOutcome } from '../pages/CallsPage.tsx';
 
@@ -56,12 +56,15 @@ export function missedSince(calls: CallView[] | null, seenAt: string): number {
   ).length;
 }
 
-/** The Chats badge: unread messages, not counting blocked or muted conversations. */
+/**
+ * The Chats badge: unread messages, not counting blocked or muted conversations, message requests
+ * or (2.19, unless "Count archived chats" is on) archived chats.
+ */
 export function chatsBadge(
   conversations: ConversationView[],
   notifications: Settings['notifications'] | undefined,
 ): number {
   return conversations
-    .filter((c) => c.state !== 'blocked' && !(notifications && isMuted(notifications, c.riverId)))
+    .filter((c) => countsOnBadge(c, notifications) && !(notifications && isMuted(notifications, c.riverId)))
     .reduce((n, c) => n + c.unread, 0);
 }

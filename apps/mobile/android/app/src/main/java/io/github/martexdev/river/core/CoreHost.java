@@ -912,7 +912,8 @@ public final class CoreHost {
           {
             Uri uri = Uri.parse(a.getString("url"));
             String scheme = uri.getScheme();
-            if ("https".equals(scheme) || "http".equals(scheme)) {
+            // mailto: and tel: (2.19) are checked by the core first: a plain address or number only.
+            if ("https".equals(scheme) || "http".equals(scheme) || "mailto".equals(scheme) || "tel".equals(scheme)) {
               context.startActivity(new Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             }
             answer(id, (Object) null);

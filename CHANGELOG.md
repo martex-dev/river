@@ -6,6 +6,47 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**Messaging, part 2: big emoji, reply previews, saved replies, tags, effects.**
+
+### Added
+
+- **Big emoji**: a message of only one to three emoji shows large and without a
+  bubble, as in Telegram, in direct messages, groups and channels, on phones and
+  computers.
+- **Reply previews**: the bar above the message box says who you are answering
+  and shows the message in one line ("Photo", "Voice message", "Poll: …" when it
+  has no text; spoilers stay hidden). Tap it, or the quote above a reply, to go to
+  that message (direct messages, groups and channels).
+- **Saved replies**: save text you send often and type / and its shortcut in any
+  message box (direct messages, groups and channels), or use the saved-replies
+  button. Kept encrypted on this device only: River has no way yet to copy
+  settings like these to your other devices.
+- **Tags for Note to self and saved messages**: give notes and saved channel
+  messages up to five tags and show only the ones with a tag. Kept encrypted on
+  this device only.
+- **Message effects**: send a message with confetti, hearts or fireworks from the
+  send menu (⏰ on computers, hold Send on phones). It plays once for the sender
+  and for each reader the first time they see it, and never with Calm mode or
+  reduced motion. The effect's name travels inside the end-to-end encrypted
+  message; River 2.17 and 2.18 ignore it and show the message as always.
+- **Count archived chats** (Settings → Notifications), off by default: archived
+  chats and message requests no longer count on the phone's Chats badge, the
+  computer's Home badge, the window title and River's icon (Telegram behaviour).
+- **Forward without the sender's name**: the Forward dialog has "Show sender's
+  name" (on by default); off, only the text is sent.
+- **Email addresses and phone numbers**: `mailto:` and `tel:` links in messages
+  open the mail or phone app after a question — only a plain address or number,
+  never with a subject, body or attachment filled in.
+
+### Changed
+
+- **Long links are shortened in messages** (the site name always shows); hover
+  for the whole address, or right-click / long-press for a sheet with the whole
+  address, Open and Copy.
+- **Phone Calls tab: the chosen All / Missed segment is an accent pill** that
+  stands out at least 3:1 in every theme; in dark themes it was almost invisible.
+- The ⏰ button next to Send is now called "More ways to send".
+
 ## [2.19.0] - 2026-10-18
 
 **Group calls in group chats, and call links.**

@@ -27,6 +27,8 @@ import {
   useEmojiIndex,
 } from '../emoji-data.ts';
 import { openMessageLink } from '../message-link.ts';
+import { openLinkSheet } from '../../components/link-sheet-store.ts';
+import { shortLink } from '../../components/message-kinds.ts';
 import { useCommunity } from '../store.ts';
 
 // ---- helpers -------------------------------------------------------------------------------------
@@ -891,12 +893,42 @@ function Lines({ text, ctx, keyBase }: { text: string; ctx: InlineCtx; keyBase: 
 }
 
 const INLINE =
-  /(<a?:[A-Za-z0-9_]{2,32}:[A-Za-z0-9_-]{22}>|\\[\\*_~|`>#\-[\]()@<]|`[^`\n]+`|\|\|[^|\n]+\|\||\[[^\]\n]{1,200}\]\(https?:\/\/[^\s)]{1,2000}\)|https?:\/\/[^\s<>]+[^\s<>.,:;"')\]!?]|<t:\d{1,12}(?::[tTdDfFR])?>|\*\*\*[^*\n]+\*\*\*|\*\*(?:[^*\n]|\*[^*\n]+\*)+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|_[^_\n]+_|@everyone|@here|@[^\s@]+(?: [^\s@]+)?|#[\w-]+)/g;
+  /(<a?:[A-Za-z0-9_]{2,32}:[A-Za-z0-9_-]{22}>|\\[\\*_~|`>#\-[\]()@<]|`[^`\n]+`|\|\|[^|\n]+\|\||\[[^\]\n]{1,200}\]\((?:https?:\/\/|mailto:|tel:)[^\s)]{1,2000}\)|https?:\/\/[^\s<>]+[^\s<>.,:;"')\]!?]|mailto:[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63})+|tel:\+?[0-9][0-9.-]{2,30}[0-9]|<t:\d{1,12}(?::[tTdDfFR])?>|\*\*\*[^*\n]+\*\*\*|\*\*(?:[^*\n]|\*[^*\n]+\*)+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|_[^_\n]+_|@everyone|@here|@[^\s@]+(?: [^\s@]+)?|#[\w-]+)/g;
 
-function openLink(url: string): void {
-  // A link to a River message opens it here; anything else goes to the browser after a confirmation.
+export function openLink(url: string): void {
+  // A link to a River message opens it here; anything else goes to the browser (or, for mailto:
+  // and tel:, the mail or phone app) after a confirmation in main, which allows only safe links.
   if (openMessageLink(url)) return;
   void window.river.links.openUrl(url);
+}
+
+/**
+ * A link in a message (2.19): long web addresses show shortened, the whole address on hover and in
+ * the sheet a right-click or long-press opens (gestures.ts finds links by data-link).
+ */
+function MessageLinkAnchor(props: { url: string; children?: ReactNode }): ReactElement {
+  const shown =
+    props.children ??
+    (props.url.startsWith('http') ? shortLink(props.url) : props.url.replace(/^(mailto|tel):/, ''));
+  return (
+    <a
+      href={props.url}
+      className="md-link"
+      data-link={props.url}
+      title={props.url}
+      onClick={(e) => {
+        e.preventDefault();
+        openLink(props.url);
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openLinkSheet(props.url, e.clientX, e.clientY);
+      }}
+    >
+      {shown}
+    </a>
+  );
 }
 
 function Spoiler({ children }: { children: ReactNode }): ReactElement {
@@ -976,33 +1008,12 @@ function inline(text: string, ctx: InlineCtx, key: string): ReactNode[] {
       const label = token.slice(1, token.indexOf(']('));
       const url = token.slice(token.indexOf('](') + 2, -1);
       out.push(
-        <a
-          key={k}
-          href={url}
-          className="md-link"
-          title={url}
-          onClick={(e) => {
-            e.preventDefault();
-            openLink(url);
-          }}
-        >
+        <MessageLinkAnchor key={k} url={url}>
           {label}
-        </a>,
+        </MessageLinkAnchor>,
       );
-    } else if (token.startsWith('http')) {
-      out.push(
-        <a
-          key={k}
-          href={token}
-          className="md-link"
-          onClick={(e) => {
-            e.preventDefault();
-            openLink(token);
-          }}
-        >
-          {token}
-        </a>,
-      );
+    } else if (token.startsWith('http') || token.startsWith('mailto:') || token.startsWith('tel:')) {
+      out.push(<MessageLinkAnchor key={k} url={token} />);
     } else if (token.startsWith('<t:')) {
       const [, unix, style] = /^<t:(\d+)(?::(\w))?>$/.exec(token)!;
       const date = new Date(Number(unix) * 1000);

@@ -4,7 +4,7 @@ import { useDm } from '../../dm/store.ts';
 import { useOutbox } from '../outbox.ts';
 import { play } from '../sound.ts';
 import { useCommunity } from '../store.ts';
-import { Modal, can } from './common.tsx';
+import { Modal, Toggle, can } from './common.tsx';
 
 interface Destination {
   key: string;
@@ -21,6 +21,18 @@ export function forwardedText(text: string, from: { name: string; channel: strin
 }
 
 /**
+ * What a forward sends (2.19): with "Show sender's name" on, the "Forwarded from" line and the
+ * text; off, only the text, as if you wrote it (Telegram's "Hide sender name").
+ */
+export function forwardBody(
+  text: string,
+  from: { name: string; channel: string },
+  showSender: boolean,
+): string {
+  return showSender ? forwardedText(text, from) : text;
+}
+
+/**
  * Forward a message to another channel or a conversation. The text is sent
  * again, encrypted for its new place; attachments are not carried over.
  */
@@ -33,6 +45,7 @@ export function ForwardDialog(props: {
   const conversations = useDm((s) => s.conversations);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showSender, setShowSender] = useState(true);
   const destinations = useMemo<Destination[]>(() => {
     const channels = communities.flatMap((c) =>
       c.channels
@@ -64,7 +77,7 @@ export function ForwardDialog(props: {
 
   const send = async (d: Destination): Promise<void> => {
     setBusy(true);
-    const ok = await d.send(forwardedText(props.text, props.from));
+    const ok = await d.send(forwardBody(props.text, props.from, showSender));
     setBusy(false);
     if (ok) {
       play('send');
@@ -76,6 +89,16 @@ export function ForwardDialog(props: {
   return (
     <Modal title="Forward message" onClose={props.onClose}>
       <blockquote className="forward__preview">{props.text.slice(0, 300)}</blockquote>
+      <Toggle
+        label="Show sender’s name"
+        help={
+          showSender
+            ? `Starts with “Forwarded from ${props.from.name}”.`
+            : 'Sent as if you wrote it, without saying who it came from.'
+        }
+        checked={showSender}
+        onChange={setShowSender}
+      />
       <label className="textfield">
         <span className="field__label">Send to</span>
         <input

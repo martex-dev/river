@@ -41,6 +41,8 @@
   --accent-glow: 0 0 8px rgba(79, 227, 209, 0.12);
   --glow: 0.35;
   --focus: var(--accent);
+  --segment-on: var(--accent);
+  --segment-ink: var(--accent-solid-ink);
   --selection: rgba(79, 227, 209, 0.32);
 
   --ok: #3ee08f;

@@ -1,13 +1,19 @@
 import type { ConversationView, DmEvent } from '../shared/dm.ts';
 import type { CommunityEvent } from '../shared/ipc.ts';
-import { conversationNotify, countsMention, effectiveNotify, mentionsYou } from '../shared/notify-rules.ts';
+import {
+  conversationNotify,
+  countsMention,
+  countsOnBadge,
+  effectiveNotify,
+  mentionsYou,
+} from '../shared/notify-rules.ts';
 import type { Settings } from '../shared/settings.ts';
 
 /**
  * The unread count on River's icon (2.17): the taskbar's overlay on Windows, the dock on macOS,
  * the launcher on Linux, the app icon on the iPhone. Like River's window title: unread direct
  * messages and groups plus @mentions in communities — never muted chats, chats or channels set
- * to Nothing, or blocked people. Android's launcher counts River's notifications by itself.
+ * to Nothing, blocked people, message requests or (unless counted, 2.19) archived chats. Android's launcher counts River's notifications by itself.
  */
 export function badgeCount(
   prefs: Settings['notifications'],
@@ -18,7 +24,8 @@ export function badgeCount(
   if (!prefs.badge) return 0;
   let n = 0;
   for (const c of conversations) {
-    if (c.state === 'blocked' || c.unread <= 0) continue;
+    // Not blocked people or message requests; archived chats only if you count them (2.19).
+    if (!countsOnBadge(c, prefs) || c.unread <= 0) continue;
     const e = conversationNotify(prefs, c.riverId, now);
     if (e.muted || e.level === 'nothing') continue;
     n += c.unread;

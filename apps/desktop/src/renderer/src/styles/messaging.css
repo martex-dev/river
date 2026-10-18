@@ -1,0 +1,279 @@
+/*
+ * Messaging, part 2 (2.19): big emoji, reply previews, saved replies, tags, message effects and
+ * the link sheet — on computers and in the phone shell (.pshell).
+ */
+
+/* ---------- Big emoji: 1–3 emoji alone show large, without a bubble (Telegram) ---------- */
+.msg__text--jumbo {
+  font-size: 40px;
+  line-height: 1.15;
+}
+.msg--jumbo-2 .msg__text--jumbo {
+  font-size: 36px;
+}
+.msg--jumbo-3 .msg__text--jumbo {
+  font-size: 32px;
+}
+.msg__text--jumbo .custom-emoji {
+  width: 1.2em;
+  height: 1.2em;
+}
+.msg.msg--jumbo .msg__body {
+  background: none !important;
+  box-shadow: none !important;
+}
+:root .pshell .chat__messages .msg.msg--jumbo .msg__body {
+  min-width: 0;
+  padding: 0 2px;
+}
+:root .pshell .chat__messages .msg.msg--jumbo .msg__body::after {
+  display: none !important;
+}
+/* The time and ticks keep a small plate of their own, readable over any wallpaper. */
+:root .pshell .chat__messages .msg--jumbo .msg__stamp {
+  top: 0;
+  float: none;
+  display: inline-flex;
+  margin: 2px 0 0;
+  padding: 0 7px;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 0.45);
+  color: #ffffff;
+  opacity: 1;
+}
+:root .pshell .chat__messages .msg--jumbo .msg__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+:root .pshell .chat__messages .msg--mine.msg--jumbo .msg__text {
+  align-items: flex-end;
+}
+:root .pshell .chat__messages .msg--jumbo .msg__reply {
+  border-radius: 8px;
+  background: var(--p-bubble-in);
+}
+
+/* ---------- Reply previews ---------- */
+.reply-bar__jump {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.reply-bar__preview {
+  overflow: hidden;
+  color: var(--text-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reply-bar__jump:hover .reply-bar__preview,
+.reply-bar__jump:focus-visible .reply-bar__preview {
+  color: var(--text);
+}
+button.msg__reply {
+  text-align: start;
+}
+
+/* ---------- Saved replies ---------- */
+.saved-replies {
+  width: min(340px, calc(100vw - 32px));
+  max-height: 360px;
+  overflow-y: auto;
+}
+.saved-replies__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.saved-replies__shortcut {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.saved-replies__text {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.saved-replies__note {
+  margin: 6px 10px;
+}
+.saved-replies-edit__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.saved-replies-edit__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+}
+.saved-replies-edit__row > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ---------- Tags on notes and saved messages ---------- */
+.msg-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 0;
+}
+.msg-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgb(var(--accent-rgb) / 0.16);
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.msg--mine .msg-tag {
+  color: inherit;
+}
+.tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.tag-filter .chip.is-on {
+  background: var(--segment-on);
+  color: var(--segment-ink);
+}
+
+/* ---------- Link sheet: a shortened link's whole address ---------- */
+.link-sheet__url {
+  max-width: min(320px, calc(100vw - 48px));
+  padding: 8px 12px;
+  color: var(--text-dim);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+/* ---------- Message effects (confetti, hearts, fireworks) ---------- */
+.msg-effect {
+  position: fixed;
+  inset: 0;
+  z-index: 215;
+  pointer-events: none;
+  overflow: hidden;
+}
+.msg-effect__piece {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--s);
+  height: calc(var(--s) * 0.45);
+  border-radius: 2px;
+  background: var(--c);
+  font-style: normal;
+  opacity: 0;
+  animation: effect-fall 2400ms cubic-bezier(0.25, 0.6, 0.4, 1) var(--d) forwards;
+}
+@keyframes effect-fall {
+  0% {
+    opacity: 0;
+    transform: translate(0, -40px) rotate(0);
+  }
+  8% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), 105vh) rotate(var(--r));
+  }
+}
+.msg-effect--hearts .msg-effect__piece {
+  top: auto;
+  bottom: -60px;
+  width: auto;
+  height: auto;
+  background: none;
+  font-size: var(--s);
+  line-height: 1;
+  animation-name: effect-rise;
+  animation-duration: 2300ms;
+}
+@keyframes effect-rise {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.6);
+  }
+  12% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), -95vh) scale(1.1) rotate(var(--r));
+  }
+}
+.msg-effect--fireworks .msg-effect__piece {
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--c);
+  animation-name: effect-spark;
+  animation-duration: 1300ms;
+  animation-timing-function: cubic-bezier(0.1, 0.8, 0.3, 1);
+}
+@keyframes effect-spark {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(0.4);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), calc(var(--dy) + 40px)) scale(0.8);
+  }
+}
+/* Never with reduced motion or Calm mode (they are not even rendered then; this is a backstop). */
+html[data-motion='reduced'] .msg-effect,
+html[data-calm='on'] .msg-effect {
+  display: none;
+}
+.msg__effect {
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.8;
+}
+.msg__effect:hover,
+.msg__effect:focus-visible {
+  opacity: 1;
+}

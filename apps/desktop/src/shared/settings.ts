@@ -146,6 +146,11 @@ export const settingsSchema = z.object({
     badge: z.boolean(),
     /** Added in 2.17: a small banner inside River for messages in other chats while it is open. */
     banners: z.boolean(),
+    /**
+     * Added in 2.19: archived chats count towards the Chats and Home badges (and River's icon).
+     * Off by default, as in Telegram; message requests never count.
+     */
+    countArchived: z.boolean(),
     /** Added in 1.0.20: no notifications or sounds between these local times (like Do Not Disturb). */
     quietHours: z
       .object({
@@ -288,6 +293,7 @@ export const DEFAULT_SETTINGS: Settings = {
     reactions: false,
     badge: true,
     banners: true,
+    countArchived: false,
   },
   server: { url: null, autoAccount: true },
   voice: {

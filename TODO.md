@@ -29,6 +29,9 @@ Plan: [docs/product/road-to-3.md](docs/product/road-to-3.md). Many releases, one
   - [x] Chat wallpapers (app and per chat; doodles, gradients, colour, photo), accent picker, bubble shapes, theme codes, live preview, reaction bursts, Calm mode
   - [ ] Alternative app icons — skipped for now: Android launcher aliases can drop home-screen shortcuts and restart the app; Windows taskbars show the pinned shortcut's icon
 - [ ] 2.19.x Messaging, part 2
+  - [x] Big emoji, reply previews with jump, saved replies (/ and a button, this device only), tags for Note to self and saved messages, message effects (Calm mode and reduced motion respected; 2.18 apps ignore them), Count archived chats, Calls segment contrast, shortened links with the whole address, safe mailto:/tel:, forward without the sender's name
+  - [ ] Copy saved replies and tags to linked devices (needs a sync path for settings)
+  - [ ] Richer editor, more sticker and emoji tools
 - [ ] 2.20.x Privacy, part 2: less metadata, padding, proxy-friendly connections
 - [ ] 2.21.x Whole-app sweep
 

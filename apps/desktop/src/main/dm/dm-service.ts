@@ -42,6 +42,12 @@ import {
   type ChatFolder,
   MAX_FOLDERS,
   MAX_TIMER,
+  isMessageEffect,
+  MAX_SAVED_REPLIES,
+  MAX_TAGGED_MESSAGES,
+  TAG_RE,
+  type MessageTags,
+  type SavedReply,
 } from '../../shared/dm.ts';
 import type { AccountService } from '../account/account-service.ts';
 import { CommunityError, type CommunityService } from '../community/community-service.ts';
@@ -149,6 +155,12 @@ const messageFields = {
   poll: pollInputSchema.optional(),
   /** The sender's link preview (2.10.6). */
   embed: linkEmbedSchema.optional(),
+  /**
+   * A full-screen effect (2.19). Any short name is accepted so a newer app's effect never drops
+   * the message; only effects this app knows are kept. Apps before 2.19 strip it ('msg' is not
+   * strict). Never put into 'sync': that one is strict there, so linked devices on 2.18 would drop it.
+   */
+  effect: z.string().max(24).optional(),
 };
 
 const contentSchema = z.discriminatedUnion('t', [
@@ -1156,6 +1168,7 @@ export class DmService {
               ...(content.silent ? { silent: true } : {}),
               ...(content.poll ? { poll: content.poll } : {}),
               ...(content.embed ? { embed: content.embed } : {}),
+              ...(isMessageEffect(content.effect) ? { effect: content.effect } : {}),
             }),
             sentAt,
             expiresAt,
@@ -2133,6 +2146,52 @@ export class DmService {
           this.setMeta('folders', JSON.stringify(list));
           return out(list);
         }
+        case 'savedReplies':
+          return out(this.savedReplyList());
+        case 'saveReply': {
+          const list = this.savedReplyList();
+          const shortcut = act.shortcut.trim();
+          const clash = list.find(
+            (r) => r.id !== act.id && r.shortcut.toLowerCase() === shortcut.toLowerCase(),
+          );
+          if (clash) throw new CommunityError(`You already have a saved reply called /${clash.shortcut}.`);
+          if (act.id) {
+            const i = list.findIndex((r) => r.id === act.id);
+            if (i < 0) throw new CommunityError('That saved reply is gone.');
+            list[i] = { id: act.id, shortcut, text: act.text };
+          } else {
+            if (list.length >= MAX_SAVED_REPLIES)
+              throw new CommunityError(`You can have up to ${MAX_SAVED_REPLIES} saved replies.`);
+            list.push({ id: randomBytes(16).toString('base64url'), shortcut, text: act.text });
+          }
+          this.setMeta('savedReplies', JSON.stringify(list));
+          return out(list);
+        }
+        case 'deleteReply': {
+          const list = this.savedReplyList().filter((r) => r.id !== act.id);
+          this.setMeta('savedReplies', JSON.stringify(list));
+          return out(list);
+        }
+        case 'messageTags':
+          return out(this.messageTags());
+        case 'tagMessage': {
+          const tags = this.messageTags();
+          // The same tag once, whatever its case.
+          const seen = new Set<string>();
+          const next = act.tags.filter((t) => {
+            const k = t.toLowerCase();
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+          });
+          if (next.length) {
+            if (!tags[act.key] && Object.keys(tags).length >= MAX_TAGGED_MESSAGES)
+              throw new CommunityError(`You can tag up to ${MAX_TAGGED_MESSAGES} messages.`);
+            tags[act.key] = next;
+          } else delete tags[act.key];
+          this.setMeta('messageTags', JSON.stringify(tags));
+          return out(tags);
+        }
         case 'noteToSelf': {
           const me = this.me();
           if (!this.contact(me)) this.upsertContact(me, 'accepted', NOTE_TO_SELF, null);
@@ -2821,6 +2880,7 @@ export class DmService {
       attachments: act.attachments,
       ...(act.poll ? { poll: act.poll } : {}),
       ...(act.embed ? { embed: act.embed } : {}),
+      ...(act.effect ? { effect: act.effect } : {}),
     };
     const ttl = this.timerOf(act.peer);
     const expiresAt = ttl ? new Date(Date.parse(sentAt) + ttl * 1000).toISOString() : null;
@@ -2855,6 +2915,7 @@ export class DmService {
         ...(act.silent ? { silent: true } : {}),
         ...(act.poll ? { poll: act.poll } : {}),
         ...(act.embed ? { embed: act.embed } : {}),
+        ...(act.effect ? { effect: act.effect } : {}),
       });
       if (undelivered.length) {
         // Some group members did not get it (the others did): recorded on the message.
@@ -2964,6 +3025,7 @@ export class DmService {
       poll?: unknown;
       embed?: unknown;
       undelivered?: unknown;
+      effect?: unknown;
     };
     const me = this.me();
     const reactions = JSON.parse(r.reactions) as Record<string, string[]>;
@@ -3000,6 +3062,7 @@ export class DmService {
       embed: r.deleted ? null : this.embedOf(body.embed, String(body.text ?? '')),
       notice: body.notice && typeof body.notice.timer === 'number' ? { timer: body.notice.timer } : null,
       ...(undelivered.length && r.sender === me ? { undeliveredTo: undelivered } : {}),
+      ...(!r.deleted && isMessageEffect(body.effect) ? { effect: body.effect } : {}),
     };
   }
 
@@ -3288,6 +3351,43 @@ export class DmService {
         .slice(0, MAX_FOLDERS);
     } catch {
       return [];
+    }
+  }
+
+  /** Saved replies (2.19), in this device's encrypted database. */
+  private savedReplyList(): SavedReply[] {
+    try {
+      const raw: unknown = JSON.parse(this.meta('savedReplies') ?? '[]');
+      if (!Array.isArray(raw)) return [];
+      return raw
+        .filter(
+          (r): r is SavedReply =>
+            !!r &&
+            typeof r === 'object' &&
+            typeof (r as SavedReply).id === 'string' &&
+            typeof (r as SavedReply).shortcut === 'string' &&
+            typeof (r as SavedReply).text === 'string',
+        )
+        .slice(0, MAX_SAVED_REPLIES);
+    } catch {
+      return [];
+    }
+  }
+
+  /** Tags on notes and saved messages (2.19), in this device's encrypted database. */
+  private messageTags(): MessageTags {
+    try {
+      const raw: unknown = JSON.parse(this.meta('messageTags') ?? '{}');
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+      const out: MessageTags = {};
+      for (const [key, tags] of Object.entries(raw as Record<string, unknown>)) {
+        if (!Array.isArray(tags)) continue;
+        const kept = tags.filter((t): t is string => typeof t === 'string' && TAG_RE.test(t));
+        if (kept.length) out[key] = kept;
+      }
+      return out;
+    } catch {
+      return {};
     }
   }
 

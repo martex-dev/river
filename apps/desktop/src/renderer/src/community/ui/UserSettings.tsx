@@ -554,6 +554,12 @@ export function NotificationSettings(): ReactElement {
         onChange={(v) => void update({ notifications: { badge: v } })}
       />
       <Toggle
+        label="Count archived chats"
+        help="Unread messages in archived chats count on the Chats and Home badges and on River’s icon. Off: archived chats wait quietly in Archived. Message requests are never counted."
+        checked={n.countArchived}
+        onChange={(v) => void update({ notifications: { countArchived: v } })}
+      />
+      <Toggle
         label="Reactions to my messages"
         help="A sound and a small notice when someone reacts to something you wrote (while that channel is loaded)."
         checked={n.reactions}

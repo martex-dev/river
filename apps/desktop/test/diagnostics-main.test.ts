@@ -78,4 +78,25 @@ describe('links from messages', { timeout: 30_000 }, () => {
     ])
       expect(safeExternalUrl(bad)).toBeNull();
   });
+
+  it('an email address or phone number may go to the mail or phone app, but nothing filled in (2.19)', async () => {
+    const { safeExternalUrl } = await import('../src/main/ipc.ts');
+    expect(safeExternalUrl('mailto:ana@example.org')?.href).toBe('mailto:ana@example.org');
+    expect(safeExternalUrl('tel:+359888123456')?.href).toBe('tel:+359888123456');
+    expect(safeExternalUrl('tel:0888-123-456')?.protocol).toBe('tel:');
+    for (const bad of [
+      'mailto:ana@example.org?subject=hi',
+      'mailto:ana@example.org?attach=/etc/passwd',
+      'mailto:ana@example.org,eve@example.org',
+      'mailto:ana@example.org#x',
+      'mailto:not-an-address',
+      'mailto://ana@example.org',
+      'tel:*21*123#',
+      'tel:+1;phone-context=x',
+      'tel:javascript:alert(1)',
+      'sms:+359888123456',
+      'callto:+359888123456',
+    ])
+      expect(safeExternalUrl(bad), bad).toBeNull();
+  });
 });
