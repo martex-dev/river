@@ -4,7 +4,7 @@ import { fromOverlay, haptic, useMessageGestures } from '../components/gestures.
 import { burst } from '../appearance/delight.tsx';
 import { ChatWallpaperDialog, useChatWallpaper } from '../appearance/ChatWallpaper.tsx';
 import { dmKey } from '../appearance/wallpaper.ts';
-import { composing, enterSends } from '../components/keys.ts';
+import { enterSends } from '../components/keys.ts';
 import { isPhone } from '../../../shared/platform.ts';
 import { localDay, newSince } from '../components/unread.ts';
 import { CreatePollDialog, PollCard } from '../community/ui/Poll.tsx';

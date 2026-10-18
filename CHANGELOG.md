@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.18.1] - 2026-10-18
+
+**Eighteen phone fixes: Back, editing, menus, calls and layout.**
+
 ### Fixed
 
 - **Phone: Back no longer leaves River from inside the archived chats** — it
