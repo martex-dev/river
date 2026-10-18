@@ -1581,6 +1581,73 @@ describe('communities', () => {
       );
       for (const c of [one, two, boss]) c.ws.close();
     });
+    it('losing access to a voice channel ends your seat there and says so (2.20)', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, voice } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const vip = await role(a, owner.token, cid, 0);
+      // Only VIPs may connect to the voice channel.
+      const overwrites = (everyoneDeny: number) => [
+        { roleId: cid, allow: 0, deny: everyoneDeny },
+        { roleId: vip.rid, allow: Permission.CONNECT, deny: 0 },
+      ];
+      expect(
+        await status(a, 'PATCH', `/v1/channels/${voice}`, owner.token, {
+          overwrites: overwrites(Permission.CONNECT),
+        }),
+      ).toBe(200);
+      expect((await assign(a, owner.token, cid, member.riverId, [vip.rid])).statusCode).toBe(200);
+
+      await a.listen({ host: '127.0.0.1', port: 0 });
+      const { port } = a.server.address() as { port: number };
+      const connect = async (token: string) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/ws`);
+        const events: Array<{ t: string; code?: string; channelId?: string; participants?: string[] }> = [];
+        ws.onmessage = (m) => events.push(JSON.parse(String(m.data)));
+        await new Promise((resolve, reject) => {
+          ws.onopen = resolve;
+          ws.onerror = reject;
+        });
+        ws.send(JSON.stringify({ t: 'auth', token }));
+        await vi.waitFor(() => expect(events.some((e) => e.t === 'ready')).toBe(true));
+        return { ws, events };
+      };
+      const boss = await connect(owner.token);
+      const guest = await connect(member.token);
+      const inVoice = (n: number) =>
+        vi.waitFor(() => {
+          const last = boss.events.filter((e) => e.t === 'voice' && e.channelId === voice).at(-1);
+          expect(last?.participants?.length).toBe(n);
+        });
+      boss.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      guest.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      await inVoice(2);
+
+      // The role that let them in is taken away: out of the channel at once, and told so.
+      expect((await assign(a, owner.token, cid, member.riverId, [])).statusCode).toBe(200);
+      await vi.waitFor(() => expect(guest.events).toContainEqual({ t: 'voice.disconnect' }));
+      await inVoice(1);
+      guest.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      await vi.waitFor(() => expect(guest.events).toContainEqual({ t: 'error', code: 'voice_forbidden' }));
+
+      // Back in with the role; then the channel is hidden from everyone but the owner.
+      expect((await assign(a, owner.token, cid, member.riverId, [vip.rid])).statusCode).toBe(200);
+      const before = guest.events.filter((e) => e.t === 'voice.disconnect').length;
+      guest.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      await inVoice(2);
+      expect(
+        await status(a, 'PATCH', `/v1/channels/${voice}`, owner.token, {
+          overwrites: overwrites(Permission.CONNECT | Permission.VIEW_CHANNELS),
+        }),
+      ).toBe(200);
+      await vi.waitFor(() =>
+        expect(guest.events.filter((e) => e.t === 'voice.disconnect').length).toBe(before + 1),
+      );
+      await inVoice(1);
+      for (const c of [boss, guest]) c.ws.close();
+    });
+
     it('soundboard: managers add sounds, people in voice who may speak play them, with a cooldown', async () => {
       const a = await start();
       const owner = await user(a);

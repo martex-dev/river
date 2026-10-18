@@ -21,6 +21,9 @@ All notable changes to River are documented here. The format follows
 - Communities: a timeout now also stops editing your own messages, renaming
   your threads and pinning (as it already stopped posting, reacting, starting
   threads and voice).
+- Communities: losing access to a voice channel (a role taken away, a
+  permission or channel overwrite changed, a temporary role over) now ends
+  your seat in it at once, instead of leaving you listening.
 
 ## [2.20.0] - 2026-10-18
 

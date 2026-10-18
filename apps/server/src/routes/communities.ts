@@ -232,8 +232,12 @@ export async function registerCommunityRoutes(
       model.members.map((m) => m.riverId),
       event,
     );
-  const changed = (model: CommunityModel): void =>
+  const changed = (model: CommunityModel): void => {
     toMembers(model, { t: 'community', communityId: model.id });
+    // Whatever changed (roles, overwrites, a category, screening) may have taken someone's
+    // access to the voice channel they are in.
+    void enforceVoiceAccess(model.id).catch(() => undefined);
+  };
   /** Members a moderator just moved: they may join that channel once even if it is full (1.0.39). */
   const movePasses = new Map<string, { channelId: string; until: number }>();
   const voiceUpdate = async (communityId: string, channelId: string): Promise<void> => {
@@ -248,6 +252,34 @@ export async function registerCommunityRoutes(
     });
   };
   hub.onSeatExpired = (left) => void voiceUpdate(left.communityId, left.channelId).catch(() => undefined);
+  /**
+   * Ends the seat of everyone in a voice channel they may no longer see or connect to (a role,
+   * an overwrite, a category or a timeout changed; a temporary role ran out), and tells them, as
+   * endVoice does for a deleted channel (2.20). Before, they stayed in and kept hearing it.
+   */
+  const enforceVoiceAccess = async (communityId: string): Promise<void> => {
+    const rooms = hub.rooms(communityId);
+    if (!rooms.length) return;
+    const model = await loadCommunity(db, communityId);
+    if (!model) return;
+    const emptied = new Set<string>();
+    for (const room of rooms) {
+      for (const id of room.participants) {
+        if (hub.voiceChannelOf(id) !== room.channelId) continue;
+        if (model.can(id, Permission.VIEW_CHANNELS | Permission.CONNECT, room.channelId)) continue;
+        hub.leaveVoice(id);
+        hub.sendTo([id], { t: 'voice.disconnect' });
+        emptied.add(room.channelId);
+      }
+    }
+    for (const channelId of emptied) await voiceUpdate(communityId, channelId);
+  };
+  // Temporary roles run out without a request: look at occupied voice channels every minute.
+  const voiceAccessTimer = setInterval(() => {
+    for (const id of hub.voiceCommunities()) void enforceVoiceAccess(id).catch(() => undefined);
+  }, 60_000);
+  voiceAccessTimer.unref?.();
+  app.addHook('onClose', async () => clearInterval(voiceAccessTimer));
   const pushMessage = async (model: CommunityModel, messageId: string): Promise<void> => {
     const row = await db.selectFrom('messages').selectAll().where('id', '=', messageId).executeTakeFirst();
     if (!row) return;

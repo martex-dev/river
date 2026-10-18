@@ -139,6 +139,11 @@ Videos and other files are sent as they are, and file names are kept.
   reaction and moderating others stay possible; owners and administrators are
   never timed out. Profiles can still be republished: the app must reseal them
   after a key rotation.
+- **Voice follows access.** Someone whose role or a channel's (or category's)
+  overwrites stopped letting them see or connect to the voice channel they were
+  in stayed in it. Since 2.20 the server ends their seat at once and tells
+  their app, as for a deleted channel; a temporary role that runs out is
+  noticed within a minute.
 
 ### 5a. Address relay (River Host, 1.0.8)
 
