@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from 'react';
+import { memo, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { CommunityView, MemberView } from '../../../../shared/ipc.ts';
 import type { NoteView } from '../../../../shared/community-actions.ts';
@@ -11,20 +11,11 @@ import { Avatar, CrownIcon, CustomStatus, Popover, XIcon, can, hex, presenceOf }
 
 export function MemberList({ community, me }: { community: CommunityView; me: string }): ReactElement {
   const [card, setCard] = useState<{ member: MemberView; x: number; y: number } | null>(null);
-  const byName = (a: MemberView, b: MemberView): number => a.name.localeCompare(b.name);
-  const online = community.members.filter((m) => m.online);
-  const offline = community.members.filter((m) => !m.online).sort(byName);
-  // Online members are grouped under their highest role that is shown separately (hoisted).
-  const groups: Array<{ key: string; title: string; members: MemberView[] }> = [];
-  const placed = new Set<string>();
-  for (const role of community.roles.filter((r) => !r.everyone && r.hoist)) {
-    const members = online.filter((m) => !placed.has(m.riverId) && m.roles.includes(role.id)).sort(byName);
-    for (const m of members) placed.add(m.riverId);
-    if (members.length) groups.push({ key: role.id, title: role.name, members });
-  }
-  const rest = online.filter((m) => !placed.has(m.riverId)).sort(byName);
-  if (rest.length) groups.push({ key: 'online', title: 'Online', members: rest });
-  if (offline.length) groups.push({ key: 'offline', title: 'Offline', members: offline });
+  // Grouped and sorted again only when the members or roles change (not on every message).
+  const groups = useMemo(
+    () => memberGroups(community.members, community.roles),
+    [community.members, community.roles],
+  );
 
   return (
     <aside className="community__members" aria-label="Members">
@@ -50,37 +41,7 @@ export function MemberList({ community, me }: { community: CommunityView; me: st
             </span>
           </div>
           {g.members.map((m) => (
-            <button
-              key={m.riverId}
-              className={`member ${m.online ? '' : 'is-offline'}`}
-              onClick={(e) => setCard({ member: m, x: e.clientX - 330, y: e.clientY - 40 })}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setCard({ member: m, x: e.clientX - 330, y: e.clientY - 40 });
-              }}
-            >
-              <Avatar id={m.riverId} name={m.name} avatar={m.avatar} size={32} status={presenceOf(m)} />
-              <span className="member__text">
-                <span
-                  className="member__name"
-                  title={m.name}
-                  style={m.color ? { color: hex(m.color) } : undefined}
-                >
-                  {m.name}
-                  {m.roleIcon && (
-                    <span className="role-icon" aria-hidden="true">
-                      {m.roleIcon}
-                    </span>
-                  )}
-                </span>
-                <CustomStatus member={m} />
-              </span>
-              {m.owner && (
-                <span className="member__crown" title="Community owner">
-                  <CrownIcon size={14} />
-                </span>
-              )}
-            </button>
+            <MemberRow key={m.riverId} m={m} onCard={setCard} />
           ))}
         </div>
       ))}
@@ -97,6 +58,64 @@ export function MemberList({ community, me }: { community: CommunityView; me: st
     </aside>
   );
 }
+
+type Groups = Array<{ key: string; title: string; members: MemberView[] }>;
+
+function memberGroups(all: MemberView[], roles: CommunityView['roles']): Groups {
+  const byName = (a: MemberView, b: MemberView): number => a.name.localeCompare(b.name);
+  const online = all.filter((m) => m.online);
+  const offline = all.filter((m) => !m.online).sort(byName);
+  // Online members are grouped under their highest role that is shown separately (hoisted).
+  const groups: Groups = [];
+  const placed = new Set<string>();
+  for (const role of roles.filter((r) => !r.everyone && r.hoist)) {
+    const members = online.filter((m) => !placed.has(m.riverId) && m.roles.includes(role.id)).sort(byName);
+    for (const m of members) placed.add(m.riverId);
+    if (members.length) groups.push({ key: role.id, title: role.name, members });
+  }
+  const rest = online.filter((m) => !placed.has(m.riverId)).sort(byName);
+  if (rest.length) groups.push({ key: 'online', title: 'Online', members: rest });
+  if (offline.length) groups.push({ key: 'offline', title: 'Offline', members: offline });
+  return groups;
+}
+
+/** One member; memoised (members keep their objects while unchanged, see structural.ts). */
+const MemberRow = memo(function MemberRow({
+  m,
+  onCard,
+}: {
+  m: MemberView;
+  onCard(card: { member: MemberView; x: number; y: number }): void;
+}): ReactElement {
+  return (
+    <button
+      className={`member ${m.online ? '' : 'is-offline'}`}
+      onClick={(e) => onCard({ member: m, x: e.clientX - 330, y: e.clientY - 40 })}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onCard({ member: m, x: e.clientX - 330, y: e.clientY - 40 });
+      }}
+    >
+      <Avatar id={m.riverId} name={m.name} avatar={m.avatar} size={32} status={presenceOf(m)} />
+      <span className="member__text">
+        <span className="member__name" title={m.name} style={m.color ? { color: hex(m.color) } : undefined}>
+          {m.name}
+          {m.roleIcon && (
+            <span className="role-icon" aria-hidden="true">
+              {m.roleIcon}
+            </span>
+          )}
+        </span>
+        <CustomStatus member={m} />
+      </span>
+      {m.owner && (
+        <span className="member__crown" title="Community owner">
+          <CrownIcon size={14} />
+        </span>
+      )}
+    </button>
+  );
+});
 
 export function ProfileCard(props: {
   community: CommunityView;

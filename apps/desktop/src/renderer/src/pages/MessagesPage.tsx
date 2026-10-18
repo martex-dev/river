@@ -30,7 +30,16 @@ import {
   useGrowToFit,
   useStickToBottom,
 } from '../components/chat-ui.ts';
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import {
+  Fragment,
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import {
   TIMER_CHOICES,
   timerLabel,
@@ -659,8 +668,12 @@ export function chatFlags(
   });
 }
 
-function ConversationRow({ c }: { c: ConversationView }): ReactElement {
-  const dm = useDm();
+/**
+ * One chat in the list. Memoised, and subscribed only to its own selection and typing: a message
+ * in one chat no longer draws every row of a long list again.
+ */
+const ConversationRow = memo(function ConversationRow({ c }: { c: ConversationView }): ReactElement {
+  const active = useDm((x) => x.selected === c.riverId);
   useDm((x) => x.typing[c.riverId]);
   const typing = isTyping(c.riverId);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -670,8 +683,8 @@ function ConversationRow({ c }: { c: ConversationView }): ReactElement {
       <button
         {...hold}
         onClickCapture={guardClick}
-        className={`dm-row ${dm.selected === c.riverId ? 'is-active' : ''} ${c.unread || c.markedUnread ? 'is-unread' : ''} ${c.state === 'blocked' ? 'is-blocked' : ''}`}
-        aria-current={dm.selected === c.riverId ? 'page' : undefined}
+        className={`dm-row ${active ? 'is-active' : ''} ${c.unread || c.markedUnread ? 'is-unread' : ''} ${c.state === 'blocked' ? 'is-blocked' : ''}`}
+        aria-current={active ? 'page' : undefined}
         onClick={() => openDm(c.riverId)}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -749,7 +762,7 @@ function ConversationRow({ c }: { c: ConversationView }): ReactElement {
       )}
     </>
   );
-}
+});
 
 export function Conversation(props: { conversation: ConversationView; onSafety(): void }): ReactElement {
   const c = props.conversation;

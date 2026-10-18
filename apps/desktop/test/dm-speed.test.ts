@@ -159,13 +159,15 @@ describe('chat list with many chats', () => {
       }
       return n;
     };
-    const add = (k: number): void => {
-      for (let i = 0; i < k; i++) {
-        const id = randomUUID();
-        contact(id, `P${i}`);
-        message(id, id, 'hi', at(i));
-      }
-    };
+    // One transaction per batch: a commit per row is a disk flush each on Windows.
+    const add = (k: number): void =>
+      db.transaction(() => {
+        for (let i = 0; i < k; i++) {
+          const id = randomUUID();
+          contact(id, `P${i}`);
+          message(id, id, 'hi', at(i));
+        }
+      })();
     add(3);
     dm.conversations();
     const few = count();
