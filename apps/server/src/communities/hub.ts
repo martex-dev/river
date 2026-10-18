@@ -158,6 +158,10 @@ export class Hub {
   admitRelay(sender: string, now: number): boolean {
     const scope = this.relayScope(sender);
     if (!scope) return false;
+    // In a voice channel, server mute (a stage's audience included) holds for relayed voice too
+    // (2.18): an app that ignores it is not forwarded, nor does it take a place among the people
+    // talking.
+    if (this.voiceOf.has(sender) && this.stateOf(sender).serverMuted) return false;
     let speakers = this.relaySpeakers.get(scope);
     if (!speakers) this.relaySpeakers.set(scope, (speakers = new RelaySpeakers()));
     return speakers.admit(sender, now);
@@ -282,6 +286,8 @@ export class Hub {
    */
   sendRelay(sender: string, to: string, frame: Buffer): void {
     const ch = this.voiceOf.get(sender);
+    // Server deafen holds for relayed voice too (2.18): nothing reaches a deafened member's app.
+    if (ch && this.voiceOf.get(to) === ch && this.stateOf(to).serverDeafened) return;
     const owner = ch && this.voiceOf.get(to) === ch ? this.voiceSocket.get(to) : this.roomSocket.get(to);
     const sockets = this.sockets.get(to);
     if (owner && sockets?.has(owner)) owner.send(frame);

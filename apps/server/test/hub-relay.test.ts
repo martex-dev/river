@@ -28,6 +28,36 @@ describe('hub voice relay', () => {
     hub.close();
   });
 
+  it('forwards nothing from a server-muted member, nor to a server-deafened one (2.18)', () => {
+    const hub = new Hub();
+    const sockets = { a: socket(), b: socket() };
+    hub.add('a', sockets.a);
+    hub.add('b', sockets.b);
+    hub.joinVoice('a', 'k', 'ch', sockets.a);
+    hub.joinVoice('b', 'k', 'ch', sockets.b);
+    expect(hub.admitRelay('a', 0)).toBe(true);
+    // A moderator mutes a (or a is in a stage's audience): an app ignoring it is not forwarded.
+    hub.setState('a', { serverMuted: true });
+    expect(hub.admitRelay('a', 20)).toBe(false);
+    // ... and b, deafened, gets nobody's voice.
+    hub.setState('b', { serverDeafened: true });
+    hub.sendRelay('a', 'b', Buffer.from([1]));
+    expect(sockets.b.got).toBe(0);
+    hub.setState('a', { serverMuted: false });
+    hub.setState('b', { serverDeafened: false });
+    expect(hub.admitRelay('a', 40)).toBe(true);
+    hub.sendRelay('a', 'b', Buffer.from([1]));
+    expect(sockets.b.got).toBe(1);
+    // Private call rooms have no server mute: a member muted in some community still talks there.
+    hub.leaveVoice('a');
+    hub.leaveVoice('b');
+    hub.setState('a', { serverMuted: true });
+    hub.joinRoom('a', 'room', 2, sockets.a);
+    hub.joinRoom('b', 'room', 2, sockets.b);
+    expect(hub.admitRelay('a', 60)).toBe(true);
+    hub.close();
+  });
+
   it('knows everyone a person may relay to: their voice channel, else their call room', () => {
     const hub = new Hub();
     for (const id of ['a', 'b', 'c', 'd']) hub.add(id, socket());
