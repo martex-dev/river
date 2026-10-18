@@ -542,6 +542,18 @@ export function NotificationSettings(): ReactElement {
         onChange={(v) => void update({ notifications: { desktop: v } })}
       />
       <Toggle
+        label="Banners inside River"
+        help="While River is open, a small banner shows new messages from other chats and channels. Tap it to open the chat. Muted chats stay quiet."
+        checked={n.banners}
+        onChange={(v) => void update({ notifications: { banners: v } })}
+      />
+      <Toggle
+        label="Unread count on River’s icon"
+        help="The number of unread messages and mentions on River’s taskbar or dock icon (and the iPhone’s app icon). Muted chats are not counted. On Android the launcher shows it from River’s notifications."
+        checked={n.badge}
+        onChange={(v) => void update({ notifications: { badge: v } })}
+      />
+      <Toggle
         label="Reactions to my messages"
         help="A sound and a small notice when someone reacts to something you wrote (while that channel is loaded)."
         checked={n.reactions}

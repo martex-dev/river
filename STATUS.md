@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-18 · Current version: **2.16.0** · Stage 1 and Stage 2 complete: Windows, macOS, Linux, Android, iPhone; linked devices; remote assistance (see and point)_
+_Last updated: 2026-10-18 · Current version: **2.17.0** · Stage 1 and Stage 2 complete: Windows, macOS, Linux, Android, iPhone; linked devices; remote assistance (see and point)_
 
 ## Complete
 
@@ -66,6 +66,7 @@ _Last updated: 2026-10-18 · Current version: **2.16.0** · Stage 1 and Stage 2 
 - **Phone shell** (2.13.0): on Android and iPhone a Telegram / Instagram-style layout (tab bar: Chats, Communities, Calls, Feed, Settings; full-screen conversations with bubbles; Back and the iPhone edge swipe pop screens) over the same pages and stores as the desktop (`apps/desktop/src/renderer/src/phone`, tests in `apps/desktop/test/phone-nav.test.tsx`). Computers keep the Discord-style layout. Not yet checked on a real phone.
 - **Phones, day to day** (1.4.0): Stay connected on Android (a visible foreground service), calls that keep going with the screen off, Share → River, replies from notifications, swipe navigation. Unreleased (2.12 native sweep): reconnect as soon as the network changes, no crash when Android refuses Stay connected's restart, other apps' call audio left alone, iPhone notifications removed on sign-out; `tests/mobile` checks the Android manifest and the libsignal stand-in's API.
 - **Android rings like a phone** (unreleased): own call screen over the lock screen with ringtone and vibration, CallStyle call notifications, per-conversation message notifications with lock-screen privacy, Stay connected on for new installs with a connection watchdog and restart after reboot, Settings → System → Calls and notifications. Native code not yet compiled or tried on a real phone (CI builds the APK). iPhone cannot ring or notify while paused (no Apple push).
+- **Notifications like Telegram's** (unreleased, 2.17): per-chat levels (All / Only @mentions and replies / Nothing), mutes and sounds for chats, channels, categories and communities, "ignore @everyone and @here" per community, one notification per conversation (computers replace it with a summary; Android groups conversations under a summary, sound channels per tone; iPhone threads), cleared when read on any device, Mark as read, unread badges (Windows overlay, macOS dock, iPhone icon; Android's launcher from notification counts), in-app banners (`notification-groups.test.ts`, `badge.test.ts`, `in-app-banner.test.tsx`, `notify-menu.test.tsx`, `tests/mobile/notify-tones.test.ts`). Native code not yet compiled here or tried on a real phone.
 - **River for iPhone** (1.3.0, `apps/mobile/ios`): the shared client core in its own WKWebView with libsignal (LibSignalClient), SQLCipher and the Keychain; built and started in a simulator in CI; shipped as an unsigned .ipa for sideloading until there is an Apple developer account.
 - **Linked devices** (1.2.0, ADR 0006): one account on several devices — link with a code or a QR code, see and remove devices; direct messages reach every device.
 - **River for Android** (1.1.0, `apps/mobile`): built and tested on an emulator in CI

@@ -121,14 +121,21 @@ type ClickListener = () => void;
 
 /** A system notification, shown by the app shell; tapping it opens River and runs the click handler. */
 type ReplyListener = (event: unknown, reply: string) => void;
+/** A button on it (2.17: Mark as read), by its index. */
+type ActionListener = (event: unknown, index: number) => void;
 
-/** Set by the desktop's notifications.ts (PhoneHints): grouping, lock-screen privacy, waking the screen. */
+/**
+ * Set by the desktop's notifications.ts (PhoneHints): grouping, lock-screen privacy, waking the
+ * screen, and (2.17) the conversation's sound and how many messages it stands for.
+ */
 interface PhoneHints {
   conversation: string;
   sender: string | null;
   group: string | null;
   lockScreen: boolean;
   wake: boolean;
+  sound?: string;
+  count?: number;
 }
 
 export class Notification {
@@ -137,15 +144,24 @@ export class Notification {
   /** Names it, so close() can take it away again (an incoming call's notification). */
   phoneTag?: string;
   private shown = false;
-  private readonly options: { title: string; body: string; reply: boolean; call: boolean };
+  private readonly options: {
+    title: string;
+    body: string;
+    reply: boolean;
+    call: boolean;
+    markRead: boolean;
+  };
   private readonly clicks: ClickListener[] = [];
   private readonly replies: ReplyListener[] = [];
+  private readonly actions: ActionListener[] = [];
+  private readonly closes: ClickListener[] = [];
   constructor(options: {
     title: string;
     body: string;
     silent?: boolean;
     hasReply?: boolean;
     urgency?: 'normal' | 'critical' | 'low';
+    actions?: Array<{ type: 'button'; text: string }>;
   }) {
     this.options = {
       title: options.title,
@@ -153,16 +169,23 @@ export class Notification {
       reply: options.hasReply === true,
       // A critical notification is an incoming call: phones ring for it.
       call: options.urgency === 'critical',
+      // Its one button is Mark as read (notifications.ts, 2.17), shown next to Reply.
+      markRead: (options.actions?.length ?? 0) > 0,
     };
   }
   static isSupported(): boolean {
     return true;
   }
-  on(event: 'click', listener: ClickListener): this;
+  on(event: 'click' | 'close', listener: ClickListener): this;
   on(event: 'reply', listener: ReplyListener): this;
-  on(event: 'click' | 'reply', listener: ClickListener | ReplyListener): this {
+  on(event: 'action', listener: ActionListener): this;
+  on(event: string, listener: ClickListener | ReplyListener | ActionListener): this;
+  on(event: string, listener: ClickListener | ReplyListener | ActionListener): this {
     if (event === 'click') this.clicks.push(listener as ClickListener);
     if (event === 'reply') this.replies.push(listener as ReplyListener);
+    if (event === 'action') this.actions.push(listener as ActionListener);
+    // Swiped away, or replaced by its conversation's next notification.
+    if (event === 'close') this.closes.push(listener as ClickListener);
     return this;
   }
   show(): void {
@@ -181,14 +204,19 @@ export class Notification {
             group: h.group,
             lockScreen: h.lockScreen === true,
             wake: h.wake === true,
+            sound: typeof h.sound === 'string' ? h.sound.slice(0, 32) : 'default',
+            count: Number.isInteger(h.count) && h.count! > 0 ? Math.min(h.count!, 999) : 1,
           }
         : { lockScreen: false, wake: false }),
     };
-    void ask<string | { reply?: unknown }>('notify', args).then(
+    void ask<string | { reply?: unknown; action?: unknown }>('notify', args).then(
       (result) => {
         if (result === 'clicked') for (const fn of this.clicks) fn();
+        else if (result === 'dismissed') for (const fn of this.closes) fn();
         else if (result && typeof result === 'object' && typeof result.reply === 'string') {
           for (const fn of this.replies) fn({}, result.reply);
+        } else if (result && typeof result === 'object' && result.action === 'read') {
+          for (const fn of this.actions) fn({}, 0);
         }
       },
       () => undefined,

@@ -3,6 +3,7 @@
  * Each sound is a few short enveloped tones; they are deliberately quiet.
  */
 import { audible, type SoundConfig, type SoundName } from './sound-rules.ts';
+import { TONE_NOTES, isTone, type NotifySound } from '../../../shared/notify-sounds.ts';
 
 export { SOUND_GROUP, SOUND_GROUPS, audible } from './sound-rules.ts';
 export type { SoundConfig, SoundGroup, SoundName } from './sound-rules.ts';
@@ -244,10 +245,34 @@ export function play(name: SoundName, force = false): void {
   // The same sound at most every 150 ms, so bursts don't stack into noise.
   if ((lastPlayed.get(name) ?? 0) > now - 150) return;
   lastPlayed.set(name, now);
+  synth(SOUNDS[name], volume);
+}
+
+/**
+ * A chat's, channel's or community's own sound (2.17) in place of `fallback` (message, dm,
+ * mention): "default" plays `fallback`, "none" nothing, a tone that tone. The same switches and
+ * volume apply as for `fallback`.
+ */
+export function playNotifySound(sound: NotifySound | undefined, fallback: SoundName, force = false): void {
+  if (!isTone(sound)) {
+    if (sound !== 'none') play(fallback, force);
+    return;
+  }
+  const config = source?.();
+  if (!enabled) return;
+  if (!force && !audible(fallback, config)) return;
+  if (config && (!config.sounds || config.soundVolume <= 0)) return;
+  const now = performance.now();
+  if ((lastPlayed.get(fallback) ?? 0) > now - 150) return;
+  lastPlayed.set(fallback, now);
+  synth(TONE_NOTES[sound], config?.soundVolume ?? 1);
+}
+
+function synth(sound: { gain: number; notes: Note[] }, volume: number): void {
   try {
     ctx ??= new AudioContext();
     if (ctx.state === 'suspended') void ctx.resume();
-    const { gain: base, notes } = SOUNDS[name];
+    const { gain: base, notes } = sound;
     const gain = base * volume;
     const t0 = ctx.currentTime + 0.01;
     for (const [freq, startMs, durMs, type = 'sine'] of notes) {

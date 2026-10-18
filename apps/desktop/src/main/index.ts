@@ -52,6 +52,7 @@ import { DmService } from './dm/dm-service.ts';
 import { SocialService } from './social/social-service.ts';
 import { BackupService } from './backup/backup-service.ts';
 import { startMessageNotifications } from './notifications.ts';
+import { badgeBitmap, startBadge } from './badge.ts';
 import { SettingsStore } from './settings-store.ts';
 import { electronKeystore } from './storage/electron-keystore.ts';
 import { StorageService } from './storage/storage-service.ts';
@@ -638,6 +639,31 @@ async function start(): Promise<void> {
   broadcastSocialEvents(window.webContents, social);
   broadcastHostStatus(window.webContents, hosting);
   startMessageNotifications({ community, dm, settings: () => settings.get(), window });
+  // The unread count on River's icon (2.17): Windows' taskbar overlay, the macOS dock, Linux launchers.
+  startBadge({
+    dm,
+    community,
+    settings: () => settings.get(),
+    onSettingsChange: (listener) => settings.onChange(listener),
+    conversations: () => dm.conversations(),
+    set: (count) => {
+      if (process.platform === 'win32') {
+        if (window.isDestroyed()) return;
+        window.setOverlayIcon(
+          count > 0
+            ? nativeImage.createFromBitmap(Buffer.from(badgeBitmap(count, 32)), {
+                width: 32,
+                height: 32,
+                scaleFactor: 2,
+              })
+            : null,
+          count > 0 ? `${count} unread` : '',
+        );
+      } else {
+        app.setBadgeCount(count);
+      }
+    },
+  });
   window.on('focus', () => window.flashFrame(false));
   if (updates) {
     const service = updates;

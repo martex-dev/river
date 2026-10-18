@@ -6,6 +6,51 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.17.0] - 2026-10-18
+
+**Notifications like Telegram's: per chat, grouped, with Mark as read and badges.**
+
+### Added
+
+- **Notifications per chat, like Telegram.** Every chat (a person or a group)
+  now has its own notification menu, as communities and channels do: mute for
+  15 minutes, an hour, 8 hours, a day, a week or until you turn it back on;
+  All messages, Only @mentions and replies (groups) or Nothing.
+- **A sound of your own** for any chat, channel, category or community: Chime,
+  Bell, Pop, Drop, Harp or No sound. River plays it in its window; on phones
+  the notification itself makes it (Android: one notification channel per
+  sound, since a channel's sound is fixed once it exists).
+- **One notification per conversation.** New messages replace a chat's or
+  channel's notification with a summary ("Bob (3)" with the latest lines, or
+  "3 new messages" when previews hide them) instead of a pile. On Android the
+  conversations are grouped under one summary ("5 new messages in 2 chats");
+  the iPhone groups them by conversation.
+- **Read anywhere, gone everywhere.** A conversation's notification goes away
+  when you read it — in River, or on another of your devices (read sync).
+- **Mark as read** on notifications, next to Reply (Android and iPhone, and
+  macOS where its notification style shows buttons; Windows and Linux
+  notifications have no buttons in Electron).
+- **Unread count on River's icon**: the Windows taskbar overlay, the macOS
+  dock, Linux launchers and the iPhone app icon show unread chats and mentions,
+  muted chats and anything set to Nothing left out (Settings → Notifications).
+  Android's launcher adds up the counts River's notifications carry.
+- **Banners inside River**: while River is open, a message in another chat or
+  channel shows a small banner with the sender and the text; tap it to open
+  the chat. Muted chats, Nothing, Do Not Disturb and quiet hours stay quiet
+  (Settings → Notifications).
+- **Ignore @everyone and @here** per community: they no longer count as
+  mentioning you there (no notification, sound or badge); your name and
+  replies to you still do.
+
+### Changed
+
+- **Mentions and replies to you in groups** are recognised: they come through a
+  muted group, and a group set to Only @mentions notifies only for them.
+- Every notification path — single notifications, summaries, Android's group
+  summary, the lock screen and in-app banners — shows only what Settings →
+  Notifications → preview allows.
+- A direct message sent without sound no longer plays River's message sound.
+
 ## [2.16.0] - 2026-10-18
 
 **Easy start: from install to your first message with no more work than a

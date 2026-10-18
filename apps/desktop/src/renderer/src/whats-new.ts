@@ -3,6 +3,11 @@
  * got, shown once. Fresh installs see nothing; full notes are in the release.
  */
 export const HIGHLIGHTS: Record<string, string[]> = {
+  '2.17.0': [
+    'Each chat can have its own notifications: mute for a while, only @mentions, or its own sound',
+    'Notifications are grouped per chat, with Mark as read, and the app icon shows how many chats wait for you',
+    'A small banner shows messages from other chats while River is open',
+  ],
   '2.16.0': [
     'Starting River takes one screen: your name, then Get started',
     'An invite link opens straight into its community, even on a new computer or phone',
