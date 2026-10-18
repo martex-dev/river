@@ -3516,7 +3516,15 @@ export class CommunityService {
   /** Every 30 s: tell the app when an event you are interested in starts. */
   private watchEvents(): void {
     if (this.eventTimer) return;
-    this.eventTimer = setInterval(() => this.remindEvents(), 30_000);
+    // Local data closed meanwhile (locked, signed out, a test that ended): skip this round
+    // instead of throwing from a timer, which nothing would catch.
+    this.eventTimer = setInterval(() => {
+      try {
+        this.remindEvents();
+      } catch {
+        // tried again in 30 s
+      }
+    }, 30_000);
     this.eventTimer.unref?.();
   }
 
