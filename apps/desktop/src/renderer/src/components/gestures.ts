@@ -1,4 +1,5 @@
 import { useEffect, useRef, type TouchEvent } from 'react';
+import { openLinkSheet } from './link-sheet-store.ts';
 
 /**
  * Phone gestures on messages (2.8): swipe a message to the left to reply, like Telegram, and
@@ -127,6 +128,8 @@ export function useMessageGestures(options: Options): Handlers {
       if (target.closest('input, textarea, audio, video, [role="slider"]')) return reset(null);
       const x = t.clientX;
       const y = t.clientY;
+      // Holding a link shows its whole address instead of the message's menu (2.19), as in Telegram.
+      const link = target.closest<HTMLElement>('a[data-link]')?.dataset.link ?? null;
       const timer = latest.current.onHold
         ? setTimeout(() => {
             const s = state.current;
@@ -135,7 +138,8 @@ export function useMessageGestures(options: Options): Handlers {
             heldAt.current = Date.now();
             swallowClick.current = true;
             haptic('select');
-            latest.current.onHold?.(x, y);
+            if (link) openLinkSheet(link, x, y);
+            else latest.current.onHold?.(x, y);
           }, HOLD_MS)
         : null;
       state.current = {

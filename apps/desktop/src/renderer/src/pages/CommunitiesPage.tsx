@@ -5,6 +5,8 @@ import { matches, withDefaults } from '../../../shared/keybinds.ts';
 import { ReportDialog } from '../community/ui/Reports.tsx';
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { Celebrations } from '../community/fx.tsx';
+import { EffectLayer } from '../appearance/effects.tsx';
+import { LinkSheet } from '../components/link-sheet.tsx';
 import { ConnectionBanner, NetworkWatcher } from '../community/ui/ConnectionBanner.tsx';
 import {
   AddFriendDialog,
@@ -159,6 +161,8 @@ export function Overlays(): ReactElement {
       <Modals me={me} />
       <Toast />
       <Celebrations />
+      <EffectLayer />
+      <LinkSheet />
       <PasteToJoin />
       <NetworkWatcher />
       <IncomingCall />
