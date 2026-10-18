@@ -124,6 +124,13 @@ Videos and other files are sent as they are, and file names are kept.
   session); removing a device ends its sessions and connection at once. A token
   stolen from memory of a running River is still good until one of these
   happens.
+- **Manage roles stays within what you hold.** A member with Manage roles
+  could give anyone (themselves included) a lower role that carries
+  Administrator or another permission they lack. Since 2.20 a role can be
+  given, taken, edited, moved, deleted or offered for self-assignment only if
+  it is below your highest role and carries no permission you do not have;
+  creating or editing a role still cannot grant one. Owners and administrators
+  hold every permission, so only the position rule applies to them.
 
 ### 5a. Address relay (River Host, 1.0.8)
 

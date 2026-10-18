@@ -13,6 +13,11 @@ All notable changes to River are documented here. The format follows
   River signs in again by itself with its device key. River signs out of its
   server when it quits (`DELETE /v1/sessions/current`, which also ends the
   connections that used the session).
+- Communities: Manage roles can no longer hand out more than its holder has. A
+  role below yours that carries Administrator, or any permission you lack, can
+  no longer be given, taken, temporarily given, edited, moved, deleted or
+  offered as a self-assignable role by you (owners and administrators are not
+  affected). River's member list no longer offers such roles.
 
 ## [2.20.0] - 2026-10-18
 

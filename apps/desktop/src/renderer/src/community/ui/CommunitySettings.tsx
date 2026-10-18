@@ -622,7 +622,10 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
   const [query, setQuery] = useState('');
   const perms = community.permissions;
   const isOwner = community.ownerId === me;
-  const assignable = community.roles.filter((r) => !r.everyone && (isOwner || r.position < community.myRank));
+  // Below your highest role, and carrying nothing you lack (the server refuses the rest, 2.20).
+  const assignable = community.roles.filter(
+    (r) => !r.everyone && (isOwner || r.position < community.myRank) && (r.permissions & ~perms) === 0,
+  );
   const members = community.members
     .filter((m) => m.name.toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => b.rank - a.rank || a.name.localeCompare(b.name));

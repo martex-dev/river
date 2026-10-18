@@ -113,8 +113,12 @@ export function ProfileCard(props: {
   const isMe = member.riverId === me;
   const outranks = community.ownerId === me || (!member.owner && community.myRank > member.rank);
   const canRoles = can(perms, Permission.MANAGE_ROLES) && (outranks || isMe);
+  // Below your highest role, and carrying nothing you lack (the server refuses the rest, 2.20).
   const assignable = community.roles.filter(
-    (r) => !r.everyone && (community.ownerId === me || r.position < community.myRank),
+    (r) =>
+      !r.everyone &&
+      (community.ownerId === me || r.position < community.myRank) &&
+      (r.permissions & ~perms) === 0,
   );
   const roles = community.roles.filter((r) => member.roles.includes(r.id));
   const voiceChannel = Object.entries(community.voice).find(([, ids]) => ids.includes(member.riverId))?.[0];

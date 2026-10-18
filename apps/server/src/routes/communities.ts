@@ -350,6 +350,24 @@ export async function registerCommunityRoutes(
   };
 
   /**
+   * A role someone may give, take, edit, move or delete (2.20): below their highest role, and
+   * carrying no permission they do not hold themselves. Otherwise Manage roles would hand out (or
+   * take away) Administrator through a lower role the owner made. Owners and administrators hold
+   * every permission, so only the position check applies to them.
+   */
+  const checkRoleInReach = (
+    model: CommunityModel,
+    actor: string,
+    role: { position: number; permissions: number },
+    what = 'assign',
+  ): void => {
+    const top = model.ownerId === actor ? Infinity : model.top(actor);
+    if (role.position >= top) throw forbidden(`You can only ${what} roles below your highest role`);
+    if ((role.permissions & ~model.perms(actor)) !== 0)
+      throw forbidden(`You cannot ${what} a role with permissions you do not have`);
+  };
+
+  /**
    * A synced channel leaving its category (category deleted, channel moved out or elsewhere)
    * keeps the permissions it had: the category's overwrites become its own and it stops being
    * synced. Without this a private category's channels would turn public the moment they leave.
@@ -518,6 +536,9 @@ export async function registerCommunityRoutes(
         if (role.permissions & SELF_ROLE_FORBIDDEN)
           throw bad('Roles members give themselves cannot moderate or manage anything');
         if (role.position >= top) throw forbidden('You can only offer roles below your highest role');
+        // Members would give it to themselves: only a role you could give them yourself (2.20).
+        // Roles offered already stay offered when someone else edits the rest.
+        if (!model.selfRoles.includes(id)) checkRoleInReach(model, me(request), role, 'offer');
       }
       await db
         .updateTable('communities')
@@ -564,6 +585,7 @@ export async function registerCommunityRoutes(
       if (!role || role.id === model.everyoneRoleId) throw bad('Unknown role');
       const top = model.ownerId === me(request) ? Infinity : model.top(me(request));
       if (role.position >= top) throw forbidden('You can only give roles below your highest role');
+      checkRoleInReach(model, me(request), role, 'give');
       if (target !== me(request) && !model.outranks(me(request), target) && model.ownerId !== me(request))
         throw forbidden('You can only change roles of members below you');
       const expiresAt = new Date(deps.now().getTime() + req.seconds * 1000).toISOString();
@@ -1717,6 +1739,9 @@ export async function registerCommunityRoutes(
     if (role.id !== model.everyoneRoleId && role.position >= model.top(me(request))) {
       throw forbidden('You can only edit roles below your highest role');
     }
+    // Nor a role that holds what you do not (taking Administrator off the admins' role, say).
+    if ((role.permissions & ~model.perms(me(request))) !== 0)
+      throw forbidden('You cannot edit a role with permissions you do not have');
     const req = parse(updateRoleRequestSchema, request.body);
     if (req.permissions !== undefined) checkGrant(model, me(request), req.permissions & ~role.permissions);
     // A role members give themselves must stay harmless (see the onboarding settings).
@@ -1773,6 +1798,7 @@ export async function registerCommunityRoutes(
       if (!role || role.id === model.everyoneRoleId) throw bad('Unknown role');
       if (role.position >= top) throw forbidden('You can only move roles below your highest role');
       if (r.position >= top) throw forbidden('Cannot move a role above your own');
+      if (r.position !== role.position) checkRoleInReach(model, actor, role, 'move');
     }
     for (const role of model.roles) {
       if (role.id === model.everyoneRoleId || ids.has(role.id)) continue;
@@ -1800,6 +1826,7 @@ export async function registerCommunityRoutes(
     if (roleId === model.everyoneRoleId) throw bad('@everyone cannot be deleted');
     const gone = model.role(roleId)!;
     if (gone.position >= model.top(me(request))) throw forbidden('You can only delete roles below your own');
+    checkRoleInReach(model, me(request), gone, 'delete');
     await db.transaction().execute(async (trx) => {
       await trx.deleteFrom('channel_overwrites').where('role_id', '=', roleId).execute();
       await trx.deleteFrom('category_overwrites').where('role_id', '=', roleId).execute();
@@ -1835,6 +1862,7 @@ export async function registerCommunityRoutes(
         const role = model.role(id);
         if (!role || id === model.everyoneRoleId) throw bad('Unknown role');
         if (role.position >= top) throw forbidden('You can only assign roles below your highest role');
+        checkRoleInReach(model, me(request), role);
       }
       if (target !== me(request) && !model.outranks(me(request), target) && model.ownerId !== me(request)) {
         throw forbidden('You can only change roles of members below you');

@@ -373,6 +373,86 @@ describe('communities', () => {
       expect(await status(a, 'GET', `/v1/communities/${cid}/events`, stranger.token)).not.toBe(200);
     });
 
+    it('Manage roles cannot reach a role carrying permissions its holder lacks (2.20)', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const mod = await join(a, owner.token, cid);
+      const member = await join(a, owner.token, cid);
+      // The managers' role first, then the admins' role: new roles go in at the bottom, so the
+      // admins' role ends up BELOW the managers' (an owner's slip, or an old community).
+      const managers = await role(a, owner.token, cid, Permission.MANAGE_ROLES | Permission.MANAGE_COMMUNITY);
+      const admins = await role(a, owner.token, cid, Permission.ADMINISTRATOR);
+      const banners = await role(a, owner.token, cid, Permission.BAN_MEMBERS);
+      const files = await role(a, owner.token, cid, Permission.ATTACH_FILES);
+      expect((await assign(a, owner.token, cid, mod.riverId, [managers.rid])).statusCode).toBe(200);
+      const c = await fetchCommunity(a, owner.token, cid);
+      const pos = (rid: string) => c.roles.find((r) => r.id === rid)!.position;
+      expect(pos(admins.rid)).toBeLessThan(pos(managers.rid));
+
+      // Giving a lower role that carries Administrator (or anything the giver lacks): refused,
+      // to themselves or to anyone else, for good or for a while.
+      expect((await assign(a, mod.token, cid, mod.riverId, [managers.rid, admins.rid])).statusCode).toBe(403);
+      expect((await assign(a, mod.token, cid, member.riverId, [admins.rid])).statusCode).toBe(403);
+      expect((await assign(a, mod.token, cid, member.riverId, [banners.rid])).statusCode).toBe(403);
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/members/${member.riverId}/temp-role`, mod.token, {
+          roleId: admins.rid,
+          seconds: 3600,
+        }),
+      ).toBe(403);
+      // A role within the giver's own permissions still works (every member may attach files).
+      expect((await assign(a, mod.token, cid, member.riverId, [files.rid])).statusCode).toBe(200);
+      // Taking it away again is refused just the same for a role out of reach.
+      expect((await assign(a, owner.token, cid, member.riverId, [files.rid, banners.rid])).statusCode).toBe(
+        200,
+      );
+      expect((await assign(a, mod.token, cid, member.riverId, [files.rid])).statusCode).toBe(403);
+      expect(
+        (await fetchCommunity(a, owner.token, cid)).members
+          .find((m) => m.riverId === member.riverId)!
+          .roles.sort(),
+      ).toEqual([files.rid, banners.rid].sort());
+
+      // Editing, moving or deleting such a role, or offering it to everyone: refused too.
+      expect(await status(a, 'PATCH', `/v1/roles/${admins.rid}`, mod.token, { name: sealed() })).toBe(403);
+      expect(await status(a, 'PATCH', `/v1/roles/${admins.rid}`, mod.token, { permissions: 0 })).toBe(403);
+      expect(await status(a, 'DELETE', `/v1/roles/${banners.rid}`, mod.token)).toBe(403);
+      expect(
+        await status(a, 'PUT', `/v1/communities/${cid}/role-order`, mod.token, {
+          roles: [
+            { id: admins.rid, position: pos(files.rid) },
+            { id: files.rid, position: pos(admins.rid) },
+          ],
+        }),
+      ).toBe(403);
+      const priority = await role(a, owner.token, cid, Permission.PRIORITY_SPEAKER);
+      expect(
+        await status(a, 'PUT', `/v1/communities/${cid}/onboarding`, mod.token, {
+          onboarding: null,
+          screening: false,
+          selfRoles: [priority.rid],
+        }),
+      ).toBe(403);
+      // Creating or editing a role still cannot grant what the editor lacks.
+      expect((await role(a, mod.token, cid, Permission.ADMINISTRATOR)).status).toBe(403);
+      expect(
+        await status(a, 'PATCH', `/v1/roles/${files.rid}`, mod.token, {
+          permissions: Permission.BAN_MEMBERS,
+        }),
+      ).toBe(403);
+      expect(await status(a, 'PATCH', `/v1/roles/${files.rid}`, mod.token, { name: sealed() })).toBe(200);
+
+      // Owners and administrators hold every permission: the position rule alone applies to them.
+      expect((await assign(a, owner.token, cid, member.riverId, [admins.rid])).statusCode).toBe(200);
+      expect((await assign(a, member.token, cid, mod.riverId, [managers.rid, banners.rid])).statusCode).toBe(
+        403,
+      ); // managers is above admins
+      expect((await assign(a, member.token, cid, owner.riverId, [banners.rid])).statusCode).toBe(403); // the owner
+      const third = await join(a, owner.token, cid);
+      expect((await assign(a, member.token, cid, third.riverId, [banners.rid])).statusCode).toBe(200);
+    });
+
     it('ownership can be handed to a member, only by the owner', async () => {
       const a = await start();
       const owner = await user(a);
