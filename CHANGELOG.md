@@ -12,6 +12,8 @@ All notable changes to River are documented here. The format follows
   settings and the rest of River need the phone unlocked. River no longer shows
   over the lock screen because another app or a web page asks it to; it does
   that only for a call it knows about.
+- Lock River (Android and iPhone): while River is locked, screen readers and a
+  keyboard can no longer reach the interface under the lock cover.
 
 ## [2.17.0] - 2026-10-18
 

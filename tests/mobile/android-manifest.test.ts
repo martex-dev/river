@@ -71,6 +71,23 @@ describe('River for Android: manifest', () => {
   });
 });
 
+describe('Lock River (2.18)', () => {
+  it('hides River under its cover from screen readers and the keyboard, not only from sight', () => {
+    const lock = java('core/AppLock.java');
+    expect(lock).toContain('IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS');
+    expect(lock).toMatch(/focused\.clearFocus\(\)/);
+    expect(lock).toMatch(/box\.requestFocus\(\)/);
+    // and gives them back when River is unlocked
+    expect(lock).toMatch(/private void hide\(\) \{[\s\S]*setImportantForAccessibility\(e\.getValue\(\)\)/);
+    const ios = readFileSync(
+      resolve(import.meta.dirname, '../../apps/mobile/ios/RiverNative/Sources/AppLock.swift'),
+      'utf8',
+    );
+    expect(ios).toContain('box.accessibilityViewIsModal = true');
+    expect(ios).toContain('view.endEditing(true)');
+  });
+});
+
 describe('River for Android: notification numbers', () => {
   /** The fixed notification numbers River's own notifications use (service, call, ringing, notices). */
   const fixed = (): Map<string, number> => {
