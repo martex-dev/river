@@ -167,6 +167,11 @@ export class GroupCalls {
     return null;
   }
 
+  /** A call-link call (ours, or one we were let into): never also a group's call. */
+  private isLinkCall(callId: string): boolean {
+    return this.linkCalls.has(callId) || this.links().some((l) => l.callId === callId);
+  }
+
   private mayTakePart(callId: string, riverId: string): boolean {
     if (riverId === this.deps.me()) return false;
     return this.allowed(callId)?.includes(riverId) ?? false;
@@ -290,6 +295,8 @@ export class GroupCalls {
       if (!group || !group.members.includes(me)) throw new Error('You are not in this group.');
       const known = this.groupOf.get(act.callId);
       if (known && known.groupId !== act.groupId) throw new Error('That call is in another group.');
+      // A call-link call stays with the people its host let in.
+      if (!known && this.isLinkCall(act.callId)) throw new Error('That call is not in this group.');
       // Starting a call (ring) makes it known; joining one needs its ring first.
       if (!known && act.kind !== 'ring') throw new Error('That call is over.');
       this.groupOf.set(act.callId, { groupId: act.groupId, at: known?.at ?? Date.now() });
@@ -380,6 +387,8 @@ export class GroupCalls {
       if (!group || !group.members.includes(peer) || !group.members.includes(me)) return;
       const known = this.groupOf.get(content.callId);
       if (known && known.groupId !== content.groupId) return;
+      // A ring naming a call-link call's ID would otherwise let the whole group into that call.
+      if (!known && this.isLinkCall(content.callId)) return;
       if (content.kind === 'ring') {
         if (age > GROUP_RING_MS) return;
         this.groupOf.set(content.callId, { groupId: content.groupId, at: known?.at ?? Date.now() });

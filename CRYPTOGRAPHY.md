@@ -394,6 +394,9 @@ keys above that) with its call setup inside libsignal messages, as in 1:1 calls.
   the same way, so a server that adds someone to a room's list cannot make
   anyone connect to them or send them a key; a removed member's setup is no
   longer accepted. Relay sender keys travel inside that setup, as before.
+  Since 2.20 a call-link call's ID is never taken as a group's call (a guest
+  "ringing" a group with it would otherwise have let that group's members
+  into the call).
 - **Call links.** A link is `https://<server>/call#h=<host's River ID>&l=<link ID>`
   (`river://open?link=…` in the app), the link ID another 128 random bits. It
   never contains the call ID. Someone with the link asks to join (`clink`

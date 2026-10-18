@@ -19,6 +19,8 @@ All notable changes to River are documented here. The format follows
   once when you accept the request.
 - Groups: people you blocked no longer see when you are typing in a group you
   share with them.
+- Call links: someone you let into a call-link call can no longer open it to
+  a group they share with you. Only the people you let in can connect.
 
 ## [2.20.0] - 2026-10-18
 

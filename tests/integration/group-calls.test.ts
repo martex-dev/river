@@ -382,6 +382,53 @@ describe('call links (2.18)', { timeout: 60_000 }, () => {
     ]);
   });
 
+  it('a guest cannot turn a call-link call into a group call to bring a group into it (2.20)', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    for (const p of [bob, carol]) await friends(alice, p);
+    const group = await alice.dm.action({
+      a: 'createGroup',
+      name: 'Climb',
+      members: [bob.riverId, carol.riverId],
+    });
+    for (const p of [bob, carol]) await p.dm.sync();
+    const link = await alice.dm.action({ a: 'createCallLink', video: false });
+    await bob.dm.action({ a: 'knock', host: alice.riverId, link: link.id });
+    await alice.dm.sync();
+    await alice.dm.action({ a: 'answerKnock', link: link.id, who: bob.riverId, admit: true });
+    await bob.dm.sync();
+    await alice.dm.action({ a: 'groupCall', kind: 'join', callId: link.callId });
+
+    // Bob, let in, "rings" the group with the link call's ID; Carol (never let in) then sends setup.
+    const forge = (p: Person) =>
+      p.dm as unknown as { sendContent(peer: string, content: unknown): Promise<void> };
+    await forge(bob).sendContent(alice.riverId, {
+      v: 1,
+      t: 'gcall',
+      callId: link.callId,
+      groupId: group.riverId,
+      kind: 'ring',
+    });
+    await forge(carol).sendContent(alice.riverId, {
+      v: 1,
+      t: 'gcall',
+      callId: link.callId,
+      groupId: group.riverId,
+      kind: 'signal',
+      data: { type: 'hello' },
+    });
+    await alice.dm.sync();
+    expect(gcalls(alice).filter((e) => e.from === carol.riverId)).toEqual([]);
+    // Who may be in the call is still the host and the people let in.
+    const again = await alice.dm.action({ a: 'groupCall', kind: 'join', callId: link.callId });
+    expect(again?.allowed.sort()).toEqual([alice.riverId, bob.riverId].sort());
+    // The window cannot do it either.
+    await expect(
+      alice.dm.action({ a: 'groupCall', kind: 'ring', callId: link.callId, groupId: group.riverId }),
+    ).rejects.toThrow();
+  });
+
   it('people let in later are announced by the host only; a revoked link answers "gone"', async () => {
     const alice = await person('Alice');
     const bob = await person('Bob');
