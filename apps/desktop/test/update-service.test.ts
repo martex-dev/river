@@ -138,6 +138,25 @@ describe('UpdateService', () => {
     expect(service.installNow()).toBe(false);
   });
 
+  it('drops a beta that was still downloading when you went back to the stable channel (2.18)', async () => {
+    let release = (): void => undefined;
+    const { updater, service, prefs } = setup({
+      channel: 'beta',
+      verify: () => new Promise<void>((r) => (release = r)),
+    });
+    updater.offer = '0.0.2-beta.1';
+    await service.check();
+    await flush();
+    expect(service.getStatus().state).toBe('verifying');
+    prefs.channel = 'stable';
+    service.applyPreferences();
+    release();
+    await flush();
+    expect(service.getStatus().state).toBe('up-to-date');
+    expect(service.installNow()).toBe(false);
+    expect(service.installOnQuit()).toBe(false);
+  });
+
   it('refuses to install when signature verification fails', async () => {
     const { updater, service } = setup({
       verify: async () => {

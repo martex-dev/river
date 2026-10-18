@@ -40,6 +40,8 @@ All notable changes to River are documented here. The format follows
 - Proxy (computers): through a proxy, River's live connection to a server
   given by IP address checked the server's certificate against the proxy's
   name instead of the server's. It now always checks it against the server.
+- Updates (computers): a test version that was still downloading when you
+  switched back to Stable is no longer installed.
 
 ## [2.17.0] - 2026-10-18
 

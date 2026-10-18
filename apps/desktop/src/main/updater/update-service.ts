@@ -239,6 +239,15 @@ export class UpdateService {
       );
       return;
     }
+    // The channel changed while it downloaded (a beta, after choosing Stable): not installed (2.18).
+    const channel = this.deps.preferences().channel;
+    if (!acceptsVersion(channel, version)) {
+      this.deps.log.info(`Dropping ${version}: not on the ${channel} channel`);
+      this.verifiedVersion = null;
+      this.pendingVersion = null;
+      this.setStatus({ state: 'up-to-date', checkedAt: this.now() });
+      return;
+    }
     this.verifiedVersion = version;
     this.deps.log.info(`Update ${version} verified`);
     this.setStatus({ state: 'ready', version });
