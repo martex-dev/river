@@ -48,6 +48,11 @@ const envSchema = z.object({
   RIVER_ATTACHMENT_QUOTA_MB: z.coerce.number().int().min(10).max(1_000_000).default(2048),
   /** Undelivered envelopes kept per device; more are refused until it catches up. */
   RIVER_MAILBOX_LIMIT: z.coerce.number().int().min(100).max(1_000_000).default(5000),
+  /**
+   * Days an undelivered envelope (and with it who sent it to whom, and when) is kept for a device
+   * that does not collect it (2.13). Delivered envelopes are deleted as soon as they are collected.
+   */
+  RIVER_MAILBOX_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
   /** TURN relay URLs for calls (comma-separated), e.g. turn:turn.example.org:3478,turns:turn.example.org:5349 */
   RIVER_TURN_URLS: z.string().max(2000).optional(),
   /** coturn "static-auth-secret": the server hands out short-lived TURN credentials signed with it. */
@@ -84,6 +89,8 @@ export interface ServerConfig {
   hostToken?: string;
   attachmentQuotaBytes: number;
   mailboxLimit: number;
+  /** How long undelivered envelopes are kept (default 30 days). */
+  mailboxTtlMs?: number;
 }
 
 export class ConfigError extends Error {
@@ -128,6 +135,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     maxAttachmentBytes: e.RIVER_MAX_ATTACHMENT_MB * 1024 * 1024,
     attachmentQuotaBytes: e.RIVER_ATTACHMENT_QUOTA_MB * 1024 * 1024,
     mailboxLimit: e.RIVER_MAILBOX_LIMIT,
+    mailboxTtlMs: e.RIVER_MAILBOX_TTL_DAYS * 24 * 60 * 60 * 1000,
     ...(e.RIVER_BEACON_RELAY ? { beaconRelay: e.RIVER_BEACON_RELAY.replace(/\/+$/, '') } : {}),
     ...(e.RIVER_HOST_TOKEN ? { hostToken: e.RIVER_HOST_TOKEN } : {}),
     turn:

@@ -11,7 +11,9 @@ import {
   net,
   powerMonitor,
   session,
+  webContents,
 } from 'electron';
+import { WebSocket as WsWebSocket } from 'ws';
 import { autoUpdater } from 'electron-updater';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import { channelOfVersion } from '@river/release/channels';
@@ -69,6 +71,8 @@ import { LaunchHealth } from './updater/launch-health.ts';
 import { runSelfTest, selfTestPath } from './self-test.ts';
 import { runMainDiagnostics } from './diagnostics.ts';
 import { PresenceTracker } from './presence.ts';
+import { ProxyAgent, activeProxy, chromiumProxyConfig, isLoopbackHost } from './proxy.ts';
+import { checkProxy } from './proxy-check.ts';
 import {
   RENDERER_RELOADS,
   SHOW_WINDOW_FALLBACK_MS,
@@ -174,6 +178,32 @@ async function start(): Promise<void> {
   log.info(`River ${app.getVersion()} starting on ${process.platform}-${process.arch}`);
 
   const settings = new SettingsStore(join(app.getPath('userData'), 'settings.json'), log);
+  // Settings → Privacy → Proxy (2.13), applied before anything connects. Chromium's sessions: main's
+  // requests, the window (calls), and the updater's own session. Without a proxy: the system's.
+  const proxySessions = (): Electron.Session[] => [
+    session.defaultSession,
+    uiSession(),
+    session.fromPartition('electron-updater', { cache: false }),
+  ];
+  const applyProxy = async (): Promise<void> => {
+    const config = chromiumProxyConfig(settings.get().privacy.proxy);
+    await Promise.all(
+      proxySessions().map(async (s) => {
+        await s.setProxy(config);
+        await s.closeAllConnections();
+      }),
+    );
+  };
+  await applyProxy().catch((err: unknown) =>
+    log.error(`Proxy settings not applied: ${(err as Error).message}`),
+  );
+  /**
+   * With a proxy, calls never send UDP outside it (Chromium's disable_non_proxied_udp): no direct
+   * peer-to-peer media, so the other people in a call do not see this computer's address. Calls then
+   * use a TURN relay over TCP through the proxy, or River's server relay for voice.
+   */
+  const rtcPolicy = (): 'default' | 'disable_non_proxied_udp' =>
+    activeProxy(settings.get().privacy.proxy) ? 'disable_non_proxied_udp' : 'default';
   // Counts starts until River has run for a while; repeated failures after an update pause auto-install.
   const health = new LaunchHealth(join(app.getPath('userData'), 'health.json'), app.getVersion());
   const startupProblem = health.crashLoop
@@ -218,6 +248,15 @@ async function start(): Promise<void> {
     identity,
     requestJson: createRequestJson((input, init) => net.fetch(input as string, init)),
     requestBytes: createRequestBytes((input, init) => net.fetch(input as string, init)),
+    // Node's WebSocket ignores Chromium's proxy: with a proxy on, the realtime connection is a tunnel
+    // through it (proxy.ts). A server on this computer is reached directly.
+    createSocket: (url) => {
+      const proxy = activeProxy(settings.get().privacy.proxy);
+      if (!proxy || isLoopbackHost(new URL(url).hostname)) return new WebSocket(url);
+      return new WsWebSocket(url, {
+        agent: new ProxyAgent(proxy, url.startsWith('wss:')),
+      }) as unknown as WebSocket;
+    },
     blobDir: () => (storage.db() ? join(app.getPath('userData'), 'attachments') : null),
     log,
     locator,
@@ -308,6 +347,10 @@ async function start(): Promise<void> {
     privacy: () => ({
       readReceipts: settings.get().presence.readReceipts,
       typing: settings.get().presence.typingIndicators,
+    }),
+    keep: () => ({
+      historyDays: settings.get().privacy.historyDays,
+      newChatTimer: settings.get().privacy.newChatTimer,
     }),
   });
   // Linked devices (1.3): this device can join an account, or add another device to it.
@@ -425,7 +468,24 @@ async function start(): Promise<void> {
   // The default session is only used by main-process networking (update verification).
   session.defaultSession.setPermissionRequestHandler((_wc, _p, cb) => cb(false));
 
-  app.on('web-contents-created', (_e, contents) => guardWebContents(contents, devServerUrl));
+  app.on('web-contents-created', (_e, contents) => {
+    guardWebContents(contents, devServerUrl);
+    contents.setWebRTCIPHandlingPolicy(rtcPolicy());
+  });
+  // A changed proxy: every session and the live connection switch now (the old connections close).
+  let lastProxy = JSON.stringify(settings.get().privacy.proxy);
+  settings.onChange((s) => {
+    const now = JSON.stringify(s.privacy.proxy);
+    if (now === lastProxy) return;
+    lastProxy = now;
+    for (const wc of webContents.getAllWebContents()) wc.setWebRTCIPHandlingPolicy(rtcPolicy());
+    void applyProxy()
+      .catch((err: unknown) => log.error(`Proxy settings not applied: ${(err as Error).message}`))
+      .then(() => {
+        community.stop();
+        community.ensureSocket();
+      });
+  });
 
   const updatesEnabled = app.isPackaged || process.env.RIVER_DEV_UPDATES === 'true';
   const updatesDisabledReason = 'Automatic updates are disabled in development builds.';
@@ -507,6 +567,20 @@ async function start(): Promise<void> {
       if (!link || (kind && link.kind !== kind)) return null;
       pendingDeepLink = null;
       return link;
+    },
+    proxyCheck: async (settingsProxy) => {
+      const proxy = activeProxy(settingsProxy);
+      if (!proxy) return [];
+      const status = account.status();
+      const server = status.state === 'registered' ? (status.serverUrl ?? null) : settings.get().server.url;
+      // Chromium's side is tested in a session of its own, so trying a proxy changes nothing else.
+      const trial = session.fromPartition('river-proxy-check', { cache: false });
+      await trial.setProxy(chromiumProxyConfig({ ...proxy }));
+      await trial.closeAllConnections();
+      return checkProxy(proxy, server, {
+        chromiumGet: async (url) =>
+          (await trial.fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(20_000) })).status,
+      });
     },
     diagnostics: () =>
       runMainDiagnostics({

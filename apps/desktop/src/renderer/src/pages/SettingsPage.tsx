@@ -5,6 +5,7 @@ import { BackupPanel } from '../components/BackupPanel.tsx';
 import { ErrorBoundary } from '../components/ErrorBoundary.tsx';
 import { DevicesPanel } from '../components/LinkDevice.tsx';
 import { ConnectionCheck } from '../components/ConnectionCheck.tsx';
+import { PrivacySettings } from '../components/PrivacySettings.tsx';
 import {
   BATTERY_WHY,
   PhoneCallsSection,
@@ -1077,6 +1078,7 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
           onChange={(v) => void updateSettings({ system: { screenSecurity: v } })}
         />
       )}
+      <PrivacySettings settings={settings} phone={phone} />
       <h2 className="panel__title">System</h2>
       {phone && platform === 'android' && (
         <>

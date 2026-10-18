@@ -42,6 +42,7 @@ import { friendlyError } from './errors.ts';
 import { parseSignup } from '../shared/invite-link.ts';
 import { isHomeLink } from '../shared/home-server.ts';
 import { checkServer } from './server-check.ts';
+import { proxySettingsSchema, type ProxySettings } from '../shared/settings.ts';
 import type { SettingsStore } from './settings-store.ts';
 import { MIN_PASSPHRASE_LENGTH, WrongPassphraseError } from './storage/key-file.ts';
 import type { StorageService } from './storage/storage-service.ts';
@@ -108,6 +109,8 @@ export interface IpcDeps {
   >;
   /** Settings → System → Connection check. */
   diagnostics(): Promise<DiagnosticCheck[]>;
+  /** Settings → Privacy → Proxy → Test connection (computers only; phones have no proxy yet). */
+  proxyCheck?: (proxy: ProxySettings) => Promise<DiagnosticCheck[]>;
   openLogs(): Promise<void>;
   /** A River link opened from a browser that the UI has not taken yet. */
   takeDeepLink(kind?: DeepLink['kind']): DeepLink | null;
@@ -423,6 +426,11 @@ export function registerIpc(deps: IpcDeps): void {
     deps.community.callRoom(room === null ? null : z.string().max(64).parse(room));
   });
   handle(IPC.diagnosticsRun, () => deps.diagnostics());
+  handle(IPC.privacyProxyCheck, async (_e, raw) => {
+    const proxy = proxySettingsSchema.parse(raw);
+    if (proxy.mode === 'off' || !deps.proxyCheck) return [];
+    return deps.proxyCheck(proxy);
+  });
   handle(IPC.diagnosticsOpenLogs, () => deps.openLogs());
   handle(IPC.screenSources, async () => {
     const sources = await desktopCapturer.getSources({
@@ -564,6 +572,8 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.linkPreview, async (_e, raw) => {
     // Only for people who turned previews on, and only for links they are sending.
     if (!deps.settings.get().appearance.linkPreviews) return null;
+    // Previews fetch the page from this computer, not through the proxy: none while one is on.
+    if (deps.settings.get().privacy.proxy.mode !== 'off') return null;
     const url = safeExternalUrl(raw);
     if (!url || !deps.previewDeps) return null;
     return fetchPreview(url.toString(), deps.previewDeps).catch(() => null);

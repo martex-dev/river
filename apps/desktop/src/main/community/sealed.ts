@@ -1,4 +1,19 @@
 import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } from 'node:crypto';
+import { padJson } from '@river/crypto/padding';
+import {
+  SEALED_ART,
+  SEALED_EMOJI,
+  SEALED_EVENT,
+  SEALED_MESSAGE,
+  SEALED_NOTE,
+  SEALED_ONBOARDING,
+  SEALED_PROFILE,
+  SEALED_REPORT,
+  SEALED_SIGNAL,
+  SEALED_SMALL,
+  SEALED_SOUND,
+  SEALED_STICKER,
+} from '@river/protocol';
 
 /**
  * Community content encryption: AES-256-GCM with a random 96-bit nonce under
@@ -56,11 +71,55 @@ export function newCommunityKey(): Buffer {
   return randomBytes(32);
 }
 
-function sealWith(key: Uint8Array, associated: Buffer, value: unknown): string {
+/** Nonce and tag around every sealed value. */
+const SEAL_OVERHEAD = 12 + 16;
+
+/** The largest sealed value (decoded bytes) the server accepts for each purpose. */
+function sealedLimit(purpose: SealPurpose): number {
+  const kind = purpose.split(':', 1)[0];
+  switch (kind) {
+    case 'message':
+      return SEALED_MESSAGE;
+    case 'profile':
+      return SEALED_PROFILE;
+    case 'signal':
+      return SEALED_SIGNAL;
+    case 'onboarding':
+      return SEALED_ONBOARDING;
+    case 'art':
+      return SEALED_ART;
+    case 'event':
+      return SEALED_EVENT;
+    case 'emoji':
+      return SEALED_EMOJI;
+    case 'sticker':
+      return SEALED_STICKER;
+    case 'note':
+      return SEALED_NOTE;
+    case 'sound':
+      return SEALED_SOUND;
+    case 'report':
+      return SEALED_REPORT;
+    case 'epoch':
+      // A key proof travels inside a direct message, where 2.11 accepts at most 400 base64 characters.
+      return 300;
+    default:
+      // Names, metadata, reactions, invite checks, key proofs, webhook keys: the smallest limit.
+      return SEALED_SMALL;
+  }
+}
+
+/**
+ * Seals `value` as padded JSON (2.13): the plaintext is lengthened with JSON whitespace to a size
+ * bucket (packages/crypto/src/padding.ts), never past what the server accepts for this purpose.
+ * Receivers — 2.11 and 2.12 included — parse it with `JSON.parse`, which ignores the padding.
+ */
+function sealWith(key: Uint8Array, associated: Buffer, value: unknown, purpose: SealPurpose): string {
   const nonce = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', key, nonce);
   cipher.setAAD(associated);
-  const ct = Buffer.concat([cipher.update(JSON.stringify(value), 'utf8'), cipher.final()]);
+  const plain = padJson(JSON.stringify(value), sealedLimit(purpose) - SEAL_OVERHEAD);
+  const ct = Buffer.concat([cipher.update(plain), cipher.final()]);
   return Buffer.concat([nonce, ct, cipher.getAuthTag()]).toString('base64');
 }
 
@@ -75,7 +134,7 @@ function openWithAad<T>(key: Uint8Array, associated: Buffer, sealed: string): T 
 }
 
 export function seal(key: Uint8Array, communityId: string, purpose: SealPurpose, value: unknown): string {
-  return sealWith(key, aad(communityId, purpose), value);
+  return sealWith(key, aad(communityId, purpose), value, purpose);
 }
 
 /** Throws if the ciphertext was not made with this key for this community and purpose. */
@@ -98,7 +157,7 @@ export function sealBound(
   v2: boolean,
 ): string {
   return v2
-    ? sealWith(key, aadV2(communityId, purpose, binding), value)
+    ? sealWith(key, aadV2(communityId, purpose, binding), value, purpose)
     : seal(key, communityId, purpose, value);
 }
 

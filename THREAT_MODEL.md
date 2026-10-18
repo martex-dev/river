@@ -67,10 +67,50 @@ River does **not** claim to defend against:
 | Display name, avatar, bio                            | No for private profiles (encrypted with a profile key shared with contacts); yes for fields a user marks public | 0.1.x                                                                       |
 | Who sends to whom                                    | Yes for direct messages (sealed sender not implemented yet); block lists too                                    | Timing correlation remains possible                                         |
 | Group/community membership and roles                 | Yes                                                                                                             | Needed to route and enforce permissions                                     |
-| Message timestamps and sizes                         | Yes (server receive time, padded sizes)                                                                         | Padding planned                                                             |
-| IP addresses                                         | Seen while connected; **not stored** by River                                                                   | Reverse proxies must be configured likewise; documented in deployment guide |
+| Message timestamps and sizes                         | Yes (server receive time, padded sizes)                                                                         | Size buckets since 2.15 (CRYPTOGRAPHY.md §4)                                |
+| IP addresses                                         | Seen while connected; **not stored** by River. Hidden from the server by Settings → Privacy → Proxy (2.15)      | Reverse proxies must be configured likewise; documented in deployment guide |
 | Push tokens (Stage 2)                                | Yes                                                                                                             | Pushes carry no content                                                     |
 | Contact lists / address book                         | **No**                                                                                                          | River never uploads address books                                           |
+
+### 5n. What the server keeps, and for how long (audit, 2.15)
+
+| Kept                                                                                               | How long                                                                                                    |
+| -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Direct-message envelopes: sender, sender device, recipient device, receive time, padded ciphertext | Until the device collects them (then deleted at once), else `RIVER_MAILBOX_TTL_DAYS` (default 30) days      |
+| Typing and other short-lived signals                                                               | Never stored (relayed to connected devices only)                                                            |
+| Read and delivery receipts                                                                         | Ordinary encrypted envelopes, padded like messages: the server cannot tell them from messages               |
+| Sessions (hashed token, device, expiry)                                                            | Until expiry; renewing a session in use moves its expiry, which shows roughly when the device was last used |
+| Sign-in challenges, sign-up codes, username holds                                                  | Until they expire (5 minutes, 7 days, 30 days); deleted at start and hourly since 2.15                      |
+| Attachments: padded size, uploader, upload time, the message they belong to                        | Unattached: 24 hours; direct-message files: 31 days; community files: as long as their message              |
+| Community messages, reactions, membership, roles                                                   | As long as the community; the audit log 90 days                                                             |
+| Presence, voice participants, who is online                                                        | In memory only, while connected                                                                             |
+| Push tokens                                                                                        | None: River does not use Google's or Apple's push services                                                  |
+| IP addresses, request bodies, identifiers in logs                                                  | Never: request logs hold method, route template, status and duration only                                   |
+
+Since 2.15 the hourly clean-up also runs when the server starts, so a server
+restarted more often than hourly (a home PC) still deletes expired mail. What
+the server can still see while it runs: which account sends a direct message
+to which (sealed sender is not implemented), when, roughly how large (bucket
+sizes), who is online, and community membership and activity. A proxy (Tor)
+hides your IP address from it, not your account.
+
+### 5o. Proxy and photos (2.13, computers)
+
+With Settings → System → Privacy → Proxy on, River's connections to its
+server, the address relay and update checks go through a SOCKS5 (Tor) or HTTP
+proxy, host names resolved by the proxy. If the proxy is unreachable River does
+not connect (no direct fallback). Calls send no UDP outside the proxy
+(Chromium's `disable_non_proxied_udp`), so there is no direct peer-to-peer
+media: voice goes through TURN over TCP or River's server relay, and the people
+in a call do not learn the computer's address; video and screen sharing need a
+TURN relay. Link previews are not made. Hosting a server on the PC is not
+proxied. The proxy operator (a Tor exit, or the HTTP proxy) sees that you
+connect to your River server, and when; TLS keeps the content from it. Phones
+have no proxy setting yet.
+
+Photos (JPEG, PNG, WebP) lose Exif, XMP, IPTC, comments, text chunks and
+appended images before they are encrypted (only the orientation is kept).
+Videos and other files are sent as they are, and file names are kept.
 
 ### 5a. Address relay (River Host, 1.0.8)
 
