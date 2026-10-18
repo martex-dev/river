@@ -507,13 +507,26 @@ public final class CoreHost {
     else replyFailed(notification);
   }
 
-  /** A notification River posted was tapped: tell the core, which opens the conversation. */
-  public void notificationTapped(int notification, String token) {
-    if (!tokenMatches(notification, token)) return;
+  /**
+   * A notification River posted was tapped: tell the core, which opens the conversation. True when
+   * it really was one of River's (its token matched).
+   */
+  public boolean notificationTapped(int notification, String token) {
+    if (!tokenMatches(notification, token)) return false;
     notificationTokens.remove(notification);
     forget(notification);
     Integer ask = notificationAsks.remove(notification);
     if (ask != null) answer(ask, (Object) "clicked");
+    return true;
+  }
+
+  /**
+   * Whether River may show over the lock screen for a call (2.18): only for a call answered on
+   * River's call screen or one that is on. An intent saying "call" proves nothing by itself: any
+   * app can send one to River's screen. Main thread.
+   */
+  public boolean callMayShowOverLock() {
+    return overLockForCall || inCall;
   }
 
   /** The notification is gone: its conversation's next message starts a new one. */

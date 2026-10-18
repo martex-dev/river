@@ -220,12 +220,13 @@ export class WebCodecsRelay implements RelayEngine {
     if (this.closed) return;
     const existing = this.remotes.get(id);
     if (existing) {
+      // The same key again (senders repeat it): nothing changes, its sequence included.
+      if (!existing.replay.rekey(raw)) return;
       existing.key = key;
-      existing.replay.reset();
       existing.meter.restart();
       return;
     }
-    this.remotes.set(id, this.makeRemote(key));
+    this.remotes.set(id, this.makeRemote(key, raw));
   }
 
   receive(from: string, payload: Uint8Array): void {
@@ -302,14 +303,14 @@ export class WebCodecsRelay implements RelayEngine {
     return decoder;
   }
 
-  private makeRemote(key: CryptoKey): RemoteVoice {
+  private makeRemote(key: CryptoKey, raw: Uint8Array): RemoteVoice {
     const ctx = this.ctx!;
     const node = new AudioWorkletNode(ctx, 'river-playout', { numberOfInputs: 0, outputChannelCount: [1] });
     const out = ctx.createMediaStreamDestination();
     node.connect(out);
     return {
       key,
-      replay: new ReplayGuard(),
+      replay: new ReplayGuard(raw),
       decoder: this.makeDecoder(node),
       node,
       out,

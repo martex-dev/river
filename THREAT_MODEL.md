@@ -299,10 +299,18 @@ encrypted call and point signals and sees who takes part, as for any call.
 
 - **The server decides community membership.** A removed member whom a
   malicious server keeps listing still gets the next community key from the
-  rotating member. Until River stops accepting keys from older Rivers without
-  a proof (planned for 2.13), such a member (or anyone who once held a genuine
-  key) can, with the server, hand out a key of their own; members the server
-  adds without ever holding a key cannot (CRYPTOGRAPHY.md §4a–4b).
+  rotating member, and can then prove the epoch after it. Since 2.18 River
+  accepts no key without a proof, so someone who held a genuine key only long
+  ago can no longer hand out one of their own; members the server adds
+  without ever holding a key get nothing (CRYPTOGRAPHY.md §4a–4b).
+- **Which community a channel belongs to** comes from the server. Since 2.18 a
+  channel stays with the community it was first seen in during a run of River;
+  on the first look after River starts, a server listing a channel under a
+  community whose key it knows shows it there (with a placeholder name unless
+  it knows that key) rather than in its own community.
+- **A call answered on Android's lock screen** shows only the call there
+  (2.18). Group call screens that are not River's full-screen call show
+  nothing until the phone is unlocked.
 - **Trust on first use.** Without verified safety numbers or a shared
   community, a server can still present a different identity key for a
   contact; River shows the change but cannot tell it from a reinstall.

@@ -1,6 +1,7 @@
 import { registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import { createRiverApi } from '../../desktop/src/shared/river-api.ts';
 import { decodeWire, encodeWire } from '../shared/wire.ts';
+import { OVER_LOCK_CHANNEL, setOverLock } from './shell.ts';
 
 /**
  * window.river on a phone. The UI is untrusted exactly as on the desktop: it
@@ -20,6 +21,10 @@ const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
 let unclaimedShare: unknown[] | null = null;
 void Core.addListener('event', ({ json }) => {
   const { channel, args } = decodeWire<{ channel: string; args: unknown[] }>(json);
+  if (channel === OVER_LOCK_CHANNEL) {
+    setOverLock(document.documentElement, args[0] === true);
+    return;
+  }
   const set = listeners.get(channel);
   if (channel === 'river:app:share' && !set?.size) unclaimedShare = args;
   for (const l of set ?? []) l(...args);

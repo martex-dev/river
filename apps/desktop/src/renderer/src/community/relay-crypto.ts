@@ -73,6 +73,11 @@ export async function openFrame(
 /** Accepts each sequence number once and only moving forward (frames over a WebSocket arrive in order). */
 export class ReplayGuard {
   private last = -1;
+  private keyBytes: Uint8Array | null;
+  /** `key`: the sender key whose frames this guards. */
+  constructor(key?: Uint8Array) {
+    this.keyBytes = key ? key.slice() : null;
+  }
   accept(seq: number): boolean {
     if (seq <= this.last) return false;
     this.last = seq;
@@ -82,6 +87,24 @@ export class ReplayGuard {
   reset(): void {
     this.last = -1;
   }
+  /**
+   * The sender's key arrived (again): true when it is a new key, which starts a new sequence.
+   * Senders repeat their key (a few times, and after every reconnect); a repeat keeps the
+   * sequence (2.18), or the server could play back frames it recorded after each repeat.
+   */
+  rekey(key: Uint8Array): boolean {
+    if (this.keyBytes && sameBytes(this.keyBytes, key)) return false;
+    this.keyBytes = key.slice();
+    this.reset();
+    return true;
+  }
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i]! ^ b[i]!;
+  return diff === 0;
 }
 
 export const toBase64 = (b: Uint8Array): string => btoa(String.fromCharCode(...b));

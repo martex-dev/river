@@ -139,12 +139,13 @@ export type KeyMessage =
     };
 
 /**
- * Keys from Rivers before 2.11 come without proof that their sender held the previous key. Until
- * every supported River sends the proof, such keys are still accepted — only from a member whose
- * sealed profile once opened with a key this device held (see CRYPTOGRAPHY.md §4a). Planned to be
- * turned off in 2.14.
+ * Keys from Rivers before 2.11 come without proof that their sender held the previous key. They
+ * were accepted from a member whose sealed profile once opened with a key this device held until
+ * every supported River sent the proof (see CRYPTOGRAPHY.md §4a). Off since 2.18 (planned for
+ * 2.14): a member removed long ago, whom such a record still vouched for, could otherwise hand out
+ * a key with the server's help.
  */
-export const ACCEPT_UNPROVEN_KEYS = true;
+export const ACCEPT_UNPROVEN_KEYS = false;
 
 export class CommunityError extends Error {
   constructor(message: string) {
@@ -623,16 +624,30 @@ export class CommunityService {
     member: { riverId: string; profile: string },
   ): boolean {
     try {
-      const { value } = ring.openBoundWith<SealedProfile>(
+      const { value, version } = ring.openBoundWith<SealedProfile>(
         communityId,
         'profile',
         member.riverId,
         member.profile,
       );
-      return typeof value.identityKey === 'string' && value.identityKey.length > 0;
+      if (typeof value.identityKey !== 'string' || value.identityKey.length === 0) return false;
+      // 2.18: a v1 profile (sealed before 2.12) may be someone else's, copied into this row by the
+      // server, so it counts only when it names the identity key libsignal holds for this member.
+      // Not every check against a profile's key elsewhere holds (one profile key per person, from
+      // whichever community was read last), so this one does not rely on them.
+      return version === 2 || this.libsignalIdentity(member.riverId) === value.identityKey;
     } catch {
       return false;
     }
+  }
+
+  /** The identity key libsignal holds for this person (base64), if River has talked to them. */
+  private libsignalIdentity(riverId: string): string | null {
+    const row = this.deps
+      .db()
+      ?.prepare("SELECT value FROM signal_store WHERE kind = 'identity' AND id = ?")
+      .get(riverId) as { value: Uint8Array } | undefined;
+    return row ? Buffer.from(row.value).toString('base64') : null;
   }
 
   /**
@@ -1149,6 +1164,10 @@ export class CommunityService {
     };
 
     const channels: ChannelView[] = c.channels
+      // A channel belongs to the community it was first seen in (2.18). What you write in a channel
+      // is sealed with the key of the community it belongs to, so a server listing a channel of one
+      // community under another (whose key it may know) must not move it there.
+      .filter((ch) => (this.channelToCommunity.get(ch.id) ?? c.id) === c.id)
       .map((ch) => {
         let name = 'channel';
         let topic = '';
@@ -1734,7 +1753,13 @@ export class CommunityService {
       throw new CommunityError('This invite link is damaged: its key does not match the community.');
     }
     if (!Number.isInteger(epoch) || epoch < 0) epoch = 0;
-    this.storeKey(res.id, invite.key, epoch);
+    // The community ID comes from the server, not from the link. A community this device already
+    // holds keys for never takes a key from an invite (2.18): otherwise a server could answer any
+    // invite with the ID of a community you are in and hand you a key it made, which you would
+    // then seal with and pass on to the other members as the next epoch. Keys you miss there
+    // arrive as for any member, each with a proof sealed under the key before it.
+    if (!this.keys.has(res.id)) this.loadKeys();
+    if (!this.keys.has(res.id)) this.storeKey(res.id, invite.key, epoch);
     await this.publishProfile(res.id);
     await this.refresh();
     this.ensureSocket();
@@ -4120,6 +4145,8 @@ export class CommunityService {
     this.deps.db()?.prepare('DELETE FROM communities WHERE id = ?').run(id);
     this.keys.delete(id);
     this.wires.delete(id);
+    for (const [channelId, owner] of this.channelToCommunity)
+      if (owner === id) this.channelToCommunity.delete(channelId);
     for (const [messageId, r] of this.recent) if (r.chat.communityId === id) this.recent.delete(messageId);
     this.communities = this.communities.filter((c) => c.id !== id);
     this.emit({ t: 'communities', communities: this.communities });

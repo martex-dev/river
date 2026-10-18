@@ -142,6 +142,24 @@ describe('River for Android on an emulator', { timeout: 180_000 }, () => {
     );
   });
 
+  it('serves the UI none of River’s own files, only its interface (2.18)', async () => {
+    const status = (path: string) =>
+      ui.evaluate(
+        (p) =>
+          fetch(p).then(
+            (r) => r.status,
+            () => 0,
+          ),
+        path,
+      );
+    expect(await status(`/_capacitor_file_/data/data/${PACKAGE}/files/settings.json`)).toBe(404);
+    expect(await status(`/_capacitor_file_/data/user/0/${PACKAGE}/shared_prefs/river-app-lock.xml`)).toBe(
+      404,
+    );
+    expect(await status('/_capacitor_content_/settings/system')).toBe(404);
+    expect(await status('/index.html')).toBe(200);
+  });
+
   it('opens SQLCipher storage protected by the Android Keystore', async () => {
     const storage = await until(() =>
       river<{ state: string; protection?: string }>('river.storage.status()').then((s) =>

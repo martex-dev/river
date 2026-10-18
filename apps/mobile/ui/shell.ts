@@ -17,6 +17,22 @@ export const OVERLAYS = [
   '.dm-call--full',
 ].join(', ');
 
+/**
+ * Android tells the interface when River shows over a locked phone (MainActivity.reportOverLock:
+ * a call answered on the lock screen, 2.18). Then only the full-screen call shows (phone.css), so
+ * someone holding a locked phone cannot read chats, change settings or link a device through it.
+ */
+export const OVER_LOCK_CHANNEL = 'river:app:overLock';
+
+export function setOverLock(root: HTMLElement, on: boolean): void {
+  if (on) root.dataset.overLock = '';
+  else delete root.dataset.overLock;
+}
+
+export function isOverLock(doc: Document): boolean {
+  return doc.documentElement.dataset.overLock !== undefined;
+}
+
 /** Overlays that close on Escape but are not on River's overlay stack (components/overlays.ts). */
 const CLOSES_ON_ESCAPE = '.settings-overlay, .story-viewer, .switcher-backdrop, .modal, .lightbox';
 
@@ -47,8 +63,10 @@ export const BACK_TARGET = 'data-phone-back';
  * back to Chats.
  */
 export function handleBack(env: BackEnv): boolean {
-  if (env.closeTopOverlay()) return true;
   const doc = env.doc;
+  // Over a locked phone only the call shows: Back puts River away, behind the lock screen.
+  if (isOverLock(doc)) return false;
+  if (env.closeTopOverlay()) return true;
   const minimize = doc.querySelector<HTMLElement>('.dm-call--full .dm-call__min');
   if (minimize) {
     minimize.click();

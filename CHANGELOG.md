@@ -169,6 +169,46 @@ All notable changes to River are documented here. The format follows
 - On phones the chat text size setting now works below 16 px too (phones show
   it 2 px larger than computers).
 
+### Security
+
+- Android: a call answered on the lock screen shows only the call there. Chats,
+  settings and the rest of River need the phone unlocked. River no longer shows
+  over the lock screen because another app or a web page asks it to; it does
+  that only for a call it knows about.
+- Lock River (Android and iPhone): while River is locked, screen readers and a
+  keyboard can no longer reach the interface under the lock cover.
+- Communities: opening an invite link never changes the key of a community you
+  are already in, so a server cannot slip a key it knows into one that way.
+- Communities: a channel stays with the community it belongs to. A server that
+  lists it under another community can no longer make River seal what you
+  write there with that other community's key.
+- Communities: keys are handed only to members whose profile is really theirs.
+  An old-style profile (from before 2.12) now counts only when it names the
+  identity key River holds for that person, so a server cannot get keys by
+  copying someone's old profile into an account of its own.
+- Calls through the server relay: when someone's voice key arrives again (as
+  it does after a reconnect), frames recorded earlier stay refused, so the
+  server cannot play back old audio.
+- Communities: a new community key is accepted only with proof that whoever
+  sent it held the key before it (as planned for 2.14). Rivers before 2.11,
+  which send no proof, can no longer hand out community keys.
+- Server: server mute (and a stage's audience) and server deafen now also hold
+  for voice that goes through the server relay, not only in the muted
+  person's own app.
+- Server: only a signed-in file upload may send a large body. Other requests,
+  and uploads without a valid session, are refused before the server reads
+  them.
+- Server: connecting no longer tells a member who is talking in voice channels
+  they cannot see.
+- Proxy (computers): through a proxy, River's live connection to a server
+  given by IP address checked the server's certificate against the proxy's
+  name instead of the server's. It now always checks it against the server.
+- Updates (computers): a test version that was still downloading when you
+  switched back to Stable is no longer installed.
+- Android: River's interface can no longer read River's own files (its
+  encrypted database, key file or logs) through the app framework's file
+  access; only River's client core reaches its storage.
+
 ## [2.17.0] - 2026-10-18
 
 **Notifications like Telegram's: per chat, grouped, with Mark as read and badges.**

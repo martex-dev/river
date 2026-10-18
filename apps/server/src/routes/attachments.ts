@@ -31,19 +31,23 @@ export async function registerAttachmentRoutes(
   await mkdir(dir, { recursive: true });
   const fileOf = (id: string): string => join(dir, id);
 
-  app.addContentTypeParser(
-    'application/octet-stream',
-    { parseAs: 'buffer', bodyLimit: deps.config.maxAttachmentBytes },
-    (_req, body, done) => done(null, body),
+  // The parser serves every route, so it keeps the server's small default limit (2.18): only the
+  // upload route below allows attachment-sized bodies, and only after the session checked out.
+  app.addContentTypeParser('application/octet-stream', { parseAs: 'buffer' }, (_req, body, done) =>
+    done(null, body),
   );
 
-  const requireSession = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+  const requireSession = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<FastifyReply | void> => {
     const header = request.headers.authorization ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
     const session = token ? await authenticate(db, token, deps.now()) : null;
     if (!session) {
-      await reply.code(401).send({ error: { code: 'unauthorized', message: 'A valid session is required' } });
-      return;
+      return reply
+        .code(401)
+        .send({ error: { code: 'unauthorized', message: 'A valid session is required' } });
     }
     request.session = session;
   };
@@ -51,7 +55,8 @@ export async function registerAttachmentRoutes(
   app.post<{ Querystring: { retain?: string } }>(
     `${API_PREFIX}/attachments`,
     {
-      preHandler: requireSession,
+      // Before the body is read: nobody without a session makes the server take in 25 MB.
+      onRequest: requireSession,
       bodyLimit: deps.config.maxAttachmentBytes,
       config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
     },
