@@ -9,16 +9,17 @@ Plan: [docs/product/road-to-3.md](docs/product/road-to-3.md). Many releases, one
 
 - [x] 2.11.2 Call fixes (missed calls, glare, a second call, other devices, speaker and Bluetooth), review fixes
 - [x] 2.11.3 Server, connection and hosting sweep: no double posts after a lost reply, reconnects that back off and notice dead connections, prekeys topped up while connected, PostgreSQL restarts, hosting retries and honest Funnel status
-- [ ] 2.12.0 Phones look like Telegram and Instagram: bottom tabs, chat list, conversation screen with bubbles, communities as a list, calls list, feed, profile
-- [ ] 2.12.x Polish for each phone screen; v2 associated data on by default
-- [ ] 2.13.x Easy start: install to first chat in under a minute, one-screen profile, invite links that open the app; community keys need a proof
-- [ ] 2.14.x Group calls, call quality, call links
-- [ ] 2.15.x Voice channels and meetings: bigger rooms, grid and speaker views, raise hand, stage
-- [ ] 2.16.x Notifications: per-chat sounds, mentions-only, grouping
-- [ ] 2.17.x Looks: wallpapers, accent colours, bubble styles, theme editor
-- [ ] 2.18.x Messaging, part 2
-- [ ] 2.19.x Privacy, part 2: less metadata, padding, proxy-friendly connections
-- [ ] 2.20.x Whole-app sweep
+- [x] 2.12.0 Community messages and profiles bound to their sender (v2 associated data by default), full channel history, community delivery fixes
+- [ ] 2.13.0 Phones look like Telegram and Instagram: bottom tabs, chat list, conversation screen with bubbles, communities as a list, calls list, feed, profile
+- [ ] 2.13.x Polish for each phone screen
+- [ ] 2.14.x Easy start: install to first chat in under a minute, one-screen profile, invite links that open the app; community keys need a proof
+- [ ] 2.15.x Group calls, call quality, call links
+- [ ] 2.16.x Voice channels and meetings: bigger rooms, grid and speaker views, raise hand, stage
+- [ ] 2.17.x Notifications: per-chat sounds, mentions-only, grouping
+- [ ] 2.18.x Looks: wallpapers, accent colours, bubble styles, theme editor
+- [ ] 2.19.x Messaging, part 2
+- [ ] 2.20.x Privacy, part 2: less metadata, padding, proxy-friendly connections
+- [ ] 2.21.x Whole-app sweep
 
 ## 2.x — Telegram, Signal and phone-call parity (maintainer request, 2026-10-16)
 
@@ -52,10 +53,10 @@ Audit and plan: [docs/product/telegram-parity.md](docs/product/telegram-parity.m
 - [ ] iPhone ringing and notifications while closed: needs Apple push (PushKit/CallKit) and a paid Apple developer account
 - [x] 2.11.1 Calls answered or declined on another device stop the others ringing; ringing stops when the caller hangs up even with the screen off; phone-style call screens
 - [x] Trust audit: identity changes, own-device copies, community key proofs, stuck rotations, v2 associated data (receiving), call-signal replays, username holds and River ID tombstones (CRYPTOGRAPHY.md §4b)
-- [ ] 2.12: seal community messages and profiles with v2 associated data (`SEAL_V2_DEFAULT = true` in `sealed.ts`) once 2.11 is out on every platform
-- [ ] 2.13: refuse community keys without a proof (`ACCEPT_UNPROVEN_KEYS = false` in `community-service.ts`)
+- [x] 2.12: seal community messages and profiles with v2 associated data (`SEAL_V2_DEFAULT = true` in `sealed.ts`) once 2.11 is out on every platform
+- [ ] 2.14: refuse community keys without a proof (`ACCEPT_UNPROVEN_KEYS = false` in `community-service.ts`)
 - [ ] Idempotent channel resend: `send` takes the outbox id so a reply lost while going offline cannot post twice (needs server de-duplication)
-- [ ] Channel history: main returns `hasMore` so pages of undecryptable messages do not end the history early (the renderer guesses today)
+- [x] Channel history: main returns `hasMore` (and where the next page starts) so pages of undecryptable messages do not end the history early; messages sharing a time at a page boundary are no longer skipped
 - [ ] Decide: bind River IDs to identity keys so an ID cannot be registered first on another server (architecture decision for the maintainer)
 - [x] Android rings and notifies like a phone: call screen over the lock screen, ringtone, CallStyle notifications, Stay connected on by default, watchdog, restart after reboot, honest Settings state (unreleased)
 - [ ] Check on real phones: Android Back, picture-in-picture, proximity, lock-screen calls, the new call screen and ringtone, Stay connected with the screen off for an hour, battery and full-screen prompts, iPhone core recovery (native code first compiled in CI)

@@ -155,16 +155,22 @@ than per-member sender keys:
   server keeps listing still receives the next key from the rotator and can
   produce a valid proof for the epoch right after the one they held. Membership
   signed by the community's managers would be needed to close that.
-- **Associated data v2 (2.11, receiving only for now)**: messages may be sealed
-  with `river-community-v2|<communityId>|message:<channelId>|<messageId>|<senderRiverId>`
+- **Associated data v2 (receiving since 2.11, sending since 2.12)**: messages
+  are sealed with
+  `river-community-v2|<communityId>|message:<channelId>|<messageId>|<senderRiverId>`
   and profiles with `river-community-v2|<communityId>|profile|<riverId>`, which
   stops the server re-attributing a message to another sender, replaying it
   under a new ID, or giving one member's profile to another. Receivers open v2
-  first, then v1. Senders keep sealing v1 until every supported River opens v2
-  (`SEAL_V2_DEFAULT` in `sealed.ts`; see §4b). Values sealed v1 stay readable
-  forever and keep v1's weaker binding. An edit of a v2 message stays v2; the
-  server can still show an earlier version of the same message (edits are not
-  ordered cryptographically).
+  first, then v1. Since 2.12 senders seal v2 (`SEAL_V2_DEFAULT = true` in
+  `sealed.ts`; see §4b): 2.11 had been released on every platform, and Rivers
+  before 2.11 cannot read v2 values. Values sealed v1 (messages and profiles
+  from before 2.12 or from older Rivers) stay readable forever and keep v1's
+  weaker binding. An edit is sealed under the message's own ID and sender, so
+  it stays v2, and editing a v1 message seals it v2; the server can still show
+  an earlier version of the same message (edits are not ordered
+  cryptographically). Incoming webhook posts are sealed by outside services
+  with the webhook's own key and v1 associated data (`scripts/webhook`); they
+  are shown under the webhook's name, never as a member.
 
 ## 4b. Trust checks against the server (2.11) and the compatibility plan
 
@@ -200,18 +206,19 @@ A3) wherever a check is possible without new primitives:
 **Mixed versions.** Desktop, Android and iPhone update at different times, so
 every change is readable by the previous releases and accepts what they send:
 
-| Change                   | 2.11 sends                                                                 | 2.11 accepts                                                                                                                                                                                                                                                      | Later release                                                                  |
-| ------------------------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Community key proof      | `ckey` with `wrap`/`prev` (ignored by older Rivers); `ckeyReq` with `have` | proven keys; unproven keys (older Rivers) only from a member whose sealed profile opened with a key held before, naming the identity key that member's messages use, and only if the sender's current profile opens with the offered key (`ACCEPT_UNPROVEN_KEYS`) | **2.13**: stop accepting unproven keys (`ACCEPT_UNPROVEN_KEYS = false`)        |
-| Associated data v2       | v1 (`SEAL_V2_DEFAULT = false`)                                             | v2 and v1                                                                                                                                                                                                                                                         | **2.12**: send v2 (`SEAL_V2_DEFAULT = true`); v1 stays readable for old values |
-| Rotation adoption report | `POST …/epoch/adopted` (older servers: ignored)                            | —                                                                                                                                                                                                                                                                 | none                                                                           |
-| Verification marks       | the verified key (33 bytes)                                                | the verified key, and the one-byte mark of older versions (treated as "the stored key was verified")                                                                                                                                                              | none                                                                           |
+| Change                   | 2.11 sends                                                                 | 2.11 accepts                                                                                                                                                                                                                                                      | Later release                                                                         |
+| ------------------------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Community key proof      | `ckey` with `wrap`/`prev` (ignored by older Rivers); `ckeyReq` with `have` | proven keys; unproven keys (older Rivers) only from a member whose sealed profile opened with a key held before, naming the identity key that member's messages use, and only if the sender's current profile opens with the offered key (`ACCEPT_UNPROVEN_KEYS`) | **2.14**: stop accepting unproven keys (`ACCEPT_UNPROVEN_KEYS = false`)               |
+| Associated data v2       | v1 (`SEAL_V2_DEFAULT = false`)                                             | v2 and v1                                                                                                                                                                                                                                                         | **2.12 (done)**: send v2 (`SEAL_V2_DEFAULT = true`); v1 stays readable for old values |
+| Rotation adoption report | `POST …/epoch/adopted` (older servers: ignored)                            | —                                                                                                                                                                                                                                                                 | none                                                                                  |
+| Verification marks       | the verified key (33 bytes)                                                | the verified key, and the one-byte mark of older versions (treated as "the stored key was verified")                                                                                                                                                              | none                                                                                  |
 
 What stays possible during the transition: a member who held a genuine key at
 some point (including someone removed whom the server keeps listing) can, with
-the server, hand an unproven key to others until 2.13; v1-sealed messages and
-profiles can still be re-attributed or swapped until senders switch to v2 (and,
-for values sealed v1 before then, afterwards too).
+the server, hand an unproven key to others until 2.14; v1-sealed messages and
+profiles can still be re-attributed or swapped: since 2.12 only values sealed
+v1 before then, or by Rivers that have not updated (v1 stays readable, so the
+server can still re-attribute or replay those).
 
 ## 5. Attachments and files (implemented, 0.4.0)
 

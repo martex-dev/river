@@ -2,7 +2,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '../src/shared/ipc.ts';
-import { useCommunity } from '../src/renderer/src/community/store.ts';
+import { canLoadOlder, useCommunity } from '../src/renderer/src/community/store.ts';
 import { usePendingFiles } from '../src/renderer/src/community/ui/Attachments.tsx';
 import { addFriend } from '../src/renderer/src/dm/friends.ts';
 import { useDm } from '../src/renderer/src/dm/store.ts';
@@ -37,6 +37,12 @@ beforeEach(() => {
   useCommunity.setState({ messages: {}, noMore: {}, threads: {}, toast: null });
 });
 
+/** A history page as main answers it (2.12). */
+const page = (messages: ChatMessage[], hasMore: boolean, before = messages[0]?.sentAt ?? null) => ({
+  ok: true,
+  value: { messages, hasMore, before, beforeId: before ? 'x'.repeat(22) : null },
+});
+
 describe('older channel history', () => {
   it('loads one page at a time, even when asked twice at once', async () => {
     useCommunity.setState({ messages: { ch: [msg('m5', 5)] } });
@@ -45,31 +51,53 @@ describe('older channel history', () => {
     const a = useCommunity.getState().loadOlder('ch');
     const b = useCommunity.getState().loadOlder('ch');
     expect(community).toHaveBeenCalledOnce();
-    answer({ ok: true, value: [msg('m1', 1), msg('m2', 2)] });
+    answer(page([msg('m1', 1), msg('m2', 2)], true));
     expect(await a).toBe(2);
     expect(await b).toBe(2);
     expect(useCommunity.getState().messages.ch!.map((m) => m.id)).toEqual(['m1', 'm2', 'm5']);
   });
 
-  it('does not stop at a short page (undecryptable messages are left out), only at an empty one', async () => {
+  it('ends where main says, not at a short page (undecryptable messages are left out)', async () => {
     useCommunity.setState({ messages: { ch: [msg('m5', 5)] } });
-    community.mockResolvedValueOnce({ ok: true, value: [msg('m4', 4)] });
+    community.mockResolvedValueOnce(page([msg('m4', 4)], true));
     await useCommunity.getState().loadOlder('ch');
     expect(useCommunity.getState().noMore.ch).toBeUndefined();
-    community.mockResolvedValueOnce({ ok: true, value: [] });
-    expect(await useCommunity.getState().loadOlder('ch')).toBe(0);
+    community.mockResolvedValueOnce(page([msg('m3', 3)], false));
+    expect(await useCommunity.getState().loadOlder('ch')).toBe(1);
     expect(useCommunity.getState().noMore.ch).toBe(true);
   });
 
-  it('can load older history again after the channel is opened anew', async () => {
+  it('walks past pages of messages it cannot open, from where the server stopped', async () => {
+    useCommunity.setState({ messages: { ch: [msg('m50', 50)] } });
+    const far = new Date(Date.UTC(2026, 9, 16, 9, 0)).toISOString();
+    const further = new Date(Date.UTC(2026, 9, 16, 8, 0)).toISOString();
+    // Two full pages from before you joined (nothing opens), then one you can read.
+    community
+      .mockResolvedValueOnce(page([], true, far))
+      .mockResolvedValueOnce(page([], true, further))
+      .mockResolvedValueOnce(page([msg('m1', 1)], true));
+    expect(await useCommunity.getState().loadOlder('ch')).toBe(1);
+    const asked = community.mock.calls.map((c) => (c[0] as { before?: string }).before);
+    // Each request starts where the server's last page ended, never at the same place again.
+    expect(asked).toEqual([msg('m50', 50).sentAt, far, further]);
+    expect(useCommunity.getState().noMore.ch).toBeUndefined();
+  });
+
+  it('offers older messages from what main says when the newest page opens only partly', async () => {
     useCommunity.setState({
       communities: [{ id: 'c', channels: [{ id: 'ch', kind: 'text' }] }] as never,
       noMore: { ch: true },
     });
-    const messages = vi.fn().mockResolvedValue({ ok: true, value: [msg('m9', 9)] });
-    (window.river.community as unknown as { messages: unknown }).messages = messages;
+    community.mockResolvedValueOnce(page([msg('m9', 9)], true));
     await useCommunity.getState().loadMessages('ch');
-    expect(useCommunity.getState().noMore.ch).toBeUndefined();
+    expect(useCommunity.getState().noMore.ch).toBe(false);
+    expect(canLoadOlder(useCommunity.getState().noMore, 'ch', 1)).toBe(true);
+    community.mockResolvedValueOnce(page([msg('m9', 9)], false));
+    await useCommunity.getState().loadMessages('ch');
+    expect(canLoadOlder(useCommunity.getState().noMore, 'ch', 1)).toBe(false);
+    // Not known yet (another way of filling the list): the old guess.
+    expect(canLoadOlder({}, 'ch', 100)).toBe(true);
+    expect(canLoadOlder({}, 'ch', 3)).toBe(false);
   });
 
   it('removes a deleted thread reply from its thread', () => {

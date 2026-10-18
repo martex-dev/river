@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Permission } from '@river/protocol';
+import { Permission, messagesResponseSchema } from '@river/protocol';
 import { tally, voteEmoji } from '../../apps/desktop/src/shared/poll.ts';
 import type { CommunityEvent } from '../../apps/desktop/src/shared/ipc.ts';
 // Desktop main-process code under test.
@@ -20,6 +20,14 @@ import { buildApp } from '../../apps/server/src/app.ts';
 import { loadConfig } from '../../apps/server/src/config.ts';
 import { migrateToLatest, openDatabase, type RiverDatabase } from '../../apps/server/src/db/database.ts';
 import { HOME_LINK_BASE } from '../../apps/desktop/src/shared/home-server.ts';
+import {
+  messageBinding,
+  newCommunityKey,
+  randomId,
+  seal,
+  sealBound,
+} from '../../apps/desktop/src/main/community/sealed.ts';
+import { z } from 'zod';
 
 const testBlobDir = (): string => join(tmpdir(), `river-blobs-${Math.random().toString(36).slice(2)}`);
 
@@ -1062,6 +1070,138 @@ describe('desktop ↔ server communities', () => {
     expect(older.map((m) => m.text)).toContain('the hidden needle');
     const found = await alice.community.action({ a: 'search', communityId: created.id, query: 'NEEDLE' });
     expect(found.map((m) => m.text)).toEqual(['the hidden needle']);
+  });
+
+  it('history pages through messages this device cannot open; search and jumps go past them', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Before you');
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.kind === 'text')!;
+    await alice.community.send(general.id, 'the old needle');
+    // A hundred messages sealed with a key this device never had (sent before it joined).
+    const unknown = newCommunityKey();
+    for (let i = 0; i < 100; i++) {
+      await alice.community.api(
+        `/channels/${general.id}/messages`,
+        'POST',
+        { id: randomId(), body: seal(unknown, created.id, `message:${general.id}`, { text: `x${i}` }) },
+        z.unknown(),
+      );
+    }
+    for (const t of ['one', 'two', 'three']) await alice.community.send(general.id, t);
+
+    const newest = await alice.community.action({ a: 'historyPage', channelId: general.id });
+    expect(newest.messages.map((m) => m.text)).toEqual(['one', 'two', 'three']);
+    expect(newest.hasMore).toBe(true);
+    // The next page starts where the server's page ended, not at the oldest message shown.
+    const older = await alice.community.action({
+      a: 'historyPage',
+      channelId: general.id,
+      before: newest.before!,
+      beforeId: newest.beforeId!,
+    });
+    expect(older.messages.map((m) => m.text)).toEqual(['the old needle']);
+    expect(older.hasMore).toBe(false);
+    const found = await alice.community.action({ a: 'search', communityId: created.id, query: 'needle' });
+    expect(found.map((m) => m.text)).toEqual(['the old needle']);
+  });
+
+  it('messages sharing a time at a page boundary are all paged, none skipped', async () => {
+    const alice = await person('Alice');
+    const created = await alice.community.create('Same time');
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.kind === 'text')!;
+    const key = Buffer.from(
+      (
+        locals.at(-1)!.prepare('SELECT key FROM community_keys WHERE community_id = ?').get(created.id) as {
+          key: Uint8Array;
+        }
+      ).key,
+    );
+    // 101 messages in the same millisecond (a burst, or a server with a coarse clock).
+    const at = new Date().toISOString();
+    await serverDb.db
+      .insertInto('messages')
+      .values(
+        Array.from({ length: 101 }, (_, i) => {
+          const id = randomId();
+          return {
+            id,
+            channel_id: general.id,
+            sender: alice.riverId,
+            body: sealBound(
+              key,
+              created.id,
+              `message:${general.id}`,
+              messageBinding(id, alice.riverId),
+              { text: `m${i}` },
+              true,
+            ),
+            sent_at: at,
+            pinned: 0,
+            thread_id: null,
+          };
+        }),
+      )
+      .execute();
+    const first = await alice.community.action({ a: 'historyPage', channelId: general.id });
+    expect(first.messages).toHaveLength(100);
+    const rest = await alice.community.action({
+      a: 'historyPage',
+      channelId: general.id,
+      before: first.before!,
+      beforeId: first.beforeId!,
+    });
+    expect(rest.messages).toHaveLength(1);
+    expect(new Set([...first.messages, ...rest.messages].map((m) => m.text)).size).toBe(101);
+  });
+
+  it('a reaction, edit or thread reply to an old message is not announced as a new message', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Quiet');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.kind === 'text')!;
+    const old = await alice.community.send(general.id, 'from last week');
+    // Bob read it last week, then starts River again: this session has not opened the channel.
+    await bob.community.refresh();
+    await bob.community.action({ a: 'markRead', channelId: general.id });
+    const fresh = bob.restart();
+    await fresh.refresh();
+    const seen: Array<{ text: string; isNew: boolean }> = [];
+    fresh.onEvent((e) => {
+      if (e.t === 'message') seen.push({ text: e.message.text, isNew: e.isNew });
+    });
+    const push = async (id: string): Promise<void> => {
+      const wire = (
+        await alice.community.api(
+          `/channels/${general.id}/messages`,
+          'GET',
+          undefined,
+          messagesResponseSchema,
+        )
+      ).messages.find((m) => m.id === id)!;
+      (fresh as unknown as { handle(e: unknown): void }).handle({
+        t: 'message',
+        communityId: created.id,
+        message: wire,
+      });
+    };
+    await alice.community.action({
+      a: 'react',
+      channelId: general.id,
+      messageId: old.id,
+      emoji: '👍',
+      on: true,
+    });
+    await push(old.id);
+    await alice.community.action({ a: 'edit', channelId: general.id, messageId: old.id, text: 'edited' });
+    await push(old.id);
+    const brandNew = await alice.community.send(general.id, 'just now');
+    await push(brandNew.id);
+    expect(seen).toEqual([
+      { text: 'from last week', isNew: false },
+      { text: 'edited', isNew: false },
+      { text: 'just now', isNew: true },
+    ]);
   });
 
   it('categories, sidebar moves and unread markers that survive a restart', async () => {

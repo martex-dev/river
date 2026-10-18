@@ -435,6 +435,20 @@ export const communityActionSchema = z.discriminatedUnion('a', [
   z.object({ a: z.literal('pins'), channelId: id }).strict(),
   /** Older messages, before an ISO timestamp (100 at a time). */
   z.object({ a: z.literal('history'), channelId: id, before: z.iso.datetime() }).strict(),
+  /**
+   * Like history, with whether older messages exist and where the next page starts (2.12): a page
+   * of messages this device cannot open (sent before you joined) does not end the history.
+   */
+  z
+    .object({
+      a: z.literal('historyPage'),
+      channelId: id,
+      /** Omitted: the newest page. */
+      before: z.iso.datetime().optional(),
+      /** The ID of the message at `before`, so messages sharing its time are not skipped. */
+      beforeId: id.optional(),
+    })
+    .strict(),
   /** Search a community's text channels (decrypted on this device). */
   z.object({ a: z.literal('search'), communityId: id, query: z.string().trim().min(2).max(100) }).strict(),
   z
@@ -739,6 +753,7 @@ interface Results {
   pins: ChatMessage[];
   upload: AttachmentPointer;
   history: ChatMessage[];
+  historyPage: HistoryPage;
   threadMessages: ChatMessage[];
   search: ChatMessage[];
   download: Uint8Array;
@@ -752,6 +767,17 @@ interface Results {
 export type CommunityActionResult<A extends CommunityAction> = A['a'] extends keyof Results
   ? Results[A['a']]
   : null;
+
+/** One page of a channel's history, oldest first (2.12). */
+export interface HistoryPage {
+  /** The messages this device could open. */
+  messages: ChatMessage[];
+  /** Whether the server may have older messages (the page was full). */
+  hasMore: boolean;
+  /** Where the next older page starts: the oldest message on this page, opened or not. */
+  before: string | null;
+  beforeId: string | null;
+}
 
 /** An unsent message as kept on this device. */
 export interface SavedOutgoing {

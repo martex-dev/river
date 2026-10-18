@@ -8,7 +8,16 @@ import { createIdentity } from '@river/crypto';
 import { AccountService } from '../../apps/desktop/src/main/account/account-service.ts';
 import { LinkService } from '../../apps/desktop/src/main/account/link-service.ts';
 import { CommunityService } from '../../apps/desktop/src/main/community/community-service.ts';
-import { newCommunityKey, seal } from '../../apps/desktop/src/main/community/sealed.ts';
+import {
+  SEAL_V2_DEFAULT,
+  messageBinding,
+  newCommunityKey,
+  open,
+  openBound,
+  seal,
+} from '../../apps/desktop/src/main/community/sealed.ts';
+// @ts-expect-error -- plain JavaScript reference script, no type declarations
+import { parseAddress, sealPost } from '../../scripts/webhook/post.mjs';
 import { DmService } from '../../apps/desktop/src/main/dm/dm-service.ts';
 import { createRequestBytes, createRequestJson } from '../../apps/desktop/src/main/http.ts';
 import { IdentityService } from '../../apps/desktop/src/main/identity/identity-service.ts';
@@ -534,6 +543,9 @@ describe('community keys a server cannot inject', { timeout: 90_000 }, () => {
       id,
       seal(newCommunityKey(), id, 'profile', { name: 'Eve', identityKey: 'z'.repeat(44) }),
     );
+    // Only what the rotation sends is checked below: Bob does not ask anyone for the key meanwhile
+    // (on a busy machine his refresh can see the new epoch first, and a request may go to Eve).
+    bob.community.keyRequestDelayMs = 20_000;
     await alice.community.action({ a: 'kick', communityId: id, riverId: carol.riverId });
     await alice.community.refresh();
     await until(() => epochs(alice, id).includes(1));
@@ -646,6 +658,54 @@ describe('community keys a server cannot inject', { timeout: 90_000 }, () => {
   });
 });
 
+describe('community key requests from newcomers', { timeout: 60_000 }, () => {
+  it('a member who joined after our last look at the members still gets the key', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Crew');
+    const link = await alice.community.invite(created.id);
+    await bob.community.join(link, async () => undefined);
+    await alice.community.refresh();
+    await alice.community.action({ a: 'kick', communityId: created.id, riverId: bob.riverId });
+    await alice.community.refresh();
+    await until(() => epochs(alice, created.id).includes(1));
+    // Dave joins with the epoch-0 link; Alice has not looked at the member list since.
+    const dave = await person('Dave');
+    await dave.community.join(link, async () => undefined);
+    await dave.community.refresh();
+    await until(async () => {
+      await alice.dm.sync();
+      await dave.dm.sync();
+      return epochs(dave, created.id).includes(1);
+    }, 20_000);
+    expect(keyOf(dave, created.id, 1).equals(keyOf(alice, created.id, 1))).toBe(true);
+  });
+
+  it('the new key goes out even when the rotating member cannot republish its profile', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    const created = await alice.community.create('Crew');
+    const link = await alice.community.invite(created.id);
+    await bob.community.join(link, async () => undefined);
+    await carol.community.join(link, async () => undefined);
+    for (const p of [alice, bob, carol]) await p.community.refresh();
+    // The profile update fails (the server hiccups) right when Alice replaces the key.
+    (alice.community as unknown as { publishProfile(): Promise<void> }).publishProfile = async () => {
+      throw new Error('server hiccup');
+    };
+    await alice.community.action({ a: 'kick', communityId: created.id, riverId: carol.riverId });
+    await alice.community.refresh();
+    await until(() => epochs(alice, created.id).includes(1));
+    await until(async () => {
+      await bob.community.refresh();
+      await bob.dm.sync();
+      return epochs(bob, created.id).includes(1);
+    });
+    expect(keyOf(bob, created.id, 1).equals(keyOf(alice, created.id, 1))).toBe(true);
+  });
+});
+
 describe('community messages and profiles bound to who sent them', { timeout: 60_000 }, () => {
   it('v2 messages open for everyone; a server cannot move them to another sender or ID; v1 still works', async () => {
     const alice = await person('Alice');
@@ -655,8 +715,8 @@ describe('community messages and profiles bound to who sent them', { timeout: 60
     const general = (await alice.community.refresh())[0]!.channels.find((c) => c.kind === 'text')!;
     await bob.community.refresh();
 
-    // Mixed versions: Alice already seals v2, Bob still v1. Both read both.
-    alice.community.sealV2 = true;
+    // Mixed versions: Alice seals v2 (the default since 2.12), Bob acts as 2.11 (v1). Both read both.
+    bob.community.sealV2 = false;
     const v2 = await alice.community.send(general.id, 'sealed v2');
     const v1 = await bob.community.send(general.id, 'sealed v1');
     expect((await bob.community.messages(general.id)).map((m) => m.text)).toEqual(
@@ -703,6 +763,80 @@ describe('community messages and profiles bound to who sent them', { timeout: 60
     const views = await bob.community.refresh();
     expect(views[0]!.members.find((m) => m.riverId === bob.riverId)?.name).not.toBe('Alice');
     expect(views[0]!.members.find((m) => m.riverId === alice.riverId)?.name).toBe('Alice');
+  });
+
+  it('2.12 seals messages, edits and profiles v2 by default; v1 from older Rivers and webhooks still open', async () => {
+    expect(SEAL_V2_DEFAULT).toBe(true);
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const created = await alice.community.create('Crew');
+    await bob.community.join(await alice.community.invite(created.id), async () => undefined);
+    const general = (await alice.community.refresh())[0]!.channels.find((c) => c.kind === 'text')!;
+    await bob.community.refresh();
+    const key = keyOf(alice, created.id, 0);
+    const purpose = `message:${general.id}` as const;
+    const stored = async (id: string): Promise<{ body: string; sender: string }> =>
+      serverDb.db
+        .selectFrom('messages')
+        .select(['body', 'sender'])
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
+
+    // A new message is bound to its ID and sender: v1 associated data does not open it.
+    const sent = await alice.community.send(general.id, 'hello v2');
+    const row = await stored(sent.id);
+    expect(() => open(key, created.id, purpose, row.body)).toThrow();
+    expect(openBound(key, created.id, purpose, messageBinding(sent.id, alice.riverId), row.body)).toEqual({
+      value: expect.objectContaining({ text: 'hello v2' }),
+      version: 2,
+    });
+    // Its edit keeps the same binding (same ID, same sender).
+    await alice.community.action({ a: 'edit', channelId: general.id, messageId: sent.id, text: 'edited' });
+    const edited = await stored(sent.id);
+    expect(
+      openBound(key, created.id, purpose, messageBinding(sent.id, alice.riverId), edited.body).version,
+    ).toBe(2);
+    // The profile is bound to its member.
+    const profile = await serverDb.db
+      .selectFrom('community_members')
+      .select('profile')
+      .where('river_id', '=', alice.riverId)
+      .executeTakeFirstOrThrow();
+    expect(() => open(key, created.id, 'profile', profile.profile)).toThrow();
+    expect(openBound(key, created.id, 'profile', alice.riverId, profile.profile).version).toBe(2);
+
+    // A message from a River before 2.12 (v1) still opens, and editing it moves it to v2.
+    bob.community.sealV2 = false;
+    const old = await bob.community.send(general.id, 'hello v1');
+    expect(open<{ text: string }>(key, created.id, purpose, (await stored(old.id)).body).text).toBe(
+      'hello v1',
+    );
+    bob.community.sealV2 = true;
+    await bob.community.action({ a: 'edit', channelId: general.id, messageId: old.id, text: 'v1 edited' });
+    expect(
+      openBound(key, created.id, purpose, messageBinding(old.id, bob.riverId), (await stored(old.id)).body)
+        .version,
+    ).toBe(2);
+
+    // A webhook post sealed by an outside service with v1 associated data (scripts/webhook) opens.
+    const address = await alice.community.action({
+      a: 'createWebhook',
+      communityId: created.id,
+      channelId: general.id,
+      name: 'CI',
+    });
+    const hook = parseAddress(address) as { endpoint: string; token: string };
+    const posted = await server.inject({
+      method: 'POST',
+      url: new URL(hook.endpoint).pathname,
+      headers: { authorization: `Bearer ${hook.token}`, 'content-type': 'application/json' },
+      payload: { id: msgId(), body: sealPost(parseAddress(address), 'Build passed') },
+    });
+    expect(posted.statusCode).toBe(201);
+    await bob.community.refresh();
+    const seen = await bob.community.messages(general.id);
+    expect(seen.map((m) => m.text)).toEqual(['edited', 'v1 edited', 'Build passed']);
+    expect(seen.find((m) => m.text === 'Build passed')).toMatchObject({ senderName: 'CI' });
   });
 
   it('a cached file is never served for a pointer with another digest or key', async () => {
