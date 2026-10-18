@@ -401,4 +401,17 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 25,
+    name: '0025_dm_received_indexes',
+    up(db) {
+      // Speed (2.21): unread counts read only the messages after where you stopped reading
+      // (not every message in the chat), and "Keep messages on this device" finds old messages
+      // without reading them all. Same expression as the queries, so SQLite can use them.
+      db.exec(`
+        CREATE INDEX dm_messages_unread ON dm_messages (peer, COALESCE(received_at, sent_at));
+        CREATE INDEX dm_messages_received ON dm_messages (COALESCE(received_at, sent_at));
+      `);
+    },
+  },
 ];

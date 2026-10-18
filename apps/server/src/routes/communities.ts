@@ -2497,10 +2497,14 @@ export async function registerCommunityRoutes(
   type MessageQuery = ReturnType<typeof messageRows>;
   const beforeCursor = (q: MessageQuery, before?: string, beforeId?: string): MessageQuery => {
     if (!before || !/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(before)) return q;
+    // `sent_at <= before` changes nothing but lets the database start reading at the cursor
+    // (an index range) instead of skipping every newer message one by one.
     if (beforeId && /^[A-Za-z0-9_-]{22}$/.test(beforeId))
-      return q.where((eb) =>
-        eb.or([eb('sent_at', '<', before), eb.and([eb('sent_at', '=', before), eb('id', '<', beforeId)])]),
-      );
+      return q
+        .where('sent_at', '<=', before)
+        .where((eb) =>
+          eb.or([eb('sent_at', '<', before), eb.and([eb('sent_at', '=', before), eb('id', '<', beforeId)])]),
+        );
     return q.where('sent_at', '<', before);
   };
 

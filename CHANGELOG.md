@@ -6,6 +6,27 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Faster with big accounts: the chat list (built again on every message) is
+  about 50 times faster with hundreds of chats, and opening a busy chat is
+  about 100 times faster. On phones, where each database query is a native
+  call, the chat list now needs 10 queries instead of thousands.
+- Smoother long lists: a message or a presence change redraws only the chat or
+  member row it changed, not every row; rows out of view are skipped; pictures
+  decode without stalling scrolling; presence updates after a reconnect arrive
+  as one.
+- Faster start: River's window opens sooner (no proxy step when no proxy is
+  set), and it loads less at start (the QR scanner, the appearance centre and
+  the server admin page load when first opened; about 15 % less start-up
+  code on computers and phones).
+- Faster servers: opening a community, sending to a community of 1000 people,
+  the community list and old channel history are 5 to 50 times faster (new
+  indexes, migration 0032, same on PostgreSQL); large answers are compressed
+  for apps that ask (about 40 % smaller).
+- Settings → System → Connection check shows how long River took to start, step
+  by step; the log has the same line. See docs/performance.md.
+
 ## [2.21.0] - 2026-10-19
 
 **River in eleven languages, and thirteen phone fixes (group calls over a locked phone, big emoji, call links on the phone).**

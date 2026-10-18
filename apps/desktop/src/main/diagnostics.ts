@@ -17,6 +17,8 @@ export interface DiagnosticsDeps {
   homeServerEnabled: boolean;
   version: string;
   platform: string;
+  /** How long this start took, step by step (startup-timings.ts). */
+  startup?: () => string | null;
   now?: () => number;
 }
 
@@ -31,6 +33,8 @@ export async function runMainDiagnostics(deps: DiagnosticsDeps): Promise<Diagnos
   const checks: DiagnosticCheck[] = [
     { id: 'app', label: 'River', status: 'ok', detail: `${deps.version} on ${deps.platform}` },
   ];
+  const startup = deps.startup?.();
+  if (startup) checks.push({ id: 'startup', label: 'Start-up', status: 'ok', detail: startup });
 
   if (deps.homeServerEnabled) {
     try {
