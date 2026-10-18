@@ -216,6 +216,18 @@ migration marked destructive and restores it on failure. Upgrade paths
   the server's outbound bandwidth (≈ speakers × listeners × 40 kbit/s), e.g.
   50 people with 3 talking ≈ 6 Mbit/s out of the server, and by the per-call
   sender-key distribution (one sealed signal per pair on join).
+- **Group calls and call links (2.18)** reuse that engine (`community/voice.ts`)
+  instead of a third media stack. A call in a group conversation joins a server
+  "call room" named by a hash of the call's secret ID (`call.group`, up to 50
+  people; the server tells the people in it and members watching it who is in it,
+  `call.roster`); members are rung inside libsignal messages (`gcall`), and call
+  setup between two people goes the same way, checked in main against the
+  group's members. People leave and rejoin from the group's "Join" bar; the call
+  is over when the last one leaves. A call link carries only the host and a link
+  ID: people ask to join (`clink`), and the host lets each one in (then they get
+  the call ID). Renderer: `dm/group-call.ts`, `dm/GroupCallUi.tsx`; main:
+  `main/dm/group-calls.ts`; server: `communities/hub.ts`. Details:
+  CRYPTOGRAPHY.md §8a.
 
 ## 11. Remote assistance (Stage 2, planned)
 

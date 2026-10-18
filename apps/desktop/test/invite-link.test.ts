@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { formatInvite } from '../src/main/community/sealed.ts';
 import {
+  callLink,
   findInvite,
   friendLink,
+  parseCallLink,
   inviteHost,
   looksLikeInvite,
   parseFriend,
@@ -56,5 +58,27 @@ describe('invites inside messages', () => {
   it('finds nothing in ordinary text or half links', () => {
     expect(findInvite('hello there')).toBeNull();
     expect(findInvite('https://crew.trycloudflare.com/join#c=short&k=short')).toBeNull();
+  });
+});
+
+describe('call links (2.18)', () => {
+  const host = '75b7293c-e0a9-44c8-95ef-9eaec50e701c';
+  const link = 'L'.repeat(22);
+  it('round-trips: the server, the host and the link ID (never a call ID)', () => {
+    const url = callLink('https://river.example.org/', host, link);
+    expect(url).toBe(`https://river.example.org/call#h=${host}&l=${link}`);
+    expect(parseCallLink(url)).toEqual({ serverUrl: 'https://river.example.org', host, link });
+    expect(parseCallLink(callLink('https://home.example/river', host, link))?.serverUrl).toBe(
+      'https://home.example/river',
+    );
+  });
+  it('rejects anything else', () => {
+    expect(parseCallLink(`https://river.example.org/add#h=${host}&l=${link}`)).toBeNull();
+    expect(parseCallLink(`https://river.example.org/call#h=${host}&l=short`)).toBeNull();
+    expect(
+      parseCallLink(`https://river.example.org/call#h=not-a-uuid-at-all-not-a-uuid-at-all&l=${link}`),
+    ).toBeNull();
+    expect(parseCallLink(`javascript:alert(1)//call#h=${host}&l=${link}`)).toBeNull();
+    expect(parseCallLink('hello')).toBeNull();
   });
 });

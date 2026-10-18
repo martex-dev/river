@@ -1,4 +1,4 @@
-import { looksLikeInvite, parseFriend, parseSignup } from '../shared/invite-link.ts';
+import { looksLikeInvite, parseCallLink, parseFriend, parseSignup } from '../shared/invite-link.ts';
 import type { DeepLink } from '../shared/ipc.ts';
 
 /** The scheme River registers with the operating system ("Open in River" on invite pages). */
@@ -7,7 +7,7 @@ export const DEEP_LINK_SCHEME = 'river';
 /**
  * Reads a `river://open?link=<invite, friend or sign-up link>` URL, as the
  * invite web page builds it from the link the person clicked. Only the three
- * kinds of River link are accepted, and nothing happens without the person
+ * kinds of River link (and call links) are accepted, and nothing happens without the person
  * confirming in the app ("Join this community?", "Add a friend?").
  */
 export function parseDeepLink(raw: string): DeepLink | null {
@@ -31,6 +31,8 @@ export function parseDeepLink(raw: string): DeepLink | null {
   if (!link) return null;
   if (looksLikeInvite(link)) return { kind: 'invite', link };
   if (parseSignup(link)) return { kind: 'signup', link };
+  // A call link (2.18): opens "Ask to join"; nothing is sent until the person asks.
+  if (parseCallLink(link)) return { kind: 'call', link };
   const friend = parseFriend(link);
   if (friend?.serverUrl) return { kind: 'friend', link };
   return null;

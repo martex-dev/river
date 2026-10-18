@@ -617,6 +617,13 @@ export const transferOwnershipRequestSchema = z.object({ riverId: riverIdSchema 
 export const callRoomSchema = z.string().regex(/^[A-Za-z0-9_-]{22,64}$/);
 /** Most people in one private call room. */
 export const MAX_CALL_ROOM = 8;
+/**
+ * Most people in one group call room (`call.group`, 2.18). Above eight people their voice goes
+ * through the encrypted relay (large rooms), so the room may be larger than a mesh.
+ */
+export const MAX_GROUP_CALL_ROOM = 50;
+/** Most call rooms one connection watches at once (`call.watch`, 2.18). */
+export const MAX_WATCHED_CALL_ROOMS = 16;
 
 export const voiceStateSchema = z.object({
   muted: z.boolean(),
@@ -671,6 +678,22 @@ export const clientEventSchema = z.discriminatedUnion('t', [
    * call together, nothing else.
    */
   z.object({ t: z.literal('call.room'), room: callRoomSchema.nullable() }),
+  /**
+   * Join (or leave, with null) a group call room (2.18): like `call.room`, for up to
+   * MAX_GROUP_CALL_ROOM people, and everyone in the room or watching it is told who is in it
+   * (`call.roster`). The room ID is a hash of the call's secret ID, known only to the people the
+   * call was shared with inside end-to-end encrypted messages: knowing it is what lets you in.
+   */
+  z.object({ t: z.literal('call.group'), room: callRoomSchema.nullable() }),
+  /**
+   * Watch these group call rooms (replacing the rooms watched before; empty: none), 2.18: the
+   * server sends `call.roster` for each now and whenever who is in it changes. Lets a group
+   * show "Join call" with who is in it without joining.
+   */
+  z.object({
+    t: z.literal('call.watch'),
+    rooms: z.array(callRoomSchema).max(MAX_WATCHED_CALL_ROOMS),
+  }),
   /** Play a soundboard sound to everyone in your voice channel (1.0.22). */
   z.object({ t: z.literal('voice.sound'), soundId: z.string().regex(COMMUNITY_ID_RE) }),
 ]);
@@ -682,6 +705,8 @@ export const serverEventSchema = z.discriminatedUnion('t', [
     riverId: riverIdSchema,
     /** The server takes voice relay frames "to everyone in my call" (RELAY_FRAME_ALL, 2.13). */
     relayAll: z.literal(true).optional(),
+    /** The server has group call rooms: `call.group`, `call.watch` and `call.roster` (2.18). */
+    groupCalls: z.literal(true).optional(),
   }),
   z.object({ t: z.literal('message'), communityId: communityIdSchema, message: messageSchema }),
   z.object({
@@ -744,6 +769,12 @@ export const serverEventSchema = z.discriminatedUnion('t', [
     riverId: riverIdSchema,
     online: z.boolean(),
     status: presenceStatusSchema.optional(),
+  }),
+  /** Who is in a group call room you are in or watch (2.18); empty: nobody, the call is over. */
+  z.object({
+    t: z.literal('call.roster'),
+    room: callRoomSchema,
+    participants: z.array(riverIdSchema).max(MAX_GROUP_CALL_ROOM),
   }),
   z.object({ t: z.literal('error'), code: z.string() }),
   z.object({ t: z.literal('pong') }),

@@ -76,6 +76,8 @@ import {
 import { isTyping, useDm } from '../dm/store.ts';
 import { startDmCall, useDmCall } from '../dm/call.ts';
 import { DmCallPanel } from '../dm/CallUi.tsx';
+import { GroupCallBar, GroupCallButtons, GroupCallInChat } from '../dm/GroupCallUi.tsx';
+import { useGroupCall } from '../dm/group-call.ts';
 import { useRiver } from '../store.ts';
 import { findInvite } from '../../../shared/invite-link.ts';
 import { joinWithLink } from '../community/ui/StartScreen.tsx';
@@ -405,8 +407,9 @@ function ContactSheet(props: {
 }): ReactElement {
   const { c } = props;
   const dm = useDm();
-  // One call at a time: none while one is on or ringing.
-  const callBusy = useDmCall((s) => !!s.active || !!s.incoming);
+  // One call at a time: none while one is on or ringing (a group call too, 2.18).
+  const inGroupCall = useGroupCall((s) => !!s.active);
+  const callBusy = useDmCall((s) => !!s.active || !!s.incoming) || inGroupCall;
   const [bio, setBio] = useState('');
   useEffect(() => {
     void window.river.social.action({ a: 'profile', riverId: c.riverId }).then((r) => {
@@ -771,7 +774,8 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
   const [dragging, setDragging] = useState(false);
   const notify = useCommunity((s) => s.notify);
   const setModal = useCommunity((s) => s.setModal);
-  const anyCall = useDmCall((s) => !!s.active || !!s.incoming);
+  const inGroupCall = useGroupCall((s) => !!s.active);
+  const anyCall = useDmCall((s) => !!s.active || !!s.incoming) || inGroupCall;
   const [showMembers, setShowMembers] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [iconPicker, setIconPicker] = useState<{ x: number; y: number } | null>(null);
@@ -926,6 +930,8 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                 </button>
               </>
             )}
+            {/* Group calls (2.18): call everyone in the group, or join the call going on. */}
+            <GroupCallButtons c={c} className="icon-btn" disabled={anyCall} />
             <button
               className={`icon-btn ${searching ? 'is-on' : ''}`}
               aria-label="Search in this conversation"
@@ -1216,6 +1222,8 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
         </div>
       )}
       <DmCallPanel conversation={c} />
+      <GroupCallBar conversation={c} />
+      <GroupCallInChat conversation={c} />
       {showMembers && c.kind === 'group' && <GroupMembers c={c} onClose={() => setShowMembers(false)} />}
       {iconPicker && (
         <Popover x={iconPicker.x} y={iconPicker.y} onClose={() => setIconPicker(null)}>
@@ -1527,6 +1535,7 @@ function PhoneChatHead(props: {
             </button>
           </>
         )}
+        <GroupCallButtons c={c} className="pchat-head__icon" disabled={props.anyCall} iconSize={22} />
         <button
           className="pchat-head__icon"
           aria-label="Conversation options"

@@ -27,6 +27,7 @@ import { FilesPage } from './pages/FilesPage.tsx';
 import { onSocialChanged } from './social/store.ts';
 import { totalUnread, useDm, windowTitle } from './dm/store.ts';
 import { handleCallEvent, handlePhoneCall } from './dm/call.ts';
+import { handleGroupCallEvent, handleRoomFull, handleRoster } from './dm/group-call.ts';
 import { useCommunity } from './community/store.ts';
 import { PlannedPage } from './pages/PlannedPage.tsx';
 import { SettingsOverlay } from './pages/SettingsPage.tsx';
@@ -93,13 +94,20 @@ export function App(): ReactElement {
     const offAccount = window.river.account.onStatus((s) => void setAccount(s));
     // Settings River changed by itself (e.g. app lock turned off on a phone without a screen lock).
     const offSettings = window.river.settings.onChange((s) => void useRiver.getState().setSettings(s));
-    const offCommunity = window.river.community.onEvent((e) => useCommunity.getState().handle(e));
+    const offCommunity = window.river.community.onEvent((e) => {
+      // Group calls (2.18): who is in a call's room, and a full room.
+      if (e.t === 'callRoster') handleRoster(e);
+      else if (e.t === 'callRoomFull') handleRoomFull();
+      else useCommunity.getState().handle(e);
+    });
     const offRelay = window.river.voice.onRelay((from, payload) =>
       useCommunity.getState().call?.receiveRelay(from, payload),
     );
-    const offDm = window.river.dm.onEvent((e) =>
-      e.t === 'call' ? handleCallEvent(e) : useDm.getState().handle(e),
-    );
+    const offDm = window.river.dm.onEvent((e) => {
+      if (e.t === 'call') handleCallEvent(e);
+      else if (e.t === 'gcall' || e.t === 'knock' || e.t === 'knockAnswer') handleGroupCallEvent(e);
+      else useDm.getState().handle(e);
+    });
     const offSocial = window.river.social.onEvent(() => onSocialChanged());
     // Android (2.11): a call answered or declined on the phone's own call screen.
     const offPhoneCall = window.river.app.onPhoneCall?.((call) => handlePhoneCall(call));

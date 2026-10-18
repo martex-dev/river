@@ -1,14 +1,30 @@
-import { create } from 'zustand';
 import type { CallOutcome, DmEvent } from '../../../shared/dm.ts';
 import type { PhoneCallAction } from '../../../shared/ipc.ts';
-import { isPhone } from '../../../shared/platform.ts';
 import { play } from '../community/sound.ts';
 import { useCommunity } from '../community/store.ts';
 import { VoiceCall, type CallTransport } from '../community/voice.ts';
 import { resumeAudio } from '../community/peer-audio.ts';
 import { WebCodecsRelay } from '../community/relay-audio.ts';
 import { useRiver } from '../store.ts';
+import {
+  callRoomOf,
+  isPrivateCall,
+  newCallId,
+  resetPhoneAudio,
+  ringTone,
+  stopRingTone,
+  useDmCall,
+} from './call-common.ts';
+import {
+  acceptGroupRing,
+  declineGroupRing,
+  handleGroupRing,
+  leaveGroupCall,
+  useGroupCall,
+} from './group-call.ts';
 import { useDm } from './store.ts';
+
+export { useDmCall } from './call-common.ts';
 
 /**
  * 1:1 calls from a direct conversation. Media goes directly between the two
@@ -26,21 +42,6 @@ export const CALL_LOST_MS = 50_000;
 /** How often a connected call checks that the other side is still there. */
 const LOST_CHECK_MS = 5000;
 
-interface DmCallState {
-  incoming: { peer: string; callId: string; video: boolean } | null;
-  active: {
-    peer: string;
-    callId: string;
-    video: boolean;
-    state: 'ringing' | 'connecting' | 'connected';
-    /** When the call first connected (ms), for the call timer. */
-    connectedAt?: number;
-  } | null;
-}
-
-export const useDmCall = create<DmCallState>(() => ({ incoming: null, active: null }));
-
-let ringTimer: number | undefined;
 /** The current call, for the call history. */
 let current: {
   peer: string;
@@ -110,42 +111,13 @@ function watchLost(callId: string, call: VoiceCall, peer: string): void {
 }
 
 function stopRinging(): void {
-  window.clearInterval(ringTimer);
+  stopRingTone();
   window.clearTimeout(timeoutTimer);
-  ringTimer = undefined;
-}
-
-/**
- * Android rings for an incoming call with the phone's own ringtone (2.11.3: also while River is
- * in front), so it follows the phone's ringer mode — silent, vibrate, Do Not Disturb — and never
- * rings twice. River's interface rings by itself only on computers and iPhones.
- */
-function phoneRingsInstead(): boolean {
-  return useRiver.getState().info?.platform === 'android';
 }
 
 function ring(sound: 'ring' | 'ringback'): void {
   stopRinging();
-  const tick = (): void => {
-    if (sound === 'ring' && phoneRingsInstead()) return;
-    play(sound);
-  };
-  tick();
-  ringTimer = window.setInterval(tick, sound === 'ring' ? 2200 : 3000);
-}
-
-/** Phones: the call audio River set (call mode, loudspeaker, headset) goes back to normal. */
-function resetPhoneAudio(): void {
-  if (isPhone(useRiver.getState().info?.platform))
-    void window.river.voice.setSpeaker(null).catch(() => undefined);
-}
-
-function newCallId(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  ringTone(sound);
 }
 
 function send(
@@ -194,7 +166,10 @@ async function begin(
   const live = (): boolean => useDmCall.getState().active?.callId === callId;
   const community = useCommunity;
   const previous = community.getState().call;
-  if (previous && !previous.channelId.startsWith('dm:')) {
+  if (useGroupCall.getState().active) {
+    // One call at a time: a group call is left for this one (2.18).
+    await leaveGroupCall();
+  } else if (previous && !isPrivateCall(previous.channelId)) {
     // Leaving voice for a call is leaving on purpose: no "Rejoin" offer for it later.
     await community.getState().leaveVoice();
   } else if (previous) {
@@ -288,15 +263,6 @@ async function begin(
   return true;
 }
 
-/** The private relay room for a call: a hash of its secret ID, so the server never learns the ID. */
-async function callRoomOf(callId: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`river-call-room:${callId}`));
-  return btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-}
-
 export async function startDmCall(peer: string, video: boolean): Promise<void> {
   // begin() marks the call active before its first wait, so a double click starts one call.
   if (useDmCall.getState().active || useDmCall.getState().incoming) return;
@@ -321,6 +287,8 @@ export async function startDmCall(peer: string, video: boolean): Promise<void> {
 export async function acceptDmCall(withVideo: boolean): Promise<void> {
   const incoming = useDmCall.getState().incoming;
   if (!incoming) return;
+  // A group call ringing (2.18): joining it is group-call.ts's.
+  if (incoming.group) return acceptGroupRing(withVideo);
   stopRinging();
   // begin() makes this call active in this same tick, so an "end" from the caller is never lost.
   useDmCall.setState({ incoming: null });
@@ -333,6 +301,10 @@ export async function acceptDmCall(withVideo: boolean): Promise<void> {
 export function declineDmCall(): void {
   const incoming = useDmCall.getState().incoming;
   if (!incoming) return;
+  if (incoming.group) {
+    declineGroupRing();
+    return;
+  }
   void window.river.dm.action({
     a: 'logCall',
     peer: incoming.peer,
@@ -409,6 +381,13 @@ export function handleCallEvent(e: Extract<DmEvent, { t: 'call' }>): void {
     case 'invite': {
       // The same call again (River's window found it ringing as it opened): nothing new.
       if (active?.callId === e.callId || incoming?.callId === e.callId) return;
+      // A group call ringing (2.18), perhaps answered on the phone's call screen already.
+      if (e.group) {
+        const answered = answerWanted?.callId === e.callId && Date.now() - answerWanted.at < RING_TIMEOUT_MS;
+        if (answered) answerWanted = null;
+        handleGroupRing(e, answered);
+        return;
+      }
       // Both called each other at once (glare): the call with the lower ID goes on, on both sides.
       if (
         active &&
@@ -426,8 +405,9 @@ export function handleCallEvent(e: Extract<DmEvent, { t: 'call' }>): void {
         void acceptDmCall(active.video);
         return;
       }
-      // Only another 1:1 call makes you busy; in a voice channel the call rings, and accepting leaves voice.
-      if (active || incoming) {
+      // Only another 1:1 call (or a group call, 2.18) makes you busy; in a voice channel the call
+      // rings, and accepting leaves voice.
+      if (active || incoming || useGroupCall.getState().active) {
         void send(e.peer, e.callId, 'busy').catch(() => undefined);
         return;
       }

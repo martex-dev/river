@@ -26,6 +26,7 @@ import {
   type ServerEvent,
   type VoiceState,
   callRoomSchema,
+  MAX_WATCHED_CALL_ROOMS,
   emojisResponseSchema,
   reportsResponseSchema,
   soundsResponseSchema,
@@ -333,6 +334,10 @@ export class CommunityService {
   private activeVoice: string | null = null;
   /** The private call room of a 1:1 call in progress (lets the server relay its voice). */
   private activeRoom: string | null = null;
+  /** `activeRoom` is a group call room (2.18): joined with `call.group`, whose members hear who is in it. */
+  private activeRoomGroup = false;
+  /** Group call rooms this app watches for who is in them (2.18). */
+  private watchedRooms: string[] = [];
   private lastVoiceState: {
     muted: boolean;
     deafened: boolean;
@@ -393,6 +398,8 @@ export class CommunityService {
 
   /** The server we are connected to takes relay frames for everyone in the call (2.13). */
   relayAllSupported = false;
+  /** The server we are connected to has group call rooms (`call.group`, 2.18). */
+  groupCallsSupported = false;
 
   /** An encrypted voice frame to everyone else in our call (large rooms; servers from 2.13). */
   relaySendAll(payload: Uint8Array): void {
@@ -3369,15 +3376,39 @@ export class CommunityService {
   /** Joins (or with null leaves) the private relay room of a 1:1 call. */
   callRoom(room: string | null): void {
     this.activeRoom = room === null ? null : callRoomSchema.parse(room);
+    this.activeRoomGroup = false;
     this.trySend({ t: 'call.room', room: this.activeRoom });
     this.callChanged();
+  }
+
+  /**
+   * Joins (or with null leaves) a group call room (2.18): the server relays voice inside it and
+   * tells its members (and anyone watching it) who is in it. Servers before 2.18 do not have it.
+   */
+  groupCallRoom(room: string | null): void {
+    this.activeRoom = room === null ? null : callRoomSchema.parse(room);
+    this.activeRoomGroup = room !== null;
+    this.trySend({ t: 'call.group', room: this.activeRoom });
+    this.callChanged();
+  }
+
+  /** Watches these group call rooms for who is in them (replacing the ones watched before), 2.18. */
+  watchCallRooms(rooms: readonly string[]): void {
+    const next = [...new Set(rooms.map((r) => callRoomSchema.parse(r)))].slice(0, MAX_WATCHED_CALL_ROOMS);
+    if (next.length === this.watchedRooms.length && next.every((r, i) => r === this.watchedRooms[i])) return;
+    this.watchedRooms = next;
+    if (this.groupCallsSupported) this.trySend({ t: 'call.watch', rooms: next });
   }
 
   /** After a reconnect: take the voice seat back, restore its state, then send held call setup. */
   private resumeVoice(): void {
     const fresh = this.pendingSignals.filter((p) => Date.now() - p.at < PENDING_SIGNAL_TTL_MS);
     this.pendingSignals = [];
-    if (this.activeRoom) this.trySend({ t: 'call.room', room: this.activeRoom });
+    if (this.activeRoom)
+      this.trySend({ t: this.activeRoomGroup ? 'call.group' : 'call.room', room: this.activeRoom });
+    // A new connection watches nothing: watch again (servers from 2.18).
+    if (this.watchedRooms.length && this.groupCallsSupported)
+      this.trySend({ t: 'call.watch', rooms: this.watchedRooms });
     if (!this.activeVoice) return;
     this.trySend({ t: 'voice.join', channelId: this.activeVoice });
     if (this.lastVoiceState) this.trySend({ t: 'voice.state', ...this.lastVoiceState });
@@ -3821,6 +3852,7 @@ export class CommunityService {
     switch (e.t) {
       case 'ready':
         this.relayAllSupported = e.relayAll === true;
+        this.groupCallsSupported = e.groupCalls === true;
         this.clearConnectTimer();
         this.readyAt = Date.now();
         this.offlineSince = null;
@@ -3926,7 +3958,8 @@ export class CommunityService {
           if (this.socket) this.dropSocket(this.socket);
           return;
         }
-        if (e.code === 'voice_full') this.emit({ t: 'voiceRefused', reason: 'full' });
+        if (e.code === 'room_full' && this.activeRoomGroup) this.emit({ t: 'callRoomFull' });
+        else if (e.code === 'voice_full') this.emit({ t: 'voiceRefused', reason: 'full' });
         // Servers before 1.0.8 refused a voice join with a plain "forbidden": only count it as one while a
         // join is waiting; otherwise it answers something else (a moderation action, a sound) and must not
         // end the call.
@@ -3938,6 +3971,9 @@ export class CommunityService {
         return;
       case 'typing':
         this.emit({ t: 'typing', communityId: e.communityId, channelId: e.channelId, riverId: e.riverId });
+        return;
+      case 'call.roster':
+        this.emit({ t: 'callRoster', room: e.room, participants: e.participants });
         return;
       case 'signal': {
         const communityId = this.channelToCommunity.get(e.channelId);

@@ -46,6 +46,14 @@ fails CI until it is made deliberately.
   from at most `MAX_RELAY_SPEAKERS` people of one call at a time. Clients send
   `0x02` frames only to servers that said `relayAll`; older servers drop them.
 
+- **2.18 — group calls and call links** (capability `group-calls`): the
+  `ready` event may carry `groupCalls: true`; such a server accepts the client
+  events `call.group` (join or leave a group call room, up to
+  `MAX_GROUP_CALL_ROOM` people) and `call.watch` (watch up to
+  `MAX_WATCHED_CALL_ROOMS` rooms), and sends `call.roster` (who is in a room) to
+  the people in it and the connections watching it. Clients send them only to
+  servers that said `groupCalls`; older servers answer `bad_event`.
+
 ## For other-language clients
 
 A client in Swift or Kotlin is conformant when it:

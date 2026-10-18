@@ -1,7 +1,9 @@
 import { useEffect, useState, type ReactElement } from 'react';
-import type { CallView } from '../../../shared/dm.ts';
+import type { CallLinkView, CallView } from '../../../shared/dm.ts';
 import { Avatar } from '../community/ui/common.tsx';
+import { useCommunity } from '../community/store.ts';
 import { startDmCall, useDmCall } from '../dm/call.ts';
+import { createCallLink, startGroupCall, startLinkCall, useGroupCall } from '../dm/group-call.ts';
 import { useDm } from '../dm/store.ts';
 import { useRiver } from '../store.ts';
 
@@ -38,13 +40,93 @@ export function callLabel(
   }
 }
 
+/** "Group call · Climbing", "Call link · Alice": what a call-history row is (2.18). */
+export function callTitle(c: Pick<CallView, 'name' | 'kind' | 'people'>): string {
+  if (c.kind === 'group') return `${c.name} · group call${c.people && c.people > 1 ? ` (${c.people})` : ''}`;
+  if (c.kind === 'link') return `${c.name} · call link`;
+  return c.name;
+}
+
+/** Your call links (2.18): start the call, copy the link, or stop it working. */
+function CallLinks(props: { busy: boolean }): ReactElement {
+  const [links, setLinks] = useState<CallLinkView[]>([]);
+  const made = useGroupCall((s) => s.madeLink);
+  const notify = useCommunity((s) => s.notify);
+  useEffect(() => {
+    void window.river.dm.action({ a: 'callLinks' }).then((r) => {
+      if (r.ok) setLinks(r.value);
+    });
+  }, [made]);
+  return (
+    <section className="glass calls__people" aria-label="Call links">
+      <h2 className="contacts__title">Call links</h2>
+      <p className="muted small">
+        Anyone with a call link can ask to join; you let each person in. Good for calls with people outside a
+        group.
+      </p>
+      <div className="call-row">
+        <button className="btn btn--primary btn--small" onClick={() => void createCallLink(false)}>
+          Create call link
+        </button>
+        <button className="btn btn--ghost btn--small" onClick={() => void createCallLink(true)}>
+          Video call link
+        </button>
+      </div>
+      {links.map((l) => (
+        <div key={l.id} className="call-row">
+          <span className="dm-row__text">
+            <strong>{l.title ?? (l.video ? 'Video call link' : 'Call link')}</strong>
+            <span className="muted small">
+              Works until {new Date(l.expiresAt).toLocaleDateString()} · {l.admitted.length} let in
+            </span>
+          </span>
+          <button
+            className="icon-btn"
+            aria-label="Copy call link"
+            title="Copy the link"
+            onClick={() =>
+              void navigator.clipboard
+                .writeText(l.url)
+                .then(() => notify('Call link copied.'))
+                .catch(() => notify('Could not copy the link.', 'error'))
+            }
+          >
+            🔗
+          </button>
+          <button
+            className="icon-btn"
+            aria-label="Start the call of this link"
+            disabled={props.busy}
+            onClick={() => void startLinkCall(l)}
+          >
+            📞
+          </button>
+          <button
+            className="icon-btn"
+            aria-label="Stop this call link"
+            title="Stop this link working"
+            onClick={() =>
+              void window.river.dm
+                .action({ a: 'revokeCallLink', link: l.id })
+                .then(() => setLinks(links.filter((x) => x.id !== l.id)))
+            }
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 /** Call history and quick calls to your contacts. */
 export function CallsPage(): ReactElement {
   const account = useRiver((r) => r.account);
   const navigate = useRiver((r) => r.navigate);
   const active = useDmCall((s) => s.active);
-  // One call at a time: none while one is on or ringing.
-  const busy = useDmCall((s) => !!s.active || !!s.incoming);
+  // One call at a time: none while one is on or ringing (a group call too, 2.18).
+  const inGroupCall = useGroupCall((s) => !!s.active);
+  const busy = useDmCall((s) => !!s.active || !!s.incoming) || inGroupCall;
   const dm = useDm();
   const [calls, setCalls] = useState<CallView[] | null>(null);
 
@@ -66,11 +148,19 @@ export function CallsPage(): ReactElement {
     };
   }, [account.state, active]);
 
-  const call = (peer: string, video: boolean): void => {
+  const call = (peer: string, video: boolean, kind?: CallView['kind']): void => {
     navigate('messages');
     dm.select(peer);
-    void startDmCall(peer, video);
+    if (kind === 'group') void startGroupCall(peer, video);
+    else void startDmCall(peer, video);
   };
+  /** A call-link call has nobody to call back; a group you left cannot be called. */
+  const canCallBack = (c: CallView): boolean =>
+    c.kind === 'link'
+      ? false
+      : c.kind === 'group'
+        ? dm.conversations.some((x) => x.riverId === c.peer && x.state === 'accepted')
+        : true;
   // Contacts who accepted (a request still waiting for their answer cannot be called yet).
   const friends = dm.conversations.filter(
     (c) => c.kind === 'direct' && !c.self && c.state === 'accepted' && !c.awaitingReply,
@@ -101,7 +191,7 @@ export function CallsPage(): ReactElement {
                   <strong
                     className={callOutcome(c) === 'missed' && c.direction === 'in' ? 'call-row__missed' : ''}
                   >
-                    {c.name}
+                    {callTitle(c)}
                   </strong>
                   <span className="muted small">
                     {callLabel(c)}
@@ -113,22 +203,23 @@ export function CallsPage(): ReactElement {
                 <button
                   className="icon-btn"
                   aria-label={`Call ${c.name}`}
-                  disabled={busy}
-                  onClick={() => call(c.peer, false)}
+                  disabled={busy || !canCallBack(c)}
+                  onClick={() => call(c.peer, false, c.kind)}
                 >
                   📞
                 </button>
                 <button
                   className="icon-btn"
                   aria-label={`Video call ${c.name}`}
-                  disabled={busy}
-                  onClick={() => call(c.peer, true)}
+                  disabled={busy || !canCallBack(c)}
+                  onClick={() => call(c.peer, true, c.kind)}
                 >
                   🎥
                 </button>
               </div>
             ))}
           </section>
+          <CallLinks busy={busy} />
           <section className="glass calls__people" aria-label="Call a contact">
             <h2 className="contacts__title">Call a contact</h2>
             {friends.length === 0 && <p className="muted small">Your contacts appear here.</p>}

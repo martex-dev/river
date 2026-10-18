@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
 /**
- * What someone sees when they open a River invite, friend or sign-up link in a
+ * What someone sees when they open a River invite, friend, sign-up or call link in a
  * browser: get River for their computer or phone (one download each, with what to
  * click past the "unsigned app" warnings), then "Open in River", which hands the
  * link to the app (river://open?link=…) so nothing has to be copied and pasted.
@@ -24,11 +24,12 @@ const SCRIPT = `
   var link = location.origin + path + location.hash;
   var open = document.getElementById('open');
   open.href = 'river://open?link=' + encodeURIComponent(link);
-  var kind = /\\/add$/.test(path) ? (location.hash.indexOf('#s=') === 0 ? 'signup' : 'friend') : /\\/join$/.test(path) ? 'invite' : 'home';
+  var kind = /\\/add$/.test(path) ? (location.hash.indexOf('#s=') === 0 ? 'signup' : 'friend') : /\\/join$/.test(path) ? 'invite' : /\\/call$/.test(path) ? 'call' : 'home';
   var titles = {
     invite: "You're invited to a River community",
     friend: 'Someone wants to be your friend on River',
     signup: 'Your River account is waiting for you',
+    call: "You're invited to a River call",
     home: 'River — private messages, voice and communities'
   };
   if (kind === 'home' || !location.hash) document.getElementById('come-in').hidden = true;
@@ -123,6 +124,8 @@ function landing(reply: FastifyReply): FastifyReply {
 export function registerLandingRoutes(app: FastifyInstance): void {
   app.get('/join', async (_request, reply) => landing(reply));
   app.get('/add', async (_request, reply) => landing(reply));
+  // Call links (2.18): "Open in River" asks the person who made the link to let you in.
+  app.get('/call', async (_request, reply) => landing(reply));
 }
 
 /**

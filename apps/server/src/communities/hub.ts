@@ -48,6 +48,14 @@ export class Hub {
   private readonly roomSocket = new Map<string, HubSocket>();
   /** Whose relayed voice is forwarded right now, per voice channel or call room (2.13). */
   private readonly relaySpeakers = new Map<string, RelaySpeakers>();
+  /**
+   * Group call rooms (2.18): rooms someone joined with `call.group`. Their members, and the
+   * connections watching them, are told who is in them (`call.roster`). Private 1:1 rooms are not.
+   */
+  private readonly groupRooms = new Set<string>();
+  /** Connections watching each group call room, and the rooms each connection watches. */
+  private readonly watchers = new Map<string, Set<HubSocket>>();
+  private readonly watching = new Map<HubSocket, Set<string>>();
 
   constructor(options: HubOptions = {}) {
     this.graceMs = options.voiceGraceMs ?? VOICE_GRACE_MS;
@@ -93,6 +101,7 @@ export class Hub {
   ): { offline: boolean; held: { channelId: string; communityId: string } | null } {
     const set = this.sockets.get(riverId);
     set?.delete(socket);
+    this.watch(socket, []);
     if (set && set.size > 0) {
       // Other devices are still connected; only the seats this connection held are let go.
       if (this.roomSocket.get(riverId) === socket) this.holdRoom(riverId, socket);
@@ -104,11 +113,19 @@ export class Hub {
     return { offline: true, held: this.holdSeat(riverId) };
   }
 
-  /** Joins a private call room (leaving any other); false if it is full. */
-  joinRoom(riverId: string, room: string, max: number, socket?: HubSocket): boolean {
+  /**
+   * Joins a private call room (leaving any other); false if it is full. `group` (2.18): a group
+   * call room, whose members and watchers are told who is in it.
+   */
+  joinRoom(riverId: string, room: string, max: number, socket?: HubSocket, group = false): boolean {
     this.clearRoomTimer(riverId);
     if (this.roomOf.get(riverId) === room) {
       this.setOwner(this.roomSocket, riverId, socket);
+      // Rejoining after a reconnect: their other connections (and they) hear the room again.
+      if (group) {
+        this.groupRooms.add(room);
+        this.announceRoster(room);
+      }
       return true;
     }
     const members = this.callRooms.get(room) ?? new Set<string>();
@@ -118,7 +135,55 @@ export class Hub {
     this.callRooms.set(room, members);
     this.roomOf.set(riverId, room);
     this.setOwner(this.roomSocket, riverId, socket);
+    if (group) this.groupRooms.add(room);
+    this.announceRoster(room);
     return true;
+  }
+
+  /** Who is in a group call room (none for a private 1:1 room, whose members are not told). */
+  roster(room: string): string[] {
+    return this.groupRooms.has(room) ? [...(this.callRooms.get(room) ?? [])] : [];
+  }
+
+  /**
+   * The group call rooms this connection watches, replacing the ones it watched before (2.18).
+   * Each newly watched room's roster is sent to it at once.
+   */
+  watch(socket: HubSocket, rooms: readonly string[]): void {
+    const before = this.watching.get(socket) ?? new Set<string>();
+    const after = new Set(rooms);
+    for (const room of before) {
+      if (after.has(room)) continue;
+      const set = this.watchers.get(room);
+      set?.delete(socket);
+      if (set && set.size === 0) this.watchers.delete(room);
+    }
+    if (after.size === 0) this.watching.delete(socket);
+    else this.watching.set(socket, after);
+    for (const room of after) {
+      if (before.has(room)) continue;
+      let set = this.watchers.get(room);
+      if (!set) this.watchers.set(room, (set = new Set()));
+      set.add(socket);
+      socket.send(JSON.stringify({ t: 'call.roster', room, participants: this.roster(room) }));
+    }
+  }
+
+  /** Connections watching group call rooms (tests: nothing lingers after they close). */
+  get watchedRooms(): number {
+    return this.watchers.size;
+  }
+
+  /** Tells everyone in a group call room, and everyone watching it, who is in it now. */
+  private announceRoster(room: string): void {
+    const group = this.groupRooms.has(room);
+    const watchers = this.watchers.get(room);
+    if (!group && !watchers) return;
+    const participants = this.roster(room);
+    const data = JSON.stringify({ t: 'call.roster', room, participants });
+    const to = new Set<HubSocket>(watchers);
+    for (const id of participants) for (const s of this.sockets.get(id) ?? []) to.add(s);
+    for (const s of to) s.send(data);
   }
 
   private setOwner(map: Map<string, HubSocket>, riverId: string, socket: HubSocket | undefined): void {
@@ -136,6 +201,14 @@ export class Hub {
     members?.delete(riverId);
     this.forgetSpeaker(`room:${room}`, riverId, !members || members.size === 0);
     if (members && members.size === 0) this.callRooms.delete(room);
+    // The one who left hears it too (their other devices stop showing them in the call).
+    if (this.groupRooms.has(room)) {
+      const data = JSON.stringify({ t: 'call.roster', room, participants: this.roster(room) });
+      for (const s of this.sockets.get(riverId) ?? []) if (!this.watchers.get(room)?.has(s)) s.send(data);
+    }
+    this.announceRoster(room);
+    // The last one left: the call is over, and the room is forgotten.
+    if (!this.callRooms.has(room)) this.groupRooms.delete(room);
   }
 
   private forgetSpeaker(scope: string, riverId: string, empty: boolean): void {

@@ -1846,6 +1846,66 @@ describe('communities', () => {
         for (const x of [a, b, c]) x.ws.close();
       });
 
+      it('group call rooms (2.18): members and watchers hear who is in it; voice is relayed inside it only', async () => {
+        const { owner, guest, connect } = await setup(5_000);
+        const third = await user(app);
+        const stranger = await user(app);
+        const a = await connect(owner.token);
+        const b = await connect(guest.token);
+        const c = await connect(third.token);
+        const s = await connect(stranger.token);
+        expect(a.events.find((e) => e.t === 'ready')).toMatchObject({ groupCalls: true });
+        const rosters = (x: { events: Ev[] }, room: string) =>
+          x.events.filter((e) => e.t === 'call.roster' && (e as { room?: string }).room === room);
+        const room = 'g'.repeat(43);
+        // Carol watches before anyone is in: told at once that nobody is.
+        c.ws.send(JSON.stringify({ t: 'call.watch', rooms: [room] }));
+        await vi.waitFor(() => expect(rosters(c, room).at(-1)?.participants).toEqual([]));
+        a.ws.send(JSON.stringify({ t: 'call.group', room }));
+        await vi.waitFor(() => expect(rosters(c, room).at(-1)?.participants).toEqual([owner.riverId]));
+        b.ws.send(JSON.stringify({ t: 'call.group', room }));
+        await vi.waitFor(() =>
+          expect(rosters(a, room).at(-1)?.participants).toEqual([owner.riverId, guest.riverId]),
+        );
+        await vi.waitFor(() => expect(rosters(c, room).at(-1)?.participants).toHaveLength(2));
+        // Relayed voice to everyone in the call reaches Bob, not the watcher or a stranger.
+        const inbox = (ws: WebSocket) => {
+          const got: Uint8Array[] = [];
+          ws.binaryType = 'arraybuffer';
+          const prev = ws.onmessage;
+          ws.onmessage = (m) => {
+            if (m.data instanceof ArrayBuffer) got.push(new Uint8Array(m.data));
+            else prev?.call(ws, m);
+          };
+          return got;
+        };
+        const atB = inbox(b.ws);
+        const atC = inbox(c.ws);
+        const atS = inbox(s.ws);
+        a.ws.send(encodeRelayAll(new Uint8Array([5])));
+        await vi.waitFor(() => expect(atB).toHaveLength(1));
+        a.ws.send(encodeRelayOut([third.riverId, stranger.riverId], new Uint8Array([6])));
+        await new Promise((r) => setTimeout(r, 200));
+        expect(atC).toHaveLength(0);
+        expect(atS).toHaveLength(0);
+        expect(rosters(s, room)).toEqual([]);
+        // Watching more rooms than allowed is refused as a bad event.
+        s.ws.send(
+          JSON.stringify({
+            t: 'call.watch',
+            rooms: Array.from({ length: 17 }, (_, i) => `${i}`.padEnd(22, 'x')),
+          }),
+        );
+        await vi.waitFor(() =>
+          expect(s.events.some((e) => e.t === 'error' && e.code === 'bad_event')).toBe(true),
+        );
+        // Everyone leaves: the watcher hears the call is over.
+        a.ws.send(JSON.stringify({ t: 'call.group', room: null }));
+        b.ws.send(JSON.stringify({ t: 'call.group', room: null }));
+        await vi.waitFor(() => expect(rosters(c, room).at(-1)?.participants).toEqual([]));
+        for (const x of [a, b, c, s]) x.ws.close();
+      });
+
       it('presence: invisible looks offline, idle and do-not-disturb show to others', async () => {
         const { owner, guest, cid, connect } = await setup(5_000);
         const watcher = await connect(owner.token);
