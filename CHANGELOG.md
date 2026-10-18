@@ -6,6 +6,15 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Phones: linking a phone to your account finishes.** After you approved it
+  on your computer, the phone could sit on "Waiting for your other device…"
+  for minutes: River's engine on the phone runs out of sight, and the phone's
+  browser engine slows timers there to about once a minute after five minutes.
+  Its timers now run in a worker that is not slowed down, which also keeps
+  reconnecting, call timeouts and Stay connected's checks on time.
+
 ## [2.13.0] - 2026-10-18
 
 **River on a phone now looks and feels like a phone app (Telegram / Instagram),
