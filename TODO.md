@@ -21,7 +21,9 @@ Plan: [docs/product/road-to-3.md](docs/product/road-to-3.md). Many releases, one
 - [x] 2.18.1 Phone audit: 18 fixes (Back inside screens, editing on phones, growing composer, menus, opaque call screen, picture-in-picture, voice lobby, tap targets, phone wording)
 - [x] 2.19.0 Group calls in group chats (up to 50, community voice engine), Join bar, call links with Ask to join
 - [x] 2.20.0 Security audit (14 fixes) and messaging part 2 (big emoji, reply previews, saved replies, tags, effects, badge without archived chats, safe mailto/tel)
-- [ ] Owed: a dedicated audit of direct messages, linking and backups (the 2.20 audit only spot-checked them)
+- [x] 2.20.1 Audit of direct messages, linking and backups: 8 fixes (first-DM impersonation, removed devices, stranger files, blocked typing, call-link rings, disappearing messages in backups, temp files, old prekeys)
+- [ ] Per-sender message IDs (an impostor can reuse a seen ID; needs a schema change)
+- [ ] Versioned, authenticated group state (the server can reorder group changes)
 - [ ] 2.20.x Polish for each phone screen
 - [ ] 2.14.x Easy start: install to first chat in under a minute, one-screen profile, invite links that open the app; community keys need a proof
 - [ ] 2.15.x Group calls, call quality, call links — group calls in group chats and call links built, unreleased (ring with "Group call · N people", Join bar, leave and rejoin, mesh up to 8 then the encrypted relay, call history, Ask to join / Let in); still to try with real phones (ringing screen, picture-in-picture) and with many people on a real network

@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.20.1] - 2026-10-18
+
+**A security audit of direct messages, linked devices and backups: eight fixes.**
+
 ### Security
 
 - Direct messages: a first message "from" someone you share a community with
