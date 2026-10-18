@@ -14,6 +14,8 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { placeWithin, pushOverlay, safeInsets, visibleBox } from '../../components/overlays.ts';
+import { menuItems, nextMenuItem, restoreFocus, trapTab } from '../../components/focus.ts';
+import { phoneShellActive } from '../../phone/mode.ts';
 import type { CommunityView, MemberView } from '../../../../shared/ipc.ts';
 import { highlight, languageOf } from './highlight.ts';
 import {
@@ -314,8 +316,27 @@ export function Modal(props: {
   className?: string;
 }): ReactElement {
   const ref = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   useOverlayLayer(props.onClose);
   const id = useLayer('modal', () => ref.current, props.onClose);
+  // Keyboard (2.13.1): the dialog takes the focus (unless a field in it already did), Tab stays
+  // inside it, and closing it gives the focus back to what had it before.
+  useEffect(() => {
+    const root = ref.current;
+    const card = cardRef.current;
+    if (!root || !card) return;
+    const previous = document.activeElement;
+    if (!card.contains(document.activeElement)) card.focus({ preventScroll: true });
+    // Native, not React's: keys in a menu opened from this dialog (another portal) are its own.
+    const onKey = (e: KeyboardEvent): void => {
+      if (trapTab(card, e)) e.preventDefault();
+    };
+    root.addEventListener('keydown', onKey);
+    return () => {
+      root.removeEventListener('keydown', onKey);
+      restoreFocus(previous, root);
+    };
+  }, []);
   return createPortal(
     <LayerParent.Provider value={id}>
       <div
@@ -327,6 +348,8 @@ export function Modal(props: {
         onMouseDown={props.onClose}
       >
         <div
+          ref={cardRef}
+          tabIndex={-1}
           className={`modal__card ${props.wide ? 'modal__card--wide' : ''} ${props.full ? 'modal__card--full' : ''} ${props.className ?? ''}`}
           onMouseDown={(e) => e.stopPropagation()}
         >
@@ -395,6 +418,16 @@ export function Popover(props: {
     vv?.addEventListener('resize', place);
     return () => vv?.removeEventListener('resize', place);
   }, [props.x, props.y]);
+  // Keyboard (2.13.1): a menu's first item takes the focus (computers; a field that focused itself
+  // keeps it), and closing gives the focus back to the button or field that had it.
+  useEffect(() => {
+    const el = ref.current;
+    const previous = document.activeElement;
+    if (el && !el.contains(document.activeElement) && !phoneShellActive()) {
+      menuItems(el)[0]?.focus({ preventScroll: true });
+    }
+    return () => restoreFocus(previous, el);
+  }, []);
   useEffect(() => {
     const openedAt = performance.now();
     const onDown = (e: PointerEvent): void => {
@@ -427,7 +460,20 @@ export function Popover(props: {
   }, [id]);
   return createPortal(
     <LayerParent.Provider value={id}>
-      <div ref={ref} className={`popover ${props.className ?? ''}`} style={pos} role="menu">
+      <div
+        ref={ref}
+        className={`popover ${props.className ?? ''}`}
+        style={pos}
+        role="menu"
+        onKeyDown={(e) => {
+          // Up, Down, Home and End move between the menu's items (not inside a text field).
+          if (!(e.target instanceof HTMLElement) || e.target.getAttribute('role') !== 'menuitem') return;
+          const next = nextMenuItem(menuItems(e.currentTarget), e.target, e.key);
+          if (!next) return;
+          e.preventDefault();
+          next.focus();
+        }}
+      >
         {props.children}
       </div>
     </LayerParent.Provider>,
