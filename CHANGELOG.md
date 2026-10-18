@@ -42,6 +42,9 @@ All notable changes to River are documented here. The format follows
   name instead of the server's. It now always checks it against the server.
 - Updates (computers): a test version that was still downloading when you
   switched back to Stable is no longer installed.
+- Android: River's interface can no longer read River's own files (its
+  encrypted database, key file or logs) through the app framework's file
+  access; only River's client core reaches its storage.
 
 ## [2.17.0] - 2026-10-18
 

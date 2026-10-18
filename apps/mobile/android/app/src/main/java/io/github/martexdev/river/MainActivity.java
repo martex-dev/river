@@ -98,6 +98,25 @@ public class MainActivity extends BridgeActivity implements CoreHost.Screen {
               }
             });
     if (getBridge() != null) {
+      // The interface's WebView reads River's interface files and nothing else (2.18, UiPaths).
+      getBridge()
+          .setWebViewClient(
+              new com.getcapacitor.BridgeWebViewClient(getBridge()) {
+                @Override
+                public android.webkit.WebResourceResponse shouldInterceptRequest(
+                    WebView view, android.webkit.WebResourceRequest request) {
+                  if (UiPaths.refused(request.getUrl().getPath())) {
+                    return new android.webkit.WebResourceResponse(
+                        "text/plain",
+                        "utf-8",
+                        404,
+                        "Not Found",
+                        new java.util.HashMap<>(),
+                        new java.io.ByteArrayInputStream(new byte[0]));
+                  }
+                  return super.shouldInterceptRequest(view, request);
+                }
+              });
       getBridge()
           .addWebViewListener(
               new WebViewListener() {
