@@ -169,6 +169,33 @@ describe('phone navigation', () => {
     }
   });
 
+  it('opens the channel you were last in when you tap it again', () => {
+    const stop = startPhoneSync();
+    const button = document.createElement('button');
+    button.className = 'channel__open';
+    document.body.append(button);
+    try {
+      act(() =>
+        useCommunity.setState({
+          communities: [{ id: 'c1', channels: [{ id: 'ch1', kind: 'text' }] }] as never,
+          selectedChannel: 'ch1',
+        }),
+      );
+      act(() => usePhoneNav.setState({ stack: [{ kind: 'community', id: 'c1' }] }));
+      // Selecting the selected channel again changes nothing in the store; the tap still opens it.
+      act(() => button.click());
+      expect(usePhoneNav.getState().stack.at(-1)).toEqual({
+        kind: 'channel',
+        communityId: 'c1',
+        channelId: 'ch1',
+      });
+    } finally {
+      button.remove();
+      stop();
+      useCommunity.setState({ communities: [], selectedChannel: null });
+    }
+  });
+
   it("keeps River's section on what is shown, so only the open chat counts as read", () => {
     phoneTab('calls');
     phonePush({ kind: 'chat', peer: SAM });

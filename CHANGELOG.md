@@ -50,6 +50,11 @@ not like Discord.** Computers keep their layout exactly as it was.
 - On a phone, opening a community no longer opens (and marks as read) its
   first channel for you.
 
+### Fixed
+
+- Phones: tapping the channel you were last in opens it again (it did nothing
+  while that channel was still selected).
+
 ## [2.12.1] - 2026-10-18
 
 **Phones that reconnect after a network change, keep their notifications and never cut other apps' calls.**

@@ -273,9 +273,22 @@ export function startPhoneSync(): () => void {
     }
     if (!s.communityStart && prev.communityStart && topScreen()?.kind === 'start') phonePop();
   });
+  // Tapping the channel that is already selected (the one you were last in) changes nothing in
+  // the store, so nothing above opens it: open it here, after the row's own click handler ran.
+  const onClick = (e: MouseEvent): void => {
+    const row = (e.target as Element | null)?.closest?.('.channel__open');
+    if (!row) return;
+    const id = useCommunity.getState().selectedChannel;
+    const top = topScreen();
+    if (!id || (top?.kind === 'channel' && top.channelId === id)) return;
+    const community = useCommunity.getState().communities.find((c) => c.channels.some((ch) => ch.id === id));
+    if (community) showChannel(community.id, id);
+  };
+  if (typeof document !== 'undefined') document.addEventListener('click', onClick);
   return () => {
     offDm();
     offCommunity();
     offRiver();
+    if (typeof document !== 'undefined') document.removeEventListener('click', onClick);
   };
 }
