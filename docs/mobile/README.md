@@ -70,6 +70,8 @@ decisions) River can go to TestFlight and the App Store instead.
   reboot. Settings → System → Calls and notifications shows battery
   optimization, full-screen calls and notification permission as Android
   reports them, each with a button to fix it.
+- River checks its connection as soon as the phone's network comes back or
+  changes (Wi-Fi to mobile data, 2.12), rather than waiting for its heartbeat.
 - iPhone: without Apple's push service (it needs a paid Apple developer
   account) River cannot notify or ring while iOS has paused it; messages and
   calls wait until River is opened. Settings → System says so.

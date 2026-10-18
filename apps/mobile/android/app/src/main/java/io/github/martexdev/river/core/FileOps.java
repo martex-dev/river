@@ -63,6 +63,21 @@ final class FileOps {
     return out.toByteArray();
   }
 
+  /**
+   * The document the person picked. Some places to save (Google Drive, some phones' own file
+   * apps) refuse "wt" (2.12: saving there failed): the document was created empty just now,
+   * so plain "w" writes the same.
+   */
+  private OutputStream openTarget(Uri target, boolean append) throws IOException {
+    android.content.ContentResolver resolver = context.getContentResolver();
+    if (append) return resolver.openOutputStream(target, "wa");
+    try {
+      return resolver.openOutputStream(target, "wt");
+    } catch (IOException | IllegalArgumentException | UnsupportedOperationException e) {
+      return resolver.openOutputStream(target, "w");
+    }
+  }
+
   private static boolean removeTree(File f) {
     File[] children = f.listFiles();
     if (children != null) for (File c : children) removeTree(c);
@@ -95,7 +110,7 @@ final class FileOps {
           boolean append = a.optBoolean("append", false);
           Uri target = saveTargets.get(new File(path).getPath());
           if (target != null) {
-            try (OutputStream out = context.getContentResolver().openOutputStream(target, append ? "wa" : "wt")) {
+            try (OutputStream out = openTarget(target, append)) {
               if (out == null) throw new IOException("cannot write the chosen file");
               out.write(b(a.getString("data")));
             }

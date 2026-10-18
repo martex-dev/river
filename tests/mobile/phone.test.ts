@@ -523,6 +523,18 @@ describe('River for Android: client core', { timeout: 60_000 }, () => {
     ]);
   });
 
+  it("takes the account's notifications away when it is deleted, on Android and on iPhone (2.12)", async () => {
+    for (const platform of ['android', 'ios'] as const) {
+      const p = await phone(`Gone ${platform}`, { platform });
+      const info = await p.invoke<{ platform: string }>(IPC.appInfo);
+      expect(info.platform).toBe(platform);
+      expect(p.asks.some((a) => a.kind === 'clearNotifications')).toBe(false);
+      ok(await p.invoke<Result<unknown>>(IPC.accountDelete));
+      // The iPhone kept them readable in Notification Center after the account was gone.
+      await until(async () => p.asks.some((a) => a.kind === 'clearNotifications'));
+    }
+  });
+
   it('checks its connection when the watchdog wakes the phone', async () => {
     const p = await phone('Sleeper');
     p.wake();

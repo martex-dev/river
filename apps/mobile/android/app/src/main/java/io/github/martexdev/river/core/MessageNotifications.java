@@ -27,11 +27,14 @@ final class MessageNotifications {
     final String sender;
     final String text;
     final long at;
+    /** Shown with full previews (its text is the message's own). */
+    final boolean full;
 
-    Line(String sender, String text, long at) {
+    Line(String sender, String text, long at, boolean full) {
       this.sender = sender;
       this.text = text;
       this.at = at;
+      this.full = full;
     }
   }
 
@@ -78,7 +81,10 @@ final class MessageNotifications {
       boolean lockScreen) {
     if (!conversation.isEmpty()) ids.put(conversation, notification);
     List<Line> list = lines.computeIfAbsent(notification, k -> new ArrayList<>());
-    list.add(new Line(sender, body, System.currentTimeMillis()));
+    // Previews turned down meanwhile (2.12): earlier messages' text is not shown
+    // again in the notification the new one joins — only what the setting shows now.
+    if (!lockScreen) list.removeIf(l -> l.full);
+    list.add(new Line(sender, body, System.currentTimeMillis(), lockScreen));
     while (list.size() > MAX_LINES) list.remove(0);
     b.setCategory(NotificationCompat.CATEGORY_MESSAGE).setNumber(list.size());
     if (sender != null && !sender.isEmpty()) {

@@ -118,6 +118,9 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- A new network (Wi-Fi to mobile data): River checks its connection at once (2.12). Also lets
+         the WebView report going on- and offline. No prompt; River reads only whether it changed. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Voice and video calls (asked for when you first join a call). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />

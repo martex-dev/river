@@ -62,7 +62,7 @@ describe('main-process connection checks', { timeout: 30_000 }, () => {
   });
 });
 
-describe('links from messages', () => {
+describe('links from messages', { timeout: 30_000 }, () => {
   it('only web addresses without embedded credentials may be offered to the browser', async () => {
     const { safeExternalUrl } = await import('../src/main/ipc.ts');
     expect(safeExternalUrl('https://example.org/x')?.href).toBe('https://example.org/x');

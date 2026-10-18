@@ -1,6 +1,6 @@
 # River Status
 
-_Last updated: 2026-10-18 · Current version: **2.12.0** · Stage 1 and Stage 2 complete: Windows, macOS, Linux, Android, iPhone; linked devices; remote assistance (see and point)_
+_Last updated: 2026-10-18 · Current version: **2.12.1** · Stage 1 and Stage 2 complete: Windows, macOS, Linux, Android, iPhone; linked devices; remote assistance (see and point)_
 
 ## Complete
 
@@ -61,7 +61,7 @@ _Last updated: 2026-10-18 · Current version: **2.12.0** · Stage 1 and Stage 2 
   installed update that then fails to start is not implemented (TODO).
 - **macOS updates**: notify-and-download only until an Apple Developer ID exists.
 - **Android updates itself** (Unreleased): signed release manifest (the desktop's verifier), the APK's SHA-256, the same Android signing key, then Android's own installer. A release signed with another key (preview builds) is explained, with the download page and a backup reminder. iPhone: sideloaded IPAs cannot self-update, and Settings says so.
-- **Phones, day to day** (1.4.0): Stay connected on Android (a visible foreground service), calls that keep going with the screen off, Share → River, replies from notifications, swipe navigation.
+- **Phones, day to day** (1.4.0): Stay connected on Android (a visible foreground service), calls that keep going with the screen off, Share → River, replies from notifications, swipe navigation. Unreleased (2.12 native sweep): reconnect as soon as the network changes, no crash when Android refuses Stay connected's restart, other apps' call audio left alone, iPhone notifications removed on sign-out; `tests/mobile` checks the Android manifest and the libsignal stand-in's API.
 - **Android rings like a phone** (unreleased): own call screen over the lock screen with ringtone and vibration, CallStyle call notifications, per-conversation message notifications with lock-screen privacy, Stay connected on for new installs with a connection watchdog and restart after reboot, Settings → System → Calls and notifications. Native code not yet compiled or tried on a real phone (CI builds the APK). iPhone cannot ring or notify while paused (no Apple push).
 - **River for iPhone** (1.3.0, `apps/mobile/ios`): the shared client core in its own WKWebView with libsignal (LibSignalClient), SQLCipher and the Keychain; built and started in a simulator in CI; shipped as an unsigned .ipa for sideloading until there is an Apple developer account.
 - **Linked devices** (1.2.0, ADR 0006): one account on several devices — link with a code or a QR code, see and remove devices; direct messages reach every device.
