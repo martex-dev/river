@@ -17,6 +17,7 @@ import {
   MAX_RELAY_PAYLOAD,
   RELAY_BURST,
   decodeRelayIn,
+  encodeRelayAll,
   encodeRelayOut,
   eventsResponseSchema,
   emojisResponseSchema,
@@ -1768,6 +1769,44 @@ describe('communities', () => {
         expect(atMember.length).toBeGreaterThan(RELAY_BURST - 10);
         expect(atMember.length).toBeLessThan(RELAY_BURST + 150);
         expect(host.ws.readyState).toBe(WebSocket.OPEN);
+        expect(atOther).toHaveLength(0);
+        expect(atHost).toHaveLength(0);
+        for (const c of [host, member, other]) c.ws.close();
+      });
+
+      it('relays a frame for everyone in the call to the others in the voice channel only (2.13)', async () => {
+        const { owner, guest, voice, connect } = await setup(5_000);
+        const stranger = await user(app);
+        const host = await connect(owner.token);
+        const member = await connect(guest.token);
+        const other = await connect(stranger.token);
+        // The server says it takes frames for everyone.
+        expect(host.events.find((e) => e.t === 'ready')).toMatchObject({ relayAll: true });
+        const inbox = (ws: WebSocket) => {
+          const got: Uint8Array[] = [];
+          ws.binaryType = 'arraybuffer';
+          const prev = ws.onmessage;
+          ws.onmessage = (m) => {
+            if (m.data instanceof ArrayBuffer) got.push(new Uint8Array(m.data));
+            else prev?.call(ws, m);
+          };
+          return got;
+        };
+        const atMember = inbox(member.ws);
+        const atOther = inbox(other.ws);
+        const atHost = inbox(host.ws);
+        const payload = new Uint8Array([7, 7, 7]);
+        // Not in voice yet: nothing goes anywhere.
+        host.ws.send(encodeRelayAll(payload));
+        host.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+        member.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+        await vi.waitFor(() =>
+          expect(host.events.filter((e) => e.t === 'voice').at(-1)?.participants).toHaveLength(2),
+        );
+        host.ws.send(encodeRelayAll(payload));
+        await vi.waitFor(() => expect(atMember).toHaveLength(1));
+        expect(decodeRelayIn(atMember[0]!)).toEqual({ sender: owner.riverId, payload });
+        await new Promise((r) => setTimeout(r, 100));
         expect(atOther).toHaveLength(0);
         expect(atHost).toHaveLength(0);
         for (const c of [host, member, other]) c.ws.close();

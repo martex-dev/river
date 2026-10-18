@@ -1,0 +1,58 @@
+/* Meeting bar above the call tiles (2.13): layout, raise hand, who is talking, hands. */
+.meeting-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.meeting-bar__talking {
+  flex: 1;
+  min-width: 140px;
+  overflow: hidden;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meeting-bar__hands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.meeting-bar__hands li {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgb(var(--warn-rgb) / 0.5);
+  background: rgb(var(--warn-rgb) / 0.12);
+}
+.meeting-bar__warn {
+  flex-basis: 100%;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--text);
+  background: rgb(var(--warn-rgb) / 0.16);
+  border: 1px solid rgb(var(--warn-rgb) / 0.45);
+}
+.tile__hand {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 13px;
+  background: rgb(var(--warn-rgb) / 0.85);
+  color: #1a1206;
+}
+/* Big rooms: smaller tiles so everyone fits without scrolling forever. */
+.voice__grid[data-size='large']:not(.voice__grid--focus) {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-auto-rows: 110px;
+}
+.voice__grid[data-size='large'] .tile__avatar .avatar {
+  transform: scale(0.7);
+}

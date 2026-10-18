@@ -145,6 +145,8 @@ export function createRiverApi(t: RiverTransport): RiverApi {
       signal: (to, channelId, payload) => t.invoke(IPC.voiceSignal, to, channelId, payload),
       iceServers: () => t.invoke(IPC.voiceIceServers),
       relay: (to, payload) => t.send(IPC.voiceRelay, to, payload),
+      relayAll: (payload) => t.send(IPC.voiceRelayAll, payload),
+      relayInfo: () => t.invoke(IPC.voiceRelayInfo),
       callRoom: (room) => t.invoke(IPC.voiceCallRoom, room),
       onRelay: (listener) =>
         t.on(IPC.voiceRelayIn, (...args) => listener(args[0] as string, args[1] as Uint8Array)),

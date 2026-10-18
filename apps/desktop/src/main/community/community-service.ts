@@ -34,6 +34,7 @@ import {
   notesResponseSchema,
   eventsResponseSchema,
   decodeRelayIn,
+  encodeRelayAll,
   encodeRelayOut,
 } from '@river/protocol';
 import { z } from 'zod';
@@ -387,6 +388,21 @@ export class CommunityService {
     )
       return;
     this.socket.send(encodeRelayOut(recipients, payload));
+  }
+
+  /** The server we are connected to takes relay frames for everyone in the call (2.13). */
+  relayAllSupported = false;
+
+  /** An encrypted voice frame to everyone else in our call (large rooms; servers from 2.13). */
+  relaySendAll(payload: Uint8Array): void {
+    if (
+      !this.relayAllSupported ||
+      (!this.activeVoice && !this.activeRoom) ||
+      this.socketState !== 'online' ||
+      this.socket?.readyState !== WebSocket.OPEN
+    )
+      return;
+    this.socket.send(encodeRelayAll(payload));
   }
 
   onEvent(listener: (e: CommunityEvent) => void): () => void {
@@ -3782,6 +3798,7 @@ export class CommunityService {
     for (const l of this.rawListeners) l(e);
     switch (e.t) {
       case 'ready':
+        this.relayAllSupported = e.relayAll === true;
         this.clearConnectTimer();
         this.readyAt = Date.now();
         this.offlineSince = null;

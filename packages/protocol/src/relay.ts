@@ -9,13 +9,24 @@
  * sends to whom, when, and how big the frames are.
  *
  * Client → server:  [0x01][n: 1..MAX_RELAY_RECIPIENTS][n × 16-byte recipient River ID][payload]
+ * Client → server:  [0x02][payload]  — to everyone else in the sender's call (2.13, large rooms)
  * Server → client:  [0x01][16-byte sender River ID][payload]
  *
  * The server forwards a frame only to recipients in the sender's own voice
- * channel, caps payload size and frame rate, and never stores frames.
+ * channel, caps payload size and frame rate, and never stores frames. It also
+ * forwards voice from at most MAX_RELAY_SPEAKERS people of one call at a time
+ * (2.13): apps send frames only while someone talks, so the people sending are
+ * the people talking — something the server could already tell from frame
+ * timing; it learns nothing new from the cap.
  */
 
 export const RELAY_FRAME = 0x01;
+/** "To everyone else in my voice channel or call room" (servers that send `relayAll` in `ready`). */
+export const RELAY_FRAME_ALL = 0x02;
+/** People of one call whose relayed voice the server forwards at the same time (2.13). */
+export const MAX_RELAY_SPEAKERS = 6;
+/** A speaker keeps their place this long after their last frame (pauses between words). */
+export const RELAY_SPEAKER_HOLD_MS = 600;
 export const MAX_RELAY_RECIPIENTS = 24;
 /** Largest encrypted payload (an Opus packet at up to 128 kbit/s plus IV and tag fits easily). */
 export const MAX_RELAY_PAYLOAD = 1200;
@@ -59,6 +70,72 @@ export function decodeRelayOut(frame: Uint8Array): { recipients: string[]; paylo
   const recipients: string[] = [];
   for (let i = 0; i < n; i++) recipients.push(bytesToUuid(frame.subarray(2 + i * 16, 18 + i * 16)));
   return { recipients, payload: frame.subarray(start) };
+}
+
+export function encodeRelayAll(payload: Uint8Array): Uint8Array {
+  if (payload.length < 1 || payload.length > MAX_RELAY_PAYLOAD) throw new Error('bad relay payload');
+  const out = new Uint8Array(1 + payload.length);
+  out[0] = RELAY_FRAME_ALL;
+  out.set(payload, 1);
+  return out;
+}
+
+/** A client frame of either kind: `recipients` is "all" for a frame to everyone in the call. */
+export function decodeRelayAny(
+  frame: Uint8Array,
+): { recipients: string[] | 'all'; payload: Uint8Array } | null {
+  if (frame[0] === RELAY_FRAME_ALL) {
+    if (frame.length < 2 || frame.length - 1 > MAX_RELAY_PAYLOAD) return null;
+    return { recipients: 'all', payload: frame.subarray(1) };
+  }
+  return decodeRelayOut(frame);
+}
+
+/**
+ * Which relayed voices of one call the server forwards right now (2.13). Apps
+ * send voice frames only while their person talks (plus one quiet frame about
+ * once a second while silent), so a run of frames means someone is talking.
+ * The first MAX_RELAY_SPEAKERS people talking keep their place while they talk;
+ * frames from anyone else are dropped until a place frees up, except a frame
+ * after a pause (a keep-alive, or the first word), so nobody looks gone.
+ *
+ * Pure (time is passed in), so it can be tested; the server keeps one per call.
+ */
+export class RelaySpeakers {
+  private readonly active = new Map<string, number>();
+  private readonly lastSeen = new Map<string, number>();
+  private readonly max: number;
+  private readonly holdMs: number;
+  constructor(max = MAX_RELAY_SPEAKERS, holdMs = RELAY_SPEAKER_HOLD_MS) {
+    this.max = max;
+    this.holdMs = holdMs;
+  }
+
+  /** Whether to forward this frame from `sender` arriving at `now`. */
+  admit(sender: string, now: number): boolean {
+    for (const [id, at] of this.active) if (now - at > this.holdMs) this.active.delete(id);
+    const prev = this.lastSeen.get(sender);
+    this.lastSeen.set(sender, now);
+    if (this.active.has(sender) || this.active.size < this.max) {
+      this.active.set(sender, now);
+      return true;
+    }
+    return prev === undefined || now - prev >= this.holdMs;
+  }
+
+  /** People whose voice is forwarded now (for tests and diagnostics). */
+  speakers(now: number): string[] {
+    return [...this.active].filter(([, at]) => now - at <= this.holdMs).map(([id]) => id);
+  }
+
+  forget(id: string): void {
+    this.active.delete(id);
+    this.lastSeen.delete(id);
+  }
+
+  get size(): number {
+    return this.lastSeen.size;
+  }
 }
 
 export function encodeRelayIn(sender: string, payload: Uint8Array): Uint8Array {

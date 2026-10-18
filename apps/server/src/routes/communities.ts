@@ -67,7 +67,7 @@ import {
   MAX_CALL_ROOM,
   RELAY_BURST,
   RELAY_FRAMES_PER_SECOND,
-  decodeRelayOut,
+  decodeRelayAny,
   encodeRelayIn,
 } from '@river/protocol';
 import { authenticate, renewSession } from '../accounts/auth-store.ts';
@@ -2959,7 +2959,7 @@ export async function registerCommunityRoutes(
         hubSocket.deviceId = session.deviceId;
         hub.setStatus(riverId, event.status ?? 'online');
         const cameOnline = hub.add(riverId, hubSocket);
-        send({ t: 'ready', riverId });
+        send({ t: 'ready', riverId, relayAll: true });
         const rows = await db
           .selectFrom('community_members')
           .select('community_id')
@@ -3172,11 +3172,14 @@ export async function registerCommunityRoutes(
       relayRefilled = now;
       if (relayTokens < 1 || !riverId) return; // over budget: drop (audio tolerates loss)
       relayTokens -= 1;
-      const frame = decodeRelayOut(new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength));
+      const frame = decodeRelayAny(new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength));
       if (!frame) return;
       const sender = riverId;
+      // Only the first few people talking at once are forwarded (large rooms, 2.13).
+      if (!hub.admitRelay(sender, now)) return;
       const out = Buffer.from(encodeRelayIn(sender, frame.payload));
-      for (const to of new Set(frame.recipients)) if (hub.sharesCall(sender, to)) hub.sendBinaryTo(to, out);
+      const to = frame.recipients === 'all' ? hub.callPeers(sender) : new Set(frame.recipients);
+      for (const id of to) if (hub.sharesCall(sender, id)) hub.sendRelay(sender, id, out);
     };
     let queue: Promise<void> = Promise.resolve();
     socket.on('message', (raw: Buffer, isBinary: boolean) => {

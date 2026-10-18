@@ -78,7 +78,9 @@ describe('jitter buffer', () => {
     jb.push(chunk(2));
     jb.push(chunk(3));
     jb.pull(out);
-    expect(out[0]).toBe(1);
+    // Faded in over the first 64 samples (no click), then the first chunk as it was.
+    expect(out[0]).toBe(0);
+    expect(out[100]).toBe(1);
   });
 
   it('bounds the delay by dropping the oldest audio', () => {

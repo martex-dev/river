@@ -870,7 +870,14 @@ async function joinVoiceNow(channelId: string, me: string, token: { cancelled: b
   await get().call?.leave();
   if (token.cancelled) return;
   const voice = useRiver.getState().settings?.voice;
-  const iceServers = await window.river.voice.iceServers().catch(() => []);
+  const [iceServers, relayAll] = await Promise.all([
+    window.river.voice.iceServers().catch(() => []),
+    // Servers from 2.13 take one relayed frame for everyone in the call (large rooms).
+    Promise.resolve()
+      .then(() => window.river.voice.relayInfo())
+      .then((r) => r.all === true)
+      .catch(() => false),
+  ]);
   if (token.cancelled) return;
   let streaming = false;
   const onChange = (): void => {
@@ -883,7 +890,10 @@ async function joinVoiceNow(channelId: string, me: string, token: { cancelled: b
     }
   };
   // People who cannot connect directly hear each other through the server (encrypted end to end).
-  const relay = new WebCodecsRelay(me, (to, payload) => window.river.voice.relay(to, payload));
+  const relay = new WebCodecsRelay(me, {
+    to: (to, payload) => window.river.voice.relay(to, payload),
+    all: relayAll ? (payload) => window.river.voice.relayAll(payload) : null,
+  });
   const call = new VoiceCall(
     channelId,
     me,

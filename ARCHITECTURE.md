@@ -198,6 +198,24 @@ migration marked destructive and restores it on failure. Upgrade paths
   via E2EE messages, call fingerprints bound to the identity keys. Group: LiveKit
   SFU with insertable-streams frame encryption; keys distributed over River
   E2EE, so the SFU forwards frames it cannot decrypt.
+- **Voice channels today (2.13)** — up to 8 people talk over a WebRTC mesh
+  (each person uploads their voice once per listener: about 40–60 kbit/s per
+  listener with packet overhead, and every pair needs its own connection and a
+  dozen call-setup signals). Above 8 people (`MESH_MAX_PEOPLE`, `media-tuning.ts`)
+  voice goes through the encrypted server relay instead: one upload per
+  20 ms frame however big the room is (one `0x02` "to everyone in my call"
+  frame), sent only while the person talks, and the server forwards at most
+  `MAX_RELAY_SPEAKERS` (6) people talking at once per call, so a listener's
+  download is bounded by the speakers, not the room. In a large room direct
+  connections are made only with people sharing a camera or screen (video
+  bitrate is shared out between viewers), so video in very large rooms still
+  costs the sharer one upload per viewer; the SFU above is what removes that.
+  Estimated limits: mesh voice ≈ 8–10 people (beyond that upload, CPU and
+  signalling grow with every joiner; joins of 40+ could hit the server's
+  per-connection signal budget), mesh video ≈ 4–6; relayed voice is bounded by
+  the server's outbound bandwidth (≈ speakers × listeners × 40 kbit/s), e.g.
+  50 people with 3 talking ≈ 6 Mbit/s out of the server, and by the per-call
+  sender-key distribution (one sealed signal per pair on join).
 
 ## 11. Remote assistance (Stage 2, planned)
 

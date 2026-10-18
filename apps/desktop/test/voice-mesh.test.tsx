@@ -153,6 +153,8 @@ class Relay {
   /** Return true to drop a signal. */
   drop: (from: string, to: string, data: { type: string }) => boolean = () => false;
   sent = 0;
+  /** Signals sent, per sender. */
+  readonly bySender = new Map<string, number>();
   transport(me: string): CallTransport {
     return {
       join: async () => {
@@ -166,6 +168,7 @@ class Relay {
       },
       signal: (to, data) => {
         this.sent += 1;
+        this.bySender.set(me, (this.bySender.get(me) ?? 0) + 1);
         if (this.drop(me, to, data as { type: string })) return;
         setTimeout(() => void this.calls.get(to)?.handleSignal(me, data), 5);
       },
@@ -201,6 +204,21 @@ class FakeRelay implements RelayEngine {
   setRecipients(ids: string[]): void {
     this.recipients = ids;
   }
+  broadcast = false;
+  bitrate = 32_000;
+  /** Loss the next loss() call reports per person (then null again). */
+  readonly lossNext = new Map<string, number>();
+  setBroadcast(on: boolean): void {
+    this.broadcast = on;
+  }
+  setBitrate(bps: number): void {
+    this.bitrate = bps;
+  }
+  loss(id: string): number | null {
+    const l = this.lossNext.get(id) ?? null;
+    this.lossNext.delete(id);
+    return l;
+  }
   ownKey(): Uint8Array {
     return this.raw;
   }
@@ -220,9 +238,11 @@ class FakeRelay implements RelayEngine {
     this.keys.delete(id);
   }
   close(): void {}
-  /** One voice frame to everyone currently relayed to. */
+  /** One voice frame to everyone currently relayed to (in a large room: to everyone in the call). */
   talk(): void {
-    for (const to of this.recipients) this.hub.get(to)?.receiveRelay(this.me, new Uint8Array([1]));
+    if (this.recipients.length === 0) return;
+    const to = this.broadcast ? [...this.hub.keys()].filter((id) => id !== this.me) : this.recipients;
+    for (const id of to) this.hub.get(id)?.receiveRelay(this.me, new Uint8Array([1]));
   }
 }
 const relays = new Map<string, FakeRelay>();
@@ -554,5 +574,219 @@ describe('remote assistance (ADR 0007)', () => {
     } finally {
       delete (globalThis as { river?: unknown }).river;
     }
+  });
+});
+
+/** IDs that sort in join order however many there are. */
+const people = (n: number): string[] =>
+  Array.from({ length: n }, (_, i) => `${String(i).padStart(8, '0')}-0000-4000-8000-000000000000`);
+const remoteOf = (c: VoiceCall, id: string): RemotePeer | undefined => c.remotes().find((r) => r.id === id);
+const connectedPairs = (): number => net.pcs.filter((p) => p.connectionState === 'connected').length / 2;
+
+describe('large rooms (2.13)', () => {
+  it('above eight people, newcomers talk to everyone through the server: no direct connections, few signals', async () => {
+    const ids_ = people(12);
+    const first = await Promise.all(ids_.slice(0, 8).map((id) => joinCall(id, true)));
+    await runUntil(() => fullMesh(first));
+    first[0]!.setMuted(true);
+    const created = net.created;
+    const late: VoiceCall[] = [];
+    for (const id of ids_.slice(8)) {
+      late.push(await joinCall(id, true));
+      await vi.advanceTimersByTimeAsync(200);
+    }
+    await vi.advanceTimersByTimeAsync(3000);
+    // Mesh would have needed 8 + 9 + 10 + 11 = 38 more connections.
+    expect(net.created).toBe(created);
+    const all = [...first, ...late];
+    for (const c of all)
+      for (const n of late)
+        if (c !== n) expect(remoteOf(c, n.me)?.relayed, `${c.me} hears ${n.me}`).toBe(true);
+    // The eight who were connected directly stay so (nothing working is torn down).
+    expect(connectedPairs()).toBe(28);
+    // One upload reaches everyone: the newcomer's relay sends each frame to the whole call.
+    const last = relays.get(ids_[11]!)!;
+    expect(last.broadcast).toBe(true);
+    last.talk();
+    for (const c of all.slice(0, 11)) expect(relays.get(c.me)!.received(ids_[11]!)).toBe(1);
+    // A newcomer who never connected directly still sees who is muted.
+    expect(remoteOf(late[3]!, ids_[0]!)?.muted).toBe(true);
+    // Joining took about two signals per person (relay key, state), not a dozen.
+    expect(relay.bySender.get(ids_[11]!) ?? 0).toBeLessThanOrEqual(2 * 11 + 2);
+  });
+
+  it('someone sharing video connects directly with everyone; nobody else connects directly', async () => {
+    const ids_ = people(10);
+    relay.participants = [...ids_]; // the room is already big when everyone's app starts
+    const videoTrack = { stop: vi.fn(), enabled: true };
+    (navigator as unknown as { mediaDevices: Record<string, unknown> }).mediaDevices.getUserMedia =
+      async (c: { video?: unknown }) =>
+        c.video
+          ? { getVideoTracks: () => [videoTrack], getAudioTracks: () => [] }
+          : { getAudioTracks: () => [{ enabled: true, stop: () => undefined }] };
+    const calls = await Promise.all(ids_.map((id) => joinCall(id, true)));
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(net.created).toBe(0);
+    expect(calls.every((c) => c.largeRoom)).toBe(true);
+    await calls[4]!.setCamera(true);
+    await runUntil(() => connectedPairs() === 9);
+    for (const c of calls)
+      if (c !== calls[4]) expect(remoteOf(c, ids_[4]!)?.state, `${c.me} sees the camera`).toBe('connected');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(connectedPairs()).toBe(9);
+  });
+
+  it('a large room that shrinks to eight goes back to talking directly', async () => {
+    const ids_ = people(9);
+    relay.participants = [...ids_];
+    const calls = await Promise.all(ids_.map((id) => joinCall(id, true)));
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(net.created).toBe(0);
+    await calls[8]!.leave();
+    const rest = calls.slice(0, 8);
+    await runUntil(() => fullMesh(rest) && rest.every((c) => c.remotes().every((r) => !r.relayed)));
+    for (const c of rest) expect(relays.get(c.me)!.broadcast).toBe(false);
+  });
+
+  it('a large room makes no direct connection for people without video, even when asked', async () => {
+    const ids_ = people(10);
+    relay.participants = [...ids_];
+    const calls = await Promise.all(ids_.map((id) => joinCall(id, true)));
+    await vi.advanceTimersByTimeAsync(2000);
+    // An older app keeps saying "hello" (please offer): voice already flows through the server.
+    await calls[0]!.handleSignal(ids_[5]!, { type: 'hello' });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(net.created).toBe(0);
+    expect(remoteOf(calls[0]!, ids_[5]!)?.relayed).toBe(true);
+  });
+
+  it('nothing about people who left lingers in a long, busy call', async () => {
+    const ids_ = people(12);
+    relay.participants = [...ids_];
+    const calls = await Promise.all(ids_.map((id) => joinCall(id, true)));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(calls[0]!.bookkeeping()).toBeGreaterThan(11);
+    for (const c of calls.slice(1)) await c.leave();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls[0]!.remotes()).toEqual([]);
+    expect(calls[0]!.bookkeeping()).toBe(0);
+  });
+});
+
+describe('meeting state between people (2.13)', () => {
+  it('raised hands reach everyone, in the order they went up, and go down again', async () => {
+    const ids_ = people(3);
+    const calls = await Promise.all(ids_.map((id) => joinCall(id)));
+    await runUntil(() => fullMesh(calls));
+    calls[2]!.setHand(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    calls[1]!.setHand(true);
+    await vi.advanceTimersByTimeAsync(100);
+    const hands = (): string[] =>
+      calls[0]!
+        .remotes()
+        .filter((r) => r.hand)
+        .sort((a, b) => a.hand! - b.hand!)
+        .map((r) => r.id);
+    expect(hands()).toEqual([ids_[2], ids_[1]]);
+    calls[2]!.setHand(false);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(hands()).toEqual([ids_[1]]);
+  });
+
+  it('someone who joins later sees the hands already up', async () => {
+    const ids_ = people(3);
+    const first = await Promise.all(ids_.slice(0, 2).map((id) => joinCall(id)));
+    await runUntil(() => fullMesh(first));
+    first[1]!.setHand(true);
+    const late = await joinCall(ids_[2]!);
+    await runUntil(() => fullMesh([...first, late]));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(remoteOf(late, ids_[1]!)?.hand).toBeGreaterThan(0);
+  });
+
+  it('a relayed person sees who is muted without waiting for them to change something', async () => {
+    const [a, b] = people(2);
+    net.broken.add(Net.key(a!, b!));
+    const alice = await joinCall(a!, true);
+    alice.setMuted(true);
+    const bob = await joinCall(b!, true);
+    await runUntil(() => remoteOf(bob, a!)?.relayed === true, 30_000);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(remoteOf(bob, a!)?.muted).toBe(true);
+  });
+
+  it('listeners missing relayed frames make the speaker send less, until it is better again', async () => {
+    const [a, b] = people(2);
+    net.broken.add(Net.key(a!, b!));
+    const calls = [await joinCall(a!, true), await joinCall(b!, true)];
+    await runUntil(() => calls.every((c) => c.remotes()[0]?.relayed), 30_000);
+    relays.get(b!)!.lossNext.set(a!, 0.1);
+    await runUntil(() => relays.get(a!)!.bitrate < 32_000, 10_000);
+    expect(relays.get(a!)!.bitrate).toBe(16_000);
+    await vi.advanceTimersByTimeAsync(25_000);
+    expect(relays.get(a!)!.bitrate).toBe(32_000);
+  });
+});
+
+describe('network and device changes (2.13)', () => {
+  it('a network change restarts the connections in place: nobody drops out, no new connections', async () => {
+    const calls = await Promise.all(people(3).map((id) => joinCall(id)));
+    await runUntil(() => fullMesh(calls));
+    const before = net.created;
+    const sent = relay.sent;
+    for (const c of calls) {
+      c.networkChanged();
+      c.networkChanged(); // a burst of change events is handled once
+    }
+    await vi.advanceTimersByTimeAsync(200);
+    expect(relay.sent).toBeGreaterThan(sent);
+    await runUntil(() => fullMesh(calls));
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(fullMesh(calls)).toBe(true);
+    expect(net.created).toBe(before);
+  });
+
+  it('an unplugged microphone is replaced, and a missing one is retried when a device appears', async () => {
+    const tracks: Array<{ enabled: boolean; stop: () => void; onended: (() => void) | null }> = [];
+    let available = true;
+    let onDevices: (() => void) | null = null;
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: {
+        mediaDevices: {
+          getUserMedia: async () => {
+            if (!available) throw Object.assign(new Error('no microphone'), { name: 'NotFoundError' });
+            const t = { enabled: true, stop: vi.fn(), onended: null };
+            tracks.push(t);
+            return { getAudioTracks: () => [t] };
+          },
+          enumerateDevices: async () => [],
+          addEventListener: (_: string, fn: () => void) => {
+            onDevices = fn;
+          },
+          removeEventListener: () => undefined,
+        },
+      },
+    });
+    const call = await joinCall(people(1)[0]!);
+    expect(tracks).toHaveLength(1);
+    tracks[0]!.onended!();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(tracks).toHaveLength(2);
+    expect(call.localTrack('audio')).toBe(tracks[1]);
+    expect(call.micLost).toBe(false);
+    // Unplugged with no other microphone: the call says so instead of sending silence quietly.
+    available = false;
+    tracks[1]!.onended!();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(call.micLost).toBe(true);
+    available = true;
+    onDevices!();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(call.micLost).toBe(false);
+    expect(call.localTrack('audio')).toBe(tracks[2]);
+    await call.leave();
+    expect(tracks[2]!.stop).toHaveBeenCalled();
   });
 });

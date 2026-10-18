@@ -23,6 +23,8 @@ export const SERVER_CAPABILITIES = [
   'delete-account',
   /** 1.3: PUT /v1/accounts/me/devices and the link mailbox (docs/architecture/decisions/0006). */
   'linked-devices',
+  /** 2.13: voice relay frames to everyone in a call (RELAY_FRAME_ALL) and the active-speaker cap. */
+  'voice-relay-all',
 ] as const;
 export type ServerCapability = (typeof SERVER_CAPABILITIES)[number];
 
