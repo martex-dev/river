@@ -11,7 +11,7 @@ import {
   sendDirectRequestSchema,
   type EnvelopeWire,
 } from '@river/protocol';
-import { authenticate } from '../accounts/auth-store.ts';
+import { authenticate, purgeExpired } from '../accounts/auth-store.ts';
 import type { Hub } from '../communities/hub.ts';
 import type { ServerConfig } from '../config.ts';
 import type { RiverDatabase } from '../db/database.ts';
@@ -19,6 +19,7 @@ import type { Database } from '../db/schema.ts';
 import { HttpError } from '../http-error.ts';
 
 /** Undelivered envelopes are kept this long, then deleted. */
+/** Default for RIVER_MAILBOX_TTL_DAYS. */
 const MAILBOX_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const PAGE = 100;
 
@@ -552,12 +553,30 @@ export function registerMessagingRoutes(
     return { ok: true };
   });
 
-  // Undelivered mail expires.
+  // Undelivered mail expires, and so does what only mattered until a time that has passed:
+  // sessions and sign-in challenges (a session's expiry shows roughly when its device was last
+  // used), username holds and sign-up codes. Also at start: a server restarted more often than
+  // hourly (a home PC) would otherwise never get here (2.13).
   const collect = async (): Promise<void> => {
-    const cutoff = new Date(deps.now().getTime() - MAILBOX_TTL_MS).toISOString();
+    const now = deps.now();
+    const cutoff = new Date(now.getTime() - (deps.config.mailboxTtlMs ?? MAILBOX_TTL_MS)).toISOString();
     await db.deleteFrom('mailbox').where('received_at', '<', cutoff).execute();
+    await purgeExpired(db, now);
+    await db.deleteFrom('username_holds').where('until', '<=', now.toISOString()).execute();
+    await db.deleteFrom('signups').where('expires_at', '<=', now.toISOString()).execute();
   };
   const timer = setInterval(() => void collect().catch(() => undefined), 60 * 60 * 1000);
   timer.unref();
+  app.addHook('onReady', async () => {
+    await collect().catch(() => undefined);
+  });
   app.addHook('onClose', async () => clearInterval(timer));
+  app.decorate('collectMailbox', collect);
+}
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    /** Deletes expired mail, sessions, challenges, username holds and sign-up codes now (tests). */
+    collectMailbox: () => Promise<void>;
+  }
 }

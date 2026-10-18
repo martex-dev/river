@@ -27,19 +27,20 @@ RIVER_DATABASE_URL=sqlite:/var/lib/river/river.sqlite npm start -w @river/server
 
 ## Configuration
 
-| Variable                      | Default                           | Meaning                                               |
-| ----------------------------- | --------------------------------- | ----------------------------------------------------- |
-| `RIVER_HOST`                  | `127.0.0.1` (`0.0.0.0` in Docker) | Listen address                                        |
-| `RIVER_PORT`                  | `8787`                            | Listen port                                           |
-| `RIVER_DATABASE_URL`          | `sqlite:./data/river.sqlite`      | `sqlite:<path>` or `postgres://user:pass@host/db`     |
-| `RIVER_LOG_LEVEL`             | `info`                            | `fatal` … `debug`, or `silent`                        |
-| `RIVER_TRUST_PROXY`           | `false`                           | Trust `X-Forwarded-For` (only behind your own proxy)  |
-| `RIVER_RATE_LIMIT_PER_MINUTE` | `300`                             | Per-client request limit (in-memory counters)         |
-| `RIVER_PUBLIC_URL`            | —                                 | Public `https://` URL; enables HSTS                   |
-| `RIVER_ATTACHMENT_DIR`        | `./data/attachments`              | Encrypted file blobs (back this up with the database) |
-| `RIVER_TURN_URLS`             | —                                 | TURN relays for calls (see [turn.md](turn.md))        |
-| `RIVER_TURN_SECRET`           | —                                 | coturn `static-auth-secret`                           |
-| `RIVER_MAX_ATTACHMENT_MB`     | `25`                              | Largest encrypted file accepted                       |
+| Variable                      | Default                           | Meaning                                                                                                                  |
+| ----------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `RIVER_HOST`                  | `127.0.0.1` (`0.0.0.0` in Docker) | Listen address                                                                                                           |
+| `RIVER_PORT`                  | `8787`                            | Listen port                                                                                                              |
+| `RIVER_DATABASE_URL`          | `sqlite:./data/river.sqlite`      | `sqlite:<path>` or `postgres://user:pass@host/db`                                                                        |
+| `RIVER_LOG_LEVEL`             | `info`                            | `fatal` … `debug`, or `silent`                                                                                           |
+| `RIVER_TRUST_PROXY`           | `false`                           | Trust `X-Forwarded-For` (only behind your own proxy)                                                                     |
+| `RIVER_RATE_LIMIT_PER_MINUTE` | `300`                             | Per-client request limit (in-memory counters)                                                                            |
+| `RIVER_PUBLIC_URL`            | —                                 | Public `https://` URL; enables HSTS                                                                                      |
+| `RIVER_ATTACHMENT_DIR`        | `./data/attachments`              | Encrypted file blobs (back this up with the database)                                                                    |
+| `RIVER_TURN_URLS`             | —                                 | TURN relays for calls (see [turn.md](turn.md))                                                                           |
+| `RIVER_TURN_SECRET`           | —                                 | coturn `static-auth-secret`                                                                                              |
+| `RIVER_MAX_ATTACHMENT_MB`     | `25`                              | Largest encrypted file accepted                                                                                          |
+| `RIVER_MAILBOX_TTL_DAYS`      | `30`                              | Days undelivered direct messages wait for a device that does not collect them (1–90); delivered ones are deleted at once |
 
 Invalid values stop the server at start-up with a list of every problem.
 
