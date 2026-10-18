@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.ts';
 import { AccessCheck } from './AccessCheck.tsx';
 import { AvatarCropDialog, keepAnimated } from './AvatarCrop.tsx';
 import { ForumSettings } from './Forum.tsx';
@@ -352,9 +353,9 @@ export function CategoryDialog(props: { community: CommunityView; categoryId?: s
               </label>
               {dirtyName && (
                 <div className="save-bar">
-                  <span>Careful — you have unsaved changes!</span>
+                  <span>{tr('Careful — you have unsaved changes!')}</span>
                   <button className="btn btn--link" onClick={() => setName(existing.name)}>
-                    Reset
+                    {tr('Reset')}
                   </button>
                   <button
                     className="btn btn--primary btn--small"
@@ -367,7 +368,7 @@ export function CategoryDialog(props: { community: CommunityView; categoryId?: s
                       })
                     }
                   >
-                    Save changes
+                    {tr('Save changes')}
                   </button>
                 </div>
               )}
@@ -391,9 +392,9 @@ export function CategoryDialog(props: { community: CommunityView; categoryId?: s
               />
               {dirtyPerms && (
                 <div className="save-bar">
-                  <span>Careful — you have unsaved changes!</span>
+                  <span>{tr('Careful — you have unsaved changes!')}</span>
                   <button className="btn btn--link" onClick={() => setOverwrites(existing.overwrites)}>
-                    Reset
+                    {tr('Reset')}
                   </button>
                   <button
                     className="btn btn--primary btn--small"
@@ -406,7 +407,7 @@ export function CategoryDialog(props: { community: CommunityView; categoryId?: s
                       })
                     }
                   >
-                    Save changes
+                    {tr('Save changes')}
                   </button>
                 </div>
               )}
@@ -660,7 +661,7 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
               </div>
               {dirtyOverview && (
                 <div className="save-bar">
-                  <span>Careful — you have unsaved changes!</span>
+                  <span>{tr('Careful — you have unsaved changes!')}</span>
                   <button
                     className="btn btn--link"
                     onClick={() => {
@@ -668,7 +669,7 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
                       setTopic(channel.topic);
                     }}
                   >
-                    Reset
+                    {tr('Reset')}
                   </button>
                   <button
                     className="btn btn--primary btn--small"
@@ -677,7 +678,7 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
                       void s.run({ a: 'updateChannel', channelId: channel.id, name: name.trim(), topic })
                     }
                   >
-                    Save changes
+                    {tr('Save changes')}
                   </button>
                 </div>
               )}
@@ -725,15 +726,15 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
               <AccessCheck community={community} channel={channel} overwrites={overwrites} bits={bits} />
               {dirtyPerms && (
                 <div className="save-bar">
-                  <span>Careful — you have unsaved changes!</span>
+                  <span>{tr('Careful — you have unsaved changes!')}</span>
                   <button className="btn btn--link" onClick={() => setOverwrites(channel.overwrites)}>
-                    Reset
+                    {tr('Reset')}
                   </button>
                   <button
                     className="btn btn--primary btn--small"
                     onClick={() => void s.run({ a: 'updateChannel', channelId: channel.id, overwrites })}
                   >
-                    Save changes
+                    {tr('Save changes')}
                   </button>
                 </div>
               )}

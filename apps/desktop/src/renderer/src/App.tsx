@@ -8,7 +8,7 @@ import { startNavHistory } from './nav-history.ts';
 import { useDesignEngine } from './appearance/use-design.ts';
 import { TryBar } from './appearance/TryBar.tsx';
 import { SetupCards } from './components/SetupCards.tsx';
-import { resolveLanguage, useT } from './i18n.ts';
+import { msg, resolveLanguage, textDirection, tr, useT } from './i18n.ts';
 import { RiverMark } from './components/RiverMark.tsx';
 import { AdminIcon, LockIcon } from './components/Icons.tsx';
 import { HOME_SECTIONS, HomeSidebar } from './components/HomeSidebar.tsx';
@@ -38,16 +38,16 @@ import { isPhone } from '../../shared/platform.ts';
 import { PhoneShell } from './phone/PhoneShell.tsx';
 
 const LABELS: Record<Section, string> = {
-  home: 'Friends',
-  messages: 'Messages',
-  communities: 'Communities',
-  social: 'Social',
-  calls: 'Calls',
-  files: 'Files',
-  contacts: 'Friends',
-  admin: 'Admin',
-  security: 'Security',
-  settings: 'Settings',
+  home: msg('Friends'),
+  messages: msg('Messages'),
+  communities: msg('Communities'),
+  social: msg('Social'),
+  calls: msg('Calls'),
+  files: msg('Files'),
+  contacts: msg('Friends'),
+  admin: msg('Admin'),
+  security: msg('Security'),
+  settings: msg('Settings'),
 };
 
 function useSystemReducedMotion(): boolean {
@@ -151,7 +151,10 @@ export function App(): ReactElement {
 
   const languageSetting = useRiver((r) => r.settings?.appearance.language);
   useEffect(() => {
-    document.documentElement.lang = resolveLanguage(languageSetting);
+    const lang = resolveLanguage(languageSetting);
+    document.documentElement.lang = lang;
+    // Right-to-left languages turn the page around (CSS uses logical sides where it matters).
+    document.documentElement.dir = textDirection(lang);
   }, [languageSetting]);
 
   useEffect(() => {
@@ -365,7 +368,7 @@ function HomeButton(): ReactElement {
       <span className="community__pill" aria-hidden="true" />
       <button
         className={`community__server rail-home ${active ? 'is-active' : ''}`}
-        aria-label="Home"
+        aria-label={tr('Home')}
         title="Home — friends and direct messages"
         aria-current={active ? 'page' : undefined}
         onClick={() => {

@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from 'react';
 import { looksLikeInvite } from '../../../shared/invite-link.ts';
 import { joinWithLink } from '../community/ui/StartScreen.tsx';
+import { tr } from '../i18n.ts';
 import { useRiver } from '../store.ts';
 
 /**
@@ -27,11 +28,11 @@ export function JoinCommunityCard(): ReactElement {
         void join(link);
       }}
     >
-      <h2 className="card__title">Join a community</h2>
-      <p className="muted small">Got an invite link? Paste it here — River does the rest.</p>
+      <h2 className="card__title">{tr('Join a community')}</h2>
+      <p className="muted small">{tr('Got an invite link? Paste it here — River does the rest.')}</p>
       <div className="start__join-row">
         <input
-          aria-label="Community invite link"
+          aria-label={tr('Community invite link')}
           value={link}
           onChange={(e) => {
             setLink(e.target.value);
@@ -46,11 +47,11 @@ export function JoinCommunityCard(): ReactElement {
               void join(pasted);
             }
           }}
-          placeholder="Paste an invite link"
+          placeholder={tr('Paste an invite link')}
           spellCheck={false}
         />
         <button className="btn btn--primary" disabled={busy || link.trim() === ''}>
-          {busy ? 'Joining…' : 'Join'}
+          {busy ? tr('Joining…') : tr('Join')}
         </button>
       </div>
       {error && <p className="field__error">{error}</p>}
@@ -59,7 +60,7 @@ export function JoinCommunityCard(): ReactElement {
         className="btn btn--link get-started__own"
         onClick={() => setCommunityStart(true)}
       >
-        Or start your own community
+        {tr('Or start your own community')}
       </button>
     </form>
   );

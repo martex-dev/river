@@ -8,6 +8,13 @@ import {
 import type { NotifySound } from '../shared/notify-sounds.ts';
 import { Notification, type BrowserWindow } from 'electron';
 import type { Settings } from '../shared/settings.ts';
+import {
+  resolveLanguage,
+  translate,
+  translatePlural,
+  type Language,
+  type Vars,
+} from '../shared/i18n/index.ts';
 import type { CommunityService } from './community/community-service.ts';
 import type { DmService } from './dm/dm-service.ts';
 
@@ -68,13 +75,16 @@ export function summaryText(
   count: number,
   lines: string[],
   kind: 'dm' | 'channel',
+  lang: Language = 'en',
 ): string {
   if (preview === 'full' && lines.length) {
     const shown = lines.slice(-SUMMARY_LINES);
     const more = count - shown.length;
-    return [...shown, ...(more > 0 ? [`+${more} more`] : [])].join('\n');
+    return [...shown, ...(more > 0 ? [translate(lang, '+{count} more', { count: more })] : [])].join('\n');
   }
-  return `${count} new ${kind === 'dm' && preview === 'none' ? 'direct ' : ''}messages`;
+  return kind === 'dm' && preview === 'none'
+    ? translatePlural(lang, '{count} new direct messages', count)
+    : translatePlural(lang, '{count} new messages', count);
 }
 
 /**
@@ -95,8 +105,17 @@ export function startMessageNotifications(deps: {
   nativeGrouping?: boolean;
   /** Takes a conversation's notification away on the phone (it was read). */
   clearConversation?: (conversation: string) => void;
+  /**
+   * The computer's or phone's language (Electron's app.getLocale(), the phone's navigator), for
+   * notifications in River's language when it follows the system. Without it: English.
+   */
+  locale?: () => string;
 }): () => void {
   const { community, window } = deps;
+  /** Notifications speak River's language (Settings → Appearance → Language). */
+  const lang = (): Language => resolveLanguage(deps.settings().appearance.language, deps.locale?.() ?? 'en');
+  const t = (text: string, vars?: Vars): string => translate(lang(), text, vars);
+  const tn = (key: string, count: number, vars?: Vars): string => translatePlural(lang(), key, count, vars);
   /**
    * Shown notifications are held until clicked or closed: on Windows one that nothing refers to
    * can be garbage-collected while on screen, and clicking it then does nothing. The oldest go
@@ -148,9 +167,9 @@ export function startMessageNotifications(deps: {
       title,
       body,
       silent: !call,
-      ...(onReply ? { hasReply: true, replyPlaceholder: 'Reply' } : {}),
+      ...(onReply ? { hasReply: true, replyPlaceholder: t('Reply') } : {}),
       // Mark as read (2.17): macOS shows the button; phones put it next to Reply.
-      ...(onRead ? { actions: [{ type: 'button' as const, text: 'Mark as read' }] } : {}),
+      ...(onRead ? { actions: [{ type: 'button' as const, text: t('Mark as read') }] } : {}),
       // An incoming call stays until it is answered or stops ringing (phones ring for it).
       ...(call ? { urgency: 'critical' as const, timeoutType: 'never' as const } : {}),
     });
@@ -216,7 +235,7 @@ export function startMessageNotifications(deps: {
     const lines = [...(before?.lines ?? []), ...(p.line ? [p.line] : [])].slice(-SUMMARY_LINES);
     const grouped = !deps.nativeGrouping && count > 1;
     const title = grouped ? `${p.summaryTitle} (${count})` : p.title;
-    const body = grouped ? summaryText(prefs.preview, count, lines, p.kind) : p.body;
+    const body = grouped ? summaryText(prefs.preview, count, lines, p.kind, lang()) : p.body;
     const n = show(
       title,
       body,
@@ -275,10 +294,10 @@ export function startMessageNotifications(deps: {
     show(
       named
         ? group
-          ? `Missed group call in ${group.name}`
-          : `Missed call from ${deps.dm.nameOf(peer)}`
-        : 'Missed call',
-      end.event.video ? 'River video call' : 'River voice call',
+          ? t('Missed group call in {group}', { group: group.name })
+          : t('Missed call from {name}', { name: deps.dm.nameOf(peer) })
+        : t('Missed call'),
+      end.event.video ? t('River video call') : t('River voice call'),
       false,
       () => deps.dm.focus(group ? group.id : peer),
       undefined,
@@ -320,16 +339,22 @@ export function startMessageNotifications(deps: {
         // Answered "busy" here meanwhile, or no longer ringing: no notification.
         if (deps.dm.ringingCall && deps.dm.ringingCall()?.callId !== callId) return;
         const prefs = deps.settings().notifications;
-        const name = prefs.preview === 'none' ? 'Someone' : deps.dm.nameOf(event.peer);
+        const name = prefs.preview === 'none' ? t('Someone') : deps.dm.nameOf(event.peer);
         // A group call (2.18): who rang, and in which group.
         const group = event.group;
         const n = show(
-          `Incoming ${group ? 'group ' : ''}${event.video ? 'video ' : ''}call`,
+          group
+            ? event.video
+              ? t('Incoming group video call')
+              : t('Incoming group call')
+            : event.video
+              ? t('Incoming video call')
+              : t('Incoming call'),
           group
             ? prefs.preview === 'none'
-              ? 'A group call'
-              : `${name} is calling ${group.name} (${group.people} people)`
-            : `${name} is calling you`,
+              ? t('A group call')
+              : tn('{name} is calling {group} ({count} people)', group.people, { name, group: group.name })
+            : t('{name} is calling you', { name }),
           true,
           () => deps.dm.focus(group ? group.id : event.peer),
           undefined,
@@ -369,10 +394,10 @@ export function startMessageNotifications(deps: {
         title,
         body:
           prefs.preview === 'none'
-            ? 'New friend request'
+            ? t('New friend request')
             : prefs.preview === 'full' && m.text
-              ? `Wants to be your friend: ${clip(m.text, 140)}`
-              : 'Wants to be your friend',
+              ? t('Wants to be your friend: {text}', { text: clip(m.text, 140) })
+              : t('Wants to be your friend'),
         summaryTitle,
         line: m.text ? clip(m.text, 140) : null,
         mention: true,
@@ -384,8 +409,8 @@ export function startMessageNotifications(deps: {
       });
       return;
     }
-    const text = m.text ? clip(m.text, 180) : 'Sent a file';
-    const body = prefs.preview === 'full' ? text : 'New direct message';
+    const text = m.text ? clip(m.text, 180) : t('Sent a file');
+    const body = prefs.preview === 'full' ? text : t('New direct message');
     // Reply right from the notification (phones; macOS), sent end-to-end encrypted like any message.
     postMessage({
       key: `dm:${m.peer}`,
@@ -410,7 +435,7 @@ export function startMessageNotifications(deps: {
     const preview = deps.settings().notifications.preview;
     show(
       preview === 'none' ? 'River' : event.name,
-      preview === 'none' ? 'An event you are interested in is starting' : 'Starting now',
+      preview === 'none' ? t('An event you are interested in is starting') : t('Starting now'),
       true,
       () => community.focusChannel(event.communityId, event.channelId ?? ''),
       undefined,
@@ -439,7 +464,7 @@ export function startMessageNotifications(deps: {
     if (!Notification.isSupported()) return;
     const channel = community.channelName(m.channelId);
     let title = 'River';
-    let body = mention ? 'You were mentioned' : 'New message';
+    let body = mention ? t('You were mentioned') : t('New message');
     const named = prefs.preview === 'sender' || prefs.preview === 'full';
     if (named) title = channel ? `${m.senderName} · #${channel}` : m.senderName;
     const text = clip(m.text, 180);

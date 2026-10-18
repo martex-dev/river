@@ -1,6 +1,8 @@
 import { useMemo, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
+import { isPhone } from '../../../../shared/platform.ts';
 import { useDm } from '../../dm/store.ts';
+import { useRiver } from '../../store.ts';
 import { useOutbox } from '../outbox.ts';
 import { play } from '../sound.ts';
 import { useCommunity } from '../store.ts';
@@ -46,6 +48,8 @@ export function ForwardDialog(props: {
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [showSender, setShowSender] = useState(true);
+  // A phone's keyboard would cover half the list before you even chose to search.
+  const phone = useRiver((r) => isPhone(r.info?.platform));
   const destinations = useMemo<Destination[]>(() => {
     const channels = communities.flatMap((c) =>
       c.channels
@@ -102,7 +106,7 @@ export function ForwardDialog(props: {
       <label className="textfield">
         <span className="field__label">Send to</span>
         <input
-          autoFocus
+          autoFocus={!phone}
           placeholder="Search channels and people"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

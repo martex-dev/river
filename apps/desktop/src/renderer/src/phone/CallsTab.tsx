@@ -1,14 +1,24 @@
 import { useEffect, useState, type ReactElement } from 'react';
-import type { CallView } from '../../../shared/dm.ts';
+import type { CallLinkView, CallView } from '../../../shared/dm.ts';
+import { useCommunity } from '../community/store.ts';
 import { Avatar } from '../community/ui/common.tsx';
 import { startDmCall, useDmCall } from '../dm/call.ts';
-import { createCallLink, startGroupCall, useGroupCall } from '../dm/group-call.ts';
+import { createCallLink, startGroupCall, startLinkCall, useGroupCall } from '../dm/group-call.ts';
 import { useDm } from '../dm/store.ts';
 import { callOutcome, callTitle } from '../pages/CallsPage.tsx';
+import { tr, trn } from '../i18n.ts';
 import { useRiver } from '../store.ts';
-import { clockTime } from '../time.ts';
+import { clockTime, dateLocale } from '../time.ts';
 import { useCallHistory } from './calls.ts';
-import { CallInIcon, CallOutIcon, PhoneCallIcon, VideoIcon } from './icons.tsx';
+import {
+  CallInIcon,
+  CallOutIcon,
+  CopyIcon,
+  LinkIcon,
+  PhoneCallIcon,
+  TrashIcon,
+  VideoIcon,
+} from './icons.tsx';
 import { openPhoneChat } from './nav.ts';
 import { TabPage } from './ui.tsx';
 
@@ -18,22 +28,112 @@ export function callWhen(iso: string, now = new Date()): string {
   const day = (x: Date): number => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const days = Math.round((day(now) - day(d)) / 86_400_000);
   if (days <= 0) return clockTime(iso);
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return d.toLocaleDateString([], { weekday: 'long' });
-  return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+  if (days === 1) return tr('Yesterday');
+  if (days < 7) return d.toLocaleDateString(dateLocale(), { weekday: 'long' });
+  return d.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' });
 }
 
 /** "Missed", "Outgoing · 4 min"… */
 function describe(c: CallView): string {
   const outcome = callOutcome(c);
-  const kind = c.video ? 'video' : 'voice';
   if (outcome === 'answered') {
     const mins = Math.max(1, Math.round(c.durationSec / 60));
-    return `${c.direction === 'in' ? 'Incoming' : 'Outgoing'} ${kind} · ${c.durationSec < 60 ? `${c.durationSec} s` : `${mins} min`}`;
+    const how =
+      c.direction === 'in'
+        ? c.video
+          ? tr('Incoming video')
+          : tr('Incoming voice')
+        : c.video
+          ? tr('Outgoing video')
+          : tr('Outgoing voice');
+    const long = c.durationSec < 60 ? trn('{count} s', c.durationSec) : trn('{count} min', mins);
+    return `${how} · ${long}`;
   }
-  if (outcome === 'declined') return `Declined ${kind}`;
-  if (outcome === 'failed') return `Could not connect`;
-  return c.direction === 'in' ? `Missed ${kind}` : `No answer`;
+  if (outcome === 'declined') return c.video ? tr('Declined video') : tr('Declined voice');
+  if (outcome === 'failed') return tr('Could not connect');
+  if (c.direction !== 'in') return tr('No answer');
+  return c.video ? tr('Missed video') : tr('Missed voice');
+}
+
+/**
+ * Your call links (2.19), as on a computer's Calls page: make one, and for each one copy it again,
+ * start its call or stop it working. Without this list a link was gone once its dialog closed.
+ */
+function PhoneCallLinks(props: { busy: boolean }): ReactElement {
+  const [links, setLinks] = useState<CallLinkView[]>([]);
+  const made = useGroupCall((s) => s.madeLink);
+  const notify = useCommunity((s) => s.notify);
+  useEffect(() => {
+    let live = true;
+    void window.river.dm.action({ a: 'callLinks' }).then((r) => {
+      if (live && r.ok) setLinks(r.value);
+    });
+    return () => {
+      live = false;
+    };
+  }, [made]);
+  return (
+    <ul className="plist pcall-links" aria-label="Call links">
+      <li>
+        <button className="prow pcall-links__new" onClick={() => void createCallLink(false)}>
+          <span className="pcall-links__icon" aria-hidden="true">
+            <LinkIcon size={22} />
+          </span>
+          <span className="prow__main">
+            <strong className="prow__name">Create call link</strong>
+            <span className="prow__preview">Anyone with it can ask to join; you let each person in</span>
+          </span>
+        </button>
+      </li>
+      {links.map((l) => (
+        <li key={l.id} className="pcall pcall-links__link">
+          <div className="prow">
+            <span className="pcall-links__icon" aria-hidden="true">
+              {l.video ? <VideoIcon size={22} /> : <LinkIcon size={22} />}
+            </span>
+            <span className="prow__main">
+              <strong className="prow__name">{l.title ?? (l.video ? 'Video call link' : 'Call link')}</strong>
+              <span className="prow__preview">
+                Until {new Date(l.expiresAt).toLocaleDateString([], { day: 'numeric', month: 'short' })} ·{' '}
+                {l.admitted.length} let in
+              </span>
+            </span>
+            <button
+              className="pcall-links__action"
+              aria-label="Copy call link"
+              onClick={() =>
+                void navigator.clipboard
+                  .writeText(l.url)
+                  .then(() => notify('Call link copied.'))
+                  .catch(() => notify('Could not copy the link.', 'error'))
+              }
+            >
+              <CopyIcon size={22} />
+            </button>
+            <button
+              className="pcall-links__action"
+              aria-label="Start the call of this link"
+              disabled={props.busy}
+              onClick={() => void startLinkCall(l)}
+            >
+              <PhoneCallIcon size={22} />
+            </button>
+            <button
+              className="pcall-links__action pcall-links__action--danger"
+              aria-label="Stop this call link"
+              onClick={() =>
+                void window.river.dm
+                  .action({ a: 'revokeCallLink', link: l.id })
+                  .then(() => setLinks((all) => all.filter((x) => x.id !== l.id)))
+              }
+            >
+              <TrashIcon size={22} />
+            </button>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 /** Calls (2.12): the call history as in Telegram, with a call-back button on every row. */
@@ -60,23 +160,19 @@ export function CallsTab(): ReactElement {
     else void startDmCall(c.peer, c.video);
   };
   return (
-    <TabPage title="Calls">
+    <TabPage title={tr('Calls')}>
       {account.state !== 'registered' ? (
         <div className="pempty">
           <div className="pempty__icon" aria-hidden="true">
             📞
           </div>
-          <h2>No account yet</h2>
-          <p>Calls need an account on a River server.</p>
+          <h2>{tr('No account yet')}</h2>
+          <p>{tr('Calls need an account on a River server.')}</p>
         </div>
       ) : (
         <>
-          <div className="pcall__links">
-            <button className="btn btn--ghost btn--small" onClick={() => void createCallLink(false)}>
-              🔗 Create call link
-            </button>
-          </div>
-          <div className="psegment" role="radiogroup" aria-label="Show calls">
+          <PhoneCallLinks busy={busy} />
+          <div className="psegment" role="radiogroup" aria-label={tr('Show calls')}>
             {(['all', 'missed'] as const).map((id) => (
               <button
                 key={id}
@@ -85,29 +181,33 @@ export function CallsTab(): ReactElement {
                 className={`psegment__item ${only === id ? 'is-active' : ''}`}
                 onClick={() => setOnly(id)}
               >
-                {id === 'all' ? 'All' : 'Missed'}
+                {id === 'all' ? tr('All') : tr('Missed')}
               </button>
             ))}
           </div>
           {history.calls === null ? (
-            <p className="pempty pempty--small">Loading…</p>
+            <p className="pempty pempty--small">{tr('Loading…')}</p>
           ) : calls.length === 0 ? (
             <div className="pempty pempty--small">
               <p>
                 {only === 'missed'
-                  ? 'No missed calls.'
-                  : 'No calls yet. Call a friend from your chat with them.'}
+                  ? tr('No missed calls.')
+                  : tr('No calls yet. Call a friend from your chat with them.')}
               </p>
             </div>
           ) : (
-            <ul className="plist" aria-label="Recent calls">
+            <ul className="plist" aria-label={tr('Recent calls')}>
               {calls.map((c) => {
                 const missed = c.direction === 'in' && callOutcome(c) === 'missed';
+                // A call through a call link has no chat to open (its "peer" is the link's host, you
+                // included: that opened Note to self), nor has a chat that is gone.
+                const chat = c.kind !== 'link' && conversations.some((x) => x.riverId === c.peer && !x.self);
+                const Row = chat ? 'button' : 'div';
                 return (
                   <li key={c.id} className="pcall">
-                    <button
+                    <Row
                       className={`prow pcall__row ${missed ? 'is-missed' : ''}`}
-                      onClick={() => openPhoneChat(c.peer)}
+                      {...(chat ? { onClick: () => openPhoneChat(c.peer) } : {})}
                     >
                       <Avatar id={c.peer} name={c.name} avatar={c.avatar} size={44} />
                       <span className="prow__main">
@@ -124,10 +224,14 @@ export function CallsTab(): ReactElement {
                           </span>
                         </span>
                       </span>
-                    </button>
+                    </Row>
                     <button
                       className="pcall__back"
-                      aria-label={`${c.video ? 'Video call' : 'Call'} ${c.name}`}
+                      aria-label={
+                        c.video
+                          ? tr('Video call {name}', { name: c.name })
+                          : tr('Call {name}', { name: c.name })
+                      }
                       disabled={
                         busy ||
                         c.kind === 'link' ||

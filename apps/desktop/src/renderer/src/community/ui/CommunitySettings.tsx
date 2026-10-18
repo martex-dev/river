@@ -169,7 +169,7 @@ function Overview({ community }: { community: CommunityView }): ReactElement {
       </p>
       {dirty && (
         <div className="save-bar">
-          <span>Careful — you have unsaved changes!</span>
+          <span>{tr('Careful — you have unsaved changes!')}</span>
           <button
             className="btn btn--link"
             onClick={() => {
@@ -178,7 +178,7 @@ function Overview({ community }: { community: CommunityView }): ReactElement {
               setIcon(community.icon);
             }}
           >
-            Reset
+            {tr('Reset')}
           </button>
           <button
             className="btn btn--primary btn--small"
@@ -193,7 +193,7 @@ function Overview({ community }: { community: CommunityView }): ReactElement {
               })
             }
           >
-            Save changes
+            {tr('Save changes')}
           </button>
         </div>
       )}
@@ -328,7 +328,7 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
                       setSelected(r.id);
                     }}
                   >
-                    {tr(editable(r) ? 'Edit role' : 'View role')}
+                    {editable(r) ? tr('Edit role') : tr('View role')}
                   </MenuItem>
                   {!r.everyone && editable(r) && (
                     <MenuItem
@@ -594,7 +594,7 @@ function RoleEditor(props: {
       )}
       {dirty && editable && (
         <div className="save-bar">
-          <span>Careful — you have unsaved changes!</span>
+          <span>{tr('Careful — you have unsaved changes!')}</span>
           <button
             className="btn btn--link"
             onClick={() => {
@@ -606,10 +606,10 @@ function RoleEditor(props: {
               setIcon(role.icon);
             }}
           >
-            Reset
+            {tr('Reset')}
           </button>
           <button className="btn btn--primary btn--small" onClick={save}>
-            Save changes
+            {tr('Save changes')}
           </button>
         </div>
       )}

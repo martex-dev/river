@@ -19,7 +19,7 @@ import { ForwardDialog } from '../community/ui/Forward.tsx';
 import { readDraft, saveDraft, useDraft } from '../community/drafts.ts';
 import { quoteOf } from '../dm/quote.ts';
 import { clockTime, dateLocale, dayLabel, fullWhen } from '../time.ts';
-import { tr } from '../i18n.ts';
+import { msg, tr, trn } from '../i18n.ts';
 import { ChatSkeleton, EditActions, HistoryFailed, typingText } from '../community/ui/Chat.tsx';
 import {
   EMOJI_PICKER,
@@ -113,6 +113,7 @@ import {
   EmojiIcon,
   MoreIcon,
   PhoneCallIcon,
+  SavedRepliesIcon,
   SendIcon,
   TickIcon,
   VideoIcon,
@@ -229,7 +230,7 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
       <div className="home-sidebar__search">
         <input
           className="search dms__search"
-          placeholder="Find a conversation"
+          placeholder={tr('Find a conversation')}
           aria-label="Find a conversation or message"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -290,19 +291,20 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
         {!archiveOpen && (
           <div className="chat-filters-row">
             <div className="chat-filters" role="radiogroup" aria-label="Show conversations">
-              {[...CHAT_FILTERS, ...folders.map((f) => ({ id: `folder:${f.id}`, label: f.name }))].map(
-                (f) => (
-                  <button
-                    key={f.id}
-                    role="radio"
-                    aria-checked={filter === f.id}
-                    className={`chat-filters__tab ${filter === f.id ? 'is-active' : ''}`}
-                    onClick={() => setFilter(f.id)}
-                  >
-                    {f.label}
-                  </button>
-                ),
-              )}
+              {[
+                ...CHAT_FILTERS.map((f) => ({ ...f, label: tr(f.label) })),
+                ...folders.map((f) => ({ id: `folder:${f.id}`, label: f.name })),
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  role="radio"
+                  aria-checked={filter === f.id}
+                  className={`chat-filters__tab ${filter === f.id ? 'is-active' : ''}`}
+                  onClick={() => setFilter(f.id)}
+                >
+                  {f.label}
+                </button>
+              ))}
             </div>
             {activeFolder ? (
               <button
@@ -636,10 +638,10 @@ export function copyText(text: string): void {
 
 type ChatFilter = 'all' | 'unread' | 'people' | 'groups';
 export const CHAT_FILTERS: Array<{ id: ChatFilter; label: string }> = [
-  { id: 'all', label: 'All' },
-  { id: 'unread', label: 'Unread' },
-  { id: 'people', label: 'People' },
-  { id: 'groups', label: 'Groups' },
+  { id: 'all', label: msg('All') },
+  { id: 'unread', label: msg('Unread') },
+  { id: 'people', label: msg('People') },
+  { id: 'groups', label: msg('Groups') },
 ];
 
 export function matchesFilter(c: ConversationView, filter: string, folder: ChatFolder | null): boolean {
@@ -781,7 +783,9 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
   useEffect(() => {
     if (c.kind === 'group') return;
     void window.river.dm.action({ a: 'calls' }).then((r) => {
-      if (r.ok) setCalls((r.value as CallView[]).filter((x) => x.peer === c.riverId));
+      // Only 1:1 calls: a call through a call link names its host, which put your own link's
+      // calls into Note to self (and a host's link call into your chat with them).
+      if (r.ok) setCalls((r.value as CallView[]).filter((x) => x.peer === c.riverId && !x.kind));
     });
   }, [c.riverId, c.kind, callBusy]);
   const pinned = messages.filter((m) => m.pinned);
@@ -799,7 +803,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
   const activeTag =
     c.self && tagFilter?.peer === c.riverId && noteTags.includes(tagFilter.tag) ? tagFilter.tag : null;
   const shown = activeTag ? messages.filter((m) => hasTag(tags, noteTagKey(m.id), activeTag)) : messages;
-  const myName = useRiver((r) => r.identity?.displayName) ?? 'You';
+  const myName = useRiver((r) => r.identity?.displayName) ?? tr('You');
   const myId = dm.myId ?? '';
   const scrollRef = useRef<HTMLDivElement>(null);
   // Pictures and previews loading below the newest message do not push it out of view.
@@ -843,7 +847,8 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
   }, [c.riverId]);
 
   const addFiles = (files: Iterable<File>): void => {
-    if (add(files) > 0) notify(`You can attach up to ${MAX_PENDING} files to one message.`, 'error');
+    if (add(files) > 0)
+      notify(tr('You can attach up to {count} files to one message.', { count: MAX_PENDING }), 'error');
   };
   // Shared from another app ("Share → River" on phones) into this conversation.
   useSharedFiles(`d:${c.riverId}`, addFiles);
@@ -851,9 +856,9 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
   const confirmRemove = (): void =>
     setModal({
       kind: 'confirm',
-      title: `Delete conversation with ${c.name}`,
-      body: 'This deletes the messages on this device only. The other person keeps their copy.',
-      action: 'Delete',
+      title: tr('Delete conversation with {name}', { name: c.name }),
+      body: tr('This deletes the messages on this device only. The other person keeps their copy.'),
+      action: tr('Delete'),
       run: async () => {
         await dm.run({ a: 'removeConversation', peer: c.riverId });
         dm.select(null);
@@ -880,8 +885,8 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
       {dragging && (
         <div className="drop-zone" aria-hidden="true">
           <div className="drop-zone__card">
-            <strong>Send to {c.name}</strong>
-            <span className="muted small">Files are encrypted on your device before upload.</span>
+            <strong>{tr('Send to {name}', { name: c.name })}</strong>
+            <span className="muted small">{tr('Files are encrypted on your device before upload.')}</span>
           </div>
         </div>
       )}
@@ -902,8 +907,8 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
           ) : (
             <button
               className="chat__head-who"
-              title={`Profile of ${c.name}`}
-              aria-label={`Profile of ${c.name}`}
+              title={tr('Profile of {name}', { name: c.name })}
+              aria-label={tr('Profile of {name}', { name: c.name })}
               onClick={() => setProfileOpen(true)}
             >
               <ConvAvatar c={c} size={28} />
@@ -914,30 +919,30 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
             <button
               className="chip dm-lock"
               onClick={() => setShowMembers(!showMembers)}
-              title="Group members"
+              title={tr('Group members')}
             >
-              👥 {c.members.length} members
+              👥 {trn('{count} members', c.members.length)}
             </button>
           ) : c.self ? (
             <span
               className="chip dm-lock"
-              title="Your notes are kept on this device and copied to your linked devices"
+              title={tr('Your notes are kept on this device and copied to your linked devices')}
             >
-              🔒 Only you
+              🔒 {tr('Only you')}
             </span>
           ) : (
             <button
               className={`chip dm-lock ${c.verified ? 'is-verified' : ''}`}
               onClick={props.onSafety}
-              title="View safety number"
+              title={tr('View safety number')}
             >
-              {c.verified ? '✓ Verified' : '🔒 Encrypted'}
+              {c.verified ? `✓ ${tr('Verified')}` : `🔒 ${tr('Encrypted')}`}
             </button>
           )}
           {!!c.timer && (
             <button
               className="chip dm-timer"
-              title={`Messages disappear after ${timerLabel(c.timer)}`}
+              title={tr('Messages disappear after {time}', { time: timerLabel(c.timer) })}
               onClick={() => setTimerOpen(true)}
             >
               ⏱ {timerLabel(c.timer)}
@@ -948,8 +953,8 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
               <>
                 <button
                   className="icon-btn"
-                  aria-label="Start voice call"
-                  title="Start voice call"
+                  aria-label={tr('Start voice call')}
+                  title={tr('Start voice call')}
                   disabled={anyCall}
                   onClick={() => void startDmCall(c.riverId, false)}
                 >
@@ -957,8 +962,8 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                 </button>
                 <button
                   className="icon-btn"
-                  aria-label="Start video call"
-                  title="Start video call"
+                  aria-label={tr('Start video call')}
+                  title={tr('Start video call')}
                   disabled={anyCall}
                   onClick={() => void startDmCall(c.riverId, true)}
                 >
@@ -970,24 +975,24 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
             <GroupCallButtons c={c} className="icon-btn" disabled={anyCall} />
             <button
               className={`icon-btn ${searching ? 'is-on' : ''}`}
-              aria-label="Search in this conversation"
-              title="Search in this conversation"
+              aria-label={tr('Search in this conversation')}
+              title={tr('Search in this conversation')}
               onClick={() => setSearching(!searching)}
             >
               🔍
             </button>
             <button
               className={`icon-btn ${showPins ? 'is-on' : ''}`}
-              aria-label="Pinned messages"
-              title="Pinned messages"
+              aria-label={tr('Pinned messages')}
+              title={tr('Pinned messages')}
               onClick={() => setShowPins(!showPins)}
             >
               📌
             </button>
             <button
               className="icon-btn"
-              aria-label="Conversation options"
-              title="More"
+              aria-label={tr('Conversation options')}
+              title={tr('More')}
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
                 setMenu({ x: r.right - 220, y: r.bottom + 4 });
@@ -1517,23 +1522,23 @@ function PhoneChatHead(props: {
   );
   const status = typing
     ? c.kind === 'group'
-      ? `${typingName(c)} is typing…`
-      : 'typing…'
+      ? tr('{name} is typing…', { name: typingName(c) })
+      : tr('typing…')
     : c.kind === 'group'
-      ? `${c.members.length} ${c.members.length === 1 ? 'member' : 'members'}`
+      ? trn('{count} members', c.members.length)
       : c.self
-        ? 'Only you · kept on your devices'
+        ? tr('Only you · kept on your devices')
         : online
-          ? 'online'
+          ? tr('online')
           : c.verified
-            ? '✓ Verified · end-to-end encrypted'
-            : 'End-to-end encrypted';
+            ? tr('✓ Verified · end-to-end encrypted')
+            : tr('End-to-end encrypted');
   const canCall = c.kind === 'direct' && !c.self && c.state === 'accepted' && !c.awaitingReply;
   return (
     <header className="chat__head pchat-head">
       <button
         className="pchat-head__back"
-        aria-label={waiting > 0 ? `Back, ${waiting} unread` : 'Back'}
+        aria-label={waiting > 0 ? trn('Back, {count} unread', waiting) : tr('Back')}
         onClick={() => phonePop()}
       >
         <BackIcon size={26} />
@@ -1545,7 +1550,11 @@ function PhoneChatHead(props: {
       </button>
       <button
         className="pchat-head__who"
-        aria-label={c.kind === 'group' ? `${c.name}, group members` : `Profile of ${c.name}`}
+        aria-label={
+          c.kind === 'group'
+            ? tr('{name}, group members', { name: c.name })
+            : tr('Profile of {name}', { name: c.name })
+        }
         onClick={props.onProfile}
       >
         {c.kind === 'group' ? <GroupAvatar c={c} size={40} /> : <ConvAvatar c={c} size={40} />}
@@ -1562,7 +1571,7 @@ function PhoneChatHead(props: {
           <>
             <button
               className="pchat-head__icon"
-              aria-label="Start voice call"
+              aria-label={tr('Start voice call')}
               disabled={props.anyCall}
               onClick={() => void startDmCall(c.riverId, false)}
             >
@@ -1570,7 +1579,7 @@ function PhoneChatHead(props: {
             </button>
             <button
               className="pchat-head__icon"
-              aria-label="Start video call"
+              aria-label={tr('Start video call')}
               disabled={props.anyCall}
               onClick={() => void startDmCall(c.riverId, true)}
             >
@@ -1581,7 +1590,7 @@ function PhoneChatHead(props: {
         <GroupCallButtons c={c} className="pchat-head__icon" disabled={props.anyCall} iconSize={22} />
         <button
           className="pchat-head__icon"
-          aria-label="Conversation options"
+          aria-label={tr('Conversation options')}
           onClick={(e) => props.onMenu(e.currentTarget.getBoundingClientRect())}
         >
           <MoreIcon size={24} />
@@ -2878,8 +2887,8 @@ ${shared}`
         <button
           type="button"
           className="icon-btn composer__attach"
-          aria-label="Attach files"
-          title="Attach files"
+          aria-label={tr('Attach files')}
+          title={tr('Attach files')}
           onClick={() => fileRef.current?.click()}
         >
           {phone ? <ClipIcon size={24} /> : <PlusIcon size={20} />}
@@ -2899,7 +2908,7 @@ ${shared}`
           rows={Math.min(8, Math.max(1, text.split('\n').length))}
           value={text}
           maxLength={4000}
-          placeholder={phone ? 'Message' : `Message ${c.name}`}
+          placeholder={phone ? tr('Message') : tr('Message {name}', { name: c.name })}
           onPaste={(e) => {
             const files = [...e.clipboardData.files];
             if (files.length) {
@@ -2976,11 +2985,12 @@ ${shared}`
             title={phone ? undefined : 'Saved replies (or type /)'}
             onClick={(e) => setRepliesMenu(nearButton(e.currentTarget, { width: 340, height: 360 }))}
           >
-            <span aria-hidden="true">💬</span>
+            {/* On a phone a line icon like its neighbours (an emoji there looked greyed out). */}
+            {phone ? <SavedRepliesIcon size={24} /> : <span aria-hidden="true">💬</span>}
           </button>
         )}
         {!text.trim() && props.pending.length === 0 && (
-          <MyStickersButton disabled={!!uploading} onPick={(file) => void sendVoice(file)} />
+          <MyStickersButton disabled={!!uploading} phone={phone} onPick={(file) => void sendVoice(file)} />
         )}
         {/* Always there, so typing (or a shared file arriving) never ends a recording. */}
         <VoiceRecorder

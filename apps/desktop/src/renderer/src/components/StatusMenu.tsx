@@ -1,5 +1,6 @@
 import { useState, type ReactElement } from 'react';
 import type { Settings } from '../../../shared/settings.ts';
+import { msg, tr } from '../i18n.ts';
 import { useRiver } from '../store.ts';
 import { EmojiPicker, Modal, PRESENCE_LABEL, Popover, type Presence } from '../community/ui/common.tsx';
 
@@ -8,15 +9,15 @@ type Chosen = Settings['presence']['status'];
 const CHOICES: Array<{ id: Chosen; dot: Presence; hint?: string }> = [
   { id: 'online', dot: 'online' },
   { id: 'idle', dot: 'idle' },
-  { id: 'dnd', dot: 'dnd', hint: 'You won’t get notifications or notification sounds.' },
-  { id: 'invisible', dot: 'offline', hint: 'You’ll appear offline but can use River as usual.' },
+  { id: 'dnd', dot: 'dnd', hint: msg('You won’t get notifications or notification sounds.') },
+  { id: 'invisible', dot: 'offline', hint: msg('You’ll appear offline but can use River as usual.') },
 ];
 
 export const CHOSEN_LABEL: Record<Chosen, string> = {
-  online: 'Online',
-  idle: 'Idle',
-  dnd: 'Do Not Disturb',
-  invisible: 'Invisible',
+  online: msg('Online'),
+  idle: msg('Idle'),
+  dnd: msg('Do Not Disturb'),
+  invisible: msg('Invisible'),
 };
 
 /** How you appear right now, for your own panel (auto-idle shows only to others). */
@@ -41,7 +42,7 @@ export function StatusMenu(props: {
   if (customOpen) return <CustomStatusDialog onClose={props.onClose} />;
   return (
     <Popover x={props.x} y={props.y} onClose={props.onClose} className="status-menu">
-      <div role="menu" aria-label="Your status">
+      <div role="menu" aria-label={tr('Your status')}>
         {CHOICES.map((c) => (
           <button
             key={c.id}
@@ -55,8 +56,8 @@ export function StatusMenu(props: {
           >
             <span className={`status-menu__dot avatar__status--${c.dot}`} aria-hidden="true" />
             <span className="status-menu__text">
-              <strong>{CHOSEN_LABEL[c.id]}</strong>
-              {c.hint && <span className="muted small">{c.hint}</span>}
+              <strong>{tr(CHOSEN_LABEL[c.id])}</strong>
+              {c.hint && <span className="muted small">{tr(c.hint)}</span>}
             </span>
           </button>
         ))}
@@ -66,7 +67,7 @@ export function StatusMenu(props: {
             {presence?.customEmoji || '💬'}
           </span>
           <span className="status-menu__text">
-            <strong>{hasCustom ? 'Edit custom status' : 'Set a custom status'}</strong>
+            <strong>{hasCustom ? tr('Edit custom status') : tr('Set a custom status')}</strong>
             {hasCustom && <span className="muted small">{presence!.customText}</span>}
           </span>
         </button>
@@ -80,7 +81,7 @@ export function StatusMenu(props: {
             }}
           >
             <span className="status-menu__dot" aria-hidden="true" />
-            <span className="status-menu__text">Clear custom status</span>
+            <span className="status-menu__text">{tr('Clear custom status')}</span>
           </button>
         )}
         <button
@@ -92,7 +93,7 @@ export function StatusMenu(props: {
           }}
         >
           <span className="status-menu__dot" aria-hidden="true" />
-          <span className="status-menu__text">Edit profile</span>
+          <span className="status-menu__text">{tr('Edit profile')}</span>
         </button>
       </div>
     </Popover>
@@ -100,11 +101,11 @@ export function StatusMenu(props: {
 }
 
 const CLEAR_AFTER: Array<{ label: string; ms: number | 'today' | null }> = [
-  { label: 'Today', ms: 'today' },
-  { label: '4 hours', ms: 4 * 3600_000 },
-  { label: '1 hour', ms: 3600_000 },
-  { label: '30 minutes', ms: 30 * 60_000 },
-  { label: 'Don’t clear', ms: null },
+  { label: msg('Today'), ms: 'today' },
+  { label: msg('4 hours'), ms: 4 * 3600_000 },
+  { label: msg('1 hour'), ms: 3600_000 },
+  { label: msg('30 minutes'), ms: 30 * 60_000 },
+  { label: msg('Don’t clear'), ms: null },
 ];
 
 /** When a custom status chosen now should clear itself. */
@@ -136,15 +137,17 @@ function CustomStatusDialog({ onClose }: { onClose(): void }): ReactElement {
     onClose();
   };
   return (
-    <Modal title="Set a custom status" onClose={onClose}>
+    <Modal title={tr('Set a custom status')} onClose={onClose}>
       <p className="muted small">
-        Everyone in your communities sees it. It is end-to-end encrypted like the rest of your profile.
+        {tr(
+          'Everyone in your communities sees it. It is end-to-end encrypted like the rest of your profile.',
+        )}
       </p>
       <div className="custom-status-form">
         <button
           type="button"
           className="custom-status-form__emoji"
-          aria-label={emoji ? `Emoji ${emoji}, change` : 'Choose an emoji'}
+          aria-label={emoji ? tr('Emoji {emoji}, change', { emoji }) : tr('Choose an emoji')}
           onClick={() => setPicking(!picking)}
         >
           {emoji || '🙂'}
@@ -152,8 +155,8 @@ function CustomStatusDialog({ onClose }: { onClose(): void }): ReactElement {
         <input
           autoFocus
           maxLength={128}
-          placeholder="What’s happening?"
-          aria-label="Custom status"
+          placeholder={tr('What’s happening?')}
+          aria-label={tr('Custom status')}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
@@ -170,21 +173,21 @@ function CustomStatusDialog({ onClose }: { onClose(): void }): ReactElement {
         />
       )}
       <label className="textfield">
-        <span className="field__label">Clear after</span>
+        <span className="field__label">{tr('Clear after')}</span>
         <select value={clear} onChange={(e) => setClear(Number(e.target.value))}>
           {CLEAR_AFTER.map((c, i) => (
             <option key={c.label} value={i}>
-              {c.label}
+              {tr(c.label)}
             </option>
           ))}
         </select>
       </label>
       <div className="modal__foot">
         <button className="btn btn--link" onClick={onClose}>
-          Cancel
+          {tr('Cancel')}
         </button>
         <button className="btn btn--primary" onClick={save}>
-          Save
+          {tr('Save')}
         </button>
       </div>
     </Modal>

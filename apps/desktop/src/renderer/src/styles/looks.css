@@ -538,6 +538,23 @@ html[data-calm='on'] .typing__dots i {
 .wp-dialog__preview[data-wp='none'] {
   background: var(--layer-2);
 }
+/*
+ * Phones: the dialog is taller than the screen. The preview stays in sight while you scroll the
+ * wallpapers, and "Set wallpaper" stays at the bottom instead of under twenty tiles.
+ */
+html:is([data-platform='android'], [data-platform='ios']) .wp-dialog .wp-dialog__preview {
+  position: sticky;
+  /* The card's padding: up to its edge, with the card's colour around it (no tiles peeking). */
+  top: -20px;
+  z-index: 1;
+  box-shadow: 0 -20px 0 20px var(--bg-2);
+}
+html:is([data-platform='android'], [data-platform='ios']) .wp-dialog .modal__foot {
+  position: sticky;
+  bottom: -20px;
+  z-index: 1;
+  background: var(--bg-2);
+}
 .wp-dialog__bubble {
   align-self: flex-start;
   padding: 5px 10px;

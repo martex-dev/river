@@ -75,9 +75,12 @@ describe('River over a locked phone (Android, 2.18)', () => {
   it('shows only the full-screen call there, without its way back to the chats', () => {
     const css = readFileSync(resolve(import.meta.dirname, '../../apps/mobile/ui/phone.css'), 'utf8');
     expect(css).toMatch(/html\[data-over-lock\] body > \* \{\s*visibility: hidden !important;/);
-    expect(css).toMatch(/html\[data-over-lock\] \.dm-call--full \{\s*visibility: visible !important;/);
+    // A 1:1 call or (2.20.3) a group call.
     expect(css).toMatch(
-      /html\[data-over-lock\] \.dm-call--full \.dm-call__min \{\s*visibility: hidden !important;/,
+      /html\[data-over-lock\] \.dm-call--full,\s*html\[data-over-lock\] \.gcall--full \{\s*visibility: visible !important;/,
+    );
+    expect(css).toMatch(
+      /html\[data-over-lock\] \.dm-call--full \.dm-call__min,\s*html\[data-over-lock\] \.gcall--full \.dm-call__min \{\s*visibility: hidden !important;/,
     );
     const shell = readFileSync(resolve(import.meta.dirname, '../../apps/mobile/ui/shell.ts'), 'utf8');
     expect(shell).toContain("OVER_LOCK_CHANNEL = 'river:app:overLock'");

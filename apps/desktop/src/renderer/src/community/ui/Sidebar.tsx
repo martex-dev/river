@@ -569,17 +569,17 @@ export function UserPanel({ me, community }: { me: string; community?: Community
           speaking={s.call?.speaking.has(me)}
         />
         <span className="user-panel__text">
-          <strong title={member?.name ?? identity?.displayName ?? 'You'}>
-            {member?.name ?? identity?.displayName ?? 'You'}
+          <strong title={member?.name ?? identity?.displayName ?? tr('You')}>
+            {member?.name ?? identity?.displayName ?? tr('You')}
           </strong>
           <span className="muted small">
             {s.connection !== 'online'
-              ? 'Offline'
+              ? tr('Offline')
               : ptt
-                ? 'Push to talk'
+                ? tr('Push to talk')
                 : custom
                   ? `${settings!.presence.customEmoji} ${settings!.presence.customText}`.trim()
-                  : CHOSEN_LABEL[settings?.presence.status ?? 'online']}
+                  : tr(CHOSEN_LABEL[settings?.presence.status ?? 'online'])}
           </span>
         </span>
       </button>

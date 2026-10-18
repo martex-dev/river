@@ -8,6 +8,7 @@ import { FilesPage } from '../pages/FilesPage.tsx';
 import { FriendsPage } from '../pages/FriendsPage.tsx';
 import { Conversation, SafetyNumber } from '../pages/MessagesPage.tsx';
 import { SocialPage } from '../pages/SocialPage.tsx';
+import { msg, tr, trn } from '../i18n.ts';
 import { useRiver } from '../store.ts';
 import { chatsBadge, missedSince, useCallHistory } from './calls.ts';
 import { CallsTab } from './CallsTab.tsx';
@@ -29,11 +30,11 @@ import { ProfileTab } from './ProfileTab.tsx';
 import { countLabel, TabPage, TitledScreen } from './ui.tsx';
 
 const TABS: Array<{ id: PhoneTab; label: string; Icon: (p: { size?: number }) => ReactElement }> = [
-  { id: 'chats', label: 'Chats', Icon: ChatsIcon },
-  { id: 'communities', label: 'Communities', Icon: GroupsIcon },
-  { id: 'calls', label: 'Calls', Icon: PhoneCallIcon },
-  { id: 'feed', label: 'Feed', Icon: FeedIcon },
-  { id: 'profile', label: 'Settings', Icon: ProfileIcon },
+  { id: 'chats', label: msg('Chats'), Icon: ChatsIcon },
+  { id: 'communities', label: msg('Communities'), Icon: GroupsIcon },
+  { id: 'calls', label: msg('Calls'), Icon: PhoneCallIcon },
+  { id: 'feed', label: msg('Feed'), Icon: FeedIcon },
+  { id: 'profile', label: msg('Settings'), Icon: ProfileIcon },
 ];
 
 /** Screens that take the whole screen: the tab bar hides, as in Telegram. */
@@ -84,7 +85,7 @@ export function PhoneShell({ notices }: { notices?: ReactNode }): ReactElement {
           aria-hidden={stack.length ? true : undefined}
           inert={stack.length > 0}
         >
-          <ErrorBoundary area={TABS.find((t) => t.id === tab)!.label}>
+          <ErrorBoundary area={tr(TABS.find((t) => t.id === tab)!.label)}>
             <TabRoot tab={tab} notices={notices} />
           </ErrorBoundary>
         </section>
@@ -98,7 +99,7 @@ export function PhoneShell({ notices }: { notices?: ReactNode }): ReactElement {
               aria-hidden={isLeaving || covered ? true : undefined}
               inert={isLeaving || covered}
             >
-              <ErrorBoundary area="This screen">
+              <ErrorBoundary area={tr('This screen')}>
                 <Screen screen={s} />
               </ErrorBoundary>
             </section>
@@ -121,7 +122,7 @@ function TabRoot({ tab, notices }: { tab: PhoneTab; notices?: ReactNode }): Reac
       return <CallsTab />;
     case 'feed':
       return (
-        <TabPage title="Feed" className="ptab--feed">
+        <TabPage title={tr('Feed')} className="ptab--feed">
           <SocialPage />
         </TabPage>
       );
@@ -140,13 +141,13 @@ function Screen({ screen }: { screen: PhoneScreen }): ReactElement {
       return <ChannelScreen communityId={screen.communityId} channelId={screen.channelId} />;
     case 'friends':
       return (
-        <TitledScreen title="Friends">
+        <TitledScreen title={tr('Friends')}>
           <FriendsPage />
         </TitledScreen>
       );
     case 'files':
       return (
-        <TitledScreen title="Files">
+        <TitledScreen title={tr('Files')}>
           <FilesPage />
         </TitledScreen>
       );
@@ -165,7 +166,7 @@ function ChatScreen({ peer }: { peer: string }): ReactElement {
     if (conversation) seen.current = true;
     else if (seen.current && screenKey(topScreen() ?? { kind: 'files' }) === `chat:${peer}`) phonePop();
   }, [conversation, peer]);
-  if (!conversation) return <TitledScreen title="Chat">{null}</TitledScreen>;
+  if (!conversation) return <TitledScreen title={tr('Chat')}>{null}</TitledScreen>;
   return (
     <div className="pscreen__frame pchat">
       <Conversation conversation={conversation} onSafety={() => setSafety(conversation.riverId)} />
@@ -216,13 +217,19 @@ function TabBar({ hidden }: { hidden: boolean }): ReactElement {
     >
       {TABS.map(({ id, label, Icon }) => {
         const n = badge[id] ?? 0;
-        const what = id === 'calls' ? 'missed' : id === 'communities' ? 'mentions' : 'unread';
+        const name = tr(label);
+        const counted =
+          id === 'calls'
+            ? trn('{tab}, {count} missed', n, { tab: name })
+            : id === 'communities'
+              ? trn('{tab}, {count} mentions', n, { tab: name })
+              : trn('{tab}, {count} unread', n, { tab: name });
         return (
           <button
             key={id}
             className={`ptabs__tab ${tab === id ? 'is-active' : ''}`}
             aria-current={tab === id ? 'page' : undefined}
-            aria-label={n > 0 ? `${label}, ${n} ${what}` : label}
+            aria-label={n > 0 ? counted : name}
             onClick={() => phoneTab(id)}
           >
             <span className="ptabs__icon">
@@ -237,7 +244,7 @@ function TabBar({ hidden }: { hidden: boolean }): ReactElement {
               )}
             </span>
             <span className="ptabs__label" aria-hidden="true">
-              {label}
+              {name}
             </span>
           </button>
         );

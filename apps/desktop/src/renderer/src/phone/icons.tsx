@@ -168,6 +168,30 @@ export const EmojiIcon = (p: IconProps): ReactElement => (
   </Svg>
 );
 
+/** Saved replies (2.19): a speech bubble with a quick-reply bolt. */
+export const SavedRepliesIcon = (p: IconProps): ReactElement => (
+  <Svg {...p}>
+    <path d="M12 3.8c-4.7 0-8.5 3.2-8.5 7.2 0 2.1 1.1 4 2.8 5.3l-.8 3.9 3.9-1.8c.8.2 1.7.3 2.6.3 4.7 0 8.5-3.2 8.5-7.2s-3.8-7.7-8.5-7.7Z" />
+    <path d="M12.8 7.5 10 11.6h3.2l-1.6 3.4" />
+  </Svg>
+);
+
+/** Stickers: a square with a peeled corner. */
+export const StickerIcon = (p: IconProps): ReactElement => (
+  <Svg {...p}>
+    <path d="M20.5 13.5V7a3.5 3.5 0 0 0-3.5-3.5H7A3.5 3.5 0 0 0 3.5 7v10A3.5 3.5 0 0 0 7 20.5h6.5z" />
+    <path d="M13.5 20.5v-4a3 3 0 0 1 3-3h4" />
+  </Svg>
+);
+
+/** A link (call links, 2.19). */
+export const LinkIcon = (p: IconProps): ReactElement => (
+  <Svg {...p}>
+    <path d="M10.2 13.8a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.3 1.3" />
+    <path d="M13.8 10.2a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.3-1.3" />
+  </Svg>
+);
+
 export const CopyIcon = (p: IconProps): ReactElement => (
   <Svg {...p}>
     <rect x="8.5" y="8.5" width="11" height="11" rx="2.4" />

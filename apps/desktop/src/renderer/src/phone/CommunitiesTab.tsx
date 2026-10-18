@@ -12,6 +12,7 @@ import { EventsRow } from '../community/ui/Sidebar.tsx';
 import { StartScreen } from '../community/ui/StartScreen.tsx';
 import { CommunityMain } from '../pages/CommunitiesPage.tsx';
 import { shortWhen } from '../pages/MessagesPage.tsx';
+import { tr, trn } from '../i18n.ts';
 import { useRiver } from '../store.ts';
 import { Glyph, MoreIcon, PlusIcon } from './icons.tsx';
 import { phonePush } from './nav.ts';
@@ -34,6 +35,12 @@ export function CommunityIcon({ c, size }: { c: CommunityView; size: number }): 
       )}
     </span>
   );
+}
+
+/** "12 members · 3 online". */
+function membersLine(members: number, online: number): string {
+  const all = trn('{count} members', members);
+  return online ? `${all} · ${trn('{count} online', online)}` : all;
 }
 
 /** Opens a community on its channels, without opening (or reading) any channel for you. */
@@ -69,11 +76,11 @@ export function CommunitiesTab(): ReactElement {
 
   return (
     <TabPage
-      title="Communities"
+      title={tr('Communities')}
       end={
         <button
           className="ptab__btn"
-          aria-label="Create or join a community"
+          aria-label={tr('Create or join a community')}
           onClick={() => setCommunityStart(true)}
         >
           <PlusIcon size={26} />
@@ -85,14 +92,14 @@ export function CommunitiesTab(): ReactElement {
           <div className="pempty__icon" aria-hidden="true">
             🏞️
           </div>
-          <h2>No communities yet</h2>
-          <p>Got an invite link? Paste it to join. Or start one for your friends from a template.</p>
+          <h2>{tr('No communities yet')}</h2>
+          <p>{tr('Got an invite link? Paste it to join. Or start one for your friends from a template.')}</p>
           <button className="pbtn" onClick={() => setCommunityStart(true)}>
-            Join or create a community
+            {tr('Join or create a community')}
           </button>
         </div>
       ) : (
-        <ul className="plist" aria-label="Your communities">
+        <ul className="plist" aria-label={tr('Your communities')}>
           {s.communities.map((c) => {
             const muted = !!prefs && isMuted(prefs, c.id);
             const mentions = c.channels.reduce((n, ch) => n + (s.mentions[ch.id] ?? 0), 0);
@@ -118,7 +125,7 @@ export function CommunitiesTab(): ReactElement {
                     <span className="prow__top">
                       <strong className="prow__name">{c.name}</strong>
                       {muted && (
-                        <span className="prow__flag" role="img" aria-label="Muted">
+                        <span className="prow__flag" role="img" aria-label={tr('Muted')}>
                           🔕
                         </span>
                       )}
@@ -128,28 +135,31 @@ export function CommunitiesTab(): ReactElement {
                       <span className="prow__preview">
                         {newest ? (
                           <>
-                            <span className="prow__you">{newest.mine ? 'You' : newest.senderName}: </span>
-                            {newest.text || 'Attachment'}
+                            <span className="prow__you">{newest.mine ? tr('You') : newest.senderName}: </span>
+                            {newest.text || tr('Attachment')}
                           </>
                         ) : (
-                          `${c.members.length} ${c.members.length === 1 ? 'member' : 'members'}${online ? ` · ${online} online` : ''}`
+                          membersLine(c.members.length, online)
                         )}
                       </span>
                       {mentions > 0 ? (
-                        <span className="pbadge" aria-label={`${mentions} mentions`}>
+                        <span className="pbadge" aria-label={trn('{count} mentions', mentions)}>
                           @{countLabel(mentions)}
                         </span>
                       ) : counted > 0 ? (
                         <span
                           className={`pbadge ${muted ? 'pbadge--muted' : ''}`}
-                          aria-label={`${counted} unread`}
+                          aria-label={trn('{count} unread', counted)}
                         >
                           {countLabel(counted)}
                         </span>
                       ) : (
                         unread &&
                         !muted && (
-                          <span className="pbadge pbadge--dot pbadge--muted" aria-label="Unread messages" />
+                          <span
+                            className="pbadge pbadge--dot pbadge--muted"
+                            aria-label={tr('Unread messages')}
+                          />
                         )
                       )}
                     </span>
@@ -170,21 +180,21 @@ export function CommunityScreen({ id }: { id: string }): ReactElement {
   const me = useRiver((r) => r.identity?.riverId ?? '');
   const setModal = useCommunity((s) => s.setModal);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  if (!community) return <TitledScreen title="Community">{null}</TitledScreen>;
+  if (!community) return <TitledScreen title={tr('Community')}>{null}</TitledScreen>;
   const perms = community.permissions;
   const online = community.members.filter((m) => m.online).length;
   return (
     <div className="pscreen__frame">
       <ScreenBar
         title={community.name}
-        subtitle={`${community.members.length} ${community.members.length === 1 ? 'member' : 'members'}${online ? ` · ${online} online` : ''}`}
+        subtitle={membersLine(community.members.length, online)}
         picture={<CommunityIcon c={community} size={38} />}
         end={
           <>
             {can(perms, Permission.CREATE_INVITE) && (
               <button
                 className="pchat-head__icon"
-                aria-label="Invite people"
+                aria-label={tr('Invite people')}
                 onClick={() => setModal({ kind: 'invite', communityId: community.id })}
               >
                 <Glyph.people size={23} />
@@ -193,7 +203,7 @@ export function CommunityScreen({ id }: { id: string }): ReactElement {
             {canOpenCommunitySettings(perms) && (
               <button
                 className="pchat-head__icon"
-                aria-label="Community settings"
+                aria-label={tr('Community settings')}
                 onClick={() => setModal({ kind: 'community-settings', communityId: community.id })}
               >
                 <Glyph.gear size={23} />
@@ -201,7 +211,7 @@ export function CommunityScreen({ id }: { id: string }): ReactElement {
             )}
             <button
               className="pchat-head__icon"
-              aria-label="Community options"
+              aria-label={tr('Community options')}
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
                 setMenu({ x: r.right - 230, y: r.bottom + 4 });
@@ -219,7 +229,7 @@ export function CommunityScreen({ id }: { id: string }): ReactElement {
         )}
         {community.description && <p className="pcommunity__about">{community.description}</p>}
         <div className="pcommunity__lock">
-          🔒 Messages here are end-to-end encrypted with the community key
+          🔒 {tr('Messages here are end-to-end encrypted with the community key')}
         </div>
         <EventsRow community={community} />
         <ChannelList community={community} me={me} />
@@ -244,28 +254,30 @@ function CommunityOptions(props: {
   return (
     <Popover x={props.at.x} y={props.at.y} onClose={props.onClose} className="menu">
       <MenuItem onClick={run(() => s.markChannelsRead(c.channels.map((ch) => ch.id)))}>
-        Mark all as read
+        {tr('Mark all as read')}
       </MenuItem>
       {can(perms, Permission.MANAGE_CHANNELS) && (
         <MenuItem
           onClick={run(() => s.setModal({ kind: 'create-channel', communityId: c.id, channelKind: 'text' }))}
         >
-          Create channel
+          {tr('Create channel')}
         </MenuItem>
       )}
       {can(perms, Permission.MANAGE_CHANNELS) && (
         <MenuItem onClick={run(() => s.setModal({ kind: 'category', communityId: c.id }))}>
-          Create category
+          {tr('Create category')}
         </MenuItem>
       )}
       {c.selfRoles.length > 0 && !c.myPending && (
         <MenuItem onClick={run(() => s.setModal({ kind: 'pick-roles', communityId: c.id }))}>
-          Pick your roles
+          {tr('Pick your roles')}
         </MenuItem>
       )}
-      <MenuItem onClick={run(() => s.setModal({ kind: 'events', communityId: c.id }))}>Events</MenuItem>
+      <MenuItem onClick={run(() => s.setModal({ kind: 'events', communityId: c.id }))}>
+        {tr('Events')}
+      </MenuItem>
       <MenuItem onClick={run(() => s.setModal({ kind: 'nickname', communityId: c.id }))}>
-        Nickname &amp; picture here
+        {tr('Nickname & picture here')}
       </MenuItem>
       <NotifyMenuSection id={c.id} kind="community" onDone={props.onClose} />
       {c.ownerId !== props.me && (
@@ -274,16 +286,16 @@ function CommunityOptions(props: {
           onClick={run(() =>
             s.setModal({
               kind: 'confirm',
-              title: `Leave ${c.name}`,
-              body: 'You will not be able to rejoin unless someone invites you again.',
-              action: 'Leave community',
+              title: tr('Leave {name}', { name: c.name }),
+              body: tr('You will not be able to rejoin unless someone invites you again.'),
+              action: tr('Leave community'),
               run: async () => {
                 await s.run({ a: 'leave', communityId: c.id });
               },
             }),
           )}
         >
-          Leave community
+          {tr('Leave community')}
         </MenuItem>
       )}
     </Popover>
@@ -302,10 +314,10 @@ export function ChannelScreen(props: { communityId: string; channelId: string })
     <div className="pscreen__frame">
       {!plainText && (
         <ScreenBar
-          title={channel?.name ?? 'Channel'}
+          title={channel?.name ?? tr('Channel')}
           subtitle={
             channel?.kind === 'voice'
-              ? `${(community?.voice[channel.id] ?? []).length} in voice · ${community?.name ?? ''}`
+              ? `${trn('{count} in voice', (community?.voice[channel.id] ?? []).length)} · ${community?.name ?? ''}`
               : community?.name
           }
         />
@@ -323,7 +335,7 @@ export function ChannelScreen(props: { communityId: string; channelId: string })
 export function StartCommunityScreen(): ReactElement {
   const account = useRiver((r) => r.account);
   return (
-    <TitledScreen title="New community">
+    <TitledScreen title={tr('New community')}>
       <StartScreen
         onDone={() => useRiver.getState().setCommunityStart(false)}
         canCancel

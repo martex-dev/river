@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Permission } from '@river/protocol/permissions';
 import type { CommunityView } from '../../../../shared/ipc.ts';
+import { StickerIcon } from '../../phone/icons.tsx';
 import { useCommunity } from '../store.ts';
 import { Popover, StillPicture, can, holdStill } from './common.tsx';
 
@@ -86,7 +87,12 @@ export function stickerFile(name: string, image: string): File | null {
  * Stickers in direct messages and groups (2.10.10): the stickers of all your communities. The one
  * you pick is sent as an encrypted picture.
  */
-export function MyStickersButton(props: { disabled?: boolean; onPick(file: File): void }): ReactElement {
+export function MyStickersButton(props: {
+  disabled?: boolean;
+  /** The phone's message box: a line icon like the buttons next to it. */
+  phone?: boolean;
+  onPick(file: File): void;
+}): ReactElement {
   const s = useCommunity();
   const communities = useCommunity((x) => x.communities);
   const all = useCommunity((x) => x.stickers);
@@ -114,7 +120,7 @@ export function MyStickersButton(props: { disabled?: boolean; onPick(file: File)
           setOpen(open ? null : { x: r.left - 260, y: r.top - 340 });
         }}
       >
-        <span aria-hidden="true">🗒️</span>
+        {props.phone ? <StickerIcon size={24} /> : <span aria-hidden="true">🗒️</span>}
       </button>
       {open && (
         <Popover x={open.x} y={open.y} onClose={() => setOpen(null)} className="sticker-picker">

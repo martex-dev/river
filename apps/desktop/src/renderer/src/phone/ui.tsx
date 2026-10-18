@@ -1,5 +1,6 @@
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { BackIcon } from './icons.tsx';
+import { tr } from '../i18n.ts';
 import { phonePop } from './nav.ts';
 
 /**
@@ -52,7 +53,7 @@ export function ScreenBar(props: {
   );
   return (
     <header className="pchat-head pscreen__bar">
-      <button className="pchat-head__back" aria-label="Back" onClick={() => phonePop()}>
+      <button className="pchat-head__back" aria-label={tr('Back')} onClick={() => phonePop()}>
         <BackIcon size={26} />
       </button>
       {props.onTitle ? (

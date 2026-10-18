@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { openAddFriend } from '../pages/FriendsPage.tsx';
+import { tr } from '../i18n.ts';
 import { useRiver } from '../store.ts';
 import { ContactsIcon, GroupsIcon } from './icons.tsx';
 
@@ -22,20 +23,20 @@ export function FirstSteps(): ReactElement {
   const setCommunityStart = useRiver((r) => r.setCommunityStart);
   const rows: Array<{ title: string; text: string; icon: ReactElement; open(): void }> = [
     {
-      title: 'Add a friend',
-      text: 'Find them by @username, or scan their QR code',
+      title: tr('Add a friend'),
+      text: tr('Find them by @username, or scan their QR code'),
       icon: <ContactsIcon size={26} />,
       open: () => openAddFriend(),
     },
     {
-      title: 'Show my QR code',
-      text: 'Friends scan it, or you send them your link',
+      title: tr('Show my QR code'),
+      text: tr('Friends scan it, or you send them your link'),
       icon: <QrGlyph />,
       open: () => openAddFriend({ qr: true }),
     },
     {
-      title: 'Join a community',
-      text: 'Paste an invite link, or start your own',
+      title: tr('Join a community'),
+      text: tr('Paste an invite link, or start your own'),
       icon: <GroupsIcon size={26} />,
       open: () => setCommunityStart(true),
     },
@@ -43,7 +44,7 @@ export function FirstSteps(): ReactElement {
   return (
     <section className="pfirst" aria-labelledby="pfirst-title">
       <h2 className="plist__head" id="pfirst-title">
-        Get started
+        {tr('Get started')}
       </h2>
       <ul className="plist">
         {rows.map((r) => (
