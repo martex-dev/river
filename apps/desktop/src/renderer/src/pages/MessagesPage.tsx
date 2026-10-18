@@ -15,7 +15,17 @@ import { NotifyMenuSection } from '../community/ui/NotifyMenu.tsx';
 import { ForwardDialog } from '../community/ui/Forward.tsx';
 import { readDraft, saveDraft, useDraft } from '../community/drafts.ts';
 import { quoteOf } from '../dm/quote.ts';
-import { clockTime } from '../time.ts';
+import { clockTime, dateLocale, dayLabel, fullWhen } from '../time.ts';
+import { tr } from '../i18n.ts';
+import { ChatSkeleton, HistoryFailed, typingText } from '../community/ui/Chat.tsx';
+import {
+  EMOJI_PICKER,
+  fromBottom,
+  insertIntoBox,
+  nearButton,
+  stopEditing,
+  useStickToBottom,
+} from '../components/chat-ui.ts';
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import {
   TIMER_CHOICES,
@@ -88,14 +98,7 @@ const timeOf = (iso: string): string => clockTime(iso);
 export function shortWhen(iso: string): string {
   const d = new Date(iso);
   if (d.toDateString() === new Date().toDateString()) return timeOf(iso);
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
-
-function dayLabel(iso: string): string {
-  const d = new Date(iso);
-  if (d.toDateString() === new Date().toDateString()) return 'Today';
-  if (d.toDateString() === new Date(Date.now() - 86_400_000).toDateString()) return 'Yesterday';
-  return d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' });
 }
 
 /** One shared empty list, so memos do not see a new array every render. */
@@ -649,7 +652,7 @@ function ConversationRow({ c }: { c: ConversationView }): ReactElement {
         {c.kind === 'group' ? <GroupAvatar c={c} size={32} /> : <ConvAvatar c={c} size={32} />}
         <span className="dm-row__text">
           <span className="dm-row__top">
-            <strong>{c.name}</strong>
+            <strong title={c.name}>{c.name}</strong>
             {c.verified && (
               <span className="dm-row__verified" title="Verified">
                 ✓
@@ -723,6 +726,14 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
   const c = props.conversation;
   const dm = useDm();
   const messages = useDm((x) => x.messages[c.riverId]) ?? NO_MESSAGES;
+  // A skeleton until the messages arrive, not "This is the beginning of your conversation" (2.13.1).
+  const loaded = useDm((x) => x.messages[c.riverId] !== undefined);
+  const failed = useDm((x) => !!x.historyFailed[c.riverId]);
+  useEffect(() => {
+    const state = useDm.getState();
+    if (state.messages[c.riverId] === undefined && !state.historyFailed[c.riverId])
+      void state.reload(c.riverId);
+  }, [c.riverId]);
   const [showPins, setShowPins] = useState(false);
   const [searching, setSearching] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -746,6 +757,8 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
   const myName = useRiver((r) => r.identity?.displayName) ?? 'You';
   const myId = dm.myId ?? '';
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Pictures and previews loading below the newest message do not push it out of view.
+  useStickToBottom(scrollRef, 80);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   // Files waiting to be sent stay with this conversation when you switch away and back.
   const { pending, setPending, add } = usePendingFiles(`d:${c.riverId}`);
@@ -1266,14 +1279,19 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
           className="chat__messages"
           ref={scrollRef}
           onScroll={(e) => {
-            const el = e.currentTarget;
-            const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+            const bottom = fromBottom(e.currentTarget) < 80;
             setAtBottom(bottom);
             if (bottom) setLeftAt(null);
             else if (leftAt === null) setLeftAt(messages.at(-1)?.sentAt ?? '');
           }}
         >
-          <div className="chat__welcome">
+          {!loaded &&
+            (failed ? (
+              <HistoryFailed onRetry={() => useDm.getState().reload(c.riverId)} />
+            ) : (
+              <ChatSkeleton />
+            ))}
+          <div className="chat__welcome" hidden={!loaded}>
             <ConvAvatar c={c} size={72} />
             <h2>{c.name}</h2>
             <p className="muted">
@@ -1710,7 +1728,7 @@ function DmMessage(props: {
           {!props.grouped && !phone && (
             <div className="msg__meta">
               <strong>{name}</strong>
-              <time className="muted small" title={new Date(m.sentAt).toLocaleString()}>
+              <time className="muted small" dateTime={m.sentAt} title={fullWhen(m.sentAt)}>
                 {timeOf(m.sentAt)}
               </time>
               {m.pinned && (
@@ -1800,7 +1818,8 @@ function DmMessage(props: {
           <button
             className="msg__action"
             aria-label="Add reaction"
-            onClick={(e) => setPicker({ x: e.clientX - 300, y: e.clientY + 12 })}
+            title={tr('Add reaction')}
+            onClick={(e) => setPicker(nearButton(e.currentTarget, EMOJI_PICKER))}
           >
             <SmileIcon size={17} />
           </button>
@@ -2370,11 +2389,17 @@ function ConversationSearch(props: { peer: string; onClose(): void }): ReactElem
 
 function DmEditBox({ m }: { m: DirectMessageView }): ReactElement {
   const [text, setText] = useState(m.text);
+  const close = (): void => stopEditing(() => useDm.setState({ editing: null }));
   const save = async (): Promise<void> => {
     const value = text.trim();
-    if (value && value !== m.text)
-      await useDm.getState().run({ a: 'edit', peer: m.peer, id: m.id, text: value });
-    useDm.setState({ editing: null });
+    if (!value) return;
+    // Not saved (offline, refused): keep editing, with the text as typed (as in channels).
+    if (
+      value !== m.text &&
+      !(await useDm.getState().attempt({ a: 'edit', peer: m.peer, id: m.id, text: value }))
+    )
+      return;
+    close();
   };
   return (
     <div className="msg__edit">
@@ -2382,9 +2407,15 @@ function DmEditBox({ m }: { m: DirectMessageView }): ReactElement {
         autoFocus
         value={text}
         maxLength={4000}
+        rows={Math.min(8, text.split('\n').length)}
         onChange={(e) => setText(e.target.value)}
+        // The caret at the end of the message, not before its first letter.
+        onFocus={(e) => e.currentTarget.setSelectionRange(text.length, text.length)}
         onKeyDown={(e) => {
-          if (e.key === 'Escape') useDm.setState({ editing: null });
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            close();
+          }
           if (e.key === 'Enter' && !e.shiftKey && !composing(e)) {
             e.preventDefault();
             void save();
@@ -2666,7 +2697,10 @@ ${shared}`
           type="button"
           className="icon-btn"
           aria-label="Emoji"
-          onClick={(e) => setPicker({ x: phone ? 8 : e.clientX - 300, y: e.clientY - 330 })}
+          title={phone ? undefined : 'Emoji'}
+          onClick={(e) =>
+            setPicker(phone ? { x: 8, y: e.clientY - 330 } : nearButton(e.currentTarget, EMOJI_PICKER))
+          }
         >
           {phone ? <EmojiIcon size={24} /> : <SmileIcon size={20} />}
         </button>
@@ -2723,7 +2757,7 @@ ${shared}`
               <i />
               <i />
             </span>
-            <span>{typingName(c)} is typing…</span>
+            <span>{typingText([typingName(c)])}</span>
           </>
         )}
       </div>
@@ -2731,9 +2765,9 @@ ${shared}`
         <Popover x={picker.x} y={picker.y} onClose={() => setPicker(null)}>
           <EmojiPicker
             onPick={(e) => {
-              setText(text + e);
+              // At the caret, not always at the end (2.13.1).
+              insertIntoBox(ref.current, text, e, setText);
               setPicker(null);
-              ref.current?.focus();
             }}
           />
         </Popover>

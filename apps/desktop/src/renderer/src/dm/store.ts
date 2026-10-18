@@ -12,6 +12,7 @@ import { useCommunity } from '../community/store.ts';
 import { celebrate } from '../community/fx.tsx';
 import { play } from '../community/sound.ts';
 import { useRiver } from '../store.ts';
+import { withLiveMessages } from '../components/unread.ts';
 
 const TYPING_MS = 6000;
 
@@ -31,6 +32,10 @@ interface DmState {
   load(): Promise<void>;
   handle(e: DmEvent): void;
   select(peer: string | null): void;
+  /** Conversations whose messages could not be loaded (2.13.1): the conversation offers Retry. */
+  historyFailed: Record<string, boolean>;
+  /** Loads a conversation's messages (again). */
+  reload(peer: string): Promise<void>;
   /** Loads the conversation back to `since` (ISO time), for jumping to older messages (2.10.7). */
   loadSince(peer: string, since: string): Promise<void>;
   /** Runs an action; shows the error as a toast and returns null on failure. */
@@ -143,10 +148,22 @@ export const useDm = create<DmState>((set, get) => ({
     if (peer === get().selected) return;
     set({ selected: peer, replyTo: null, editing: null });
     if (!peer) return;
-    void window.river.dm.action({ a: 'messages', peer }).then((res) => {
-      if (res.ok) set({ messages: { ...get().messages, [peer]: res.value } });
-    });
+    void get().reload(peer);
     void window.river.dm.action({ a: 'read', peer });
+  },
+
+  historyFailed: {},
+  reload: async (peer) => {
+    const { [peer]: _failed, ...historyFailed } = get().historyFailed;
+    set({ historyFailed });
+    const res = await window.river.dm.action({ a: 'messages', peer });
+    if (res.ok) {
+      // Messages that arrived while this answer was on its way stay (2.13.1).
+      set({ messages: { ...get().messages, [peer]: withLiveMessages(res.value, get().messages[peer]) } });
+    } else if (!get().messages[peer]) {
+      // Shown in the conversation with Retry, instead of a skeleton forever.
+      set({ historyFailed: { ...get().historyFailed, [peer]: true } });
+    }
   },
 
   run: async (action) => {
@@ -178,6 +195,21 @@ export function isTyping(peer: string): boolean {
   return at !== undefined && Date.now() - at < TYPING_MS;
 }
 
-export function totalUnread(conversations: ConversationView[]): number {
-  return conversations.filter((c) => c.state !== 'blocked').reduce((n, c) => n + c.unread, 0);
+/**
+ * Unread messages for the Home badge: not blocked people, and (2.13.1) not muted conversations,
+ * which counted on computers although they stay quiet (the phone's Chats badge already skipped them).
+ */
+export function totalUnread(
+  conversations: ConversationView[],
+  notifications?: Parameters<typeof isMuted>[0],
+): number {
+  return conversations
+    .filter((c) => c.state !== 'blocked' && !(notifications && isMuted(notifications, c.riverId)))
+    .reduce((n, c) => n + c.unread, 0);
+}
+
+/** The window's title: "(3) River" while direct messages or mentions wait, like other messengers. */
+export function windowTitle(unread: number, mentions: number): string {
+  const n = unread + mentions;
+  return n > 0 ? `(${n > 99 ? '99+' : n}) River` : 'River';
 }

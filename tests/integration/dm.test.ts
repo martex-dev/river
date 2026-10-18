@@ -377,15 +377,19 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     const insert = alice.local.prepare(
       `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions) VALUES (?, ?, ?, ?, ?, 'received', '{}')`,
     );
-    for (let i = 0; i < 700; i++) {
-      insert.run(
-        `m${String(i).padStart(20, '0')}`,
-        bob.riverId,
-        bob.riverId,
-        JSON.stringify({ text: `#${i}` }),
-        at(i),
-      );
-    }
+    // In one transaction: 700 separate writes to the encrypted database made this test take longer
+    // than its time limit when the whole suite runs at once.
+    alice.local.transaction(() => {
+      for (let i = 0; i < 700; i++) {
+        insert.run(
+          `m${String(i).padStart(20, '0')}`,
+          bob.riverId,
+          bob.riverId,
+          JSON.stringify({ text: `#${i}` }),
+          at(i),
+        );
+      }
+    })();
     const latest = await alice.dm.action({ a: 'messages', peer: bob.riverId });
     expect(latest).toHaveLength(500);
     expect(latest[0]!.text).toBe('#200');

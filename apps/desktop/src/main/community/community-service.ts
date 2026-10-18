@@ -3532,7 +3532,13 @@ export class CommunityService {
   /** Every 30 s: tell the app when an event you are interested in starts. */
   private watchEvents(): void {
     if (this.eventTimer) return;
-    this.eventTimer = setInterval(() => this.remindEvents(), 30_000);
+    this.eventTimer = setInterval(() => {
+      try {
+        this.remindEvents();
+      } catch {
+        // Storage closed (locked, signed out, quitting): no reminders until it is open again.
+      }
+    }, 30_000);
     this.eventTimer.unref?.();
   }
 
@@ -3570,6 +3576,8 @@ export class CommunityService {
   }
 
   stop(): void {
+    if (this.eventTimer) clearInterval(this.eventTimer);
+    this.eventTimer = null;
     for (const timer of this.keyTimers.values()) clearTimeout(timer);
     this.keyTimers.clear();
     // An open still waiting for its token gives up when it gets it.
