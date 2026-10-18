@@ -50,9 +50,10 @@ export interface ProtocolStorage {
 
 /**
  * How long a signed prekey and last-resort Kyber key are kept after a rotation replaced them:
- * longer than the server keeps undelivered mail (30 days by default), then they are deleted.
+ * longer than any River server keeps undelivered mail (30 days by default, at most 90 with
+ * RIVER_MAILBOX_TTL_DAYS), then they are deleted.
  */
-export const RETIRED_PREKEY_KEEP_MS = 60 * 86_400_000;
+export const RETIRED_PREKEY_KEEP_MS = 95 * 86_400_000;
 
 interface RetiredPreKey {
   signed: number;

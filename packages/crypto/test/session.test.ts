@@ -400,3 +400,9 @@ describe('libsignal sessions', () => {
     expect(bob.storage.count('signed')).toBe(1);
   });
 });
+
+describe('retired prekeys', () => {
+  it('outlast the longest mailbox retention a server may set (90 days)', () => {
+    expect(RETIRED_PREKEY_KEEP_MS).toBeGreaterThan(90 * 86_400_000);
+  });
+});

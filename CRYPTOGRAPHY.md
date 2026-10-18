@@ -43,8 +43,8 @@ possible.
 | Recovery secret  | 128-bit random, shown as 16 Bytewords + 2 checksum words (§7) | Account                            | Derives the backup key (HKDF-SHA256, `info` label `river-backup-v1`)                                        |
 
 **Old prekeys (2.20).** A signed prekey and last-resort Kyber key replaced by
-the weekly rotation are kept for 60 days (`RETIRED_PREKEY_KEEP_MS`: longer than
-the server keeps undelivered mail, 30 days by default) so first messages made
+the weekly rotation are kept for 95 days (`RETIRED_PREKEY_KEEP_MS`: longer than
+any server keeps undelivered mail, 30 days by default and at most 90) so first messages made
 with them still open, then deleted, as Signal does. Before 2.20 every signed
 prekey was kept for good, and a replaced last-resort Kyber key was deleted by
 the first message that used it, so other first messages made with it failed.
