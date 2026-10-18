@@ -71,6 +71,32 @@ describe('River for Android: manifest', () => {
   });
 });
 
+describe('River over a locked phone (Android, 2.18)', () => {
+  it('shows only the full-screen call there, without its way back to the chats', () => {
+    const css = readFileSync(resolve(import.meta.dirname, '../../apps/mobile/ui/phone.css'), 'utf8');
+    expect(css).toMatch(/html\[data-over-lock\] body > \* \{\s*visibility: hidden !important;/);
+    expect(css).toMatch(/html\[data-over-lock\] \.dm-call--full \{\s*visibility: visible !important;/);
+    expect(css).toMatch(
+      /html\[data-over-lock\] \.dm-call--full \.dm-call__min \{\s*visibility: hidden !important;/,
+    );
+    const shell = readFileSync(resolve(import.meta.dirname, '../../apps/mobile/ui/shell.ts'), 'utf8');
+    expect(shell).toContain("OVER_LOCK_CHANNEL = 'river:app:overLock'");
+  });
+
+  it('is told so by Android, which shows River there only for a call it knows of', () => {
+    const main = java('MainActivity.java');
+    expect(main).toContain('river:app:overLock');
+    // The "call" extra of an intent any app can send is not enough on its own.
+    expect(main).not.toMatch(/getBooleanExtra\(CoreHost\.EXTRA_CALL, false\)\)\s*showOverLock\(true\)/);
+    expect(main).toMatch(
+      /getBooleanExtra\(CoreHost\.EXTRA_CALL, false\) && \(tapped \|\| core\.callMayShowOverLock\(\)\)\)\s*showOverLock\(true\)/,
+    );
+    expect(java('core/CoreHost.java')).toMatch(
+      /public boolean callMayShowOverLock\(\) \{\s*return overLockForCall \|\| inCall;/,
+    );
+  });
+});
+
 describe('Lock River (2.18)', () => {
   it('hides River under its cover from screen readers and the keyboard, not only from sight', () => {
     const lock = java('core/AppLock.java');
