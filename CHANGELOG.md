@@ -6,6 +6,46 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.18.0] - 2026-10-18
+
+**Make River yours: chat wallpapers, any accent colour, bubble shapes, theme codes.**
+
+### Added
+
+- **Chat wallpapers** on computers and phones: eight Telegram-like doodle
+  patterns tinted by your accent, ten gradients, one colour of your choice, or
+  your own photo with blur and dim sliders. Every built-in wallpaper is drawn by
+  River in the theme's colours (light and dark) — nothing is downloaded — and
+  keeps text readable (WCAG AA). Set one for all chats in Settings → Appearance
+  → Chat, or one for a single conversation or channel from its menu
+  (Wallpaper). Photos are shrunk and kept on this device only; wallpapers are
+  per device and are left out of appearance exports.
+- **Accent picker**: twelve quick accents or any colour; River shows the
+  contrast of text on it and adjusts the shade until it reads (WCAG AA). A
+  matching second accent comes with it.
+- **Bubble shapes**: rounded, square-ish or outlined, on phones and with the
+  Bubbles message style on computers.
+- **Theme codes**: copy the theme you use (with every colour you changed) as a
+  short `river-theme:` code and send it to anyone; pasting one adds it to your
+  themes. Codes are only colours, checked before use — nothing in them can run.
+  The theme editor can now start from any theme.
+- **A live sample chat** at the top of Settings → Appearance follows every
+  choice at once: theme, accent, wallpaper, bubbles, text size and density.
+- **Delight**: reactions burst out of their chip as you add them, a
+  double-tapped message gets a big heart, confetti uses your theme's colours
+  (and phones buzz), typing dots wave in the accent, and new bubbles grow in
+  with a little spring. A first theme of your own is celebrated.
+- **Calm mode** (Settings → Appearance → Motion): no confetti, bursts or
+  bouncing — messages and reactions simply appear. Reduced motion still turns
+  off every non-essential animation.
+
+### Changed
+
+- Settings → Appearance has a **Chat** section with the wallpaper, bubble
+  shape, message style, chat text size and density in one place.
+- On phones the chat text size setting now works below 16 px too (phones show
+  it 2 px larger than computers).
+
 ## [2.17.0] - 2026-10-18
 
 **Notifications like Telegram's: per chat, grouped, with Mark as read and badges.**

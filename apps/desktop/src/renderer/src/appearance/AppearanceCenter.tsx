@@ -4,6 +4,7 @@ import {
   DEFAULT_DESIGN,
   DEFAULT_DESIGN_PREFS,
   designExportSchema,
+  MAX_WALLPAPER_PHOTOS,
   type ColorRole,
   type DesignPrefs,
   type DesignProfile,
@@ -12,16 +13,27 @@ import {
 import type { Settings } from '../../../shared/settings.ts';
 import { Toggle } from '../community/ui/common.tsx';
 import { play } from '../community/sound.ts';
+import { celebrate } from '../community/fx.tsx';
 import { useRiver } from '../store.ts';
 import { contrast } from './color.ts';
 import { applyTheme, commitDesign, newId, setPrefs, useEditedDesign } from './editor.ts';
 import { resolveDesign } from './engine.ts';
 import { THEMES, themeById } from './themes.ts';
 import { ThemeBrowser, ThemePreview } from './ThemeBrowser.tsx';
+import { Choice, Group, pct, Row, Slider } from './controls.tsx';
+import { AccentPicker } from './AccentPicker.tsx';
+import { chatPhotoCount } from './ChatWallpaper.tsx';
+import { LivePreview } from './LivePreview.tsx';
+import { addSharedTheme, parseThemeCode, themeCode } from './share.ts';
+import { SKINS } from './skins.ts';
+import { colorsOf } from './wallpaper.ts';
+import { WallpaperPicker } from './WallpaperPicker.tsx';
+import { isPhone } from '../../../shared/platform.ts';
 
 const SECTIONS = [
   ['themes', 'Themes'],
   ['colors', 'Colours'],
+  ['chat', 'Chat'],
   ['type', 'Typography'],
   ['layout', 'Layout'],
   ['components', 'Components'],
@@ -37,6 +49,8 @@ type Section = (typeof SECTIONS)[number][0];
  * The appearance and personalisation centre (1.0.45): skins and themes, colours,
  * type, layout, components, effects, background, motion and saved profiles.
  * Every control changes the live app immediately and is saved automatically.
+ * 2.18: a live sample chat on top, an accent picker, theme codes, and the Chat section
+ * (wallpapers, bubbles, text size, density).
  */
 export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
   const [section, setSection] = useState<Section>('themes');
@@ -48,7 +62,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
     <div className="design">
       <header className="design__head">
         <div className="design__now">
-          <ThemePreview themeId={resolved.theme.id} design={design} withPrefs />
+          <LivePreview design={design} />
           <div>
             <div className="eyebrow">Now using</div>
             <h2 className="panel__title">{nameOf(design)}</h2>
@@ -77,6 +91,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
 
       {section === 'themes' && <ThemeBrowser design={design} />}
       {section === 'colors' && <Colors design={design} />}
+      {section === 'chat' && <ChatLook design={design} />}
       {section === 'type' && (
         <Group>
           <Row label="Interface font">
@@ -514,76 +529,21 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
   );
 }
 
-const pct = (v: number): string => `${Math.round(v * 100)}%`;
+/** Exports carry no pictures: no background picture, and a photo wallpaper becomes no wallpaper. */
+function noPictures(prefs: DesignPrefs): DesignPrefs {
+  const wallpaper = prefs.wallpaper ?? DEFAULT_DESIGN_PREFS.wallpaper;
+  return {
+    ...prefs,
+    backgroundImage: null,
+    wallpaper: wallpaper.photo ? { ...wallpaper, kind: 'none', photo: null } : wallpaper,
+  };
+}
 
 function nameOf(design: DesignSettings): string {
   return (
     design.customThemes.find((c) => c.id === design.theme)?.name ??
     themeById(design.theme)?.name ??
     'Deep Current'
-  );
-}
-
-function Group(props: { children: ReactNode }): ReactElement {
-  return <div className="design-group">{props.children}</div>;
-}
-
-function Row(props: { label: string; children: ReactNode }): ReactElement {
-  return (
-    <div className="design-row">
-      <span className="design-row__label">{props.label}</span>
-      {props.children}
-    </div>
-  );
-}
-
-function Choice<T extends string>(props: {
-  value: T;
-  options: ReadonlyArray<readonly [T, string]>;
-  onChange(v: T): void;
-}): ReactElement {
-  return (
-    <div className="seg seg--wrap" role="radiogroup">
-      {props.options.map(([id, label]) => (
-        <button
-          key={id}
-          role="radio"
-          aria-checked={props.value === id}
-          className={`seg__item ${props.value === id ? 'is-active' : ''}`}
-          onClick={() => props.onChange(id)}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function Slider(props: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  format?: (v: number) => string;
-  onChange(v: number): void;
-}): ReactElement {
-  return (
-    <label className="design-slider">
-      <span className="design-row__label">
-        {props.label}{' '}
-        <span className="muted small">{props.format ? props.format(props.value) : props.value}</span>
-      </span>
-      <input
-        type="range"
-        min={props.min}
-        max={props.max}
-        step={props.step}
-        value={props.value}
-        aria-label={props.label}
-        onChange={(e) => props.onChange(Number(e.target.value))}
-      />
-    </label>
   );
 }
 
@@ -657,10 +617,33 @@ function Colors({ design }: { design: DesignSettings }): ReactElement {
     });
     setName('');
     play('success');
+    if (design.customThemes.length === 0) celebrate('Your first theme ✨');
   };
   const isCustom = design.customThemes.some((c) => c.id === design.theme);
   return (
     <div className="design-group">
+      <h3 className="design-sub">Accent</h3>
+      <AccentPicker design={design} />
+      <h3 className="design-sub">Theme editor</h3>
+      <Row label="Start from">
+        <select
+          className="search design-start"
+          aria-label="Start from theme"
+          value={THEMES.some((t) => t.id === design.theme) ? design.theme : ''}
+          onChange={(e) => e.target.value && applyTheme(design, e.target.value)}
+        >
+          {!THEMES.some((t) => t.id === design.theme) && <option value="">{nameOf(design)}</option>}
+          {SKINS.map((skin) => (
+            <optgroup key={skin.id} label={skin.name}>
+              {THEMES.filter((t) => t.skin === skin.id).map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.mode})
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </Row>
       <p className="muted small">
         Change any colour of the current theme. River keeps text readable: if a colour would make text too
         faint, it is adjusted automatically (shown below).
@@ -712,6 +695,7 @@ function Colors({ design }: { design: DesignSettings }): ReactElement {
           Save as my theme
         </button>
       </div>
+      <ThemeShare design={design} name={name.trim() || nameOf(design)} />
       {isCustom && (
         <div className="design-actions">
           <span className="muted small">“{nameOf(design)}” is one of your themes.</span>
@@ -825,6 +809,7 @@ function Background({ design }: { design: DesignSettings }): ReactElement {
 function Motion({ design }: { design: DesignSettings }): ReactElement {
   const p = { ...DEFAULT_DESIGN_PREFS, ...design.prefs };
   const motion = useRiver((r) => r.settings?.appearance.motion ?? 'system');
+  const calm = useRiver((r) => r.settings?.appearance.calm ?? false);
   const update = useRiver((r) => r.updateSettings);
   const set = (patch: Partial<DesignPrefs>): void => setPrefs(design, patch);
   return (
@@ -840,6 +825,12 @@ function Motion({ design }: { design: DesignSettings }): ReactElement {
           ]}
         />
       </Row>
+      <Toggle
+        label="Calm mode"
+        help="No confetti, reaction bursts or bouncing: messages and reactions simply appear. Phones still give a small buzz."
+        checked={calm}
+        onChange={(on) => void update({ appearance: { calm: on } })}
+      />
       <Slider
         label="Animation speed"
         value={p.motionSpeed}
@@ -935,9 +926,9 @@ function Profiles({ design }: { design: DesignSettings }): ReactElement {
       version: 1,
       skin: design.skin,
       theme: design.theme,
-      prefs: { ...design.prefs, backgroundImage: null },
+      prefs: noPictures(design.prefs),
       customThemes: design.customThemes,
-      profiles: design.profiles.map((x) => ({ ...x, prefs: { ...x.prefs, backgroundImage: null } })),
+      profiles: design.profiles.map((x) => ({ ...x, prefs: noPictures(x.prefs) })),
     };
     const text = JSON.stringify(data);
     setIo(text);
@@ -1158,6 +1149,172 @@ function Profiles({ design }: { design: DesignSettings }): ReactElement {
       </div>
       <p className="muted small">Resetting keeps your own themes and profiles.</p>
     </div>
+  );
+}
+
+/** Theme codes: copy the theme in use as a short code, or paste one someone shared. */
+function ThemeShare({ design, name }: { design: DesignSettings; name: string }): ReactElement {
+  const [code, setCode] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+  const copy = (): void => {
+    const text = themeCode(design, name);
+    setCode(text);
+    void navigator.clipboard
+      ?.writeText(text)
+      .then(() => setMessage('Theme code copied. Send it to anyone with River.'))
+      .catch(() => setMessage('Select the code above and copy it.'));
+  };
+  const add = (): void => {
+    const result = parseThemeCode(code);
+    if (!result.ok) return setMessage(result.error);
+    const { design: next, theme } = addSharedTheme(
+      design,
+      result.theme,
+      newId('custom'),
+      new Date().toISOString(),
+    );
+    commitDesign(next);
+    setCode('');
+    setMessage(`Added “${theme.name}” to your themes and switched to it.`);
+    play('success');
+  };
+  return (
+    <>
+      <h3 className="design-sub">Share a theme</h3>
+      <p className="muted small">
+        A theme code is the theme’s name and colours as a short line of text. Paste one here to add it — River
+        checks every colour, and nothing in a code can run.
+      </p>
+      <textarea
+        className="design-io design-io--code"
+        aria-label="Theme code"
+        placeholder="river-theme:…"
+        value={code}
+        onChange={(e) => {
+          setCode(e.target.value);
+          setMessage(null);
+        }}
+        spellCheck={false}
+      />
+      <div className="design-actions">
+        <button className="btn btn--ghost btn--small" onClick={copy}>
+          Copy theme code
+        </button>
+        <button className="btn btn--ghost btn--small" disabled={!code.trim()} onClick={add}>
+          Add pasted theme
+        </button>
+        {message && (
+          <span className="small" role="status">
+            {message}
+          </span>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** Chat (2.18): the wallpaper behind every chat, bubble shape, text size and density. */
+function ChatLook({ design }: { design: DesignSettings }): ReactElement {
+  const p = { ...DEFAULT_DESIGN_PREFS, ...design.prefs };
+  const appearance = useRiver((r) => r.settings?.appearance);
+  const phone = useRiver((r) => isPhone(r.info?.platform));
+  const update = useRiver((r) => r.updateSettings);
+  const colors = useMemo(() => {
+    const r = resolveDesign(design);
+    return colorsOf(r.vars, r.mode);
+  }, [design]);
+  const own = Object.keys(design.chatWallpapers ?? {}).length;
+  const fontSize = appearance?.fontSize ?? 14;
+  return (
+    <Group>
+      <h3 className="design-sub">Wallpaper</h3>
+      <p className="muted small">
+        Behind the messages of every conversation and channel. A chat can have its own: open the chat’s menu
+        and choose Wallpaper. Wallpapers stay on this device (they are not copied to your other devices).
+      </p>
+      <WallpaperPicker
+        value={p.wallpaper}
+        colors={colors}
+        design={design}
+        onChange={(wallpaper) => setPrefs(design, { wallpaper })}
+        photosLeft={MAX_WALLPAPER_PHOTOS - chatPhotoCount(design.chatWallpapers ?? {})}
+      />
+      {own > 0 && (
+        <div className="design-actions">
+          <span className="muted small">
+            {own} {own === 1 ? 'chat has a wallpaper of its own.' : 'chats have wallpapers of their own.'}
+          </span>
+          <button
+            className="btn btn--link btn--small"
+            onClick={() => commitDesign({ ...design, chatWallpapers: {} })}
+          >
+            Use this wallpaper everywhere
+          </button>
+        </div>
+      )}
+      <h3 className="design-sub">Bubbles</h3>
+      <Row label="Bubble shape">
+        <Choice
+          label="Bubble shape"
+          value={p.bubbles}
+          onChange={(bubbles) => setPrefs(design, { bubbles })}
+          options={[
+            ['rounded', 'Rounded'],
+            ['square', 'Square-ish'],
+            ['outlined', 'Outlined'],
+          ]}
+        />
+      </Row>
+      {!phone && (
+        <Row label="Message style">
+          <Choice
+            label="Message style"
+            value={p.messageStyle}
+            onChange={(messageStyle) => setPrefs(design, { messageStyle })}
+            options={[
+              ['skin', 'Skin'],
+              ['flat', 'Classic'],
+              ['bubbles', 'Bubbles'],
+              ['cards', 'Cards'],
+              ['compact', 'Compact'],
+              ['terminal', 'Terminal'],
+            ]}
+          />
+        </Row>
+      )}
+      {!phone && (
+        <p className="muted small">On computers, bubble shapes show with the Bubbles message style.</p>
+      )}
+      <h3 className="design-sub">Text and spacing</h3>
+      <label className="design-slider">
+        <span className="design-row__label">
+          Chat text size <span className="muted small">{phone ? fontSize + 2 : fontSize}px</span>
+        </span>
+        <input
+          type="range"
+          min={12}
+          max={22}
+          step={1}
+          value={fontSize}
+          aria-label="Chat text size"
+          onChange={(e) => void update({ appearance: { fontSize: Number(e.target.value) } })}
+        />
+      </label>
+      {!phone && (
+        <Row label="Density">
+          <Choice
+            label="Density"
+            value={appearance?.density ?? 'cozy'}
+            onChange={(density) => void update({ appearance: { density } })}
+            options={[
+              ['cozy', 'Cozy'],
+              ['compact', 'Compact'],
+            ]}
+          />
+        </Row>
+      )}
+      <p className="muted small">The sample chat at the top shows every change at once.</p>
+    </Group>
   );
 }
 

@@ -17,12 +17,15 @@ Plan: [docs/product/road-to-3.md](docs/product/road-to-3.md). Many releases, one
 - [x] 2.15.0 Privacy part 2 (padding, photo metadata, proxy, retention, local history) and the desktop polish sweep
 - [x] 2.16.0 Easy start: one-screen first run, invite links straight in
 - [x] 2.17.0 Notifications: per-chat mute/mentions/sound, grouping, Mark as read, badges, in-app banners, mentions always come through
-- [ ] 2.17.x Polish for each phone screen
+- [x] 2.18.0 Looks: wallpapers, accent picker, bubble shapes, theme codes, live preview, delight with Calm mode
+- [ ] 2.18.x Polish for each phone screen
 - [ ] 2.14.x Easy start: install to first chat in under a minute, one-screen profile, invite links that open the app; community keys need a proof
 - [ ] 2.15.x Group calls, call quality, call links
 - [ ] 2.16.x Voice channels and meetings: bigger rooms, grid and speaker views, raise hand, stage
 - [ ] 2.17.x Notifications: per-chat sounds, mentions-only, grouping — built, unreleased (per-chat levels, mutes and sounds, one notification per conversation with Android group summaries, cleared on read anywhere, Mark as read, icon badges, in-app banners, ignore @everyone); still to try on a real Android phone and iPhone
 - [ ] 2.18.x Looks: wallpapers, accent colours, bubble styles, theme editor
+  - [x] Chat wallpapers (app and per chat; doodles, gradients, colour, photo), accent picker, bubble shapes, theme codes, live preview, reaction bursts, Calm mode
+  - [ ] Alternative app icons — skipped for now: Android launcher aliases can drop home-screen shortcuts and restart the app; Windows taskbars show the pinned shortcut's icon
 - [ ] 2.19.x Messaging, part 2
 - [ ] 2.20.x Privacy, part 2: less metadata, padding, proxy-friendly connections
 - [ ] 2.21.x Whole-app sweep
