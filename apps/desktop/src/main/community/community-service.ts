@@ -3518,7 +3518,13 @@ export class CommunityService {
   /** Every 30 s: tell the app when an event you are interested in starts. */
   private watchEvents(): void {
     if (this.eventTimer) return;
-    this.eventTimer = setInterval(() => this.remindEvents(), 30_000);
+    this.eventTimer = setInterval(() => {
+      try {
+        this.remindEvents();
+      } catch {
+        // the local database closed meanwhile (locked, quitting): next time
+      }
+    }, 30_000);
     this.eventTimer.unref?.();
   }
 
