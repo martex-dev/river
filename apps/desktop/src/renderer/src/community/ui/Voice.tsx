@@ -11,6 +11,8 @@ import {
 import { tr } from '../../i18n.ts';
 import { SCREEN_QUALITIES, saveQuality, savedQuality, type ScreenQuality } from '../screen-quality.ts';
 import { StagePanel } from './Stage.tsx';
+import { MeetingBar, useMeetingView, useSpeakerFocus } from './Meeting.tsx';
+import { encryptionNote } from '../meeting.ts';
 import { priorityFactor } from '../priority-speaker.ts';
 import { SoundboardButton } from './Soundboard.tsx';
 import { describeLink, linkQuality, type LinkStats } from '../link-stats.ts';
@@ -52,6 +54,7 @@ export function VoiceChannel(props: {
   const [picker, setPicker] = useState<ScreenSource[] | null>(null);
   const [quality, setQuality] = useState<ScreenQuality>(savedQuality);
   const [focus, setFocus] = useState<string | null>(null);
+  const [view, setView] = useMeetingView();
   const placesTaken = (community.voice[channel.id] ?? []).length;
   const full =
     channel.userLimit > 0 &&
@@ -67,7 +70,20 @@ export function VoiceChannel(props: {
     : [];
   // On a stage only the speakers get tiles; the audience is listed in the stage panel.
   const shownTiles = channel.stage ? tiles.filter((t) => !community.voiceStates[t.id]?.serverMuted) : tiles;
-  const focused = focus && shownTiles.some((t) => t.id === focus) ? focus : null;
+  // Speaker view (2.13) shows whoever talks or shares large; a tile you clicked stays large.
+  const auto = useSpeakerFocus(
+    inThisCall ? call : null,
+    me,
+    shownTiles.map((t) => t.id),
+    view,
+  );
+  const focused = focus && shownTiles.some((t) => t.id === focus) ? focus : auto;
+  const note = encryptionNote({
+    inCall: inThisCall,
+    others: remotes.length,
+    relayed: remotes.filter((r) => r.relayed).length,
+    large: inThisCall && call.largeRoom,
+  });
 
   return (
     <div className="voice">
@@ -77,7 +93,7 @@ export function VoiceChannel(props: {
         </span>
         <strong>{channel.name}</strong>
         <span className="chat__topic">
-          {participants.length} in channel · encrypted directly between devices (DTLS-SRTP)
+          {participants.length} in channel · {note}
         </span>
       </header>
 
@@ -122,9 +138,23 @@ export function VoiceChannel(props: {
       ) : (
         <>
           {channel.stage && <StagePanel community={community} channel={channel} me={me} />}
+          {!phone && (
+            <MeetingBar
+              call={call}
+              community={community}
+              channel={channel}
+              me={me}
+              view={view}
+              onView={(v) => {
+                setView(v);
+                setFocus(null);
+              }}
+            />
+          )}
           <div
             className={`voice__grid ${focused ? 'voice__grid--focus' : ''}`}
             data-count={shownTiles.length}
+            data-size={shownTiles.length > 12 ? 'large' : undefined}
           >
             {shownTiles.map((t) =>
               t.self ? (
@@ -140,6 +170,7 @@ export function VoiceChannel(props: {
                   screen={call.localTrack('screen')}
                   focused={focused === me}
                   onClick={() => setFocus(focused === me ? null : me)}
+                  hand={call.hand !== null}
                   self
                 />
               ) : (
@@ -363,6 +394,7 @@ function Tile(props: {
   focused: boolean;
   onClick(): void;
   self?: boolean;
+  hand?: boolean;
 }): ReactElement {
   return (
     <div
@@ -392,7 +424,17 @@ function Tile(props: {
         {props.muted ? ' · muted' : ''}
       </span>
       {props.screen && <span className="live-badge tile__live">LIVE</span>}
+      {props.hand && <HandBadge />}
     </div>
+  );
+}
+
+/** ✋ on the tile of someone whose hand is up (2.13). */
+function HandBadge(): ReactElement {
+  return (
+    <span className="tile__hand" title="Hand raised" role="img" aria-label="Hand raised">
+      ✋
+    </span>
   );
 }
 
@@ -514,6 +556,7 @@ function RemoteTile(props: {
             : ''}
       </span>
       {peer.screenOn && <span className="live-badge tile__live">LIVE</span>}
+      {peer.hand ? <HandBadge /> : null}
     </div>
   );
 }

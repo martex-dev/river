@@ -1,6 +1,7 @@
 import { tr } from '../../i18n.ts';
 import { useState, type DragEvent, type ReactElement } from 'react';
 import { forgetCall, lastCall } from '../rejoin.ts';
+import { callStatus } from '../meeting.ts';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, CommunityView, MemberView } from '../../../../shared/ipc.ts';
 import { ProfileCard } from './Members.tsx';
@@ -419,8 +420,10 @@ export function VoicePanel({
   if (!channelCommunity) return null;
   const channel = channelCommunity.channels.find((ch) => ch.id === call.channelId);
   const screen = !!call.localTrack('screen');
+  // Honest (2.13): offline from the server with nobody's voice arriving is not "connected".
+  const status = callStatus({ server: s.connection, others: call.remotes() });
   return (
-    <div className="voice-panel">
+    <div className={`voice-panel ${status === 'reconnecting' ? 'voice-panel--reconnecting' : ''}`}>
       <div className="voice-panel__status">
         <span className="voice-panel__signal" aria-hidden="true">
           <i />
@@ -428,7 +431,7 @@ export function VoicePanel({
           <i />
         </span>
         <div>
-          <strong>{tr('Voice connected')}</strong>
+          <strong>{status === 'reconnecting' ? tr('Reconnecting…') : tr('Voice connected')}</strong>
           <button
             className="voice-panel__where"
             onClick={() => {

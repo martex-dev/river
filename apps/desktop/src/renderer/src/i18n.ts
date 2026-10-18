@@ -111,6 +111,7 @@ const BG: Record<string, string> = {
   'Edit category': 'Редактирай категорията',
   // Voice panel (1.0.36)
   'Voice connected': 'Гласът е свързан',
+  'Reconnecting…': 'Свързване отново…',
   Disconnect: 'Прекъсни',
   Rejoin: 'Влез отново',
   'Call ended unexpectedly': 'Разговорът прекъсна неочаквано',
