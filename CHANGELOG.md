@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.17.0] - 2026-10-18
+
+**Notifications like Telegram's: per chat, grouped, with Mark as read and badges.**
+
 ### Added
 
 - **Notifications per chat, like Telegram.** Every chat (a person or a group)

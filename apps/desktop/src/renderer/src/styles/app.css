@@ -1840,7 +1840,7 @@ html[data-density='compact'] .member {
 }
 .share-sheet__target:hover,
 .share-sheet__target:focus-visible {
-  background: var(--surface-hover, rgba(127, 127, 127, 0.12));
+  background: var(--surface-hover, rgb(var(--line-rgb) / 0.12));
 }
 
 /* Chat list (2.1): filters, archive row, pins, marked-unread dot. */
@@ -2263,7 +2263,7 @@ html[data-density='compact'] .member {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: var(--layer-2, rgba(127, 127, 127, 0.2));
+  background: var(--layer-2, rgb(var(--line-rgb) / 0.2));
   color: var(--text);
   font-size: 16px;
   opacity: var(--swipe);
@@ -2297,7 +2297,7 @@ html[data-density='compact'] .member {
 .qr-scanner__frame {
   position: absolute;
   inset: 18%;
-  border: 3px solid rgba(255, 255, 255, 0.9);
+  border: 3px solid rgb(var(--fg-rgb) / 0.9);
   border-radius: 18px;
   box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.35);
   pointer-events: none;
@@ -2469,7 +2469,7 @@ body:has(.dm-call--full) .river-toast {
   height: 44px;
   border: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
+  background: rgb(var(--fg-rgb) / 0.14);
   color: #fff;
   font-size: 22px;
   cursor: pointer;
@@ -2481,7 +2481,7 @@ body:has(.dm-call--full) .river-toast {
   left: 0;
   z-index: 3;
   padding: 0 16px;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgb(var(--fg-rgb) / 0.8);
 }
 .dm-call--full .voice__controls {
   position: absolute;
@@ -2723,7 +2723,7 @@ body:has(.dm-call--full) .popover {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.22);
+  background: rgb(var(--fg-rgb) / 0.22);
   animation: call-ring 2s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
 }
 .incoming-call__ring--late {
@@ -2741,7 +2741,7 @@ body:has(.dm-call--full) .popover {
 }
 .incoming-call .incoming-call__avatar > :not(.incoming-call__ring) {
   position: relative;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 0 3px rgb(var(--fg-rgb) / 0.45);
   border-radius: 50%;
 }
 .incoming-call .incoming-call__name {
@@ -2843,7 +2843,7 @@ body:has(.dm-call--full) .popover {
   width: 60px;
   height: 60px;
   border: 0;
-  background: rgba(255, 255, 255, 0.16);
+  background: rgb(var(--fg-rgb) / 0.16);
   color: #fff;
   backdrop-filter: blur(10px);
 }
@@ -2852,7 +2852,7 @@ body:has(.dm-call--full) .popover {
   color: #111;
 }
 .dm-call--full .voice__controls .round-btn--off {
-  background: rgba(255, 255, 255, 0.85);
+  background: rgb(var(--fg-rgb) / 0.85);
   color: #111;
 }
 .dm-call--full .voice__controls .round-btn--danger {
