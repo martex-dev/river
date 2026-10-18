@@ -3,12 +3,19 @@ import type { RelayEngine } from './relay-audio.ts';
 import { VoiceGate, levelOf } from './voice-gate.ts';
 import { screenConstraints, type ScreenQuality } from './screen-quality.ts';
 import { readLinkStats, type LinkStats } from './link-stats.ts';
+import { isLargeRoom, tuneOpusSdp, videoBitrates } from './media-tuning.ts';
+import { relayBitrate } from './relay-quality.ts';
 
 /**
  * Voice/video calls as a WebRTC mesh: every participant connects directly to
  * every other participant. Media is encrypted with DTLS-SRTP between the two
  * computers; the River server only relays connection setup, and that setup is
- * itself sealed with the community key. Fine for small groups (≈10 people).
+ * itself sealed with the community key.
+ *
+ * Large rooms (2.13): above MESH_MAX_PEOPLE everyone's voice goes through the
+ * server instead (relay-audio.ts: still end-to-end encrypted, one upload
+ * however big the room is, and only while you talk), and direct connections
+ * are made only with people sharing a camera or screen, for their video.
  *
  * Each connection carries three fixed slots (audio, camera, screen). Turning
  * the camera or screen on/off swaps the track in its slot, so no renegotiation
@@ -34,13 +41,23 @@ type Signal =
   /** Sent by the answering side when a working connection falters: "please restart ICE". */
   | { type: 'restart'; sid?: string }
   /** What the sender is currently sending; receivers show tiles from this, not from track heuristics. */
-  | { type: 'state'; camera: boolean; screen: boolean; muted: boolean; priority?: boolean }
+  | {
+      type: 'state';
+      camera: boolean;
+      screen: boolean;
+      muted: boolean;
+      priority?: boolean;
+      /** Hand raised since (the sender's clock, ms), 2.13; absent: hand down. */
+      hand?: number;
+    }
   /** Remote assistance (ADR 0007): "look here" on the screen you are sharing, as fractions. */
   | { type: 'point'; x: number; y: number }
   /** "I can't reach you directly: here is my relay key; let's talk through the server" (1.0.17). */
   | { type: 'relay'; key: string }
   /** "We are connected directly again: stop relaying to me." */
-  | { type: 'relay-off' };
+  | { type: 'relay-off' }
+  /** "I miss this share of your relayed frames" (2.13): the sender lowers its bitrate. */
+  | { type: 'relay-loss'; loss: number };
 
 /** Answering side asks for an offer after this long without one (then less and less often). */
 const OFFER_WAIT_MS = 3000;
@@ -70,6 +87,14 @@ const RELAY_KEY_RESEND_MS = 8000;
  * frame now and then while muted, so a muted person still counts).
  */
 const RELAY_SILENT_MS = 15_000;
+/** How often listeners tell relayed speakers how many of their frames went missing. */
+const LOSS_REPORT_EVERY = 3; // relay checks (6 s)
+/** A loss report counts this long. */
+const LOSS_REPORT_TTL_MS = 20_000;
+/** Losses from this share on are reported (and the first report back under it, once). */
+const LOSS_REPORT_FROM = 0.03;
+/** Network changes closer together than this are handled once. */
+const NETWORK_CHANGE_MS = 3000;
 
 function newSid(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(9));
@@ -96,6 +121,8 @@ export interface RemotePeer {
   relayFlowing: boolean;
   /** Says Priority speaker is on (1.0.33); listeners honour it only if the community allows it. */
   priority?: boolean;
+  /** Hand raised since (ms, their clock, never later than ours), or null (2.13). */
+  hand?: number | null;
 }
 
 interface Peer {
@@ -225,6 +252,19 @@ export class VoiceCall {
   /** Relayed frames received from each person so far, and when the count last grew. */
   private readonly relayHeard = new Map<string, { frames: number; at: number }>();
   private relayPollPending = false;
+  /** What listeners told us they miss of our relayed voice, and when (2.13). */
+  private readonly lossReports = new Map<string, { loss: number; at: number }>();
+  /** What we last told each relayed speaker about their frames we miss. */
+  private readonly lossTold = new Map<string, number>();
+  /** Share of each relayed speaker's frames we missed lately (for the tile's connection details). */
+  private readonly relayLoss = new Map<string, number>();
+  private relayChecks = 0;
+  private lastNetworkChange = 0;
+  private readonly cleanups: Array<() => void> = [];
+  /** The microphone stopped (unplugged) and no other one could be opened: nobody hears us. */
+  micLost = false;
+  /** Our hand is raised (since, ms), 2.13. */
+  hand: number | null = null;
   private local: Record<Slot, MediaStreamTrack | null> = { audio: null, camera: null, screen: null };
   private readonly onChange: () => void;
   muted = false;
@@ -274,10 +314,11 @@ export class VoiceCall {
   async linkStats(): Promise<Record<string, LinkStats>> {
     const out: Record<string, LinkStats> = {};
     for (const id of this.relayPeers)
-      if (!this.peers.has(id)) out[id] = { path: 'server', rttMs: null, loss: null };
+      if (!this.peers.has(id))
+        out[id] = { path: 'server', rttMs: null, loss: this.relayLoss.get(id) ?? null };
     for (const [id, p] of this.peers) {
       if (p.remote.relayed && p.pc.connectionState !== 'connected') {
-        out[id] = { path: 'server', rttMs: null, loss: null };
+        out[id] = { path: 'server', rttMs: null, loss: this.relayLoss.get(id) ?? null };
         continue;
       }
       if (p.pc.connectionState !== 'connected') {
@@ -308,10 +349,15 @@ export class VoiceCall {
       echoCancellation: this.options.echoCancellation,
       noiseSuppression: this.options.noiseSuppression,
       autoGainControl: true,
+      // Voice is mono: no second channel to process and send.
+      channelCount: { ideal: 1 },
       ...(this.options.inputDeviceId ? { deviceId: { exact: this.options.inputDeviceId } } : {}),
     };
     try {
-      return (await navigator.mediaDevices.getUserMedia({ audio, video: false })).getAudioTracks()[0] ?? null;
+      const track =
+        (await navigator.mediaDevices.getUserMedia({ audio, video: false })).getAudioTracks()[0] ?? null;
+      if (track) track.onended = () => this.micEnded(track);
+      return track;
     } catch (err) {
       // The saved device may be unplugged: fall back to the default microphone.
       if (!this.options.inputDeviceId || (err as Error).name !== 'OverconstrainedError') throw err;
@@ -364,6 +410,115 @@ export class VoiceCall {
     }
     this.speakingTimer = setInterval(() => this.measure(), 80);
     this.relayCheckTimer = setInterval(() => this.checkRelays(), RELAY_CHECK_MS);
+    this.listen();
+  }
+
+  /** Follows device and network changes for as long as the call lasts. */
+  private listen(): void {
+    const devices = navigator.mediaDevices as MediaDevices | undefined;
+    if (devices?.addEventListener) {
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const onDevices = (): void => {
+        // Plugging a headset in fires several events: look once they settle.
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => void this.devicesChanged(), 500);
+      };
+      devices.addEventListener('devicechange', onDevices);
+      this.cleanups.push(() => {
+        if (timer) clearTimeout(timer);
+        devices.removeEventListener('devicechange', onDevices);
+      });
+    }
+    const target = globalThis as Partial<Pick<EventTarget, 'addEventListener' | 'removeEventListener'>>;
+    if (typeof target.addEventListener === 'function') {
+      const onOnline = (): void => this.networkChanged();
+      target.addEventListener('online', onOnline);
+      this.cleanups.push(() => target.removeEventListener?.('online', onOnline));
+    }
+    const connection = (navigator as { connection?: EventTarget }).connection;
+    if (connection?.addEventListener) {
+      const onChange = (): void => this.networkChanged();
+      connection.addEventListener('change', onChange);
+      this.cleanups.push(() => connection.removeEventListener('change', onChange));
+    }
+  }
+
+  /**
+   * The computer's network changed (Wi-Fi to cable, a VPN, waking from sleep): direct
+   * connections are restarted at once instead of waiting for them to fail, and our relay key
+   * goes out again in case signals were lost meanwhile. Nobody leaves the channel.
+   */
+  networkChanged(): void {
+    if (this.closed) return;
+    const now = Date.now();
+    if (now - this.lastNetworkChange < NETWORK_CHANGE_MS) return;
+    this.lastNetworkChange = now;
+    for (const [id, peer] of [...this.peers]) {
+      if (peer.pc.connectionState === 'connected') {
+        peer.restarted = true;
+        if (this.me < id) void this.iceRestart(peer);
+        else this.send(id, { type: 'restart', ...(peer.sid ? { sid: peer.sid } : {}) });
+        this.peerTimer(peer, RESTART_TIMEOUT_MS, () => {
+          if (peer.pc.connectionState !== 'connected') this.recover(id, peer, 'failed');
+        });
+      } else {
+        this.retries.delete(id);
+        this.rebuild(id);
+      }
+    }
+    for (const [id, sent] of this.keySentTo) this.keySentTo.set(id, { at: sent.at, times: 0 });
+    this.resumedAt = now;
+  }
+
+  /**
+   * Audio devices changed. If the microphone was lost, try again; if you use the system's default
+   * microphone and the default changed (a headset was plugged in), switch to it.
+   */
+  private async devicesChanged(): Promise<void> {
+    if (this.closed) return;
+    if (this.micLost) {
+      await this.reopenMic();
+      return;
+    }
+    if (this.options.inputDeviceId !== null || !this.local.audio) return;
+    try {
+      const all = await navigator.mediaDevices.enumerateDevices();
+      const fallback = all.find((d) => d.kind === 'audioinput' && d.deviceId === 'default');
+      const current = this.local.audio.getSettings?.().groupId;
+      if (fallback?.groupId && current && fallback.groupId !== current) await this.reopenMic();
+    } catch {
+      // device list unavailable: keep the microphone we have
+    }
+  }
+
+  /** Opens the microphone again (another device, or after it was unplugged) without leaving. */
+  private async reopenMic(): Promise<void> {
+    let track: MediaStreamTrack | null;
+    try {
+      track = await this.microphone();
+    } catch {
+      track = null;
+    }
+    if (this.closed) {
+      track?.stop();
+      return;
+    }
+    this.micLost = !track;
+    if (track) {
+      await this.setSlot('audio', track);
+      if (this.closed) return;
+      this.probe(track);
+      this.applyMic();
+    }
+    this.onChange();
+  }
+
+  /** The microphone track ended by itself (unplugged, taken away): get another one. */
+  private micEnded(track: MediaStreamTrack): void {
+    if (this.closed || this.local.audio !== track) return;
+    this.micLost = true;
+    this.onChange();
+    void this.reopenMic();
   }
 
   /**
@@ -389,6 +544,60 @@ export class VoiceCall {
         this.sendRelayKey(id);
       }
     }
+    if (++this.relayChecks % LOSS_REPORT_EVERY === 0) this.reportLoss();
+    this.tuneRelay();
+  }
+
+  /** Tells relayed speakers how much of their voice we miss, so they can send less (2.13). */
+  private reportLoss(): void {
+    if (!this.relay) return;
+    for (const id of this.relayPeers) {
+      const loss = this.relay.loss(id);
+      if (loss === null) continue;
+      this.relayLoss.set(id, loss);
+      const told = this.lossTold.get(id) ?? 0;
+      if (loss < LOSS_REPORT_FROM && told < LOSS_REPORT_FROM) continue;
+      this.lossTold.set(id, loss);
+      this.send(id, { type: 'relay-loss', loss: Math.round(loss * 100) / 100 });
+    }
+  }
+
+  /** Relayed voice: to everyone at once in a large room, at a bitrate our listeners can take. */
+  private tuneRelay(): void {
+    if (!this.relay) return;
+    const now = Date.now();
+    let worst: number | null = null;
+    for (const [id, r] of this.lossReports) {
+      if (now - r.at > LOSS_REPORT_TTL_MS || !this.relayPeers.has(id)) this.lossReports.delete(id);
+      else worst = Math.max(worst ?? 0, r.loss);
+    }
+    const large = this.largeRoom;
+    this.relay.setBroadcast(large);
+    this.relay.setBitrate(relayBitrate(worst, large));
+  }
+
+  /** More than MESH_MAX_PEOPLE in the call (and the relay works here): voice goes through the server. */
+  get largeRoom(): boolean {
+    return isLargeRoom(this.participants.length, !!this.relay);
+  }
+
+  /** Whether to connect directly with this person: always in small rooms, for video in large ones. */
+  private wantsDirect(id: string): boolean {
+    if (!this.largeRoom) return true;
+    const view = this.views.get(id);
+    return !!this.local.camera || !!this.local.screen || !!view?.cameraOn || !!view?.screenOn;
+  }
+
+  /** Starts a direct connection with this person if one is wanted and none exists. */
+  private ensureDirect(id: string): void {
+    if (this.closed || id === this.me || this.peers.has(id) || !this.participants.includes(id)) return;
+    if (!this.wantsDirect(id)) {
+      this.enableRelay(id);
+      return;
+    }
+    // The participant with the smaller ID makes the offer, so each pair negotiates once.
+    if (this.me < id) void this.offer(id);
+    else this.awaitOffer(id);
   }
 
   /** Whether our microphone is actually transmitting right now. */
@@ -465,6 +674,9 @@ export class VoiceCall {
       this.relay.setRecipients([...this.relayPeers]);
       // Counted from now: frames from an earlier stretch through the server say nothing of now.
       this.relayHeard.set(id, { frames: this.relay.received(id), at: 0 });
+      // They may never have heard from us directly: tell them now whether we are muted, sharing
+      // or have a hand up, or they would show us wrong until something changes.
+      this.send(id, this.stateSignal());
     }
     if (!this.keySentTo.has(id)) this.sendRelayKey(id);
     this.refreshAudio(id);
@@ -472,9 +684,15 @@ export class VoiceCall {
 
   private sendRelayKey(id: string): void {
     if (!this.relay) return;
+    let key: Uint8Array;
+    try {
+      key = this.relay.ownKey();
+    } catch {
+      return; // the relay is still starting: the next relay check sends it
+    }
     const sent = this.keySentTo.get(id);
     this.keySentTo.set(id, { at: Date.now(), times: (sent?.times ?? 0) + 1 });
-    this.send(id, { type: 'relay', key: toBase64(this.relay.ownKey()) });
+    this.send(id, { type: 'relay', key: toBase64(key) });
   }
 
   private disableRelay(id: string, tell: boolean): void {
@@ -489,6 +707,9 @@ export class VoiceCall {
     this.relayPeers.delete(id);
     this.keySentTo.delete(id);
     this.relayHeard.delete(id);
+    this.lossReports.delete(id);
+    this.lossTold.delete(id);
+    this.relayLoss.delete(id);
     this.relay?.setRecipients([...this.relayPeers]);
     this.relay?.dropPeer(id);
   }
@@ -591,7 +812,16 @@ export class VoiceCall {
     this.analysers.delete(id);
     if (track) {
       try {
-        this.audioCtx ??= new AudioContext();
+        if (!this.audioCtx) {
+          const ctx = new AudioContext();
+          this.audioCtx = ctx;
+          // After sleep the engine can stop: no meters, no voice activity. Start it again.
+          ctx.addEventListener?.('statechange', () => {
+            const state = ctx.state as string;
+            if (!this.closed && (state === 'suspended' || state === 'interrupted'))
+              void ctx.resume().catch(() => undefined);
+          });
+        }
         const source = this.audioCtx.createMediaStreamSource(new MediaStream([track]));
         const node = this.audioCtx.createAnalyser();
         node.fftSize = 512;
@@ -619,7 +849,8 @@ export class VoiceCall {
       if (id === this.me && !this.options.pushToTalk && this.options.sensitivity !== null) {
         if (this.gate.update(levelOf(rms), this.options.sensitivity, now)) this.applyMic();
       }
-      const live = id === this.me ? this.transmitting : !(this.peers.get(id)?.remote.muted ?? false);
+      // Someone relayed may have no direct connection at all: their view says whether they muted.
+      const live = id === this.me ? this.transmitting : !(this.views.get(id)?.muted ?? false);
       if (live && rms > SPEAKING_THRESHOLD) this.lastLoud.set(id, now);
       const speaking = live && now - (this.lastLoud.get(id) ?? 0) < SPEAKING_HOLD_MS;
       if (speaking !== this.speaking.has(id)) {
@@ -651,6 +882,7 @@ export class VoiceCall {
         reconnecting: false,
         relayed: this.relayPeers.has(id),
         relayFlowing: false,
+        hand: null,
       };
       this.views.set(id, v);
     }
@@ -665,6 +897,37 @@ export class VoiceCall {
     this.analysers.get(id)?.source.disconnect();
     this.analysers.delete(id);
     this.speaking.delete(id);
+    // Nothing about them lingers: big rooms see many people come and go over an evening.
+    this.lastLoud.delete(id);
+    this.retries.delete(id);
+    this.earlyIce.delete(id);
+    this.awaiting.delete(id);
+    this.lastPointFrom.delete(id);
+    this.linkCounts.delete(id);
+    this.missingSince.delete(id);
+    this.signalQueues.delete(id);
+  }
+
+  /** How many entries the call keeps per person (tests: nothing lingers after people leave). */
+  bookkeeping(): number {
+    return [
+      this.peers,
+      this.views,
+      this.analysers,
+      this.lastLoud,
+      this.retries,
+      this.earlyIce,
+      this.awaiting,
+      this.lastPointFrom,
+      this.linkCounts,
+      this.missingSince,
+      this.signalQueues,
+      this.keySentTo,
+      this.relayHeard,
+      this.lossReports,
+      this.lossTold,
+      this.relayLoss,
+    ].reduce((n, m) => n + m.size, this.relayPeers.size + this.speaking.size);
   }
 
   localTrack(slot: Slot): MediaStreamTrack | null {
@@ -714,12 +977,8 @@ export class VoiceCall {
     }
     this.participants = [...ids, ...[...this.missingSince.keys()].filter((id) => !ids.includes(id))];
     this.syncShare();
-    for (const id of ids) {
-      if (id === this.me || this.peers.has(id)) continue;
-      // The participant with the smaller ID makes the offer, so each pair negotiates once.
-      if (this.me < id) void this.offer(id);
-      else this.awaitOffer(id);
-    }
+    this.tuneRelay();
+    for (const id of ids) this.ensureDirect(id);
     this.onChange();
   }
 
@@ -741,7 +1000,8 @@ export class VoiceCall {
     const signal = data as Signal;
     if (signal.type === 'hello') {
       // The other side has no working connection with us: (re)offer unless one is healthy or underway.
-      if (this.me < from && this.participants.includes(from)) {
+      // In a large room, someone without video is heard through the server instead.
+      if (this.me < from && this.participants.includes(from) && this.wantsDirect(from)) {
         const peer = this.peers.get(from);
         if (!peer || !this.healthy(peer)) this.rebuild(from);
       }
@@ -752,9 +1012,16 @@ export class VoiceCall {
       const peer = this.peers.get(from);
       if (this.me < from && peer && (signal.sid === undefined || signal.sid === peer.sid)) {
         await this.iceRestart(peer);
-      } else if (this.me < from && !peer && this.participants.includes(from)) {
+      } else if (this.me < from && !peer && this.participants.includes(from) && this.wantsDirect(from)) {
         this.rebuild(from);
       }
+      return;
+    }
+    if (signal.type === 'relay-loss') {
+      const loss = signal.loss;
+      if (!this.relayPeers.has(from) || typeof loss !== 'number' || !(loss >= 0 && loss <= 1)) return;
+      this.lossReports.set(from, { loss, at: Date.now() });
+      this.tuneRelay();
       return;
     }
     if (signal.type === 'relay') {
@@ -795,6 +1062,13 @@ export class VoiceCall {
         view.screenOn = !!signal.screen;
         view.muted = !!signal.muted;
         view.priority = signal.priority === true;
+        // A hand "raised" later than now (a clock ahead of ours) counts as raised now.
+        view.hand =
+          typeof signal.hand === 'number' && Number.isFinite(signal.hand) && signal.hand > 0
+            ? Math.min(signal.hand, Date.now())
+            : null;
+        // In a large room, video needs a direct connection: make one now that they share.
+        this.ensureDirect(from);
         this.onChange();
       }
       return;
@@ -816,10 +1090,10 @@ export class VoiceCall {
           });
         }
         await this.flushIce(peer);
-        await peer.pc.setLocalDescription(await peer.pc.createAnswer());
+        await this.setLocal(peer, await peer.pc.createAnswer());
         if (this.peers.get(from) !== peer) return; // replaced meanwhile
         this.sendSdp(from, peer);
-        if (!renegotiation) this.tuneScreenSender(peer);
+        if (!renegotiation) this.tuneSenders(peer);
         this.onChange();
       } else {
         const peer = this.peers.get(from);
@@ -848,6 +1122,14 @@ export class VoiceCall {
 
   setPriority(on: boolean): void {
     this.priority = on;
+    this.broadcastState();
+    this.onChange();
+  }
+
+  /** Raise or lower our hand (2.13): everyone in the call sees it, in the order hands went up. */
+  setHand(up: boolean): void {
+    if (up === (this.hand !== null)) return;
+    this.hand = up ? Date.now() : null;
     this.broadcastState();
     this.onChange();
   }
@@ -900,6 +1182,7 @@ export class VoiceCall {
     if (this.relayCheckTimer) clearInterval(this.relayCheckTimer);
     for (const t of this.timers) clearTimeout(t);
     this.timers.clear();
+    for (const fn of this.cleanups.splice(0)) fn();
     for (const id of [...this.peers.keys()]) this.dropPeer(id);
     this.views.clear();
     this.relay?.close();
@@ -915,6 +1198,10 @@ export class VoiceCall {
     this.audioCtx = null;
     this.speaking.clear();
     this.lastLoud.clear();
+    this.lossReports.clear();
+    this.lossTold.clear();
+    this.relayLoss.clear();
+    this.keySentTo.clear();
   }
 
   /** Points at (x, y) on `peerId`'s shared screen; they see a ring there (remote assistance). */
@@ -959,6 +1246,11 @@ export class VoiceCall {
       }),
     );
     this.broadcastState();
+    if (slot !== 'audio') {
+      // A large room connects directly for video only: whoever can now see ours gets a connection.
+      for (const id of this.participants) this.ensureDirect(id);
+      this.tuneVideo();
+    }
     this.onChange();
   }
 
@@ -1035,6 +1327,7 @@ export class VoiceCall {
       peer.everConnected = true;
       peer.restarted = false;
       this.send(id, this.stateSignal());
+      this.tuneVideo();
     } else if (state === 'disconnected') {
       // Often a short network blip that heals by itself; if not, restart ICE (audio may keep flowing).
       peer.remote.reconnecting = true;
@@ -1056,6 +1349,14 @@ export class VoiceCall {
    */
   private recover(id: string, peer: Peer, why: 'disconnected' | 'failed' | 'timeout'): void {
     if (this.closed || this.peers.get(id) !== peer || !this.participants.includes(id)) return;
+    // A large room needs no direct connection for voice: let it go and keep talking through the server.
+    if (!this.wantsDirect(id)) {
+      this.dropPeer(id);
+      this.retries.delete(id);
+      this.enableRelay(id);
+      this.onChange();
+      return;
+    }
     if (why === 'disconnected' && peer.everConnected && !peer.restarted) {
       peer.restarted = true;
       if (this.me < id) void this.iceRestart(peer);
@@ -1096,7 +1397,7 @@ export class VoiceCall {
     const id = peer.remote.id;
     if (this.peers.get(id) !== peer || peer.pc.signalingState !== 'stable') return;
     try {
-      await peer.pc.setLocalDescription(await peer.pc.createOffer({ iceRestart: true }));
+      await this.setLocal(peer, await peer.pc.createOffer({ iceRestart: true }));
       if (this.peers.get(id) !== peer) return;
       this.sendSdp(id, peer);
     } catch {
@@ -1118,7 +1419,7 @@ export class VoiceCall {
     this.awaiting.add(id);
     const tick = (wait: number): void => {
       this.later(wait, () => {
-        if (this.closed || this.peers.has(id) || !this.participants.includes(id)) {
+        if (this.closed || this.peers.has(id) || !this.participants.includes(id) || !this.wantsDirect(id)) {
           this.awaiting.delete(id);
           return;
         }
@@ -1137,10 +1438,24 @@ export class VoiceCall {
       await t.sender.replaceTrack(this.local[slot]).catch(() => undefined);
     }
     if (this.peers.get(id) !== peer) return;
-    this.tuneScreenSender(peer);
-    await peer.pc.setLocalDescription(await peer.pc.createOffer());
+    this.tuneSenders(peer);
+    await this.setLocal(peer, await peer.pc.createOffer());
     if (this.peers.get(id) !== peer) return;
     this.sendSdp(id, peer);
+  }
+
+  /**
+   * Our side of the call setup, with Opus asked to send voice well (FEC, DTX, mono, 32 kbit/s).
+   * Should a browser refuse the tuned description, the original is used.
+   */
+  private async setLocal(peer: Peer, desc: RTCSessionDescriptionInit): Promise<void> {
+    const tuned = desc.sdp ? tuneOpusSdp(desc.sdp) : desc.sdp;
+    if (tuned === desc.sdp) return peer.pc.setLocalDescription(desc);
+    try {
+      await peer.pc.setLocalDescription({ type: desc.type, sdp: tuned } as RTCSessionDescriptionInit);
+    } catch {
+      await peer.pc.setLocalDescription(desc);
+    }
   }
 
   private stateSignal(): Signal {
@@ -1152,6 +1467,7 @@ export class VoiceCall {
       // a gated voice is silent anyway, and people talking would otherwise look muted to others.
       muted: this.muted || this.deafened || this.serverMuted || this.serverDeafened,
       ...(this.priority ? { priority: true } : {}),
+      ...(this.hand !== null ? { hand: this.hand } : {}),
     };
   }
 
@@ -1170,19 +1486,46 @@ export class VoiceCall {
     for (const candidate of peer.outgoingIce.splice(0)) this.send(to, { type: 'ice', candidate, ...sid });
   }
 
-  /** Screen share gets more bandwidth and keeps resolution over frame rate. */
-  private tuneScreenSender(peer: Peer): void {
-    const sender = peer.pc.getTransceivers()[2]?.sender;
+  /**
+   * Voice goes first when the network is tight; screen share keeps resolution over frame rate;
+   * video bandwidth is shared between everyone watching (videoBitrates).
+   */
+  private tuneSenders(peer: Peer): void {
+    const video = videoBitrates(this.peers.size);
+    const [audio, camera, screen] = peer.pc.getTransceivers().map((t) => t.sender);
+    this.tuneSender(audio, (e) => {
+      e.priority = 'high';
+      e.networkPriority = 'high';
+    });
+    this.tuneSender(camera, (e) => {
+      e.maxBitrate = video.camera;
+      e.scaleResolutionDownBy = video.cameraScale;
+    });
+    this.tuneSender(screen, (e, params) => {
+      e.maxBitrate = video.screen;
+      params.degradationPreference = 'maintain-resolution';
+    });
+  }
+
+  private tuneSender(
+    sender: RTCRtpSender | undefined,
+    set: (e: RTCRtpEncodingParameters, p: RTCRtpSendParameters) => void,
+  ): void {
     if (!sender) return;
     try {
       const params = sender.getParameters();
       if (!params.encodings?.length) params.encodings = [{}];
-      params.encodings[0]!.maxBitrate = 2_500_000;
-      params.degradationPreference = 'maintain-resolution';
+      set(params.encodings[0]!, params);
       void sender.setParameters(params).catch(() => undefined);
     } catch {
       // not supported here
     }
+  }
+
+  /** The number of direct connections changed: share video bandwidth out again. */
+  private tuneVideo(): void {
+    for (const peer of this.peers.values())
+      if (peer.pc.connectionState === 'connected') this.tuneSenders(peer);
   }
 
   private async flushIce(peer: Peer): Promise<void> {

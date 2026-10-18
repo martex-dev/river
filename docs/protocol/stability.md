@@ -37,6 +37,15 @@ fails CI until it is made deliberately.
    (`packages/crypto/scripts/generate-vectors.ts` and
    `tests/scripts/generate-format-vectors.ts` refuse to overwrite without `--force`).
 
+## Additive changes so far
+
+- **2.13 — voice relay to everyone in a call** (capability `voice-relay-all`):
+  the `ready` event may carry `relayAll: true`; such a server also accepts the
+  binary relay frame `[0x02][payload]` ("to everyone else in my voice channel
+  or call room", `packages/protocol/src/relay.ts`) and forwards relayed voice
+  from at most `MAX_RELAY_SPEAKERS` people of one call at a time. Clients send
+  `0x02` frames only to servers that said `relayAll`; older servers drop them.
+
 ## For other-language clients
 
 A client in Swift or Kotlin is conformant when it:

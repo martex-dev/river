@@ -287,6 +287,24 @@ of types are shown inline; everything else is saved only when the user chooses.
   silence about once a second (2.11.3), so the other side knows they are still
   there; the server could already tell muted from talking by the frame rate.
   Camera and screen sharing still need a direct connection.
+- **Large rooms (2.13).** Above eight people every member's voice goes through
+  the relay (same frame format, same per-call sender keys, given to each member
+  of the call inside sealed, identity-signed signals), and a frame can be
+  addressed "to everyone else in my call" (`0x02`); the server expands that to
+  the members of the sender's own voice channel or call room. Apps send frames
+  only while their person talks (plus the once-a-second quiet frame), and the
+  server forwards at most six people talking at once per call, chosen by frame
+  timing alone. **What this costs in metadata:** in a large room the server
+  sees when each member talks (frame timing), for everyone rather than only for
+  relayed pairs; in rooms of eight or fewer with direct connections it still
+  sees nothing of that. It still cannot decrypt, alter, reorder or replay
+  frames. Listeners tell a speaker how many of their frames went missing (a
+  number, inside a sealed signal) so the speaker can lower its Opus bitrate.
+  Relayed frames now go only to the connection of each account that is in the
+  call, not to the account's other devices.
+- **Opus over direct connections (2.13):** River asks for in-band FEC, DTX,
+  mono and 32 kbit/s in the SDP it sends; voice packets get high network
+  priority. This changes codec parameters only, never DTLS-SRTP.
 - **Identity-bound call setup.** Every community call signal is also signed
   with the sender's identity key (XEdDSA) over
   `"river-call-signal-v1" ‖ community ‖ channel ‖ sender ‖ recipient ‖ time ‖ payload`.

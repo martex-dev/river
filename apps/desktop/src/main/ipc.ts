@@ -408,6 +408,17 @@ export function registerIpc(deps: IpcDeps): void {
       // invalid or untrusted: dropped
     }
   });
+  ipcMain.on(IPC.voiceRelayAll, (event, payload: unknown) => {
+    try {
+      assertTrustedSender(event as unknown as IpcMainInvokeEvent, deps.devServerUrl);
+      if (!(payload instanceof Uint8Array) || payload.length < 1 || payload.length > MAX_RELAY_PAYLOAD)
+        return;
+      deps.community.relaySendAll(payload);
+    } catch {
+      // invalid or untrusted: dropped
+    }
+  });
+  handle(IPC.voiceRelayInfo, () => ({ all: deps.community.relayAllSupported }));
   handle(IPC.voiceCallRoom, (_e, room) => {
     deps.community.callRoom(room === null ? null : z.string().max(64).parse(room));
   });

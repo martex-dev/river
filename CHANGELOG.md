@@ -6,6 +6,47 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Voice channels: **large rooms**. Above eight people River sends everyone's
+  voice through your server, still end-to-end encrypted, once per frame however
+  big the room is and only while you talk; the server passes on at most six
+  people talking at once. Direct connections are then made only with people
+  sharing a camera or screen. The channel header says how voice travels
+  (directly, partly or fully through your server) instead of always claiming a
+  direct connection.
+- Voice channels on computers: a **meeting bar** with **Grid / Speaker view**
+  (speaker view shows whoever is talking or sharing large), **Raise hand** with
+  everyone's raised hands listed in the order they went up (also shown on the
+  tiles), a quick **Noise suppression** switch and a "who is talking" line.
+
+### Changed
+
+- Better sound on bad networks: direct calls ask Opus for error correction,
+  silence suppression, mono and 32 kbit/s, and voice goes ahead of video when
+  the network is tight; relayed voice lowers its bitrate while listeners miss
+  frames, its playout buffer grows on jittery connections and shrinks again
+  when calm, and gaps fade instead of clicking. Video bandwidth is shared out
+  between the people watching.
+
+### Fixed
+
+- Voice: **a headset plugged in mid-call is used** when you use the system's
+  default microphone, and an unplugged microphone is replaced by another one;
+  with none left, the call says so instead of sending silence.
+- Voice: **a network change (Wi-Fi to cable, VPN, waking from sleep) restarts
+  connections in place** without leaving the channel; the sidebar shows
+  "Reconnecting…" only while the server is unreachable and no voice arrives.
+- Voice: someone reached only through the server now **sees at once who is
+  muted, sharing or has a hand up** (they saw everyone unmuted until something
+  changed); speaking rings for relayed people respect their mute.
+- Voice: relayed voice no longer goes silent for good after a damaged packet
+  or an encoder failure, its frames can no longer arrive out of order, the
+  audio engine is resumed after sleep, and nothing about people who left is
+  kept for the rest of a long call.
+- Server: relayed voice goes only to the device that is in the call, not to the
+  account's other devices (a phone in a pocket downloaded every voice frame).
+
 ## [2.12.1] - 2026-10-18
 
 **Phones that reconnect after a network change, keep their notifications and never cut other apps' calls.**
