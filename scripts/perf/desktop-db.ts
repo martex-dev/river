@@ -28,6 +28,39 @@ const CONTACTS = contactsArg || 300;
 const GROUPS = groupsArg || 30;
 const MESSAGES = messagesArg || 100_000;
 
+/** Counts statement runs (get, all, run) while `fn` runs. */
+function patchStatements(db: { prepare(sql: string): object }): { count(): number; restore(): void } {
+  const proto = Object.getPrototypeOf(db.prepare('SELECT 1')) as Record<string, (...a: unknown[]) => unknown>;
+  const saved = { get: proto.get!, all: proto.all!, run: proto.run! };
+  let n = 0;
+  for (const k of ['get', 'all', 'run'] as const) {
+    proto[k] = function (this: unknown, ...args: unknown[]) {
+      n++;
+      return saved[k].apply(this, args);
+    };
+  }
+  return { count: () => n, restore: () => Object.assign(proto, saved) };
+}
+let countDb: { prepare(sql: string): object } | null = null;
+function countQueries(fn: () => unknown): number {
+  const p = patchStatements(countDb!);
+  try {
+    fn();
+    return p.count();
+  } finally {
+    p.restore();
+  }
+}
+async function countQueriesAsync(fn: () => Promise<unknown>): Promise<number> {
+  const p = patchStatements(countDb!);
+  try {
+    await fn();
+    return p.count();
+  } finally {
+    p.restore();
+  }
+}
+
 function median(fn: () => unknown, runs = 9): number {
   fn(); // warm-up (prepared statements, page cache)
   const times: number[] = [];
@@ -135,6 +168,7 @@ try {
     db.close();
   }, 5);
   db = migrateDatabase(path, key, CLIENT_MIGRATIONS).db;
+  countDb = db;
 
   const results: Array<[string, number]> = [
     ['open + migrate database', openMs],
@@ -156,6 +190,15 @@ try {
     `River local database: ${CONTACTS} chats, ${GROUPS} groups of 32, ${MESSAGES} messages (seeded in ${seedMs.toFixed(0)} ms)`,
   );
   for (const [name, ms] of results) console.log(`  ${name.padEnd(42)} ${ms.toFixed(2).padStart(9)} ms`);
+  // On phones every query is a synchronous native call, so the number of queries matters most there.
+  console.log('Queries (each one a native call on a phone):');
+  console.log(`  ${'chat list'.padEnd(42)} ${String(countQueries(() => dm.conversations())).padStart(9)}`);
+  console.log(
+    `  ${'busy chat, latest 500 messages'.padEnd(42)} ${String(await countQueriesAsync(() => action({ a: 'messages', peer: people[0] }))).padStart(9)}`,
+  );
+  console.log(
+    `  ${'group chat, latest messages'.padEnd(42)} ${String(await countQueriesAsync(() => action({ a: 'messages', peer: groups[0] }))).padStart(9)}`,
+  );
   db.close();
 } finally {
   rmSync(dir, { recursive: true, force: true });
