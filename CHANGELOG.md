@@ -6,6 +6,48 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Computers: the window title shows how many direct messages and mentions are
+  waiting, like "(3) River", in the taskbar and Alt+Tab.
+
+### Fixed
+
+- Computers: the Home badge no longer counts muted conversations (they stay
+  quiet, and the phone's Chats badge already left them out).
+- "N new messages since …" names the day when they are from an earlier day.
+
+- Computers: a channel or chat that is still loading shows grey placeholder
+  messages, not "This is the start of #channel" with a Wave button; if it cannot
+  be loaded it says so, with Retry.
+- A message that arrived while a channel or chat was loading no longer
+  disappears until you open it again.
+- The newest message stays in view while pictures, videos and link previews
+  load below it, or the message box grows.
+- The emoji and reaction pickers open next to their button (opened with the
+  keyboard they appeared in the top-left corner), and an emoji goes in where the
+  caret is, not always at the end.
+- Escape closes the @mention and :emoji: suggestions; after editing a message
+  (Up arrow, then Enter or Escape) you can type in the message box straight
+  away. Editing in direct messages starts with the caret at the end and stays
+  open if saving fails, as in channels.
+- Dialogs keep Tab inside themselves and give the keyboard back when they close;
+  menus are reached with the arrow keys, Home and End. Letters typed while a
+  dialog or menu is open no longer jump into the chat behind it.
+- Dates are written in River's language (Bulgarian weekdays and months in
+  Bulgarian), and "Yesterday" is right after a daylight-saving change.
+  "Today", "Yesterday", "New", "Jump to present", "… is typing" and the message
+  menu are translated into Bulgarian.
+- Pinned messages and search: an answer for a channel you have left, or for an
+  older search, no longer replaces what you are looking at.
+- Notifications at the bottom: errors are announced at once and stay longer,
+  × closes them and pointing at one keeps it on screen.
+- Long channel names and topics no longer push the header buttons off a narrow
+  window; cut-off names in the sidebar, member list and chat list show in full
+  on hover.
+- Better contrast in menus, "Jump to present" and the green and red labels
+  (every skin reaches 4.5:1).
+
 ## [2.13.0] - 2026-10-18
 
 **River on a phone now looks and feels like a phone app (Telegram / Instagram),
@@ -1687,8 +1729,8 @@ versioning (2.0.1, 2.1.0, …).
 ### Added
 
 - **Soundboard.** Play short sounds to everyone in a voice channel from the
-  🎵 button; right-click one to hear it yourself first. People with *Manage
-  emoji & sounds* upload clips (up to 5.5 seconds) with a name and emoji in
+  🎵 button; right-click one to hear it yourself first. People with _Manage
+  emoji & sounds_ upload clips (up to 5.5 seconds) with a name and emoji in
   Community settings → Soundboard. Sounds are end-to-end encrypted; set or
   turn off their volume in Settings → Voice, and muting someone for yourself
   silences their sounds too.
@@ -1751,7 +1793,7 @@ versioning (2.0.1, 2.1.0, …).
   permissions and settings, and **duplicate a role**.
 - **Rename custom emoji** (click the name) and **favourite emoji**:
   right-click any emoji in the picker; favourites get their own ⭐ tab.
-- **Server deafen** for moderators with *Mute & deafen members*: the person
+- **Server deafen** for moderators with _Mute & deafen members_: the person
   hears nothing and cannot speak until undeafened, and is told.
 - **Input sensitivity** for voice activity (Settings → Voice): turn off
   automatic sensitivity and set how loud you must be to be heard, with a line
@@ -2106,8 +2148,8 @@ versioning (2.0.1, 2.1.0, …).
   address changes after a restart. The server signs a note with its new
   address, and River moves there automatically, but only if the same server
   signed it and answers there.
-- **Settings → System**: *Start River when I sign in* (opens quietly in the
-  tray) and *Keep River running when I close the window*.
+- **Settings → System**: _Start River when I sign in_ (opens quietly in the
+  tray) and _Keep River running when I close the window_.
 - **Voice channel user limits** (2 to 99 people); the channel list shows
   `2/5`, and a full channel says so.
 - **Video tiles** you can use from the keyboard: Enter shows someone large,
@@ -2141,11 +2183,11 @@ versioning (2.0.1, 2.1.0, …).
 
 ### Added
 
-- **Time out members** (new *Time out members* permission) for 60 seconds up
+- **Time out members** (new _Time out members_ permission) for 60 seconds up
   to a week, from their member card. A timed-out member can still read, but
   cannot send, react, attach files, invite or join voice. Their card and
   composer show until when.
-- **Audit log** in Community settings (new *View audit log* permission). It
+- **Audit log** in Community settings (new _View audit log_ permission). It
   shows who changed roles, channels, categories and settings, who moderated
   whom, and who joined or left, in plain sentences. The server keeps only IDs
   and numbers for 90 days; names are filled in on your computer.
@@ -2170,7 +2212,7 @@ versioning (2.0.1, 2.1.0, …).
 ### Added
 
 - **Messages wait for you.** What you send appears straight away as
-  *Sending…*. While you are offline it shows *Waiting for connection* and goes
+  _Sending…_. While you are offline it shows _Waiting for connection_ and goes
   out automatically when you are back. If the server refuses it, the reason
   stays with **Retry** and **Delete**.
 - **A clear connection banner.** After a short grace period it says
@@ -2539,7 +2581,7 @@ text channels and meet in voice channels with video and screen sharing.
 
 - **Communities** with text and voice channels, owners/admins/members, member
   list, and live updates.
-- **Invite links** — one paste joins the community *and* creates the account on
+- **Invite links** — one paste joins the community _and_ creates the account on
   that server automatically. Links expire after 7 days or 100 uses.
 - **End-to-end encrypted community content**: community, channel and member
   names, messages and call setup are encrypted on your device with the community
@@ -2605,7 +2647,7 @@ fingerprint your contacts will be able to verify.
   The private key is stored only in the encrypted local database and never
   leaves River's main process.
 - **Identity fingerprint** (128-bit, hex) and **verification words** (Bytewords),
-  shown in onboarding and in a new *Your identity* card in the Security Center.
+  shown in onboarding and in a new _Your identity_ card in the Security Center.
 - `@river/crypto` package: identity creation, fingerprints, verification words
   and libsignal safety numbers (used for contact verification from 0.3).
 - `THIRD_PARTY_NOTICES.md`.
