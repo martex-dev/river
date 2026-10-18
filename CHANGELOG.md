@@ -6,6 +6,41 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Phone: Back no longer leaves River from inside the archived chats** — it
+  goes back to your chat list. Back also clears a search in Chats (which now has
+  its own clear button), closes the search, pinned messages, saved messages,
+  thread and member list inside a conversation or channel, ends selecting
+  messages, and cancels editing a message, before it closes the conversation.
+- **Phone: the archived chats are a list of their own** — message requests and
+  stories no longer show on top of them.
+- **Phone: editing a message works without a keyboard's Escape and Enter** —
+  the box shows Cancel and Save, grows with what you write (it used to cut the
+  text to one line), and Enter starts a new line as in the message box.
+- **Phone: the message box grows as you type** long messages that wrap, up to a
+  few lines, instead of hiding what you wrote on one line.
+- **A call is shown under the day it happened**: a call today after
+  yesterday's last message gets its own "Today" above it, instead of sitting
+  under yesterday.
+- **Phone: menus stay on the screen** — a long-press menu no longer touches
+  the edge of the screen, and one that grows (opening "Mute ▸") moves up
+  instead of running off the bottom. Menu rows are 44px tall, as intended.
+- **Phone: the incoming call screen covers the whole screen again** instead of
+  showing the chat list and the tab bar through it.
+- **Phone: picture-in-picture shows the whole call** in the little window, not
+  only its top part.
+- **Phone: tapping a voice channel opens it** with Join voice, instead of
+  joining straight away and turning your microphone on.
+- **Phone: a voice message fits its bubble** on narrow phones (the speed
+  button stuck out), and the emoji picker shows every column.
+- **Phone: bigger buttons** — filter chips, Calls' All/Missed, the voice bar's
+  Disconnect, dialog buttons and close buttons are at least 40px to tap.
+- **Phone: "Phone and battery" in Settings opens the System part** of the page,
+  not its privacy toggles.
+- **Phone: the hints say long-press and tap**, not hover, right-click or click.
+- **Phone: a voice channel's header is not shown twice.**
+
 ## [2.16.0] - 2026-10-18
 
 **Easy start: from install to your first message with no more work than a

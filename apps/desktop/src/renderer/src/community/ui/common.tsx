@@ -410,13 +410,24 @@ export function Popover(props: {
       const insets = safeInsets();
       // Measure at the tallest it may be, then place it.
       el.style.maxHeight = `${placeWithin(0, 0, { width: 0, height: 0 }, view, insets).maxHeight}px`;
-      const r = el.getBoundingClientRect();
-      setPos(placeWithin(props.x, props.y, { width: r.width, height: r.height }, view, insets));
+      // Its own size, not the one it has while its opening animation scales it.
+      const size = { width: el.offsetWidth, height: el.offsetHeight };
+      const next = placeWithin(props.x, props.y, size, view, insets);
+      el.style.maxHeight = `${next.maxHeight}px`;
+      setPos((p) =>
+        p.left === next.left && p.top === next.top && p.maxHeight === next.maxHeight ? p : next,
+      );
     };
     place();
     const vv = window.visualViewport;
     vv?.addEventListener('resize', place);
-    return () => vv?.removeEventListener('resize', place);
+    // A menu that grows (a section opening inside it, e.g. "Mute ▸") stays on the screen.
+    const grow = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => place());
+    if (ref.current) grow?.observe(ref.current);
+    return () => {
+      vv?.removeEventListener('resize', place);
+      grow?.disconnect();
+    };
   }, [props.x, props.y]);
   // Keyboard (2.13.1): a menu's first item takes the focus (computers; a field that focused itself
   // keeps it), and closing gives the focus back to the button or field that had it.
@@ -575,7 +586,7 @@ export function EmojiPicker(props: {
       : group === -1
         ? 'Recently used'
         : group === -3
-          ? 'Favourites — right-click to remove'
+          ? `Favourites — ${phoneShellActive() ? 'long-press' : 'right-click'} to remove`
           : (index?.groups[group]?.name ?? 'Loading…');
   const first = customMatches[0] ? customEmojiText(customMatches[0]) : results?.[0]?.emoji;
   return (

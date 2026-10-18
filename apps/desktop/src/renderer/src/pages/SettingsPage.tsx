@@ -25,6 +25,7 @@ import { SecurityPage } from './SecurityPage.tsx';
 import { AppearanceCenter } from '../appearance/AppearanceCenter.tsx';
 import { TryBar } from '../appearance/TryBar.tsx';
 import { useCommunity } from '../community/store.ts';
+import { phoneShellActive } from '../phone/mode.ts';
 import { useRiver, type SettingsTab } from '../store.ts';
 import { play } from '../community/sound.ts';
 
@@ -1079,7 +1080,9 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
         />
       )}
       <PrivacySettings settings={settings} phone={phone} />
-      <h2 className="panel__title">System</h2>
+      <h2 className="panel__title" id="settings-system">
+        System
+      </h2>
       {phone && platform === 'android' && (
         <>
           <Toggle
@@ -1193,8 +1196,9 @@ function NotificationsPanel({ settings }: { settings: Settings }): ReactElement 
       </fieldset>
       <QuietHours settings={settings} />
       <p className="muted small">
-        Right-click a community or channel to mute it or choose All messages, Only @mentions or Nothing just
-        for it. Do Not Disturb (click your name) silences everything except your own sounds.
+        {phoneShellActive()
+          ? 'Long-press a chat, or open a community’s menu, to mute it or choose All messages, Only @mentions or Nothing just for it. Do Not Disturb (your status in Settings) silences everything except your own sounds.'
+          : 'Right-click a community or channel to mute it or choose All messages, Only @mentions or Nothing just for it. Do Not Disturb (click your name) silences everything except your own sounds.'}
       </p>
     </div>
   );
