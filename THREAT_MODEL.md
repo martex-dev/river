@@ -341,20 +341,21 @@ encrypted call and point signals and sees who takes part, as for any call.
 
 ## 6. Key threats and mitigations (STRIDE summary)
 
-| Threat          | Example                                | Mitigation                                                                                                                              | Status                                                 |
-| --------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Spoofing        | Server injects a fake device for Alice | Device list signed by Alice's identity key; clients verify on every connect and stop trusting a server that serves an unsigned list     | ✅ 0.1.0 (own list); other users' lists with messaging |
-| Spoofing        | Server swaps Bob's identity key        | Safety numbers, key-change warnings, sending blocked for verified contacts until re-verified; key cross-checked with community profiles | ✅ 0.5.0                                               |
-| Tampering       | Modified ciphertext                    | AEAD/MAC in libsignal and attachment format                                                                                             | ✅ 0.4.0 / 0.5.0                                       |
-| Tampering       | Malicious update                       | Ed25519 manifest signature verified before install                                                                                      | **0.0.1**                                              |
-| Repudiation     | —                                      | River intentionally offers deniable 1:1 messaging (Signal property)                                                                     | —                                                      |
-| Info disclosure | DB stolen from disk                    | SQLCipher + OS keystore-wrapped key, or Argon2id passphrase where no keystore exists                                                    | ✅ 0.0.3                                               |
-| Info disclosure | Notification previews on lock screen   | Previews off by default for sensitive content; content-free pushes                                                                      | 0.2.x / Stage 2                                        |
-| Info disclosure | Sensitive logging                      | Log scrubbing helpers, no content in logs, CI lint rule                                                                                 | ongoing                                                |
-| DoS             | Message flooding                       | Per-account/per-device rate limits, message requests                                                                                    | 0.2.x                                                  |
-| Elevation       | Renderer XSS → key theft               | Sandboxed renderer, CSP, keys only in main process, validated IPC                                                                       | **0.0.1**                                              |
-| Elevation       | Malicious file/attachment              | Attachments never auto-executed; previews rendered in sandbox; filename sanitisation; path traversal checks                             | ✅ 0.4.0                                               |
-| Elevation       | Remote-assistance abuse                | Consent asked by main per share, always-visible bar with Stop outside the window, no control or unattended mode (ADR 0007)              | ✅ 1.8.0                                               |
+| Threat          | Example                                                                | Mitigation                                                                                                                                         | Status                                                 |
+| --------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Spoofing        | Server injects a fake device for Alice                                 | Device list signed by Alice's identity key; clients verify on every connect and stop trusting a server that serves an unsigned list                | ✅ 0.1.0 (own list); other users' lists with messaging |
+| Spoofing        | Server swaps Bob's identity key                                        | Safety numbers, key-change warnings, sending blocked for verified contacts until re-verified; key cross-checked with community profiles            | ✅ 0.5.0                                               |
+| Spoofing        | Group member sends their own message under another member's message ID | Messages identified by (sender, ID); edits and deletes looked up by their sender; replies, reactions and pins name the author (CRYPTOGRAPHY.md §4) | ✅ 2.20.1 audit fix                                    |
+| Tampering       | Modified ciphertext                                                    | AEAD/MAC in libsignal and attachment format                                                                                                        | ✅ 0.4.0 / 0.5.0                                       |
+| Tampering       | Malicious update                                                       | Ed25519 manifest signature verified before install                                                                                                 | **0.0.1**                                              |
+| Repudiation     | —                                                                      | River intentionally offers deniable 1:1 messaging (Signal property)                                                                                | —                                                      |
+| Info disclosure | DB stolen from disk                                                    | SQLCipher + OS keystore-wrapped key, or Argon2id passphrase where no keystore exists                                                               | ✅ 0.0.3                                               |
+| Info disclosure | Notification previews on lock screen                                   | Previews off by default for sensitive content; content-free pushes                                                                                 | 0.2.x / Stage 2                                        |
+| Info disclosure | Sensitive logging                                                      | Log scrubbing helpers, no content in logs, CI lint rule                                                                                            | ongoing                                                |
+| DoS             | Message flooding                                                       | Per-account/per-device rate limits, message requests                                                                                               | 0.2.x                                                  |
+| Elevation       | Renderer XSS → key theft                                               | Sandboxed renderer, CSP, keys only in main process, validated IPC                                                                                  | **0.0.1**                                              |
+| Elevation       | Malicious file/attachment                                              | Attachments never auto-executed; previews rendered in sandbox; filename sanitisation; path traversal checks                                        | ✅ 0.4.0                                               |
+| Elevation       | Remote-assistance abuse                                                | Consent asked by main per share, always-visible bar with Stop outside the window, no control or unattended mode (ADR 0007)                         | ✅ 1.8.0                                               |
 
 ## 7. Residual risks (current)
 
@@ -382,6 +383,15 @@ encrypted call and point signals and sees who takes part, as for any call.
   before 2.12, and anything from Rivers not yet on 2.12) can still be
   re-attributed to another sender or replayed under a new ID by the server;
   receivers keep opening v1 so old history stays readable.
+- **Message IDs and apps that have not updated.** Messages are identified by
+  sender and ID, but apps from before that fix still keep only the first copy
+  of an ID and send replies, reactions and pins without the author. Updated
+  apps read such a reference as the copy they stored first in that
+  conversation, so a server that delays a genuine group message behind an
+  impostor's can still mislead them about which one an older app meant (both
+  messages are shown, with their real senders). In channels, a reply from an
+  older app to a deleted message can show a message posted later under the
+  same ID.
 
 - **Linked devices are not revoked cryptographically.** A removed device keeps
   the identity and community keys it had; the server ends its access. Leaving

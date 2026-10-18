@@ -55,9 +55,21 @@ const deadSocket = (): WebSocket => ({ send() {}, close() {}, readyState: 0 }) a
 
 type Keep = () => { historyDays: number; newChatTimer: number };
 
-/** One install of River (no identity yet): its own local database and services. */
-function install(name: string, privacy?: { readReceipts: boolean; typing: boolean }, keep?: Keep) {
-  const local = migrateDatabase(join(dir, `${name}.db`), newDatabaseKey(), CLIENT_MIGRATIONS).db;
+/**
+ * One install of River (no identity yet): its own local database and services. `db` opens an
+ * existing database again (`key`), or writes one as an older River did (only migrations up to `upTo`).
+ */
+function install(
+  name: string,
+  privacy?: { readReceipts: boolean; typing: boolean },
+  keep?: Keep,
+  db?: { key?: Buffer; upTo?: number },
+) {
+  const local = migrateDatabase(
+    join(dir, `${name}.db`),
+    db?.key ?? newDatabaseKey(),
+    CLIENT_MIGRATIONS.filter((m) => m.version <= (db?.upTo ?? Infinity)),
+  ).db;
   locals.push(local);
   const identity = new IdentityService(() => local);
   const account = new AccountService({
@@ -1946,5 +1958,327 @@ describe('messaging, part 2 (2.19)', { timeout: 60_000 }, () => {
     await alice.dm.action({ a: 'deleteReply', id: list[0]!.id });
     expect(await alice.dm.action({ a: 'savedReplies' })).toEqual([]);
     expect(wire.length).toBe(before);
+  });
+});
+
+describe('per-sender message IDs (2.20.1 audit)', { timeout: 90_000 }, () => {
+  /** A three-person group (Alice made it), accepted by Bob and Mallory. */
+  async function trio() {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const mallory = await person('Mallory');
+    const group = await alice.dm.action({
+      a: 'createGroup',
+      name: 'Trip',
+      members: [bob.riverId, mallory.riverId],
+    });
+    await bob.dm.sync();
+    await mallory.dm.sync();
+    await bob.dm.action({ a: 'accept', peer: group.riverId });
+    await mallory.dm.action({ a: 'accept', peer: group.riverId });
+    await alice.dm.sync();
+    return { alice, bob, mallory, conv: group.riverId };
+  }
+  /** Content as an app sends it, straight to one person (an impostor's, or an older app's). */
+  const raw = (from: Person, to: Person, content: Record<string, unknown>) =>
+    internals(from).sendContent(to.riverId, { v: 1, ...content });
+
+  it('an impostor reusing a seen ID cannot replace the genuine message; replies, reactions, edits and deletes reach the right one', async () => {
+    const { alice, bob, mallory, conv } = await trio();
+    // The server holds Alice's message back from Bob…
+    const dm = internals(alice);
+    const send = dm.sendContent.bind(alice.dm);
+    const held: unknown[] = [];
+    dm.sendContent = async (peer, content, ephemeral) => {
+      if (peer === bob.riverId && (content as { t: string }).t === 'msg') held.push(content);
+      else await send(peer, content, ephemeral);
+    };
+    const genuine = await alice.dm.action({ a: 'send', peer: conv, text: 'meet at 10' });
+    dm.sendContent = send;
+    // …while Mallory, who got it, posts her own message under its ID (claiming an earlier time).
+    await mallory.dm.sync();
+    expect((await messagesOf(mallory, conv)).find((m) => m.text === 'meet at 10')!.id).toBe(genuine.id);
+    const impostor = {
+      t: 'msg',
+      id: genuine.id,
+      text: 'meet at 11',
+      sentAt: new Date(Date.parse(genuine.sentAt) - 60_000).toISOString(),
+      groupId: conv,
+    };
+    await raw(mallory, bob, impostor);
+    await raw(mallory, alice, impostor);
+    await bob.dm.sync();
+    // Alice's copy reaches Bob late: it is kept beside the impostor's, not dropped.
+    for (const c of held) await send(bob.riverId, c);
+    await bob.dm.sync();
+    await alice.dm.sync();
+    let bobView = await messagesOf(bob, conv);
+    const bobGenuine = bobView.find((m) => m.sender === alice.riverId && m.text === 'meet at 10')!;
+    const bobImpostor = bobView.find((m) => m.sender === mallory.riverId && m.text === 'meet at 11')!;
+    expect(bobGenuine).toBeDefined();
+    expect(bobImpostor).toBeDefined();
+    expect(bobGenuine.id).not.toBe(bobImpostor.id);
+    // Alice's own message keeps its ID on her device; Mallory's shows as Mallory's.
+    let aliceView = await messagesOf(alice, conv);
+    expect(aliceView.find((m) => m.id === genuine.id)).toMatchObject({ text: 'meet at 10', mine: true });
+    expect(aliceView.find((m) => m.text === 'meet at 11')).toMatchObject({ sender: mallory.riverId });
+
+    // Bob replies to, reacts to and pins the genuine message: Alice's gets them, not Mallory's.
+    await bob.dm.action({ a: 'send', peer: conv, text: 'ok, 10', replyTo: bobGenuine.id });
+    await bob.dm.action({ a: 'react', peer: conv, id: bobGenuine.id, emoji: '👍', on: true });
+    await bob.dm.action({ a: 'pin', peer: conv, id: bobGenuine.id, pinned: true });
+    await alice.dm.sync();
+    await mallory.dm.sync();
+    aliceView = await messagesOf(alice, conv);
+    expect(aliceView.find((m) => m.id === genuine.id)).toMatchObject({
+      reactions: [{ emoji: '👍', count: 1, mine: false, users: [bob.riverId] }],
+      pinned: true,
+    });
+    expect(aliceView.find((m) => m.text === 'meet at 11')).toMatchObject({ reactions: [], pinned: false });
+    // The reply quotes Alice's message, and counts as a reply to her (a mention).
+    expect(aliceView.find((m) => m.text === 'ok, 10')).toMatchObject({
+      replyTo: genuine.id,
+      mentionsMe: true,
+      mentionKind: 'direct',
+    });
+    expect((await messagesOf(mallory, conv)).find((m) => m.text === 'ok, 10')!.replyTo).toBe(genuine.id);
+    bobView = await messagesOf(bob, conv);
+    expect(bobView.find((m) => m.text === 'ok, 10')!.replyTo).toBe(bobGenuine.id);
+
+    // Edits and deletes reach only their sender's message: Alice's edit changes hers; Mallory's
+    // edit and delete of that ID only ever touch her own.
+    await alice.dm.action({ a: 'edit', peer: conv, id: genuine.id, text: 'meet at 10:30' });
+    await raw(mallory, bob, { t: 'edit', id: genuine.id, text: 'meet at noon', groupId: conv });
+    await bob.dm.sync();
+    bobView = await messagesOf(bob, conv);
+    expect(bobView.find((m) => m.id === bobGenuine.id)).toMatchObject({
+      text: 'meet at 10:30',
+      deleted: false,
+    });
+    expect(bobView.find((m) => m.id === bobImpostor.id)).toMatchObject({ text: 'meet at noon' });
+    await raw(mallory, bob, { t: 'delete', id: genuine.id, groupId: conv });
+    await bob.dm.sync();
+    bobView = await messagesOf(bob, conv);
+    expect(bobView.find((m) => m.id === bobGenuine.id)).toMatchObject({
+      text: 'meet at 10:30',
+      deleted: false,
+    });
+    expect(bobView.find((m) => m.id === bobImpostor.id)).toMatchObject({ deleted: true });
+    // Alice deletes hers for everyone; Mallory's (not deleted on Alice's device) stays there.
+    await alice.dm.action({ a: 'delete', peer: conv, id: genuine.id, forEveryone: true });
+    await bob.dm.sync();
+    expect((await messagesOf(bob, conv)).find((m) => m.id === bobGenuine.id)).toMatchObject({
+      deleted: true,
+    });
+    expect((await messagesOf(alice, conv)).find((m) => m.text === 'meet at 11')).toBeDefined();
+  });
+
+  it('references without an author (apps before this) mean the copy stored first in that conversation', async () => {
+    const { alice, bob, mallory, conv } = await trio();
+    const genuine = await alice.dm.action({ a: 'send', peer: conv, text: 'genuine' });
+    await bob.dm.sync();
+    await mallory.dm.sync();
+    // Mallory's message under the same ID reaches Bob after the genuine one.
+    await raw(mallory, bob, {
+      t: 'msg',
+      id: genuine.id,
+      text: 'impostor',
+      sentAt: genuine.sentAt,
+      groupId: conv,
+    });
+    await bob.dm.sync();
+    // An older app's reply and reaction name only the ID: they mean the genuine message, the
+    // one Bob's device (like every older app) had first.
+    const replyId = 'R'.repeat(22);
+    await raw(mallory, bob, {
+      t: 'msg',
+      id: replyId,
+      text: 'old reply',
+      replyTo: genuine.id,
+      sentAt: new Date().toISOString(),
+      groupId: conv,
+    });
+    await raw(mallory, bob, { t: 'react', id: genuine.id, emoji: '🔥', on: true, groupId: conv });
+    await bob.dm.sync();
+    const view = await messagesOf(bob, conv);
+    const bobGenuine = view.find((m) => m.text === 'genuine')!;
+    expect(bobGenuine.id).toBe(genuine.id);
+    expect(view.find((m) => m.text === 'old reply')!.replyTo).toBe(genuine.id);
+    expect(bobGenuine.reactions).toEqual([{ emoji: '🔥', count: 1, mine: false, users: [mallory.riverId] }]);
+    expect(view.find((m) => m.text === 'impostor')!.reactions).toEqual([]);
+    // The choice is kept with the reply, so a copy arriving later never changes what it quotes.
+    const stored = bob.local.prepare('SELECT body FROM dm_messages WHERE msg_id = ?').get(replyId) as {
+      body: string;
+    };
+    expect(JSON.parse(stored.body)).toMatchObject({ replyTo: genuine.id, replyToSender: alice.riverId });
+    // A reference with an author never falls back to someone else's message under that ID.
+    await raw(mallory, bob, {
+      t: 'react',
+      id: genuine.id,
+      emoji: '💀',
+      on: true,
+      groupId: conv,
+      author: bob.riverId,
+    });
+    await bob.dm.sync();
+    for (const m of await messagesOf(bob, conv)) expect(m.reactions.map((r) => r.emoji)).not.toContain('💀');
+    // The same sender and ID again (here in a 1:1 chat) is the same message: no second copy.
+    await raw(mallory, bob, {
+      t: 'msg',
+      id: genuine.id,
+      text: 'in private',
+      sentAt: new Date().toISOString(),
+    });
+    await bob.dm.sync();
+    expect(await messagesOf(bob, mallory.riverId)).toEqual([]);
+  });
+
+  it("your other devices apply your replies, reactions and pins to that sender's message", async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const mallory = await person('Mallory');
+    const phone = await linkDevice(bob, 'Bob phone');
+    const group = await alice.dm.action({
+      a: 'createGroup',
+      name: 'Trip',
+      members: [bob.riverId, mallory.riverId],
+    });
+    const conv = group.riverId;
+    await bob.dm.sync();
+    await phone.dm.sync();
+    await mallory.dm.sync();
+    await bob.dm.action({ a: 'accept', peer: conv });
+    await mallory.dm.action({ a: 'accept', peer: conv });
+    await alice.dm.sync();
+    await phone.dm.sync();
+    // Mallory's message under Alice's ID reaches both of Bob's devices before Alice's does.
+    const dm = internals(alice);
+    const send = dm.sendContent.bind(alice.dm);
+    const held: unknown[] = [];
+    dm.sendContent = async (peer, content, ephemeral) => {
+      if (peer === bob.riverId && (content as { t: string }).t === 'msg') held.push(content);
+      else await send(peer, content, ephemeral);
+    };
+    const genuine = await alice.dm.action({ a: 'send', peer: conv, text: 'genuine' });
+    dm.sendContent = send;
+    await mallory.dm.sync();
+    await raw(mallory, bob, {
+      t: 'msg',
+      id: genuine.id,
+      text: 'impostor',
+      sentAt: genuine.sentAt,
+      groupId: conv,
+    });
+    await bob.dm.sync();
+    await phone.dm.sync();
+    for (const c of held) await send(bob.riverId, c);
+    await bob.dm.sync();
+    await phone.dm.sync();
+    const on = async (p: Person) => {
+      const view = await messagesOf(p, conv);
+      return {
+        genuine: view.find((m) => m.text === 'genuine')!,
+        impostor: view.find((m) => m.text === 'impostor')!,
+        reply: view.find((m) => m.text === 'agreed'),
+      };
+    };
+    // On the computer Bob answers Alice's message; the phone puts it all on Alice's message too.
+    const desk = await on(bob);
+    await bob.dm.action({ a: 'send', peer: conv, text: 'agreed', replyTo: desk.genuine.id });
+    await bob.dm.action({ a: 'react', peer: conv, id: desk.genuine.id, emoji: '✅', on: true });
+    await bob.dm.action({ a: 'pin', peer: conv, id: desk.genuine.id, pinned: true });
+    // Copies to your other devices go in the background.
+    const there = await until(async () => {
+      await phone.dm.sync();
+      const x = await on(phone);
+      return x.genuine.pinned && x.genuine.reactions.length && x.reply ? x : null;
+    });
+    expect(there.genuine).toMatchObject({ sender: alice.riverId, pinned: true });
+    expect(there.genuine.reactions).toEqual([{ emoji: '✅', count: 1, mine: true, users: [bob.riverId] }]);
+    expect(there.impostor).toMatchObject({ sender: mallory.riverId, pinned: false, reactions: [] });
+    expect(there.reply!.replyTo).toBe(there.genuine.id);
+  });
+
+  it('keeps history written before per-sender IDs (local migration 26)', async () => {
+    const bob = await person('Bob');
+    const key = newDatabaseKey();
+    // Alice's River as 2.21 left it: schema 25, history stored by message ID alone.
+    const old = install('Alice', undefined, undefined, { key, upTo: 25 });
+    const aliceId = old.identity.create('Alice').riverId;
+    await old.account.register(SERVER);
+    await old.dm.sync();
+    const hello = 'H'.repeat(22);
+    const answer = 'A'.repeat(22);
+    const at = (s: number) => new Date(Date.now() - 600_000 + s * 1000).toISOString();
+    old.local
+      .prepare(
+        `INSERT INTO contacts (river_id, name, state, created_at, heard_from) VALUES (?, 'Bob', 'accepted', ?, 1)`,
+      )
+      .run(bob.riverId, at(0));
+    const insert = old.local.prepare(
+      `INSERT INTO dm_messages (id, peer, sender, body, sent_at, status, reactions, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    insert.run(
+      hello,
+      bob.riverId,
+      bob.riverId,
+      JSON.stringify({ text: 'hello' }),
+      at(1),
+      'received',
+      JSON.stringify({ '❤️': [aliceId] }),
+      at(1),
+    );
+    insert.run(
+      answer,
+      bob.riverId,
+      aliceId,
+      JSON.stringify({ text: 'hi back', replyTo: hello }),
+      at(2),
+      'read',
+      '{}',
+      at(2),
+    );
+    old.local.close();
+    locals.splice(locals.indexOf(old.local), 1);
+
+    // This River opens it: migration 26 keeps every row, with its ID and its sender.
+    const alice = { ...install('Alice', undefined, undefined, { key }), riverId: aliceId };
+    expect(alice.local.pragma('user_version', { simple: true })).toBe(CLIENT_MIGRATIONS.at(-1)!.version);
+    expect(alice.local.prepare('SELECT id, msg_id, sender FROM dm_messages ORDER BY sent_at').all()).toEqual([
+      { id: hello, msg_id: hello, sender: bob.riverId },
+      { id: answer, msg_id: answer, sender: aliceId },
+    ]);
+    await alice.dm.sync();
+    let view = await messagesOf(alice, bob.riverId);
+    expect(view.map((m) => [m.id, m.text, m.replyTo])).toEqual([
+      [hello, 'hello', null],
+      [answer, 'hi back', hello],
+    ]);
+    expect(view[0]!.reactions).toEqual([{ emoji: '❤️', count: 1, mine: true, users: [aliceId] }]);
+
+    // The old IDs still work on the wire: Bob (who has the same history) edits his message and
+    // reacts to hers.
+    const copy = bob.local.prepare(
+      `INSERT INTO dm_messages (id, msg_id, peer, sender, body, sent_at, status, reactions, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, '{}', ?)`,
+    );
+    copy.run(hello, hello, aliceId, bob.riverId, JSON.stringify({ text: 'hello' }), at(1), 'sent', at(1));
+    copy.run(answer, answer, aliceId, aliceId, JSON.stringify({ text: 'hi back' }), at(2), 'received', at(2));
+    await bob.dm.action({ a: 'open', peer: aliceId, name: 'Alice' });
+    await bob.dm.action({ a: 'edit', peer: aliceId, id: hello, text: 'hello!' });
+    await bob.dm.action({ a: 'react', peer: aliceId, id: answer, emoji: '👋', on: true });
+    // …and a message of Bob's under the ID of Alice's old answer is his own, beside hers.
+    await raw(bob, alice, { t: 'msg', id: answer, text: 'mine now?', sentAt: new Date().toISOString() });
+    await alice.dm.sync();
+    view = await messagesOf(alice, bob.riverId);
+    expect(view.find((m) => m.id === hello)).toMatchObject({ text: 'hello!' });
+    expect(view.find((m) => m.id === answer)).toMatchObject({
+      text: 'hi back',
+      sender: aliceId,
+      replyTo: hello,
+      reactions: [{ emoji: '👋', count: 1, mine: false, users: [bob.riverId] }],
+    });
+    const his = view.find((m) => m.text === 'mine now?')!;
+    expect(his).toMatchObject({ sender: bob.riverId });
+    expect(his.id).not.toBe(answer);
   });
 });

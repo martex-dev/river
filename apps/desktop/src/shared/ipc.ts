@@ -503,6 +503,11 @@ export interface ChatMessage {
   pinned: boolean;
   reactions: ReactionView[];
   replyTo: string | null;
+  /**
+   * Whose message `replyTo` is, as the replier sealed it (per-sender message IDs). A message under
+   * that ID from anyone else is not the quoted one. Absent from apps before this.
+   */
+  replyToSender?: string;
   attachments: AttachmentPointer[];
   /** Descriptions of attached pictures, by attachment ID (1.0.21). */
   alts?: Record<string, string>;

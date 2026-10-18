@@ -66,7 +66,15 @@ JSON with `v: 1` and a type `t`:
 | `clink`            | Call link (2.18): knock (ask to join), admit (with the call ID), deny, gone      |
 
 Receivers validate every field; edits and deletes are applied only to messages
-from the same sender. Messages from people you have not accepted arrive as
+from the same sender. **Message IDs are per sender**: a message is identified by
+its sender and its `id`, so another sender's message under the same ID is a
+different message (both are kept). A reply names whose message it quotes in
+`replyToSender`, and `react` and `pin` name the message's `author` (the `sync`
+copy carries `replyToSender` beside `message`, `syncOp` reactions and pins an
+`author`); receipts are for the receiver's own messages. Apps from before this
+send plain IDs: a reference without an author means the copy of that ID the
+receiving device stored first in that conversation (CRYPTOGRAPHY §4).
+Messages from people you have not accepted arrive as
 **requests**: no delivery or read receipts, no typing, no calls until accepted,
 and their files are not fetched in the background (2.20).
 

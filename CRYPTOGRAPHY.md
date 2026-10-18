@@ -101,6 +101,27 @@ about. This prevents the server from silently adding an eavesdropping device.
   (one ciphertext per message, distribution over 1:1 sessions, new key on every
   membership change) remain a later optimisation for larger groups. Wire
   details: [docs/protocol/messaging.md](docs/protocol/messaging.md#groups).
+- **Message IDs are per sender** (2.20.1 audit fix): the sender picks a random
+  128-bit ID, and a message is identified by (sender River ID, ID), where the
+  sender is the one libsignal authenticated. Before, the first copy of an ID
+  won: a group member who saw another member's message ID first (the server
+  delaying the genuine copy) could send their own message under it, and the
+  genuine one was dropped, with replies, reactions and pins landing on the
+  impostor. Now both are kept (local migration 26: the wire ID is `msg_id`,
+  unique together with the sender; `id` is the device's own handle, the wire ID
+  unless another sender's message already has it). Edits, deletes for everyone
+  and receipts are looked up by (their sender — for receipts, us — and ID), so
+  they only ever reach that sender's message. Replies carry `replyToSender`,
+  reactions and pins `author` (and the copies to linked devices the same, the
+  reply's beside the strict `message` object), inside the encrypted content.
+  **Compatibility**: apps before this change send plain IDs and ignore the new
+  fields. A reference without an author means the copy of that ID this device
+  stored first _in that conversation_ — what those apps showed there — and a
+  reply's choice is stored with it, so a later copy never changes what it
+  quotes; a reference that names an author never falls back to another sender's
+  message. An impostor can reuse an ID only after seeing the genuine message,
+  so with an honest server the genuine copy is the earlier one; a server that
+  delays it can still mislead apps that have not updated, never updated ones.
 - **Length padding** (`packages/crypto/src/session.ts`, `padding.ts`): before
   libsignal encrypts it, content gets `0x80` and zeros (Signal's scheme). Up
   to 2560 bytes the result is a multiple of 160 bytes, so every short message,
@@ -212,6 +233,13 @@ than per-member sender keys:
   cryptographically). Incoming webhook posts are sealed by outside services
   with the webhook's own key and v1 associated data (`scripts/webhook`); they
   are shown under the webhook's name, never as a member.
+- **Message IDs in channels** are chosen by the sending app too, but the server
+  stores one message per ID (a second one is refused with 409) before anyone
+  sees it, and v2 associated data binds ID and sender, so no member can take an
+  ID first. An ID becomes free again when its message is deleted: since the
+  per-sender ID fix a reply seals `replyToSender`, and a message posted later
+  under a deleted message's ID is neither shown as the quoted one nor pings
+  its author as a reply. Replies from older apps lack it.
 
 ## 4b. Trust checks against the server (2.11) and the compatibility plan
 
