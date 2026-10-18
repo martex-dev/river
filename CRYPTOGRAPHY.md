@@ -285,7 +285,9 @@ a stranger cannot make River download files or crowd your kept copies out.
 - Database: SQLCipher 4 format (AES-256-CBC pages, HMAC-SHA512) via
   `better-sqlite3-multiple-ciphers`, opened with a **raw 32-byte random key**
   (`PRAGMA key = "x'…'"`, no password KDF since the key is already uniform).
-  `secure_delete` is on.
+  `secure_delete` is on, and since 2.20 `temp_store` is `MEMORY`: the cipher
+  covers the database file and its journal, not SQLite's temporary files, so
+  temporary tables and sort spills never reach the disk in plaintext.
 - Key file `data/database.key`, one of:
   - `os-keystore`: the key wrapped by Electron `safeStorage` — Windows DPAPI,
     macOS Keychain, Linux Secret Service. On Linux, Electron's `basic_text`

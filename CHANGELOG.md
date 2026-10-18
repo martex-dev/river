@@ -24,6 +24,9 @@ All notable changes to River are documented here. The format follows
 - Backups: messages set to disappear are no longer saved in backup files,
   which would have kept them long after they disappeared. Disappearing-message
   timers are kept, so after a restore new messages still disappear.
+- Local data: the encrypted database keeps its temporary working data in
+  memory, so large searches and sorts never write unencrypted pieces of your
+  messages to temporary files on disk.
 
 ## [2.20.0] - 2026-10-18
 
