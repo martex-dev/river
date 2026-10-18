@@ -47,6 +47,18 @@ describe('relay frame encryption', () => {
     g.reset();
     expect(g.accept(0)).toBe(true);
   });
+
+  it('a repeated sender key keeps the sequence; only a new key starts again (2.18)', async () => {
+    const first = await newSenderKey();
+    const g = new ReplayGuard(first.raw);
+    expect([g.accept(0), g.accept(1), g.accept(2)]).toEqual([true, true, true]);
+    // The sender repeats its key (after a reconnect): frames recorded earlier stay refused.
+    expect(g.rekey(first.raw.slice())).toBe(false);
+    expect([g.accept(0), g.accept(2), g.accept(3)]).toEqual([false, false, true]);
+    // A new key (River started again) is a new sequence.
+    expect(g.rekey((await newSenderKey()).raw)).toBe(true);
+    expect(g.accept(0)).toBe(true);
+  });
 });
 
 describe('relay wire format', () => {

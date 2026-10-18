@@ -23,6 +23,9 @@ All notable changes to River are documented here. The format follows
   An old-style profile (from before 2.12) now counts only when it names the
   identity key River holds for that person, so a server cannot get keys by
   copying someone's old profile into an account of its own.
+- Calls through the server relay: when someone's voice key arrives again (as
+  it does after a reconnect), frames recorded earlier stay refused, so the
+  server cannot play back old audio.
 
 ## [2.17.0] - 2026-10-18
 
