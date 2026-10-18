@@ -1,7 +1,7 @@
 import type { CallView } from '../../../shared/dm.ts';
 import { VoiceRecorder } from '../components/VoiceMessage.tsx';
 import { fromOverlay, haptic, useMessageGestures } from '../components/gestures.ts';
-import { composing, enterSends } from '../components/keys.ts';
+import { enterSends } from '../components/keys.ts';
 import { isPhone } from '../../../shared/platform.ts';
 import { localDay, newSince } from '../components/unread.ts';
 import { CreatePollDialog, PollCard } from '../community/ui/Poll.tsx';
@@ -17,16 +17,17 @@ import { readDraft, saveDraft, useDraft } from '../community/drafts.ts';
 import { quoteOf } from '../dm/quote.ts';
 import { clockTime, dateLocale, dayLabel, fullWhen } from '../time.ts';
 import { tr } from '../i18n.ts';
-import { ChatSkeleton, HistoryFailed, typingText } from '../community/ui/Chat.tsx';
+import { ChatSkeleton, EditActions, HistoryFailed, typingText } from '../community/ui/Chat.tsx';
 import {
   EMOJI_PICKER,
   fromBottom,
   insertIntoBox,
   nearButton,
   stopEditing,
+  useGrowToFit,
   useStickToBottom,
 } from '../components/chat-ui.ts';
-import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import {
   TIMER_CHOICES,
   timerLabel,
@@ -1162,13 +1163,18 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
             <button
               className="icon-btn"
               aria-label="Close pinned messages"
+              data-phone-back=""
               onClick={() => setShowPins(false)}
             >
               ✕
             </button>
           </header>
           {pinned.length === 0 && (
-            <p className="muted small">Nothing pinned yet. Hover a message and press 📌.</p>
+            <p className="muted small">
+              {phone
+                ? 'Nothing pinned yet. Long-press a message and choose Pin.'
+                : 'Nothing pinned yet. Hover a message and press 📌.'}
+            </p>
           )}
           {pinned.map((m) => (
             <button
@@ -1300,19 +1306,20 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
           </div>
           {messages.map((m, i) => {
             const prev = messages[i - 1];
-            const newDay =
-              !prev || new Date(prev.sentAt).toDateString() !== new Date(m.sentAt).toDateString();
+            const between = callsBetween(calls, prev?.sentAt ?? null, m.sentAt);
+            // The day changes after whatever came last: the previous message, or a call after it.
+            const before = between.at(-1)?.startedAt ?? prev?.sentAt;
+            const newDay = !before || !sameDay(before, m.sentAt);
             const grouped =
               !newDay &&
+              between.length === 0 &&
               !m.replyTo &&
               prev !== undefined &&
               prev.sender === m.sender &&
               Date.parse(m.sentAt) - Date.parse(prev.sentAt) < GROUP_MS;
             return (
               <div key={m.id}>
-                {callsBetween(calls, prev?.sentAt ?? null, m.sentAt).map((call) => (
-                  <CallNote key={call.id} call={call} />
-                ))}
+                <CallNotes calls={between} after={prev?.sentAt ?? null} />
                 {newDay && (
                   <div className="chat__day">
                     <span>{dayLabel(m.sentAt)}</span>
@@ -1339,9 +1346,10 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
               </div>
             );
           })}
-          {callsBetween(calls, messages.at(-1)?.sentAt ?? null, null).map((call) => (
-            <CallNote key={call.id} call={call} />
-          ))}
+          <CallNotes
+            calls={callsBetween(calls, messages.at(-1)?.sentAt ?? null, null)}
+            after={messages.at(-1)?.sentAt ?? null}
+          />
         </div>
       </GalleryContext.Provider>
       {!atBottom && (
@@ -1581,6 +1589,34 @@ export function ConvAvatar({ c, size }: { c: ConversationView; size: number }): 
       </span>
     );
   return <Avatar id={c.riverId} name={c.name} avatar={c.avatar} size={size} />;
+}
+
+function sameDay(a: string, b: string): boolean {
+  return new Date(a).toDateString() === new Date(b).toDateString();
+}
+
+/**
+ * Calls between two messages, each under the day it was on: a call today after yesterday's last
+ * message gets its own "Today" above it.
+ */
+function CallNotes({ calls, after }: { calls: CallView[]; after: string | null }): ReactElement {
+  return (
+    <>
+      {calls.map((call, i) => {
+        const before = i > 0 ? calls[i - 1]!.startedAt : after;
+        return (
+          <Fragment key={call.id}>
+            {(!before || !sameDay(before, call.startedAt)) && (
+              <div className="chat__day">
+                <span>{dayLabel(call.startedAt)}</span>
+              </div>
+            )}
+            <CallNote call={call} />
+          </Fragment>
+        );
+      })}
+    </>
+  );
 }
 
 function CallNote({ call }: { call: CallView }): ReactElement {
@@ -2271,7 +2307,11 @@ function SelectionToolbar(props: {
         >
           Delete
         </button>
-        <button className="btn btn--primary btn--small" onClick={() => useSelection.getState().clear()}>
+        <button
+          className="btn btn--primary btn--small"
+          data-phone-back=""
+          onClick={() => useSelection.getState().clear()}
+        >
           Done
         </button>
       </span>
@@ -2365,7 +2405,7 @@ function ConversationSearch(props: { peer: string; onClose(): void }): ReactElem
           if (e.target.value) void jumpToDate(e.target.value);
         }}
       />
-      <button className="icon-btn" aria-label="Close search" onClick={props.onClose}>
+      <button className="icon-btn" aria-label="Close search" data-phone-back="" onClick={props.onClose}>
         <XIcon size={16} />
       </button>
       {query.trim().length >= 2 && (
@@ -2389,6 +2429,9 @@ function ConversationSearch(props: { peer: string; onClose(): void }): ReactElem
 
 function DmEditBox({ m }: { m: DirectMessageView }): ReactElement {
   const [text, setText] = useState(m.text);
+  const phone = useRiver((r) => isPhone(r.info?.platform));
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useGrowToFit(ref, text, phone);
   const close = (): void => stopEditing(() => useDm.setState({ editing: null }));
   const save = async (): Promise<void> => {
     const value = text.trim();
@@ -2404,10 +2447,12 @@ function DmEditBox({ m }: { m: DirectMessageView }): ReactElement {
   return (
     <div className="msg__edit">
       <textarea
+        ref={ref}
         autoFocus
         value={text}
         maxLength={4000}
         rows={Math.min(8, text.split('\n').length)}
+        aria-label="Edit message"
         onChange={(e) => setText(e.target.value)}
         // The caret at the end of the message, not before its first letter.
         onFocus={(e) => e.currentTarget.setSelectionRange(text.length, text.length)}
@@ -2416,13 +2461,18 @@ function DmEditBox({ m }: { m: DirectMessageView }): ReactElement {
             e.preventDefault();
             close();
           }
-          if (e.key === 'Enter' && !e.shiftKey && !composing(e)) {
+          // On a phone Enter is a new line, as in the message box: Save saves.
+          if (enterSends(e, phone)) {
             e.preventDefault();
             void save();
           }
         }}
       />
-      <span className="muted small">escape to cancel • enter to save</span>
+      {phone ? (
+        <EditActions onCancel={close} onSave={() => void save()} />
+      ) : (
+        <span className="muted small">escape to cancel • enter to save</span>
+      )}
     </div>
   );
 }
@@ -2456,6 +2506,7 @@ ${shared}`
   const [scheduling, setScheduling] = useState(false);
   const phone = useRiver((r) => isPhone(r.info?.platform));
   // Whether the box is still there, for when a send fails later.
+  useGrowToFit(ref, text, phone);
   const draftKey = `d:${c.riverId}`;
   const mounted = useRef(true);
   useEffect(() => {
@@ -2699,7 +2750,12 @@ ${shared}`
           aria-label="Emoji"
           title={phone ? undefined : 'Emoji'}
           onClick={(e) =>
-            setPicker(phone ? { x: 8, y: e.clientY - 330 } : nearButton(e.currentTarget, EMOJI_PICKER))
+            setPicker(
+              phone
+                ? // Above the message box (a tap's own position is 0 when it came from a keyboard).
+                  { x: 8, y: e.currentTarget.getBoundingClientRect().top - EMOJI_PICKER.height - 8 }
+                : nearButton(e.currentTarget, EMOJI_PICKER),
+            )
           }
         >
           {phone ? <EmojiIcon size={24} /> : <SmileIcon size={20} />}
@@ -3028,7 +3084,7 @@ function GroupMembers({ c, onClose }: { c: ConversationView; onClose(): void }):
     <div className="group-members">
       <header className="pins__head">
         <strong>Members — {c.members.length}</strong>
-        <button className="icon-btn" aria-label="Close members" onClick={onClose}>
+        <button className="icon-btn" aria-label="Close members" data-phone-back="" onClick={onClose}>
           <XIcon size={14} />
         </button>
       </header>
