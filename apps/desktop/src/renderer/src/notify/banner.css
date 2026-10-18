@@ -1,0 +1,85 @@
+/* In-app banners (2.17): a message from another chat while River is open. */
+.inapp-banner {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 950;
+  display: flex;
+  align-items: stretch;
+  width: min(420px, calc(100vw - 24px));
+  border-radius: var(--radius-l, 14px);
+  background: var(--surface-strong, #1e2230);
+  color: var(--text, #fff);
+  box-shadow: var(--shadow-pop, 0 8px 28px rgb(0 0 0 / 35%));
+  animation: inapp-banner-in 180ms ease-out;
+  overflow: hidden;
+}
+
+.inapp-banner__card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 4px 10px 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inapp-banner__card--mention {
+  box-shadow: inset 3px 0 0 var(--danger, #e5484d);
+}
+
+.inapp-banner__title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inapp-banner__body {
+  color: var(--text-dim, #c7cbd6);
+  font-size: 0.92em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.inapp-banner__close {
+  flex: none;
+  width: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim, #c7cbd6);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.inapp-banner__close:hover,
+.inapp-banner__card:hover {
+  background: var(--surface-hover, rgb(255 255 255 / 6%));
+}
+
+@keyframes inapp-banner-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inapp-banner {
+    animation: none;
+  }
+}
+
+[data-motion='reduced'] .inapp-banner {
+  animation: none;
+}

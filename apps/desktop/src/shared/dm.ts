@@ -68,6 +68,12 @@ export interface DirectMessageView {
   expiresAt?: string | null;
   /** Sent without sound (2.5). */
   silent?: boolean;
+  /**
+   * In a group (2.17): it mentions you by name, replies to your message ("direct"), or says
+   * @everyone or @here ("everyone"). A group set to "Only @mentions" notifies only for these.
+   */
+  mentionsMe?: boolean;
+  mentionKind?: 'direct' | 'everyone';
   /** A poll (2.10.4); votes are encrypted reactions, as in channels. */
   poll?: Poll | null;
   /** A link preview made by the sender's app (2.10.6); readers never fetch anything. */

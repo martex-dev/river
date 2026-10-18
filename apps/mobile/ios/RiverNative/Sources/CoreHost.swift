@@ -251,7 +251,17 @@ public final class CoreHost: NSObject {
             notify(
                 id: id, title: a["title"] as? String ?? "River", body: a["body"] as? String ?? "",
                 reply: (a["reply"] as? Bool) ?? false, call: (a["call"] as? Bool) ?? false,
-                tag: a["tag"] as? String)
+                tag: a["tag"] as? String, markRead: (a["markRead"] as? Bool) ?? false,
+                conversation: a["conversation"] as? String ?? "", sound: a["sound"] as? String ?? "default")
+        case "notifyClear":
+            // A conversation was read, here or on another device (2.17): its notifications go.
+            clearConversation(a["conversation"] as? String ?? "")
+            answer(id, value: nil)
+        case "badge":
+            // The app icon's unread count (2.17): unread chats and mentions, muted ones left out.
+            let count = max(0, min(9999, (a["count"] as? NSNumber)?.intValue ?? 0))
+            UNUserNotificationCenter.current().setBadgeCount(count) { _ in }
+            answer(id, value: nil)
         case "notifyClose":
             // An incoming call stopped ringing: its notification goes (2.11.3).
             if let tag = a["tag"] as? String, !tag.isEmpty {
@@ -267,6 +277,7 @@ public final class CoreHost: NSObject {
             let center = UNUserNotificationCenter.current()
             center.removeAllDeliveredNotifications()
             center.removeAllPendingNotificationRequests()
+            center.setBadgeCount(0) { _ in }
             let waiting = Array(notificationAsks.values)
             notificationAsks = [:]
             notificationOrder = []
@@ -340,7 +351,13 @@ public final class CoreHost: NSObject {
 
     private static let replyCategory = "river.reply"
     private static let plainCategory = "river.plain"
+    /// 2.17: Reply and Mark as read, or Mark as read alone.
+    private static let replyReadCategory = "river.reply.read"
+    private static let readCategory = "river.read"
     private static let replyAction = "river.reply.text"
+    private static let readAction = "river.read.mark"
+    /// River's own notification sounds (apps/desktop/src/shared/notify-sounds.ts), in the core bundle.
+    private static let tones: Set<String> = ["chime", "bell", "pop", "drop", "harp"]
 
     /// Every River notification has a category that reports being swiped away (customDismissAction).
     private static func categories() -> Set<UNNotificationCategory> {
@@ -348,15 +365,63 @@ public final class CoreHost: NSObject {
         let action = UNTextInputNotificationAction(
             identifier: replyAction, title: "Reply", options: [],
             textInputButtonTitle: "Send", textInputPlaceholder: "Reply")
+        // Mark as read (2.17): the core marks the conversation read, without opening River.
+        let read = UNNotificationAction(identifier: readAction, title: "Mark as read", options: [])
         return [
             UNNotificationCategory(
                 identifier: replyCategory, actions: [action], intentIdentifiers: [], options: [.customDismissAction]),
+            UNNotificationCategory(
+                identifier: replyReadCategory, actions: [action, read], intentIdentifiers: [],
+                options: [.customDismissAction]),
+            UNNotificationCategory(
+                identifier: readCategory, actions: [read], intentIdentifiers: [], options: [.customDismissAction]),
             UNNotificationCategory(
                 identifier: plainCategory, actions: [], intentIdentifiers: [], options: [.customDismissAction]),
         ]
     }
 
-    private func notify(id: Int, title: String, body: String, reply: Bool, call: Bool, tag: String? = nil) {
+    /// A conversation's notifications (2.17): taken away once it is read, here or on another device.
+    private func clearConversation(_ conversation: String) {
+        guard !conversation.isEmpty else { return }
+        let gen = generation
+        let center = UNUserNotificationCenter.current()
+        center.getDeliveredNotifications { delivered in
+            let ids = delivered.filter { $0.request.content.threadIdentifier == conversation }.map { $0.request.identifier }
+            DispatchQueue.main.async {
+                guard gen == self.generation, !ids.isEmpty else { return }
+                center.removeDeliveredNotifications(withIdentifiers: ids)
+                for identifier in ids {
+                    if let ask = self.takeNotification(identifier) { self.answer(ask, value: "dismissed") }
+                }
+            }
+        }
+    }
+
+    /// One of River's tones as a notification sound: iOS plays sounds from Library/Sounds, so the
+    /// file is copied there from the core bundle the first time. Nil when it cannot be.
+    private func toneSound(_ sound: String) -> UNNotificationSound? {
+        guard CoreHost.tones.contains(sound) else { return nil }
+        let file = "river_tone_\(sound).wav"
+        let fm = FileManager.default
+        guard let library = fm.urls(for: .libraryDirectory, in: .userDomainMask).first else { return nil }
+        let dir = library.appendingPathComponent("Sounds", isDirectory: true)
+        let target = dir.appendingPathComponent(file)
+        if !fm.fileExists(atPath: target.path) {
+            guard
+                let source = Bundle(for: CoreHost.self).url(forResource: "core", withExtension: nil)?
+                    .appendingPathComponent("sounds").appendingPathComponent(file),
+                fm.fileExists(atPath: source.path)
+            else { return nil }
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            guard (try? fm.copyItem(at: source, to: target)) != nil else { return nil }
+        }
+        return UNNotificationSound(named: UNNotificationSoundName(rawValue: file))
+    }
+
+    private func notify(
+        id: Int, title: String, body: String, reply: Bool, call: Bool, tag: String? = nil,
+        markRead: Bool = false, conversation: String = "", sound: String = "default"
+    ) {
         let gen = generation
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
@@ -369,9 +434,19 @@ public final class CoreHost: NSObject {
                 let content = UNMutableNotificationContent()
                 content.title = title
                 content.body = body
-                content.categoryIdentifier = reply ? CoreHost.replyCategory : CoreHost.plainCategory
-                // An incoming call makes a sound; other notifications stay quiet, as on computers.
-                if call { content.sound = .default }
+                content.categoryIdentifier =
+                    reply
+                    ? (markRead ? CoreHost.replyReadCategory : CoreHost.replyCategory)
+                    : (markRead ? CoreHost.readCategory : CoreHost.plainCategory)
+                // One conversation's notifications are one group in Notification Center (2.17).
+                if !conversation.isEmpty { content.threadIdentifier = String(conversation.prefix(200)) }
+                // An incoming call makes a sound; other notifications stay quiet, as on computers,
+                // unless the chat has a sound of its own (2.17).
+                if call {
+                    content.sound = .default
+                } else if let tone = self.toneSound(sound) {
+                    content.sound = tone
+                }
                 // A named notification (an incoming call's) can be taken away again by its name.
                 let identifier = (tag?.isEmpty == false) ? tag! : UUID().uuidString
                 if let earlier = self.takeNotification(identifier) {
@@ -518,10 +593,13 @@ extension CoreHost: UNUserNotificationCenterDelegate {
         let text = (response as? UNTextInputNotificationResponse)?.userText
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let dismissed = response.actionIdentifier == UNNotificationDismissActionIdentifier
+        let markedRead = response.actionIdentifier == CoreHost.readAction
         DispatchQueue.main.async {
             if let id = self.takeNotification(identifier) {
                 if dismissed {
                     self.answer(id, value: "dismissed")
+                } else if markedRead {
+                    self.answer(id, value: ["action": "read"] as [String: Any])
                 } else if !text.isEmpty {
                     self.answer(id, value: ["reply": String(text.prefix(4000))] as [String: Any])
                 } else {

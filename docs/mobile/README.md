@@ -60,6 +60,22 @@ decisions) River can go to TestFlight and the App Store instead.
   **Stay connected** (Settings → System) keeps River connected while closed,
   with a quiet permanent notification — River uses no Google or Apple push
   service.
+- Notifications like Telegram's (2.17): one notification per chat or channel
+  (Android's MessagingStyle; the iPhone's per-conversation threads), grouped
+  under a summary ("5 new messages in 2 chats") on Android, taken away when the
+  chat is read on any of your devices, with **Mark as read** next to Reply.
+  Android's launcher badge adds up the messages River's notifications stand
+  for; the iPhone's app icon shows unread chats and mentions (muted ones left
+  out). What a notification, summary or lock screen shows always follows
+  Settings → Notifications → preview.
+- Sounds per chat, channel or community (2.17). An Android notification
+  channel's sound cannot change once the channel exists, so River makes one
+  channel per sound it offers ("Messages · Chime", …) the first time a chat
+  uses it, and posts each chat's notification to its sound's channel; "No
+  sound" posts silently to the usual Messages channel. The tones are River's
+  own synthesised sounds rendered to WAV (`node scripts/generate-notify-tones.ts`
+  writes `res/raw` and the core bundle's `sounds/`, which the iPhone copies to
+  Library/Sounds); a test checks the files still match the notes.
 - Calls keep going with the screen off on Android, ring while River is in the
   background (1.7), and have a speaker button (2.0.1).
 - Android rings like a phone call (2.11): the phone's ringtone and vibration, a

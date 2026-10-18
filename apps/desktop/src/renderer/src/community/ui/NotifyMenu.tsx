@@ -7,7 +7,10 @@ import {
   withOverride,
   type Override,
 } from '../../../../shared/notify-rules.ts';
+import { NOTIFY_SOUNDS, NOTIFY_SOUND_LABELS, type NotifySound } from '../../../../shared/notify-sounds.ts';
+import { useDm } from '../../dm/store.ts';
 import { useRiver } from '../../store.ts';
+import { playNotifySound } from '../sound.ts';
 import { MenuItem } from './common.tsx';
 
 const LEVELS: Array<{ id: Override['level']; label: string }> = [
@@ -16,6 +19,18 @@ const LEVELS: Array<{ id: Override['level']; label: string }> = [
   { id: 'mentions', label: 'Only @mentions' },
   { id: 'nothing', label: 'Nothing' },
 ];
+
+/**
+ * A chat's levels (2.17): chats notify for every message by default; a group can be set to only
+ * mentions and replies to you, any chat to nothing at all.
+ */
+function chatLevels(group: boolean): Array<{ id: Override['level']; label: string }> {
+  return [
+    { id: 'default', label: 'All messages' },
+    ...(group ? [{ id: 'mentions' as const, label: 'Only @mentions and replies' }] : []),
+    { id: 'nothing', label: 'Nothing' },
+  ];
+}
 
 /** "Muted until 18:30", "Muted" (for good) or null. */
 export function mutedLabel(until: string | null | undefined, now = Date.now()): string | null {
@@ -27,8 +42,9 @@ export function mutedLabel(until: string | null | undefined, now = Date.now()): 
 }
 
 /**
- * Mute and notification level for one channel or community, as menu items
- * (1.0.18). Saved on this device.
+ * Mute, notification level and sound for one channel, category, community or chat, as menu
+ * items (1.0.18; chats' levels and sounds, and @everyone for communities, 2.17). Saved on this
+ * device.
  */
 export function NotifyMenuSection(props: {
   id: string;
@@ -37,7 +53,8 @@ export function NotifyMenuSection(props: {
 }): ReactElement | null {
   const settings = useRiver((r) => r.settings);
   const update = useRiver((r) => r.updateSettings);
-  const [choosing, setChoosing] = useState<'mute' | 'level' | null>(null);
+  const group = useDm((d) => d.conversations.find((c) => c.riverId === props.id)?.kind === 'group');
+  const [choosing, setChoosing] = useState<'mute' | 'level' | 'sound' | null>(null);
   if (!settings) return null;
   const overrides = settings.notifications.overrides;
   const current = overrides[props.id];
@@ -46,7 +63,13 @@ export function NotifyMenuSection(props: {
     void update({ notifications: { overrides: withOverride(overrides, props.id, patch) } });
     props.onDone();
   };
-  const noun = props.kind;
+  const toggle = (menu: 'mute' | 'level' | 'sound'): void => setChoosing(choosing === menu ? null : menu);
+  const noun = props.kind === 'conversation' ? 'chat' : props.kind;
+  const levels = props.kind === 'conversation' ? chatLevels(group) : LEVELS;
+  const level = current?.level ?? 'default';
+  const levelLabel = (levels.find((l) => l.id === level) ?? levels[0]!).label;
+  const sound: NotifySound = current?.sound ?? 'default';
+  const fallback = props.kind === 'conversation' ? 'dm' : 'message';
   return (
     <>
       <div className="menu__sep" role="separator" />
@@ -56,10 +79,7 @@ export function NotifyMenuSection(props: {
           <span className="menu__hint">{mutedLabel(current?.muteUntil)}</span>
         </MenuItem>
       ) : (
-        <MenuItem
-          icon={<span aria-hidden="true">🔕</span>}
-          onClick={() => setChoosing(choosing === 'mute' ? null : 'mute')}
-        >
+        <MenuItem icon={<span aria-hidden="true">🔕</span>} onClick={() => toggle('mute')}>
           Mute {noun} {choosing === 'mute' ? '▾' : '▸'}
         </MenuItem>
       )}
@@ -69,26 +89,47 @@ export function NotifyMenuSection(props: {
             <span className="menu__indent">{c.label}</span>
           </MenuItem>
         ))}
-      {props.kind !== 'conversation' && (
-        <MenuItem
-          icon={<span aria-hidden="true">⚙</span>}
-          onClick={() => setChoosing(choosing === 'level' ? null : 'level')}
-        >
-          Notifications {choosing === 'level' ? '▾' : '▸'}
-          <span className="menu__hint">
-            {LEVELS.find((l) => l.id === (current?.level ?? 'default'))!.label}
-          </span>
-        </MenuItem>
-      )}
+      <MenuItem icon={<span aria-hidden="true">⚙</span>} onClick={() => toggle('level')}>
+        Notifications {choosing === 'level' ? '▾' : '▸'}
+        <span className="menu__hint">{levelLabel}</span>
+      </MenuItem>
       {choosing === 'level' &&
-        LEVELS.map((l) => (
+        levels.map((l) => (
           <MenuItem key={l.id} onClick={() => save({ level: l.id })}>
             <span className="menu__indent">
-              {(current?.level ?? 'default') === l.id ? '● ' : '○ '}
+              {level === l.id ? '● ' : '○ '}
               {l.label}
             </span>
           </MenuItem>
         ))}
+      <MenuItem icon={<span aria-hidden="true">♪</span>} onClick={() => toggle('sound')}>
+        Sound {choosing === 'sound' ? '▾' : '▸'}
+        <span className="menu__hint">{NOTIFY_SOUND_LABELS[sound]}</span>
+      </MenuItem>
+      {choosing === 'sound' &&
+        NOTIFY_SOUNDS.map((s) => (
+          <MenuItem
+            key={s}
+            onClick={() => {
+              // Heard once as it is chosen.
+              playNotifySound(s, fallback, true);
+              save({ sound: s });
+            }}
+          >
+            <span className="menu__indent">
+              {sound === s ? '● ' : '○ '}
+              {NOTIFY_SOUND_LABELS[s]}
+            </span>
+          </MenuItem>
+        ))}
+      {props.kind === 'community' && (
+        <MenuItem
+          icon={<span aria-hidden="true">@</span>}
+          onClick={() => save({ suppressEveryone: !current?.suppressEveryone })}
+        >
+          {current?.suppressEveryone ? '● ' : '○ '}Ignore @everyone and @here
+        </MenuItem>
+      )}
     </>
   );
 }

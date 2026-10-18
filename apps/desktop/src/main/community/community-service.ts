@@ -1406,6 +1406,7 @@ export class CommunityService {
         : c,
     );
     if (changed) this.emit({ t: 'communities', communities: this.communities });
+    this.emit({ t: 'channelRead', channelId });
   }
 
   private toChat(communityId: string, m: MessageWire): ChatMessage | null {
@@ -1501,9 +1502,18 @@ export class CommunityService {
           return e.success && text.includes(e.data.url) ? { embed: e.data } : {};
         })(),
         // A reply pings the person replied to, unless the sender turned that off.
-        mentionsMe:
-          m.sender !== me &&
-          this.mentions(text, community, m.sender, body.noPing === true ? undefined : (replyTo ?? undefined)),
+        ...((): { mentionsMe: boolean; mentionKind?: 'direct' | 'everyone' } => {
+          const kind =
+            m.sender === me
+              ? null
+              : this.mentions(
+                  text,
+                  community,
+                  m.sender,
+                  body.noPing === true ? undefined : (replyTo ?? undefined),
+                );
+          return kind ? { mentionsMe: true, mentionKind: kind } : { mentionsMe: false };
+        })(),
         mine: m.sender === me && !hook,
         threadId: m.threadId,
         thread: m.thread
@@ -1536,15 +1546,16 @@ export class CommunityService {
   /**
    * Does this message mention you? By name, through a role you have (when the
    * role is mentionable or the sender may mention everyone), with @everyone or
-   * @here (only from people allowed to), or by replying to your message.
+   * @here (only from people allowed to), or by replying to your message. "everyone" when only
+   * @everyone or @here mention you (2.17: a community may be set to ignore those).
    */
   private mentions(
     text: string,
     community: CommunityView | undefined,
     sender: string,
     replyTo?: string,
-  ): boolean {
-    if (replyTo && this.messageSenders.get(replyTo) === this.me()) return true;
+  ): 'direct' | 'everyone' | null {
+    if (replyTo && this.messageSenders.get(replyTo) === this.me()) return 'direct';
     const lower = text.toLowerCase();
     const senderMember = community?.members.find((m) => m.riverId === sender);
     const senderPerms = senderMember
@@ -1555,16 +1566,17 @@ export class CommunityService {
             .reduce((p, r) => p | r.permissions, 0)
       : 0;
     const mayMentionAll = (senderPerms & (Permission.MENTION_EVERYONE | Permission.ADMINISTRATOR)) !== 0;
-    if (mayMentionAll && /(^|\s)@(everyone|here)\b/.test(lower)) return true;
     const mine = community?.members.find((m) => m.riverId === this.me())?.roles ?? [];
     for (const role of community?.roles ?? []) {
       if (role.everyone || !mine.includes(role.id) || !(role.mentionable || mayMentionAll)) continue;
-      if (lower.includes(`@${role.name.toLowerCase()}`)) return true;
+      if (lower.includes(`@${role.name.toLowerCase()}`)) return 'direct';
     }
     const names = [this.myName(), community ? this.nickname(community.id) : null].filter(
       (n): n is string => !!n,
     );
-    return names.some((n) => lower.includes(`@${n.toLowerCase()}`));
+    if (names.some((n) => lower.includes(`@${n.toLowerCase()}`))) return 'direct';
+    if (mayMentionAll && /(^|\s)@(everyone|here)\b/.test(lower)) return 'everyone';
+    return null;
   }
 
   // ---- Public API (called via IPC) -----------------------------------------------------------

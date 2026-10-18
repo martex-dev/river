@@ -1,4 +1,4 @@
-import { isMuted } from '../../../shared/notify-rules.ts';
+import { conversationNotify, isMuted, mentionsYou, shouldAlert } from '../../../shared/notify-rules.ts';
 import { create } from 'zustand';
 import type {
   ConversationView,
@@ -10,7 +10,7 @@ import type {
 import type { Result } from '../../../shared/ipc.ts';
 import { useCommunity } from '../community/store.ts';
 import { celebrate } from '../community/fx.tsx';
-import { play } from '../community/sound.ts';
+import { play, playNotifySound } from '../community/sound.ts';
 import { useRiver } from '../store.ts';
 import { withLiveMessages } from '../components/unread.ts';
 
@@ -113,9 +113,14 @@ export const useDm = create<DmState>((set, get) => ({
           const viewing =
             get().selected === m.peer && useRiver.getState().section === 'messages' && document.hasFocus();
           if (viewing) void window.river.dm.action({ a: 'read', peer: m.peer });
-          // A muted conversation stays quiet (1.0.26).
+          // A muted conversation stays quiet (1.0.26), as does one set to Nothing, a message sent
+          // without sound, and a group set to Only @mentions unless it mentions you (2.17). The
+          // chat's own sound plays, if it has one.
           const prefs = useRiver.getState().settings?.notifications;
-          if (!prefs || !isMuted(prefs, m.peer)) play(viewing ? 'message' : 'dm');
+          const chat = prefs ? conversationNotify(prefs, m.peer) : null;
+          if (!m.silent && (!chat || shouldAlert(chat, mentionsYou(chat, m)))) {
+            playNotifySound(chat?.sound, viewing ? 'message' : 'dm');
+          }
         }
         return;
       }
@@ -204,7 +209,13 @@ export function totalUnread(
   notifications?: Parameters<typeof isMuted>[0],
 ): number {
   return conversations
-    .filter((c) => c.state !== 'blocked' && !(notifications && isMuted(notifications, c.riverId)))
+    .filter(
+      (c) =>
+        c.state !== 'blocked' &&
+        !(notifications && isMuted(notifications, c.riverId)) &&
+        // Set to Nothing (2.17): no count either.
+        notifications?.overrides[c.riverId]?.level !== 'nothing',
+    )
     .reduce((n, c) => n + c.unread, 0);
 }
 

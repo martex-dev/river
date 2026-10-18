@@ -2,6 +2,7 @@ import { DEFAULT_KEYBINDS } from './keybinds.ts';
 import { z } from 'zod';
 import { RELEASE_CHANNELS } from '@river/release/channels';
 import { DEFAULT_DESIGN, compactDesignImages, designSettingsSchema } from './design.ts';
+import { NOTIFY_SOUNDS } from './notify-sounds.ts';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
@@ -127,11 +128,19 @@ export const settingsSchema = z.object({
         .object({
           level: z.enum(['default', 'all', 'mentions', 'nothing']),
           muteUntil: z.string().max(40).nullable(),
+          /** Added in 2.17: this chat's, channel's or community's notification sound (notify-sounds.ts). */
+          sound: z.enum(NOTIFY_SOUNDS).optional(),
+          /** Added in 2.17 (communities): @everyone and @here do not count as mentioning you. */
+          suppressEveryone: z.boolean().optional(),
         })
         .strict(),
     ),
     /** Added in 1.0.23: tell me when someone reacts to my message (sound and a small notice). */
     reactions: z.boolean(),
+    /** Added in 2.17: the unread count on River's taskbar or dock icon (and the iPhone's app icon). */
+    badge: z.boolean(),
+    /** Added in 2.17: a small banner inside River for messages in other chats while it is open. */
+    banners: z.boolean(),
     /** Added in 1.0.20: no notifications or sounds between these local times (like Do Not Disturb). */
     quietHours: z
       .object({
@@ -271,6 +280,8 @@ export const DEFAULT_SETTINGS: Settings = {
     overrides: {},
     quietHours: { enabled: false, start: '22:00', end: '08:00' },
     reactions: false,
+    badge: true,
+    banners: true,
   },
   server: { url: null, autoAccount: true },
   voice: {
