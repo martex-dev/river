@@ -116,6 +116,19 @@ export function shouldAlert(e: Effective, mentionsMe: boolean): boolean {
 }
 
 /** Whether a channel or community counts as muted right now (for dimming and unread dots). */
+/**
+ * Whether a chat's unread messages count on the badges (the phone's Chats tab, the computer's
+ * Home button, River's icon) — 2.19, as in Telegram: never blocked people or message requests,
+ * and archived chats only with "Count archived chats" on. Muted chats are left out by the callers.
+ */
+export function countsOnBadge(
+  c: { state: string; archived?: boolean | undefined },
+  prefs: { countArchived?: boolean } | undefined,
+): boolean {
+  if (c.state === 'blocked' || c.state === 'request') return false;
+  return !c.archived || !!prefs?.countArchived;
+}
+
 export function isMuted(prefs: Settings['notifications'], id: string, now = Date.now()): boolean {
   return mutedNow(prefs.overrides[id], now);
 }

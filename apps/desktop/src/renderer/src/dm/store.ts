@@ -1,4 +1,10 @@
-import { conversationNotify, isMuted, mentionsYou, shouldAlert } from '../../../shared/notify-rules.ts';
+import {
+  conversationNotify,
+  countsOnBadge,
+  isMuted,
+  mentionsYou,
+  shouldAlert,
+} from '../../../shared/notify-rules.ts';
 import { create } from 'zustand';
 import type {
   ConversationView,
@@ -211,7 +217,8 @@ export function totalUnread(
   return conversations
     .filter(
       (c) =>
-        c.state !== 'blocked' &&
+        // Not message requests, nor archived chats unless you count them (2.19).
+        countsOnBadge(c, notifications) &&
         !(notifications && isMuted(notifications, c.riverId)) &&
         // Set to Nothing (2.17): no count either.
         notifications?.overrides[c.riverId]?.level !== 'nothing',
