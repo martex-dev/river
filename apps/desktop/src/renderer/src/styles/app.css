@@ -2333,6 +2333,9 @@ html[data-density='compact'] .member {
   position: absolute;
   inset: 0;
   display: block;
+  /* The whole little window, not the 300px the stage has in a conversation. */
+  height: auto;
+  padding: 0;
 }
 [data-pip='on'] .dm-call__stage .tile[data-remote] {
   position: absolute;
@@ -2807,8 +2810,9 @@ body:has(.dm-call--full) .popover {
 .call-action--decline svg {
   transform: rotate(0deg);
 }
-/* On a phone: the whole screen, like the phone's own call screen. */
-.incoming-call--full {
+/* On a phone: the whole screen, like the phone's own call screen (two classes: the plain
+   .incoming-call's dim backdrop in community.css comes later and must not win). */
+.incoming-call.incoming-call--full {
   background: linear-gradient(180deg, var(--call-from), var(--call-to) 65%, #05070c);
 }
 .incoming-call--full .incoming-call__card {

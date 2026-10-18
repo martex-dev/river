@@ -5,6 +5,7 @@ import { callStatus } from '../meeting.ts';
 import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, CommunityView, MemberView } from '../../../../shared/ipc.ts';
 import { ProfileCard } from './Members.tsx';
+import { phoneShellActive } from '../../phone/mode.ts';
 import { useRiver } from '../../store.ts';
 import { useCommunity } from '../store.ts';
 import { canOpenCommunitySettings } from '../settings-tabs.ts';
@@ -203,7 +204,14 @@ export function ChannelRow(props: {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const open = (): void => {
     s.selectChannel(ch.id);
-    if (ch.kind === 'voice' && s.call?.channelId !== ch.id && can(ch.permissions, Permission.CONNECT)) {
+    // On a phone a voice channel opens on its lobby, where Join voice joins: a tap while
+    // scrolling the list never turns your microphone on (as in Discord's phone app).
+    if (
+      ch.kind === 'voice' &&
+      !phoneShellActive() &&
+      s.call?.channelId !== ch.id &&
+      can(ch.permissions, Permission.CONNECT)
+    ) {
       void s.joinVoice(ch.id, me);
     }
   };

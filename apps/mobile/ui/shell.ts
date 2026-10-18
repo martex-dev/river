@@ -32,11 +32,19 @@ export interface BackEnv {
 }
 
 /**
+ * Something open inside a screen that Back closes before the screen itself: its own close button
+ * carries this attribute (a search in a conversation, messages being selected, an edit, the
+ * archived chats). The last one on the page is the one opened over the others.
+ */
+export const BACK_TARGET = 'data-phone-back';
+
+/**
  * Android's Back button (MainActivity asks `window.__riverBack()`): true when River handled it,
  * false to let Android put River in the background. In order: the topmost menu or dialog closes;
  * a full-screen call shrinks back into its conversation (it keeps going); Settings, a story or
- * the quick switcher closes; then the screen on top (a conversation, a channel) closes; then the
- * tab goes back to Chats.
+ * the quick switcher closes; then what is open inside the screen (a search, a selection, an edit,
+ * see BACK_TARGET); then the screen on top (a conversation, a channel) closes; then the tab goes
+ * back to Chats.
  */
 export function handleBack(env: BackEnv): boolean {
   if (env.closeTopOverlay()) return true;
@@ -51,6 +59,14 @@ export function handleBack(env: BackEnv): boolean {
     const focused = doc.activeElement;
     const target = focused instanceof HTMLElement && open.contains(focused) ? focused : doc.body;
     target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    return true;
+  }
+  // Not on a screen that is covered or sliding away (those are inert).
+  const inner = [...doc.querySelectorAll<HTMLElement>(`[${BACK_TARGET}]`)]
+    .filter((b) => !b.closest('[inert]') && !(b as HTMLButtonElement).disabled)
+    .at(-1);
+  if (inner) {
+    inner.click();
     return true;
   }
   return env.back();

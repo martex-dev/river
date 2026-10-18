@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, type RefObject } from 'react';
 
 /**
  * Small pieces shared by the channel and direct-message conversations (2.13.1): where a picker
@@ -109,4 +109,29 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, threshold =
       added?.disconnect();
     };
   }, [ref, threshold]);
+}
+
+/**
+ * A message box that grows with what is typed, lines that wrap included, up to its CSS
+ * max-height (then it scrolls). Phones only: a narrow box wraps after a few words, and with only
+ * `rows` it would stay one line tall and hide what you wrote (2.16.1).
+ */
+export function useGrowToFit(ref: RefObject<HTMLTextAreaElement | null>, text: string, on: boolean): void {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !on) return;
+    el.style.height = 'auto';
+    const s = getComputedStyle(el);
+    const extra =
+      s.boxSizing === 'border-box'
+        ? el.offsetHeight - el.clientHeight
+        : -(parseFloat(s.paddingTop) + parseFloat(s.paddingBottom));
+    el.style.height = `${el.scrollHeight + (Number.isFinite(extra) ? extra : 0)}px`;
+  }, [ref, text, on]);
+  useEffect(() => {
+    const el = ref.current;
+    return () => {
+      if (el) el.style.height = '';
+    };
+  }, [ref, on]);
 }

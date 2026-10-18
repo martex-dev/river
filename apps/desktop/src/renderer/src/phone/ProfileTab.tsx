@@ -90,7 +90,14 @@ export function ProfileTab(): ReactElement {
       { label: 'Appearance', icon: Glyph.brush, tone: 'teal', open: 'appearance' },
       { label: 'Calls, voice and video', icon: Glyph.phone, tone: 'green', open: 'voice' },
       { label: 'Language', icon: Glyph.globe, tone: 'purple', open: 'appearance', focus: '.language-field' },
-      { label: 'Phone and battery', icon: Glyph.gear, tone: 'gray', open: 'system' },
+      {
+        label: 'Phone and battery',
+        icon: Glyph.gear,
+        tone: 'gray',
+        open: 'system',
+        // The System part of the page (it starts with read receipts and other privacy toggles).
+        focus: '#settings-system',
+      },
     ],
     [
       ...(platform === 'ios'

@@ -34,11 +34,13 @@ import {
   insertIntoBox,
   nearButton,
   stopEditing,
+  useGrowToFit,
   useStickToBottom,
 } from '../../components/chat-ui.ts';
 import { formatMessageLink } from '../message-link.ts';
 import { ProfileCard } from './Members.tsx';
 import { ForwardDialog } from './Forward.tsx';
+import { phoneShellActive } from '../../phone/mode.ts';
 import { useRiver } from '../../store.ts';
 import { burst } from '../../appearance/delight.tsx';
 import { ChatWallpaperDialog, useChatWallpaper } from '../../appearance/ChatWallpaper.tsx';
@@ -1305,6 +1307,9 @@ function MessageView(props: {
 
 function EditBox({ message }: { message: ChatMessage }): ReactElement {
   const [text, setText] = useState(message.text);
+  const phone = useRiver((r) => isPhone(r.info?.platform));
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useGrowToFit(ref, text, phone);
   const close = (): void => stopEditing(() => useCommunity.setState({ editing: null }));
   const save = async (): Promise<void> => {
     const value = text.trim();
@@ -1320,10 +1325,12 @@ function EditBox({ message }: { message: ChatMessage }): ReactElement {
   return (
     <div className="msg__edit">
       <textarea
+        ref={ref}
         autoFocus
         value={text}
         maxLength={4000}
         rows={Math.min(8, text.split('\n').length)}
+        aria-label={tr('Edit message')}
         onChange={(e) => setText(e.target.value)}
         onFocus={(e) => e.currentTarget.setSelectionRange(text.length, text.length)}
         onKeyDown={(e) => {
@@ -1331,22 +1338,46 @@ function EditBox({ message }: { message: ChatMessage }): ReactElement {
             e.preventDefault();
             close();
           }
-          if (e.key === 'Enter' && !e.shiftKey && !composing(e)) {
+          // On a phone Enter is a new line, as in the message box: Save saves.
+          if (enterSends(e, phone)) {
             e.preventDefault();
             void save();
           }
         }}
       />
-      <span className="muted small">
-        {tr('escape to')}{' '}
-        <button className="btn--link" onClick={close}>
-          {tr('cancel')}
-        </button>{' '}
-        • {tr('enter to')}{' '}
-        <button className="btn--link" onClick={() => void save()}>
-          {tr('save')}
-        </button>
-      </span>
+      {phone ? (
+        <EditActions onCancel={close} onSave={() => void save()} />
+      ) : (
+        <span className="muted small">
+          {tr('escape to')}{' '}
+          <button className="btn--link" onClick={close}>
+            {tr('cancel')}
+          </button>{' '}
+          • {tr('enter to')}{' '}
+          <button className="btn--link" onClick={() => void save()}>
+            {tr('save')}
+          </button>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** A phone has no Escape or Enter key for an edit: Cancel and Save buttons instead (2.16.1). */
+export function EditActions(props: { onCancel(): void; onSave(): void }): ReactElement {
+  return (
+    <div className="msg__edit-actions">
+      <button
+        type="button"
+        className="btn btn--ghost msg__edit-cancel"
+        data-phone-back=""
+        onClick={props.onCancel}
+      >
+        {tr('Cancel')}
+      </button>
+      <button type="button" className="btn btn--primary" onClick={props.onSave}>
+        {tr('Save')}
+      </button>
     </div>
   );
 }
@@ -1402,6 +1433,7 @@ ${shared}`
   const canSend = can(channel.permissions, Permission.SEND_MESSAGES);
   const phone = useRiver((r) => isPhone(r.info?.platform));
   const replyTo = s.replyTo && s.replyTo.channelId === channel.id ? s.replyTo : null;
+  useGrowToFit(ref, text, phone);
   const replyPing = !replyTo || pingOffFor !== replyTo.id;
 
   // Autocomplete for @people, @roles, @everyone/@here and #channels: the word being typed at the caret.
@@ -1924,7 +1956,12 @@ ${shared}`
           aria-label="Emoji"
           title="Emoji"
           onClick={(e) =>
-            setPicker(phone ? { x: 8, y: e.clientY - 330 } : nearButton(e.currentTarget, EMOJI_PICKER))
+            setPicker(
+              phone
+                ? // Above the message box (a tap's own position is 0 when it came from a keyboard).
+                  { x: 8, y: e.currentTarget.getBoundingClientRect().top - EMOJI_PICKER.height - 8 }
+                : nearButton(e.currentTarget, EMOJI_PICKER),
+            )
           }
         >
           {phone ? <EmojiIcon size={24} /> : <SmileIcon size={20} />}
@@ -2019,6 +2056,7 @@ function PinsPanel(props: {
         <button
           className="icon-btn"
           aria-label="Close pinned messages"
+          data-phone-back=""
           onClick={() => useCommunity.setState({ showPins: false })}
         >
           <XIcon size={14} />
@@ -2114,6 +2152,7 @@ function SearchPanel(props: { community: CommunityView; onJump(id: string): void
         <button
           className="icon-btn"
           aria-label="Close search"
+          data-phone-back=""
           onClick={() => useCommunity.setState({ showSearch: false })}
         >
           <XIcon size={14} />
@@ -2202,9 +2241,14 @@ function SelectionBar({ channelId }: { channelId: string }): ReactElement | null
   return (
     <div className="selection-bar" role="toolbar" aria-label="Selected messages">
       <span>
-        <strong>{n}</strong> selected · click messages to add or remove (up to 100)
+        <strong>{n}</strong> selected · {phoneShellActive() ? 'tap' : 'click'} messages to add or remove (up
+        to 100)
       </span>
-      <button className="btn btn--link btn--small" onClick={() => useCommunity.setState({ selecting: null })}>
+      <button
+        className="btn btn--link btn--small"
+        data-phone-back=""
+        onClick={() => useCommunity.setState({ selecting: null })}
+      >
         Cancel
       </button>
       <button
