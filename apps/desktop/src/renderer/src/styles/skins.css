@@ -407,8 +407,14 @@ svg {
 [data-frame='floating'] .workspace > .content,
 [data-frame='floating'] .home-sidebar {
   border-radius: var(--radius-l);
-  overflow: hidden;
   box-shadow: var(--shadow-1);
+}
+/* Only the sidebar is clipped. The page column keeps its own overflow (app.css: it scrolls;
+   community.css: a full-height view clips), which already clips to the rounded corners; an
+   `overflow: hidden` here outranked it and left every page that runs past the window
+   (Admin, Friends, Social, Calls, Files) without a scrollbar or wheel scrolling. */
+[data-frame='floating'] .home-sidebar {
+  overflow: hidden;
 }
 [data-frame='floating'] .community {
   gap: 8px;
