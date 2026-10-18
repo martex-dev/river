@@ -1183,9 +1183,13 @@ export class DmService {
         this.db().prepare('UPDATE contacts SET heard_from = 1 WHERE river_id = ?').run(peer);
         this.emitMessage(content.id, true);
         this.emitConversations();
-        // Keep our own (encrypted) copies of files before the server's copy expires.
-        for (const a of content.attachments ?? []) {
-          void this.deps.community.prefetchAttachment(a).catch(() => undefined);
+        // Keep our own (encrypted) copies of files before the server's copy expires — but not for
+        // a message request: nothing from someone you have not accepted is fetched on its own
+        // (accepting fetches it then).
+        if (this.accepted(conv)) {
+          for (const a of content.attachments ?? []) {
+            void this.deps.community.prefetchAttachment(a).catch(() => undefined);
+          }
         }
         if (!groupId && this.contact(peer)?.state === 'accepted') {
           void this.sendContent(peer, { v: 1, t: 'receipt', kind: 'delivered', ids: [content.id] }).catch(
@@ -1484,6 +1488,30 @@ export class DmService {
       await this.shareProfile(peer).catch((err: unknown) =>
         this.deps.log.warn(`Could not share the profile with one friend: ${(err as Error).message}`),
       );
+    }
+  }
+
+  /** A conversation you accepted (a friend, your own notes, a group you joined), not a request. */
+  private accepted(conv: string): boolean {
+    return isGroupId(conv)
+      ? this.group(conv)?.state === 'accepted'
+      : this.contact(conv)?.state === 'accepted';
+  }
+
+  /** Keeps local copies of the files in a conversation (once it is accepted). */
+  private prefetchConversation(conv: string): void {
+    const rows = this.db()
+      .prepare(
+        `SELECT body FROM dm_messages WHERE peer = ? AND deleted = 0
+           AND json_array_length(json_extract(body, '$.attachments')) > 0`,
+      )
+      .all(conv) as Array<{ body: string }>;
+    for (const r of rows) {
+      try {
+        this.prefetch((JSON.parse(r.body) as { attachments?: AttachmentPointer[] }).attachments ?? []);
+      } catch {
+        // an unreadable row has nothing to fetch
+      }
     }
   }
 
@@ -2581,6 +2609,7 @@ export class DmService {
             const g = this.group(act.peer);
             if (g && g.state === 'request') {
               this.saveGroup({ ...g, state: 'accepted' });
+              this.prefetchConversation(g.id);
               // Now that we joined, let the others see who we are.
               const me = this.me();
               void (async () => {
@@ -2593,6 +2622,7 @@ export class DmService {
             return out(null);
           }
           this.db().prepare(`UPDATE contacts SET state = 'accepted' WHERE river_id = ?`).run(act.peer);
+          this.prefetchConversation(act.peer);
           this.emitConversations();
           // Sharing your profile is also how the other side learns you accepted.
           await this.shareProfile(act.peer).catch(() => undefined);
@@ -2891,11 +2921,18 @@ export class DmService {
     const group = isGroupId(act.peer) ? this.group(act.peer) : undefined;
     if (isGroupId(act.peer)) {
       if (!group || group.state === 'left') throw new CommunityError('You are not in this group.');
-      if (group.state === 'request') this.saveGroup({ ...group, state: 'accepted' });
+      if (group.state === 'request') {
+        this.saveGroup({ ...group, state: 'accepted' });
+        this.prefetchConversation(group.id);
+      }
     } else {
       const contact = this.contact(act.peer);
       if (contact?.state === 'blocked') throw new CommunityError('Unblock this person to message them.');
-      if (!contact || contact.state === 'request') this.upsertContact(act.peer, 'accepted');
+      if (!contact || contact.state === 'request') {
+        this.upsertContact(act.peer, 'accepted');
+        // Writing back accepts a request: its files are kept now.
+        if (contact) this.prefetchConversation(act.peer);
+      }
     }
     const me = this.me();
     const earlier = reuseId ? this.row(reuseId) : undefined;

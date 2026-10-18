@@ -619,8 +619,12 @@ describe('desktop ↔ server direct messages', { timeout: 30_000 }, () => {
     await bob.dm.sync();
     const [m] = await bob.dm.action({ a: 'messages', peer: alice.riverId });
     expect(m!.attachments).toEqual([pointer]);
-    // Bob's River keeps its own encrypted copy as soon as the message arrives…
+    // Alice is a message request for Bob: nothing she sent is fetched on its own (2.20)…
     const local = join(dir, 'Bob-blobs', pointer.id);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(existsSync(local)).toBe(false);
+    // …until Bob accepts. Then his River keeps its own encrypted copy…
+    await bob.dm.action({ a: 'accept', peer: alice.riverId });
     for (let i = 0; i < 100 && !existsSync(local); i++) await new Promise((r) => setTimeout(r, 20));
     expect(readFileSync(local).toString('utf8')).not.toContain('private notes');
     // …so the file still opens after the server's copy has expired.

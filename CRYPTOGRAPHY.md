@@ -275,6 +275,10 @@ decrypting. Blobs have random 128-bit IDs; the server learns their padded size,
 uploader and which message they belong to, nothing else. Received files are
 never opened automatically — only images, audio and video of a short allow-list
 of types are shown inline; everything else is saved only when the user chooses.
+Files in direct messages are fetched ahead (kept encrypted on the device, so
+they outlive the server's copy) only in conversations you accepted; since 2.20
+a message request's files are fetched only when you open them or accept it, so
+a stranger cannot make River download files or crowd your kept copies out.
 
 ## 6. Local storage (implemented, 0.0.3)
 

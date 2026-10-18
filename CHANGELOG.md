@@ -14,6 +14,9 @@ All notable changes to River are documented here. The format follows
 - Linked devices: a device you remove stops getting copies of what you send
   right away, also when the server keeps offering the old device list. A list
   for your account signed by any key other than yours is ignored.
+- Message requests: files from people you have not accepted are no longer
+  downloaded in the background. They are fetched when you open them, or all at
+  once when you accept the request.
 
 ## [2.20.0] - 2026-10-18
 
