@@ -21,6 +21,9 @@ All notable changes to River are documented here. The format follows
   share with them.
 - Call links: someone you let into a call-link call can no longer open it to
   a group they share with you. Only the people you let in can connect.
+- Backups: messages set to disappear are no longer saved in backup files,
+  which would have kept them long after they disappeared. Disappearing-message
+  timers are kept, so after a restore new messages still disappear.
 
 ## [2.20.0] - 2026-10-18
 

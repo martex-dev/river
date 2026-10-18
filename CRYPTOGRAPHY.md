@@ -310,6 +310,9 @@ a stranger cannot make River download files or crowd your kept copies out.
   keys (all epochs), contacts' identity keys and verification marks, groups,
   message history and posts — not libsignal sessions or prekeys, which are
   regenerated after a restore (contacts get a fresh session automatically).
+  Since 2.20 messages set to disappear are left out (a backup file outlives
+  their timer); the conversations' timers are kept, so what you write after a
+  restore still disappears.
 - Device-to-device transfer (Stage 2) uses a libsignal session established by
   scanning a QR code.
 

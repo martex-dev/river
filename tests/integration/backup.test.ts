@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { openBackup, parseRecoveryPhrase } from '@river/crypto';
 import { AccountService } from '../../apps/desktop/src/main/account/account-service.ts';
 import { BackupService } from '../../apps/desktop/src/main/backup/backup-service.ts';
 import { CommunityService } from '../../apps/desktop/src/main/community/community-service.ts';
@@ -169,6 +170,33 @@ describe('backup and restore', { timeout: 60_000 }, () => {
     expect(() => restored.backup.restore(file, phrase.join(' '))).toThrow(/fresh install/);
     // Whoever restored typed the phrase: they can make backups straight away.
     expect(restored.backup.status().phraseShown).toBe(true);
+  });
+
+  it('leaves disappearing messages out and keeps the timers (2.20)', async () => {
+    const alice = await install('ana.db', 'Ana');
+    const bob = await install('ben.db', 'Ben');
+    const bobId = bob.identity.get()!.riverId;
+    await alice.dm.action({ a: 'open', peer: bobId });
+    await alice.dm.action({ a: 'send', peer: bobId, text: 'kept' });
+    await alice.dm.action({ a: 'setTimer', peer: bobId, seconds: 3600 });
+    await alice.dm.action({ a: 'send', peer: bobId, text: 'gone in an hour' });
+    const phrase = alice.backup.phrase();
+    const { file } = alice.backup.create();
+    const inside = openBackup<{ tables: { dm_messages: Array<{ body: string }> } }>(
+      parseRecoveryPhrase(phrase.join(' ')),
+      file,
+    );
+    const texts = inside.tables.dm_messages.map((r) => (JSON.parse(r.body) as { text: string }).text);
+    expect(texts).toContain('kept');
+    expect(texts).not.toContain('gone in an hour');
+
+    const restored = await install('ana-new.db');
+    restored.backup.restore(file, phrase.join(' '));
+    expect((await restored.dm.action({ a: 'messages', peer: bobId })).map((m) => m.text)).not.toContain(
+      'gone in an hour',
+    );
+    // What Ana writes after the restore still disappears.
+    expect(restored.dm.timerOf(bobId)).toBe(3600);
   });
 
   it('makes no backup before the recovery phrase was shown, and counts only saved ones', async () => {

@@ -38,11 +38,16 @@ const TABLES = [
 /** Contacts' identity keys (trust on first use) and verification marks. */
 const SIGNAL_KINDS = ['identity', 'verified'];
 /**
+ * Disappearing-message timers per conversation (2.20): without them a restored River would send
+ * new messages that never disappear. The messages that are set to disappear are not in backups.
+ */
+const DM_TIMERS = 'dm:timers';
+/**
  * Protocol facts that guard against a server rolling things back (2.11): the newest device list
  * version seen for each contact, and community members known to hold a genuine key. Without
  * them a restored River would accept an older device list again.
  */
-const SIGNAL_META_PREFIXES = ['dm:listVersion:', 'community:vouched:'];
+const SIGNAL_META_PREFIXES = ['dm:listVersion:', 'community:vouched:', DM_TIMERS];
 const backedUpSignal = (kind: string, id: string): boolean =>
   SIGNAL_KINDS.includes(kind) || (kind === 'meta' && SIGNAL_META_PREFIXES.some((p) => id.startsWith(p)));
 
@@ -131,7 +136,9 @@ export class BackupService {
     }
     const tables: BackupFile['tables'] = {};
     for (const t of TABLES) {
-      const rows = db.prepare(`SELECT * FROM ${t}`).all() as Array<Record<string, unknown>>;
+      // Disappearing messages never go into a backup: a file outlives their timer (2.20).
+      const where = t === 'dm_messages' ? ' WHERE expires_at IS NULL' : '';
+      const rows = db.prepare(`SELECT * FROM ${t}${where}`).all() as Array<Record<string, unknown>>;
       tables[t] = rows.map((r) =>
         Object.fromEntries(
           Object.entries(r).map(([k, v]) => [
