@@ -154,6 +154,28 @@ describe('River server HTTP API', () => {
     expect(res.json().error.code).toBe('payload_too_large');
   });
 
+  it('takes large binary bodies only for a signed-in upload, not on any other route (2.18)', async () => {
+    const { app } = await start();
+    const big = Buffer.alloc(1024 * 1024, 1);
+    for (const url of ['/v1/accounts', '/v1/auth/challenge']) {
+      const res = await app.inject({
+        method: 'POST',
+        url,
+        headers: { 'content-type': 'application/octet-stream' },
+        payload: big,
+      });
+      expect(res.statusCode, url).toBe(413);
+    }
+    // The upload route itself answers before reading the body when there is no session.
+    const upload = await app.inject({
+      method: 'POST',
+      url: '/v1/attachments',
+      headers: { 'content-type': 'application/octet-stream', authorization: 'Bearer nope' },
+      payload: big,
+    });
+    expect(upload.statusCode).toBe(401);
+  });
+
   it('hides internal error details', async () => {
     const { app } = await start();
     app.get('/v1/explode-test', async () => {

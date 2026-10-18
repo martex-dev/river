@@ -32,6 +32,9 @@ All notable changes to River are documented here. The format follows
 - Server: server mute (and a stage's audience) and server deafen now also hold
   for voice that goes through the server relay, not only in the muted
   person's own app.
+- Server: only a signed-in file upload may send a large body. Other requests,
+  and uploads without a valid session, are refused before the server reads
+  them.
 
 ## [2.17.0] - 2026-10-18
 
