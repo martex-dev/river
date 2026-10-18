@@ -266,7 +266,10 @@ describe('TURN credentials', () => {
 });
 
 describe('abuse limits', () => {
-  const custom = async (env: Record<string, string>, diskFree?: () => Promise<number>) => {
+  const custom = async (
+    env: Record<string, string>,
+    extra: { diskFree?: () => Promise<number>; now?: () => Date } = {},
+  ) => {
     database = openDatabase('sqlite::memory:');
     await migrateToLatest(database.db);
     app = await buildApp({
@@ -277,7 +280,7 @@ describe('abuse limits', () => {
         ...env,
       }),
       database,
-      ...(diskFree ? { diskFree } : {}),
+      ...extra,
     });
   };
   const sendTo = (
@@ -356,6 +359,66 @@ describe('abuse limits', () => {
     expect(Number(stored.n)).toBeLessThanOrEqual(10 * 1024 * 1024);
   });
 
+  it('one account cannot use up another’s one-time prekeys; sessions still start (2.20)', async () => {
+    let clock = new Date('2026-10-18T12:00:00.000Z');
+    await custom({}, { now: () => clock });
+    const mallory = await client(app);
+    const alice = await client(app);
+    const bob = await client(app);
+    expect((await upload(app, bob, 50)).statusCode).toBe(200);
+    const left = async () =>
+      (await app.inject({ method: 'GET', url: '/v1/keys', headers: auth(bob.token) })).json() as {
+        preKeys: number;
+        kyberPreKeys: number;
+      };
+    // Mallory fetches Bob's keys again and again: ten fetches an hour take one-time keys, the
+    // rest get the signed and last-resort keys only.
+    const taken: Array<number | null> = [];
+    for (let i = 0; i < 30; i++) {
+      const res = keyBundleResponseSchema.parse((await bundle(app, mallory.token, bob.riverId)).json());
+      taken.push(res.devices[0]!.preKey?.id ?? null);
+    }
+    expect(taken.filter((x) => x !== null)).toHaveLength(10);
+    expect(taken.slice(10).every((x) => x === null)).toBe(true);
+    expect(await left()).toEqual({ preKeys: 40, kyberPreKeys: 40 });
+
+    // Alice, who never fetched before, still gets one-time keys.
+    const fresh = keyBundleResponseSchema.parse((await bundle(app, alice.token, bob.riverId)).json());
+    expect(fresh.devices[0]!.preKey).not.toBeNull();
+
+    // A bundle past the budget still starts a working session (as when the keys ran out).
+    const lean = keyBundleResponseSchema.parse((await bundle(app, mallory.token, bob.riverId)).json());
+    expect(lean.devices[0]!.preKey).toBeNull();
+    await mallory.protocol.startSession(
+      bob.riverId,
+      Buffer.from(lean.identityKey, 'base64'),
+      lean.devices[0]!,
+    );
+    const env = await mallory.protocol.encrypt(bob.riverId, 1, text('hello from the last-resort keys'));
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: `/v1/messages/${bob.riverId}`,
+          headers: auth(mallory.token),
+          payload: { messages: [{ deviceId: 1, registrationId: bob.identity.registrationId, ...env }] },
+        })
+      ).statusCode,
+    ).toBe(202);
+    const box = mailboxResponseSchema.parse(
+      (await app.inject({ method: 'GET', url: '/v1/messages', headers: auth(bob.token) })).json(),
+    );
+    const e = box.envelopes[0]!;
+    expect(new TextDecoder().decode(await bob.protocol.decrypt(e.sender, e.senderDevice, e))).toBe(
+      'hello from the last-resort keys',
+    );
+
+    // An hour later the budget is there again.
+    clock = new Date(clock.getTime() + 61 * 60 * 1000);
+    const later = keyBundleResponseSchema.parse((await bundle(app, mallory.token, bob.riverId)).json());
+    expect(later.devices[0]!.preKey).not.toBeNull();
+  });
+
   it('the defaults let thousands of messages wait for an offline friend', () => {
     const config = loadConfig({});
     expect(config.mailboxPerSender).toBeGreaterThanOrEqual(2000);
@@ -366,7 +429,10 @@ describe('abuse limits', () => {
 
   it('refuses uploads when the disk is nearly full or the server-wide total is reached (2.20)', async () => {
     let free = 500 * 1024 * 1024;
-    await custom({ RIVER_ATTACHMENT_TOTAL_MB: '10', RIVER_MAX_ATTACHMENT_MB: '25' }, async () => free);
+    await custom(
+      { RIVER_ATTACHMENT_TOTAL_MB: '10', RIVER_MAX_ATTACHMENT_MB: '25' },
+      { diskFree: async () => free },
+    );
     const alice = await client(app);
     const bob = await client(app);
     const upload = (token: string) =>

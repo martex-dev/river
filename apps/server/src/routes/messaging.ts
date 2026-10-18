@@ -25,6 +25,16 @@ const MAILBOX_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MAILBOX_PER_SENDER = 2500;
 const MAILBOX_MAX_BYTES = 100 * 1024 * 1024;
 const PAGE = 100;
+/**
+ * Key-bundle fetches one account may make for another per hour that take one-time prekeys
+ * (2.20). A normal app fetches once per new contact, and again when their devices change; past
+ * this, bundles come with the signed and last-resort keys only (sessions still start), so nobody
+ * can use up someone's one-time keys and with them the extra protection they give first messages.
+ */
+const PREKEY_CLAIMS_PER_HOUR = 10;
+const PREKEY_WINDOW_MS = 60 * 60 * 1000;
+/** Requester/target pairs remembered at most (in memory); the oldest windows go first. */
+const MAX_CLAIM_PAIRS = 100_000;
 
 const b = (s: string): Buffer => Buffer.from(s, 'base64');
 const bad = (msg = 'Bad request'): HttpError => new HttpError(400, 'bad_request', msg);
@@ -305,6 +315,28 @@ export function registerMessagingRoutes(
     );
   };
 
+  /** One-time prekey takings per requester and target, in memory only (2.20). */
+  const claims = new Map<string, { since: number; n: number }>();
+  const mayClaim = (requester: string, target: string): boolean => {
+    const now = deps.now().getTime();
+    const key = `${requester}>${target}`;
+    let c = claims.get(key);
+    if (!c || now - c.since >= PREKEY_WINDOW_MS) {
+      claims.delete(key);
+      c = { since: now, n: 0 };
+      claims.set(key, c);
+      if (claims.size > MAX_CLAIM_PAIRS) {
+        for (const [k, v] of claims) {
+          if (claims.size <= MAX_CLAIM_PAIRS) break;
+          if (k !== key || now - v.since >= PREKEY_WINDOW_MS) claims.delete(k);
+        }
+      }
+    }
+    if (c.n >= PREKEY_CLAIMS_PER_HOUR) return false;
+    c.n += 1;
+    return true;
+  };
+
   const isBlocked = async (owner: string, other: string): Promise<boolean> =>
     !!(await db
       .selectFrom('blocks')
@@ -357,6 +389,8 @@ export function registerMessagingRoutes(
         .orderBy('device_id')
         .execute();
       const bundles = [];
+      // Over the budget for this pair: the bundle carries no one-time keys (none are used up).
+      const oneTime = mayClaim(request.session!.riverId, target);
       for (const d of devices) {
         if (target === request.session!.riverId && d.device_id === request.session!.deviceId) continue;
         const bundle = await db.transaction().execute(async (trx) => {
@@ -371,7 +405,7 @@ export function registerMessagingRoutes(
           // never both hand out the same key (on PostgreSQL the candidate row is locked, skipping
           // rows another fetch already holds; SQLite runs one write transaction at a time).
           const kyber =
-            (await claimOneTime(trx, 'kyber_prekeys', target, d.device_id)) ??
+            (oneTime ? await claimOneTime(trx, 'kyber_prekeys', target, d.device_id) : undefined) ??
             (await trx
               .selectFrom('kyber_prekeys')
               .selectAll()
@@ -380,7 +414,7 @@ export function registerMessagingRoutes(
               .where('last_resort', '=', 1)
               .executeTakeFirst());
           if (!kyber) return null;
-          const pre = await claimOneTime(trx, 'prekeys', target, d.device_id);
+          const pre = oneTime ? await claimOneTime(trx, 'prekeys', target, d.device_id) : undefined;
           return {
             deviceId: d.device_id,
             registrationId: d.registration_id,
@@ -628,7 +662,14 @@ export function registerMessagingRoutes(
     await db.deleteFrom('username_holds').where('until', '<=', now.toISOString()).execute();
     await db.deleteFrom('signups').where('expires_at', '<=', now.toISOString()).execute();
   };
-  const timer = setInterval(() => void collect().catch(() => undefined), 60 * 60 * 1000);
+  const timer = setInterval(
+    () => {
+      void collect().catch(() => undefined);
+      const now = deps.now().getTime();
+      for (const [k, v] of claims) if (now - v.since >= PREKEY_WINDOW_MS) claims.delete(k);
+    },
+    60 * 60 * 1000,
+  );
   timer.unref();
   app.addHook('onReady', async () => {
     await collect().catch(() => undefined);

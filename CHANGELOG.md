@@ -31,6 +31,10 @@ All notable changes to River are documented here. The format follows
   the server's disk is nearly full (`RIVER_MIN_FREE_DISK_MB`) or past an
   optional total for all files (`RIVER_ATTACHMENT_TOTAL_MB`), with a clear
   message instead of a failing server.
+- Server: fetching someone's keys over and over no longer uses up their
+  one-time prekeys. One account takes at most ten of another's an hour;
+  further fetches get keys that still start a conversation (apps need no
+  change).
 
 ## [2.20.0] - 2026-10-18
 

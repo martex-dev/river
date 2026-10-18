@@ -935,6 +935,40 @@ describe('direct messages: audit fixes', { timeout: 60_000 }, () => {
     expect((await messagesOf(bob, alice.riverId)).some((m) => m.text === 'a day later')).toBe(true);
   });
 
+  it('first contact still works once the server stops handing one-time prekeys to this account (2.20)', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    // Alice's account already fetched Bob's keys ten times this hour (the server's budget per pair):
+    // the next bundle comes with the signed and last-resort keys only.
+    for (let i = 0; i < 10; i++) {
+      const res = await server.inject({
+        method: 'GET',
+        url: `/v1/keys/${bob.riverId}`,
+        headers: { authorization: `Bearer ${alice.account.sessionToken()}` },
+      });
+      expect(res.statusCode).toBe(200);
+    }
+    const left = async () =>
+      Number(
+        (
+          await serverDb.db
+            .selectFrom('prekeys')
+            .select((eb) => eb.fn.countAll().as('n'))
+            .where('river_id', '=', bob.riverId)
+            .executeTakeFirstOrThrow()
+        ).n,
+      );
+    const before = await left();
+    await alice.dm.action({ a: 'open', peer: bob.riverId, name: 'Bob' });
+    const sent = await alice.dm.action({ a: 'send', peer: bob.riverId, text: 'no one-time key needed' });
+    expect(sent.status).toBe('sent');
+    expect(await left()).toBe(before);
+    await bob.dm.sync();
+    expect((await messagesOf(bob, alice.riverId)).some((m) => m.text === 'no one-time key needed')).toBe(
+      true,
+    );
+  });
+
   it('answering a call on one device stops it ringing on your other devices', async () => {
     const bob = await person('Bob');
     const bobPhone = await linkDevice(bob, 'Bob-phone');

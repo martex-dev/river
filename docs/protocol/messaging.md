@@ -14,11 +14,11 @@ storage (the SQLCipher database) and the wire encoding.
 
 ## Prekeys
 
-| Endpoint                | Purpose                                                                                                                                                     |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PUT /v1/keys`          | Upload a signed prekey, a Kyber last-resort key and up to 100 one-time EC and Kyber prekeys. Every signature must verify with the account identity key.     |
-| `GET /v1/keys`          | Remaining one-time prekeys (clients top up below 25, to 100).                                                                                               |
-| `GET /v1/keys/:riverId` | Identity key, the identity-signed device list, and one bundle per device. One-time keys are consumed; when none are left the Kyber last-resort key is used. |
+| Endpoint                | Purpose                                                                                                                                                                                                                                                                                         |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PUT /v1/keys`          | Upload a signed prekey, a Kyber last-resort key and up to 100 one-time EC and Kyber prekeys. Every signature must verify with the account identity key.                                                                                                                                         |
+| `GET /v1/keys`          | Remaining one-time prekeys (clients top up below 25, to 100).                                                                                                                                                                                                                                   |
+| `GET /v1/keys/:riverId` | Identity key, the identity-signed device list, and one bundle per device. One-time keys are consumed; when none are left the Kyber last-resort key is used. Since 2.20 one account consumes at most 10 of another's per hour; later bundles carry `preKey: null` and the last-resort Kyber key. |
 
 Clients rotate the signed prekey (and Kyber last-resort key) weekly.
 

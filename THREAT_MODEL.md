@@ -154,6 +154,13 @@ Videos and other files are sent as they are, and file names are kept.
   (`RIVER_ATTACHMENT_TOTAL_MB`). Many accounts working together can still fill
   a mailbox up to its cap; the 30-day expiry and the device's next collection
   empty it.
+- **One-time prekeys cannot be drained by one account.** Every key-bundle
+  fetch takes one of the person's one-time prekeys, so anyone could fetch
+  again and again until none were left (first messages then lose the extra
+  forward secrecy those keys give). Since 2.20 one account takes at most ten an
+  hour from another; further fetches get the signed and last-resort keys only,
+  with which sessions still start. Many accounts can still use them up
+  together; the app tops them up when it next connects.
 
 ### 5a. Address relay (River Host, 1.0.8)
 
