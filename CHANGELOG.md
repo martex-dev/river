@@ -18,6 +18,9 @@ All notable changes to River are documented here. The format follows
   no longer be given, taken, temporarily given, edited, moved, deleted or
   offered as a self-assignable role by you (owners and administrators are not
   affected). River's member list no longer offers such roles.
+- Communities: a timeout now also stops editing your own messages, renaming
+  your threads and pinning (as it already stopped posting, reacting, starting
+  threads and voice).
 
 ## [2.20.0] - 2026-10-18
 

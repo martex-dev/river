@@ -159,6 +159,24 @@ export class CommunityModel {
     return perms;
   }
 
+  /**
+   * Timed out, or still to accept a screened community's rules, and neither the owner nor an
+   * administrator: may read, but not take part. Used where no permission bit decides it (editing
+   * your own message, renaming your thread), so a timeout cannot be talked around (2.20).
+   */
+  restricted(riverId: string): boolean {
+    if (riverId === this.ownerId || !(this.pending(riverId) || this.timedOut(riverId))) return false;
+    const m = this.member(riverId);
+    if (!m) return true;
+    const perms = computePermissions({
+      ownerId: this.ownerId,
+      everyoneRoleId: this.everyoneRoleId,
+      roles: this.roles,
+      member: { riverId, roles: m.roles },
+    });
+    return !(perms & Permission.ADMINISTRATOR);
+  }
+
   /** Is this member timed out right now? */
   timedOut(riverId: string, now = Date.now()): boolean {
     const until = this.member(riverId)?.timeoutUntil;

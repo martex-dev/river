@@ -38,9 +38,10 @@ export type PermissionName = keyof typeof Permission;
 
 export const ALL_PERMISSIONS = Object.values(Permission).reduce((a, b) => a | b, 0);
 
-/** What a timed-out member cannot do (they can still read). */
+/** What a timed-out member cannot do (they can still read). Pinning since 2.20. */
 export const TIMEOUT_DENIES =
   Permission.SEND_MESSAGES |
+  Permission.PIN_MESSAGES |
   Permission.ADD_REACTIONS |
   Permission.ATTACH_FILES |
   Permission.MENTION_EVERYONE |

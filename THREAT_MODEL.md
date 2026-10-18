@@ -131,6 +131,14 @@ Videos and other files are sent as they are, and file names are kept.
   it is below your highest role and carries no permission you do not have;
   creating or editing a role still cannot grant one. Owners and administrators
   hold every permission, so only the position rule applies to them.
+- **A timeout holds everywhere.** A timed-out member could still edit their
+  old messages, rename their threads and pin. Since 2.20 a timeout (and a
+  screened community's rules not yet accepted) also stops editing, renaming a
+  thread and pinning, besides posting, reacting, starting threads, inviting and
+  voice (the seat ends when the timeout starts). Reading, taking back your own
+  reaction and moderating others stay possible; owners and administrators are
+  never timed out. Profiles can still be republished: the app must reseal them
+  after a key rotation.
 
 ### 5a. Address relay (River Host, 1.0.8)
 

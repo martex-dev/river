@@ -2699,6 +2699,9 @@ export async function registerCommunityRoutes(
       model.can(me(request), Permission.MANAGE_CHANNELS, msg.channel_id);
     if (thread.creator !== me(request) && !manager) throw forbidden();
     const req = parse(updateThreadRequestSchema, request.body);
+    // Its name is something everyone reads: not while timed out (2.20).
+    if (req.name !== undefined && model.restricted(me(request)))
+      throw forbidden('You cannot rename threads while you are timed out');
     await db
       .updateTable('threads')
       .set({
@@ -2726,6 +2729,8 @@ export async function registerCommunityRoutes(
   app.patch<{ Params: { id: string } }>(`${API_PREFIX}/messages/:id`, authed, async (request) => {
     const { model, msg } = await messageContext(request.params.id, me(request));
     if (msg.sender !== me(request) || msg.webhook_id) throw forbidden('You can only edit your own messages');
+    // A timeout takes away talking, and editing an old message is talking too (2.20).
+    if (model.restricted(me(request))) throw forbidden('You cannot edit messages while you are timed out');
     const req = parse(editMessageRequestSchema, request.body);
     await db
       .updateTable('messages')
@@ -2812,7 +2817,8 @@ export async function registerCommunityRoutes(
     const can =
       model.can(me(request), Permission.PIN_MESSAGES, msg.channel_id) ||
       model.can(me(request), Permission.MANAGE_MESSAGES, msg.channel_id);
-    if (!can) throw forbidden();
+    // Pinning puts a message in front of everyone: a timeout stops it, as it stops posting (2.20).
+    if (!can || model.restricted(me(request))) throw forbidden();
     await db.updateTable('messages').set({ pinned }).where('id', '=', msg.id).execute();
     await pushMessage(model, msg.id);
     return { ok: true };

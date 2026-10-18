@@ -1303,6 +1303,83 @@ describe('communities', () => {
       ).toBe(201);
     });
 
+    it('a timeout also stops editing, reacting, threads and pins (2.20)', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const pinner = await role(a, owner.token, cid, Permission.PIN_MESSAGES);
+      await assign(a, owner.token, cid, member.riverId, [pinner.rid]);
+      const mine = id();
+      const theirs = id();
+      expect(
+        await status(a, 'POST', `/v1/channels/${text}/messages`, member.token, { id: mine, body: sealed() }),
+      ).toBe(201);
+      expect(
+        await status(a, 'POST', `/v1/channels/${text}/messages`, owner.token, { id: theirs, body: sealed() }),
+      ).toBe(201);
+      expect(await status(a, 'POST', `/v1/messages/${mine}/thread`, member.token, { name: sealed() })).toBe(
+        201,
+      );
+      const tag = randomBytes(16).toString('hex');
+      expect(
+        await status(a, 'PUT', `/v1/messages/${theirs}/reactions/${tag}`, owner.token, { emoji: sealed() }),
+      ).toBe(200);
+      const until = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      const timeout = (value: string | null) =>
+        status(a, 'PUT', `/v1/communities/${cid}/members/${member.riverId}/timeout`, owner.token, {
+          until: value,
+        });
+      expect(await timeout(until)).toBe(200);
+
+      const tries = async () => ({
+        edit: await status(a, 'PATCH', `/v1/messages/${mine}`, member.token, { body: sealed() }),
+        rename: await status(a, 'PATCH', `/v1/threads/${mine}`, member.token, { name: sealed() }),
+        thread: await status(a, 'POST', `/v1/messages/${theirs}/thread`, member.token, { name: sealed() }),
+        reactNew: await status(
+          a,
+          'PUT',
+          `/v1/messages/${theirs}/reactions/${randomBytes(16).toString('hex')}`,
+          member.token,
+          {
+            emoji: sealed(),
+          },
+        ),
+        reactJoin: await status(a, 'PUT', `/v1/messages/${theirs}/reactions/${tag}`, member.token, {
+          emoji: sealed(),
+        }),
+        pin: await status(a, 'PUT', `/v1/messages/${theirs}/pin`, member.token),
+      });
+      expect(await tries()).toEqual({
+        edit: 403,
+        rename: 403,
+        thread: 403,
+        reactNew: 403,
+        reactJoin: 403,
+        pin: 403,
+      });
+      // Reading, and taking your own reaction back, still work.
+      expect(await status(a, 'GET', `/v1/channels/${text}/messages`, member.token)).toBe(200);
+      expect(await status(a, 'DELETE', `/v1/messages/${theirs}/reactions/${tag}`, member.token)).toBe(200);
+      const body = (
+        await a.inject({ method: 'GET', url: `/v1/channels/${text}/messages`, headers: auth(owner.token) })
+      )
+        .json()
+        .messages.find((m: { id: string }) => m.id === mine);
+      expect(body.editedAt).toBeNull();
+
+      // Once the timeout is over, all of it works again.
+      expect(await timeout(null)).toBe(200);
+      expect(await tries()).toEqual({
+        edit: 200,
+        rename: 200,
+        thread: 201,
+        reactNew: 200,
+        reactJoin: 200,
+        pin: 200,
+      });
+    });
+
     it('records an audit log that only permitted members can read', async () => {
       const a = await start();
       const owner = await user(a);
