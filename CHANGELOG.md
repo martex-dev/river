@@ -6,6 +6,36 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.20.1] - 2026-10-18
+
+**A security audit of direct messages, linked devices and backups: eight fixes.**
+
+### Security
+
+- Direct messages: a first message "from" someone you share a community with
+  must use the safety key their community profile names. A server can no
+  longer write to you first as a community member under a key of its own.
+- Linked devices: a device you remove stops getting copies of what you send
+  right away, also when the server keeps offering the old device list. A list
+  for your account signed by any key other than yours is ignored.
+- Message requests: files from people you have not accepted are no longer
+  downloaded in the background. They are fetched when you open them, or all at
+  once when you accept the request.
+- Groups: people you blocked no longer see when you are typing in a group you
+  share with them.
+- Call links: someone you let into a call-link call can no longer open it to
+  a group they share with you. Only the people you let in can connect.
+- Backups: messages set to disappear are no longer saved in backup files,
+  which would have kept them long after they disappeared. Disappearing-message
+  timers are kept, so after a restore new messages still disappear.
+- Local data: the encrypted database keeps its temporary working data in
+  memory, so large searches and sorts never write unencrypted pieces of your
+  messages to temporary files on disk.
+- Direct messages: old signed prekeys are deleted 95 days after they are
+  replaced, instead of being kept forever, so keys taken from a device later
+  cannot open older first messages. A replaced key is no longer deleted too
+  early either, which made some first messages fail to open.
+
 ## [2.20.0] - 2026-10-18
 
 **A security audit's fourteen fixes, and messaging that feels like Telegram: big emoji, reply previews, saved replies, effects.**

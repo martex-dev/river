@@ -53,6 +53,9 @@ export function openEncryptedDatabase(path: string, key: Buffer): LocalDatabase 
   }
   db.pragma('foreign_keys = ON');
   db.pragma('secure_delete = ON');
+  // Temporary tables, indices and sort spills stay in memory: the cipher covers the database
+  // file and its journal, but SQLite's temp files would hold plaintext rows on disk.
+  db.pragma('temp_store = MEMORY');
   db.pragma('journal_mode = DELETE');
   return db;
 }

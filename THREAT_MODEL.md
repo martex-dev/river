@@ -267,7 +267,9 @@ A new device gets the account's identity key and community keys sealed to it
 (HPKE) through a short-lived mailbox; the server sees public keys, sealed
 blobs and timing. The device list is signed by the identity key, and clients
 refuse lists older than one they have seen. Removing a device makes the server
-end its sessions and connection; a removed device keeps what it already had
+end its sessions and connection, and since 2.20 the account's other devices
+stop encrypting copies to it at once (they never use an own-device list older
+than the one they hold); a removed device keeps what it already had
 (including keys), so against a lost device the server's cooperation matters.
 
 ### 5m. Remote assistance (1.8, ADR 0007)
@@ -313,7 +315,10 @@ encrypted call and point signals and sees who takes part, as for any call.
   nothing until the phone is unlocked.
 - **Trust on first use.** Without verified safety numbers or a shared
   community, a server can still present a different identity key for a
-  contact; River shows the change but cannot tell it from a reinstall.
+  contact; River shows the change but cannot tell it from a reinstall. With a
+  shared community the key in that person's sealed profile is checked both
+  ways: for a first message to them, and since 2.20 for a first message from
+  them.
 - **Community messages sealed with v1 associated data** (everything sent
   before 2.12, and anything from Rivers not yet on 2.12) can still be
   re-attributed to another sender or replayed under a new ID by the server;

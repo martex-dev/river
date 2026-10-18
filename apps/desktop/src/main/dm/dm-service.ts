@@ -678,6 +678,10 @@ export class DmService {
       },
       count: (kind) =>
         (db.prepare('SELECT COUNT(*) AS n FROM signal_store WHERE kind = ?').get(kind) as { n: number }).n,
+      ids: (kind) =>
+        (db.prepare('SELECT id FROM signal_store WHERE kind = ?').all(kind) as Array<{ id: string }>).map(
+          (r) => r.id,
+        ),
     };
   }
 
@@ -693,6 +697,12 @@ export class DmService {
       this.emitConversations();
     };
     protocol.approveIdentityChange = (change) => this.confirmIdentityChange(change);
+    // A first message "from" someone in a shared community must come under the identity key their
+    // sealed profile names (the server cannot forge that), as for a first message sent to them.
+    protocol.acceptNewIdentity = (riverId, key) => {
+      const fromCommunity = this.deps.community.communityIdentityKey(riverId);
+      return !fromCommunity || fromCommunity === Buffer.from(key).toString('base64');
+    };
     this.protocolCache = protocol;
     this.protocolOwner = identity.riverId;
     return protocol;
@@ -1177,9 +1187,13 @@ export class DmService {
         this.db().prepare('UPDATE contacts SET heard_from = 1 WHERE river_id = ?').run(peer);
         this.emitMessage(content.id, true);
         this.emitConversations();
-        // Keep our own (encrypted) copies of files before the server's copy expires.
-        for (const a of content.attachments ?? []) {
-          void this.deps.community.prefetchAttachment(a).catch(() => undefined);
+        // Keep our own (encrypted) copies of files before the server's copy expires — but not for
+        // a message request: nothing from someone you have not accepted is fetched on its own
+        // (accepting fetches it then).
+        if (this.accepted(conv)) {
+          for (const a of content.attachments ?? []) {
+            void this.deps.community.prefetchAttachment(a).catch(() => undefined);
+          }
         }
         if (!groupId && this.contact(peer)?.state === 'accepted') {
           void this.sendContent(peer, { v: 1, t: 'receipt', kind: 'delivered', ids: [content.id] }).catch(
@@ -1481,6 +1495,30 @@ export class DmService {
     }
   }
 
+  /** A conversation you accepted (a friend, your own notes, a group you joined), not a request. */
+  private accepted(conv: string): boolean {
+    return isGroupId(conv)
+      ? this.group(conv)?.state === 'accepted'
+      : this.contact(conv)?.state === 'accepted';
+  }
+
+  /** Keeps local copies of the files in a conversation (once it is accepted). */
+  private prefetchConversation(conv: string): void {
+    const rows = this.db()
+      .prepare(
+        `SELECT body FROM dm_messages WHERE peer = ? AND deleted = 0
+           AND json_array_length(json_extract(body, '$.attachments')) > 0`,
+      )
+      .all(conv) as Array<{ body: string }>;
+    for (const r of rows) {
+      try {
+        this.prefetch((JSON.parse(r.body) as { attachments?: AttachmentPointer[] }).attachments ?? []);
+      } catch {
+        // an unreadable row has nothing to fetch
+      }
+    }
+  }
+
   /** Keeps local copies of files in received posts. */
   prefetch(attachments: AttachmentPointer[]): void {
     for (const a of attachments) void this.deps.community.prefetchAttachment(a).catch(() => undefined);
@@ -1572,7 +1610,10 @@ export class DmService {
     if (!g || g.state === 'left') throw new CommunityError('You are not in this group.');
     const me = this.me();
     const failed: string[] = [];
-    const others = this.list(g.members).filter((m) => m !== me);
+    // Typing goes to nobody you blocked (they still get the group's messages, or the group breaks).
+    const others = this.list(g.members).filter(
+      (m) => m !== me && !(content.t === 'typing' && this.contact(m)?.state === 'blocked'),
+    );
     for (const m of others) {
       // Our group-scoped profile is a nicety: the message still goes if sharing it fails.
       if (!ephemeral) {
@@ -1892,6 +1933,21 @@ export class DmService {
     return moved;
   }
 
+  /**
+   * The oldest device-list version still acceptable for `peer`: the newest seen here, and for this
+   * account's own devices at least the version of its own identity-signed list (which this device
+   * keeps up to date when it adds or removes a device, or signs in after another device did).
+   */
+  private ownIdentityKey(): Uint8Array | null {
+    return this.deps.identity.signer()?.publicKey ?? null;
+  }
+
+  private listFloor(peer: string, seen: number): number {
+    if (peer !== this.me()) return seen;
+    const s = this.deps.account.status();
+    return Math.max(seen, s.state === 'registered' ? s.listVersion : 0);
+  }
+
   /** Verifies a key bundle and starts sessions with devices we have none with. */
   private async prepareSessions(
     peer: string,
@@ -1905,7 +1961,11 @@ export class DmService {
     // The cached list is used while it is fresh; it is fetched and verified again at least daily,
     // and sooner when a message arrives from a device it does not have (hintDevice).
     const checkedAt = Number(this.meta(`devicesAt:${peer}`) ?? 0);
-    const fresh = Date.now() - checkedAt < DEVICE_LIST_MAX_AGE_MS && checkedAt <= Date.now();
+    const seen = Number(this.meta(`listVersion:${peer}`) ?? '0');
+    // This account's own devices: never from a list older than the one this device holds
+    // (a device removed here, or on another device, stops getting copies at once).
+    const floor = this.listFloor(peer, seen);
+    const fresh = Date.now() - checkedAt < DEVICE_LIST_MAX_AGE_MS && checkedAt <= Date.now() && seen >= floor;
     const sessions = !!cached?.length && cached.every((d) => protocol.hasSession(peer, d.deviceId));
     if (!force && fresh && sessions) return cached!;
     // Only due for its daily check: the signed list alone is enough while it names the same
@@ -1917,8 +1977,7 @@ export class DmService {
     // Versions count per identity key: a new key (after a reinstall) starts its own list.
     const stored = peer === this.me() ? null : protocol.identityOf(peer);
     const sameKey = !stored || Buffer.from(stored).equals(identityKey);
-    const seen = Number(this.meta(`listVersion:${peer}`) ?? '0');
-    if (sameKey && list.version < seen) {
+    if (sameKey && list.version < floor) {
       throw new CommunityError(
         'The server offered an older device list for this person than River has already seen. Messages were not sent.',
       );
@@ -1970,7 +2029,7 @@ export class DmService {
       return false;
     }
     const identityKey = Buffer.from(res.identityKey, 'base64');
-    const stored = peer === this.me() ? null : this.protocol().identityOf(peer);
+    const stored = peer === this.me() ? this.ownIdentityKey() : this.protocol().identityOf(peer);
     if (stored && !Buffer.from(stored).equals(identityKey)) return false;
     const fromCommunity = peer === this.me() ? null : this.deps.community.communityIdentityKey(peer);
     if (fromCommunity && fromCommunity !== res.identityKey) return false;
@@ -1980,7 +2039,7 @@ export class DmService {
     const list = deviceListSchema.parse(JSON.parse(listBytes.toString('utf8')));
     if (list.riverId !== peer) return false;
     const seen = Number(this.meta(`listVersion:${peer}`) ?? '0');
-    if (list.version < seen) return false;
+    if (list.version < this.listFloor(peer, seen)) return false;
     const wanted = list.devices.filter((d) => !(peer === this.me() && d.deviceId === this.deviceId()));
     const same =
       wanted.length === cached.length &&
@@ -2011,6 +2070,11 @@ export class DmService {
       throw err;
     }
     const identityKey = Buffer.from(res.identityKey, 'base64');
+    // This account's own devices share its identity key: a list under any other key is not ours.
+    const own = peer === this.me() ? this.ownIdentityKey() : null;
+    if (own && !Buffer.from(own).equals(identityKey)) {
+      throw new CommunityError('The server returned a device list that is not signed by your identity.');
+    }
     // Shared communities carry the person's identity key sealed with a community key the server
     // cannot read; if the server hands out a different key, refuse.
     const fromCommunity = peer === this.me() ? null : this.deps.community.communityIdentityKey(peer);
@@ -2552,6 +2616,7 @@ export class DmService {
             const g = this.group(act.peer);
             if (g && g.state === 'request') {
               this.saveGroup({ ...g, state: 'accepted' });
+              this.prefetchConversation(g.id);
               // Now that we joined, let the others see who we are.
               const me = this.me();
               void (async () => {
@@ -2564,6 +2629,7 @@ export class DmService {
             return out(null);
           }
           this.db().prepare(`UPDATE contacts SET state = 'accepted' WHERE river_id = ?`).run(act.peer);
+          this.prefetchConversation(act.peer);
           this.emitConversations();
           // Sharing your profile is also how the other side learns you accepted.
           await this.shareProfile(act.peer).catch(() => undefined);
@@ -2862,11 +2928,18 @@ export class DmService {
     const group = isGroupId(act.peer) ? this.group(act.peer) : undefined;
     if (isGroupId(act.peer)) {
       if (!group || group.state === 'left') throw new CommunityError('You are not in this group.');
-      if (group.state === 'request') this.saveGroup({ ...group, state: 'accepted' });
+      if (group.state === 'request') {
+        this.saveGroup({ ...group, state: 'accepted' });
+        this.prefetchConversation(group.id);
+      }
     } else {
       const contact = this.contact(act.peer);
       if (contact?.state === 'blocked') throw new CommunityError('Unblock this person to message them.');
-      if (!contact || contact.state === 'request') this.upsertContact(act.peer, 'accepted');
+      if (!contact || contact.state === 'request') {
+        this.upsertContact(act.peer, 'accepted');
+        // Writing back accepts a request: its files are kept now.
+        if (contact) this.prefetchConversation(act.peer);
+      }
     }
     const me = this.me();
     const earlier = reuseId ? this.row(reuseId) : undefined;

@@ -304,6 +304,32 @@ describe('identity keys a server cannot swap', { timeout: 60_000 }, () => {
     expect(await conversationOf(alice, bob.riverId)).toMatchObject({ keyChanged: false });
   });
 
+  it('a first message under a key that disagrees with the shared community profile is refused (2.20)', async () => {
+    const alice = await person('Alice');
+    const bob = await person('Bob');
+    const carol = await person('Carol');
+    const created = await alice.community.create('Crew');
+    for (const p of [bob, carol])
+      await p.community.join(await alice.community.invite(created.id), async () => undefined);
+    await alice.community.refresh();
+    // Alice and Bob never wrote to each other, so River holds no key for Bob yet. The server makes
+    // a key of its own for him and writes to Alice first, "as Bob" (his name shows from the community).
+    const forged = await reinstall(bob, 'Mallory');
+    await forged.dm.action({ a: 'open', peer: alice.riverId });
+    await forged.dm.action({ a: 'send', peer: alice.riverId, text: 'hi, it is Bob' });
+    await alice.dm.sync();
+    expect(await messagesOf(alice, bob.riverId)).toHaveLength(0);
+    expect(await conversationOf(alice, bob.riverId)).toBeUndefined();
+    expect(
+      alice.local.prepare("SELECT 1 FROM signal_store WHERE kind = 'identity' AND id = ?").get(bob.riverId),
+    ).toBeUndefined();
+    // A genuine first message from another member of the community still arrives.
+    await carol.dm.action({ a: 'open', peer: alice.riverId });
+    await carol.dm.action({ a: 'send', peer: alice.riverId, text: 'hi, it is Carol' });
+    await alice.dm.sync();
+    expect((await messagesOf(alice, carol.riverId)).map((m) => m.text)).toContain('hi, it is Carol');
+  });
+
   it('copies "from this account" are accepted only from its own listed devices and identity key', async () => {
     const alice = await person('Alice');
     const laptop = await linkDevice(alice, 'Alice laptop');

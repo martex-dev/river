@@ -65,6 +65,14 @@ describe('encrypted database', () => {
     reopened.close();
   });
 
+  it('keeps temporary tables and sort spills in memory, never in unencrypted temp files (2.20)', () => {
+    const db = openEncryptedDatabase(join(dir, 'temp.db'), newDatabaseKey());
+    // 2 = MEMORY. SQLite3 Multiple Ciphers encrypts the database and its journal, not temp files.
+    expect(db.pragma('temp_store', { simple: true })).toBe(2);
+    expect(db.pragma('secure_delete', { simple: true })).toBe(1);
+    db.close();
+  });
+
   it('refuses the wrong key', () => {
     const path = join(dir, 'b.db');
     const db = openEncryptedDatabase(path, newDatabaseKey());

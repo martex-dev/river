@@ -44,6 +44,21 @@ export interface ProtocolStorage {
   put(kind: StoreKind, id: string, value: Uint8Array): void;
   delete(kind: StoreKind, id: string): void;
   count(kind: StoreKind): number;
+  /** The IDs stored under `kind` (optional: without it, old keys from before 2.20 stay). */
+  ids?(kind: StoreKind): string[];
+}
+
+/**
+ * How long a signed prekey and last-resort Kyber key are kept after a rotation replaced them:
+ * longer than any River server keeps undelivered mail (30 days by default, at most 90 with
+ * RIVER_MAILBOX_TTL_DAYS), then they are deleted.
+ */
+export const RETIRED_PREKEY_KEEP_MS = 95 * 86_400_000;
+
+interface RetiredPreKey {
+  signed: number;
+  kyber: number;
+  at: number;
 }
 
 export interface LocalIdentity {
@@ -172,6 +187,12 @@ export class RiverProtocol {
    * key, the key sealed in a shared community). Without a decision the change is refused.
    */
   approveIdentityChange: (change: IncomingIdentityChange) => Promise<boolean> = async () => false;
+  /**
+   * Decides whether an incoming message may set up the first identity key River stores for a
+   * contact (trust on first use). The caller refuses a key that contradicts what the server cannot
+   * forge on its own (the key sealed in a shared community profile). Default: accepted.
+   */
+  acceptNewIdentity: (riverId: string, identityKey: Uint8Array) => boolean = () => true;
   /** Registration IDs claimed by PreKey messages being decrypted right now, by address. */
   private readonly incomingRegistration = new Map<string, number>();
 
@@ -212,9 +233,11 @@ export class RiverProtocol {
     })();
 
     const approve = (change: IncomingIdentityChange): Promise<boolean> => this.approveIdentityChange(change);
+    const acceptNew = (riverId: string, key: Uint8Array): boolean => this.acceptNewIdentity(riverId, key);
     const claimedRegistration = (address: string): number | null =>
       this.incomingRegistration.get(address) ?? null;
     const ownKey = Buffer.from(local.publicKey);
+    const retiredKyber = (id: number): boolean => this.retired().some((x) => x.kyber === id);
     this.identities = new (class extends IdentityKeyStore {
       async getIdentityKey(): Promise<PrivateKey> {
         return pair.privateKey;
@@ -254,7 +277,10 @@ export class RiverProtocol {
           if (mark && existing) return serialized.equals(Buffer.from(existing));
           return true;
         }
-        if (!existing || Buffer.from(existing).equals(serialized)) return true;
+        // A first message from someone River holds no key for yet: trust on first use, unless the
+        // key contradicts one the caller knows from elsewhere.
+        if (!existing) return acceptNew(name.name(), new Uint8Array(serialized));
+        if (Buffer.from(existing).equals(serialized)) return true;
         // An incoming message under a new identity key: accepted only when the caller confirmed it.
         return approve({
           riverId: name.name(),
@@ -306,8 +332,9 @@ export class RiverProtocol {
         return KyberPreKeyRecord.deserialize(bytes(raw));
       }
       async markKyberPreKeyUsed(id: number): Promise<void> {
-        // One-time Kyber keys are deleted; the last-resort key stays.
-        if (readId(st.get('meta', 'kyberLastResort')) === id) return;
+        // One-time Kyber keys are deleted; the last-resort key stays, and so does one a rotation
+        // replaced (other first messages may still use it; it is deleted with its signed prekey).
+        if (readId(st.get('meta', 'kyberLastResort')) === id || retiredKyber(id)) return;
         st.delete('kyber', String(id));
       }
     })();
@@ -332,6 +359,57 @@ export class RiverProtocol {
     return this.identityPair.privateKey.sign(bytes(data));
   }
 
+  /** Signed and last-resort Kyber prekeys replaced by a rotation, and when (meta `retiredPreKeys`). */
+  private retired(): RetiredPreKey[] {
+    const raw = this.storage.get('meta', 'retiredPreKeys');
+    if (!raw) return [];
+    try {
+      const list: unknown = JSON.parse(Buffer.from(raw).toString('utf8'));
+      return Array.isArray(list)
+        ? list.filter(
+            (x): x is RetiredPreKey =>
+              !!x &&
+              typeof x === 'object' &&
+              Number.isInteger((x as RetiredPreKey).signed) &&
+              Number.isInteger((x as RetiredPreKey).kyber) &&
+              typeof (x as RetiredPreKey).at === 'number',
+          )
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Forward secrecy for first messages: the signed prekey and last-resort Kyber key a rotation
+   * replaced are kept for RETIRED_PREKEY_KEEP_MS (first messages made with them may still wait in
+   * the mailbox) and then deleted, as Signal does. Keys left by Rivers before 2.20 (which kept
+   * every signed prekey) are retired the first time this runs.
+   */
+  private retirePreKeys(before: { signed: number; kyber: number }, current: number, now: number): void {
+    const first = !this.storage.get('meta', 'retiredPreKeys');
+    const list = this.retired();
+    if (before.signed || before.kyber) list.push({ signed: before.signed, kyber: before.kyber, at: now });
+    if (first && this.storage.ids) {
+      const known = new Set(list.map((x) => x.signed));
+      for (const raw of this.storage.ids('signed')) {
+        const id = Number(raw);
+        if (Number.isInteger(id) && id !== current && !known.has(id))
+          list.push({ signed: id, kyber: 0, at: now });
+      }
+    }
+    const keep: RetiredPreKey[] = [];
+    for (const x of list) {
+      if (now - x.at < RETIRED_PREKEY_KEEP_MS) {
+        keep.push(x);
+        continue;
+      }
+      if (x.signed && x.signed !== current) this.storage.delete('signed', String(x.signed));
+      if (x.kyber) this.storage.delete('kyber', String(x.kyber));
+    }
+    this.storage.put('meta', 'retiredPreKeys', Buffer.from(JSON.stringify(keep), 'utf8'));
+  }
+
   /**
    * Makes keys to upload. With `rotate`, also a new signed prekey and Kyber
    * last-resort key (do this on registration and periodically).
@@ -341,6 +419,10 @@ export class RiverProtocol {
     let signed: SignedPreKeyRecord;
     let lastResort: KyberPreKeyRecord;
     if (options.rotate || !this.storage.get('meta', 'signedPreKey')) {
+      const before = {
+        signed: readId(this.storage.get('meta', 'signedPreKey')),
+        kyber: readId(this.storage.get('meta', 'kyberLastResort')),
+      };
       const id = this.nextId('nextSignedId');
       const priv = PrivateKey.generate();
       signed = SignedPreKeyRecord.new(
@@ -357,6 +439,7 @@ export class RiverProtocol {
       lastResort = KyberPreKeyRecord.new(kid, now, pair, this.sign(pair.getPublicKey().serialize()));
       this.storage.put('kyber', String(kid), lastResort.serialize());
       this.storage.put('meta', 'kyberLastResort', writeId(kid));
+      this.retirePreKeys(before, id, now);
     } else {
       signed = SignedPreKeyRecord.deserialize(
         bytes(this.storage.get('signed', String(readId(this.storage.get('meta', 'signedPreKey'))))!),

@@ -42,6 +42,14 @@ possible.
 | Profile key      | 256-bit random                                                | Account                            | Encrypts profile fields; shared with contacts                                                               |
 | Recovery secret  | 128-bit random, shown as 16 Bytewords + 2 checksum words (§7) | Account                            | Derives the backup key (HKDF-SHA256, `info` label `river-backup-v1`)                                        |
 
+**Old prekeys (2.20).** A signed prekey and last-resort Kyber key replaced by
+the weekly rotation are kept for 95 days (`RETIRED_PREKEY_KEEP_MS`: longer than
+any server keeps undelivered mail, 30 days by default and at most 90) so first messages made
+with them still open, then deleted, as Signal does. Before 2.20 every signed
+prekey was kept for good, and a replaced last-resort Kyber key was deleted by
+the first message that used it, so other first messages made with it failed.
+Signed prekeys left by older Rivers are retired on the first rotation.
+
 **Signatures.** All River protocol signatures are libsignal XEdDSA over a
 distinct ASCII context followed by the payload (`river-device-list-v1`,
 `river-register-v1`, `river-session-v1`); see
@@ -219,10 +227,20 @@ A3) wherever a check is possible without new primitives:
   Without verification and without a shared community a server can still
   substitute a key — trust on first use cannot prevent that — but the change
   is shown.
+- **First messages (2.20).** A first message from someone River holds no key
+  for yet is accepted under trust on first use, except when a shared
+  community profile names a different identity key for them: then it is
+  dropped and no key is stored, as a first message _to_ them already was
+  (`acceptNewIdentity` in `session.ts`). A server can no longer write to you
+  first "as" a community member under a key of its own.
 - **Copies from this account's own devices** (sent messages, edits, the friends
   list, groups) are accepted only from another device in the account's
   identity-signed device list, and libsignal accepts only the account's own
-  identity key for them.
+  identity key for them. Copies _to_ the account's other devices (2.20) go
+  only to devices in a list signed by the account's own identity key and never
+  older than the list this device holds itself (updated when it adds or
+  removes a device, or signs in after another device did): a removed device is
+  no longer encrypted to, even by a server that keeps serving the old list.
 - **Device lists** of contacts are fetched and verified again at least daily,
   and sooner when a message comes from a device the cached list lacks. Newest
   seen versions (per identity key) are included in backups.
@@ -265,13 +283,19 @@ decrypting. Blobs have random 128-bit IDs; the server learns their padded size,
 uploader and which message they belong to, nothing else. Received files are
 never opened automatically — only images, audio and video of a short allow-list
 of types are shown inline; everything else is saved only when the user chooses.
+Files in direct messages are fetched ahead (kept encrypted on the device, so
+they outlive the server's copy) only in conversations you accepted; since 2.20
+a message request's files are fetched only when you open them or accept it, so
+a stranger cannot make River download files or crowd your kept copies out.
 
 ## 6. Local storage (implemented, 0.0.3)
 
 - Database: SQLCipher 4 format (AES-256-CBC pages, HMAC-SHA512) via
   `better-sqlite3-multiple-ciphers`, opened with a **raw 32-byte random key**
   (`PRAGMA key = "x'…'"`, no password KDF since the key is already uniform).
-  `secure_delete` is on.
+  `secure_delete` is on, and since 2.20 `temp_store` is `MEMORY`: the cipher
+  covers the database file and its journal, not SQLite's temporary files, so
+  temporary tables and sort spills never reach the disk in plaintext.
 - Key file `data/database.key`, one of:
   - `os-keystore`: the key wrapped by Electron `safeStorage` — Windows DPAPI,
     macOS Keychain, Linux Secret Service. On Linux, Electron's `basic_text`
@@ -296,6 +320,9 @@ of types are shown inline; everything else is saved only when the user chooses.
   keys (all epochs), contacts' identity keys and verification marks, groups,
   message history and posts — not libsignal sessions or prekeys, which are
   regenerated after a restore (contacts get a fresh session automatically).
+  Since 2.20 messages set to disappear are left out (a backup file outlives
+  their timer); the conversations' timers are kept, so what you write after a
+  restore still disappears.
 - Device-to-device transfer (Stage 2) uses a libsignal session established by
   scanning a QR code.
 
@@ -380,6 +407,9 @@ keys above that) with its call setup inside libsignal messages, as in 1:1 calls.
   the same way, so a server that adds someone to a room's list cannot make
   anyone connect to them or send them a key; a removed member's setup is no
   longer accepted. Relay sender keys travel inside that setup, as before.
+  Since 2.20 a call-link call's ID is never taken as a group's call (a guest
+  "ringing" a group with it would otherwise have let that group's members
+  into the call).
 - **Call links.** A link is `https://<server>/call#h=<host's River ID>&l=<link ID>`
   (`river://open?link=…` in the app), the link ID another 128 random bits. It
   never contains the call ID. Someone with the link asks to join (`clink`
