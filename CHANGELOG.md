@@ -35,6 +35,8 @@ All notable changes to River are documented here. The format follows
 - Server: only a signed-in file upload may send a large body. Other requests,
   and uploads without a valid session, are refused before the server reads
   them.
+- Server: connecting no longer tells a member who is talking in voice channels
+  they cannot see.
 
 ## [2.17.0] - 2026-10-18
 

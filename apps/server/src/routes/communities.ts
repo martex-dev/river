@@ -2966,7 +2966,12 @@ export async function registerCommunityRoutes(
           .where('river_id', '=', riverId)
           .execute();
         for (const c of rows) {
-          for (const room of hub.rooms(c.community_id)) {
+          const rooms = hub.rooms(c.community_id);
+          if (rooms.length === 0) continue;
+          // Only voice channels this member can see (2.18), as for every later voice update.
+          const model = await loadCommunity(db, c.community_id);
+          for (const room of rooms) {
+            if (!model?.can(session.riverId, Permission.VIEW_CHANNELS, room.channelId)) continue;
             send({
               t: 'voice',
               communityId: c.community_id,

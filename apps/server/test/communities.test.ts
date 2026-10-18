@@ -1686,7 +1686,7 @@ describe('communities', () => {
           return { ws, events };
         };
         const lastVoice = (events: Ev[]) => events.filter((e) => e.t === 'voice').at(-1);
-        return { owner, guest, cid, voice, connect, lastVoice };
+        return { a, owner, guest, cid, voice, connect, lastVoice };
       };
 
       it('keeps the seat (marked reconnecting) and resumes it when the app rejoins', async () => {
@@ -1714,6 +1714,36 @@ describe('communities', () => {
         const seen = host.events.filter((e) => e.t === 'voice').map((e) => e.participants?.length);
         expect(seen.slice(seen.indexOf(2))).not.toContain(1);
         for (const c of [host, member]) c.ws.close();
+      });
+
+      it('tells a connecting member only about voice channels they can see (2.18)', async () => {
+        const { a, owner, guest, cid, voice, connect } = await setup(5_000);
+        const secret = id();
+        await status(a, 'POST', `/v1/communities/${cid}/channels`, owner.token, {
+          id: secret,
+          kind: 'voice',
+          name: sealed(),
+          overwrites: [{ roleId: cid, allow: 0, deny: Permission.VIEW_CHANNELS }],
+        });
+        const host = await connect(owner.token);
+        host.ws.send(JSON.stringify({ t: 'voice.join', channelId: secret }));
+        await vi.waitFor(() =>
+          expect(host.events.some((e) => e.t === 'voice' && e.participants?.length === 1)).toBe(true),
+        );
+        const peek = await connect(guest.token);
+        await new Promise((r) => setTimeout(r, 200));
+        expect(peek.events.filter((e) => e.t === 'voice')).toEqual([]);
+        peek.ws.close();
+        // A channel they can see is still announced to them when they connect.
+        host.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+        await new Promise((r) => setTimeout(r, 200));
+        const again = await connect(guest.token);
+        await vi.waitFor(() =>
+          expect(again.events.filter((e) => e.t === 'voice').map((e) => e.participants)).toContainEqual([
+            owner.riverId,
+          ]),
+        );
+        for (const c of [host, again]) c.ws.close();
       });
 
       it('gives the seat up when the app does not come back in time', async () => {
