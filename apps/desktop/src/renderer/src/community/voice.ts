@@ -75,8 +75,11 @@ const RETRY_MAX_MS = 15_000;
 const RELAYED_RETRY_MS = 30_000;
 /** Someone missing from the participant list keeps their working connection this long (server restart). */
 const MISSING_GRACE_MS = 10_000;
-/** A pair not connected directly after this long talks through the server meanwhile. */
-const RELAY_AFTER_MS = 6000;
+/**
+ * A pair not connected directly after this long talks through the server meanwhile (2.14: 1.5 s,
+ * was 6 s), so someone joining is heard at once; the direct connection takes over when it comes up.
+ */
+const RELAY_AFTER_MS = 1500;
 /** How often relayed pairs are checked for a direct connection that works again. */
 const RELAY_CHECK_MS = 2000;
 /** While relayed, our key is sent again this many times, this far apart (lost signals). */
@@ -123,6 +126,8 @@ export interface RemotePeer {
   priority?: boolean;
   /** Hand raised since (ms, their clock, never later than ours), or null (2.13). */
   hand?: number | null;
+  /** When this person appeared in the call here (ms): a join is not "connecting…" at once (2.14). */
+  since?: number;
 }
 
 interface Peer {
@@ -883,6 +888,7 @@ export class VoiceCall {
         relayed: this.relayPeers.has(id),
         relayFlowing: false,
         hand: null,
+        since: Date.now(),
       };
       this.views.set(id, v);
     }

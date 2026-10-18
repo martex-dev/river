@@ -512,7 +512,10 @@ function RemoteTile(props: {
   const label = member?.name ?? 'Someone';
   const state = community.voiceStates[peer.id];
   // Relayed voice works while the direct connection is still being set up.
-  const connecting = peer.state !== 'connected' && !peer.relayed;
+  // A join takes a moment to connect (the server carries voice after 1.5 s if the direct way is
+  // slow): only someone still not reachable after JOIN_GRACE_MS shows "connecting…".
+  const settling = useJoinGrace(peer.since, peer.reconnecting);
+  const connecting = peer.state !== 'connected' && !peer.relayed && !settling;
   return (
     <div
       className={`tile ${connecting ? 'tile--connecting' : ''} ${peer.screenOn ? 'tile--screen' : ''} ${props.speaking ? 'is-speaking' : ''} ${props.focused ? 'is-focused' : ''}`}
@@ -687,4 +690,22 @@ function SpeakingWaves(): ReactElement {
       <i />
     </span>
   );
+}
+
+/** How long a newly joined person is shown without "connecting…" while their link comes up. */
+export const JOIN_GRACE_MS = 3000;
+
+/** True during the first JOIN_GRACE_MS after `since` (never while reconnecting); re-renders when it ends. */
+export function useJoinGrace(since: number | undefined, reconnecting: boolean): boolean {
+  const until = since === undefined || reconnecting ? 0 : since + JOIN_GRACE_MS;
+  /** The grace that has run out (its end time); the one for `until` is over once they match. */
+  const [ended, setEnded] = useState(0);
+  useEffect(() => {
+    if (!until) return;
+    const t = setTimeout(() => setEnded(until), Math.max(0, until - Date.now()));
+    return () => clearTimeout(t);
+  }, [until]);
+  // A grace that was over before this tile appeared (an old join) never shows.
+  const [shownAt] = useState(() => Date.now());
+  return until > shownAt && ended !== until;
 }

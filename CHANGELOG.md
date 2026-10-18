@@ -8,6 +8,12 @@ All notable changes to River are documented here. The format follows
 
 ### Fixed
 
+- **Joining a voice channel no longer shows "connecting…" first.** Someone who
+  just joined is heard at once: when the direct connection takes more than
+  1.5 s (it waited 6 s before), their voice goes through the server meanwhile,
+  encrypted as always, and the direct connection takes over when it comes up.
+  "connecting…" only shows for someone still unreachable after 3 seconds.
+
 - **Phones: linking a phone to your account finishes.** After you approved it
   on your computer, the phone could sit on "Waiting for your other device…"
   for minutes: River's engine on the phone runs out of sight, and the phone's
