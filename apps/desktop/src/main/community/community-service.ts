@@ -71,6 +71,7 @@ import {
 import { roleOrderChanges } from '../../shared/role-order.ts';
 import { communityIconSchema, templateById, type TemplateId } from '../../shared/templates.ts';
 import { describeAudit } from './audit-text.ts';
+import { stripImageMetadata } from '../image-metadata.ts';
 import { openSignal, signSignal, SignalReplayGuard, type SignalKeys } from './call-signal.ts';
 import type { ServerLocator } from './server-locator.ts';
 import type { PresenceTracker } from '../presence.ts';
@@ -3055,7 +3056,8 @@ export class CommunityService {
     retain?: 'dm',
   ): Promise<AttachmentPointer> {
     const requestBytes = this.requireBytes();
-    const enc = encryptAttachment(file.bytes);
+    // Photos lose their location, camera and other hidden metadata first (2.13).
+    const enc = encryptAttachment(stripImageMetadata(file.bytes, file.mime));
     const url = `${this.server()}${API_PREFIX}/attachments${retain ? `?retain=${retain}` : ''}`;
     const post = async (): Promise<Uint8Array> =>
       requestBytes(url, { method: 'POST', body: enc.blob, token: await this.token(), maxBytes: 4096 });
