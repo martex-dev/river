@@ -6,7 +6,13 @@
 'use strict';
 const timers = new Map();
 self.onmessage = (e) => {
+  // A dedicated worker hears only the page that started it (its messages carry no origin, or
+  // this worker's own); anything else, or anything not shaped like a timer request, is ignored.
+  if (e.origin && e.origin !== self.location.origin) return;
+  if (!Array.isArray(e.data) || e.data.length > 3) return;
   const [op, id, ms] = e.data;
+  if (!Number.isSafeInteger(id) || id <= 0) return;
+  if (op !== 'clear' && !(typeof ms === 'number' && ms >= 0 && ms <= 2 ** 31 - 1)) return;
   if (op === 'clear') {
     const t = timers.get(id);
     if (t !== undefined) {
