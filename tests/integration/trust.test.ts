@@ -543,6 +543,44 @@ describe('community keys a server cannot inject', { timeout: 90_000 }, () => {
     expect(() => openBound(keyOf(eve, bait.id, 0), bait.id, purpose, binding, row.body)).toThrow();
   });
 
+  it('an old unbound profile copied into a fake member gets no key, even with a community in common (2.18)', async () => {
+    const { alice, bob, id } = await crew();
+    const eve = await person('Eve');
+    // Eve and Bob share a community of Eve's, where Eve's genuine profile names her own key.
+    const zed = await eve.community.create('Zed');
+    await bob.community.join(await eve.community.invite(zed.id), async () => undefined);
+    // The server lists Eve in Crew with a v1 profile of Alice's (as Rivers before 2.12 sealed them).
+    const aliceRow = await serverDb.db
+      .selectFrom('community_members')
+      .select('profile')
+      .where('community_id', '=', id)
+      .where('river_id', '=', alice.riverId)
+      .executeTakeFirstOrThrow();
+    const crewKey = keyOf(alice, id, 0);
+    const aliceProfile = openBound<{ identityKey: string }>(
+      crewKey,
+      id,
+      'profile',
+      alice.riverId,
+      aliceRow.profile,
+    ).value;
+    await inject(eve, id, seal(crewKey, id, 'profile', aliceProfile));
+    // ... and orders Zed last, so the key Bob last read for Eve is her own.
+    rewrite = (path, body) => {
+      if (!path.endsWith('/communities')) return body;
+      const res = JSON.parse(body.toString('utf8')) as { communities: Array<{ id: string }> };
+      res.communities.sort((a, b) => Number(a.id === zed.id) - Number(b.id === zed.id));
+      return Buffer.from(JSON.stringify(res));
+    };
+    await bob.community.refresh();
+    await internals(eve).sendContent(bob.riverId, { v: 1, t: 'ckeyReq', communityId: id, epoch: 0 });
+    await bob.dm.sync();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(
+      await serverDb.db.selectFrom('mailbox').selectAll().where('recipient', '=', eve.riverId).execute(),
+    ).toEqual([]);
+  });
+
   it('a key from a member who never held one is refused, with or without a made-up proof', async () => {
     const { alice, bob, id } = await crew();
     const eve = await person('Eve');

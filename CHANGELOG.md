@@ -19,6 +19,10 @@ All notable changes to River are documented here. The format follows
 - Communities: a channel stays with the community it belongs to. A server that
   lists it under another community can no longer make River seal what you
   write there with that other community's key.
+- Communities: keys are handed only to members whose profile is really theirs.
+  An old-style profile (from before 2.12) now counts only when it names the
+  identity key River holds for that person, so a server cannot get keys by
+  copying someone's old profile into an account of its own.
 
 ## [2.17.0] - 2026-10-18
 

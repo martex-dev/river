@@ -616,16 +616,30 @@ export class CommunityService {
     member: { riverId: string; profile: string },
   ): boolean {
     try {
-      const { value } = ring.openBoundWith<SealedProfile>(
+      const { value, version } = ring.openBoundWith<SealedProfile>(
         communityId,
         'profile',
         member.riverId,
         member.profile,
       );
-      return typeof value.identityKey === 'string' && value.identityKey.length > 0;
+      if (typeof value.identityKey !== 'string' || value.identityKey.length === 0) return false;
+      // 2.18: a v1 profile (sealed before 2.12) may be someone else's, copied into this row by the
+      // server, so it counts only when it names the identity key libsignal holds for this member.
+      // Not every check against a profile's key elsewhere holds (one profile key per person, from
+      // whichever community was read last), so this one does not rely on them.
+      return version === 2 || this.libsignalIdentity(member.riverId) === value.identityKey;
     } catch {
       return false;
     }
+  }
+
+  /** The identity key libsignal holds for this person (base64), if River has talked to them. */
+  private libsignalIdentity(riverId: string): string | null {
+    const row = this.deps
+      .db()
+      ?.prepare("SELECT value FROM signal_store WHERE kind = 'identity' AND id = ?")
+      .get(riverId) as { value: Uint8Array } | undefined;
+    return row ? Buffer.from(row.value).toString('base64') : null;
   }
 
   /**

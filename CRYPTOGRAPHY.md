@@ -148,7 +148,10 @@ than per-member sender keys:
   epoch with a compare-and-set, generates a fresh 32-byte key, seals its own
   profile with it and sends it inside libsignal messages to the remaining
   members whose sealed profile opens with a key it held before (2.11; a member
-  the server lists without ever holding a key gets nothing). Since 2.11 the
+  the server lists without ever holding a key gets nothing). Since 2.18 a
+  profile sealed v1 (not bound to its member, see below) counts for this, and
+  for answering key requests, only when the identity key it names is the one
+  libsignal holds for that member; a v2 profile is bound to its member. Since 2.11 the
   key travels with a **proof**: the new key sealed (AES-256-GCM, purpose
   `epoch:<n>`) under the key of the epoch before it. New content is sealed with
   the newest key; members keep older keys to read history (a value is opened
