@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { generateKeyPair, sign } from '@river/crypto';
+import { deviceListMessage } from '@river/protocol';
 import { AccountService } from '../../apps/desktop/src/main/account/account-service.ts';
 import {
   LinkService,
@@ -35,8 +37,18 @@ const links: LinkService[] = [];
 /** Stopped before their databases close, so no reconnect timer outlives its test. */
 const communities: CommunityService[] = [];
 
+/** Requests the server got (a test reads them), and a malicious server changing its answers. */
+const requests: Array<{ method: string; path: string; body: string }> = [];
+let rewrite: ((path: string, body: Buffer) => Buffer) | null = null;
+
 const injectFetch: typeof fetch = async (input, init) => {
   const url = new URL(String(input));
+  requests.push({
+    method: init?.method ?? 'GET',
+    path: url.pathname,
+    body: typeof init?.body === 'string' ? init.body : '',
+  });
+  if (requests.length > 5000) requests.splice(0, 1000);
   const res = await server.inject({
     method: (init?.method ?? 'GET') as 'GET',
     url: url.pathname + url.search,
@@ -45,7 +57,8 @@ const injectFetch: typeof fetch = async (input, init) => {
       ? { payload: init.body instanceof Uint8Array ? Buffer.from(init.body) : String(init.body) }
       : {}),
   });
-  return new Response(res.rawPayload.length ? new Uint8Array(res.rawPayload) : null, {
+  const payload = rewrite ? rewrite(url.pathname, res.rawPayload) : res.rawPayload;
+  return new Response(payload.length ? new Uint8Array(payload) : null, {
     status: res.statusCode,
     headers: res.headers as Record<string, string>,
   });
@@ -89,7 +102,7 @@ function install(name: string, broken: { when: (url: string) => boolean } = { wh
   links.push(link);
 
   communities.push(community);
-  return { identity, account, community, dm, link };
+  return { identity, account, community, dm, link, local };
 }
 
 async function until<T>(
@@ -120,6 +133,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  rewrite = null;
+  requests.splice(0);
   for (const l of links.splice(0)) l.dispose();
 
   for (const c of communities.splice(0)) c.stop();
@@ -485,6 +500,110 @@ describe('linking, carefully', { timeout: 60_000 }, () => {
     await phone.link.accept();
     expect(phone.link.status()).toEqual({ state: 'linked' });
     await until(() => desktop.link.status().state === 'idle', 10_000);
+  });
+
+  it('a removed device gets no more copies, even from a server that keeps offering the old list (2.20)', async () => {
+    const desktop = install('kim-desktop');
+    const me = desktop.identity.create('Kim');
+    await desktop.account.register(SERVER);
+    await desktop.dm.sync();
+    const bob = install('kim-bob');
+    const bobId = bob.identity.create('Bob').riverId;
+    await bob.account.register(SERVER);
+    await bob.dm.sync();
+    const phone = install('kim-phone');
+    const phoneId = await linkUpToReview(desktop, phone);
+    await phone.link.accept();
+    await phone.dm.sync();
+    const laptop = install('kim-laptop');
+    const laptopId = await linkUpToReview(desktop, laptop);
+    await laptop.link.accept();
+    await laptop.dm.sync();
+
+    // Copies of what the desktop sends go to both other devices; the list the server serves now
+    // (signed by Kim's identity, naming the phone) is kept for later.
+    await desktop.dm.action({ a: 'open', peer: bobId, name: 'Bob' });
+    await desktop.dm.action({ a: 'send', peer: bobId, text: 'before' });
+    const copiesTo = (): number[] =>
+      requests
+        .filter((r) => r.method === 'POST' && r.path === `/v1/messages/${me.riverId}`)
+        .flatMap((r) => (JSON.parse(r.body) as { messages: Array<{ deviceId: number }> }).messages)
+        .map((m) => m.deviceId);
+    await until(() => copiesTo().includes(phoneId) && copiesTo().includes(laptopId));
+    const old = new Map<string, Buffer>();
+    for (const path of [`/v1/keys/${me.riverId}/devices`, `/v1/keys/${me.riverId}`]) {
+      const res = await server.inject({
+        method: 'GET',
+        url: path,
+        headers: { authorization: `Bearer ${bob.account.sessionToken()}` },
+      });
+      expect(JSON.parse(res.body)).toHaveProperty('deviceList');
+      old.set(path, res.rawPayload);
+    }
+
+    // The phone is removed (lost, say). The next copy is not even encrypted for it.
+    await desktop.link.remove(phoneId);
+    requests.splice(0);
+    await desktop.dm.action({ a: 'send', peer: bobId, text: 'after' });
+    await until(() => copiesTo().includes(laptopId));
+    expect(copiesTo()).not.toContain(phoneId);
+
+    // A server that hides the removal (it serves the old signed list again once River looks
+    // again) is refused: River already holds a newer list of its own devices.
+    rewrite = (path, body) => old.get(path) ?? body;
+    desktop.local
+      .prepare("UPDATE signal_store SET value = ? WHERE kind = 'meta' AND id = ?")
+      .run(Buffer.from(String(Date.now() - 25 * 3_600_000)), `dm:devicesAt:${me.riverId}`);
+    requests.splice(0);
+    await desktop.dm.action({ a: 'send', peer: bobId, text: 'later' });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(copiesTo()).not.toContain(phoneId);
+
+    // A list for Kim's River ID signed by some other key (with a version far ahead) is not hers:
+    // it must not raise the version River expects, which would refuse her genuine list afterwards.
+    const path = `/v1/keys/${me.riverId}/devices`;
+    const current = JSON.parse(
+      (
+        await server.inject({
+          method: 'GET',
+          url: path,
+          headers: { authorization: `Bearer ${bob.account.sessionToken()}` },
+        })
+      ).body,
+    ) as { deviceList: string };
+    const fake = generateKeyPair();
+    const listBytes = Buffer.from(
+      JSON.stringify({
+        ...JSON.parse(Buffer.from(current.deviceList, 'base64').toString('utf8')),
+        version: 2 ** 31,
+      }),
+    );
+    const forged = Buffer.from(
+      JSON.stringify({
+        ...current,
+        identityKey: Buffer.from(fake.publicKey).toString('base64'),
+        deviceList: listBytes.toString('base64'),
+        deviceListSignature: Buffer.from(sign(fake.privateKey, deviceListMessage(listBytes))).toString(
+          'base64',
+        ),
+      }),
+    );
+    const ageList = (): void => {
+      desktop.local
+        .prepare("UPDATE signal_store SET value = ? WHERE kind = 'meta' AND id = ?")
+        .run(Buffer.from(String(Date.now() - 25 * 3_600_000)), `dm:devicesAt:${me.riverId}`);
+    };
+    rewrite = (p, body) => (p === path ? forged : body);
+    ageList();
+    requests.splice(0);
+    await desktop.dm.action({ a: 'send', peer: bobId, text: 'forged list' });
+    await until(() => copiesTo().includes(laptopId));
+    rewrite = null;
+    ageList();
+    requests.splice(0);
+    await desktop.dm.action({ a: 'send', peer: bobId, text: 'honest again' });
+    await until(() => copiesTo().includes(laptopId));
+    expect(copiesTo()).not.toContain(phoneId);
   });
 
   it('cancelling while the code is being reserved shows no code', async () => {

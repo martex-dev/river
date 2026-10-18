@@ -11,6 +11,9 @@ All notable changes to River are documented here. The format follows
 - Direct messages: a first message "from" someone you share a community with
   must use the safety key their community profile names. A server can no
   longer write to you first as a community member under a key of its own.
+- Linked devices: a device you remove stops getting copies of what you send
+  right away, also when the server keeps offering the old device list. A list
+  for your account signed by any key other than yours is ignored.
 
 ## [2.20.0] - 2026-10-18
 

@@ -1898,6 +1898,21 @@ export class DmService {
     return moved;
   }
 
+  /**
+   * The oldest device-list version still acceptable for `peer`: the newest seen here, and for this
+   * account's own devices at least the version of its own identity-signed list (which this device
+   * keeps up to date when it adds or removes a device, or signs in after another device did).
+   */
+  private ownIdentityKey(): Uint8Array | null {
+    return this.deps.identity.signer()?.publicKey ?? null;
+  }
+
+  private listFloor(peer: string, seen: number): number {
+    if (peer !== this.me()) return seen;
+    const s = this.deps.account.status();
+    return Math.max(seen, s.state === 'registered' ? s.listVersion : 0);
+  }
+
   /** Verifies a key bundle and starts sessions with devices we have none with. */
   private async prepareSessions(
     peer: string,
@@ -1911,7 +1926,11 @@ export class DmService {
     // The cached list is used while it is fresh; it is fetched and verified again at least daily,
     // and sooner when a message arrives from a device it does not have (hintDevice).
     const checkedAt = Number(this.meta(`devicesAt:${peer}`) ?? 0);
-    const fresh = Date.now() - checkedAt < DEVICE_LIST_MAX_AGE_MS && checkedAt <= Date.now();
+    const seen = Number(this.meta(`listVersion:${peer}`) ?? '0');
+    // This account's own devices: never from a list older than the one this device holds
+    // (a device removed here, or on another device, stops getting copies at once).
+    const floor = this.listFloor(peer, seen);
+    const fresh = Date.now() - checkedAt < DEVICE_LIST_MAX_AGE_MS && checkedAt <= Date.now() && seen >= floor;
     const sessions = !!cached?.length && cached.every((d) => protocol.hasSession(peer, d.deviceId));
     if (!force && fresh && sessions) return cached!;
     // Only due for its daily check: the signed list alone is enough while it names the same
@@ -1923,8 +1942,7 @@ export class DmService {
     // Versions count per identity key: a new key (after a reinstall) starts its own list.
     const stored = peer === this.me() ? null : protocol.identityOf(peer);
     const sameKey = !stored || Buffer.from(stored).equals(identityKey);
-    const seen = Number(this.meta(`listVersion:${peer}`) ?? '0');
-    if (sameKey && list.version < seen) {
+    if (sameKey && list.version < floor) {
       throw new CommunityError(
         'The server offered an older device list for this person than River has already seen. Messages were not sent.',
       );
@@ -1976,7 +1994,7 @@ export class DmService {
       return false;
     }
     const identityKey = Buffer.from(res.identityKey, 'base64');
-    const stored = peer === this.me() ? null : this.protocol().identityOf(peer);
+    const stored = peer === this.me() ? this.ownIdentityKey() : this.protocol().identityOf(peer);
     if (stored && !Buffer.from(stored).equals(identityKey)) return false;
     const fromCommunity = peer === this.me() ? null : this.deps.community.communityIdentityKey(peer);
     if (fromCommunity && fromCommunity !== res.identityKey) return false;
@@ -1986,7 +2004,7 @@ export class DmService {
     const list = deviceListSchema.parse(JSON.parse(listBytes.toString('utf8')));
     if (list.riverId !== peer) return false;
     const seen = Number(this.meta(`listVersion:${peer}`) ?? '0');
-    if (list.version < seen) return false;
+    if (list.version < this.listFloor(peer, seen)) return false;
     const wanted = list.devices.filter((d) => !(peer === this.me() && d.deviceId === this.deviceId()));
     const same =
       wanted.length === cached.length &&
@@ -2017,6 +2035,11 @@ export class DmService {
       throw err;
     }
     const identityKey = Buffer.from(res.identityKey, 'base64');
+    // This account's own devices share its identity key: a list under any other key is not ours.
+    const own = peer === this.me() ? this.ownIdentityKey() : null;
+    if (own && !Buffer.from(own).equals(identityKey)) {
+      throw new CommunityError('The server returned a device list that is not signed by your identity.');
+    }
     // Shared communities carry the person's identity key sealed with a community key the server
     // cannot read; if the server hands out a different key, refuse.
     const fromCommunity = peer === this.me() ? null : this.deps.community.communityIdentityKey(peer);

@@ -228,7 +228,11 @@ A3) wherever a check is possible without new primitives:
 - **Copies from this account's own devices** (sent messages, edits, the friends
   list, groups) are accepted only from another device in the account's
   identity-signed device list, and libsignal accepts only the account's own
-  identity key for them.
+  identity key for them. Copies _to_ the account's other devices (2.20) go
+  only to devices in a list signed by the account's own identity key and never
+  older than the list this device holds itself (updated when it adds or
+  removes a device, or signs in after another device did): a removed device is
+  no longer encrypted to, even by a server that keeps serving the old list.
 - **Device lists** of contacts are fetched and verified again at least daily,
   and sooner when a message comes from a device the cached list lacks. Newest
   seen versions (per identity key) are included in backups.

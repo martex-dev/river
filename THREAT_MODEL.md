@@ -267,7 +267,9 @@ A new device gets the account's identity key and community keys sealed to it
 (HPKE) through a short-lived mailbox; the server sees public keys, sealed
 blobs and timing. The device list is signed by the identity key, and clients
 refuse lists older than one they have seen. Removing a device makes the server
-end its sessions and connection; a removed device keeps what it already had
+end its sessions and connection, and since 2.20 the account's other devices
+stop encrypting copies to it at once (they never use an own-device list older
+than the one they hold); a removed device keeps what it already had
 (including keys), so against a lost device the server's cooperation matters.
 
 ### 5m. Remote assistance (1.8, ADR 0007)
