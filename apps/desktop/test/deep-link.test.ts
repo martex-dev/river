@@ -14,6 +14,12 @@ describe('river:// links (Open in River)', () => {
     expect(parseDeepLink(wrap(signup))).toEqual({ kind: 'signup', link: signup });
   });
 
+  it('reads call links (2.18), and only whole ones', () => {
+    const call = `https://crew.trycloudflare.com/call#h=75b7293c-e0a9-44c8-95ef-9eaec50e701c&l=${'L'.repeat(22)}`;
+    expect(parseDeepLink(wrap(call))).toEqual({ kind: 'call', link: call });
+    expect(parseDeepLink(wrap('https://crew.trycloudflare.com/call#h=nope&l=short'))).toBeNull();
+  });
+
   it('reads device link codes (the QR code in Settings → Devices)', () => {
     const device = 'river://link?s=https%3A%2F%2Fcrew.trycloudflare.com&c=ABCD-EFGH-JKMN-PQRS';
     expect(parseDeepLink(device)).toEqual({ kind: 'device', link: device });

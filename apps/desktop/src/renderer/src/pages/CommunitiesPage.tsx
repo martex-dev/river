@@ -41,6 +41,7 @@ import { Permission } from '@river/protocol/permissions';
 import type { ChannelView, CommunityView } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
 import { CallPill, CallPip, IncomingCall } from '../dm/CallUi.tsx';
+import { GroupCallOverlays } from '../dm/GroupCallUi.tsx';
 
 export function CommunitiesPage(): ReactElement {
   const s = useCommunity();
@@ -164,6 +165,7 @@ export function Overlays(): ReactElement {
       <IncomingCall />
       <CallPill />
       <CallPip />
+      <GroupCallOverlays />
     </>
   );
 }

@@ -745,6 +745,9 @@ async function start(): Promise<void> {
     quitting = true;
     // In a 1:1 call: tell the other side it ended (at most a moment), rather than leaving them in
     // a call with nobody until it times out.
+    // In a group call (2.18): leave its room now, so the others see you left at once instead of
+    // after the server's grace period for dropped connections.
+    if (dm.currentGroupCall()) community.groupCallRoom(null);
     const call = quitCallEnded ? null : dm.currentCall();
     if (call) {
       quitCallEnded = true;

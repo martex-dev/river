@@ -269,13 +269,18 @@ export function startMessageNotifications(deps: {
     const prefs = deps.settings().notifications;
     if (!prefs.desktop) return;
     const peer = end.event.peer;
+    const group = end.event.group;
     // Previews hidden: no name, on the lock screen or anywhere else.
     const named = prefs.preview !== 'none';
     show(
-      named ? `Missed call from ${deps.dm.nameOf(peer)}` : 'Missed call',
+      named
+        ? group
+          ? `Missed group call in ${group.name}`
+          : `Missed call from ${deps.dm.nameOf(peer)}`
+        : 'Missed call',
       end.event.video ? 'River video call' : 'River voice call',
       false,
-      () => deps.dm.focus(peer),
+      () => deps.dm.focus(group ? group.id : peer),
       undefined,
       false,
       {
@@ -316,11 +321,17 @@ export function startMessageNotifications(deps: {
         if (deps.dm.ringingCall && deps.dm.ringingCall()?.callId !== callId) return;
         const prefs = deps.settings().notifications;
         const name = prefs.preview === 'none' ? 'Someone' : deps.dm.nameOf(event.peer);
+        // A group call (2.18): who rang, and in which group.
+        const group = event.group;
         const n = show(
-          `Incoming ${event.video ? 'video ' : ''}call`,
-          `${name} is calling you`,
+          `Incoming ${group ? 'group ' : ''}${event.video ? 'video ' : ''}call`,
+          group
+            ? prefs.preview === 'none'
+              ? 'A group call'
+              : `${name} is calling ${group.name} (${group.people} people)`
+            : `${name} is calling you`,
           true,
-          () => deps.dm.focus(event.peer),
+          () => deps.dm.focus(group ? group.id : event.peer),
           undefined,
           true,
           undefined,

@@ -389,4 +389,16 @@ export const CLIENT_MIGRATIONS: readonly ClientMigration[] = [
       `);
     },
   },
+  {
+    version: 24,
+    name: '0024_group_call_log',
+    up(db) {
+      // Group calls and call links in the call history (2.18): which kind of call (null: 1:1),
+      // and how many people were in it at most.
+      db.exec(`
+        ALTER TABLE call_log ADD COLUMN kind TEXT;
+        ALTER TABLE call_log ADD COLUMN people INTEGER;
+      `);
+    },
+  },
 ];

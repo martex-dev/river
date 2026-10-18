@@ -47,6 +47,7 @@ import type { AccountService } from '../account/account-service.ts';
 import { CommunityError, type CommunityService } from '../community/community-service.ts';
 import { ApiError } from '../http.ts';
 import type { IdentityService } from '../identity/identity-service.ts';
+import { clinkContent, gcallContent, GroupCalls } from './group-calls.ts';
 import type { Logger } from '../logger.ts';
 import type { LocalDatabase } from '../storage/database.ts';
 
@@ -330,6 +331,9 @@ const contentSchema = z.discriminatedUnion('t', [
     reactions: z.record(z.string().max(32), z.array(z.uuid()).max(1000)),
   }),
   z.object({ v: z.literal(1), t: z.literal('storySeen'), postId: msgId }),
+  // Group calls and call links (2.18), handled by GroupCalls.
+  gcallContent,
+  clinkContent,
 ]);
 export type SocialContent = Extract<
   z.infer<typeof contentSchema>,
@@ -358,7 +362,7 @@ const INBOX_MAX_WAITING = 500;
 /** Messages one sender may have waiting for groups this device does not know yet. */
 const INBOX_MAX_WAITING_PER_SENDER = 20;
 /** Live signals: never kept to be applied later. */
-const EPHEMERAL = new Set(['call', 'typing']);
+const EPHEMERAL = new Set(['call', 'typing', 'gcall', 'clink']);
 /** How long a removed group stays remembered, so its traffic is dropped instead of waiting. */
 const GROUP_TOMBSTONE_MS = 90 * 86_400_000;
 /** Peer device lists are fetched and verified again at least this often. */
@@ -470,6 +474,8 @@ export class DmService {
   private ownCall: { peer: string; callId: string; outgoing: boolean; answered: boolean; at: number } | null =
     null;
   private readonly ringEndListeners = new Set<(end: RingEnd) => void>();
+  /** Group calls and call links (2.18). */
+  private readonly groupCalls: GroupCalls;
   /** When old history was last looked for (Settings → Privacy → Keep messages). */
   private historySweptAt = 0;
   /** A changed bio goes to friends once typing has settled (not once per save). */
@@ -477,6 +483,41 @@ export class DmService {
 
   constructor(deps: Deps) {
     this.deps = deps;
+    this.groupCalls = new GroupCalls({
+      me: () => this.me(),
+      group: (id) => {
+        const g = this.group(id);
+        return g && g.state === 'accepted' ? { name: g.name, members: this.list(g.members) } : undefined;
+      },
+      // Live only: rings and connection setup are never stored on the server.
+      send: (peer, content) => this.sendContent(peer, content, true),
+      handled: (conv, callId) => this.syncOp(conv, { t: 'callHandled', callId }),
+      emit: (e) => this.emit(e),
+      ring: (event) => {
+        // Something rings already (another call, or this one): no second ringing, no "busy".
+        const ringing = this.liveRinging();
+        if (ringing) return ringing.event.callId === event.callId ? 'already' : 'busy';
+        this.startRinging(event);
+        this.emit(event);
+        return 'rang';
+      },
+      endRinging: (callId, how) => {
+        if (this.ringing?.event.callId !== callId) return false;
+        this.endRinging(callId, how);
+        return true;
+      },
+      inDirectCall: () => this.ownCall !== null,
+      meta: (key) => this.meta(key),
+      setMeta: (key, value) => this.setMeta(key, value),
+      shareUrl: () => {
+        const s = this.deps.account.status();
+        if (s.state !== 'registered') throw new CommunityError('Create an account first.');
+        return s.shareUrl;
+      },
+      isFriend: (riverId) => this.contact(riverId)?.state === 'accepted',
+      myName: () => this.deps.identity.get()?.displayName ?? null,
+      warn: (message) => this.deps.log.warn(message),
+    });
     deps.community.onServerEvent((e) => this.onServerEvent(e));
     deps.community.setKeyChannel({ send: (peer, message) => this.sendContent(peer, { v: 1, ...message }) });
     // Disappearing messages are deleted on time even if nobody opens the conversation.
@@ -523,6 +564,11 @@ export class DmService {
   /** The 1:1 call this device is making or in, if any (for quitting: the other side is told). */
   currentCall(): { peer: string; callId: string } | null {
     return this.ownCall ? { peer: this.ownCall.peer, callId: this.ownCall.callId } : null;
+  }
+
+  /** The group or call-link call this device is in, if any (2.18). */
+  currentGroupCall(): string | null {
+    return this.groupCalls.current();
   }
 
   private liveRinging(): NonNullable<DmService['ringing']> | null {
@@ -1028,6 +1074,11 @@ export class DmService {
       // Community key exchange between members; not a conversation.
       const { v: _v, ...message } = content;
       void this.deps.community.handleKeyMessage(peer, message).catch(() => undefined);
+      return null;
+    }
+    if (content.t === 'gcall' || content.t === 'clink') {
+      // Group calls and call links (2.18): GroupCalls checks who may take part.
+      this.groupCalls.receive(peer, content, Date.now() - inbound.keptAt);
       return null;
     }
     const now = new Date();
@@ -2146,9 +2197,12 @@ export class DmService {
               (answeredAt !== undefined && Date.now() - answeredAt < CALL_ANSWER_WINDOW_MS
                 ? 'failed'
                 : 'missed'));
+          // A group call is logged by its group; any other call by a person (2.18).
+          if ((act.kind === 'group') !== isGroupId(act.peer))
+            throw new CommunityError('That call is not in a group.');
           this.db()
             .prepare(
-              'INSERT INTO call_log (id, peer, direction, video, started_at, answered, duration_sec) VALUES (?, ?, ?, ?, ?, ?, ?)',
+              'INSERT INTO call_log (id, peer, direction, video, started_at, answered, duration_sec, kind, people) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             )
             .run(
               randomBytes(16).toString('base64url'),
@@ -2158,6 +2212,8 @@ export class DmService {
               new Date(Date.now() - act.durationSec * 1000).toISOString(),
               CALL_OUTCOME_CODE[outcome],
               act.durationSec,
+              act.kind ?? null,
+              act.people ?? null,
             );
           this.emit({ t: 'calls' });
           return out(null);
@@ -2173,19 +2229,32 @@ export class DmService {
                 started_at: string;
                 answered: number;
                 duration_sec: number;
+                kind: string | null;
+                people: number | null;
               }>
-            ).map((c) => ({
-              id: c.id,
-              peer: c.peer,
-              name: this.nameOf(c.peer),
-              avatar: this.avatarOf(c.peer),
-              direction: c.direction,
-              video: c.video === 1,
-              answered: c.answered === 1,
-              outcome: CALL_OUTCOMES[c.answered] ?? 'missed',
-              durationSec: c.duration_sec,
-              startedAt: c.started_at,
-            })),
+            ).map((c) => {
+              const kind = c.kind === 'group' || c.kind === 'link' ? c.kind : undefined;
+              const group = kind === 'group' ? this.group(c.peer) : undefined;
+              return {
+                id: c.id,
+                peer: c.peer,
+                name:
+                  kind === 'group'
+                    ? (group?.name ?? 'Group')
+                    : kind === 'link' && c.peer === this.me()
+                      ? 'Your call link'
+                      : this.nameOf(c.peer),
+                avatar: kind === 'group' ? null : this.avatarOf(c.peer),
+                direction: c.direction,
+                video: c.video === 1,
+                answered: c.answered === 1,
+                outcome: CALL_OUTCOMES[c.answered] ?? 'missed',
+                durationSec: c.duration_sec,
+                startedAt: c.started_at,
+                ...(kind ? { kind } : {}),
+                ...(c.people ? { people: c.people } : {}),
+              };
+            }),
           );
         case 'search': {
           const like = `%${act.query.replace(/[!%_]/g, (c) => `!${c}`)}%`;
@@ -2690,10 +2759,39 @@ export class DmService {
           if (act.kind === 'accept' || act.kind === 'decline')
             this.syncOp(act.peer, { t: 'callHandled', callId: act.callId });
           return out(null);
+        case 'groupCall':
+          return out(await this.groupCallAction(() => this.groupCalls.act(act)));
+        case 'createCallLink':
+          return out(this.groupCalls.createLink(act.video, act.title ?? null));
+        case 'callLinks':
+          return out(this.groupCalls.listLinks());
+        case 'revokeCallLink':
+          this.groupCalls.revokeLink(act.link);
+          return out(null);
+        case 'knock':
+          await this.groupCallAction(() => this.groupCalls.knock(act.host, act.link));
+          return out(null);
+        case 'cancelKnock':
+          this.groupCalls.cancelKnock(act.link);
+          return out(null);
+        case 'answerKnock':
+          await this.groupCallAction(() => this.groupCalls.answerKnock(act.link, act.who, act.admit));
+          return out(null);
       }
     } catch (err) {
       if (err instanceof SafetyNumberChangedError) throw new CommunityError(err.message);
       throw err;
+    }
+  }
+
+  /** Runs a group-call step; its refusals reach the window as plain messages. */
+  private async groupCallAction<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (err) {
+      if (err instanceof CommunityError || err instanceof SafetyNumberChangedError) throw err;
+      if (err instanceof ApiError) throw err;
+      throw new CommunityError((err as Error).message);
     }
   }
 

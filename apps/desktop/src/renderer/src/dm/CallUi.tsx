@@ -17,6 +17,7 @@ import {
 } from '../community/ui/common.tsx';
 import { useRiver } from '../store.ts';
 import { acceptDmCall, declineDmCall, endDmCall, useDmCall } from './call.ts';
+import { callName, useGroupCall } from './group-call.ts';
 import { useDm } from './store.ts';
 import type { ScreenSource } from '../../../shared/ipc.ts';
 import { useEffect, useState } from 'react';
@@ -58,27 +59,44 @@ export function callColours(name: string): [string, string] {
 export function IncomingCall(): ReactElement | null {
   const incoming = useDmCall((s) => s.incoming);
   const conv = useDm((d) => d.conversations.find((c) => c.riverId === incoming?.peer));
+  const group = useDm((d) => d.conversations.find((c) => c.riverId === incoming?.group?.id));
   const phone = useRiver((r) => isPhone(r.info?.platform));
   if (!incoming) return null;
-  const name = conv?.name ?? 'Someone';
+  // A group call (2.18): the group's name, who rang, and how many people the group has.
+  const g = incoming.group;
+  const caller = conv?.name ?? group?.members.find((m) => m.riverId === incoming.peer)?.name ?? 'Someone';
+  const name = g ? (group?.name ?? g.name) : (conv?.name ?? 'Someone');
   const [from, to] = callColours(name);
   return (
     <div
       className={`incoming-call ${phone ? 'incoming-call--full' : ''}`}
       role="alertdialog"
-      aria-label={`Incoming call from ${name}`}
+      aria-label={g ? `Incoming group call in ${name}` : `Incoming call from ${name}`}
       style={{ '--call-from': from, '--call-to': to } as React.CSSProperties}
     >
-      {conv?.avatar && <img className="incoming-call__photo" src={conv.avatar} alt="" aria-hidden="true" />}
+      {!g && conv?.avatar && (
+        <img className="incoming-call__photo" src={conv.avatar} alt="" aria-hidden="true" />
+      )}
       <div className="incoming-call__card">
-        <span className="incoming-call__kind">River {incoming.video ? 'video' : 'voice'} call</span>
+        <span className="incoming-call__kind">
+          {g
+            ? `Group ${incoming.video ? 'video ' : ''}call · ${g.people} people`
+            : `River ${incoming.video ? 'video' : 'voice'} call`}
+        </span>
         <div className="incoming-call__avatar">
           <span className="incoming-call__ring" aria-hidden="true" />
           <span className="incoming-call__ring incoming-call__ring--late" aria-hidden="true" />
-          <Avatar id={incoming.peer} name={name} avatar={conv?.avatar} size={phone ? 128 : 96} />
+          <Avatar
+            id={g ? g.id : incoming.peer}
+            name={name}
+            avatar={g ? null : conv?.avatar}
+            size={phone ? 128 : 96}
+          />
         </div>
         <strong className="incoming-call__name">{name}</strong>
-        <span className="incoming-call__status">Ringing… · end-to-end encrypted</span>
+        <span className="incoming-call__status">
+          {g ? `${caller} is calling… · end-to-end encrypted` : 'Ringing… · end-to-end encrypted'}
+        </span>
         <div className="incoming-call__actions">
           <div className="incoming-call__action">
             <button
@@ -128,15 +146,19 @@ export function IncomingCall(): ReactElement | null {
  */
 export function CallPip(): null {
   const peer = useDmCall((s) => s.active?.peer ?? null);
+  // A group or call-link call too (2.18).
+  const group = useGroupCall((s) => (s.active ? (s.active.groupId ?? s.active.callId) : null));
+  const on = !!peer || !!group;
   useEffect(() => {
-    window.river.voice.setPip(!!peer);
+    window.river.voice.setPip(on);
     return () => window.river.voice.setPip(false);
-  }, [peer]);
+  }, [on]);
   useEffect(
     () =>
       window.river.app.onPip((on) => {
         document.documentElement.dataset.pip = on ? 'on' : 'off';
-        const p = useDmCall.getState().active?.peer;
+        // The conversation of the call opens, so the small window shows the call.
+        const p = useDmCall.getState().active?.peer ?? useGroupCall.getState().active?.groupId;
         if (on && p) {
           useDm.getState().select(p);
           useRiver.getState().navigate('messages');
@@ -152,7 +174,8 @@ export function CallPill(): ReactElement | null {
   const section = useRiver((r) => r.section);
   const selected = useDm((d) => d.selected);
   const name = useDm((d) => d.conversations.find((c) => c.riverId === active?.peer)?.name);
-  if (!active || (section === 'messages' && selected === active.peer)) return null;
+  if (!active) return <GroupCallPill />;
+  if (section === 'messages' && selected === active.peer) return null;
   return (
     <button
       className="call-pill"
@@ -163,6 +186,33 @@ export function CallPill(): ReactElement | null {
     >
       <span className="call-pill__dot" /> {active.state === 'ringing' ? 'Calling' : 'In call with'}{' '}
       {name ?? '…'}
+      {active.connectedAt && (
+        <>
+          {' · '}
+          <CallTimer since={active.connectedAt} />
+        </>
+      )}
+    </button>
+  );
+}
+
+/** The pill for a group call (2.18) whose group is not on screen (a call-link call is always shown). */
+function GroupCallPill(): ReactElement | null {
+  const active = useGroupCall((s) => s.active);
+  const section = useRiver((r) => r.section);
+  const selected = useDm((d) => d.selected);
+  useDm((d) => d.conversations);
+  if (!active?.groupId || (section === 'messages' && selected === active.groupId)) return null;
+  const groupId = active.groupId;
+  return (
+    <button
+      className="call-pill"
+      onClick={() => {
+        useRiver.getState().navigate('messages');
+        useDm.getState().select(groupId);
+      }}
+    >
+      <span className="call-pill__dot" /> In a call in {callName(active)}
       {active.connectedAt && (
         <>
           {' · '}

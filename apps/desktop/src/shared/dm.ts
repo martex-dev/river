@@ -114,6 +114,7 @@ export type CallOutcome = 'answered' | 'missed' | 'declined' | 'failed' | 'busy'
 
 export interface CallView {
   id: string;
+  /** The person, or for a group call the group (2.18), or for a call link its host. */
   peer: string;
   name: string;
   avatar: string | null;
@@ -123,6 +124,36 @@ export interface CallView {
   outcome: CallOutcome;
   durationSec: number;
   startedAt: string;
+  /** A group call or a call through a call link (2.18); absent: a 1:1 call. */
+  kind?: 'group' | 'link';
+  /** How many people were in it at most, you included (group and link calls). */
+  people?: number;
+}
+
+/** Most people in one group call or call-link call (2.18; the server's MAX_GROUP_CALL_ROOM). */
+export const MAX_GROUP_CALL = 50;
+
+/** A group call ringing here (2.18): its group and how many people are in that group. */
+export interface RingingGroup {
+  id: string;
+  name: string;
+  people: number;
+}
+
+/** A call link you made (2.18): anyone with it may ask to join; you let each person in. */
+export interface CallLinkView {
+  /** The link's secret ID (part of the link; never the call's own ID). */
+  id: string;
+  /** The link to share: https://<your server>/call#h=<you>&l=<id>. */
+  url: string;
+  /** The call it leads to. */
+  callId: string;
+  video: boolean;
+  title: string | null;
+  createdAt: string;
+  expiresAt: string;
+  /** People you let in so far. */
+  admitted: string[];
 }
 
 /** A chat folder (2.10.8): a named set of conversations, kept on this device. */
@@ -151,7 +182,31 @@ export type DmEvent =
       kind: 'invite' | 'accept' | 'decline' | 'end' | 'signal' | 'busy' | 'elsewhere';
       video: boolean;
       data?: unknown;
-    };
+      /** A group call (2.18): `peer` started it (or rang you again) in this group. */
+      group?: RingingGroup;
+    }
+  /**
+   * Group calls and call links (2.18). `signal`: connection setup from `from`; `decline`: they
+   * said no to your ring; `ongoing`: a call started in a group while you were in another call;
+   * `allow`: who may be in a call-link call now (from its host); `admitted`: the host of a call
+   * link let you in (`host`, `video`, `title`, `allowed`).
+   */
+  | {
+      t: 'gcall';
+      kind: 'signal' | 'decline' | 'ongoing' | 'allow' | 'admitted';
+      callId: string;
+      from: string;
+      groupId?: string;
+      host?: string;
+      video?: boolean;
+      title?: string | null;
+      allowed?: string[];
+      data?: unknown;
+    }
+  /** Someone asks to join one of your call links (2.18). `contact`: they are your friend. */
+  | { t: 'knock'; link: string; from: string; name: string; contact: boolean }
+  /** The host of a call link you asked to join said no, or the link no longer works. */
+  | { t: 'knockAnswer'; link: string; host: string; answer: 'deny' | 'gone' };
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 const riverId = z.uuid();
@@ -313,7 +368,12 @@ export const dmActionSchema = z.discriminatedUnion('a', [
   z
     .object({
       a: z.literal('logCall'),
-      peer: riverId,
+      /** The person; for a group call the group (2.18); for a call-link call its host. */
+      peer: conv,
+      /** A group call or a call-link call (2.18). */
+      kind: z.enum(['group', 'link']).optional(),
+      /** How many people were in it at most, you included. */
+      people: z.number().int().min(1).max(MAX_GROUP_CALL).optional(),
       direction: z.enum(['in', 'out']),
       video: z.boolean(),
       answered: z.boolean(),
@@ -362,6 +422,39 @@ export const dmActionSchema = z.discriminatedUnion('a', [
       data: z.unknown().optional(),
     })
     .strict(),
+  /**
+   * Group calls (2.18), in a group or through a call link. `ring`: rings the group's other
+   * members (or only `to`: "Ring again"); `join` and `leave`: this device takes part or no
+   * longer does; `decline`: tells `to` (who rang) you will not join; `signal`: connection setup
+   * for `to`. Main checks every person against the group or the people the link's host let in.
+   */
+  z
+    .object({
+      a: z.literal('groupCall'),
+      kind: z.enum(['ring', 'join', 'leave', 'decline', 'signal']),
+      callId: id,
+      groupId: id.optional(),
+      to: z.array(riverId).min(1).max(MAX_GROUP_CALL).optional(),
+      video: z.boolean().optional(),
+      data: z.unknown().optional(),
+    })
+    .strict(),
+  /** Makes a call link (2.18): a new call, and a link anyone may use to ask to join it. */
+  z
+    .object({
+      a: z.literal('createCallLink'),
+      video: z.boolean(),
+      title: z.string().trim().min(1).max(64).optional(),
+    })
+    .strict(),
+  z.object({ a: z.literal('callLinks') }).strict(),
+  z.object({ a: z.literal('revokeCallLink'), link: id }).strict(),
+  /** Asks the host of a call link to let you in (2.18). */
+  z.object({ a: z.literal('knock'), host: riverId, link: id }).strict(),
+  /** Stops waiting to be let in. */
+  z.object({ a: z.literal('cancelKnock'), link: id }).strict(),
+  /** Host: lets someone who asked into the call of one of your links, or says no. */
+  z.object({ a: z.literal('answerKnock'), link: id, who: riverId, admit: z.boolean() }).strict(),
 ]);
 
 export type DmAction = z.input<typeof dmActionSchema>;
@@ -386,6 +479,10 @@ interface DmResults {
   scheduled: ScheduledView[];
   /** `answer`: it was answered on the phone's own call screen (Android, 2.11), so the window answers it. */
   pendingCall: (Extract<DmEvent, { t: 'call' }> & { answer?: boolean }) | null;
+  /** Who may be in that call (group members, or the people a call link's host let in), 2.18. */
+  groupCall: { allowed: string[] } | null;
+  createCallLink: CallLinkView;
+  callLinks: CallLinkView[];
 }
 
 export type DmActionResult<A extends DmAction> = A['a'] extends keyof DmResults ? DmResults[A['a']] : null;

@@ -416,7 +416,7 @@ export function VoicePanel({
   useCommunity((x) => x.callVersion);
   const call = s.call;
   if (!call) return <RejoinPanel me={me} />;
-  if (call.channelId.startsWith('dm:')) return null;
+  if (call.channelId.startsWith('dm:') || call.channelId.startsWith('gcall:')) return null;
   const channelCommunity =
     s.communities.find((c) => c.channels.some((ch) => ch.id === call.channelId)) ?? community;
   if (!channelCommunity) return null;
