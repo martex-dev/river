@@ -6,6 +6,8 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.16.0] - 2026-10-18
+
 **Easy start: from install to your first message with no more work than a
 normal social app.**
 
