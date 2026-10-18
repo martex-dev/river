@@ -39,6 +39,7 @@ with machine-readable schemas in `packages/protocol`. Planned resources:
 | `POST /v1/accounts`                               | Register: identity key, device key, signed device list — **implemented** | 0.1.0     |
 | `POST /v1/auth/session`                           | Device challenge–response login — **implemented**                        | 0.1.0     |
 | `GET /v1/accounts/me`                             | Own account record incl. signed device list — **implemented**            | 0.1.0     |
+| `DELETE /v1/sessions/current`                     | Sign out: ends the bearer token's session — **implemented**              | 2.20      |
 | `PUT /v1/devices/list`                            | Update the identity-signed device list                                   | 0.1.x     |
 | `PUT /v1/profile`                                 | Encrypted profile                                                        | 0.1.1     |
 | `PUT /v1/keys`, `GET /v1/keys/{account}/{device}` | Prekey upload and fetch                                                  | 0.2.0     |

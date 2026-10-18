@@ -373,6 +373,86 @@ describe('communities', () => {
       expect(await status(a, 'GET', `/v1/communities/${cid}/events`, stranger.token)).not.toBe(200);
     });
 
+    it('Manage roles cannot reach a role carrying permissions its holder lacks (2.20)', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const mod = await join(a, owner.token, cid);
+      const member = await join(a, owner.token, cid);
+      // The managers' role first, then the admins' role: new roles go in at the bottom, so the
+      // admins' role ends up BELOW the managers' (an owner's slip, or an old community).
+      const managers = await role(a, owner.token, cid, Permission.MANAGE_ROLES | Permission.MANAGE_COMMUNITY);
+      const admins = await role(a, owner.token, cid, Permission.ADMINISTRATOR);
+      const banners = await role(a, owner.token, cid, Permission.BAN_MEMBERS);
+      const files = await role(a, owner.token, cid, Permission.ATTACH_FILES);
+      expect((await assign(a, owner.token, cid, mod.riverId, [managers.rid])).statusCode).toBe(200);
+      const c = await fetchCommunity(a, owner.token, cid);
+      const pos = (rid: string) => c.roles.find((r) => r.id === rid)!.position;
+      expect(pos(admins.rid)).toBeLessThan(pos(managers.rid));
+
+      // Giving a lower role that carries Administrator (or anything the giver lacks): refused,
+      // to themselves or to anyone else, for good or for a while.
+      expect((await assign(a, mod.token, cid, mod.riverId, [managers.rid, admins.rid])).statusCode).toBe(403);
+      expect((await assign(a, mod.token, cid, member.riverId, [admins.rid])).statusCode).toBe(403);
+      expect((await assign(a, mod.token, cid, member.riverId, [banners.rid])).statusCode).toBe(403);
+      expect(
+        await status(a, 'POST', `/v1/communities/${cid}/members/${member.riverId}/temp-role`, mod.token, {
+          roleId: admins.rid,
+          seconds: 3600,
+        }),
+      ).toBe(403);
+      // A role within the giver's own permissions still works (every member may attach files).
+      expect((await assign(a, mod.token, cid, member.riverId, [files.rid])).statusCode).toBe(200);
+      // Taking it away again is refused just the same for a role out of reach.
+      expect((await assign(a, owner.token, cid, member.riverId, [files.rid, banners.rid])).statusCode).toBe(
+        200,
+      );
+      expect((await assign(a, mod.token, cid, member.riverId, [files.rid])).statusCode).toBe(403);
+      expect(
+        (await fetchCommunity(a, owner.token, cid)).members
+          .find((m) => m.riverId === member.riverId)!
+          .roles.sort(),
+      ).toEqual([files.rid, banners.rid].sort());
+
+      // Editing, moving or deleting such a role, or offering it to everyone: refused too.
+      expect(await status(a, 'PATCH', `/v1/roles/${admins.rid}`, mod.token, { name: sealed() })).toBe(403);
+      expect(await status(a, 'PATCH', `/v1/roles/${admins.rid}`, mod.token, { permissions: 0 })).toBe(403);
+      expect(await status(a, 'DELETE', `/v1/roles/${banners.rid}`, mod.token)).toBe(403);
+      expect(
+        await status(a, 'PUT', `/v1/communities/${cid}/role-order`, mod.token, {
+          roles: [
+            { id: admins.rid, position: pos(files.rid) },
+            { id: files.rid, position: pos(admins.rid) },
+          ],
+        }),
+      ).toBe(403);
+      const priority = await role(a, owner.token, cid, Permission.PRIORITY_SPEAKER);
+      expect(
+        await status(a, 'PUT', `/v1/communities/${cid}/onboarding`, mod.token, {
+          onboarding: null,
+          screening: false,
+          selfRoles: [priority.rid],
+        }),
+      ).toBe(403);
+      // Creating or editing a role still cannot grant what the editor lacks.
+      expect((await role(a, mod.token, cid, Permission.ADMINISTRATOR)).status).toBe(403);
+      expect(
+        await status(a, 'PATCH', `/v1/roles/${files.rid}`, mod.token, {
+          permissions: Permission.BAN_MEMBERS,
+        }),
+      ).toBe(403);
+      expect(await status(a, 'PATCH', `/v1/roles/${files.rid}`, mod.token, { name: sealed() })).toBe(200);
+
+      // Owners and administrators hold every permission: the position rule alone applies to them.
+      expect((await assign(a, owner.token, cid, member.riverId, [admins.rid])).statusCode).toBe(200);
+      expect((await assign(a, member.token, cid, mod.riverId, [managers.rid, banners.rid])).statusCode).toBe(
+        403,
+      ); // managers is above admins
+      expect((await assign(a, member.token, cid, owner.riverId, [banners.rid])).statusCode).toBe(403); // the owner
+      const third = await join(a, owner.token, cid);
+      expect((await assign(a, member.token, cid, third.riverId, [banners.rid])).statusCode).toBe(200);
+    });
+
     it('ownership can be handed to a member, only by the owner', async () => {
       const a = await start();
       const owner = await user(a);
@@ -1037,7 +1117,7 @@ describe('communities', () => {
       expect((await claim()).epoch_claimed_at).toBeNull();
 
       // A claimed rotation that nobody reports in ten minutes reached nobody: asked for again,
-      // at most three times.
+      // three times after ten minutes each; after that the wait doubles (2.20: it used to stop).
       for (let retry = 1; retry <= 4; retry++) {
         const from = (await fetchCommunity(a, owner.token, cid)).keyEpoch;
         expect(await status(a, 'POST', `/v1/communities/${cid}/epoch`, owner.token, { from })).toBe(200);
@@ -1050,6 +1130,92 @@ describe('communities', () => {
         expect(c.rotationNeeded).toBe(retry <= 3);
         if (retry <= 3) expect((await claim()).rotation_retries).toBe(retry);
       }
+      // The fourth claim is not left in place for good: after twenty minutes it is asked for again.
+      await database.db
+        .updateTable('communities')
+        .set({ epoch_claimed_at: new Date(Date.now() - 21 * 60_000).toISOString() })
+        .where('id', '=', cid)
+        .execute();
+      expect((await fetchCommunity(a, owner.token, cid)).rotationNeeded).toBe(true);
+      expect((await claim()).rotation_retries).toBe(4);
+    });
+
+    it('a member whose claims reach nobody stands aside for another, and claims always expire (2.20)', async () => {
+      const a = await start({ rotationRecheckMs: 0 });
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const mallory = await join(a, owner.token, cid);
+      const honest = await join(a, owner.token, cid);
+      const leaver = await join(a, owner.token, cid);
+      await status(a, 'POST', `/v1/communities/${cid}/leave`, leaver.token);
+      const row = async () =>
+        await database.db
+          .selectFrom('communities')
+          .select([
+            'rotation_needed',
+            'rotation_retries',
+            'epoch_claimed_by',
+            'rotation_stalled',
+            'key_epoch',
+          ])
+          .where('id', '=', cid)
+          .executeTakeFirstOrThrow();
+      const claim = async (token: string) =>
+        status(a, 'POST', `/v1/communities/${cid}/epoch`, token, { from: (await row()).key_epoch });
+      const age = async (minutes: number) => {
+        await database.db
+          .updateTable('communities')
+          .set({ epoch_claimed_at: new Date(Date.now() - minutes * 60_000).toISOString() })
+          .where('id', '=', cid)
+          .execute();
+        await fetchCommunity(a, owner.token, cid); // the owner uses River: someone could have it
+      };
+
+      // Mallory claims every rotation and never hands the key out.
+      expect(await claim(mallory.token)).toBe(200);
+      await age(11);
+      expect(await row()).toMatchObject({ rotation_needed: 1, epoch_claimed_by: null });
+      expect(JSON.parse((await row()).rotation_stalled)).toEqual([mallory.riverId]);
+      // Next time Mallory has to stand aside (her app steps back on this refusal) …
+      expect(await claim(mallory.token)).toBe(403);
+      // … and another member rotates.
+      expect(await claim(honest.token)).toBe(200);
+      expect((await row()).epoch_claimed_by).toBe(honest.riverId);
+      // That one reaches nobody either: both stand aside now, the owner may still rotate.
+      await age(11);
+      expect(JSON.parse((await row()).rotation_stalled).sort()).toEqual(
+        [mallory.riverId, honest.riverId].sort(),
+      );
+      expect(await claim(mallory.token)).toBe(403);
+      expect(await claim(honest.token)).toBe(403);
+      expect(await claim(owner.token)).toBe(200);
+
+      // However many retries it took, a claim nobody received still expires (later each time).
+      await database.db
+        .updateTable('communities')
+        .set({ rotation_retries: 20 })
+        .where('id', '=', cid)
+        .execute();
+      await age(23 * 60);
+      expect(await row()).toMatchObject({ rotation_needed: 0, epoch_claimed_by: owner.riverId });
+      await age(25 * 60);
+      expect(await row()).toMatchObject({ rotation_needed: 1, epoch_claimed_by: null, rotation_retries: 21 });
+
+      // A rotation that reaches someone ends it: nobody stands aside any more.
+      expect(await claim(owner.token)).toBe(200);
+      const epoch = (await row()).key_epoch;
+      expect(await status(a, 'POST', `/v1/communities/${cid}/epoch/adopted`, honest.token, { epoch })).toBe(
+        200,
+      );
+      expect(await row()).toMatchObject({
+        epoch_claimed_by: null,
+        rotation_stalled: '[]',
+        rotation_retries: 0,
+      });
+      // Someone leaves again: Mallory may be the one to rotate this time.
+      const other = await join(a, owner.token, cid);
+      await status(a, 'POST', `/v1/communities/${cid}/leave`, other.token);
+      expect(await claim(mallory.token)).toBe(200);
     });
 
     it('a stuck rotation is asked for again only once another member could have received it', async () => {
@@ -1221,6 +1387,83 @@ describe('communities', () => {
       expect(
         await status(a, 'POST', `/v1/channels/${text}/messages`, member.token, { id: id(), body: sealed() }),
       ).toBe(201);
+    });
+
+    it('a timeout also stops editing, reacting, threads and pins (2.20)', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, text } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const pinner = await role(a, owner.token, cid, Permission.PIN_MESSAGES);
+      await assign(a, owner.token, cid, member.riverId, [pinner.rid]);
+      const mine = id();
+      const theirs = id();
+      expect(
+        await status(a, 'POST', `/v1/channels/${text}/messages`, member.token, { id: mine, body: sealed() }),
+      ).toBe(201);
+      expect(
+        await status(a, 'POST', `/v1/channels/${text}/messages`, owner.token, { id: theirs, body: sealed() }),
+      ).toBe(201);
+      expect(await status(a, 'POST', `/v1/messages/${mine}/thread`, member.token, { name: sealed() })).toBe(
+        201,
+      );
+      const tag = randomBytes(16).toString('hex');
+      expect(
+        await status(a, 'PUT', `/v1/messages/${theirs}/reactions/${tag}`, owner.token, { emoji: sealed() }),
+      ).toBe(200);
+      const until = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      const timeout = (value: string | null) =>
+        status(a, 'PUT', `/v1/communities/${cid}/members/${member.riverId}/timeout`, owner.token, {
+          until: value,
+        });
+      expect(await timeout(until)).toBe(200);
+
+      const tries = async () => ({
+        edit: await status(a, 'PATCH', `/v1/messages/${mine}`, member.token, { body: sealed() }),
+        rename: await status(a, 'PATCH', `/v1/threads/${mine}`, member.token, { name: sealed() }),
+        thread: await status(a, 'POST', `/v1/messages/${theirs}/thread`, member.token, { name: sealed() }),
+        reactNew: await status(
+          a,
+          'PUT',
+          `/v1/messages/${theirs}/reactions/${randomBytes(16).toString('hex')}`,
+          member.token,
+          {
+            emoji: sealed(),
+          },
+        ),
+        reactJoin: await status(a, 'PUT', `/v1/messages/${theirs}/reactions/${tag}`, member.token, {
+          emoji: sealed(),
+        }),
+        pin: await status(a, 'PUT', `/v1/messages/${theirs}/pin`, member.token),
+      });
+      expect(await tries()).toEqual({
+        edit: 403,
+        rename: 403,
+        thread: 403,
+        reactNew: 403,
+        reactJoin: 403,
+        pin: 403,
+      });
+      // Reading, and taking your own reaction back, still work.
+      expect(await status(a, 'GET', `/v1/channels/${text}/messages`, member.token)).toBe(200);
+      expect(await status(a, 'DELETE', `/v1/messages/${theirs}/reactions/${tag}`, member.token)).toBe(200);
+      const body = (
+        await a.inject({ method: 'GET', url: `/v1/channels/${text}/messages`, headers: auth(owner.token) })
+      )
+        .json()
+        .messages.find((m: { id: string }) => m.id === mine);
+      expect(body.editedAt).toBeNull();
+
+      // Once the timeout is over, all of it works again.
+      expect(await timeout(null)).toBe(200);
+      expect(await tries()).toEqual({
+        edit: 200,
+        rename: 200,
+        thread: 201,
+        reactNew: 200,
+        reactJoin: 200,
+        pin: 200,
+      });
     });
 
     it('records an audit log that only permitted members can read', async () => {
@@ -1424,6 +1667,73 @@ describe('communities', () => {
       );
       for (const c of [one, two, boss]) c.ws.close();
     });
+    it('losing access to a voice channel ends your seat there and says so (2.20)', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid, voice } = await createCommunity(a, owner.token);
+      const member = await join(a, owner.token, cid);
+      const vip = await role(a, owner.token, cid, 0);
+      // Only VIPs may connect to the voice channel.
+      const overwrites = (everyoneDeny: number) => [
+        { roleId: cid, allow: 0, deny: everyoneDeny },
+        { roleId: vip.rid, allow: Permission.CONNECT, deny: 0 },
+      ];
+      expect(
+        await status(a, 'PATCH', `/v1/channels/${voice}`, owner.token, {
+          overwrites: overwrites(Permission.CONNECT),
+        }),
+      ).toBe(200);
+      expect((await assign(a, owner.token, cid, member.riverId, [vip.rid])).statusCode).toBe(200);
+
+      await a.listen({ host: '127.0.0.1', port: 0 });
+      const { port } = a.server.address() as { port: number };
+      const connect = async (token: string) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/ws`);
+        const events: Array<{ t: string; code?: string; channelId?: string; participants?: string[] }> = [];
+        ws.onmessage = (m) => events.push(JSON.parse(String(m.data)));
+        await new Promise((resolve, reject) => {
+          ws.onopen = resolve;
+          ws.onerror = reject;
+        });
+        ws.send(JSON.stringify({ t: 'auth', token }));
+        await vi.waitFor(() => expect(events.some((e) => e.t === 'ready')).toBe(true));
+        return { ws, events };
+      };
+      const boss = await connect(owner.token);
+      const guest = await connect(member.token);
+      const inVoice = (n: number) =>
+        vi.waitFor(() => {
+          const last = boss.events.filter((e) => e.t === 'voice' && e.channelId === voice).at(-1);
+          expect(last?.participants?.length).toBe(n);
+        });
+      boss.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      guest.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      await inVoice(2);
+
+      // The role that let them in is taken away: out of the channel at once, and told so.
+      expect((await assign(a, owner.token, cid, member.riverId, [])).statusCode).toBe(200);
+      await vi.waitFor(() => expect(guest.events).toContainEqual({ t: 'voice.disconnect' }));
+      await inVoice(1);
+      guest.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      await vi.waitFor(() => expect(guest.events).toContainEqual({ t: 'error', code: 'voice_forbidden' }));
+
+      // Back in with the role; then the channel is hidden from everyone but the owner.
+      expect((await assign(a, owner.token, cid, member.riverId, [vip.rid])).statusCode).toBe(200);
+      const before = guest.events.filter((e) => e.t === 'voice.disconnect').length;
+      guest.ws.send(JSON.stringify({ t: 'voice.join', channelId: voice }));
+      await inVoice(2);
+      expect(
+        await status(a, 'PATCH', `/v1/channels/${voice}`, owner.token, {
+          overwrites: overwrites(Permission.CONNECT | Permission.VIEW_CHANNELS),
+        }),
+      ).toBe(200);
+      await vi.waitFor(() =>
+        expect(guest.events.filter((e) => e.t === 'voice.disconnect').length).toBe(before + 1),
+      );
+      await inVoice(1);
+      for (const c of [boss, guest]) c.ws.close();
+    });
+
     it('soundboard: managers add sounds, people in voice who may speak play them, with a cooldown', async () => {
       const a = await start();
       const owner = await user(a);

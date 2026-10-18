@@ -120,6 +120,31 @@ export class AccountService {
   }
 
   /**
+   * Signs this device out of its server (2.20): the session it holds ends there at once, rather
+   * than when it expires. Used when River quits (the token lives in memory only, so nothing could
+   * use it again). Best effort: offline, or a server before 2.20, the session expires by itself.
+   */
+  async signOut(): Promise<void> {
+    const token = this.token;
+    const server = token ? this.row()?.server_url : undefined;
+    this.token = null;
+    if (token && server) await this.endSession(server, token);
+  }
+
+  /** Ends a session on the server; never throws (older servers do not have the route). */
+  private async endSession(server: string, token: string): Promise<void> {
+    try {
+      await this.deps.requestJson(
+        `${server}${API_PREFIX}/sessions/current`,
+        { method: 'DELETE', token },
+        z.object({ ok: z.literal(true) }),
+      );
+    } catch {
+      // unreachable or not supported: the session runs out on its own
+    }
+  }
+
+  /**
    * Creates an account for this identity. `replaceMissing`: the server no longer lets this device
    * sign in (Settings → Account → Set up again). The old account is replaced only once the new
    * one exists, so a refusal (the account is still there, registration is closed, no network)

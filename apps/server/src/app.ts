@@ -52,6 +52,8 @@ export interface AppDeps {
   rotationRecheckMs?: number;
   /** Bytes a realtime connection may have queued before it is closed (tests lower it). */
   maxEventBuffer?: number;
+  /** Free bytes on the attachment folder's disk (tests replace it). */
+  diskFree?: (dir: string) => Promise<number>;
 }
 
 function errorBody(code: string, message: string): ErrorResponse {
@@ -193,12 +195,16 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   const now = deps.now ?? (() => new Date());
   const hub = new Hub(deps.voiceGraceMs !== undefined ? { voiceGraceMs: deps.voiceGraceMs } : {});
+  // Set once the community routes exist (they own the realtime connections).
+  let endSession: ((tokenHash: string) => void) | null = null;
   registerAccountRoutes(app, {
     config,
     database: deps.database,
     now,
     // A removed device's realtime connection ends at once, not when it next reconnects.
     onDevicesRemoved: (riverId, removed) => hub.disconnectDevices(riverId, removed),
+    // A signed-out session's realtime connection ends at once, not at its next check.
+    onSessionEnded: (hash) => endSession?.(hash),
   });
   app.addHook('onClose', async () => hub.close());
   const ops = await registerCommunityRoutes(app, {
@@ -210,6 +216,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     ...(deps.rotationRecheckMs !== undefined ? { rotationRecheckMs: deps.rotationRecheckMs } : {}),
     ...(deps.maxEventBuffer !== undefined ? { maxEventBuffer: deps.maxEventBuffer } : {}),
   });
+  endSession = ops.endSession;
   registerAdminRoutes(app, { config, database: deps.database, now, hub, ops });
   registerLandingRoutes(app);
   registerSelfRoutes(app, { database: deps.database, now, hub, ops });
@@ -221,7 +228,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     now,
     ...(deps.fetch ? { fetch: deps.fetch } : {}),
   });
-  await registerAttachmentRoutes(app, { config, database: deps.database, now });
+  await registerAttachmentRoutes(app, {
+    config,
+    database: deps.database,
+    now,
+    ...(deps.diskFree ? { diskFree: deps.diskFree } : {}),
+  });
 
   return app;
 }

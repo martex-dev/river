@@ -40,6 +40,11 @@ const envSchema = z.object({
     .min(1)
     .max(24 * 30)
     .default(24),
+  /**
+   * Days after sign-in a session ends however often it is renewed (2.20); the app then signs in
+   * again with its device key, without asking the person.
+   */
+  RIVER_SESSION_MAX_DAYS: z.coerce.number().int().min(1).max(365).default(90),
   /** Where encrypted attachment blobs are stored. */
   RIVER_ATTACHMENT_DIR: z.string().min(1).default('./data/attachments'),
   /** Largest attachment (after encryption) in MiB. */
@@ -48,6 +53,20 @@ const envSchema = z.object({
   RIVER_ATTACHMENT_QUOTA_MB: z.coerce.number().int().min(10).max(1_000_000).default(2048),
   /** Undelivered envelopes kept per device; more are refused until it catches up. */
   RIVER_MAILBOX_LIMIT: z.coerce.number().int().min(100).max(1_000_000).default(5000),
+  /**
+   * Undelivered envelopes one sender may have waiting for one device (2.20), so a single sender
+   * cannot fill someone's mailbox and shut everyone else out. Writing to yourself is not counted.
+   */
+  RIVER_MAILBOX_PER_SENDER: z.coerce.number().int().min(100).max(1_000_000).default(2500),
+  /** Stored size of the undelivered envelopes kept per device, in MiB; one sender may use half (2.20). */
+  RIVER_MAILBOX_MAX_MB: z.coerce.number().int().min(10).max(100_000).default(100),
+  /**
+   * Total size of all files on the server in MiB (2.20); 0 = no total besides the free-space guard.
+   * RIVER_ATTACHMENT_QUOTA_MB is the limit per person.
+   */
+  RIVER_ATTACHMENT_TOTAL_MB: z.coerce.number().int().min(0).max(100_000_000).default(0),
+  /** Uploads are refused while the attachment folder's disk has less free space than this, in MiB (2.20). */
+  RIVER_MIN_FREE_DISK_MB: z.coerce.number().int().min(0).max(1_000_000).default(1024),
   /**
    * Days an undelivered envelope (and with it who sent it to whom, and when) is kept for a device
    * that does not collect it (2.13). Delivered envelopes are deleted as soon as they are collected.
@@ -82,13 +101,21 @@ export interface ServerConfig {
   publicUrl: string | undefined;
   registration: 'open' | 'closed';
   sessionTtlMs: number;
+  /** Absolute lifetime of a session from sign-in (default 90 days). */
+  sessionMaxMs?: number;
   attachmentDir: string;
   maxAttachmentBytes: number;
   turn: { urls: string[]; secret: string } | null;
   beaconRelay?: string;
   hostToken?: string;
   attachmentQuotaBytes: number;
+  /** All files together (0: no total); and the free disk space uploads must leave (2.20). */
+  attachmentTotalBytes?: number;
+  minFreeDiskBytes?: number;
   mailboxLimit: number;
+  /** Undelivered envelopes per sender per device, and stored size per device (2.20). */
+  mailboxPerSender?: number;
+  mailboxMaxBytes?: number;
   /** How long undelivered envelopes are kept (default 30 days). */
   mailboxTtlMs?: number;
 }
@@ -131,10 +158,15 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     publicUrl: e.RIVER_PUBLIC_URL,
     registration: e.RIVER_REGISTRATION,
     sessionTtlMs: e.RIVER_SESSION_TTL_HOURS * 60 * 60 * 1000,
+    sessionMaxMs: e.RIVER_SESSION_MAX_DAYS * 24 * 60 * 60 * 1000,
     attachmentDir: e.RIVER_ATTACHMENT_DIR,
     maxAttachmentBytes: e.RIVER_MAX_ATTACHMENT_MB * 1024 * 1024,
     attachmentQuotaBytes: e.RIVER_ATTACHMENT_QUOTA_MB * 1024 * 1024,
     mailboxLimit: e.RIVER_MAILBOX_LIMIT,
+    mailboxPerSender: e.RIVER_MAILBOX_PER_SENDER,
+    mailboxMaxBytes: e.RIVER_MAILBOX_MAX_MB * 1024 * 1024,
+    attachmentTotalBytes: e.RIVER_ATTACHMENT_TOTAL_MB * 1024 * 1024,
+    minFreeDiskBytes: e.RIVER_MIN_FREE_DISK_MB * 1024 * 1024,
     mailboxTtlMs: e.RIVER_MAILBOX_TTL_DAYS * 24 * 60 * 60 * 1000,
     ...(e.RIVER_BEACON_RELAY ? { beaconRelay: e.RIVER_BEACON_RELAY.replace(/\/+$/, '') } : {}),
     ...(e.RIVER_HOST_TOKEN ? { hostToken: e.RIVER_HOST_TOKEN } : {}),

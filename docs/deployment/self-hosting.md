@@ -41,8 +41,23 @@ RIVER_DATABASE_URL=sqlite:/var/lib/river/river.sqlite npm start -w @river/server
 | `RIVER_TURN_SECRET`           | —                                 | coturn `static-auth-secret`                                                                                              |
 | `RIVER_MAX_ATTACHMENT_MB`     | `25`                              | Largest encrypted file accepted                                                                                          |
 | `RIVER_MAILBOX_TTL_DAYS`      | `30`                              | Days undelivered direct messages wait for a device that does not collect them (1–90); delivered ones are deleted at once |
+| `RIVER_SESSION_TTL_HOURS`     | `24`                              | Hours a session lasts without use; a session in use is renewed                                                           |
+| `RIVER_SESSION_MAX_DAYS`      | `90`                              | Days after sign-in a session ends however often it was renewed (1–365); River then signs in again by itself              |
+| `RIVER_MAILBOX_LIMIT`         | `5000`                            | Undelivered direct-message envelopes kept per device                                                                     |
+| `RIVER_MAILBOX_PER_SENDER`    | `2500`                            | Of those, how many one sender may have waiting for one device (your own devices are not counted)                         |
+| `RIVER_MAILBOX_MAX_MB`        | `100`                             | Stored size of a device's undelivered envelopes; one sender may use half                                                 |
+| `RIVER_ATTACHMENT_QUOTA_MB`   | `2048`                            | Total size of the files one person keeps on the server                                                                   |
+| `RIVER_ATTACHMENT_TOTAL_MB`   | `0` (no total)                    | Total size of all files on the server                                                                                    |
+| `RIVER_MIN_FREE_DISK_MB`      | `1024`                            | Uploads are refused while less than this would stay free on the attachment folder's disk                                 |
 
 Invalid values stop the server at start-up with a list of every problem.
+
+The mailbox and file limits (2.20) keep one person, or a full disk, from taking
+the server down: a direct message over a sender's share is refused with `429`
+(`mailbox_full`), one over a device's size cap with `507`, and an upload while
+the disk is nearly full or past `RIVER_ATTACHMENT_TOTAL_MB` with `507`
+(`quota_exceeded`). The defaults let a few thousand messages wait for a friend
+who is offline.
 
 `RIVER_TRUST_PROXY=true` trusts only a proxy or tunnel on the same machine
 (loopback), such as Tailscale Funnel or Caddy on the host: the client address is

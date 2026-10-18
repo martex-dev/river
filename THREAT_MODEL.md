@@ -113,6 +113,65 @@ Photos (JPEG, PNG, WebP) lose Exif, XMP, IPTC, comments, text chunks and
 appended images before they are encrypted (only the orientation is kept).
 Videos and other files are sent as they are, and file names are kept.
 
+### 5p. Server hardening (security audit, 2.20)
+
+- **Sessions end.** A session kept alive by an open connection used to renew
+  forever, so a stolen token stayed good as long as the device stayed
+  connected. Since 2.20 every session ends 90 days after sign-in
+  (`RIVER_SESSION_MAX_DAYS`) however often it was renewed, and the app signs in
+  again with its device key. River signs out when it quits
+  (`DELETE /v1/sessions/current`, which also ends the connections that used the
+  session); removing a device ends its sessions and connection at once. A token
+  stolen from memory of a running River is still good until one of these
+  happens.
+- **Manage roles stays within what you hold.** A member with Manage roles
+  could give anyone (themselves included) a lower role that carries
+  Administrator or another permission they lack. Since 2.20 a role can be
+  given, taken, edited, moved, deleted or offered for self-assignment only if
+  it is below your highest role and carries no permission you do not have;
+  creating or editing a role still cannot grant one. Owners and administrators
+  hold every permission, so only the position rule applies to them.
+- **A timeout holds everywhere.** A timed-out member could still edit their
+  old messages, rename their threads and pin. Since 2.20 a timeout (and a
+  screened community's rules not yet accepted) also stops editing, renaming a
+  thread and pinning, besides posting, reacting, starting threads, inviting and
+  voice (the seat ends when the timeout starts). Reading, taking back your own
+  reaction and moderating others stay possible; owners and administrators are
+  never timed out. Profiles can still be republished: the app must reseal them
+  after a key rotation.
+- **Voice follows access.** Someone whose role or a channel's (or category's)
+  overwrites stopped letting them see or connect to the voice channel they were
+  in stayed in it. Since 2.20 the server ends their seat at once and tells
+  their app, as for a deleted channel; a temporary role that runs out is
+  noticed within a minute.
+- **Mailboxes and disks have limits per sender.** One sender could fill a
+  device's mailbox (5000 envelopes of up to 128 KB) and so shut everyone else
+  out, and uploads could fill the disk. Since 2.20 one sender may have at most
+  2500 envelopes and half of 100 MB waiting for one device
+  (`RIVER_MAILBOX_PER_SENDER`, `RIVER_MAILBOX_MAX_MB`; the size counts for the
+  device as a whole too), and uploads are refused while less than 1 GB would
+  stay free (`RIVER_MIN_FREE_DISK_MB`) or past an optional server-wide total
+  (`RIVER_ATTACHMENT_TOTAL_MB`). Many accounts working together can still fill
+  a mailbox up to its cap; the 30-day expiry and the device's next collection
+  empty it.
+- **One-time prekeys cannot be drained by one account.** Every key-bundle
+  fetch takes one of the person's one-time prekeys, so anyone could fetch
+  again and again until none were left (first messages then lose the extra
+  forward secrecy those keys give). Since 2.20 one account takes at most ten an
+  hour from another; further fetches get the signed and last-resort keys only,
+  with which sessions still start. Many accounts can still use them up
+  together; the app tops them up when it next connects.
+- **Key rotation cannot be stalled by one member.** A member could claim each
+  new community epoch and never hand out its key; after three retries the
+  server stopped asking, and the community stayed on a key nobody else had.
+  Since 2.20 a member whose claim reached nobody stands aside (the server
+  refuses their next claim while another member could rotate) until a rotation
+  succeeds, and a stuck claim always expires, after a wait that doubles past
+  the third retry (at most a day). Keys still need the proof they did before
+  (CRYPTOGRAPHY.md §4a). Several accounts working together can still delay a
+  rotation by one round each, and a member's second account could report the
+  key as received when it was not.
+
 ### 5a. Address relay (River Host, 1.0.8)
 
 A server hosted on a home PC behind a quick tunnel posts signed notes of its
