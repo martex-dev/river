@@ -3,6 +3,11 @@
  * got, shown once. Fresh installs see nothing; full notes are in the release.
  */
 export const HIGHLIGHTS: Record<string, string[]> = {
+  '2.15.0': [
+    'Message lengths are hidden from the server, and photos lose their location and other hidden data before sending',
+    'Settings → System → Privacy: connect through Tor or another proxy, keep messages on this device only for a while, a disappearing timer for new chats',
+    'Chats load with a placeholder and a Retry, stay at the newest message, and work fully from the keyboard',
+  ],
   '2.14.0': [
     'Voice channels for big groups: everyone heard, still end-to-end encrypted',
     'Meetings: Grid or Speaker view, Raise hand in order, a quick noise-suppression switch',

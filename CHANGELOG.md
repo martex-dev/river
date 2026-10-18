@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-10-18
+
+**More private by default, and a calmer, steadier desktop.**
+
 ### Added
 
 - Computers: the window title shows how many direct messages and mentions are
