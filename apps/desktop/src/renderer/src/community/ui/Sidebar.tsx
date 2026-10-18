@@ -499,7 +499,7 @@ function RejoinPanel({ me }: { me: string }): ReactElement | null {
 }
 
 /** "📅 Events · Game night today at 19:00" — opens the community's events. */
-function EventsRow({ community }: { community: CommunityView }): ReactElement {
+export function EventsRow({ community }: { community: CommunityView }): ReactElement {
   const s = useCommunity();
   const events = useEvents(community.id);
   const active = (events ?? []).filter((e) => !e.canceled && eventPhase(e) !== 'past');

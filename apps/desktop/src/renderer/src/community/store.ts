@@ -30,6 +30,7 @@ import { VoiceCall } from './voice.ts';
 import { WebCodecsRelay } from './relay-audio.ts';
 import { forgetCall, rememberCall } from './rejoin.ts';
 import { resumeAudio } from './peer-audio.ts';
+import { phoneShellActive } from '../phone/mode.ts';
 
 export type Modal =
   | { kind: 'community-settings'; communityId: string; tab?: CommunityTab }
@@ -945,12 +946,15 @@ function applyCommunities(communities: CommunityView[]): void {
   const s = useCommunity.getState();
   useCommunity.setState({ communities });
   const current = communities.find((c) => c.id === s.selectedCommunity);
+  // On a phone (2.12) a community opens on its channel list: nothing is opened (or read) for you.
+  const phone = phoneShellActive();
   if (!current) {
-    if (communities[0]) useCommunity.getState().select(communities[0].id);
+    if (communities[0] && !phone) useCommunity.getState().select(communities[0].id);
     else useCommunity.setState({ selectedCommunity: null, selectedChannel: null });
   } else if (s.selectedChannel && !current.channels.some((ch) => ch.id === s.selectedChannel)) {
     // The channel was deleted or hidden from us.
-    useCommunity.getState().select(current.id);
+    if (phone) useCommunity.setState({ selectedChannel: null });
+    else useCommunity.getState().select(current.id);
   }
 }
 

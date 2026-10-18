@@ -220,40 +220,48 @@ describe('River for Android on an emulator', { timeout: 180_000 }, () => {
     expect(mine.digits).toBe(theirs.digits);
   });
 
-  it('shows one pane at a time on the phone (screenshots for review)', async () => {
+  it('shows the phone shell: chats, a conversation, a community channel (screenshots for review)', async () => {
     const shots = join(process.cwd(), 'android-screenshots');
     mkdirSync(shots, { recursive: true });
     // The UI was driven through window.river; load it again to show the account it now has.
     await ui.reload();
-    await ui.waitForSelector('.workspace, .skin-gate', { timeout: 60_000 });
+    await ui.waitForSelector('.pshell, .skin-gate', { timeout: 60_000 });
     await ui.screenshot({ path: join(shots, '0-first-screen.png') });
     if (await ui.locator('.skin-gate').isVisible()) {
       await ui.getByRole('radio', { name: 'Specter skin' }).click();
       await ui.getByRole('radio', { name: 'Specter palette' }).click();
       await ui.getByRole('button', { name: 'Continue' }).click();
-      await ui.waitForSelector('.workspace', { timeout: 15_000 });
+      await ui.waitForSelector('.pshell', { timeout: 15_000 });
     }
     await sleep(1500);
-    await ui.screenshot({ path: join(shots, '1-conversation.png') });
-    await ui.click('.phone-menu');
-    await until(() => ui.evaluate("document.documentElement.dataset.pane === 'nav'"));
-    await sleep(500);
-    await ui.screenshot({ path: join(shots, '2-list.png') });
-    // Home's list: open the conversation with Alice.
-    await ui.click('.dm-row');
-    await until(() => ui.evaluate("document.documentElement.dataset.pane === 'main'"));
+    // Chats: the conversation with Alice, opened full screen over the list.
+    await ui.screenshot({ path: join(shots, '1-chats.png') });
+    await ui.locator('.prow', { hasText: 'Alice' }).first().click();
+    await until(() => ui.evaluate("!!document.querySelector('.pchat .pchat-head')"));
     await sleep(800);
-    await ui.screenshot({ path: join(shots, '3-direct-message.png') });
-    // The community: choose it in the rail, then its channel.
-    await ui.click('.phone-menu');
-    await ui.click('.community__server:not(.community__server--add):not(.rail-home)');
+    await ui.screenshot({ path: join(shots, '2-direct-message.png') });
+    // Android's Back closes the conversation, as MainActivity asks it.
+    expect(await ui.evaluate('window.__riverBack()')).toBe(true);
+    await until(() => ui.evaluate("!document.querySelector('.pscreen--pushed:not(.is-leaving)')"));
+    // Communities: the community, its channels, then the channel.
+    await ui
+      .getByRole('navigation', { name: 'River' })
+      .getByRole('button', { name: /^Communities/ })
+      .click();
+    await ui.locator('.prow').first().click();
     await ui.waitForSelector('.channel__open', { timeout: 15_000 });
     await sleep(500);
-    await ui.screenshot({ path: join(shots, '4-channels.png') });
+    await ui.screenshot({ path: join(shots, '3-channels.png') });
     await ui.locator('.channel__open').first().click();
-    await until(() => ui.evaluate("document.documentElement.dataset.pane === 'main'"));
+    await until(() => ui.evaluate("!!document.querySelector('.pchannel')"));
     await sleep(800);
-    await ui.screenshot({ path: join(shots, '5-channel.png') });
+    await ui.screenshot({ path: join(shots, '4-channel.png') });
     expect(await ui.locator('text=hi Android').count()).toBeGreaterThan(0);
+    // Back: the channel, the community, then Chats; on Chats, Back leaves River.
+    expect(await ui.evaluate('window.__riverBack()')).toBe(true);
+    expect(await ui.evaluate('window.__riverBack()')).toBe(true);
+    expect(await ui.evaluate('window.__riverBack()')).toBe(true);
+    await until(() => ui.evaluate("!document.querySelector('.pscreen--pushed:not(.is-leaving)')"));
+    expect(await ui.evaluate('window.__riverBack()')).toBe(false);
   });
 });

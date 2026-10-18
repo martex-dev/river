@@ -24,6 +24,8 @@ import { formatMessageLink } from '../message-link.ts';
 import { ProfileCard } from './Members.tsx';
 import { ForwardDialog } from './Forward.tsx';
 import { useRiver } from '../../store.ts';
+import { phonePop } from '../../phone/nav.ts';
+import { BackIcon, ClipIcon, EmojiIcon, MoreIcon, SearchIcon, SendIcon } from '../../phone/icons.tsx';
 import { replaceCustomShortcodes, replaceShortcodes, searchEmoji, useEmojiIndex } from '../emoji-data.ts';
 import {
   memo,
@@ -135,6 +137,11 @@ export function TextChannel(props: {
   const [dragging, setDragging] = useState(false);
   // Media channels open as a gallery (1.0.26); the chat is one click away.
   const [view, setView] = useState<'chat' | 'gallery'>(channel.media ? 'gallery' : 'chat');
+  // Phones (2.12): a Telegram-style header with Back; the panels move into its menu.
+  const phone = useRiver((r) => isPhone(r.info?.platform));
+  const [headMenu, setHeadMenu] = useState<{ x: number; y: number } | null>(null);
+  useCommunity((x) => x.typing[channel.id]);
+  const typingNow = phone ? typingNames(channel.id, community, me) : [];
   const canAttach = can(channel.permissions, Permission.ATTACH_FILES | Permission.SEND_MESSAGES);
   const addFiles = (files: Iterable<File>): void => {
     if (!canAttach) return s.notify('You cannot attach files in this channel.', 'error');
@@ -241,67 +248,166 @@ export function TextChannel(props: {
           </div>
         </div>
       )}
-      <header className="chat__head">
-        <span className="channel__icon">
-          {channel.announcement ? <span aria-hidden="true">📢</span> : <HashIcon size={20} />}
-        </span>
-        <strong>{channel.name}</strong>
-        {channel.topic && <span className="chat__topic">{channel.topic}</span>}
-        <span className="chat__head-actions">
-          {channel.media && (
-            <button
-              className={`icon-btn ${view === 'gallery' ? 'is-on' : ''}`}
-              aria-label={view === 'gallery' ? 'Show as chat' : 'Show as gallery'}
-              title={view === 'gallery' ? 'Show as chat' : 'Show as gallery'}
-              onClick={() => setView(view === 'gallery' ? 'chat' : 'gallery')}
-            >
-              {view === 'gallery' ? '💬' : '🖼️'}
-            </button>
-          )}
-          {can(community.permissions, Permission.CREATE_INVITE) && (
-            <button
-              className="icon-btn"
-              aria-label="Invite people"
-              title="Invite people"
-              onClick={() => s.setModal({ kind: 'invite', communityId: community.id })}
-            >
-              <UserPlusIcon size={18} />
-            </button>
-          )}
-          <button
-            className={`icon-btn ${s.showSearch ? 'is-on' : ''}`}
-            aria-label="Search"
-            title="Search this community"
-            onClick={() => useCommunity.setState({ showSearch: !s.showSearch })}
-          >
-            🔍
+      {phone && (
+        <header className="chat__head pchat-head">
+          <button className="pchat-head__back" aria-label="Back" onClick={() => phonePop()}>
+            <BackIcon size={26} />
           </button>
           <button
-            className={`icon-btn ${s.showSaved ? 'is-on' : ''}`}
-            aria-label="Saved messages"
-            title="Saved messages"
-            onClick={() => useCommunity.setState({ showSaved: !s.showSaved, showPins: false })}
-          >
-            🔖
-          </button>
-          <button
-            className={`icon-btn ${s.showPins ? 'is-on' : ''}`}
-            aria-label="Pinned messages"
-            title="Pinned messages"
-            onClick={() => useCommunity.setState({ showPins: !s.showPins })}
-          >
-            <PinIcon size={18} />
-          </button>
-          <button
-            className={`icon-btn ${s.showMembers ? 'is-on' : ''}`}
-            aria-label="Member list"
-            title="Show member list"
+            className="pchat-head__who"
+            aria-label={`${channel.name}, member list`}
             onClick={() => useCommunity.setState({ showMembers: !s.showMembers })}
           >
-            <UsersIcon size={18} />
+            <span className="pchat-head__glyph" aria-hidden="true">
+              {channel.announcement ? '📢' : <HashIcon size={20} />}
+            </span>
+            <span className="pchat-head__text">
+              <strong>{channel.name}</strong>
+              <span className={`pchat-head__status ${typingNow.length ? 'is-live' : ''}`}>
+                {typingNow.length === 1
+                  ? `${typingNow[0]} is typing…`
+                  : typingNow.length > 1
+                    ? `${typingNow.length} people are typing…`
+                    : `${community.name} · ${community.members.length} ${community.members.length === 1 ? 'member' : 'members'}`}
+              </span>
+            </span>
           </button>
-        </span>
-      </header>
+          <span className="pchat-head__actions">
+            <button
+              className={`pchat-head__icon ${s.showSearch ? 'is-on' : ''}`}
+              aria-label="Search"
+              onClick={() => useCommunity.setState({ showSearch: !s.showSearch })}
+            >
+              <SearchIcon size={22} />
+            </button>
+            <button
+              className="pchat-head__icon"
+              aria-label="Channel options"
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setHeadMenu({ x: r.right - 220, y: r.bottom + 4 });
+              }}
+            >
+              <MoreIcon size={24} />
+            </button>
+          </span>
+        </header>
+      )}
+      {headMenu && (
+        <Popover x={headMenu.x} y={headMenu.y} onClose={() => setHeadMenu(null)} className="menu">
+          <MenuItem
+            icon={<PinIcon size={16} />}
+            onClick={() => {
+              setHeadMenu(null);
+              useCommunity.setState({ showPins: !s.showPins, showSaved: false });
+            }}
+          >
+            Pinned messages
+          </MenuItem>
+          <MenuItem
+            icon={<span aria-hidden="true">🔖</span>}
+            onClick={() => {
+              setHeadMenu(null);
+              useCommunity.setState({ showSaved: !s.showSaved, showPins: false });
+            }}
+          >
+            Saved messages
+          </MenuItem>
+          <MenuItem
+            icon={<UsersIcon size={16} />}
+            onClick={() => {
+              setHeadMenu(null);
+              useCommunity.setState({ showMembers: !s.showMembers });
+            }}
+          >
+            Member list
+          </MenuItem>
+          {can(community.permissions, Permission.CREATE_INVITE) && (
+            <MenuItem
+              icon={<UserPlusIcon size={16} />}
+              onClick={() => {
+                setHeadMenu(null);
+                s.setModal({ kind: 'invite', communityId: community.id });
+              }}
+            >
+              Invite people
+            </MenuItem>
+          )}
+          {channel.media && (
+            <MenuItem
+              onClick={() => {
+                setHeadMenu(null);
+                setView(view === 'gallery' ? 'chat' : 'gallery');
+              }}
+            >
+              {view === 'gallery' ? '💬 Show as chat' : '🖼️ Show as gallery'}
+            </MenuItem>
+          )}
+        </Popover>
+      )}
+      {!phone && (
+        <header className="chat__head">
+          <span className="channel__icon">
+            {channel.announcement ? <span aria-hidden="true">📢</span> : <HashIcon size={20} />}
+          </span>
+          <strong>{channel.name}</strong>
+          {channel.topic && <span className="chat__topic">{channel.topic}</span>}
+          <span className="chat__head-actions">
+            {channel.media && (
+              <button
+                className={`icon-btn ${view === 'gallery' ? 'is-on' : ''}`}
+                aria-label={view === 'gallery' ? 'Show as chat' : 'Show as gallery'}
+                title={view === 'gallery' ? 'Show as chat' : 'Show as gallery'}
+                onClick={() => setView(view === 'gallery' ? 'chat' : 'gallery')}
+              >
+                {view === 'gallery' ? '💬' : '🖼️'}
+              </button>
+            )}
+            {can(community.permissions, Permission.CREATE_INVITE) && (
+              <button
+                className="icon-btn"
+                aria-label="Invite people"
+                title="Invite people"
+                onClick={() => s.setModal({ kind: 'invite', communityId: community.id })}
+              >
+                <UserPlusIcon size={18} />
+              </button>
+            )}
+            <button
+              className={`icon-btn ${s.showSearch ? 'is-on' : ''}`}
+              aria-label="Search"
+              title="Search this community"
+              onClick={() => useCommunity.setState({ showSearch: !s.showSearch })}
+            >
+              🔍
+            </button>
+            <button
+              className={`icon-btn ${s.showSaved ? 'is-on' : ''}`}
+              aria-label="Saved messages"
+              title="Saved messages"
+              onClick={() => useCommunity.setState({ showSaved: !s.showSaved, showPins: false })}
+            >
+              🔖
+            </button>
+            <button
+              className={`icon-btn ${s.showPins ? 'is-on' : ''}`}
+              aria-label="Pinned messages"
+              title="Pinned messages"
+              onClick={() => useCommunity.setState({ showPins: !s.showPins })}
+            >
+              <PinIcon size={18} />
+            </button>
+            <button
+              className={`icon-btn ${s.showMembers ? 'is-on' : ''}`}
+              aria-label="Member list"
+              title="Show member list"
+              onClick={() => useCommunity.setState({ showMembers: !s.showMembers })}
+            >
+              <UsersIcon size={18} />
+            </button>
+          </span>
+        </header>
+      )}
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {spoken}
       </div>
@@ -515,6 +621,19 @@ function MessageView(props: {
   // Poll votes are reactions underneath; they show in the poll, not as reactions.
   const reactions = m.reactions.filter((r) => !isVote(r.emoji));
   const isSaved = useCommunity((x) => !!x.saved?.some((v) => v.messageId === m.id));
+  // Phones (2.12): bubbles with the time inside, reactions at the top of the hold menu.
+  const phone = useRiver((r) => isPhone(r.info?.platform));
+  const stamp = phone ? (
+    <span className="msg__stamp">
+      {m.pinned && (
+        <span className="msg__stamp-flag" role="img" aria-label="Pinned">
+          📌
+        </span>
+      )}
+      {m.editedAt && <span className="msg__stamp-edited">edited</span>}
+      <time dateTime={m.sentAt}>{timeOf(m.sentAt)}</time>
+    </span>
+  ) : null;
   // Very long messages start folded so the conversation stays readable.
   const long = m.text.length > 1500 || m.text.split('\n').length > 30;
   const [expanded, setExpanded] = useState(false);
@@ -702,18 +821,20 @@ function MessageView(props: {
                   {expanded ? 'Show less' : 'Show more'}
                 </button>
               )}
-              {m.editedAt && (
+              {m.editedAt && !phone && (
                 <span className="msg__edited" title={new Date(m.editedAt).toLocaleString()}>
                   {' '}
                   (edited)
                 </span>
               )}
+              {!!m.text && stamp}
             </div>
           )}
           {m.poll && <PollView message={m} me={props.me} canVote={canReact} />}
           {m.embed && <LinkCard embed={m.embed} />}
           {m.sticker && <StickerImage id={m.sticker} />}
           {m.attachments.length > 0 && <AttachmentList attachments={m.attachments} alts={m.alts} />}
+          {!m.text && !editing && stamp}
           {m.thread && (
             <button className="thread-summary" onClick={() => void s.showThread(channel.id, m.id)}>
               <span aria-hidden="true">🧵</span>
@@ -760,7 +881,7 @@ function MessageView(props: {
           )}
         </div>
       </div>
-      {!editing && (
+      {!editing && !phone && (
         <div className="msg__actions" role="toolbar" aria-label="Message actions">
           {canReact &&
             QUICK_REACTIONS.slice(0, 3).map((e) => (
@@ -843,12 +964,30 @@ function MessageView(props: {
       )}
       {menu && (
         <Popover x={menu.x} y={menu.y} onClose={() => setMenu(null)} className="menu">
+          {phone && canReact && (
+            <div className="menu__reactions" role="group" aria-label="React">
+              {QUICK_REACTIONS.map((e) => (
+                <button
+                  key={e}
+                  role="menuitem"
+                  className={`menu__reaction ${reactions.some((r) => r.emoji === e && r.mine) ? 'is-mine' : ''}`}
+                  aria-label={`React ${e}`}
+                  onClick={() => {
+                    setMenu(null);
+                    react(e, !reactions.find((r) => r.emoji === e)?.mine);
+                  }}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+          )}
           {canReact && (
             <MenuItem
               icon={<SmileIcon size={16} />}
               onClick={() => {
                 setMenu(null);
-                setPicker({ x: menu.x, y: menu.y - 320 });
+                setPicker({ x: phone ? 8 : menu.x, y: Math.max(8, menu.y - 320) });
               }}
             >
               Add reaction
@@ -1127,6 +1266,7 @@ ${shared}`
   // Replies notify the person you reply to, unless you switch it off for that reply (like Discord's "@ ON").
   const [pingOffFor, setPingOffFor] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
+  const [attachMenu, setAttachMenu] = useState<{ x: number; y: number } | null>(null);
   // Quote puts the quoted lines in front of whatever is being written.
   useEffect(
     () =>
@@ -1524,28 +1664,69 @@ ${shared}`
           void send();
         }}
       >
-        <button
-          type="button"
-          className="icon-btn composer__poll"
-          aria-label="Create a poll"
-          title="Create a poll"
-          onClick={() => setPolling(true)}
-        >
-          📊
-        </button>
-        <StickerButton community={community} channelId={channel.id} />
-        {props.canAttach && <GifButton channelId={channel.id} />}
+        {phone ? (
+          // Phones (2.12): files and polls behind the paper clip, as in Telegram.
+          <button
+            type="button"
+            className="icon-btn composer__attach"
+            aria-label="Attach a file or create a poll"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setAttachMenu({ x: r.left, y: r.top - 110 });
+            }}
+          >
+            <ClipIcon size={24} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="icon-btn composer__poll"
+            aria-label="Create a poll"
+            title="Create a poll"
+            onClick={() => setPolling(true)}
+          >
+            📊
+          </button>
+        )}
+        {attachMenu && (
+          <Popover x={attachMenu.x} y={attachMenu.y} onClose={() => setAttachMenu(null)} className="menu">
+            {props.canAttach && (
+              <MenuItem
+                icon={<span aria-hidden="true">🖼️</span>}
+                onClick={() => {
+                  setAttachMenu(null);
+                  fileRef.current?.click();
+                }}
+              >
+                Photo or file
+              </MenuItem>
+            )}
+            <MenuItem
+              icon={<span aria-hidden="true">📊</span>}
+              onClick={() => {
+                setAttachMenu(null);
+                setPolling(true);
+              }}
+            >
+              Poll
+            </MenuItem>
+          </Popover>
+        )}
+        {!phone && <StickerButton community={community} channelId={channel.id} />}
+        {!phone && props.canAttach && <GifButton channelId={channel.id} />}
         {props.canAttach && (
           <>
-            <button
-              type="button"
-              className="icon-btn composer__attach"
-              aria-label="Attach files"
-              title="Attach files"
-              onClick={() => fileRef.current?.click()}
-            >
-              <PlusIcon size={20} />
-            </button>
+            {!phone && (
+              <button
+                type="button"
+                className="icon-btn composer__attach"
+                aria-label="Attach files"
+                title="Attach files"
+                onClick={() => fileRef.current?.click()}
+              >
+                <PlusIcon size={20} />
+              </button>
+            )}
             <input
               ref={fileRef}
               type="file"
@@ -1570,7 +1751,7 @@ ${shared}`
           rows={Math.min(8, Math.max(1, text.split('\n').length))}
           value={text}
           maxLength={4000}
-          placeholder={`Message #${channel.name}`}
+          placeholder={phone ? 'Message' : `Message #${channel.name}`}
           onChange={(e) => {
             setText(e.target.value);
             const now = Date.now();
@@ -1615,10 +1796,16 @@ ${shared}`
           className="icon-btn"
           aria-label="Emoji"
           title="Emoji"
-          onClick={(e) => setPicker({ x: e.clientX - 300, y: e.clientY - 330 })}
+          onClick={(e) => setPicker({ x: phone ? 8 : e.clientX - 300, y: e.clientY - 330 })}
         >
-          <SmileIcon size={20} />
+          {phone ? <EmojiIcon size={24} /> : <SmileIcon size={20} />}
         </button>
+        {phone && !text.trim() && props.pending.length === 0 && (
+          <>
+            <StickerButton community={community} channelId={channel.id} />
+            {props.canAttach && <GifButton channelId={channel.id} />}
+          </>
+        )}
         {/* Always there, so typing (or a shared file arriving) never ends a recording. */}
         {mayAttach && (
           <VoiceRecorder
@@ -1627,12 +1814,20 @@ ${shared}`
             onRecorded={(file) => void sendVoice(file)}
           />
         )}
-        <button
-          className="btn btn--primary"
-          disabled={(text.trim() === '' && props.pending.length === 0) || !!uploading}
-        >
-          Send
-        </button>
+        {phone ? (
+          (text.trim() !== '' || props.pending.length > 0) && (
+            <button className="composer__send" aria-label="Send" disabled={!!uploading}>
+              <SendIcon size={22} />
+            </button>
+          )
+        ) : (
+          <button
+            className="btn btn--primary"
+            disabled={(text.trim() === '' && props.pending.length === 0) || !!uploading}
+          >
+            Send
+          </button>
+        )}
       </form>
       <div className="typing" aria-live="polite">
         {typers.length > 0 && (

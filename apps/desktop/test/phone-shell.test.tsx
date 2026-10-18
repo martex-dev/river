@@ -6,18 +6,19 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-const env = (pane: 'nav' | 'main', closeTopOverlay = () => false) => {
-  const showList = vi.fn();
-  return { env: { closeTopOverlay, doc: document, pane, showList }, showList };
+/** `screens`: what the phone shell's own Back can still close (0 = Chats, where Back leaves). */
+const env = (screens: 0 | 1, closeTopOverlay = () => false) => {
+  const back = vi.fn(() => screens > 0);
+  return { env: { closeTopOverlay, doc: document, back }, back };
 };
 
 describe("the phone's Back button", () => {
   it('closes the topmost menu or dialog first', () => {
     const close = vi.fn(() => true);
-    const { env: e, showList } = env('main', close);
+    const { env: e, back } = env(1, close);
     expect(handleBack(e)).toBe(true);
     expect(close).toHaveBeenCalledOnce();
-    expect(showList).not.toHaveBeenCalled();
+    expect(back).not.toHaveBeenCalled();
   });
 
   it('shrinks a full-screen call back into its conversation (the call goes on)', () => {
@@ -25,28 +26,28 @@ describe("the phone's Back button", () => {
       '<div class="dm-call dm-call--full"><button class="dm-call__min">⌄</button></div>';
     const min = vi.fn();
     document.querySelector('.dm-call__min')!.addEventListener('click', min);
-    const { env: e, showList } = env('main');
+    const { env: e, back } = env(1);
     expect(handleBack(e)).toBe(true);
     expect(min).toHaveBeenCalledOnce();
-    expect(showList).not.toHaveBeenCalled();
+    expect(back).not.toHaveBeenCalled();
   });
 
   it('closes Settings or a story with Escape', () => {
     document.body.innerHTML = '<div class="settings-overlay" role="dialog"></div>';
     const keys: string[] = [];
     window.addEventListener('keydown', (k) => keys.push(k.key), { once: true });
-    const { env: e } = env('main');
+    const { env: e } = env(1);
     expect(handleBack(e)).toBe(true);
     expect(keys).toEqual(['Escape']);
   });
 
-  it('goes from a conversation to the list, and from the list out of River', () => {
-    const main = env('main');
-    expect(handleBack(main.env)).toBe(true);
-    expect(main.showList).toHaveBeenCalledOnce();
-    const nav = env('nav');
-    expect(handleBack(nav.env)).toBe(false);
-    expect(nav.showList).not.toHaveBeenCalled();
+  it('then asks the phone shell, and leaves River when the shell has nothing to close', () => {
+    const open = env(1);
+    expect(handleBack(open.env)).toBe(true);
+    expect(open.back).toHaveBeenCalledOnce();
+    const chats = env(0);
+    expect(handleBack(chats.env)).toBe(false);
+    expect(chats.back).toHaveBeenCalledOnce();
   });
 });
 

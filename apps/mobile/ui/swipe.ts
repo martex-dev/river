@@ -1,11 +1,9 @@
 /**
- * Swiping between the two phone panes, as in Discord: a swipe to the right on
- * the conversation opens the list behind it; a swipe to the left on the list
- * goes back to the conversation. Only clear, mostly horizontal swipes count,
- * so scrolling a conversation never switches panes.
+ * Going back by swiping from the left edge of the screen, as everywhere on an iPhone (2.12): a
+ * clear, mostly horizontal swipe to the right that starts at the very edge closes the screen on
+ * top. Swipes further in belong to the page (a chat row's actions, a message's reply swipe), and
+ * scrolling never counts.
  */
-
-export type Pane = 'nav' | 'main';
 
 export interface Swipe {
   x0: number;
@@ -16,15 +14,14 @@ export interface Swipe {
   ms: number;
 }
 
+/** How far (px) from the left edge a back swipe starts. */
+export const EDGE_PX = 28;
 const MIN_DISTANCE = 70;
 const MAX_MS = 800;
 
-export function swipeTarget(pane: Pane, s: Swipe, width: number): Pane | null {
+export function isEdgeSwipeBack(s: Swipe): boolean {
   const dx = s.x1 - s.x0;
   const dy = s.y1 - s.y0;
-  if (s.ms > MAX_MS || Math.abs(dx) < MIN_DISTANCE || Math.abs(dx) < 2 * Math.abs(dy)) return null;
-  // Opening the list starts from the left part of the screen (the right is for message actions).
-  if (pane === 'main' && dx > 0 && s.x0 < width * 0.6) return 'nav';
-  if (pane === 'nav' && dx < 0) return 'main';
-  return null;
+  if (s.ms > MAX_MS || s.x0 > EDGE_PX) return false;
+  return dx >= MIN_DISTANCE && dx >= 2 * Math.abs(dy);
 }
