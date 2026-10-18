@@ -1,0 +1,1812 @@
+/*
+ * River on a phone (2.12): Telegram / Instagram look over River's own pages (PhoneShell.tsx).
+ * Everything here is under .shell--phone or .pshell, so a computer never sees it. Colours come
+ * from the chosen skin's tokens (light and dark), the accent from the skin.
+ */
+
+.shell--phone {
+  display: block;
+  height: 100%;
+  --p-font: -apple-system, BlinkMacSystemFont, system-ui, 'Roboto', 'Segoe UI', sans-serif;
+  --p-sep: rgb(var(--line-rgb) / 0.13);
+  --p-fill: rgb(var(--fg-rgb) / 0.07);
+  --p-fill-strong: rgb(var(--fg-rgb) / 0.11);
+  --p-bar: rgb(var(--shade-rgb) / 0.82);
+  --p-bubble-in: var(--layer-3);
+  --p-bubble-out: var(--accent);
+  --p-bubble-out-ink: var(--accent-solid-ink);
+  --p-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --p-push: 340ms;
+  font-family: var(--p-font);
+}
+
+.pshell {
+  position: fixed;
+  inset: 0 0 var(--kb, 0px) 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--layer-1);
+  color: var(--text);
+  font-family: var(--p-font);
+  font-size: 16px;
+  letter-spacing: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.pshell button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ---------- Screens: a stack that slides ---------- */
+.pshell__screens {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.pscreen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--layer-1);
+  transition:
+    transform var(--p-push) var(--p-ease),
+    filter var(--p-push) var(--p-ease);
+}
+.pscreen--pushed {
+  box-shadow: -10px 0 28px -16px rgb(0 0 0 / 0.55);
+  animation: pscreen-in var(--p-push) var(--p-ease);
+}
+.pscreen.is-covered {
+  transform: translateX(-26%);
+  filter: brightness(0.82);
+  visibility: hidden;
+  transition:
+    transform var(--p-push) var(--p-ease),
+    filter var(--p-push) var(--p-ease),
+    visibility 0s var(--p-push);
+}
+.pscreen.is-leaving {
+  z-index: 5;
+  pointer-events: none;
+  animation: pscreen-out 260ms var(--p-ease) forwards;
+}
+.pscreen--root.is-fading {
+  animation: pscreen-fade 180ms ease-out;
+}
+@keyframes pscreen-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes pscreen-out {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes pscreen-fade {
+  from {
+    opacity: 0.4;
+  }
+}
+html[data-motion='reduced'] .shell--phone *,
+html[data-motion='reduced'] .shell--phone *::before,
+html[data-motion='reduced'] .shell--phone *::after {
+  animation: none !important;
+  transition: none !important;
+}
+.pscreen__frame {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.pscreen__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
+/* ---------- Tab bar ---------- */
+.ptabs {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex: none;
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  border-top: 0.5px solid var(--p-sep);
+  background: var(--p-bar);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+}
+.ptabs.is-hidden,
+html[data-keyboard='open'] .ptabs {
+  display: none;
+}
+.ptabs__tab {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 0 5px;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+}
+.ptabs__tab.is-active {
+  color: var(--accent-text);
+}
+.ptabs__tab:active .ptabs__icon {
+  transform: scale(0.88);
+}
+.ptabs__icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 28px;
+  transition: transform 120ms ease-out;
+}
+.ptabs__label {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.ptabs__badge {
+  position: absolute;
+  top: -3px;
+  left: calc(50% + 7px);
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5.5px;
+  border: 2px solid var(--layer-1);
+  border-radius: 10px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}
+
+/* ---------- A tab's page: large title, small title on scroll ---------- */
+.ptab {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.ptab__bar {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  flex: none;
+  min-height: calc(46px + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) calc(6px + env(safe-area-inset-right)) 0
+    calc(6px + env(safe-area-inset-left));
+  border-bottom: 0.5px solid transparent;
+  background: var(--layer-1);
+  transition:
+    border-color 160ms,
+    background 160ms;
+}
+.ptab.is-collapsed .ptab__bar {
+  border-bottom-color: var(--p-sep);
+  background: var(--p-bar);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+}
+.ptab__side {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.ptab__side--end {
+  justify-content: flex-end;
+}
+.ptab__small {
+  font-size: 17px;
+  font-weight: 600;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 160ms,
+    transform 160ms;
+}
+.ptab.is-collapsed .ptab__small {
+  opacity: 1;
+  transform: none;
+}
+.ptab__btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 22px;
+  background: none;
+  color: var(--accent-text);
+}
+.ptab__btn:active {
+  background: var(--p-fill);
+}
+.ptab__dot {
+  position: absolute;
+  top: 9px;
+  right: 8px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--layer-1);
+  border-radius: 50%;
+  background: var(--danger);
+}
+.ptab__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  padding: 0 env(safe-area-inset-right) 28px env(safe-area-inset-left);
+  user-select: none;
+}
+.ptab__title {
+  margin: 0;
+  padding: 0 16px 6px;
+  font-family: var(--p-font);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-transform: none;
+  transition: opacity 160ms;
+}
+.ptab.is-collapsed .ptab__title {
+  opacity: 0;
+}
+.ptab__subtitle {
+  padding: 0 16px 6px;
+}
+.pconnecting {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-faint);
+  font-size: 14px;
+}
+.pconnecting__spin {
+  width: 13px;
+  height: 13px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: pspin 0.8s linear infinite;
+}
+@keyframes pspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Notices (pick a username, what's new, stay connected) as cards above the list. */
+.pshell .notices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 12px 8px;
+}
+.pshell .notices:empty {
+  display: none;
+}
+
+/* ---------- Search, chips, segmented control ---------- */
+.psearch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  margin: 2px 16px 10px;
+  padding: 0 10px;
+  border-radius: 11px;
+  background: var(--p-fill);
+  color: var(--text-faint);
+}
+.psearch input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+.psearch input::placeholder {
+  color: var(--text-faint);
+}
+.psearch input::-webkit-search-cancel-button {
+  filter: grayscale(1);
+}
+.pchips {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pchips::-webkit-scrollbar {
+  display: none;
+}
+.pchip {
+  flex: none;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--p-fill);
+  color: var(--text-dim);
+  font-size: 14.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pchip.is-active {
+  background: var(--accent);
+  color: var(--accent-solid-ink);
+}
+.pchip--icon {
+  width: 32px;
+  padding: 0;
+  font-weight: 500;
+}
+.psegment {
+  display: flex;
+  margin: 2px 16px 12px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--p-fill);
+}
+.psegment__item {
+  flex: 1;
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.psegment__item.is-active {
+  background: var(--layer-3);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.18);
+}
+
+/* Stories: Instagram's row of circles. */
+.pshell .stories {
+  gap: 12px;
+  padding: 4px 16px 12px;
+  scrollbar-width: none;
+}
+.pshell .stories::-webkit-scrollbar {
+  display: none;
+}
+.pshell .story-bubble {
+  width: 68px;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text);
+}
+.pshell .story-bubble__ring {
+  width: 66px;
+  height: 66px;
+}
+.pshell .story-bubble__ring .avatar {
+  width: 58px !important;
+  height: 58px !important;
+}
+
+/* ---------- Lists: chats, communities, calls ---------- */
+.plist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.plist__head {
+  margin: 14px 0 4px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.plist__back {
+  display: block;
+  margin: 0 0 6px;
+  padding: 6px 16px;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+.prow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 76px;
+  padding: 0 0 0 12px;
+  border: 0;
+  background: var(--layer-1);
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  -webkit-touch-callout: none;
+  transition: background 120ms;
+}
+.prow:active {
+  background: var(--p-fill-strong);
+}
+.prow > .avatar,
+.prow > .group-avatar,
+.prow > .group-icon,
+.prow > .pcommunity-icon,
+.prow__avatar {
+  flex: none;
+}
+.prow__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  align-self: stretch;
+  min-width: 0;
+  padding: 8px 14px 8px 0;
+  border-bottom: 0.5px solid var(--p-sep);
+}
+.plist > li:last-child .prow__main {
+  border-bottom-color: transparent;
+}
+.prow__top,
+.prow__bottom {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.prow__name {
+  overflow: hidden;
+  font-size: 16.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prow__verified {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-solid-ink);
+  font-size: 10px;
+  font-weight: 800;
+}
+.prow__flag {
+  flex: none;
+  display: inline-flex;
+  color: var(--text-faint);
+}
+.prow__flag--pin {
+  margin-left: auto;
+  transform: rotate(40deg);
+}
+.prow__time {
+  flex: none;
+  margin-left: auto;
+  padding-left: 6px;
+  color: var(--text-faint);
+  font-size: 14px;
+}
+.prow.is-unread .prow__time {
+  color: var(--accent-text);
+}
+.prow__preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 15px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prow__you {
+  color: var(--text-dim);
+}
+.prow__typing {
+  color: var(--accent-text);
+  font-style: normal;
+}
+.prow.is-blocked .prow__name {
+  color: var(--text-faint);
+}
+.prow__avatar {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  color: #fff;
+}
+.prow__avatar--gray {
+  background: #8e8e93;
+}
+.prow__avatar--accent {
+  background: var(--accent);
+  color: var(--accent-solid-ink);
+}
+.pbadge {
+  flex: none;
+  min-width: 22px;
+  height: 22px;
+  margin-left: auto;
+  padding: 0 7px;
+  border-radius: 11px;
+  background: var(--accent);
+  color: var(--accent-solid-ink);
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+}
+.pbadge--muted {
+  background: var(--text-faint);
+  color: var(--layer-1);
+}
+.pbadge--dot {
+  min-width: 12px;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+}
+
+/* Swipe actions behind a row. */
+.pswipe {
+  position: relative;
+  overflow: hidden;
+}
+.pswipe__actions {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  overflow: hidden;
+  transition: width 240ms var(--p-ease);
+}
+.pswipe.is-dragging .pswipe__actions {
+  transition: none;
+}
+.pswipe__actions--start {
+  left: 0;
+}
+.pswipe__actions--end {
+  right: 0;
+}
+.pswipe__action {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  border: 0;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.pswipe__action--blue {
+  background: #2e8af6;
+}
+.pswipe__action--green {
+  background: #34c759;
+}
+.pswipe__action--orange {
+  background: #ff9500;
+}
+.pswipe__action--red {
+  background: #ff3b30;
+}
+.pswipe__action--gray {
+  background: #8e8e93;
+}
+.pswipe__action--accent {
+  background: var(--accent);
+  color: var(--accent-solid-ink);
+}
+.pswipe__content {
+  position: relative;
+  transition: transform 240ms var(--p-ease);
+}
+.pswipe.is-dragging .pswipe__content {
+  transition: none;
+}
+
+/* Empty states and buttons. */
+.pempty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 56px 32px;
+  color: var(--text-faint);
+  text-align: center;
+}
+.pempty--small {
+  padding: 28px 24px;
+}
+.pempty h2 {
+  color: var(--text);
+  font-size: 20px;
+}
+.pempty p {
+  font-size: 15px;
+  line-height: 1.4;
+}
+.pempty__icon {
+  font-size: 54px;
+  line-height: 1.2;
+}
+.pbtn {
+  margin-top: 8px;
+  padding: 11px 22px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-solid-ink);
+  font-size: 16px;
+  font-weight: 600;
+}
+.pbtn:active {
+  filter: brightness(0.9);
+}
+.pfoot {
+  padding: 22px 16px 8px;
+  color: var(--text-faint);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ---------- A pushed screen's bar (conversation, channel, community…) ---------- */
+:root .pshell .pchat-head,
+:root .shell--phone .settings-overlay__phone-head {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  min-height: calc(54px + env(safe-area-inset-top));
+  margin: 0;
+  padding: env(safe-area-inset-top) calc(4px + env(safe-area-inset-right)) 0
+    calc(2px + env(safe-area-inset-left));
+  border-bottom: 0.5px solid var(--p-sep);
+  background: var(--p-bar);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+}
+.pchat-head__back {
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: 44px;
+  min-width: 40px;
+  padding: 0 4px 0 2px;
+  border: 0;
+  border-radius: 22px;
+  background: none;
+  color: var(--accent-text);
+}
+.pchat-head__back:active,
+.pchat-head__icon:active,
+.pchat-head__who:active {
+  background: var(--p-fill);
+}
+.pchat-head__waiting {
+  min-width: 22px;
+  height: 22px;
+  margin-left: -2px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: rgb(var(--accent-rgb) / 0.16);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+}
+.pchat-head__who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+.pchat-head__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.pchat-head__text strong {
+  overflow: hidden;
+  font-size: 16.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pchat-head__status {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 13.5px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pchat-head__status.is-live {
+  color: var(--accent-text);
+}
+.pchat-head__glyph {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--p-fill-strong);
+  color: var(--text-dim);
+}
+.pchat-head__actions {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+.pchat-head__icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 21px;
+  background: none;
+  color: var(--accent-text);
+}
+.pchat-head__icon:disabled {
+  opacity: 0.4;
+}
+.pchat-head__icon.is-on {
+  background: rgb(var(--accent-rgb) / 0.16);
+}
+
+/* ---------- Conversations: Telegram's bubbles ---------- */
+.pchat,
+.pchannel {
+  flex: 1;
+  min-height: 0;
+}
+:root .pshell .chat {
+  background: var(--pattern), var(--layer-0);
+  animation: none;
+}
+:root .pshell .chat__messages {
+  padding: 6px 0 10px;
+  font-family: var(--p-font);
+}
+:root .pshell .chat__welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 300px;
+  margin: 18px auto 8px;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background: rgb(var(--shade-rgb) / 0.45);
+  color: var(--text);
+  text-align: center;
+}
+:root .pshell .chat__welcome h2 {
+  margin: 8px 0 4px;
+  font-size: 18px;
+}
+:root .pshell .chat__welcome p {
+  font-size: 14px;
+}
+:root .pshell .chat__day {
+  justify-content: center;
+  margin: 10px 0 6px;
+}
+:root .pshell .chat__day::before,
+:root .pshell .chat__day::after {
+  display: none;
+}
+:root .pshell .chat__day span,
+:root .pshell .call-note,
+:root .pshell .chat__notice {
+  padding: 4px 11px;
+  border-radius: 13px;
+  background: rgb(var(--shade-rgb) / 0.55);
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+:root .pshell .call-note,
+:root .pshell .chat__notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 86%;
+  margin: 8px auto;
+  font-weight: 500;
+}
+:root .pshell .chat__new span {
+  border-radius: 12px;
+}
+
+:root .pshell .chat__messages .msg {
+  margin: 0;
+  padding: 1.5px 8px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  -webkit-touch-callout: none;
+}
+:root .pshell .chat__messages .msg:not(.msg--grouped) {
+  margin-top: 7px;
+}
+:root .pshell .chat__messages .msg.is-selected {
+  background: rgb(var(--accent-rgb) / 0.14);
+}
+:root .pshell .chat__messages .msg__row {
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 6px;
+}
+:root .pshell .chat__messages .msg--mine .msg__row {
+  flex-direction: row-reverse;
+}
+:root .pshell .chat__messages .msg__gutter {
+  width: 34px;
+  align-self: flex-end;
+}
+:root .pshell .chat__messages .msg__gutter:empty,
+:root .pshell .chat__messages .msg--mine .msg__gutter {
+  display: none;
+}
+:root .pshell .msg__hover-time {
+  display: none;
+}
+:root .pshell .chat__messages .msg__body {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 64px;
+  max-width: min(82%, 520px);
+  margin: 0;
+  padding: 6px 10px 6px 11px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--p-bubble-in);
+  color: var(--text);
+  box-shadow: 0 1px 1px rgb(0 0 0 / 0.12);
+}
+:root .pshell .chat__messages .msg--mine .msg__body {
+  background: var(--p-bubble-out);
+  color: var(--p-bubble-out-ink);
+}
+/* Grouped bubbles: the corners where they meet are tighter, as in Telegram. */
+:root .pshell .chat__messages .msg--grouped:not(.msg--mine) .msg__body {
+  border-top-left-radius: 6px;
+}
+:root .pshell .chat__messages .msg--grouped.msg--mine .msg__body {
+  border-top-right-radius: 6px;
+}
+:root .pshell .chat__messages > div:has(+ div > .msg--grouped) > .msg:not(.msg--mine) .msg__body {
+  border-bottom-left-radius: 6px;
+}
+:root .pshell .chat__messages > div:has(+ div > .msg--grouped) > .msg--mine .msg__body {
+  border-bottom-right-radius: 6px;
+}
+/* The tail, on the last bubble of a group. */
+:root .pshell .chat__messages > div:not(:has(+ div > .msg--grouped)) > .msg .msg__body {
+  border-bottom-left-radius: 0;
+}
+:root .pshell .chat__messages > div:not(:has(+ div > .msg--grouped)) > .msg--mine .msg__body {
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 0;
+}
+:root .pshell .chat__messages > div:not(:has(+ div > .msg--grouped)) > .msg .msg__body::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: -7px;
+  width: 12px;
+  height: 16px;
+  background: inherit;
+  clip-path: path('M7 1 C7 9 4.5 13 0 15.5 Q5 16.5 12 15 L12 1 Z');
+}
+:root .pshell .chat__messages > div:not(:has(+ div > .msg--grouped)) > .msg--mine .msg__body::after {
+  left: auto;
+  right: -7px;
+  clip-path: path('M5 1 C5 9 7.5 13 12 15.5 Q7 16.5 0 15 L0 1 Z');
+}
+/* In a conversation, a group member's picture sits beside their last bubble. */
+:root .pshell .pchat .chat__messages > div:has(+ div > .msg--grouped) > .msg .msg__gutter > * {
+  visibility: hidden;
+}
+/* In a channel, by the first. */
+:root .pshell .pchannel .chat__messages .msg__row {
+  align-items: flex-start;
+}
+:root .pshell .pchannel .chat__messages .msg__gutter {
+  align-self: flex-start;
+}
+:root .pshell .chat__messages .msg__sender,
+:root .pshell .chat__messages .msg__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 2px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+:root .pshell .chat__messages .msg__meta .msg__time,
+:root .pshell .chat__messages .msg__meta .msg__pinned {
+  display: none;
+}
+:root .pshell .chat__messages .msg--mine .msg__meta {
+  display: none;
+}
+:root .pshell .chat__messages .msg__author {
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+:root .pshell .chat__messages .msg__text {
+  font-family: var(--p-font);
+  font-size: max(16px, var(--chat-font-size, 16px));
+  line-height: 1.34;
+}
+:root .pshell .chat__messages .msg--mine .msg__text a,
+:root .pshell .chat__messages .msg--mine .mention {
+  color: inherit;
+  text-decoration: underline;
+}
+/* The time and ticks, bottom right inside the bubble. */
+.msg__stamp {
+  position: relative;
+  top: 5px;
+  float: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 0 -3px 0 10px;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+  user-select: none;
+}
+.msg--mine .msg__stamp {
+  color: inherit;
+  opacity: 0.72;
+}
+.msg__body > .msg__stamp {
+  top: 0;
+  float: none;
+  display: flex;
+  justify-content: flex-end;
+  margin: 3px -3px -2px 0;
+}
+.msg__stamp-edited {
+  font-style: italic;
+}
+.msg__stamp-flag {
+  font-size: 10px;
+}
+.msg__ticks {
+  display: inline-flex;
+}
+.msg__ticks--read {
+  opacity: 1;
+}
+.msg__ticks--failed {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+:root .pshell .chat__messages .dm-status {
+  margin-top: 2px;
+  font-size: 12px;
+}
+/* A reply inside its bubble. */
+:root .pshell .chat__messages .msg__body .msg__reply {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  margin: 2px 0 5px;
+  padding: 3px 9px;
+  border-left: 3px solid var(--accent);
+  border-radius: 5px;
+  background: rgb(var(--accent-rgb) / 0.12);
+  color: inherit;
+  font-size: 14px;
+  line-height: 1.3;
+}
+:root .pshell .chat__messages .msg--mine .msg__body .msg__reply {
+  border-left-color: currentColor;
+  background: rgb(0 0 0 / 0.1);
+}
+:root .pshell .chat__messages .msg__body .msg__reply svg {
+  display: none;
+}
+:root .pshell .chat__messages .msg__body .msg__reply strong {
+  color: var(--accent-text);
+}
+:root .pshell .chat__messages .msg--mine .msg__body .msg__reply strong,
+:root .pshell .chat__messages .msg--mine .msg__body .msg__reply .muted,
+:root .pshell .chat__messages .msg--mine .msg__body .msg__reply-text {
+  color: inherit;
+}
+:root .pshell .chat__messages .msg__body .msg__reply-text {
+  max-width: 100%;
+  overflow: hidden;
+  opacity: 0.85;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:root .pshell .pchannel .chat__messages .msg > .msg__reply {
+  margin: 4px 0 2px 48px;
+  font-size: 13px;
+}
+/* Reactions inside the bubble. */
+:root .pshell .chat__messages .reactions {
+  margin: 5px 0 1px;
+  gap: 4px;
+}
+:root .pshell .chat__messages .reaction {
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 13px;
+  background: rgb(var(--accent-rgb) / 0.16);
+  color: inherit;
+}
+:root .pshell .chat__messages .reaction.is-mine {
+  background: var(--accent);
+  color: var(--accent-solid-ink);
+}
+:root .pshell .chat__messages .msg--mine .reaction {
+  background: rgb(0 0 0 / 0.12);
+}
+:root .pshell .chat__messages .msg--mine .reaction.is-mine {
+  background: var(--p-bubble-out-ink);
+  color: var(--p-bubble-out);
+}
+:root .pshell .chat__messages .reaction--add {
+  display: none;
+}
+:root .pshell .chat__messages .attachments {
+  margin: 2px -4px 0;
+}
+:root .pshell .chat__messages .msg__actions {
+  display: none;
+}
+:root .pshell .chat__jump-latest,
+:root .pshell .chat__jump {
+  left: auto;
+  right: 12px;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  transform: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--layer-3);
+  color: var(--text);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.3);
+  font-size: 0;
+}
+:root .pshell .chat__jump::before {
+  content: '↓';
+  font-size: 20px;
+}
+:root .pshell .chat__jump-latest {
+  font-size: 20px;
+}
+:root .pshell .chat__jump-count {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+}
+:root .pshell .typing {
+  display: none;
+}
+:root .pshell .dm-banner {
+  margin: 8px 10px 0;
+  border-radius: 14px;
+}
+
+/* ---------- The message box ---------- */
+:root .pshell .chat__composer-wrap {
+  flex: none;
+  padding: 6px calc(6px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom))
+    calc(6px + env(safe-area-inset-left));
+  border-top: 0.5px solid var(--p-sep);
+  background: var(--p-bar);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+}
+html[data-keyboard='open'] .pshell .chat__composer-wrap {
+  padding-bottom: 6px;
+}
+:root .pshell .chat__composer {
+  align-items: flex-end;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+:root .pshell .chat__composer textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  max-height: 140px;
+  padding: 9px 46px 9px 15px;
+  border: 0.5px solid var(--p-sep);
+  border-radius: 20px;
+  background: var(--layer-1);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.3;
+}
+/* The emoji button sits inside the field, at its end, as in Telegram. */
+:root .pshell .chat__composer textarea + .icon-btn {
+  position: relative;
+  z-index: 1;
+  margin-left: -44px;
+}
+:root .pshell .chat__composer .icon-btn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 20px;
+  color: var(--text-faint);
+}
+:root .pshell .chat__composer .composer__attach {
+  color: var(--text-faint);
+}
+.composer__send {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  margin: 1px 1px 1px 4px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-solid-ink);
+  animation: psend-in 160ms var(--ease-spring);
+}
+.composer__send:disabled {
+  opacity: 0.5;
+}
+@keyframes psend-in {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+:root .pshell .reply-bar {
+  margin: 0 0 6px;
+  padding: 2px 6px 2px 10px;
+  border: 0;
+  border-left: 3px solid var(--accent);
+  border-radius: 0;
+  background: none;
+  font-size: 14px;
+}
+:root .pshell .chat__composer--locked,
+:root .pshell .dm-request {
+  margin: 0;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  border: 0;
+  border-top: 0.5px solid var(--p-sep);
+  border-radius: 0;
+  background: var(--p-bar);
+}
+:root .pshell .chat__composer-wrap .pending-files,
+:root .pshell .chat__composer-wrap .upload-progress {
+  margin-bottom: 6px;
+}
+
+/* Pins, search, members in a conversation: panels under the bar. */
+:root .pshell .pins,
+:root .pshell .group-members {
+  position: absolute;
+  top: calc(54px + env(safe-area-inset-top));
+  left: 8px;
+  right: 8px;
+  z-index: 7;
+  max-height: 60%;
+  overflow-y: auto;
+  border-radius: 16px;
+  box-shadow: var(--shadow-pop);
+}
+
+/* ---------- Communities ---------- */
+.pcommunity-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  overflow: hidden;
+  border-radius: 30%;
+  color: #fff;
+  font-weight: 700;
+}
+.pcommunity-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pcommunity__banner {
+  display: block;
+  width: 100%;
+  max-height: 150px;
+  object-fit: cover;
+}
+.pcommunity__about {
+  padding: 12px 16px 0;
+  color: var(--text-dim);
+  font-size: 15px;
+}
+.pcommunity__lock {
+  padding: 10px 16px 4px;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+.pcommunity .events-row {
+  width: calc(100% - 24px);
+  margin: 8px 12px 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--p-fill);
+}
+/* The channel list, as grouped rows. */
+.pcommunity .channel-list,
+.pcommunity .channels {
+  padding: 0;
+}
+:root .pshell .pcommunity .channel-group__head {
+  margin: 0;
+  padding: 18px 16px 6px;
+  color: var(--text-faint);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+:root .pshell .pcommunity .channel-wrap {
+  margin: 0;
+}
+:root .pshell .pcommunity .channel {
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+}
+:root .pshell .pcommunity .channel__open {
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 16px;
+  border-bottom: 0.5px solid var(--p-sep);
+  border-radius: 0;
+  color: var(--text);
+  font-size: 16.5px;
+}
+:root .pshell .pcommunity .channel__open:active {
+  background: var(--p-fill-strong);
+}
+:root .pshell .pcommunity .channel__icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--p-fill-strong);
+  color: var(--text-dim);
+}
+:root .pshell .pcommunity .channel.is-unread .channel__name {
+  font-weight: 700;
+}
+:root .pshell .pcommunity .channel.is-unread .channel__open::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--accent);
+}
+:root .pshell .pcommunity .channel__gear {
+  display: none;
+}
+:root .pshell .pcommunity .channel__participant {
+  min-height: 40px;
+  padding: 0 16px 0 60px;
+  font-size: 15px;
+}
+:root .pshell .pchannel {
+  display: flex;
+  flex-direction: column;
+}
+:root .pshell .pchannel .community__main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  border-radius: 0;
+}
+:root .pshell .pchannel .community__members,
+:root .pshell .pchannel .thread-panel {
+  position: absolute;
+  inset: calc(54px + env(safe-area-inset-top)) 0 0 0;
+  z-index: 8;
+  width: auto;
+  max-width: none;
+  border: 0;
+  background: var(--layer-1);
+}
+.pvoice {
+  flex: none;
+  padding: 6px 8px 4px;
+  background: var(--p-bar);
+  border-top: 0.5px solid var(--p-sep);
+}
+.pvoice .voice-panel {
+  margin: 0;
+  border-radius: 12px;
+}
+
+/* ---------- Calls ---------- */
+.pcall {
+  position: relative;
+  display: flex;
+}
+.pcall__row {
+  flex: 1;
+  min-height: 62px;
+  padding-right: 48px;
+}
+.pcall__row .prow__main {
+  padding-right: 50px;
+}
+.pcall__row.is-missed .prow__name {
+  color: var(--danger);
+}
+.pcall__what {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pcall__arrow {
+  display: inline-flex;
+  color: #34c759;
+}
+.pcall__arrow.is-missed {
+  color: var(--danger);
+}
+.pcall__back {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-top: -22px;
+  border: 0;
+  border-radius: 22px;
+  background: none;
+  color: var(--accent-text);
+}
+.pcall__back:disabled {
+  opacity: 0.35;
+}
+.pcall__back:active {
+  background: var(--p-fill);
+}
+
+/* ---------- Settings (the tab) ---------- */
+.ptab--settings .ptab__scroll {
+  background: var(--layer-0);
+}
+.ptab--settings .ptab__bar,
+.ptab--settings.is-collapsed .ptab__bar {
+  background: var(--layer-0);
+}
+.pme {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 16px 18px;
+  text-align: center;
+}
+.pme__avatar {
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+}
+.pme__name {
+  margin-top: 8px;
+  font-size: 24px;
+  font-weight: 700;
+}
+.pme__line {
+  color: var(--text-faint);
+  font-size: 15.5px;
+}
+.pme__id {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--accent-text);
+  font-size: 14px;
+}
+.pme__id:active,
+.pme__status:active {
+  background: var(--p-fill);
+}
+.pme__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--layer-1);
+  color: var(--text);
+  font-size: 14.5px;
+}
+.pme__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--inactive);
+}
+.pme__dot--online {
+  background: var(--ok);
+}
+.pme__dot--idle {
+  background: var(--warn);
+}
+.pme__dot--dnd {
+  background: var(--danger);
+}
+.pgroup {
+  margin: 0 16px 22px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--layer-1);
+  list-style: none;
+}
+.pgroup__row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 0 0 14px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 16.5px;
+  text-align: left;
+}
+.pgroup__row:active {
+  background: var(--p-fill-strong);
+}
+.pgroup__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: #fff;
+}
+.pgroup__label,
+.pgroup__hint {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  border-bottom: 0.5px solid var(--p-sep);
+}
+.pgroup__label {
+  flex: 1;
+  min-width: 0;
+}
+.pgroup__hint {
+  max-width: 40%;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pgroup__chevron {
+  align-self: stretch;
+  box-sizing: content-box;
+  height: auto;
+  padding-right: 12px;
+  padding-left: 6px;
+  border-bottom: 0.5px solid var(--p-sep);
+  color: var(--text-faint);
+  opacity: 0.7;
+}
+.pgroup > li:last-child .pgroup__label,
+.pgroup > li:last-child .pgroup__hint,
+.pgroup > li:last-child .pgroup__chevron {
+  border-bottom-color: transparent;
+}
+.pgroup__icon--red {
+  background: #ff3b30;
+}
+.pgroup__icon--orange {
+  background: #ff9500;
+}
+.pgroup__icon--green {
+  background: #34c759;
+}
+.pgroup__icon--blue {
+  background: #2e8af6;
+}
+.pgroup__icon--indigo {
+  background: #5856d6;
+}
+.pgroup__icon--purple {
+  background: #af52de;
+}
+.pgroup__icon--teal {
+  background: #30b0c7;
+}
+.pgroup__icon--gray {
+  background: #8e8e93;
+}
+.pgroup__icon--pink {
+  background: #ff2d55;
+}
+
+/* Settings sections open full screen, with Back. */
+.shell--phone .settings-overlay {
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  background: var(--layer-1);
+  font-family: var(--p-font);
+  animation: pscreen-in var(--p-push) var(--p-ease);
+}
+.shell--phone .settings-overlay__phone-head {
+  margin: 0 calc(-1 * env(safe-area-inset-right)) 0 calc(-1 * env(safe-area-inset-left));
+}
+.settings-overlay__phone-title {
+  flex: 1;
+  margin: 0 48px 0 0;
+  overflow: hidden;
+  font-family: var(--p-font);
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.shell--phone .settings-overlay__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.shell--phone .settings-overlay__content {
+  max-width: none;
+  padding: 16px 14px calc(40px + env(safe-area-inset-bottom));
+}
+
+/* ---------- Feed: Instagram ---------- */
+.ptab--feed .social {
+  display: block;
+  height: auto;
+  padding: 0;
+  overflow: visible;
+}
+.ptab--feed .social__main {
+  gap: 0;
+}
+.ptab--feed .social__side {
+  display: none;
+}
+.ptab--feed .social__narrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px 10px;
+}
+.ptab--feed .social__narrow .social__me {
+  flex: 1;
+  min-width: 0;
+}
+.ptab--feed .stories {
+  padding: 6px 16px 12px;
+  border-bottom: 0.5px solid var(--p-sep);
+}
+.ptab--feed .social__compose,
+.ptab--feed .social__me {
+  border: 0;
+  border-radius: 14px;
+  background: var(--p-fill);
+  box-shadow: none;
+}
+.ptab--feed .social__compose {
+  width: auto;
+  margin: 10px 16px;
+}
+.ptab--feed .post {
+  margin: 0;
+  padding: 0 0 12px;
+  border: 0;
+  border-bottom: 0.5px solid var(--p-sep);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.ptab--feed .post__head {
+  padding: 10px 12px 8px;
+}
+.ptab--feed .post__text {
+  padding: 0 14px 8px;
+  font-size: 16px;
+}
+.ptab--feed .post__media .attachments {
+  margin: 0;
+}
+.ptab--feed .post__media img,
+.ptab--feed .post__media video,
+.ptab--feed .post__media .attachment-image {
+  width: 100%;
+  max-width: none;
+  border-radius: 0;
+}
+.ptab--feed .post__actions,
+.ptab--feed .post__comments,
+.ptab--feed .post__reply {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+.ptab--feed .social__empty {
+  margin: 16px;
+  border-radius: 16px;
+}
+
+/* Friends and Files pages inside a pushed screen. */
+.pscreen__body > .page,
+.pscreen__body > .friends,
+.pscreen__body > .files {
+  padding: 12px 14px 24px;
+}
+.pscreen__body .page__header {
+  display: none;
+}
+
+/* Menus open from the bottom half like sheets would; the reaction strip at the top of a menu. */
+.menu__reactions {
+  display: flex;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 4px 4px 8px;
+  margin-bottom: 4px;
+  border-bottom: 0.5px solid var(--border-strong);
+}
+.menu__reaction {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 19px;
+  background: none;
+  font-size: 24px;
+  transition: transform 120ms var(--ease-spring);
+}
+.menu__reaction:active {
+  transform: scale(1.25);
+}
+.menu__reaction.is-mine {
+  background: rgb(var(--accent-rgb) / 0.2);
+}
+.menu__reaction--more {
+  font-size: 0;
+  color: var(--text-dim);
+  background: var(--p-fill, rgb(var(--fg-rgb) / 0.07));
+}
+html:is([data-platform='android'], [data-platform='ios']) .popover.menu {
+  min-width: 230px;
+  padding: 6px;
+  border-radius: 14px;
+  font-size: 16px;
+}
+html:is([data-platform='android'], [data-platform='ios']) .popover.menu .menu__item {
+  min-height: 44px;
+  font-size: 16px;
+}
+
+/* The text and its time share the last line, as in Telegram. */
+:root .pshell .chat__messages .msg__text > div:not(.msg__long) {
+  display: inline;
+}
+:root .pshell .pcommunity .channel.is-unread::before {
+  display: none;
+}
+:root .pshell .pcommunity .channel-wrap,
+:root .pshell .pcommunity .channel-group {
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: 0;
+  padding-right: 0;
+}

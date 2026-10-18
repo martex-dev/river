@@ -32,6 +32,8 @@ import { SettingsOverlay } from './pages/SettingsPage.tsx';
 import { AdminPage } from './pages/AdminPage.tsx';
 import { useHostStatus } from './components/HostingPanel.tsx';
 import { useRiver, type Section } from './store.ts';
+import { isPhone } from '../../shared/platform.ts';
+import { PhoneShell } from './phone/PhoneShell.tsx';
 
 const LABELS: Record<Section, string> = {
   home: 'Friends',
@@ -224,6 +226,43 @@ export function App(): ReactElement {
     );
   }
 
+  const notices = (
+    <div className="notices">
+      {info?.startupProblem && (
+        <div className="glass card card--error" role="alert">
+          {info.startupProblem}
+        </div>
+      )}
+      <UsernamePrompt />
+      <WhatsNew />
+      <StayConnectedPrompt />
+      {loadError && (
+        <div className="glass card card--error" role="alert">
+          River could not load its settings: {loadError}
+        </div>
+      )}
+    </div>
+  );
+
+  // Phones (2.12): Telegram and Instagram's layout over the same pages. Until River reports its
+  // platform, the page's own (set by the phone app) decides, so a phone never shows the desktop.
+  if (isPhone(info?.platform ?? document.documentElement.dataset.platform)) {
+    return (
+      <div className="shell shell--phone">
+        <div className="backdrop" aria-hidden="true" />
+        <PhoneShell notices={notices} />
+        <SettingsOverlay />
+        <TryBar />
+        <UpdateToast />
+        <CallAudio />
+        <VoiceHotkeys />
+        <Overlays />
+        <QuickSwitcher />
+        <ShareSheet />
+      </div>
+    );
+  }
+
   const title = settingsOpen
     ? t('Settings')
     : section === 'communities'
@@ -250,21 +289,7 @@ export function App(): ReactElement {
           className={`content ${section === 'communities' || section === 'messages' ? 'content--full' : ''}`}
           key={section}
         >
-          <div className="notices">
-            {info?.startupProblem && (
-              <div className="glass card card--error" role="alert">
-                {info.startupProblem}
-              </div>
-            )}
-            <UsernamePrompt />
-            <WhatsNew />
-            <StayConnectedPrompt />
-            {loadError && (
-              <div className="glass card card--error" role="alert">
-                River could not load its settings: {loadError}
-              </div>
-            )}
-          </div>
+          {notices}
           {/* One page crashing replaces only that page; the rail, calls and dialogs keep working. */}
           <ErrorBoundary area={t(LABELS[section])} resetKey={pageKey}>
             {(section === 'home' || section === 'contacts') && <FriendsPage />}

@@ -41,6 +41,7 @@ import {
 } from '../community/ui/Attachments.tsx';
 import {
   Avatar,
+  avatarColor,
   CameraIcon,
   EditIcon,
   EmojiPicker,
@@ -64,13 +65,27 @@ import { DmCallPanel } from '../dm/CallUi.tsx';
 import { useRiver } from '../store.ts';
 import { findInvite } from '../../../shared/invite-link.ts';
 import { joinWithLink } from '../community/ui/StartScreen.tsx';
+import { phonePop } from '../phone/nav.ts';
+import { chatsBadge } from '../phone/calls.ts';
+import {
+  BackIcon,
+  ClipIcon,
+  ClockIcon,
+  DoubleTickIcon,
+  EmojiIcon,
+  MoreIcon,
+  PhoneCallIcon,
+  SendIcon,
+  TickIcon,
+  VideoIcon,
+} from '../phone/icons.tsx';
 
 const GROUP_MS = 5 * 60_000;
 const RIVER_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const timeOf = (iso: string): string => clockTime(iso);
 
-function shortWhen(iso: string): string {
+export function shortWhen(iso: string): string {
   const d = new Date(iso);
   if (d.toDateString() === new Date().toDateString()) return timeOf(iso);
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
@@ -490,7 +505,7 @@ function ContactSheet(props: {
 }
 
 /** Make or change a chat folder (2.10.8): a name and the chats in it. */
-function FolderDialog(props: {
+export function FolderDialog(props: {
   folder: ChatFolder | null;
   conversations: ConversationView[];
   onSaved(folders: ChatFolder[], id: string | null): void;
@@ -577,7 +592,7 @@ async function replyPrivately(m: DirectMessageView, group: string): Promise<void
 }
 
 /** Copies text and says so (or says why not). */
-function copyText(text: string): void {
+export function copyText(text: string): void {
   void navigator.clipboard
     ?.writeText(text)
     .then(() => {
@@ -588,14 +603,14 @@ function copyText(text: string): void {
 }
 
 type ChatFilter = 'all' | 'unread' | 'people' | 'groups';
-const CHAT_FILTERS: Array<{ id: ChatFilter; label: string }> = [
+export const CHAT_FILTERS: Array<{ id: ChatFilter; label: string }> = [
   { id: 'all', label: 'All' },
   { id: 'unread', label: 'Unread' },
   { id: 'people', label: 'People' },
   { id: 'groups', label: 'Groups' },
 ];
 
-function matchesFilter(c: ConversationView, filter: string, folder: ChatFolder | null): boolean {
+export function matchesFilter(c: ConversationView, filter: string, folder: ChatFolder | null): boolean {
   if (folder) return folder.peers.includes(c.riverId);
   if (filter === 'unread') return c.unread > 0 || !!c.markedUnread;
   if (filter === 'people') return c.kind === 'direct';
@@ -603,7 +618,7 @@ function matchesFilter(c: ConversationView, filter: string, folder: ChatFolder |
   return true;
 }
 
-function chatFlags(
+export function chatFlags(
   peer: string,
   flags: { pinned?: boolean; archived?: boolean; markedUnread?: boolean },
 ): void {
@@ -704,7 +719,7 @@ function ConversationRow({ c }: { c: ConversationView }): ReactElement {
   );
 }
 
-function Conversation(props: { conversation: ConversationView; onSafety(): void }): ReactElement {
+export function Conversation(props: { conversation: ConversationView; onSafety(): void }): ReactElement {
   const c = props.conversation;
   const dm = useDm();
   const messages = useDm((x) => x.messages[c.riverId]) ?? NO_MESSAGES;
@@ -742,6 +757,8 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
   const [renaming, setRenaming] = useState<string | null>(null);
   const [iconPicker, setIconPicker] = useState<{ x: number; y: number } | null>(null);
   const [adding, setAdding] = useState(false);
+  // Phones (2.12): a Telegram-style header with Back; search and pins move into the menu.
+  const phone = useRiver((r) => isPhone(r.info?.platform));
 
   // New messages scroll into view only when you are at the bottom (or sent them yourself);
   // reading older messages is not interrupted. "Jump to latest" brings you back.
@@ -809,106 +826,149 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
           </div>
         </div>
       )}
-      <header className="chat__head">
-        {c.kind === 'group' || c.self ? (
-          <>
-            {c.kind === 'group' ? <GroupAvatar c={c} size={28} /> : <ConvAvatar c={c} size={28} />}
-            <strong>{c.name}</strong>
-          </>
-        ) : (
-          <button
-            className="chat__head-who"
-            title={`Profile of ${c.name}`}
-            aria-label={`Profile of ${c.name}`}
-            onClick={() => setProfileOpen(true)}
-          >
-            <ConvAvatar c={c} size={28} />
-            <strong>{c.name}</strong>
-          </button>
-        )}
-        {c.kind === 'group' ? (
-          <button className="chip dm-lock" onClick={() => setShowMembers(!showMembers)} title="Group members">
-            👥 {c.members.length} members
-          </button>
-        ) : c.self ? (
-          <span
-            className="chip dm-lock"
-            title="Your notes are kept on this device and copied to your linked devices"
-          >
-            🔒 Only you
-          </span>
-        ) : (
-          <button
-            className={`chip dm-lock ${c.verified ? 'is-verified' : ''}`}
-            onClick={props.onSafety}
-            title="View safety number"
-          >
-            {c.verified ? '✓ Verified' : '🔒 Encrypted'}
-          </button>
-        )}
-        {!!c.timer && (
-          <button
-            className="chip dm-timer"
-            title={`Messages disappear after ${timerLabel(c.timer)}`}
-            onClick={() => setTimerOpen(true)}
-          >
-            ⏱ {timerLabel(c.timer)}
-          </button>
-        )}
-        <span className="chat__head-actions">
-          {c.kind === 'direct' && !c.self && c.state === 'accepted' && !c.awaitingReply && (
+      {phone ? (
+        <PhoneChatHead
+          c={c}
+          anyCall={anyCall}
+          onProfile={() => (c.kind === 'group' ? setShowMembers(!showMembers) : setProfileOpen(true))}
+          onMenu={(r) => setMenu({ x: r.right - 220, y: r.bottom + 4 })}
+        />
+      ) : (
+        <header className="chat__head">
+          {c.kind === 'group' || c.self ? (
             <>
-              <button
-                className="icon-btn"
-                aria-label="Start voice call"
-                title="Start voice call"
-                disabled={anyCall}
-                onClick={() => void startDmCall(c.riverId, false)}
-              >
-                <PhoneIcon size={18} />
-              </button>
-              <button
-                className="icon-btn"
-                aria-label="Start video call"
-                title="Start video call"
-                disabled={anyCall}
-                onClick={() => void startDmCall(c.riverId, true)}
-              >
-                <CameraIcon size={18} />
-              </button>
+              {c.kind === 'group' ? <GroupAvatar c={c} size={28} /> : <ConvAvatar c={c} size={28} />}
+              <strong>{c.name}</strong>
             </>
+          ) : (
+            <button
+              className="chat__head-who"
+              title={`Profile of ${c.name}`}
+              aria-label={`Profile of ${c.name}`}
+              onClick={() => setProfileOpen(true)}
+            >
+              <ConvAvatar c={c} size={28} />
+              <strong>{c.name}</strong>
+            </button>
           )}
-          <button
-            className={`icon-btn ${searching ? 'is-on' : ''}`}
-            aria-label="Search in this conversation"
-            title="Search in this conversation"
-            onClick={() => setSearching(!searching)}
-          >
-            🔍
-          </button>
-          <button
-            className={`icon-btn ${showPins ? 'is-on' : ''}`}
-            aria-label="Pinned messages"
-            title="Pinned messages"
-            onClick={() => setShowPins(!showPins)}
-          >
-            📌
-          </button>
-          <button
-            className="icon-btn"
-            aria-label="Conversation options"
-            title="More"
-            onClick={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              setMenu({ x: r.right - 220, y: r.bottom + 4 });
-            }}
-          >
-            ⋯
-          </button>
-        </span>
-      </header>
+          {c.kind === 'group' ? (
+            <button
+              className="chip dm-lock"
+              onClick={() => setShowMembers(!showMembers)}
+              title="Group members"
+            >
+              👥 {c.members.length} members
+            </button>
+          ) : c.self ? (
+            <span
+              className="chip dm-lock"
+              title="Your notes are kept on this device and copied to your linked devices"
+            >
+              🔒 Only you
+            </span>
+          ) : (
+            <button
+              className={`chip dm-lock ${c.verified ? 'is-verified' : ''}`}
+              onClick={props.onSafety}
+              title="View safety number"
+            >
+              {c.verified ? '✓ Verified' : '🔒 Encrypted'}
+            </button>
+          )}
+          {!!c.timer && (
+            <button
+              className="chip dm-timer"
+              title={`Messages disappear after ${timerLabel(c.timer)}`}
+              onClick={() => setTimerOpen(true)}
+            >
+              ⏱ {timerLabel(c.timer)}
+            </button>
+          )}
+          <span className="chat__head-actions">
+            {c.kind === 'direct' && !c.self && c.state === 'accepted' && !c.awaitingReply && (
+              <>
+                <button
+                  className="icon-btn"
+                  aria-label="Start voice call"
+                  title="Start voice call"
+                  disabled={anyCall}
+                  onClick={() => void startDmCall(c.riverId, false)}
+                >
+                  <PhoneIcon size={18} />
+                </button>
+                <button
+                  className="icon-btn"
+                  aria-label="Start video call"
+                  title="Start video call"
+                  disabled={anyCall}
+                  onClick={() => void startDmCall(c.riverId, true)}
+                >
+                  <CameraIcon size={18} />
+                </button>
+              </>
+            )}
+            <button
+              className={`icon-btn ${searching ? 'is-on' : ''}`}
+              aria-label="Search in this conversation"
+              title="Search in this conversation"
+              onClick={() => setSearching(!searching)}
+            >
+              🔍
+            </button>
+            <button
+              className={`icon-btn ${showPins ? 'is-on' : ''}`}
+              aria-label="Pinned messages"
+              title="Pinned messages"
+              onClick={() => setShowPins(!showPins)}
+            >
+              📌
+            </button>
+            <button
+              className="icon-btn"
+              aria-label="Conversation options"
+              title="More"
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setMenu({ x: r.right - 220, y: r.bottom + 4 });
+              }}
+            >
+              ⋯
+            </button>
+          </span>
+        </header>
+      )}
       {menu && (
         <Popover x={menu.x} y={menu.y} onClose={() => setMenu(null)} className="menu">
+          {phone && (
+            <>
+              <MenuItem
+                onClick={() => {
+                  setMenu(null);
+                  setSearching(true);
+                }}
+              >
+                🔍 Search in this conversation
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  setMenu(null);
+                  setShowPins(true);
+                }}
+              >
+                📌 Pinned messages{pinned.length ? ` · ${pinned.length}` : ''}
+              </MenuItem>
+              {c.kind === 'direct' && !c.self && (
+                <MenuItem
+                  onClick={() => {
+                    setMenu(null);
+                    setProfileOpen(true);
+                  }}
+                >
+                  Profile
+                </MenuItem>
+              )}
+            </>
+          )}
           {c.kind === 'group' ? (
             <>
               <MenuItem
@@ -1331,6 +1391,146 @@ function Conversation(props: { conversation: ConversationView; onSafety(): void 
   );
 }
 
+/**
+ * The conversation's header on a phone (2.12), as in Telegram: Back (with how many unread
+ * messages wait in other chats), the name with what is happening (typing, or online when River
+ * knows it from a shared community) and the picture, the call buttons and the menu.
+ */
+function PhoneChatHead(props: {
+  c: ConversationView;
+  anyCall: boolean;
+  onProfile(): void;
+  onMenu(rect: DOMRect): void;
+}): ReactElement {
+  const { c } = props;
+  const prefs = useRiver((r) => r.settings?.notifications);
+  const waiting = useDm((d) =>
+    chatsBadge(
+      d.conversations.filter((x) => x.riverId !== c.riverId),
+      prefs,
+    ),
+  );
+  useDm((x) => x.typing[c.riverId]);
+  const typing = isTyping(c.riverId);
+  const online = useCommunity(
+    (s) =>
+      c.kind === 'direct' &&
+      s.communities.some((x) => x.members.some((m) => m.riverId === c.riverId && m.online)),
+  );
+  const status = typing
+    ? c.kind === 'group'
+      ? `${typingName(c)} is typing…`
+      : 'typing…'
+    : c.kind === 'group'
+      ? `${c.members.length} ${c.members.length === 1 ? 'member' : 'members'}`
+      : c.self
+        ? 'Only you · kept on your devices'
+        : online
+          ? 'online'
+          : c.verified
+            ? '✓ Verified · end-to-end encrypted'
+            : 'End-to-end encrypted';
+  const canCall = c.kind === 'direct' && !c.self && c.state === 'accepted' && !c.awaitingReply;
+  return (
+    <header className="chat__head pchat-head">
+      <button
+        className="pchat-head__back"
+        aria-label={waiting > 0 ? `Back, ${waiting} unread` : 'Back'}
+        onClick={() => phonePop()}
+      >
+        <BackIcon size={26} />
+        {waiting > 0 && (
+          <span className="pchat-head__waiting" aria-hidden="true">
+            {waiting > 99 ? '99+' : waiting}
+          </span>
+        )}
+      </button>
+      <button
+        className="pchat-head__who"
+        aria-label={c.kind === 'group' ? `${c.name}, group members` : `Profile of ${c.name}`}
+        onClick={props.onProfile}
+      >
+        {c.kind === 'group' ? <GroupAvatar c={c} size={40} /> : <ConvAvatar c={c} size={40} />}
+        <span className="pchat-head__text">
+          <strong>
+            {c.name}
+            {!!c.timer && <span className="pchat-head__timer"> ⏱</span>}
+          </strong>
+          <span className={`pchat-head__status ${typing || online ? 'is-live' : ''}`}>{status}</span>
+        </span>
+      </button>
+      <span className="pchat-head__actions">
+        {canCall && (
+          <>
+            <button
+              className="pchat-head__icon"
+              aria-label="Start voice call"
+              disabled={props.anyCall}
+              onClick={() => void startDmCall(c.riverId, false)}
+            >
+              <PhoneCallIcon size={23} />
+            </button>
+            <button
+              className="pchat-head__icon"
+              aria-label="Start video call"
+              disabled={props.anyCall}
+              onClick={() => void startDmCall(c.riverId, true)}
+            >
+              <VideoIcon size={25} />
+            </button>
+          </>
+        )}
+        <button
+          className="pchat-head__icon"
+          aria-label="Conversation options"
+          onClick={(e) => props.onMenu(e.currentTarget.getBoundingClientRect())}
+        >
+          <MoreIcon size={24} />
+        </button>
+      </span>
+    </header>
+  );
+}
+
+/** Time, "edited", and for your own messages how far they got, inside the bubble (2.12). */
+function Stamp({ m }: { m: DirectMessageView }): ReactElement {
+  return (
+    <span className="msg__stamp">
+      {m.pinned && (
+        <span className="msg__stamp-flag" role="img" aria-label="Pinned">
+          📌
+        </span>
+      )}
+      {m.expiresAt && (
+        <span className="msg__stamp-flag" role="img" aria-label="Disappearing message">
+          ⏱
+        </span>
+      )}
+      {m.editedAt && <span className="msg__stamp-edited">edited</span>}
+      <time dateTime={m.sentAt}>{timeOf(m.sentAt)}</time>
+      {m.mine && <Ticks status={m.status} />}
+    </span>
+  );
+}
+
+function Ticks({ status }: { status: DirectMessageView['status'] }): ReactElement | null {
+  const label = STATUS_LABEL[status];
+  if (!label) return null;
+  return (
+    <span className={`msg__ticks msg__ticks--${status}`} role="img" aria-label={label}>
+      {status === 'sending' ? (
+        <ClockIcon size={13} />
+      ) : status === 'failed' ? (
+        <span aria-hidden="true">!</span>
+      ) : status === 'sent' ? (
+        <TickIcon size={16} />
+      ) : (
+        <DoubleTickIcon size={18} />
+      )}
+    </span>
+  );
+}
+
 const STATUS_LABEL: Record<DirectMessageView['status'], string> = {
   sending: 'Sending…',
   sent: 'Sent',
@@ -1341,7 +1541,7 @@ const STATUS_LABEL: Record<DirectMessageView['status'], string> = {
 };
 
 /** A conversation's picture: a group's emoji, else the person's avatar. */
-function ConvAvatar({ c, size }: { c: ConversationView; size: number }): ReactElement {
+export function ConvAvatar({ c, size }: { c: ConversationView; size: number }): ReactElement {
   if (c.self)
     return (
       <span
@@ -1432,6 +1632,8 @@ function DmMessage(props: {
       : {}),
   });
   const { onClickCapture: guardClick, ...touch } = gestures;
+  // Phones (2.12): Telegram-style bubbles, time and ticks inside, reactions in the hold menu.
+  const phone = useRiver((r) => isPhone(r.info?.platform));
   const remove = (forEveryone: boolean): void => {
     useCommunity.getState().setModal({
       kind: 'confirm',
@@ -1447,6 +1649,20 @@ function DmMessage(props: {
       },
     });
   };
+
+  const reply = m.replyTo ? (
+    <div className="msg__reply">
+      <ReplyIcon size={13} />
+      {props.replied ? (
+        <>
+          <strong>{props.replied.mine ? props.myName : props.replied.senderName}</strong>
+          <span className="msg__reply-text">{props.replied.text.slice(0, 120) || 'Attachment'}</span>
+        </>
+      ) : (
+        <span className="muted">Original message not available</span>
+      )}
+    </div>
+  ) : null;
 
   return (
     <div
@@ -1472,29 +1688,26 @@ function DmMessage(props: {
         setMenu({ x: e.clientX, y: e.clientY });
       }}
     >
-      {m.replyTo && (
-        <div className="msg__reply">
-          <ReplyIcon size={13} />
-          {props.replied ? (
-            <>
-              <strong>{props.replied.mine ? props.myName : props.replied.senderName}</strong>
-              <span className="msg__reply-text">{props.replied.text.slice(0, 120) || 'Attachment'}</span>
-            </>
-          ) : (
-            <span className="muted">Original message not available</span>
-          )}
-        </div>
-      )}
+      {!phone && reply}
       <div className="msg__row">
         <div className="msg__gutter">
-          {props.grouped ? (
+          {phone ? (
+            c.kind === 'group' &&
+            !m.mine && <Avatar id={m.sender} name={name} avatar={senderAvatar} size={34} />
+          ) : props.grouped ? (
             <time className="msg__hover-time">{timeOf(m.sentAt)}</time>
           ) : (
             <Avatar id={m.sender} name={name} avatar={senderAvatar} size={38} />
           )}
         </div>
         <div className="msg__body">
-          {!props.grouped && (
+          {phone && !props.grouped && c.kind === 'group' && !m.mine && (
+            <div className="msg__sender" style={{ color: avatarColor(m.sender) }}>
+              {name}
+            </div>
+          )}
+          {phone && reply}
+          {!props.grouped && !phone && (
             <div className="msg__meta">
               <strong>{name}</strong>
               <time className="muted small" title={new Date(m.sentAt).toLocaleString()}>
@@ -1521,6 +1734,7 @@ function DmMessage(props: {
           ) : m.deleted ? (
             <div className="msg__text muted">
               <em>This message was deleted.</em>
+              {phone && <Stamp m={m} />}
             </div>
           ) : (
             <div className="msg__text">
@@ -1531,7 +1745,8 @@ function DmMessage(props: {
                   me={props.myName}
                 />
               )}
-              {m.editedAt && <span className="msg__edited"> (edited)</span>}
+              {m.editedAt && !phone && <span className="msg__edited"> (edited)</span>}
+              {phone && !!m.text && <Stamp m={m} />}
             </div>
           )}
           {!m.deleted && !m.mine && m.text && <InviteCard text={m.text} />}
@@ -1546,6 +1761,7 @@ function DmMessage(props: {
             />
           )}
           {m.attachments.length > 0 && <AttachmentList attachments={m.attachments} />}
+          {phone && !m.text && !m.deleted && !editing && <Stamp m={m} />}
           {m.reactions.some((r) => !isVote(r.emoji)) && (
             <div className="reactions">
               {m.reactions
@@ -1564,12 +1780,12 @@ function DmMessage(props: {
                 ))}
             </div>
           )}
-          {m.mine && (props.last || m.status === 'failed') && (
+          {m.mine && (props.last || m.status === 'failed') && (!phone || m.status === 'failed') && (
             <div className={`dm-status dm-status--${m.status}`}>{STATUS_LABEL[m.status]}</div>
           )}
         </div>
       </div>
-      {!m.deleted && !editing && c.state === 'accepted' && (
+      {!phone && !m.deleted && !editing && c.state === 'accepted' && (
         <div className="msg__actions" role="toolbar" aria-label="Message actions">
           {QUICK_REACTIONS.slice(0, 3).map((e) => (
             <button
@@ -1645,6 +1861,35 @@ function DmMessage(props: {
       )}
       {menu && (
         <Popover x={menu.x} y={menu.y} onClose={() => setMenu(null)} className="menu">
+          {phone && canReply && (
+            <div className="menu__reactions" role="group" aria-label="React">
+              {QUICK_REACTIONS.map((e) => (
+                <button
+                  key={e}
+                  role="menuitem"
+                  className={`menu__reaction ${m.reactions.some((r) => r.emoji === e && r.mine) ? 'is-mine' : ''}`}
+                  aria-label={`React ${e}`}
+                  onClick={() => {
+                    setMenu(null);
+                    react(e, !m.reactions.find((r) => r.emoji === e)?.mine);
+                  }}
+                >
+                  {e}
+                </button>
+              ))}
+              <button
+                role="menuitem"
+                className="menu__reaction menu__reaction--more"
+                aria-label="More reactions"
+                onClick={() => {
+                  setPicker({ x: 8, y: Math.max(8, menu.y - 160) });
+                  setMenu(null);
+                }}
+              >
+                <SmileIcon size={18} />
+              </button>
+            </div>
+          )}
           {c.state === 'accepted' && (
             <MenuItem
               icon={<ReplyIcon size={15} />}
@@ -2366,7 +2611,7 @@ ${shared}`
           title="Attach files"
           onClick={() => fileRef.current?.click()}
         >
-          <PlusIcon size={20} />
+          {phone ? <ClipIcon size={24} /> : <PlusIcon size={20} />}
         </button>
         <input
           ref={fileRef}
@@ -2383,7 +2628,7 @@ ${shared}`
           rows={Math.min(8, Math.max(1, text.split('\n').length))}
           value={text}
           maxLength={4000}
-          placeholder={`Message ${c.name}`}
+          placeholder={phone ? 'Message' : `Message ${c.name}`}
           onPaste={(e) => {
             const files = [...e.clipboardData.files];
             if (files.length) {
@@ -2421,9 +2666,9 @@ ${shared}`
           type="button"
           className="icon-btn"
           aria-label="Emoji"
-          onClick={(e) => setPicker({ x: e.clientX - 300, y: e.clientY - 330 })}
+          onClick={(e) => setPicker({ x: phone ? 8 : e.clientX - 300, y: e.clientY - 330 })}
         >
-          <SmileIcon size={20} />
+          {phone ? <EmojiIcon size={24} /> : <SmileIcon size={20} />}
         </button>
         {!text.trim() && props.pending.length === 0 && (
           <MyStickersButton disabled={!!uploading} onPick={(file) => void sendVoice(file)} />
@@ -2434,7 +2679,7 @@ ${shared}`
           idleHidden={!!text.trim() || props.pending.length > 0}
           onRecorded={(file) => void sendVoice(file)}
         />
-        {(!!text.trim() || props.pending.length > 0) && (
+        {!phone && (!!text.trim() || props.pending.length > 0) && (
           <button
             type="button"
             className="icon-btn"
@@ -2445,12 +2690,30 @@ ${shared}`
             ⏰
           </button>
         )}
-        <button
-          className="btn btn--primary"
-          disabled={(!text.trim() && !props.pending.length) || !!uploading}
-        >
-          Send
-        </button>
+        {phone ? (
+          // The microphone turns into Send once there is something to send; hold Send to send
+          // later or without sound.
+          (!!text.trim() || props.pending.length > 0) && (
+            <button
+              className="composer__send"
+              aria-label="Send"
+              disabled={!!uploading}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setLater({ x: e.clientX - 200, y: e.clientY - 110 });
+              }}
+            >
+              <SendIcon size={22} />
+            </button>
+          )
+        ) : (
+          <button
+            className="btn btn--primary"
+            disabled={(!text.trim() && !props.pending.length) || !!uploading}
+          >
+            Send
+          </button>
+        )}
       </form>
       <div className="typing" aria-live="polite">
         {isTyping(c.riverId) && (
@@ -2575,7 +2838,7 @@ export function NewMessage({ onClose }: { onClose(): void }): ReactElement {
   );
 }
 
-function SafetyNumber({ peer, onClose }: { peer: string; onClose(): void }): ReactElement {
+export function SafetyNumber({ peer, onClose }: { peer: string; onClose(): void }): ReactElement {
   const dm = useDm();
   const [data, setData] = useState<{ digits: string; verified: boolean; theirName: string } | null>(null);
   useEffect(() => {
@@ -2711,7 +2974,7 @@ function PeoplePicker(props: {
   );
 }
 
-function GroupAvatar({ c, size }: { c: ConversationView; size: number }): ReactElement {
+export function GroupAvatar({ c, size }: { c: ConversationView; size: number }): ReactElement {
   const shown = c.members.slice(0, 2);
   return (
     <span className="group-avatar" style={{ width: size, height: size }}>

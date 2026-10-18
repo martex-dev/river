@@ -53,7 +53,12 @@ afterEach(async () => {
     await exited;
   }
   // The stand-in server notices within a moment and lets go of its folder (Windows keeps it locked).
-  rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+  // Best effort: a folder Windows still holds is left in the temp directory, not a failed test.
+  try {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+  } catch {
+    // left for the system's temp cleanup
+  }
 });
 
 describe('River Host', () => {

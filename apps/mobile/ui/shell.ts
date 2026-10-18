@@ -3,9 +3,7 @@
  * of the screen the keyboard covers, and which tap after a long press is the one to ignore.
  */
 
-import type { Pane } from './swipe.ts';
-
-/** Shown above everything: while one is open, swiping does not switch panes and ☰ is hidden. */
+/** Shown above everything: while one is open, swiping from the edge does not go back. */
 export const OVERLAYS = [
   '[role="dialog"]',
   '[role="alertdialog"]',
@@ -26,15 +24,19 @@ export interface BackEnv {
   /** Closes the topmost menu, dialog or picture (River's overlay stack); false if none is open. */
   closeTopOverlay(): boolean;
   doc: Document;
-  pane: Pane;
-  showList(): void;
+  /**
+   * The phone shell's own Back (phone/nav.ts): the screen on top closes, else Chats shows; false
+   * on Chats, where Back leaves River.
+   */
+  back(): boolean;
 }
 
 /**
  * Android's Back button (MainActivity asks `window.__riverBack()`): true when River handled it,
  * false to let Android put River in the background. In order: the topmost menu or dialog closes;
  * a full-screen call shrinks back into its conversation (it keeps going); Settings, a story or
- * the quick switcher closes; a conversation goes back to the list.
+ * the quick switcher closes; then the screen on top (a conversation, a channel) closes; then the
+ * tab goes back to Chats.
  */
 export function handleBack(env: BackEnv): boolean {
   if (env.closeTopOverlay()) return true;
@@ -51,11 +53,7 @@ export function handleBack(env: BackEnv): boolean {
     target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     return true;
   }
-  if (env.pane === 'main') {
-    env.showList();
-    return true;
-  }
-  return false;
+  return env.back();
 }
 
 /**

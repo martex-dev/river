@@ -37,7 +37,7 @@ import { NotifyMenuSection } from '../community/ui/NotifyMenu.tsx';
 import { CommunityRail } from '../community/ui/Rail.tsx';
 import { EventsDialog } from '../community/ui/Events.tsx';
 import { Permission } from '@river/protocol/permissions';
-import type { CommunityView } from '../../../shared/ipc.ts';
+import type { ChannelView, CommunityView } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
 import { CallPill, CallPip, IncomingCall } from '../dm/CallUi.tsx';
 
@@ -48,8 +48,6 @@ export function CommunitiesPage(): ReactElement {
   const communityStart = useRiver((r) => r.communityStart);
   const setCommunityStart = useRiver((r) => r.setCommunityStart);
 
-  /** Age-restricted channels confirmed in this session (1.0.27). */
-  const [ageOk, setAgeOk] = useState<string[]>([]);
   const me = identity?.riverId ?? '';
 
   useEffect(() => {
@@ -88,7 +86,26 @@ export function CommunitiesPage(): ReactElement {
   return (
     <div className={`community ${s.showMembers && channel?.kind === 'text' ? '' : 'community--no-members'}`}>
       {community && <ChannelSidebar community={community} me={me} />}
+      <CommunityMain community={community} channel={channel} me={me} />
+    </div>
+  );
+}
 
+/**
+ * A channel of a community: the conversation (or forum, or voice), with its member list or thread
+ * beside it. Also the phone's channel screen (2.12), which shows it full screen.
+ */
+export function CommunityMain(props: {
+  community: CommunityView | null;
+  channel: ChannelView | null;
+  me: string;
+}): ReactElement {
+  const { community, channel, me } = props;
+  const s = useCommunity();
+  /** Age-restricted channels confirmed in this session (1.0.27). */
+  const [ageOk, setAgeOk] = useState<string[]>([]);
+  return (
+    <>
       <section className="community__main">
         <ConnectionBanner />
         {community?.securing && (
@@ -129,7 +146,7 @@ export function CommunitiesPage(): ReactElement {
           me={me}
         />
       )}
-    </div>
+    </>
   );
 }
 

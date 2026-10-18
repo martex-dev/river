@@ -1,24 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { swipeTarget } from '../../apps/mobile/ui/swipe.ts';
+import { isEdgeSwipeBack } from '../../apps/mobile/ui/swipe.ts';
 
-const W = 400;
 const swipe = (x0: number, x1: number, dy = 0, ms = 200) => ({ x0, y0: 300, x1, y1: 300 + dy, ms });
 
-describe('phone swipes', () => {
-  it('right on the conversation opens the list; left on the list closes it', () => {
-    expect(swipeTarget('main', swipe(40, 200), W)).toBe('nav');
-    expect(swipeTarget('nav', swipe(300, 100), W)).toBe('main');
+describe('the iPhone back swipe', () => {
+  it('goes back on a swipe to the right from the left edge', () => {
+    expect(isEdgeSwipeBack(swipe(4, 160))).toBe(true);
+    expect(isEdgeSwipeBack(swipe(20, 120, 30))).toBe(true);
   });
 
-  it('ignores scrolling, short, slow and wrong-way swipes', () => {
-    expect(swipeTarget('main', swipe(40, 200, 120), W)).toBeNull(); // mostly vertical
-    expect(swipeTarget('main', swipe(40, 90), W)).toBeNull(); // too short
-    expect(swipeTarget('main', swipe(40, 300, 0, 1500), W)).toBeNull(); // too slow
-    expect(swipeTarget('main', swipe(300, 100), W)).toBeNull(); // already on the conversation
-    expect(swipeTarget('nav', swipe(40, 200), W)).toBeNull();
-  });
-
-  it('opening the list starts on the left part of the screen', () => {
-    expect(swipeTarget('main', swipe(300, 399), W)).toBeNull();
+  it('ignores swipes that start further in, scrolling, short, slow and leftward swipes', () => {
+    expect(isEdgeSwipeBack(swipe(80, 300))).toBe(false); // a chat row's actions, not Back
+    expect(isEdgeSwipeBack(swipe(4, 160, 120))).toBe(false); // mostly vertical
+    expect(isEdgeSwipeBack(swipe(4, 50))).toBe(false); // too short
+    expect(isEdgeSwipeBack(swipe(4, 300, 0, 1500))).toBe(false); // too slow
+    expect(isEdgeSwipeBack(swipe(20, 0))).toBe(false); // the wrong way
   });
 });

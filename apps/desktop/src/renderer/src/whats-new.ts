@@ -3,6 +3,11 @@
  * got, shown once. Fresh installs see nothing; full notes are in the release.
  */
 export const HIGHLIGHTS: Record<string, string[]> = {
+  '2.13.0': [
+    'On phones, River now looks like a phone app: tabs at the bottom, a chat list, full-screen chats with bubbles',
+    'Swipe a chat for quick actions; hold a message to react, reply or forward',
+    'Computers keep their layout',
+  ],
   '1.1.0': [
     'River for Android: the same River on your phone — download River-android.apk from the release page',
     'Phones join your communities and talk to computers directly, with the same encryption',
