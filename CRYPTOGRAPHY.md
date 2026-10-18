@@ -177,6 +177,9 @@ than per-member sender keys:
   removed, not what they could already read, and there is no per-message forward
   secrecy inside a community. Until the rotating member's message reaches
   everyone, a member may still seal a few messages with the previous key.
+  An edit, and a reaction, is sealed with the key of the message it belongs to
+  (its reaction tags depend on that key), so editing a message from before a
+  rotation leaves the new text readable to someone who held that older key.
   Rotation needs members on 0.5.0+ (it travels over direct-message sessions).
   The server decides who is a member: a member who was removed but whom the
   server keeps listing still receives the next key from the rotator and can
