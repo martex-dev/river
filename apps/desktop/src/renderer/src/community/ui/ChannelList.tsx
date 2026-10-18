@@ -333,7 +333,9 @@ export function ChannelList(props: { community: CommunityView; me: string }): Re
                 <span className="category__chevron" aria-hidden="true">
                   <ChevronIcon size={12} />
                 </span>
-                <span className="category__name">{k.name}</span>
+                <span className="category__name" title={k.name}>
+                  {k.name}
+                </span>
               </button>
               {manage && (
                 <span className="category__tools">
