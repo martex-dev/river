@@ -15,6 +15,7 @@ export const OVERLAYS = [
   '.story-viewer',
   '.switcher-backdrop',
   '.dm-call--full',
+  '.gcall--full',
 ].join(', ');
 
 /**
@@ -67,7 +68,8 @@ export function handleBack(env: BackEnv): boolean {
   // Over a locked phone only the call shows: Back puts River away, behind the lock screen.
   if (isOverLock(doc)) return false;
   if (env.closeTopOverlay()) return true;
-  const minimize = doc.querySelector<HTMLElement>('.dm-call--full .dm-call__min');
+  // A group call (2.19) has the same "back to the conversation" button.
+  const minimize = doc.querySelector<HTMLElement>(':is(.dm-call--full, .gcall--full) .dm-call__min');
   if (minimize) {
     minimize.click();
     return true;
