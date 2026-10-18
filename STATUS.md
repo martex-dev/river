@@ -53,6 +53,7 @@ _Last updated: 2026-10-18 · Current version: **2.13.0** · Stage 1 and Stage 2 
 | Move members                         | Moderators move people to another voice channel (server checks rank and Move members in both channels; one-time pass for full channels)                                                                     | server test (move), e2e                                                                                              |
 | What's new                           | A once-per-update card with the version's highlights and a link to all changes                                                                                                                              | unit (whats-new), e2e                                                                                                |
 | Diagnostics                          | Connection check (Settings → System), startup failure dialog, GPU fallback, `--self-test`                                                                                                                   | `diagnostics*.test.ts*`, `startup-guard.test.ts`                                                                     |
+| Desktop polish (unreleased)          | Loading skeletons with Retry, live messages kept while history loads, stay-at-newest, focus-trapped dialogs, arrow-key menus, pickers at their button, dates in River's language, muted chats off the badge | `desktop-polish.test.tsx`, e2e                                                                                       |
 
 ## Partially complete
 
