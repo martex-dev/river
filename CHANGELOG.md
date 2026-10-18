@@ -6,6 +6,52 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+**Easy start: from install to your first message with no more work than a
+normal social app.**
+
+### Changed
+
+- **The first run is one screen**: type your name (and add a photo if you
+  like), press Get started, and River is open. Your account is still created
+  by itself on River's server — no phone number, e-mail or server address. The
+  username, fingerprint and "Choose your look" screens are gone from the first
+  run.
+- **Your look is no longer a gate.** Computers start with River's usual look;
+  Android and iPhone start with a Telegram-like one (blue on white, dark when
+  the phone is dark). A "Pick your look" card offers the rest, and Settings →
+  Appearance has it any time.
+- **A username is suggested from your name** (Bulgarian names are spelled in
+  Latin letters), so claiming one is a single tap on the card at the top.
+- **A backup is offered when there is something to keep** — once you have a
+  friend or a community and no backup file yet. "Not now" puts it off for two
+  weeks; River never says you are backed up when you are not.
+- **An invite link opens straight into the community.** Opened on a computer or
+  phone without River set up, the first screen says you are invited and its
+  button joins: a name, one tap, and you are in. With River already set up it
+  asks once, as before.
+- **Friends with nobody in it yet** shows the username field, your link and QR
+  code and "Join a community" (paste an invite, or start your own) instead of
+  an empty list. On phones, **Chats** starts with "Add a friend", "Show my QR
+  code" and "Join a community".
+- **Friend requests say so in the notification** ("Wants to be your friend"),
+  with no reply button; opening it shows Accept. Previews follow your
+  notification settings.
+- **Linking a second device**: the new device can scan the QR code shown on the
+  old one with its camera (Settings → Account → Devices → Link a new device).
+- The invite page now has one download per phone too: Android's APK with what
+  to allow, and an honest note on installing the iPhone app.
+- Friends, Chats and "Add a friend?" say "Setting up your account…" while River
+  is still making it, instead of asking you to join a community first; an
+  invite-only server's sign-up link is asked for in a card after the first run.
+
+### Fixed
+
+- A River link that started River on a new computer (an invite from "Open in
+  River") was used up in the moment before the first screen appeared, so it did
+  nothing; it now waits for the first screen.
+- An event reminder no longer throws in the background when River's local data
+  has just been closed.
+
 ## [2.15.0] - 2026-10-18
 
 **More private by default, and a calmer, steadier desktop.**

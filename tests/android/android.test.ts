@@ -225,14 +225,9 @@ describe('River for Android on an emulator', { timeout: 180_000 }, () => {
     mkdirSync(shots, { recursive: true });
     // The UI was driven through window.river; load it again to show the account it now has.
     await ui.reload();
-    await ui.waitForSelector('.pshell, .skin-gate', { timeout: 60_000 });
+    // 2.14: no skin chooser in the way — the phone shell comes straight up ("Pick your look" is a card).
+    await ui.waitForSelector('.pshell', { timeout: 60_000 });
     await ui.screenshot({ path: join(shots, '0-first-screen.png') });
-    if (await ui.locator('.skin-gate').isVisible()) {
-      await ui.getByRole('radio', { name: 'Specter skin' }).click();
-      await ui.getByRole('radio', { name: 'Specter palette' }).click();
-      await ui.getByRole('button', { name: 'Continue' }).click();
-      await ui.waitForSelector('.pshell', { timeout: 15_000 });
-    }
     await sleep(1500);
     // Chats: the conversation with Alice, opened full screen over the list.
     await ui.screenshot({ path: join(shots, '1-chats.png') });

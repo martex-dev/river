@@ -39,6 +39,7 @@ import {
 import { openPhoneChat, phonePush, phoneTab } from './nav.ts';
 import { SwipeRow, type RowAction } from './SwipeRow.tsx';
 import { countLabel, TabPage } from './ui.tsx';
+import { FirstSteps } from './FirstSteps.tsx';
 
 /** Chats (2.12): your conversations as in Telegram, with your friends' stories on top. */
 export function ChatsTab({ notices }: { notices?: ReactNode }): ReactElement {
@@ -82,6 +83,23 @@ export function ChatsTab({ notices }: { notices?: ReactNode }): ReactElement {
       {notices}
       {registered ? (
         <ChatList onCompose={() => setComposing(true)} />
+      ) : account.state === 'none' && account.waiting ? (
+        // River makes the account by itself (2.0); it only waits for its server.
+        <div className="pempty" role="status">
+          <div className="pempty__icon" aria-hidden="true">
+            💬
+          </div>
+          <h2>Setting up your account…</h2>
+          <p>River keeps trying by itself. Your chats appear here as soon as it is ready.</p>
+        </div>
+      ) : account.state === 'none' && account.needsInvite ? (
+        <div className="pempty">
+          <div className="pempty__icon" aria-hidden="true">
+            💬
+          </div>
+          <h2>One more step</h2>
+          <p>Paste the sign-up link from whoever runs your River server in the card above.</p>
+        </div>
       ) : (
         <div className="pempty">
           <div className="pempty__icon" aria-hidden="true">
@@ -283,21 +301,32 @@ function ChatList({ onCompose }: { onCompose(): void }): ReactElement {
           <ChatRow key={c.riverId} c={c} muted={muted(c)} />
         ))}
       </ul>
-      {chats.length === 0 && !searching && (
-        <div className="pempty pempty--small">
-          <p>
-            {archiveOpen
-              ? 'No archived chats.'
-              : filter === 'all'
-                ? 'No chats yet. Start one with a friend.'
-                : 'Nothing here.'}
-          </p>
-          {!archiveOpen && filter === 'all' && (
-            <button className="pbtn" onClick={onCompose}>
-              Start a chat
-            </button>
-          )}
-        </div>
+      {chats.length === 0 &&
+      !searching &&
+      !archiveOpen &&
+      filter === 'all' &&
+      requests.length === 0 &&
+      archived.length === 0 ? (
+        // Your first chat is a few taps away (2.14).
+        <FirstSteps />
+      ) : (
+        chats.length === 0 &&
+        !searching && (
+          <div className="pempty pempty--small">
+            <p>
+              {archiveOpen
+                ? 'No archived chats.'
+                : filter === 'all'
+                  ? 'No chats yet. Start one with a friend.'
+                  : 'Nothing here.'}
+            </p>
+            {!archiveOpen && filter === 'all' && (
+              <button className="pbtn" onClick={onCompose}>
+                Start a chat
+              </button>
+            )}
+          </div>
+        )
       )}
       {found.length > 0 && (
         <>

@@ -34,6 +34,11 @@ describe('invite landing page', () => {
       expect(html).toContain('River-mac-apple-silicon.dmg');
       expect(html).toContain('river://open?link=');
       expect(html).toContain('Run anyway');
+      // Phones too (2.14): one download each, with what Android or iPhone asks for.
+      expect(html).toContain('releases/latest/download/River-android.apk');
+      expect(html).toContain('River-ios-unsigned.ipa');
+      expect(html).toContain('install unknown apps');
+      expect(html).not.toContain('phones are coming');
     });
   }
 });

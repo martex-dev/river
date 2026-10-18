@@ -191,6 +191,24 @@ export function startMessageNotifications(deps: {
     // A conversation you muted stays quiet (1.0.26).
     if (isMuted(prefs, m.peer)) return;
     const title = prefs.preview === 'none' ? 'River' : event.senderName;
+    // A first message from someone who is not your friend yet is a friend request (2.14): it says
+    // so, and opening it shows Accept. No reply from the notification: that would answer a stranger.
+    if (deps.dm.contactState?.(m.peer) === 'request') {
+      show(
+        title,
+        prefs.preview === 'none'
+          ? 'New friend request'
+          : prefs.preview === 'full' && m.text
+            ? `Wants to be your friend: ${m.text.length > 140 ? `${m.text.slice(0, 140)}…` : m.text}`
+            : 'Wants to be your friend',
+        true,
+        () => deps.dm.focus(m.peer),
+        undefined,
+        false,
+        hints(`dm:${m.peer}`, event.senderName),
+      );
+      return;
+    }
     const body =
       prefs.preview === 'full'
         ? m.text

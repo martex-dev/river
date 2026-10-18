@@ -86,9 +86,9 @@ export function CommunitiesTab(): ReactElement {
             🏞️
           </div>
           <h2>No communities yet</h2>
-          <p>Create one for your friends, or join one with an invite link.</p>
+          <p>Got an invite link? Paste it to join. Or start one for your friends from a template.</p>
           <button className="pbtn" onClick={() => setCommunityStart(true)}>
-            Create or join a community
+            Join or create a community
           </button>
         </div>
       ) : (
