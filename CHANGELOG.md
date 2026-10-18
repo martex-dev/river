@@ -27,6 +27,20 @@ All notable changes to River are documented here. The format follows
 - Settings → System → Connection check shows how long River took to start, step
   by step; the log has the same line. See docs/performance.md.
 
+### Security
+
+- Message IDs are per sender (2.20.1 audit): in a group, a member who saw
+  someone's message first could send their own message under its ID, and the
+  genuine one was then dropped for others, with replies, reactions and pins
+  landing on the impostor's. Now both messages are kept with their real
+  senders; edits and deletes reach only their sender's message; replies,
+  reactions and pins (and their copies to your other devices) name whose
+  message they mean. Your history is kept (local migration 26). Replies and
+  reactions from apps that have not updated mean the copy your device got
+  first in that conversation. Channel replies also name the quoted sender, so a
+  message posted later under a deleted message's ID is not shown as the quoted
+  one.
+
 ## [2.21.0] - 2026-10-19
 
 **River in eleven languages, and thirteen phone fixes (group calls over a locked phone, big emoji, call links on the phone).**
