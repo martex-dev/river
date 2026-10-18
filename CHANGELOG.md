@@ -47,6 +47,8 @@ All notable changes to River are documented here. The format follows
   on hover.
 - Better contrast in menus, "Jump to present" and the green and red labels
   (every skin reaches 4.5:1).
+- Event reminders no longer raise an error every 30 seconds after River is
+  locked or signed out.
 
 ## [2.13.0] - 2026-10-18
 
