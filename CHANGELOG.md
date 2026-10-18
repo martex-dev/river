@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.20.2] - 2026-10-18
+
+**Server hardening: sessions that end, roles in reach, timeouts that hold, limits on mailboxes and disks.**
+
 ### Security
 
 - Server: sessions no longer renew forever. However often a connected device

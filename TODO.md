@@ -22,6 +22,7 @@ Plan: [docs/product/road-to-3.md](docs/product/road-to-3.md). Many releases, one
 - [x] 2.19.0 Group calls in group chats (up to 50, community voice engine), Join bar, call links with Ask to join
 - [x] 2.20.0 Security audit (14 fixes) and messaging part 2 (big emoji, reply previews, saved replies, tags, effects, badge without archived chats, safe mailto/tel)
 - [x] 2.20.1 Audit of direct messages, linking and backups: 8 fixes (first-DM impersonation, removed devices, stranger files, blocked typing, call-link rings, disappearing messages in backups, temp files, old prekeys)
+- [x] 2.20.2 Server hardening: 90-day sessions and sign-out, roles only within reach, timeouts on edits and pins, voice seats end with access, mailbox and disk caps, prekey draining limit, stalled rotations
 - [ ] Per-sender message IDs (an impostor can reuse a seen ID; needs a schema change)
 - [ ] Versioned, authenticated group state (the server can reorder group changes)
 - [ ] 2.20.x Polish for each phone screen
