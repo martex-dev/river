@@ -1,6 +1,6 @@
 import { BANNED_UNTIL } from '@river/protocol';
 import { createHash, randomBytes } from 'node:crypto';
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 import { CHALLENGE_BYTES } from '@river/protocol';
 import type { Database } from '../db/schema.ts';
 
@@ -39,21 +39,48 @@ export async function consumeChallenge(
   return result.numDeletedRows === 1n;
 }
 
-/** Opaque bearer token; the server stores only SHA-256(token). */
+/** Default absolute lifetime of a session (RIVER_SESSION_MAX_DAYS), from sign-in. */
+export const SESSION_MAX_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
+ * Opaque bearer token; the server stores only SHA-256(token). It expires after `ttlMs` unless
+ * renewed, and never later than `maxMs` after sign-in (2.20): then the device signs in again.
+ */
 export async function createSession(
   db: Kysely<Database>,
   riverId: string,
   deviceId: number,
   ttlMs: number,
   now: Date,
+  maxMs: number = SESSION_MAX_MS,
 ): Promise<{ token: string; expiresAt: string }> {
   const token = randomBytes(32).toString('base64url');
-  const expiresAt = new Date(now.getTime() + ttlMs).toISOString();
+  const notAfter = new Date(now.getTime() + maxMs).toISOString();
+  const expiresAt = new Date(now.getTime() + Math.min(ttlMs, maxMs)).toISOString();
   await db
     .insertInto('sessions')
-    .values({ token_hash: sha256(token), river_id: riverId, device_id: deviceId, expires_at: expiresAt })
+    .values({
+      token_hash: sha256(token),
+      river_id: riverId,
+      device_id: deviceId,
+      expires_at: expiresAt,
+      not_after: notAfter,
+    })
     .execute();
   return { token, expiresAt };
+}
+
+/** The stored form of a session token (what sign-out deletes by). Null for a malformed token. */
+export function sessionHash(token: string): string | null {
+  return /^[A-Za-z0-9_-]{43}$/.test(token) ? sha256(token) : null;
+}
+
+/** Ends one session (sign-out). True if it existed. */
+export async function endSession(db: Kysely<Database>, token: string): Promise<boolean> {
+  const hash = sessionHash(token);
+  if (!hash) return false;
+  const res = await db.deleteFrom('sessions').where('token_hash', '=', hash).executeTakeFirst();
+  return res.numDeletedRows > 0n;
 }
 
 export async function authenticate(
@@ -69,6 +96,8 @@ export async function authenticate(
     .select(['sessions.river_id', 'sessions.device_id'])
     .where('sessions.token_hash', '=', sha256(token))
     .where('sessions.expires_at', '>', iso)
+    // Past its absolute end a session is over, however recently it was renewed (2.20).
+    .where('sessions.not_after', '>', iso)
     // A suspended account's sessions stop working at once, wherever they are used.
     .where((eb) =>
       eb.or([eb('accounts.suspended_until', 'is', null), eb('accounts.suspended_until', '<=', iso)]),
@@ -79,8 +108,9 @@ export async function authenticate(
 
 /**
  * Keeps a session in use alive (2.10.13): past half its lifetime it is extended to a full one, so a
- * device that stays connected is never cut off once a day. Signed out, deleted or expired sessions
- * are not touched (the update matches only a live one).
+ * device that stays connected is never cut off once a day. Never past the session's absolute end
+ * (2.20): a session does not renew forever. Signed out, deleted or expired sessions are not
+ * touched (the update matches only a live one).
  */
 export async function renewSession(
   db: Kysely<Database>,
@@ -89,11 +119,14 @@ export async function renewSession(
   ttlMs: number,
 ): Promise<void> {
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return;
+  const next = new Date(now.getTime() + ttlMs).toISOString();
   await db
     .updateTable('sessions')
-    .set({ expires_at: new Date(now.getTime() + ttlMs).toISOString() })
+    // ISO times of one length compare as text: the earlier of a full lifetime and the absolute end.
+    .set({ expires_at: sql<string>`case when not_after < ${next} then not_after else ${next} end` })
     .where('token_hash', '=', sha256(token))
     .where('expires_at', '>', now.toISOString())
+    .where('not_after', '>', now.toISOString())
     .where('expires_at', '<', new Date(now.getTime() + ttlMs / 2).toISOString())
     .execute();
 }
@@ -126,5 +159,10 @@ export function suspensionMessage(s: { until: string; reason: string | null }): 
 export async function purgeExpired(db: Kysely<Database>, now: Date): Promise<void> {
   const iso = now.toISOString();
   await db.deleteFrom('auth_challenges').where('expires_at', '<=', iso).execute();
-  await db.deleteFrom('sessions').where('expires_at', '<=', iso).execute();
+  await db
+    .deleteFrom('sessions')
+    .where((eb) =>
+      eb.or([eb('expires_at', '<=', iso), eb('not_after', 'is', null), eb('not_after', '<=', iso)]),
+    )
+    .execute();
 }

@@ -741,6 +741,8 @@ async function start(): Promise<void> {
   let hostStopped = false;
   /** A 1:1 call on when River quits: the other side was told it ended (once). */
   let quitCallEnded = false;
+  /** River signed out of its server on the way out (once). */
+  let signedOut = false;
   app.on('before-quit', (event) => {
     quitting = true;
     // In a 1:1 call: tell the other side it ended (at most a moment), rather than leaving them in
@@ -756,6 +758,18 @@ async function start(): Promise<void> {
         dm.action({ a: 'call', peer: call.peer, callId: call.callId, kind: 'end' }).catch(() => undefined),
         new Promise((resolve) => setTimeout(resolve, 1500)),
       ]).finally(() => app.quit());
+      return;
+    }
+    // Sign out (2.20): the session ends on the server now, not when it expires (at most a moment;
+    // before hosting stops, as the account may be on this PC's own server).
+    if (!signedOut && account.sessionToken()) {
+      signedOut = true;
+      event.preventDefault();
+      // No reconnecting (and signing in again) once the server ends the connection.
+      community.stop();
+      void Promise.race([account.signOut(), new Promise((resolve) => setTimeout(resolve, 1000))]).finally(
+        () => app.quit(),
+      );
       return;
     }
     // Stop the community server cleanly before River exits (at most a few seconds).

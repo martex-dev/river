@@ -6,6 +6,44 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.20.2] - 2026-10-18
+
+**Server hardening: sessions that end, roles in reach, timeouts that hold, limits on mailboxes and disks.**
+
+### Security
+
+- Server: sessions no longer renew forever. However often a connected device
+  renews it, a session ends 90 days after sign-in (`RIVER_SESSION_MAX_DAYS`) and
+  River signs in again by itself with its device key. River signs out of its
+  server when it quits (`DELETE /v1/sessions/current`, which also ends the
+  connections that used the session).
+- Communities: Manage roles can no longer hand out more than its holder has. A
+  role below yours that carries Administrator, or any permission you lack, can
+  no longer be given, taken, temporarily given, edited, moved, deleted or
+  offered as a self-assignable role by you (owners and administrators are not
+  affected). River's member list no longer offers such roles.
+- Communities: a timeout now also stops editing your own messages, renaming
+  your threads and pinning (as it already stopped posting, reacting, starting
+  threads and voice).
+- Communities: losing access to a voice channel (a role taken away, a
+  permission or channel overwrite changed, a temporary role over) now ends
+  your seat in it at once, instead of leaving you listening.
+- Server: one sender can no longer fill someone's mailbox for everyone else.
+  At most 2500 undelivered messages (and half the size cap) from one sender
+  wait for each device (`RIVER_MAILBOX_PER_SENDER`), and a device's mailbox has
+  a size cap (`RIVER_MAILBOX_MAX_MB`, 100 MB). File uploads are refused while
+  the server's disk is nearly full (`RIVER_MIN_FREE_DISK_MB`) or past an
+  optional total for all files (`RIVER_ATTACHMENT_TOTAL_MB`), with a clear
+  message instead of a failing server.
+- Server: fetching someone's keys over and over no longer uses up their
+  one-time prekeys. One account takes at most ten of another's an hour;
+  further fetches get keys that still start a conversation (apps need no
+  change).
+- Communities: one member can no longer stall a key rotation by claiming it
+  and never handing out the key. Their next claim is refused while someone else
+  can rotate, and a claim that reaches nobody always runs out (the server used
+  to stop asking after three tries).
+
 ## [2.20.1] - 2026-10-18
 
 **A security audit of direct messages, linked devices and backups: eight fixes.**

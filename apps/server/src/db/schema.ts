@@ -54,6 +54,8 @@ export interface SessionsTable {
   river_id: string;
   device_id: number;
   expires_at: string;
+  /** Absolute end (2.20): renewing never moves `expires_at` past it. Null only before 0029 ran. */
+  not_after: string | null;
 }
 
 export interface AuthChallengesTable {
@@ -81,6 +83,11 @@ export interface CommunitiesTable {
   epoch_claimed_by: string | null;
   /** How often a rotation that reached nobody was asked for again (2.11). */
   rotation_retries: Generated<number>;
+  /**
+   * JSON array of River IDs whose claim ran out without anyone receiving the key (2.20): they
+   * stand aside for the next claim, until a rotation succeeds.
+   */
+  rotation_stalled: Generated<string>;
 }
 
 export interface CommunityMembersTable {
@@ -253,6 +260,8 @@ export interface MailboxTable {
   type: number;
   body: string;
   received_at: string;
+  /** Stored size of `body` (2.20), for the per-device and per-sender caps. */
+  size: Generated<number>;
 }
 
 export interface BlocksTable {

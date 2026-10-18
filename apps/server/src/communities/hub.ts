@@ -432,6 +432,11 @@ export class Hub {
       .map(([channelId, r]) => ({ channelId, participants: [...r.members] }));
   }
 
+  /** Communities with someone in one of their voice channels right now. */
+  voiceCommunities(): string[] {
+    return [...new Set([...this.voice.values()].map((r) => r.communityId))];
+  }
+
   /** Soundboard cooldown: true (and remembered) when this person may play a sound now. */
   takeSoundTurn(riverId: string, now: number, cooldownMs: number): boolean {
     const last = this.lastSound.get(riverId) ?? -Infinity;

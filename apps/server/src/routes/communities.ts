@@ -71,7 +71,7 @@ import {
   decodeRelayAny,
   encodeRelayIn,
 } from '@river/protocol';
-import { authenticate, renewSession } from '../accounts/auth-store.ts';
+import { authenticate, renewSession, sessionHash } from '../accounts/auth-store.ts';
 import type { Hub, HubSocket } from '../communities/hub.ts';
 import type { Transaction } from 'kysely';
 import type { ChannelModel, CommunityModel } from '../communities/model.ts';
@@ -107,8 +107,15 @@ const SOCKET_BURST = 400;
 const SESSION_RECHECK_MS = 5 * 60_000;
 /** A claimed key epoch nobody else reports having in this long is asked for again (2.11). */
 const ROTATION_ADOPT_MS = 10 * 60_000;
-/** How often a rotation that reached nobody is asked for again before the server gives up. */
+/**
+ * How often a rotation that reached nobody is asked for again at ROTATION_ADOPT_MS; after that
+ * the wait doubles each time (up to ROTATION_MAX_WAIT_MS) instead of the server giving up, which
+ * left a claim that never reached anyone in place for good (2.20).
+ */
 const ROTATION_MAX_RETRIES = 3;
+const ROTATION_MAX_WAIT_MS = 24 * 60 * 60_000;
+/** Members remembered as having stalled a rotation, per community. */
+const MAX_STALLED = 1000;
 /** Stuck rotations are looked for at most this often per process (2.11.2). */
 const ROTATION_RECHECK_MS = 60_000;
 /** How long the server remembers that a member used River (for stuck rotations). */
@@ -138,6 +145,8 @@ export interface CommunityOps {
   removeEverywhere(riverId: string): Promise<void>;
   /** Deletes a community and tells its members. */
   deleteCommunity(communityId: string): Promise<boolean>;
+  /** A session was signed out: realtime connections that signed in with it end now (2.20). */
+  endSession(tokenHash: string): void;
 }
 
 /**
@@ -230,8 +239,12 @@ export async function registerCommunityRoutes(
       model.members.map((m) => m.riverId),
       event,
     );
-  const changed = (model: CommunityModel): void =>
+  const changed = (model: CommunityModel): void => {
     toMembers(model, { t: 'community', communityId: model.id });
+    // Whatever changed (roles, overwrites, a category, screening) may have taken someone's
+    // access to the voice channel they are in.
+    void enforceVoiceAccess(model.id).catch(() => undefined);
+  };
   /** Members a moderator just moved: they may join that channel once even if it is full (1.0.39). */
   const movePasses = new Map<string, { channelId: string; until: number }>();
   const voiceUpdate = async (communityId: string, channelId: string): Promise<void> => {
@@ -246,6 +259,34 @@ export async function registerCommunityRoutes(
     });
   };
   hub.onSeatExpired = (left) => void voiceUpdate(left.communityId, left.channelId).catch(() => undefined);
+  /**
+   * Ends the seat of everyone in a voice channel they may no longer see or connect to (a role,
+   * an overwrite, a category or a timeout changed; a temporary role ran out), and tells them, as
+   * endVoice does for a deleted channel (2.20). Before, they stayed in and kept hearing it.
+   */
+  const enforceVoiceAccess = async (communityId: string): Promise<void> => {
+    const rooms = hub.rooms(communityId);
+    if (!rooms.length) return;
+    const model = await loadCommunity(db, communityId);
+    if (!model) return;
+    const emptied = new Set<string>();
+    for (const room of rooms) {
+      for (const id of room.participants) {
+        if (hub.voiceChannelOf(id) !== room.channelId) continue;
+        if (model.can(id, Permission.VIEW_CHANNELS | Permission.CONNECT, room.channelId)) continue;
+        hub.leaveVoice(id);
+        hub.sendTo([id], { t: 'voice.disconnect' });
+        emptied.add(room.channelId);
+      }
+    }
+    for (const channelId of emptied) await voiceUpdate(communityId, channelId);
+  };
+  // Temporary roles run out without a request: look at occupied voice channels every minute.
+  const voiceAccessTimer = setInterval(() => {
+    for (const id of hub.voiceCommunities()) void enforceVoiceAccess(id).catch(() => undefined);
+  }, 60_000);
+  voiceAccessTimer.unref?.();
+  app.addHook('onClose', async () => clearInterval(voiceAccessTimer));
   const pushMessage = async (model: CommunityModel, messageId: string): Promise<void> => {
     const row = await db.selectFrom('messages').selectAll().where('id', '=', messageId).executeTakeFirst();
     if (!row) return;
@@ -345,6 +386,24 @@ export async function registerCommunityRoutes(
       if (o.allow & ~had & Permission.ADMINISTRATOR) throw bad('Overwrites cannot grant Administrator');
       if ((o.allow & ~had & ~mine) !== 0) throw forbidden('You cannot grant permissions you do not have');
     }
+  };
+
+  /**
+   * A role someone may give, take, edit, move or delete (2.20): below their highest role, and
+   * carrying no permission they do not hold themselves. Otherwise Manage roles would hand out (or
+   * take away) Administrator through a lower role the owner made. Owners and administrators hold
+   * every permission, so only the position check applies to them.
+   */
+  const checkRoleInReach = (
+    model: CommunityModel,
+    actor: string,
+    role: { position: number; permissions: number },
+    what = 'assign',
+  ): void => {
+    const top = model.ownerId === actor ? Infinity : model.top(actor);
+    if (role.position >= top) throw forbidden(`You can only ${what} roles below your highest role`);
+    if ((role.permissions & ~model.perms(actor)) !== 0)
+      throw forbidden(`You cannot ${what} a role with permissions you do not have`);
   };
 
   /**
@@ -516,6 +575,9 @@ export async function registerCommunityRoutes(
         if (role.permissions & SELF_ROLE_FORBIDDEN)
           throw bad('Roles members give themselves cannot moderate or manage anything');
         if (role.position >= top) throw forbidden('You can only offer roles below your highest role');
+        // Members would give it to themselves: only a role you could give them yourself (2.20).
+        // Roles offered already stay offered when someone else edits the rest.
+        if (!model.selfRoles.includes(id)) checkRoleInReach(model, me(request), role, 'offer');
       }
       await db
         .updateTable('communities')
@@ -562,6 +624,7 @@ export async function registerCommunityRoutes(
       if (!role || role.id === model.everyoneRoleId) throw bad('Unknown role');
       const top = model.ownerId === me(request) ? Infinity : model.top(me(request));
       if (role.position >= top) throw forbidden('You can only give roles below your highest role');
+      checkRoleInReach(model, me(request), role, 'give');
       if (target !== me(request) && !model.outranks(me(request), target) && model.ownerId !== me(request))
         throw forbidden('You can only change roles of members below you');
       const expiresAt = new Date(deps.now().getTime() + req.seconds * 1000).toISOString();
@@ -1715,6 +1778,9 @@ export async function registerCommunityRoutes(
     if (role.id !== model.everyoneRoleId && role.position >= model.top(me(request))) {
       throw forbidden('You can only edit roles below your highest role');
     }
+    // Nor a role that holds what you do not (taking Administrator off the admins' role, say).
+    if ((role.permissions & ~model.perms(me(request))) !== 0)
+      throw forbidden('You cannot edit a role with permissions you do not have');
     const req = parse(updateRoleRequestSchema, request.body);
     if (req.permissions !== undefined) checkGrant(model, me(request), req.permissions & ~role.permissions);
     // A role members give themselves must stay harmless (see the onboarding settings).
@@ -1771,6 +1837,7 @@ export async function registerCommunityRoutes(
       if (!role || role.id === model.everyoneRoleId) throw bad('Unknown role');
       if (role.position >= top) throw forbidden('You can only move roles below your highest role');
       if (r.position >= top) throw forbidden('Cannot move a role above your own');
+      if (r.position !== role.position) checkRoleInReach(model, actor, role, 'move');
     }
     for (const role of model.roles) {
       if (role.id === model.everyoneRoleId || ids.has(role.id)) continue;
@@ -1798,6 +1865,7 @@ export async function registerCommunityRoutes(
     if (roleId === model.everyoneRoleId) throw bad('@everyone cannot be deleted');
     const gone = model.role(roleId)!;
     if (gone.position >= model.top(me(request))) throw forbidden('You can only delete roles below your own');
+    checkRoleInReach(model, me(request), gone, 'delete');
     await db.transaction().execute(async (trx) => {
       await trx.deleteFrom('channel_overwrites').where('role_id', '=', roleId).execute();
       await trx.deleteFrom('category_overwrites').where('role_id', '=', roleId).execute();
@@ -1833,6 +1901,7 @@ export async function registerCommunityRoutes(
         const role = model.role(id);
         if (!role || id === model.everyoneRoleId) throw bad('Unknown role');
         if (role.position >= top) throw forbidden('You can only assign roles below your highest role');
+        checkRoleInReach(model, me(request), role);
       }
       if (target !== me(request) && !model.outranks(me(request), target) && model.ownerId !== me(request)) {
         throw forbidden('You can only change roles of members below you');
@@ -2264,6 +2333,18 @@ export async function registerCommunityRoutes(
       if (model.pending(me(request))) throw forbidden('Accept the rules first');
       if (!model.rotationNeeded && !model.can(me(request), Permission.MANAGE_COMMUNITY))
         throw forbidden('The community key does not need replacing');
+      // A member whose last claim reached nobody stands aside while someone else could rotate
+      // (2.20), so one member cannot keep claiming epochs whose key they never hand out. The owner
+      // is not held back (they can delete the community anyway). Apps step aside on this refusal.
+      const stalled = await stalledBy(model.id);
+      if (
+        me(request) !== model.ownerId &&
+        stalled.has(me(request)) &&
+        model.members.some(
+          (m) => m.riverId !== me(request) && !stalled.has(m.riverId) && !model.pending(m.riverId),
+        )
+      )
+        throw forbidden('Another member replaces the community key this time');
       const req = parse(rotateKeyRequestSchema, request.body);
       const res = await db
         .updateTable('communities')
@@ -2297,9 +2378,10 @@ export async function registerCommunityRoutes(
     async (request) => {
       const model = await community(request.params.id, me(request));
       const req = parse(rotateKeyResponseSchema.strict(), request.body);
+      // The rotation reached someone: done, and whoever stalled earlier ones may rotate again.
       await db
         .updateTable('communities')
-        .set({ epoch_claimed_at: null, epoch_claimed_by: null })
+        .set({ epoch_claimed_at: null, epoch_claimed_by: null, rotation_stalled: '[]', rotation_retries: 0 })
         .where('id', '=', model.id)
         .where('key_epoch', '=', req.epoch)
         .where('epoch_claimed_by', '!=', me(request))
@@ -2314,6 +2396,26 @@ export async function registerCommunityRoutes(
    * community does not stay on a key a removed member still has.
    */
   let lastRecheck = Number.NEGATIVE_INFINITY;
+  /** Members whose claims reached nobody since the last rotation that succeeded (2.20). */
+  const stalledBy = async (communityId: string): Promise<Set<string>> => {
+    const row = await db
+      .selectFrom('communities')
+      .select('rotation_stalled')
+      .where('id', '=', communityId)
+      .executeTakeFirst();
+    try {
+      const list = JSON.parse(row?.rotation_stalled ?? '[]') as unknown;
+      return new Set(Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : []);
+    } catch {
+      return new Set();
+    }
+  };
+  /** How long a claim may go unreported before it is asked for again: longer after each retry. */
+  const adoptWindow = (retries: number): number =>
+    Math.min(
+      ROTATION_MAX_WAIT_MS,
+      (deps.rotationAdoptMs ?? ROTATION_ADOPT_MS) * 2 ** Math.max(0, retries - (ROTATION_MAX_RETRIES - 1)),
+    );
   const recheckRotations = async (): Promise<void> => {
     // At most once a minute per process (2.11.2): GET /communities runs it too, and it scans
     // every community.
@@ -2324,12 +2426,21 @@ export async function registerCommunityRoutes(
     const cutoff = new Date(nowMs - (deps.rotationAdoptMs ?? ROTATION_ADOPT_MS)).toISOString();
     const stuck = await db
       .selectFrom('communities')
-      .select(['id', 'key_epoch', 'epoch_claimed_at', 'epoch_claimed_by'])
+      .select([
+        'id',
+        'key_epoch',
+        'epoch_claimed_at',
+        'epoch_claimed_by',
+        'rotation_retries',
+        'rotation_stalled',
+      ])
       .where('epoch_claimed_at', 'is not', null)
       .where('epoch_claimed_at', '<', cutoff)
-      .where('rotation_retries', '<', ROTATION_MAX_RETRIES)
       .execute();
     for (const c of stuck) {
+      // Past the first few retries the wait grows, but a claim never stays forever (2.20).
+      const expiredBefore = new Date(nowMs - adoptWindow(c.rotation_retries)).toISOString();
+      if ((c.epoch_claimed_at ?? '') >= expiredBefore) continue;
       const members = (
         await db.selectFrom('community_members').select('river_id').where('community_id', '=', c.id).execute()
       ).map((m) => m.river_id);
@@ -2343,6 +2454,16 @@ export async function registerCommunityRoutes(
           id !== c.epoch_claimed_by && (hub.isOnline(id) || (lastActive.get(id) ?? -Infinity) >= claimedAt),
       );
       if (!alone && !someoneCould) continue;
+      // Whoever claimed it stands aside next time, so another member rotates (2.20).
+      const stalled = ((): string[] => {
+        try {
+          const list = JSON.parse(c.rotation_stalled) as unknown;
+          return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : [];
+        } catch {
+          return [];
+        }
+      })();
+      if (c.epoch_claimed_by && !stalled.includes(c.epoch_claimed_by)) stalled.push(c.epoch_claimed_by);
       const res = await db
         .updateTable('communities')
         .set((eb) => ({
@@ -2350,10 +2471,11 @@ export async function registerCommunityRoutes(
           epoch_claimed_at: null,
           epoch_claimed_by: null,
           rotation_retries: eb('rotation_retries', '+', 1),
+          rotation_stalled: JSON.stringify(stalled.slice(-MAX_STALLED)),
         }))
         .where('id', '=', c.id)
         .where('key_epoch', '=', c.key_epoch)
-        .where('epoch_claimed_at', '<', cutoff)
+        .where('epoch_claimed_at', '=', c.epoch_claimed_at)
         .executeTakeFirst();
       if (!alone && Number(res.numUpdatedRows) === 1) {
         const model = await loadCommunity(db, c.id);
@@ -2669,6 +2791,9 @@ export async function registerCommunityRoutes(
       model.can(me(request), Permission.MANAGE_CHANNELS, msg.channel_id);
     if (thread.creator !== me(request) && !manager) throw forbidden();
     const req = parse(updateThreadRequestSchema, request.body);
+    // Its name is something everyone reads: not while timed out (2.20).
+    if (req.name !== undefined && model.restricted(me(request)))
+      throw forbidden('You cannot rename threads while you are timed out');
     await db
       .updateTable('threads')
       .set({
@@ -2696,6 +2821,8 @@ export async function registerCommunityRoutes(
   app.patch<{ Params: { id: string } }>(`${API_PREFIX}/messages/:id`, authed, async (request) => {
     const { model, msg } = await messageContext(request.params.id, me(request));
     if (msg.sender !== me(request) || msg.webhook_id) throw forbidden('You can only edit your own messages');
+    // A timeout takes away talking, and editing an old message is talking too (2.20).
+    if (model.restricted(me(request))) throw forbidden('You cannot edit messages while you are timed out');
     const req = parse(editMessageRequestSchema, request.body);
     await db
       .updateTable('messages')
@@ -2782,7 +2909,8 @@ export async function registerCommunityRoutes(
     const can =
       model.can(me(request), Permission.PIN_MESSAGES, msg.channel_id) ||
       model.can(me(request), Permission.MANAGE_MESSAGES, msg.channel_id);
-    if (!can) throw forbidden();
+    // Pinning puts a message in front of everyone: a timeout stops it, as it stops posting (2.20).
+    if (!can || model.restricted(me(request))) throw forbidden();
     await db.updateTable('messages').set({ pinned }).where('id', '=', msg.id).execute();
     await pushMessage(model, msg.id);
     return { ok: true };
@@ -2872,8 +3000,12 @@ export async function registerCommunityRoutes(
     });
   };
 
+  /** Open realtime connections by the session they signed in with (hashed), to end on sign-out. */
+  const connectionsBySession = new Map<string, Set<() => void>>();
+
   app.get(`${API_PREFIX}/ws`, { websocket: true }, (socket) => {
     let riverId: string | null = null;
+    let tokenHash: string | null = null;
     let closed = false;
     /** The session this connection signed in with, re-checked now and then (it expires, or is revoked). */
     let token: string | null = null;
@@ -2894,6 +3026,11 @@ export async function registerCommunityRoutes(
       close: (c) => socket.close(c),
     };
     const send = (e: ServerEvent): void => hubSocket.send(JSON.stringify(e));
+    const endedBySignOut = (): void => {
+      if (closed) return;
+      send({ t: 'error', code: 'unauthorized' });
+      socket.close(4401);
+    };
     const authTimer = setTimeout(() => {
       if (!riverId) socket.close(4401);
     }, 10_000);
@@ -2960,6 +3097,12 @@ export async function registerCommunityRoutes(
         }
         clearTimeout(authTimer);
         token = event.token;
+        tokenHash = sessionHash(event.token);
+        if (tokenHash) {
+          const set = connectionsBySession.get(tokenHash) ?? new Set();
+          set.add(endedBySignOut);
+          connectionsBySession.set(tokenHash, set);
+        }
         riverId = session.riverId;
         hubSocket.deviceId = session.deviceId;
         hub.setStatus(riverId, event.status ?? 'online');
@@ -3225,6 +3368,11 @@ export async function registerCommunityRoutes(
       clearTimeout(authTimer);
       clearInterval(heartbeat);
       clearInterval(sessionTimer);
+      if (tokenHash) {
+        const set = connectionsBySession.get(tokenHash);
+        set?.delete(endedBySignOut);
+        if (set?.size === 0) connectionsBySession.delete(tokenHash);
+      }
       if (!riverId) return;
       const gone = riverId;
       const { offline, held } = hub.remove(gone, hubSocket);
@@ -3270,6 +3418,9 @@ export async function registerCommunityRoutes(
       if (!model) return false;
       await deleteCommunity(model);
       return true;
+    },
+    endSession: (hash) => {
+      for (const end of [...(connectionsBySession.get(hash) ?? [])]) end();
     },
   };
 }
