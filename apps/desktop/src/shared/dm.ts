@@ -82,7 +82,39 @@ export interface DirectMessageView {
   notice?: { timer: number } | null;
   /** Group members your message could not be delivered to (everyone else got it). */
   undeliveredTo?: string[];
+  /**
+   * A full-screen effect the sender chose (2.19), played once when you first see the message.
+   * Travels inside the encrypted message; apps before 2.19 ignore it.
+   */
+  effect?: MessageEffect | null;
 }
+
+/** Message effects (2.19): played on screen, never with reduced motion or Calm mode. */
+export const MESSAGE_EFFECTS = ['confetti', 'hearts', 'fireworks'] as const;
+export type MessageEffect = (typeof MESSAGE_EFFECTS)[number];
+export function isMessageEffect(v: unknown): v is MessageEffect {
+  return typeof v === 'string' && (MESSAGE_EFFECTS as readonly string[]).includes(v);
+}
+
+/** A saved reply (2.19): text you send often, kept in this device's encrypted database. */
+export interface SavedReply {
+  id: string;
+  /** Typed after "/" to find it. */
+  shortcut: string;
+  text: string;
+}
+export const MAX_SAVED_REPLIES = 50;
+
+/**
+ * Tags on your notes and saved messages (2.19), kept in this device's encrypted database. Keys:
+ * `d:<message ID>` for a direct message (Note to self), `c:<message ID>` for a saved channel message.
+ */
+export type MessageTags = Record<string, string[]>;
+export const MAX_TAGS_PER_MESSAGE = 5;
+export const MAX_TAGGED_MESSAGES = 2000;
+/** A tag: letters, digits, _ and - (like a #hashtag), 1–24 characters. */
+export const TAG_RE = /^[\p{L}\p{N}_-]{1,24}$/u;
+export const TAG_KEY_RE = /^[dc]:[A-Za-z0-9_-]{22}$/;
 
 /** A message waiting on this device to be sent later (2.5). */
 export interface ScheduledView {
@@ -211,6 +243,8 @@ export const dmActionSchema = z.discriminatedUnion('a', [
       poll: pollInputSchema.optional(),
       /** A link preview made on this device, if you turned previews on (2.10.6). */
       embed: linkEmbedSchema.optional(),
+      /** A full-screen effect for the people who get it (2.19). */
+      effect: z.enum(MESSAGE_EFFECTS).optional(),
     })
     .strict()
     .refine((v) => v.text.trim().length > 0 || (v.attachments?.length ?? 0) > 0, 'empty'),
@@ -305,6 +339,31 @@ export const dmActionSchema = z.discriminatedUnion('a', [
     })
     .strict(),
   z.object({ a: z.literal('deleteFolder'), id }).strict(),
+  /** Saved replies (2.19), kept on this device. */
+  z.object({ a: z.literal('savedReplies') }).strict(),
+  z
+    .object({
+      a: z.literal('saveReply'),
+      /** Absent: a new saved reply. */
+      id: id.optional(),
+      shortcut: z.string().trim().regex(TAG_RE),
+      text: z
+        .string()
+        .max(4000)
+        .refine((s) => s.trim().length > 0),
+    })
+    .strict(),
+  z.object({ a: z.literal('deleteReply'), id }).strict(),
+  /** Tags on notes and saved messages (2.19), kept on this device. */
+  z.object({ a: z.literal('messageTags') }).strict(),
+  z
+    .object({
+      a: z.literal('tagMessage'),
+      key: z.string().regex(TAG_KEY_RE),
+      /** The message's tags from now on ([] removes them all). */
+      tags: z.array(z.string().trim().regex(TAG_RE)).max(MAX_TAGS_PER_MESSAGE),
+    })
+    .strict(),
   /** Opens (and creates, the first time) the Note to self conversation (2.9). */
   z.object({ a: z.literal('noteToSelf') }).strict(),
   /** Every file shared in conversations and posts on this device. */
@@ -382,6 +441,11 @@ interface DmResults {
   folders: ChatFolder[];
   saveFolder: ChatFolder[];
   deleteFolder: ChatFolder[];
+  savedReplies: SavedReply[];
+  saveReply: SavedReply[];
+  deleteReply: SavedReply[];
+  messageTags: MessageTags;
+  tagMessage: MessageTags;
   schedule: ScheduledView;
   scheduled: ScheduledView[];
   /** `answer`: it was answered on the phone's own call screen (Android, 2.11), so the window answers it. */
