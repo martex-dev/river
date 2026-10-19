@@ -1,3 +1,4 @@
+import { msg } from '../../../shared/i18n/index.ts';
 import { useEffect, useState } from 'react';
 
 /**
@@ -20,16 +21,16 @@ export interface EmojiIndex {
 }
 
 const GROUP_NAMES = [
-  'Smileys & emotion',
-  'People & body',
-  'Components',
-  'Animals & nature',
-  'Food & drink',
-  'Travel & places',
-  'Activities',
-  'Objects',
-  'Symbols',
-  'Flags',
+  msg('Smileys & emotion'),
+  msg('People & body'),
+  msg('Components'),
+  msg('Animals & nature'),
+  msg('Food & drink'),
+  msg('Travel & places'),
+  msg('Activities'),
+  msg('Objects'),
+  msg('Symbols'),
+  msg('Flags'),
 ];
 
 let loading: Promise<EmojiIndex> | null = null;

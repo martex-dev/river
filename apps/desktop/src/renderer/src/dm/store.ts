@@ -20,6 +20,7 @@ import { uiStartup } from '../startup.ts';
 import { celebrate } from '../community/fx.tsx';
 import { play, playNotifySound } from '../community/sound.ts';
 import { useRiver } from '../store.ts';
+import { tr } from '../i18n.ts';
 import { withLiveMessages } from '../components/unread.ts';
 
 const TYPING_MS = 6000;
@@ -106,7 +107,7 @@ export const useDm = create<DmState>((set, get) => ({
           });
           if (friend) {
             play('friendAdded');
-            celebrate(`You and ${friend.name} are now friends`);
+            celebrate(tr('You and {name} are now friends', { name: friend.name }));
           }
         }
         return;

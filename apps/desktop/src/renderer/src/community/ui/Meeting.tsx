@@ -14,6 +14,7 @@ import { play } from '../sound.ts';
 import { useCommunity } from '../store.ts';
 import type { VoiceCall } from '../voice.ts';
 import { nameOf } from './common.tsx';
+import { tr, trn } from '../../i18n.ts';
 import '../../styles/meeting.css';
 
 /** Grid or speaker view, remembered on this computer. */
@@ -65,7 +66,7 @@ export function MeetingBar(props: {
   const voice = useRiver((r) => r.settings?.voice);
   const updateSettings = useRiver((r) => r.updateSettings);
   const remotes = call.remotes();
-  const name = (id: string): string => (id === me ? 'You' : nameOf(community, id));
+  const name = (id: string): string => (id === me ? tr('You') : nameOf(community, id));
   const talking = [...call.speaking]
     .filter((id) => id !== me || call.transmitting)
     .sort((a, b) => (a === me ? 1 : b === me ? -1 : 0))
@@ -83,18 +84,18 @@ export function MeetingBar(props: {
   }, [handsUp]);
 
   return (
-    <div className="meeting-bar" role="toolbar" aria-label="Meeting">
-      <div className="segmented meeting-bar__views" role="radiogroup" aria-label="Layout">
+    <div className="meeting-bar" role="toolbar" aria-label={tr('Meeting')}>
+      <div className="segmented meeting-bar__views" role="radiogroup" aria-label={tr('Layout')}>
         {(['grid', 'speaker'] as const).map((v) => (
           <button
             key={v}
             role="radio"
             aria-checked={view === v}
             className={`segmented__item ${view === v ? 'is-active' : ''}`}
-            title={v === 'grid' ? 'Everyone the same size' : 'Whoever is talking (or sharing) large'}
+            title={v === 'grid' ? tr('Everyone the same size') : tr('Whoever is talking (or sharing) large')}
             onClick={() => onView(v)}
           >
-            {v === 'grid' ? 'Grid' : 'Speaker'}
+            {v === 'grid' ? tr('Grid') : tr('Speaker')}
           </button>
         ))}
       </div>
@@ -103,10 +104,12 @@ export function MeetingBar(props: {
         <button
           className={`btn btn--small ${call.hand !== null ? 'btn--primary' : 'btn--ghost'}`}
           aria-pressed={call.hand !== null}
-          title={call.hand !== null ? 'Lower your hand' : 'Raise your hand: everyone sees it, in order'}
+          title={
+            call.hand !== null ? tr('Lower your hand') : tr('Raise your hand: everyone sees it, in order')
+          }
           onClick={() => call.setHand(call.hand === null)}
         >
-          <span aria-hidden="true">✋</span> {call.hand !== null ? 'Lower hand' : 'Raise hand'}
+          <span aria-hidden="true">✋</span> {call.hand !== null ? tr('Lower hand') : tr('Raise hand')}
         </button>
       )}
       <button
@@ -114,21 +117,21 @@ export function MeetingBar(props: {
         aria-pressed={noise}
         title={
           noise
-            ? 'Noise suppression is on: background noise is filtered out of your voice'
-            : 'Noise suppression is off (music, instruments)'
+            ? tr('Noise suppression is on: background noise is filtered out of your voice')
+            : tr('Noise suppression is off (music, instruments)')
         }
         onClick={() => {
           void updateSettings({ voice: { noiseSuppression: !noise } });
           void call.updateOptions({ noiseSuppression: !noise });
         }}
       >
-        Noise suppression
+        {tr('Noise suppression')}
       </button>
-      <span className="meeting-bar__talking" title="Who is talking now">
-        {talkingLine(talking) ?? (remotes.length > 0 ? 'Nobody is talking' : '')}
+      <span className="meeting-bar__talking" title={tr('Who is talking now')}>
+        {talkingLine(talking, tr, trn) ?? (remotes.length > 0 ? tr('Nobody is talking') : '')}
       </span>
       {hands.length > 0 && (
-        <ol className="meeting-bar__hands" aria-label="Raised hands, in order">
+        <ol className="meeting-bar__hands" aria-label={tr('Raised hands, in order')}>
           {hands.map((h, i) => (
             <li key={h.id}>
               <span aria-hidden="true">✋</span> {i + 1}. {name(h.id)}
@@ -138,12 +141,12 @@ export function MeetingBar(props: {
       )}
       {status === 'reconnecting' && (
         <span className="meeting-bar__warn" role="status">
-          Reconnecting to your server… you stay in the channel.
+          {tr('Reconnecting to your server… you stay in the channel.')}
         </span>
       )}
       {call.micLost && (
         <span className="meeting-bar__warn" role="alert">
-          Your microphone was disconnected: nobody can hear you until one is plugged in.
+          {tr('Your microphone was disconnected: nobody can hear you until one is plugged in.')}
         </span>
       )}
     </div>

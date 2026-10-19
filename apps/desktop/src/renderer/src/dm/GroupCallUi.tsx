@@ -38,6 +38,7 @@ import {
 } from './group-call.ts';
 import { useDm } from './store.ts';
 import '../styles/group-call.css';
+import { rich, tr, trn } from '../i18n.ts';
 
 /** The call going on in a group right now (someone is in it), if any: the newest. */
 export function useOngoingCall(groupId: string): string | null {
@@ -60,9 +61,10 @@ function Timer(props: { since: number }): ReactElement {
 
 /** "Alice, Bob and 3 others" */
 function namesLine(names: string[]): string {
-  if (names.length <= 2) return names.join(' and ');
-  if (names.length === 3) return `${names[0]}, ${names[1]} and ${names[2]}`;
-  return `${names[0]}, ${names[1]} and ${names.length - 2} others`;
+  if (names.length < 2) return names.join('');
+  if (names.length === 2) return tr('{a} and {b}', { a: names[0]!, b: names[1]! });
+  if (names.length === 3) return tr('{a}, {b} and {c}', { a: names[0]!, b: names[1]!, c: names[2]! });
+  return trn('{a}, {b} and {count} others', names.length - 2, { a: names[0]!, b: names[1]! });
 }
 
 /**
@@ -88,8 +90,8 @@ export function GroupCallButtons(props: {
     <>
       <button
         className={props.className}
-        aria-label={ongoing ? 'Join call' : 'Start group voice call'}
-        title={ongoing ? 'Join the call going on in this group' : 'Call everyone in this group'}
+        aria-label={ongoing ? tr('Join call') : tr('Start group voice call')}
+        title={ongoing ? tr('Join the call going on in this group') : tr('Call everyone in this group')}
         disabled={busy}
         onClick={() => go(false)}
       >
@@ -97,8 +99,8 @@ export function GroupCallButtons(props: {
       </button>
       <button
         className={props.className}
-        aria-label={ongoing ? 'Join call with video' : 'Start group video call'}
-        title={ongoing ? 'Join the call with your camera on' : 'Video call everyone in this group'}
+        aria-label={ongoing ? tr('Join call with video') : tr('Start group video call')}
+        title={ongoing ? tr('Join the call with your camera on') : tr('Video call everyone in this group')}
         disabled={busy}
         onClick={() => go(true)}
       >
@@ -123,7 +125,7 @@ export function GroupCallBar({ conversation: c }: { conversation: ConversationVi
   const people = inCall(ongoing);
   const names = people.map((id) => personName(id, c.riverId));
   return (
-    <div className="gcall-bar" role="region" aria-label="Call in progress">
+    <div className="gcall-bar" role="region" aria-label={tr('Call in progress')}>
       <span className="gcall-bar__dot" aria-hidden="true" />
       <span className="gcall-bar__faces" aria-hidden="true">
         {people.slice(0, 4).map((id) => {
@@ -132,7 +134,7 @@ export function GroupCallBar({ conversation: c }: { conversation: ConversationVi
         })}
       </span>
       <span className="gcall-bar__text">
-        <strong>{known.video ? 'Video call' : 'Call'} in progress</strong>
+        <strong>{known.video ? tr('Video call in progress') : tr('Call in progress')}</strong>
         <span className="small muted"> · {namesLine(names)}</span>
       </span>
       <button
@@ -140,12 +142,12 @@ export function GroupCallBar({ conversation: c }: { conversation: ConversationVi
         disabled={busy || !!active}
         onClick={() => void joinGroupCall(ongoing, false)}
       >
-        Join
+        {tr('Join')}
       </button>
       <button
         className="btn btn--ghost btn--small"
-        aria-label="Join with video"
-        title="Join with your camera on"
+        aria-label={tr('Join with video')}
+        title={tr('Join with your camera on')}
         disabled={busy || !!active}
         onClick={() => void joinGroupCall(ongoing, true)}
       >
@@ -214,11 +216,11 @@ function GroupTile(props: {
       <span className="tile__label">
         {muted && <MicOffIcon size={14} />}
         {props.name}
-        {self ? ' (you)' : ''}
-        {peer?.relayed ? ' · via server' : ''}
-        {connecting ? ` · ${peer?.reconnecting ? 'reconnecting…' : 'connecting…'}` : ''}
+        {self ? ` ${tr('(you)')}` : ''}
+        {peer?.relayed ? ` · ${tr('via server')}` : ''}
+        {connecting ? ` · ${peer?.reconnecting ? tr('reconnecting…') : tr('connecting…')}` : ''}
       </span>
-      {sharing && <span className="live-badge tile__live">LIVE</span>}
+      {sharing && <span className="live-badge tile__live">{tr('LIVE')}</span>}
     </div>
   );
 }
@@ -254,13 +256,13 @@ export function GroupCallPanel(props: {
   const status =
     remotes.length === 0
       ? active.outgoing && !active.connectedAt && active.groupId
-        ? 'Ringing…'
-        : 'Waiting for others to join…'
+        ? tr('Ringing…')
+        : tr('Waiting for others to join…')
       : active.state === 'waiting'
-        ? 'Connecting…'
+        ? tr('Connecting…')
         : call.largeRoom
-          ? `${people} people · voice through your server, end-to-end encrypted`
-          : `${people} people · end-to-end encrypted`;
+          ? trn('{count} people · voice through your server, end-to-end encrypted', people)
+          : trn('{count} people · end-to-end encrypted', people);
   const big = remotes.length <= 1;
   const avatarOf = (id: string): string | null | undefined =>
     c?.members.find((m) => m.riverId === id)?.avatar;
@@ -268,14 +270,14 @@ export function GroupCallPanel(props: {
     <div
       className={`gcall ${full ? 'gcall--full' : ''} ${props.overlay && !full ? 'gcall--overlay' : ''}`}
       role="region"
-      aria-label={`Call: ${title}`}
+      aria-label={tr('Call: {name}', { name: title })}
     >
       <div className="gcall__top">
         {full && (
           <button
             className="dm-call__min"
-            aria-label="Back to the conversation"
-            title="Back to the conversation"
+            aria-label={tr('Back to the conversation')}
+            title={tr('Back to the conversation')}
             onClick={() => setMinimized(true)}
           >
             ⌄
@@ -293,14 +295,14 @@ export function GroupCallPanel(props: {
         </span>
         {phone && minimized && (
           <button className="btn btn--link" onClick={() => setMinimized(false)}>
-            Full screen
+            {tr('Full screen')}
           </button>
         )}
       </div>
       <div className={`gcall__grid gcall__grid--${Math.min(people, 9)}`}>
         <GroupTile
           id={me?.riverId ?? 'me'}
-          name={me?.displayName ?? 'You'}
+          name={me?.displayName ?? tr('You')}
           avatar={null}
           speaking={call.speaking.has(me?.riverId ?? '')}
           self={{
@@ -324,38 +326,40 @@ export function GroupCallPanel(props: {
       </div>
       {active.groupId && missing.length > 0 && (
         <div className="gcall__missing small">
-          <span className="muted">Not in the call: {namesLine(missing.map((m) => m.name))}</span>
+          <span className="muted">
+            {tr('Not in the call: {names}', { names: namesLine(missing.map((m) => m.name)) })}
+          </span>
           <button
             className="btn btn--link"
-            aria-label="Ring everyone not in the call"
+            aria-label={tr('Ring everyone not in the call')}
             onClick={() => void ringAgain(missing.map((m) => m.riverId))}
           >
-            Ring
+            {tr('Ring')}
           </button>
         </div>
       )}
       <div className="voice__controls">
         <button
           className={`round-btn ${s.selfMuted ? 'round-btn--off' : ''}`}
-          aria-label={s.selfMuted ? 'Unmute' : 'Mute'}
+          aria-label={s.selfMuted ? tr('Unmute') : tr('Mute')}
           onClick={s.toggleMute}
         >
           {s.selfMuted ? <MicOffIcon /> : <MicIcon />}
         </button>
         <button
           className={`round-btn ${s.selfDeafened ? 'round-btn--off' : ''}`}
-          aria-label={s.selfDeafened ? 'Undeafen' : 'Deafen'}
+          aria-label={s.selfDeafened ? tr('Undeafen') : tr('Deafen')}
           onClick={s.toggleDeafen}
         >
           {s.selfDeafened ? <HeadphonesOffIcon /> : <HeadphonesIcon />}
         </button>
         <button
           className={`round-btn ${call.localTrack('camera') ? 'round-btn--on' : ''}`}
-          aria-label={call.localTrack('camera') ? 'Camera off' : 'Camera on'}
+          aria-label={call.localTrack('camera') ? tr('Camera off') : tr('Camera on')}
           onClick={() =>
             void call
               .setCamera(!call.localTrack('camera'))
-              .catch(() => s.notify('Could not start your camera.', 'error'))
+              .catch(() => s.notify(tr('Could not start your camera.'), 'error'))
           }
         >
           <CameraIcon />
@@ -364,8 +368,8 @@ export function GroupCallPanel(props: {
         {!phone && document.pictureInPictureEnabled && remotes.some((r) => r.cameraOn || r.screenOn) && (
           <button
             className="round-btn"
-            aria-label="Picture in picture"
-            title="Keep their video in a small window on top"
+            aria-label={tr('Picture in picture')}
+            title={tr('Keep their video in a small window on top')}
             onClick={() => {
               if (document.pictureInPictureElement)
                 void document.exitPictureInPicture().catch(() => undefined);
@@ -373,7 +377,7 @@ export function GroupCallPanel(props: {
                 void document
                   .querySelector<HTMLVideoElement>('.gcall [data-remote] video')
                   ?.requestPictureInPicture()
-                  .catch(() => s.notify('Picture in picture is not available here.', 'error'));
+                  .catch(() => s.notify(tr('Picture in picture is not available here.'), 'error'));
             }}
           >
             ⧉
@@ -382,7 +386,7 @@ export function GroupCallPanel(props: {
         {!phone && (
           <button
             className={`round-btn ${call.localTrack('screen') ? 'round-btn--on' : ''}`}
-            aria-label={call.localTrack('screen') ? 'Stop sharing' : 'Share screen'}
+            aria-label={call.localTrack('screen') ? tr('Stop sharing') : tr('Share screen')}
             onClick={() => {
               if (call.localTrack('screen')) void call.setScreen(false);
               else void window.river.voice.screenSources().then(setPicker);
@@ -393,19 +397,19 @@ export function GroupCallPanel(props: {
         )}
         <button
           className="round-btn round-btn--danger"
-          aria-label="Leave call"
-          title="Leave the call (it goes on for the others)"
+          aria-label={tr('Leave call')}
+          title={tr('Leave the call (it goes on for the others)')}
           onClick={() => void leaveGroupCall()}
         >
           <PhoneOffIcon />
         </button>
       </div>
       {picker && (
-        <div className="picker" role="dialog" aria-label="Choose what to share">
+        <div className="picker" role="dialog" aria-label={tr('Choose what to share')}>
           <div className="picker__card glass">
-            <h2 className="card__title">Share your screen</h2>
+            <h2 className="card__title">{tr('Share your screen')}</h2>
             {picker.length === 0 && (
-              <p className="muted">River could not find any screen or window to share.</p>
+              <p className="muted">{tr('River could not find any screen or window to share.')}</p>
             )}
             <div className="picker__grid">
               {picker.map((src) => (
@@ -426,7 +430,7 @@ export function GroupCallPanel(props: {
               ))}
             </div>
             <button className="btn btn--ghost" onClick={() => setPicker(null)}>
-              Cancel
+              {tr('Cancel')}
             </button>
           </div>
         </div>
@@ -459,25 +463,28 @@ function Knocks(): ReactElement | null {
   const knocks = useGroupCall((s) => s.knocks);
   if (knocks.length === 0) return null;
   return (
-    <div className="gcall-knocks" role="region" aria-label="People asking to join your call">
+    <div className="gcall-knocks" role="region" aria-label={tr('People asking to join your call')}>
       {knocks.map((k) => (
         <div key={`${k.link}:${k.from}`} className="gcall-knock glass" role="alert">
           <Avatar id={k.from} name={k.name} size={36} />
           <span className="gcall-knock__text">
-            <strong>{k.name}</strong> asks to join your call
+            {rich(tr('{name} asks to join your call'), { name: <strong>{k.name}</strong> })}
             {!k.contact && (
-              <span className="small muted"> · not in your friends (the name is theirs to choose)</span>
+              <span className="small muted">
+                {' '}
+                · {tr('not in your friends (the name is theirs to choose)')}
+              </span>
             )}
           </span>
           <button className="btn btn--ghost btn--small" onClick={() => void answerKnock(k, false)}>
-            Deny
+            {tr('Deny')}
           </button>
           <button
             className="btn btn--primary btn--small"
-            aria-label={`Let ${k.name} in`}
+            aria-label={tr('Let {name} in', { name: k.name })}
             onClick={() => void answerKnock(k, true)}
           >
-            Let in
+            {tr('Let in')}
           </button>
         </div>
       ))}
@@ -491,24 +498,26 @@ function AskToJoin(): ReactElement | null {
   if (!asking) return null;
   const host = personName(asking.host, null);
   const text = {
-    confirm: `${host} invited you to a call. River asks ${host} to let you in; they see your name.`,
-    asking: `Waiting for ${host} to let you in…`,
-    denied: `${host} didn't let you in.`,
-    gone: 'That call link no longer works.',
-    unanswered: `${host} didn't answer. Try again later.`,
+    confirm: tr('{name} invited you to a call. River asks {name} to let you in; they see your name.', {
+      name: host,
+    }),
+    asking: tr('Waiting for {name} to let you in…', { name: host }),
+    denied: tr("{name} didn't let you in.", { name: host }),
+    gone: tr('That call link no longer works.'),
+    unanswered: tr("{name} didn't answer. Try again later.", { name: host }),
   }[asking.state];
   return (
-    <Modal title="Join the call?" onClose={stopAsking}>
+    <Modal title={tr('Join the call?')} onClose={stopAsking}>
       <p className="modal__text" role="status">
         {text}
       </p>
       <div className="modal__foot">
         <button className="btn btn--link" onClick={stopAsking}>
-          {asking.state === 'confirm' || asking.state === 'asking' ? 'Cancel' : 'Close'}
+          {asking.state === 'confirm' || asking.state === 'asking' ? tr('Cancel') : tr('Close')}
         </button>
         {asking.state === 'confirm' && (
           <button className="btn btn--primary" autoFocus onClick={() => void askToJoin()}>
-            Ask to join
+            {tr('Ask to join')}
           </button>
         )}
       </div>
@@ -522,26 +531,27 @@ function MadeLink(): ReactElement | null {
   if (!link) return null;
   const close = (): void => useGroupCall.setState({ madeLink: null });
   return (
-    <Modal title="Your call link" onClose={close}>
+    <Modal title={tr('Your call link')} onClose={close}>
       <p className="modal__text">
-        Anyone with this link can ask to join; you let each person in. It works for 7 days. The call is
-        end-to-end encrypted like every River call.
+        {tr(
+          'Anyone with this link can ask to join; you let each person in. It works for 7 days. The call is end-to-end encrypted like every River call.',
+        )}
       </p>
-      <input className="input gcall-link__url" readOnly value={link.url} aria-label="Call link" />
+      <input className="input gcall-link__url" readOnly value={link.url} aria-label={tr('Call link')} />
       <div className="modal__foot">
         <button
           className="btn btn--ghost"
           onClick={() =>
             void navigator.clipboard
               .writeText(link.url)
-              .then(() => notify('Call link copied.'))
-              .catch(() => notify('Could not copy the link.', 'error'))
+              .then(() => notify(tr('Call link copied.')))
+              .catch(() => notify(tr('Could not copy the link.'), 'error'))
           }
         >
-          Copy link
+          {tr('Copy link')}
         </button>
         <button className="btn btn--primary" onClick={() => void startLinkCall(link)}>
-          <UsersIcon size={16} /> Start the call
+          <UsersIcon size={16} /> {tr('Start the call')}
         </button>
       </div>
     </Modal>

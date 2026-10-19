@@ -1,3 +1,4 @@
+import { msg } from '../../../shared/i18n/index.ts';
 import {
   CHAT_KEY,
   DEFAULT_WALLPAPER,
@@ -84,16 +85,16 @@ const GRADIENT_STOPS: Record<Exclude<WallpaperGradient, 'theme'>, { light: strin
 };
 
 export const GRADIENT_NAMES: Record<WallpaperGradient, string> = {
-  theme: 'Theme',
-  dawn: 'Dawn',
-  lagoon: 'Lagoon',
-  dusk: 'Dusk',
-  mint: 'Mint',
-  peach: 'Peach',
-  ocean: 'Ocean',
-  berry: 'Berry',
-  forest: 'Forest',
-  mono: 'Mist',
+  theme: msg('Theme'),
+  dawn: msg('Dawn'),
+  lagoon: msg('Lagoon'),
+  dusk: msg('Dusk'),
+  mint: msg('Mint'),
+  peach: msg('Peach'),
+  ocean: msg('Ocean'),
+  berry: msg('Berry'),
+  forest: msg('Forest'),
+  mono: msg('Mist'),
 };
 
 /** The gradient's stops in this theme, each readable behind text. */
@@ -172,14 +173,14 @@ const PATTERN_ICONS: Record<WallpaperPattern, string[]> = {
 };
 
 export const PATTERN_NAMES: Record<WallpaperPattern, string> = {
-  doodles: 'Doodles',
-  hearts: 'Hearts',
-  space: 'Space',
-  leaves: 'Garden',
-  geometry: 'Shapes',
-  waves: 'Waves',
-  music: 'Music',
-  paws: 'Paws',
+  doodles: msg('Doodles'),
+  hearts: msg('Hearts'),
+  space: msg('Space'),
+  leaves: msg('Garden'),
+  geometry: msg('Shapes'),
+  waves: msg('Waves'),
+  music: msg('Music'),
+  paws: msg('Paws'),
 };
 
 /** A small deterministic random sequence, so a pattern always looks the same. */

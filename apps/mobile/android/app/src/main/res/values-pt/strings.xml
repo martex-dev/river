@@ -44,6 +44,7 @@
     <string name="service_title">O River está conectado</string>
     <string name="service_text">Novas mensagens chegam com o River fechado. Desligue em Configurações → Sistema.</string>
     <string name="installer_could_not_open">Não foi possível abrir o instalador do Android</string>
+    <string name="core_restarted">O River reiniciou o núcleo. Tente de novo.</string>
     <plurals name="new_messages_count">
         <item quantity="one">%d nova mensagem</item>
         <item quantity="many">%d de novas mensagens</item>

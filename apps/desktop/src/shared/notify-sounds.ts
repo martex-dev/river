@@ -1,3 +1,4 @@
+import { msg } from './i18n/index.ts';
 /**
  * Notification sounds you can pick per chat, channel or community (2.17), like Telegram's.
  *
@@ -17,13 +18,13 @@ export const NOTIFY_SOUNDS = ['default', 'none', ...NOTIFY_TONES] as const;
 export type NotifySound = (typeof NOTIFY_SOUNDS)[number];
 
 export const NOTIFY_SOUND_LABELS: Record<NotifySound, string> = {
-  default: 'Default',
-  none: 'No sound',
-  chime: 'Chime',
-  bell: 'Bell',
-  pop: 'Pop',
-  drop: 'Drop',
-  harp: 'Harp',
+  default: msg('Default'),
+  none: msg('No sound'),
+  chime: msg('Chime'),
+  bell: msg('Bell'),
+  pop: msg('Pop'),
+  drop: msg('Drop'),
+  harp: msg('Harp'),
 };
 
 export function isTone(sound: string | undefined | null): sound is NotifyTone {

@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.ts';
 import { useEffect, useState, type ReactElement } from 'react';
 import type { AttachmentPointer, FavoriteMediaView } from '../../../../shared/community-actions.ts';
 import { create } from 'zustand';
@@ -25,7 +26,7 @@ export const useFavorites = create<FavoritesState>((set, get) => ({
       .run(on ? { a: 'favoriteMedia', pointer, on: true } : { a: 'removeFavorite', id: pointer.id });
     if (res === null) return;
     await get().load();
-    useCommunity.getState().notify(on ? 'Added to your GIFs.' : 'Removed from your GIFs.');
+    useCommunity.getState().notify(on ? tr('Added to your GIFs.') : tr('Removed from your GIFs.'));
   },
   remove: async (id) => {
     await useCommunity.getState().run({ a: 'removeFavorite', id });
@@ -70,8 +71,8 @@ export function FavoriteStar({ pointer }: { pointer: AttachmentPointer }): React
   return (
     <button
       className={`favorite-star ${on ? 'is-on' : ''}`}
-      aria-label={on ? 'Remove from your GIFs' : 'Add to your GIFs'}
-      title={on ? 'Remove from your GIFs' : 'Add to your GIFs (kept only on this device)'}
+      aria-label={on ? tr('Remove from your GIFs') : tr('Add to your GIFs')}
+      title={on ? tr('Remove from your GIFs') : tr('Add to your GIFs (kept only on this device)')}
       onClick={(e) => {
         e.stopPropagation();
         void useFavorites.getState().toggle(pointer, !on);
@@ -87,8 +88,8 @@ function Thumb({ f, onPick }: { f: FavoriteMediaView; onPick(): void }): ReactEl
   return (
     <button
       className="sticker-picker__item"
-      title={`${f.name} — right-click to remove`}
-      aria-label={`Send ${f.name}`}
+      title={tr('{name} — right-click to remove', { name: f.name })}
+      aria-label={tr('Send {name}', { name: f.name })}
       onClick={onPick}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -116,8 +117,8 @@ export function GifButton({ channelId }: { channelId: string }): ReactElement {
       <button
         type="button"
         className="icon-btn composer__gif"
-        aria-label="GIFs"
-        title="Your GIFs"
+        aria-label={tr('GIFs')}
+        title={tr('Your GIFs')}
         onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
           setOpen(open ? null : { x: r.left - 260, y: r.top - 340 });
@@ -130,15 +131,16 @@ export function GifButton({ channelId }: { channelId: string }): ReactElement {
           <input
             className="emoji-picker__search"
             autoFocus
-            placeholder="Search your GIFs"
-            aria-label="Search your GIFs"
+            placeholder={tr('Search your GIFs')}
+            aria-label={tr('Search your GIFs')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           {list?.length === 0 && (
             <p className="muted small">
-              Click ☆ on any GIF or picture in a chat to keep it here. Your GIFs stay on this device; no GIF
-              service sees what you look for.
+              {tr(
+                'Click ☆ on any GIF or picture in a chat to keep it here. Your GIFs stay on this device; no GIF service sees what you look for.',
+              )}
             </p>
           )}
           <div className="sticker-picker__grid">

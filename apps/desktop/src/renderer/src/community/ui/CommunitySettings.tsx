@@ -400,7 +400,7 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
                 <span className="role-row__move">
                   <button
                     className="icon-btn"
-                    aria-label={`Move ${r.name} up`}
+                    aria-label={tr('Move {name} up', { name: r.name })}
                     disabled={!canMove(r, 1)}
                     onClick={() =>
                       void s.run({ a: 'moveRole', communityId: community.id, roleId: r.id, direction: 1 })
@@ -410,7 +410,7 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
                   </button>
                   <button
                     className="icon-btn"
-                    aria-label={`Move ${r.name} down`}
+                    aria-label={tr('Move {name} down', { name: r.name })}
                     disabled={!canMove(r, -1)}
                     onClick={() =>
                       void s.run({ a: 'moveRole', communityId: community.id, roleId: r.id, direction: -1 })
@@ -466,7 +466,7 @@ function RoleEditor(props: {
 
   return (
     <div className="role-editor">
-      <h3>Edit role — {role.name}</h3>
+      <h3>{tr('Edit role — {name}', { name: role.name })}</h3>
       {!props.reach.ok && (
         <p className="field__error" role="note">
           {reachText(props.reach)}

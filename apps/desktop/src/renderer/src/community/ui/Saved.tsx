@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.ts';
 import { useEffect, useState, type ReactElement } from 'react';
 import { hasTag, savedTagKey, TagChips, TagDialog, TagFilter, tagsIn, useTags } from '../../dm/tags.tsx';
 import { phoneShellActive } from '../../phone/mode.ts';
@@ -23,7 +24,7 @@ export function SavedPanel(): ReactElement {
   const where = (communityId: string, channelId: string): string => {
     const c = s.communities.find((x) => x.id === communityId);
     const ch = c?.channels.find((x) => x.id === channelId);
-    return c ? `${c.name}${ch ? ` · #${ch.name}` : ''}` : 'A community you left';
+    return c ? `${c.name}${ch ? ` · #${ch.name}` : ''}` : tr('A community you left');
   };
   const keys = (saved ?? []).map((m) => savedTagKey(m.messageId));
   const allTags = tagsIn(tags, keys);
@@ -32,10 +33,10 @@ export function SavedPanel(): ReactElement {
   return (
     <div className="pins">
       <header className="pins__head">
-        <span aria-hidden="true">🔖</span> <strong>Saved messages</strong>
+        <span aria-hidden="true">🔖</span> <strong>{tr('Saved messages')}</strong>
         <button
           className="icon-btn"
-          aria-label="Close saved messages"
+          aria-label={tr('Close saved messages')}
           data-phone-back=""
           onClick={() => useCommunity.setState({ showSaved: false })}
         >
@@ -43,11 +44,12 @@ export function SavedPanel(): ReactElement {
         </button>
       </header>
       <TagFilter tags={allTags} value={active} onChange={setFilter} />
-      {saved === null && <p className="muted small">Loading…</p>}
+      {saved === null && <p className="muted small">{tr('Loading…')}</p>}
       {saved?.length === 0 && (
         <p className="muted small">
-          {phoneShellActive() ? 'Long-press' : 'Right-click'} a message and choose Save message to keep it
-          here.
+          {phoneShellActive()
+            ? tr('Long-press a message and choose Save message to keep it here.')
+            : tr('Right-click a message and choose Save message to keep it here.')}
         </p>
       )}
       {shown.map((m) => (
@@ -63,20 +65,20 @@ export function SavedPanel(): ReactElement {
               {where(m.communityId, m.channelId)} · {clockDateTime(m.sentAt)}
             </span>
             <strong>{m.senderName}</strong>
-            <span className="saved__text">{m.text.slice(0, 200) || 'An attachment'}</span>
+            <span className="saved__text">{m.text.slice(0, 200) || tr('An attachment')}</span>
             <TagChips tags={tags[savedTagKey(m.messageId)]} />
           </button>
           <button
             className="icon-btn"
-            aria-label={`Tags for the message from ${m.senderName}`}
-            title="Tags"
+            aria-label={tr('Tags for the message from {name}', { name: m.senderName })}
+            title={tr('Tags')}
             onClick={() => setTagging(m.messageId)}
           >
             <span aria-hidden="true">#</span>
           </button>
           <button
             className="icon-btn"
-            aria-label="Remove from saved"
+            aria-label={tr('Remove from saved')}
             onClick={() => void s.toggleSaved(m.channelId, m.messageId, false)}
           >
             <XIcon size={14} />

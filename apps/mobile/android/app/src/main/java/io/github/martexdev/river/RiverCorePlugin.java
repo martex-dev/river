@@ -23,7 +23,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @CapacitorPlugin(name = "RiverCore")
 public class RiverCorePlugin extends Plugin implements CoreHost.Listener {
   /** What a call gets when the core was replaced before it answered (bridge.ts makes it an Error). */
-  private static final String RESTARTED = "{\"ok\":false,\"error\":\"River restarted its core. Try again.\"}";
 
   private final Map<Integer, PluginCall> calls = new ConcurrentHashMap<>();
   private CoreHost core;
@@ -81,7 +80,12 @@ public class RiverCorePlugin extends Plugin implements CoreHost.Listener {
 
   @Override
   public void onCoreRestarted() {
+    // In the phone's language (res/values*/strings.xml), as the rest of River's own texts.
+    JSObject failed = new JSObject();
+    failed.put("ok", false);
+    failed.put("error", getContext().getString(R.string.core_restarted));
+    String restarted = failed.toString();
     List<Integer> ids = new ArrayList<>(calls.keySet());
-    for (Integer id : ids) onReply(id, RESTARTED);
+    for (Integer id : ids) onReply(id, restarted);
   }
 }

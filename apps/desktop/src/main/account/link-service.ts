@@ -14,7 +14,7 @@ import { ApiError, type RequestJson } from '../http.ts';
 import type { IdentityService } from '../identity/identity-service.ts';
 import type { Logger } from '../logger.ts';
 import { UserFacingError, type AccountService } from './account-service.ts';
-import { msg } from '../../shared/i18n/index.ts';
+import { msg, type Vars } from '../../shared/i18n/index.ts';
 
 /**
  * Linking devices (1.3, ADR 0006): one River account on several devices.
@@ -226,9 +226,9 @@ export class LinkService {
     }
   }
 
-  private fail(message: string): void {
+  private fail(message: string, vars?: Vars): void {
     this.stop();
-    this.set({ state: 'failed', message });
+    this.set({ state: 'failed', message, ...(vars ? { vars } : {}) });
   }
 
   private stop(): void {
@@ -256,7 +256,8 @@ export class LinkService {
       if (attempt !== this.attempt) return;
       void fn().catch((err: unknown) => {
         if (attempt !== this.attempt) return;
-        this.fail(err instanceof UserFacingError ? err.message : 'Linking failed. Start again.');
+        if (err instanceof UserFacingError) this.fail(err.text, err.vars);
+        else this.fail(msg('Linking failed. Start again.'));
       });
     }, POLL_MS);
   }
@@ -345,13 +346,15 @@ export class LinkService {
     // The server forgets the mailbox when the code runs out: linking now would add a device
     // that never receives the account.
     if (Date.now() > offer.expires) {
-      this.fail('The link code expired. Start again.');
+      this.fail(msg('The link code expired. Start again.'));
       throw new UserFacingError(msg('The link code expired. Start again.'));
     }
     const list = await this.deps.account.deviceList();
     if (this.offer !== offer) throw new UserFacingError(msg('Linking was cancelled.'));
     if (list.devices.length >= MAX_DEVICES) {
-      throw new UserFacingError(`An account can have ${MAX_DEVICES} devices. Remove one first.`);
+      throw new UserFacingError(msg('An account can have {count} devices. Remove one first.'), {
+        vars: { count: MAX_DEVICES },
+      });
     }
     if (list.devices.some((d) => d.authKey === hello.authKey))
       throw new UserFacingError(msg('That device is already linked.'));
@@ -480,7 +483,8 @@ export class LinkService {
       if (this.progress.state === 'idle' || this.progress.state === 'linked') {
         this.set({
           state: 'failed',
-          message: `${w.deviceName} did not take the account, so it was removed again. Nothing was linked.`,
+          message: msg('{name} did not take the account, so it was removed again. Nothing was linked.'),
+          vars: { name: w.deviceName },
         });
       }
     } catch {
@@ -488,7 +492,8 @@ export class LinkService {
       if (this.progress.state === 'idle' || this.progress.state === 'linked') {
         this.set({
           state: 'failed',
-          message: `${w.deviceName} did not take the account. Remove it from your devices below.`,
+          message: msg('{name} did not take the account. Remove it from your devices below.'),
+          vars: { name: w.deviceName },
         });
       }
     }
@@ -549,7 +554,8 @@ export class LinkService {
       this.stop();
       this.set({
         state: 'failed',
-        message: err instanceof UserFacingError ? err.message : 'Linking failed.',
+        message: err instanceof UserFacingError ? err.text : msg('Linking failed.'),
+        ...(err instanceof UserFacingError && err.vars ? { vars: err.vars } : {}),
       });
       throw err;
     }

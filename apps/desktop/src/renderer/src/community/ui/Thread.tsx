@@ -9,7 +9,7 @@ import { isPhone } from '../../../../shared/platform.ts';
 import { useRiver } from '../../store.ts';
 import { useOutbox } from '../outbox.ts';
 import { useCommunity } from '../store.ts';
-import { tr } from '../../i18n.ts';
+import { tr, trn } from '../../i18n.ts';
 import { AttachmentList } from './Attachments.tsx';
 import { Avatar, RichText, XIcon, can, hex, memberOf } from './common.tsx';
 
@@ -76,7 +76,7 @@ export function ThreadPanel(props: {
 
   const following = useFollowing(rootId);
   return (
-    <aside className="thread-panel" aria-label={`Thread ${thread?.name ?? ''}`}>
+    <aside className="thread-panel" aria-label={tr('Thread {name}', { name: thread?.name ?? '' })}>
       <header className="thread-panel__head">
         <span aria-hidden="true">🧵</span>
         {renaming !== null ? (
@@ -92,7 +92,7 @@ export function ThreadPanel(props: {
           >
             <input
               autoFocus
-              aria-label="Thread name"
+              aria-label={tr('Thread name')}
               value={renaming}
               maxLength={64}
               onChange={(e) => setRenaming(e.target.value)}
@@ -108,20 +108,20 @@ export function ThreadPanel(props: {
             aria-label={tr('Rename thread {name}', { name: thread?.name ?? '' })}
             onClick={() => setRenaming(thread?.name ?? '')}
           >
-            {thread?.name ?? 'Thread'}
+            {thread?.name ?? tr('Thread')}
           </button>
         ) : (
-          <strong className="thread-panel__name">{thread?.name ?? 'Thread'}</strong>
+          <strong className="thread-panel__name">{thread?.name ?? tr('Thread')}</strong>
         )}
-        {thread?.archived && <span className="chip">Archived</span>}
+        {thread?.archived && <span className="chip">{tr('Archived')}</span>}
         <span className="thread-panel__actions">
           <button
             className={`btn btn--small ${following ? 'btn--ghost' : 'btn--primary'}`}
             aria-pressed={following}
-            title={following ? 'Stop hearing about new replies' : 'Hear about new replies'}
+            title={following ? tr('Stop hearing about new replies') : tr('Hear about new replies')}
             onClick={() => setFollowing(rootId, !following)}
           >
-            {following ? 'Following' : 'Follow'}
+            {following ? tr('Following') : tr('Follow')}
           </button>
           {mayEdit && (
             <button
@@ -135,14 +135,14 @@ export function ThreadPanel(props: {
                 })
               }
             >
-              {thread?.archived ? 'Unarchive' : 'Archive'}
+              {thread?.archived ? tr('Unarchive') : tr('Archive')}
             </button>
           )}
           <button
             className="icon-btn"
-            aria-label="Close thread"
+            aria-label={tr('Close thread')}
             data-phone-back=""
-            title="Close thread"
+            title={tr('Close thread')}
             onClick={close}
           >
             <XIcon size={18} />
@@ -156,9 +156,7 @@ export function ThreadPanel(props: {
           </div>
         )}
         <div className="thread-panel__count muted small">
-          {replies === undefined
-            ? 'Loading replies…'
-            : `${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}`}
+          {replies === undefined ? tr('Loading replies…') : trn('{count} replies', replies.length)}
         </div>
         {replies?.map((m) => (
           <Reply key={m.id} m={m} community={community} names={names} myName={myName} />
@@ -166,12 +164,12 @@ export function ThreadPanel(props: {
         {outgoing.map((o) => (
           <div key={o.localId} className={`thread-reply msg--${o.status}`}>
             <div className="thread-reply__meta">
-              <strong>{myName ?? 'You'}</strong>
+              <strong>{myName ?? tr('You')}</strong>
               <span className="muted small">
                 {o.status === 'sending'
-                  ? 'Sending…'
+                  ? tr('Sending…')
                   : o.status === 'waiting'
-                    ? 'Waiting for connection'
+                    ? tr('Waiting for connection')
                     : o.error}
               </span>
             </div>
@@ -182,14 +180,14 @@ export function ThreadPanel(props: {
                   className="btn btn--link btn--small"
                   onClick={() => useOutbox.getState().retry(o.localId)}
                 >
-                  Retry
+                  {tr('Retry')}
                 </button>
                 {/* Gone from this device too, like a failed message in the channel. */}
                 <button
                   className="btn btn--link btn--small"
                   onClick={() => useOutbox.getState().discard(o.localId)}
                 >
-                  Discard
+                  {tr('Discard')}
                 </button>
               </span>
             )}
@@ -205,8 +203,8 @@ export function ThreadPanel(props: {
           }}
         >
           <textarea
-            aria-label="Reply in thread"
-            placeholder="Reply in thread"
+            aria-label={tr('Reply in thread')}
+            placeholder={tr('Reply in thread')}
             value={text}
             rows={1}
             maxLength={4000}
@@ -220,12 +218,12 @@ export function ThreadPanel(props: {
             }}
           />
           <button className="btn btn--primary btn--small" disabled={!text.trim()}>
-            Send
+            {tr('Send')}
           </button>
         </form>
       ) : (
         <div className="thread-panel__locked muted small">
-          {thread?.archived ? 'This thread is archived.' : 'You cannot reply here.'}
+          {thread?.archived ? tr('This thread is archived.') : tr('You cannot reply here.')}
         </div>
       )}
     </aside>

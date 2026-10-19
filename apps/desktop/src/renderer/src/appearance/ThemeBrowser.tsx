@@ -4,6 +4,7 @@ import { applyTheme, tryTheme } from './editor.ts';
 import { resolveDesign } from './engine.ts';
 import { SKINS, type Skin } from './skins.ts';
 import { themeById, themesOf, type Theme } from './themes.ts';
+import { tr } from '../i18n.ts';
 
 /** A miniature River drawn with one theme's real tokens, fonts and shapes. */
 export const ThemePreview = memo(function ThemePreview(props: {
@@ -54,19 +55,19 @@ export const ThemePreview = memo(function ThemePreview(props: {
           <i className="tp__av" />
           <div className="tp__body">
             <b>Ana</b>
-            <span>See you in voice at nine</span>
+            <span>{tr('See you in voice at nine')}</span>
           </div>
         </div>
         <div className="tp__msg tp__msg--mine">
           <i className="tp__av tp__av--me" />
           <div className="tp__body">
-            <b>You</b>
-            <span>On my way ✨</span>
+            <b>{tr('You')}</b>
+            <span>{tr('On my way ✨')}</span>
           </div>
         </div>
         <div className="tp__bar">
           <span className="tp__input" />
-          <span className="tp__btn">Send</span>
+          <span className="tp__btn">{tr('Send')}</span>
         </div>
       </div>
     </div>
@@ -108,8 +109,8 @@ export function ThemeBrowser(props: {
   const skinName = SKINS.find((s) => s.id === currentSkin)?.name ?? '';
   return (
     <div className="design-browser">
-      <h3 className="design-section">Skins</h3>
-      <div className="skin-grid" role="radiogroup" aria-label="Skin">
+      <h3 className="design-section">{tr('Skins')}</h3>
+      <div className="skin-grid" role="radiogroup" aria-label={tr('Skin')}>
         {SKINS.map((skin) => (
           <SkinCard
             key={skin.id}
@@ -121,9 +122,9 @@ export function ThemeBrowser(props: {
           />
         ))}
       </div>
-      {currentSkin && <h3 className="design-section">{skinName} palettes</h3>}
+      {currentSkin && <h3 className="design-section">{tr('{name} palettes', { name: skinName })}</h3>}
       {currentSkin && (
-        <div className="palette-row" role="radiogroup" aria-label={`${skinName} palettes`}>
+        <div className="palette-row" role="radiogroup" aria-label={tr('{name} palettes', { name: skinName })}>
           {palettes.map((t) => (
             <PaletteChip key={t.id} theme={t} selected={t.id === current} onPick={() => pick(t.id)} />
           ))}
@@ -150,12 +151,12 @@ export function ThemeBrowser(props: {
       )}
       {!props.onPick && palettes.length > 0 && (
         <p className="muted small">
-          Click a skin or palette to use it at once.{' '}
+          {tr('Click a skin or palette to use it at once.')}{' '}
           <button
             className="btn btn--link btn--small"
             onClick={() => tryTheme(design, palettes[(position + 1) % palettes.length]!.id)}
           >
-            Try the next palette on the whole app
+            {tr('Try the next palette on the whole app')}
           </button>
         </p>
       )}
@@ -176,7 +177,7 @@ function SkinCard(props: {
     <button
       role="radio"
       aria-checked={props.selected}
-      aria-label={`${props.skin.name} skin`}
+      aria-label={tr('{name} skin', { name: props.skin.name })}
       className={`skin-card ${props.selected ? 'is-selected' : ''}`}
       onClick={() => props.onPick(theme.id)}
     >
@@ -189,7 +190,7 @@ function SkinCard(props: {
           </span>
         )}
       </span>
-      <span className="skin-card__tagline">{props.skin.tagline}</span>
+      <span className="skin-card__tagline">{tr(props.skin.tagline)}</span>
     </button>
   );
 }
@@ -205,10 +206,12 @@ function PaletteChip(props: {
     <button
       role="radio"
       aria-checked={props.selected}
-      aria-label={`${t.name} palette${props.mine ? ' (yours)' : ''}`}
+      aria-label={
+        props.mine ? tr('{name} palette (yours)', { name: t.name }) : tr('{name} palette', { name: t.name })
+      }
       className={`palette-chip ${props.selected ? 'is-selected' : ''}`}
       onClick={props.onPick}
-      title={`${t.name} · ${t.mode}`}
+      title={`${t.name} · ${t.mode === 'dark' ? tr('dark') : tr('light')}`}
     >
       <span
         className="palette-chip__swatch"
@@ -219,7 +222,7 @@ function PaletteChip(props: {
         }}
       />
       {t.name}
-      {props.mine && <span className="muted small"> · yours</span>}
+      {props.mine && <span className="muted small"> · {tr('yours')}</span>}
     </button>
   );
 }

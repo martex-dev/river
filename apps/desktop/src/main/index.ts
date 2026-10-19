@@ -18,7 +18,7 @@ import { autoUpdater } from 'electron-updater';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import { channelOfVersion } from '@river/release/channels';
 import { IPC, type AppInfo, type DeepLink } from '../shared/ipc.ts';
-import { msg, resolveLanguage, translate, type Vars } from '../shared/i18n/index.ts';
+import { msg, resolveLanguage, translate, translatePlural, type Vars } from '../shared/i18n/index.ts';
 import {
   broadcastAccountStatus,
   broadcastCommunityEvents,
@@ -153,12 +153,15 @@ async function startupFailed(err: unknown): Promise<void> {
   }
   try {
     await app.whenReady();
+    // Settings may be what failed: the computer's own language, not River's setting.
+    const lang = resolveLanguage('system', app.getLocale());
+    const t = (text: string, vars?: Vars): string => translate(lang, text, vars);
     const { response } = await dialog.showMessageBox({
       type: 'error',
-      title: 'River could not start',
-      message: 'River could not start',
-      detail: `${details}\n\nThe log is in ${logDir}. Copy the details and send them to whoever helps you with River.`,
-      buttons: ['Copy details', 'Open log folder', 'Quit'],
+      title: t('River could not start'),
+      message: t('River could not start'),
+      detail: `${details}\n\n${t('The log is in {folder}. Copy the details and send them to whoever helps you with River.', { folder: logDir })}`,
+      buttons: [t('Copy details'), t('Open log folder'), t('Quit')],
       defaultId: 0,
       cancelId: 2,
     });
@@ -281,6 +284,7 @@ async function start(): Promise<void> {
       inCallNow = inCall;
       if (!inCall) callEnded();
     },
+    language: () => resolveLanguage(settings.get().appearance.language, app.getLocale()),
   });
   let callEnded: () => void = () => undefined;
   // Updates never restart River during a voice channel or a call.
@@ -354,6 +358,7 @@ async function start(): Promise<void> {
     log,
   });
   const dm = new DmService({
+    language: () => resolveLanguage(settings.get().appearance.language, app.getLocale()),
     db: () => storage.db(),
     identity,
     account,
@@ -611,6 +616,7 @@ async function start(): Promise<void> {
         version: app.getVersion(),
         platform: `${process.platform}-${process.arch}${gpuState.disabled ? ' (graphics acceleration off)' : ''}`,
         startup: () => startup.summary(),
+        t,
       }),
     openLogs: async () => {
       const { shell } = await import('electron');
@@ -679,6 +685,7 @@ async function start(): Promise<void> {
     set: (count) => {
       if (process.platform === 'win32') {
         if (window.isDestroyed()) return;
+        const lang = resolveLanguage(settings.get().appearance.language, app.getLocale());
         window.setOverlayIcon(
           count > 0
             ? nativeImage.createFromBitmap(Buffer.from(badgeBitmap(count, 32)), {
@@ -687,7 +694,7 @@ async function start(): Promise<void> {
                 scaleFactor: 2,
               })
             : null,
-          count > 0 ? `${count} unread` : '',
+          count > 0 ? translatePlural(lang, '{count} unread', count) : '',
         );
       } else {
         app.setBadgeCount(count);

@@ -44,6 +44,7 @@
     <string name="service_title">River е свързан</string>
     <string name="service_text">Новите съобщения пристигат, докато River е затворен. Изключете от Настройки → Система.</string>
     <string name="installer_could_not_open">Инсталаторът на Android не можа да се отвори</string>
+    <string name="core_restarted">River рестартира ядрото си. Опитайте отново.</string>
     <plurals name="new_messages_count">
         <item quantity="one">%d ново съобщение</item>
         <item quantity="other">%d нови съобщения</item>

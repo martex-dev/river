@@ -29,19 +29,20 @@ import { SKINS } from './skins.ts';
 import { colorsOf } from './wallpaper.ts';
 import { WallpaperPicker } from './WallpaperPicker.tsx';
 import { isPhone } from '../../../shared/platform.ts';
+import { msg, tr, trn } from '../i18n.ts';
 
 const SECTIONS = [
-  ['themes', 'Themes'],
-  ['colors', 'Colours'],
-  ['chat', 'Chat'],
-  ['type', 'Typography'],
-  ['layout', 'Layout'],
-  ['components', 'Components'],
-  ['effects', 'Effects'],
-  ['background', 'Background'],
-  ['motion', 'Motion'],
-  ['profiles', 'Profiles'],
-  ['general', 'General'],
+  ['themes', msg('Themes')],
+  ['colors', msg('Colours')],
+  ['chat', msg('Chat')],
+  ['type', msg('Typography')],
+  ['layout', msg('Layout')],
+  ['components', msg('Components')],
+  ['effects', msg('Effects')],
+  ['background', msg('Background')],
+  ['motion', msg('Motion')],
+  ['profiles', msg('Profiles')],
+  ['general', msg('General')],
 ] as const;
 type Section = (typeof SECTIONS)[number][0];
 
@@ -64,17 +65,19 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
         <div className="design__now">
           <LivePreview design={design} />
           <div>
-            <div className="eyebrow">Now using</div>
+            <div className="eyebrow">{tr('Now using')}</div>
             <h2 className="panel__title">{nameOf(design)}</h2>
             <p className="muted small">
-              {resolved.skin.name} skin · {resolved.theme.mode} ·{' '}
+              {tr('{name} skin', { name: resolved.skin.name })} · {tr(modeLabel(resolved.theme.mode))} ·{' '}
               {design.activeProfile
-                ? `profile “${design.profiles.find((x) => x.id === design.activeProfile)?.name ?? ''}”`
-                : 'your settings'}
+                ? tr('profile “{name}”', {
+                    name: design.profiles.find((x) => x.id === design.activeProfile)?.name ?? '',
+                  })
+                : tr('your settings')}
             </p>
           </div>
         </div>
-        <nav className="design__tabs" role="tablist" aria-label="Appearance sections">
+        <nav className="design__tabs" role="tablist" aria-label={tr('Appearance sections')}>
           {SECTIONS.map(([id, label]) => (
             <button
               key={id}
@@ -83,7 +86,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
               className={`design__tab ${section === id ? 'is-active' : ''}`}
               onClick={() => setSection(id)}
             >
-              {label}
+              {tr(label)}
             </button>
           ))}
         </nav>
@@ -94,29 +97,29 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
       {section === 'chat' && <ChatLook design={design} />}
       {section === 'type' && (
         <Group>
-          <Row label="Interface font">
+          <Row label={tr('Interface font')}>
             <Choice
               value={p.uiFont}
               onChange={(uiFont) => set({ uiFont })}
               options={[
-                ['skin', 'Skin'],
+                ['skin', tr('Skin')],
                 ['inter', 'Inter'],
                 ['manrope', 'Manrope'],
                 ['plex', 'IBM Plex'],
                 ['exo', 'Exo 2'],
                 ['grotesk', 'Space Grotesk'],
                 ['hyperlegible', 'Hyperlegible'],
-                ['mono', 'Monospace'],
+                ['mono', tr('Monospace')],
               ]}
             />
           </Row>
-          <Row label="Heading font">
+          <Row label={tr('Heading font')}>
             <Choice
               value={p.displayFont}
               onChange={(displayFont) => set({ displayFont })}
               options={[
-                ['skin', 'Skin'],
-                ['same', 'Same as text'],
+                ['skin', tr('Skin')],
+                ['same', tr('Same as text')],
                 ['grotesk', 'Space Grotesk'],
                 ['orbitron', 'Orbitron'],
                 ['playfair', 'Playfair'],
@@ -126,12 +129,12 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
               ]}
             />
           </Row>
-          <Row label="Code font">
+          <Row label={tr('Code font')}>
             <Choice
               value={p.monoFont}
               onChange={(monoFont) => set({ monoFont })}
               options={[
-                ['skin', 'Skin'],
+                ['skin', tr('Skin')],
                 ['jetbrains', 'JetBrains Mono'],
                 ['fira', 'Fira Code'],
                 ['plex-mono', 'IBM Plex Mono'],
@@ -139,20 +142,20 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
               ]}
             />
           </Row>
-          <Row label="Headings">
+          <Row label={tr('Headings')}>
             <Choice
               value={p.headings}
               onChange={(headings) => set({ headings })}
               options={[
-                ['skin', 'Skin'],
-                ['normal', 'Normal'],
-                ['uppercase', 'Uppercase'],
-                ['display', 'Display font'],
+                ['skin', tr('Skin')],
+                ['normal', tr('Normal')],
+                ['uppercase', tr('Uppercase')],
+                ['display', tr('Display font')],
               ]}
             />
           </Row>
           <Slider
-            label="Text weight"
+            label={tr('Text weight')}
             value={p.textWeight}
             min={300}
             max={600}
@@ -160,7 +163,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             onChange={(textWeight) => set({ textWeight })}
           />
           <Slider
-            label="Line height"
+            label={tr('Line height')}
             value={p.lineHeight}
             min={1.2}
             max={1.9}
@@ -168,7 +171,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             onChange={(lineHeight) => set({ lineHeight })}
           />
           <Slider
-            label="Letter spacing"
+            label={tr('Letter spacing')}
             value={p.letterSpacing}
             min={-0.03}
             max={0.08}
@@ -177,75 +180,75 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             onChange={(letterSpacing) => set({ letterSpacing })}
           />
           <Toggle
-            label="Table numbers"
-            help="Digits of equal width, so times and counts line up."
+            label={tr('Table numbers')}
+            help={tr('Digits of equal width, so times and counts line up.')}
             checked={p.tabularNumbers}
             onChange={(tabularNumbers) => set({ tabularNumbers })}
           />
-          <p className="muted small">Message text size and the interface size are under General.</p>
+          <p className="muted small">{tr('Message text size and the interface size are under General.')}</p>
         </Group>
       )}
       {section === 'layout' && (
         <Group>
-          <Row label="Messages look like">
+          <Row label={tr('Messages look like')}>
             <Choice
               value={p.messageStyle}
               onChange={(messageStyle) => set({ messageStyle })}
               options={[
-                ['skin', 'Skin'],
-                ['flat', 'Classic'],
-                ['bubbles', 'Bubbles'],
-                ['cards', 'Cards'],
-                ['compact', 'Compact'],
-                ['terminal', 'Terminal'],
+                ['skin', tr('Skin')],
+                ['flat', tr('Classic')],
+                ['bubbles', tr('Bubbles')],
+                ['cards', tr('Cards')],
+                ['compact', tr('Compact')],
+                ['terminal', tr('Terminal')],
               ]}
             />
           </Row>
-          <Row label="Your messages (bubbles)">
+          <Row label={tr('Your messages (bubbles)')}>
             <Choice
               value={p.ownMessages}
               onChange={(ownMessages) => set({ ownMessages })}
               options={[
-                ['right', 'On the right'],
-                ['left', 'On the left'],
+                ['right', tr('On the right')],
+                ['left', tr('On the left')],
               ]}
             />
           </Row>
-          <Row label="Pictures">
+          <Row label={tr('Pictures')}>
             <Choice
               value={p.avatarShape}
               onChange={(avatarShape) => set({ avatarShape })}
               options={[
-                ['skin', 'Skin'],
-                ['circle', 'Circle'],
-                ['rounded', 'Rounded'],
-                ['square', 'Square'],
-                ['hexagon', 'Hexagon'],
+                ['skin', tr('Skin')],
+                ['circle', tr('Circle')],
+                ['rounded', tr('Rounded')],
+                ['square', tr('Square')],
+                ['hexagon', tr('Hexagon')],
               ]}
             />
           </Row>
-          <Row label="Navigation side">
+          <Row label={tr('Navigation side')}>
             <Choice
               value={p.navSide}
               onChange={(navSide) => set({ navSide })}
               options={[
-                ['left', 'Left'],
-                ['right', 'Right'],
+                ['left', tr('Left')],
+                ['right', tr('Right')],
               ]}
             />
           </Row>
-          <Row label="Community rail">
+          <Row label={tr('Community rail')}>
             <Choice
               value={p.railSize}
               onChange={(railSize) => set({ railSize })}
               options={[
-                ['normal', 'Normal'],
-                ['compact', 'Compact'],
+                ['normal', tr('Normal')],
+                ['compact', tr('Compact')],
               ]}
             />
           </Row>
           <Slider
-            label="Sidebar width"
+            label={tr('Sidebar width')}
             value={p.sidebarWidth}
             min={200}
             max={340}
@@ -253,18 +256,18 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             format={(v) => `${v}px`}
             onChange={(sidebarWidth) => set({ sidebarWidth })}
           />
-          <Row label="Member list">
+          <Row label={tr('Member list')}>
             <Choice
               value={p.memberList}
               onChange={(memberList) => set({ memberList })}
               options={[
-                ['show', 'Show'],
-                ['hide', 'Hide'],
+                ['show', tr('Show')],
+                ['hide', tr('Hide')],
               ]}
             />
           </Row>
           <Slider
-            label="Member list width"
+            label={tr('Member list width')}
             value={p.memberWidth}
             min={180}
             max={320}
@@ -272,18 +275,18 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             format={(v) => `${v}px`}
             onChange={(memberWidth) => set({ memberWidth })}
           />
-          <Row label="Conversation width">
+          <Row label={tr('Conversation width')}>
             <Choice
               value={p.chatWidth}
               onChange={(chatWidth) => set({ chatWidth })}
               options={[
-                ['full', 'Full'],
-                ['readable', 'Readable column'],
+                ['full', tr('Full')],
+                ['readable', tr('Readable column')],
               ]}
             />
           </Row>
           <Slider
-            label="Spacing"
+            label={tr('Spacing')}
             value={p.spacing}
             min={0.7}
             max={1.4}
@@ -291,19 +294,19 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             format={pct}
             onChange={(spacing) => set({ spacing })}
           />
-          <Row label="Title bar">
+          <Row label={tr('Title bar')}>
             <Choice
               value={p.titlebar}
               onChange={(titlebar) => set({ titlebar })}
               options={[
-                ['show', 'Name and place'],
-                ['minimal', 'Minimal'],
+                ['show', tr('Name and place')],
+                ['minimal', tr('Minimal')],
               ]}
             />
           </Row>
           <Toggle
-            label="Focus mode"
-            help="Hides the community rail and member list: just channels and the conversation."
+            label={tr('Focus mode')}
+            help={tr('Hides the community rail and member list: just channels and the conversation.')}
             checked={p.focusMode}
             onChange={(focusMode) => set({ focusMode })}
           />
@@ -311,55 +314,55 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
       )}
       {section === 'components' && (
         <Group>
-          <Row label="Buttons">
+          <Row label={tr('Buttons')}>
             <Choice
               value={p.buttonShape}
               onChange={(buttonShape) => set({ buttonShape })}
               options={[
-                ['skin', 'Skin'],
-                ['pill', 'Pill'],
-                ['rounded', 'Rounded'],
-                ['square', 'Square'],
-                ['cut', 'Cut corners'],
+                ['skin', tr('Skin')],
+                ['pill', tr('Pill')],
+                ['rounded', tr('Rounded')],
+                ['square', tr('Square')],
+                ['cut', tr('Cut corners')],
               ]}
             />
           </Row>
-          <Row label="Tabs">
+          <Row label={tr('Tabs')}>
             <Choice
               value={p.tabs}
               onChange={(tabs) => set({ tabs })}
               options={[
-                ['skin', 'Skin'],
-                ['pill', 'Pill'],
-                ['underline', 'Underline'],
-                ['block', 'Block'],
+                ['skin', tr('Skin')],
+                ['pill', tr('Pill')],
+                ['underline', tr('Underline')],
+                ['block', tr('Block')],
               ]}
             />
           </Row>
-          <Row label="Unread badges">
+          <Row label={tr('Unread badges')}>
             <Choice
               value={p.badges}
               onChange={(badges) => set({ badges })}
               options={[
-                ['filled', 'Filled'],
-                ['outline', 'Outline'],
-                ['dot', 'Dot'],
+                ['filled', tr('Filled')],
+                ['outline', tr('Outline')],
+                ['dot', tr('Dot')],
               ]}
             />
           </Row>
-          <Row label="Scrollbars">
+          <Row label={tr('Scrollbars')}>
             <Choice
               value={p.scrollbars}
               onChange={(scrollbars) => set({ scrollbars })}
               options={[
-                ['thin', 'Thin'],
-                ['normal', 'Normal'],
-                ['hidden', 'Hidden'],
+                ['thin', tr('Thin')],
+                ['normal', tr('Normal')],
+                ['hidden', tr('Hidden')],
               ]}
             />
           </Row>
           <Slider
-            label="Corner rounding"
+            label={tr('Corner rounding')}
             value={p.radius}
             min={0}
             max={2}
@@ -368,7 +371,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             onChange={(radius) => set({ radius })}
           />
           <Slider
-            label="Border thickness"
+            label={tr('Border thickness')}
             value={p.borderWidth}
             min={0}
             max={2}
@@ -377,7 +380,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             onChange={(borderWidth) => set({ borderWidth })}
           />
           <Slider
-            label="Border visibility"
+            label={tr('Border visibility')}
             value={p.borders}
             min={0}
             max={2}
@@ -386,7 +389,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             onChange={(borders) => set({ borders })}
           />
           <Slider
-            label="Icon size"
+            label={tr('Icon size')}
             value={p.iconSize}
             min={16}
             max={26}
@@ -395,7 +398,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             onChange={(iconSize) => set({ iconSize })}
           />
           <Slider
-            label="Icon stroke"
+            label={tr('Icon stroke')}
             value={p.iconStroke}
             min={1.2}
             max={2.6}
@@ -408,7 +411,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
       {section === 'effects' && (
         <Group>
           <Slider
-            label="Overall intensity"
+            label={tr('Overall intensity')}
             value={p.intensity}
             min={0}
             max={2}
@@ -417,7 +420,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             onChange={(intensity) => set({ intensity })}
           />
           <Slider
-            label="Contrast"
+            label={tr('Contrast')}
             value={p.contrast}
             min={0.8}
             max={1.5}
@@ -426,7 +429,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             onChange={(contrast) => set({ contrast })}
           />
           <Slider
-            label="Colour saturation"
+            label={tr('Colour saturation')}
             value={p.saturation}
             min={0}
             max={1.5}
@@ -435,7 +438,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             onChange={(saturation) => set({ saturation })}
           />
           <Slider
-            label="Surface depth"
+            label={tr('Surface depth')}
             value={p.surfaceDepth}
             min={0}
             max={2}
@@ -444,7 +447,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             onChange={(surfaceDepth) => set({ surfaceDepth })}
           />
           <Slider
-            label="Glass (transparency)"
+            label={tr('Glass (transparency)')}
             value={p.glass}
             min={0}
             max={2}
@@ -453,7 +456,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             onChange={(glass) => set({ glass })}
           />
           <Slider
-            label="Blur"
+            label={tr('Blur')}
             value={p.blur}
             min={0}
             max={2}
@@ -462,7 +465,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             onChange={(blur) => set({ blur })}
           />
           <Slider
-            label="Glow"
+            label={tr('Glow')}
             value={p.glow}
             min={0}
             max={2}
@@ -471,7 +474,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             onChange={(glow) => set({ glow })}
           />
           <Slider
-            label="Gradients"
+            label={tr('Gradients')}
             value={p.gradient}
             min={0}
             max={2}
@@ -480,7 +483,7 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             onChange={(gradient) => set({ gradient })}
           />
           <Slider
-            label="Shadows"
+            label={tr('Shadows')}
             value={p.shadows}
             min={0}
             max={2}
@@ -488,26 +491,26 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             format={pct}
             onChange={(shadows) => set({ shadows })}
           />
-          <Row label="Pattern">
+          <Row label={tr('Pattern')}>
             <Choice
               value={p.pattern}
               onChange={(pattern) => set({ pattern })}
               options={[
-                ['skin', 'Skin'],
-                ['none', 'None'],
-                ['grid', 'Grid'],
-                ['blueprint', 'Blueprint'],
-                ['dots', 'Dots'],
-                ['lines', 'Lines'],
-                ['scanlines', 'Scanlines'],
-                ['noise', 'Grain'],
-                ['stars', 'Stars'],
-                ['waves', 'Waves'],
+                ['skin', tr('Skin')],
+                ['none', tr('None')],
+                ['grid', tr('Grid')],
+                ['blueprint', tr('Blueprint')],
+                ['dots', tr('Dots')],
+                ['lines', tr('Lines')],
+                ['scanlines', tr('Scanlines')],
+                ['noise', tr('Grain')],
+                ['stars', tr('Stars')],
+                ['waves', tr('Waves')],
               ]}
             />
           </Row>
           <Slider
-            label="Pattern strength"
+            label={tr('Pattern strength')}
             value={p.patternStrength}
             min={0}
             max={2}
@@ -516,8 +519,9 @@ export function AppearanceCenter(props: { general: ReactNode }): ReactElement {
             onChange={(patternStrength) => set({ patternStrength })}
           />
           <p className="muted small">
-            Glass and blur cost graphics power: on a slow computer, set them to 0%. Text always keeps a
-            readable contrast, whatever you choose here.
+            {tr(
+              'Glass and blur cost graphics power: on a slow computer, set them to 0%. Text always keeps a readable contrast, whatever you choose here.',
+            )}
           </p>
         </Group>
       )}
@@ -547,22 +551,27 @@ function nameOf(design: DesignSettings): string {
   );
 }
 
+/** "dark" or "light", to translate. */
+function modeLabel(mode: 'dark' | 'light'): string {
+  return mode === 'dark' ? msg('dark') : msg('light');
+}
+
 const ROLE_LABEL: Record<ColorRole, string> = {
-  bg: 'Frame and rail',
-  surface: 'Sidebars',
-  base: 'Conversation',
-  raised: 'Cards and inputs',
-  text: 'Text',
-  muted: 'Secondary text',
-  accent: 'Accent',
-  accent2: 'Second accent',
-  selection: 'Selection',
-  border: 'Borders',
-  focus: 'Focus outline',
-  ok: 'Success',
-  warn: 'Warning',
-  danger: 'Error',
-  info: 'Information',
+  bg: msg('Frame and rail'),
+  surface: msg('Sidebars'),
+  base: msg('Conversation'),
+  raised: msg('Cards and inputs'),
+  text: msg('Text'),
+  muted: msg('Secondary text'),
+  accent: msg('Accent'),
+  accent2: msg('Second accent'),
+  selection: msg('Selection'),
+  border: msg('Borders'),
+  focus: msg('Focus outline'),
+  ok: msg('Success'),
+  warn: msg('Warning'),
+  danger: msg('Error'),
+  info: msg('Information'),
 };
 
 function Colors({ design }: { design: DesignSettings }): ReactElement {
@@ -588,10 +597,10 @@ function Colors({ design }: { design: DesignSettings }): ReactElement {
   };
   const base = current.base;
   const checks: Array<[string, number, number]> = [
-    ['Text on conversation', contrast(current.text, base), 7],
-    ['Secondary text', contrast(current.muted, base), 4.5],
-    ['Accent on conversation', contrast(current.accent, base), 3],
-    ['Text on buttons', contrast(r.vars['--accent-solid-ink']!, current.accent), 4.5],
+    [tr('Text on conversation'), contrast(current.text, base), 7],
+    [tr('Secondary text'), contrast(current.muted, base), 4.5],
+    [tr('Accent on conversation'), contrast(current.accent, base), 3],
+    [tr('Text on buttons'), contrast(r.vars['--accent-solid-ink']!, current.accent), 4.5],
   ];
   const setColor = (role: ColorRole, value: string | null): void => {
     const next = { ...colors };
@@ -600,7 +609,7 @@ function Colors({ design }: { design: DesignSettings }): ReactElement {
     setPrefs(design, { colors: next });
   };
   const saveAsTheme = (): void => {
-    const label = name.trim() || `My ${r.theme.name}`;
+    const label = name.trim() || tr('My {name}', { name: r.theme.name });
     const id = newId('custom');
     const baseId = THEMES.some((t) => t.id === design.theme)
       ? design.theme
@@ -617,18 +626,18 @@ function Colors({ design }: { design: DesignSettings }): ReactElement {
     });
     setName('');
     play('success');
-    if (design.customThemes.length === 0) celebrate('Your first theme ✨');
+    if (design.customThemes.length === 0) celebrate(tr('Your first theme ✨'));
   };
   const isCustom = design.customThemes.some((c) => c.id === design.theme);
   return (
     <div className="design-group">
-      <h3 className="design-sub">Accent</h3>
+      <h3 className="design-sub">{tr('Accent')}</h3>
       <AccentPicker design={design} />
-      <h3 className="design-sub">Theme editor</h3>
-      <Row label="Start from">
+      <h3 className="design-sub">{tr('Theme editor')}</h3>
+      <Row label={tr('Start from')}>
         <select
           className="search design-start"
-          aria-label="Start from theme"
+          aria-label={tr('Start from theme')}
           value={THEMES.some((t) => t.id === design.theme) ? design.theme : ''}
           onChange={(e) => e.target.value && applyTheme(design, e.target.value)}
         >
@@ -637,7 +646,7 @@ function Colors({ design }: { design: DesignSettings }): ReactElement {
             <optgroup key={skin.id} label={skin.name}>
               {THEMES.filter((t) => t.skin === skin.id).map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.name} ({t.mode})
+                  {t.name} ({tr(modeLabel(t.mode))})
                 </option>
               ))}
             </optgroup>
@@ -645,8 +654,9 @@ function Colors({ design }: { design: DesignSettings }): ReactElement {
         </select>
       </Row>
       <p className="muted small">
-        Change any colour of the current theme. River keeps text readable: if a colour would make text too
-        faint, it is adjusted automatically (shown below).
+        {tr(
+          'Change any colour of the current theme. River keeps text readable: if a colour would make text too faint, it is adjusted automatically (shown below).',
+        )}
       </p>
       <div className="design-colors">
         {COLOR_ROLES.map((role) => (
@@ -654,21 +664,21 @@ function Colors({ design }: { design: DesignSettings }): ReactElement {
             <input
               type="color"
               value={current[role].slice(0, 7)}
-              aria-label={ROLE_LABEL[role]}
+              aria-label={tr(ROLE_LABEL[role])}
               onChange={(e) => setColor(role, e.target.value)}
             />
-            <span className="design-color__name">{ROLE_LABEL[role]}</span>
+            <span className="design-color__name">{tr(ROLE_LABEL[role])}</span>
             {colors[role] ? (
               <button className="btn btn--link btn--small" onClick={() => setColor(role, null)}>
-                Reset
+                {tr('Reset')}
               </button>
             ) : (
-              <span className="muted small">theme</span>
+              <span className="muted small">{tr('theme')}</span>
             )}
           </label>
         ))}
       </div>
-      <div className="design-checks" aria-label="Contrast checks">
+      <div className="design-checks" aria-label={tr('Contrast checks')}>
         {checks.map(([label, ratio, need]) => (
           <span key={label} className={`design-check ${ratio >= need ? 'is-ok' : 'is-low'}`}>
             {ratio >= need ? '✓' : '!'} {label} {ratio.toFixed(1)}:1
@@ -681,24 +691,26 @@ function Colors({ design }: { design: DesignSettings }): ReactElement {
           disabled={Object.keys(colors).length === 0}
           onClick={() => setPrefs(design, { colors: {} })}
         >
-          Reset all colours
+          {tr('Reset all colours')}
         </button>
         <input
           className="search design-actions__name"
-          placeholder={`My ${r.theme.name}`}
-          aria-label="Name for your theme"
+          placeholder={tr('My {name}', { name: r.theme.name })}
+          aria-label={tr('Name for your theme')}
           maxLength={48}
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
         <button className="btn btn--primary btn--small" onClick={saveAsTheme}>
-          Save as my theme
+          {tr('Save as my theme')}
         </button>
       </div>
       <ThemeShare design={design} name={name.trim() || nameOf(design)} />
       {isCustom && (
         <div className="design-actions">
-          <span className="muted small">“{nameOf(design)}” is one of your themes.</span>
+          <span className="muted small">
+            {tr('“{name}” is one of your themes.', { name: nameOf(design) })}
+          </span>
           <button
             className="btn btn--link btn--small"
             onClick={() => {
@@ -710,7 +722,7 @@ function Colors({ design }: { design: DesignSettings }): ReactElement {
               });
             }}
           >
-            Delete this theme
+            {tr('Delete this theme')}
           </button>
         </div>
       )}
@@ -726,30 +738,30 @@ function Background({ design }: { design: DesignSettings }): ReactElement {
   const pick = (f: File | undefined): void => {
     setError(null);
     if (!f) return;
-    if (!/^image\/(png|jpeg|webp)$/.test(f.type)) return setError('Choose a PNG, JPEG or WebP picture.');
-    if (f.size > 2_000_000) return setError('That picture is larger than 2 MB. Choose a smaller one.');
+    if (!/^image\/(png|jpeg|webp)$/.test(f.type)) return setError(tr('Choose a PNG, JPEG or WebP picture.'));
+    if (f.size > 2_000_000) return setError(tr('That picture is larger than 2 MB. Choose a smaller one.'));
     const reader = new FileReader();
     reader.onload = () => {
       const url = String(reader.result);
       if (!/^data:image\/(png|jpeg|webp);base64,/.test(url))
-        return setError('That picture could not be read.');
+        return setError(tr('That picture could not be read.'));
       set({ background: 'image', backgroundImage: url });
     };
     reader.readAsDataURL(f);
   };
   return (
     <Group>
-      <Row label="Background">
+      <Row label={tr('Background')}>
         <Choice
           value={p.background}
           onChange={(background) => set({ background })}
           options={[
-            ['skin', 'Skin'],
-            ['solid', 'Solid'],
-            ['gradient', 'Gradient'],
-            ['aurora', 'Aurora'],
-            ['mesh', 'Mesh'],
-            ['image', 'My picture'],
+            ['skin', tr('Skin')],
+            ['solid', tr('Solid')],
+            ['gradient', tr('Gradient')],
+            ['aurora', tr('Aurora')],
+            ['mesh', tr('Mesh')],
+            ['image', tr('My picture')],
           ]}
         />
       </Row>
@@ -762,21 +774,21 @@ function Background({ design }: { design: DesignSettings }): ReactElement {
           onChange={(e) => pick(e.target.files?.[0])}
         />
         <button className="btn btn--ghost btn--small" onClick={() => file.current?.click()}>
-          Choose a picture…
+          {tr('Choose a picture…')}
         </button>
         {p.backgroundImage && (
           <button
             className="btn btn--link btn--small"
             onClick={() => set({ backgroundImage: null, background: 'skin' })}
           >
-            Remove picture
+            {tr('Remove picture')}
           </button>
         )}
-        <span className="muted small">Stays on this computer. PNG, JPEG or WebP up to 2 MB.</span>
+        <span className="muted small">{tr('Stays on this computer. PNG, JPEG or WebP up to 2 MB.')}</span>
       </div>
       {error && <p className="field__error">{error}</p>}
       <Slider
-        label="Darken picture"
+        label={tr('Darken picture')}
         value={p.backgroundDim}
         min={0}
         max={1}
@@ -785,7 +797,7 @@ function Background({ design }: { design: DesignSettings }): ReactElement {
         onChange={(backgroundDim) => set({ backgroundDim })}
       />
       <Slider
-        label="Blur background"
+        label={tr('Blur background')}
         value={p.backgroundBlur}
         min={0}
         max={24}
@@ -794,13 +806,13 @@ function Background({ design }: { design: DesignSettings }): ReactElement {
         onChange={(backgroundBlur) => set({ backgroundBlur })}
       />
       <Toggle
-        label="Slowly moving background"
-        help="A gentle drift of the background colours. Off when motion is reduced."
+        label={tr('Slowly moving background')}
+        help={tr('A gentle drift of the background colours. Off when motion is reduced.')}
         checked={p.animatedBackground}
         onChange={(animatedBackground) => set({ animatedBackground })}
       />
       <p className="muted small">
-        The background shows around the panels; turn up Glass under Effects to see it behind them too.
+        {tr('The background shows around the panels; turn up Glass under Effects to see it behind them too.')}
       </p>
     </Group>
   );
@@ -814,25 +826,27 @@ function Motion({ design }: { design: DesignSettings }): ReactElement {
   const set = (patch: Partial<DesignPrefs>): void => setPrefs(design, patch);
   return (
     <Group>
-      <Row label="Animations">
+      <Row label={tr('Animations')}>
         <Choice
           value={motion}
           onChange={(m) => void update({ appearance: { motion: m } })}
           options={[
-            ['system', 'Follow system'],
-            ['full', 'Full'],
-            ['reduced', 'Reduced'],
+            ['system', tr('Follow system')],
+            ['full', tr('Full')],
+            ['reduced', tr('Reduced')],
           ]}
         />
       </Row>
       <Toggle
-        label="Calm mode"
-        help="No confetti, reaction bursts or bouncing: messages and reactions simply appear. Phones still give a small buzz."
+        label={tr('Calm mode')}
+        help={tr(
+          'No confetti, reaction bursts or bouncing: messages and reactions simply appear. Phones still give a small buzz.',
+        )}
         checked={calm}
         onChange={(on) => void update({ appearance: { calm: on } })}
       />
       <Slider
-        label="Animation speed"
+        label={tr('Animation speed')}
         value={p.motionSpeed}
         min={0.5}
         max={2}
@@ -841,19 +855,19 @@ function Motion({ design }: { design: DesignSettings }): ReactElement {
         onChange={(motionSpeed) => set({ motionSpeed })}
       />
       <Toggle
-        label="Highlight on hover"
-        help="Rows and messages light up under the pointer."
+        label={tr('Highlight on hover')}
+        help={tr('Rows and messages light up under the pointer.')}
         checked={p.hoverEffects}
         onChange={(hoverEffects) => set({ hoverEffects })}
       />
       <Toggle
-        label="Ambient effects"
-        help="Allows the moving background (Background → Slowly moving background)."
+        label={tr('Ambient effects')}
+        help={tr('Allows the moving background (Background → Slowly moving background).')}
         checked={p.ambient}
         onChange={(ambient) => set({ ambient })}
       />
       <p className="muted small">
-        Reduced motion turns off every non-essential animation, whatever the skin.
+        {tr('Reduced motion turns off every non-essential animation, whatever the skin.')}
       </p>
     </Group>
   );
@@ -861,42 +875,42 @@ function Motion({ design }: { design: DesignSettings }): ReactElement {
 
 /** One-click starting points for common workflows. */
 const STARTERS: Array<{ name: string; theme: string; prefs: Partial<DesignPrefs>; text: string }> = [
-  { name: 'Daily work', theme: 'specter-specter', prefs: {}, text: 'River’s signature look.' },
+  { name: msg('Daily work'), theme: 'specter-specter', prefs: {}, text: msg('River’s signature look.') },
   {
-    name: 'Deep focus',
+    name: msg('Deep focus'),
     theme: 'specter-void',
     prefs: { focusMode: true, memberList: 'hide', chatWidth: 'readable', glow: 0 },
-    text: 'Quiet graphite, no rail or member list.',
+    text: msg('Quiet graphite, no rail or member list.'),
   },
   {
-    name: 'Night session',
+    name: msg('Night session'),
     theme: 'specter-ember',
     prefs: { saturation: 0.8, glow: 0.5, intensity: 0.8 },
-    text: 'Warm and low-key for late hours.',
+    text: msg('Warm and low-key for late hours.'),
   },
   {
-    name: 'Office',
+    name: msg('Office'),
     theme: 'corporate-professional-light',
     prefs: { messageStyle: 'flat' },
-    text: 'Bright, neutral, business-like.',
+    text: msg('Bright, neutral, business-like.'),
   },
   {
-    name: 'Presentation',
+    name: msg('Presentation'),
     theme: 'corporate-enterprise-blue',
     prefs: { spacing: 1.25, contrast: 1.2, iconSize: 22 },
-    text: 'Large spacing and strong contrast for sharing your screen.',
+    text: msg('Large spacing and strong contrast for sharing your screen.'),
   },
   {
-    name: 'High contrast',
+    name: msg('High contrast'),
     theme: 'retro-contrast',
     prefs: { contrast: 1.4 },
-    text: 'Maximum legibility.',
+    text: msg('Maximum legibility.'),
   },
   {
-    name: 'Night city',
+    name: msg('Night city'),
     theme: 'neon-cyber',
     prefs: { glow: 1.3, pattern: 'scanlines' },
-    text: 'Full cyberpunk, all lights on.',
+    text: msg('Full cyberpunk, all lights on.'),
   },
 ];
 
@@ -934,7 +948,7 @@ function Profiles({ design }: { design: DesignSettings }): ReactElement {
     setIo(text);
     void navigator.clipboard
       .writeText(text)
-      .then(() => setMessage('Copied. Paste it anywhere to keep or share it.'));
+      .then(() => setMessage(tr('Copied. Paste it anywhere to keep or share it.')));
   };
   const importJson = (): void => {
     setMessage(null);
@@ -942,11 +956,11 @@ function Profiles({ design }: { design: DesignSettings }): ReactElement {
     try {
       parsed = JSON.parse(io);
     } catch {
-      return setMessage('That is not an appearance export (not valid JSON).');
+      return setMessage(tr('That is not an appearance export (not valid JSON).'));
     }
     const result = designExportSchema.safeParse(parsed);
     if (!result.success)
-      return setMessage('That file is not a River appearance export, or it is damaged. Nothing changed.');
+      return setMessage(tr('That file is not a River appearance export, or it is damaged. Nothing changed.'));
     const d = result.data;
     const known = (id: string): boolean =>
       THEMES.some((t) => t.id === id) ||
@@ -969,21 +983,22 @@ function Profiles({ design }: { design: DesignSettings }): ReactElement {
       profiles,
       activeProfile: null,
     });
-    setMessage('Imported. Your existing themes and profiles were kept.');
+    setMessage(tr('Imported. Your existing themes and profiles were kept.'));
     play('success');
   };
   return (
     <div className="design-group">
-      <h3 className="design-sub">Your profiles</h3>
+      <h3 className="design-sub">{tr('Your profiles')}</h3>
       <p className="muted small">
-        A profile saves everything about how River looks — theme, colours, type, layout and effects — so you
-        can switch between them in one click.
+        {tr(
+          'A profile saves everything about how River looks — theme, colours, type, layout and effects — so you can switch between them in one click.',
+        )}
       </p>
       <div className="design-actions">
         <input
           className="search design-actions__name"
-          placeholder="e.g. Night session"
-          aria-label="Profile name"
+          placeholder={tr('e.g. Night session')}
+          aria-label={tr('Profile name')}
           maxLength={48}
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -992,17 +1007,19 @@ function Profiles({ design }: { design: DesignSettings }): ReactElement {
           className="btn btn--primary btn--small"
           disabled={design.profiles.length >= 30}
           onClick={() => {
-            const profile = snapshot(name.trim() || `Profile ${design.profiles.length + 1}`);
+            const profile = snapshot(
+              name.trim() || tr('Profile {count}', { count: design.profiles.length + 1 }),
+            );
             commitDesign({ ...design, profiles: [...design.profiles, profile], activeProfile: profile.id });
             setName('');
             play('success');
           }}
         >
-          Save current look
+          {tr('Save current look')}
         </button>
       </div>
       {design.profiles.length === 0 ? (
-        <p className="muted small">No profiles yet.</p>
+        <p className="muted small">{tr('No profiles yet.')}</p>
       ) : (
         <ul className="design-profiles">
           {design.profiles.map((profile) => (
@@ -1019,7 +1036,7 @@ function Profiles({ design }: { design: DesignSettings }): ReactElement {
                   className="search"
                   autoFocus
                   maxLength={48}
-                  aria-label="New name"
+                  aria-label={tr('New name')}
                   value={renaming.name}
                   onChange={(e) => setRenaming({ id: profile.id, name: e.target.value })}
                   data-own-escape=""
@@ -1039,14 +1056,14 @@ function Profiles({ design }: { design: DesignSettings }): ReactElement {
               ) : (
                 <strong>{profile.name}</strong>
               )}
-              <span className="muted small">{themeById(profile.theme)?.name ?? 'Custom theme'}</span>
+              <span className="muted small">{themeById(profile.theme)?.name ?? tr('Custom theme')}</span>
               <span className="design-profiles__actions">
                 <button className="btn btn--primary btn--small" onClick={() => apply(profile)}>
-                  {design.activeProfile === profile.id ? 'In use' : 'Use'}
+                  {design.activeProfile === profile.id ? tr('In use') : tr('Use')}
                 </button>
                 <button
                   className="btn btn--ghost btn--small"
-                  title="Save the current look into this profile"
+                  title={tr('Save the current look into this profile')}
                   onClick={() =>
                     commitDesign({
                       ...design,
@@ -1059,13 +1076,13 @@ function Profiles({ design }: { design: DesignSettings }): ReactElement {
                     })
                   }
                 >
-                  Update
+                  {tr('Update')}
                 </button>
                 <button
                   className="btn btn--link btn--small"
                   onClick={() => setRenaming({ id: profile.id, name: profile.name })}
                 >
-                  Rename
+                  {tr('Rename')}
                 </button>
                 <button
                   className="btn btn--link btn--small"
@@ -1077,7 +1094,7 @@ function Profiles({ design }: { design: DesignSettings }): ReactElement {
                     })
                   }
                 >
-                  Delete
+                  {tr('Delete')}
                 </button>
               </span>
             </li>
@@ -1085,7 +1102,7 @@ function Profiles({ design }: { design: DesignSettings }): ReactElement {
         </ul>
       )}
 
-      <h3 className="design-sub">Starting points</h3>
+      <h3 className="design-sub">{tr('Starting points')}</h3>
       <div className="design-starters">
         {STARTERS.map((s) => (
           <button
@@ -1106,20 +1123,21 @@ function Profiles({ design }: { design: DesignSettings }): ReactElement {
               design={{ ...design, prefs: { ...DEFAULT_DESIGN_PREFS, ...s.prefs } }}
               withPrefs
             />
-            <strong>{s.name}</strong>
-            <span className="muted small">{s.text}</span>
+            <strong>{tr(s.name)}</strong>
+            <span className="muted small">{tr(s.text)}</span>
           </button>
         ))}
       </div>
 
-      <h3 className="design-sub">Import and export</h3>
+      <h3 className="design-sub">{tr('Import and export')}</h3>
       <p className="muted small">
-        Export copies your theme, colours, layout, your own themes and profiles as text (without a background
-        picture). Paste such text below to import it — nothing in it can run code.
+        {tr(
+          'Export copies your theme, colours, layout, your own themes and profiles as text (without a background picture). Paste such text below to import it — nothing in it can run code.',
+        )}
       </p>
       <textarea
         className="design-io"
-        aria-label="Appearance export"
+        aria-label={tr('Appearance export')}
         placeholder='{"kind":"river-appearance", …}'
         value={io}
         onChange={(e) => setIo(e.target.value)}
@@ -1127,27 +1145,27 @@ function Profiles({ design }: { design: DesignSettings }): ReactElement {
       />
       <div className="design-actions">
         <button className="btn btn--ghost btn--small" onClick={exportJson}>
-          Export (copy)
+          {tr('Export (copy)')}
         </button>
         <button className="btn btn--ghost btn--small" disabled={!io.trim()} onClick={importJson}>
-          Import
+          {tr('Import')}
         </button>
         {message && <span className="small">{message}</span>}
       </div>
 
-      <h3 className="design-sub">Reset</h3>
+      <h3 className="design-sub">{tr('Reset')}</h3>
       <div className="design-actions">
         <button className="btn btn--ghost btn--small" onClick={() => setPrefs(design, DEFAULT_DESIGN_PREFS)}>
-          Reset adjustments (keep theme)
+          {tr('Reset adjustments (keep theme)')}
         </button>
         <button
           className="btn btn--ghost btn--small"
           onClick={() => applyTheme({ ...design, prefs: DEFAULT_DESIGN_PREFS }, DEFAULT_DESIGN.theme)}
         >
-          Back to Specter’s default look
+          {tr('Back to Specter’s default look')}
         </button>
       </div>
-      <p className="muted small">Resetting keeps your own themes and profiles.</p>
+      <p className="muted small">{tr('Resetting keeps your own themes and profiles.')}</p>
     </div>
   );
 }
@@ -1161,12 +1179,12 @@ function ThemeShare({ design, name }: { design: DesignSettings; name: string }):
     setCode(text);
     void navigator.clipboard
       ?.writeText(text)
-      .then(() => setMessage('Theme code copied. Send it to anyone with River.'))
-      .catch(() => setMessage('Select the code above and copy it.'));
+      .then(() => setMessage(tr('Theme code copied. Send it to anyone with River.')))
+      .catch(() => setMessage(tr('Select the code above and copy it.')));
   };
   const add = (): void => {
     const result = parseThemeCode(code);
-    if (!result.ok) return setMessage(result.error);
+    if (!result.ok) return setMessage(tr(result.error));
     const { design: next, theme } = addSharedTheme(
       design,
       result.theme,
@@ -1175,19 +1193,20 @@ function ThemeShare({ design, name }: { design: DesignSettings; name: string }):
     );
     commitDesign(next);
     setCode('');
-    setMessage(`Added “${theme.name}” to your themes and switched to it.`);
+    setMessage(tr('Added “{name}” to your themes and switched to it.', { name: theme.name }));
     play('success');
   };
   return (
     <>
-      <h3 className="design-sub">Share a theme</h3>
+      <h3 className="design-sub">{tr('Share a theme')}</h3>
       <p className="muted small">
-        A theme code is the theme’s name and colours as a short line of text. Paste one here to add it — River
-        checks every colour, and nothing in a code can run.
+        {tr(
+          'A theme code is the theme’s name and colours as a short line of text. Paste one here to add it — River checks every colour, and nothing in a code can run.',
+        )}
       </p>
       <textarea
         className="design-io design-io--code"
-        aria-label="Theme code"
+        aria-label={tr('Theme code')}
         placeholder="river-theme:…"
         value={code}
         onChange={(e) => {
@@ -1198,10 +1217,10 @@ function ThemeShare({ design, name }: { design: DesignSettings; name: string }):
       />
       <div className="design-actions">
         <button className="btn btn--ghost btn--small" onClick={copy}>
-          Copy theme code
+          {tr('Copy theme code')}
         </button>
         <button className="btn btn--ghost btn--small" disabled={!code.trim()} onClick={add}>
-          Add pasted theme
+          {tr('Add pasted theme')}
         </button>
         {message && (
           <span className="small" role="status">
@@ -1227,10 +1246,11 @@ function ChatLook({ design }: { design: DesignSettings }): ReactElement {
   const fontSize = appearance?.fontSize ?? 14;
   return (
     <Group>
-      <h3 className="design-sub">Wallpaper</h3>
+      <h3 className="design-sub">{tr('Wallpaper')}</h3>
       <p className="muted small">
-        Behind the messages of every conversation and channel. A chat can have its own: open the chat’s menu
-        and choose Wallpaper. Wallpapers stay on this device (they are not copied to your other devices).
+        {tr(
+          'Behind the messages of every conversation and channel. A chat can have its own: open the chat’s menu and choose Wallpaper. Wallpapers stay on this device (they are not copied to your other devices).',
+        )}
       </p>
       <WallpaperPicker
         value={p.wallpaper}
@@ -1241,54 +1261,54 @@ function ChatLook({ design }: { design: DesignSettings }): ReactElement {
       />
       {own > 0 && (
         <div className="design-actions">
-          <span className="muted small">
-            {own} {own === 1 ? 'chat has a wallpaper of its own.' : 'chats have wallpapers of their own.'}
-          </span>
+          <span className="muted small">{trn('{count} chats have wallpapers of their own.', own)}</span>
           <button
             className="btn btn--link btn--small"
             onClick={() => commitDesign({ ...design, chatWallpapers: {} })}
           >
-            Use this wallpaper everywhere
+            {tr('Use this wallpaper everywhere')}
           </button>
         </div>
       )}
-      <h3 className="design-sub">Bubbles</h3>
-      <Row label="Bubble shape">
+      <h3 className="design-sub">{tr('Bubbles')}</h3>
+      <Row label={tr('Bubble shape')}>
         <Choice
-          label="Bubble shape"
+          label={tr('Bubble shape')}
           value={p.bubbles}
           onChange={(bubbles) => setPrefs(design, { bubbles })}
           options={[
-            ['rounded', 'Rounded'],
-            ['square', 'Square-ish'],
-            ['outlined', 'Outlined'],
+            ['rounded', tr('Rounded')],
+            ['square', tr('Square-ish')],
+            ['outlined', tr('Outlined')],
           ]}
         />
       </Row>
       {!phone && (
-        <Row label="Message style">
+        <Row label={tr('Message style')}>
           <Choice
-            label="Message style"
+            label={tr('Message style')}
             value={p.messageStyle}
             onChange={(messageStyle) => setPrefs(design, { messageStyle })}
             options={[
-              ['skin', 'Skin'],
-              ['flat', 'Classic'],
-              ['bubbles', 'Bubbles'],
-              ['cards', 'Cards'],
-              ['compact', 'Compact'],
-              ['terminal', 'Terminal'],
+              ['skin', tr('Skin')],
+              ['flat', tr('Classic')],
+              ['bubbles', tr('Bubbles')],
+              ['cards', tr('Cards')],
+              ['compact', tr('Compact')],
+              ['terminal', tr('Terminal')],
             ]}
           />
         </Row>
       )}
       {!phone && (
-        <p className="muted small">On computers, bubble shapes show with the Bubbles message style.</p>
+        <p className="muted small">
+          {tr('On computers, bubble shapes show with the Bubbles message style.')}
+        </p>
       )}
-      <h3 className="design-sub">Text and spacing</h3>
+      <h3 className="design-sub">{tr('Text and spacing')}</h3>
       <label className="design-slider">
         <span className="design-row__label">
-          Chat text size <span className="muted small">{phone ? fontSize + 2 : fontSize}px</span>
+          {tr('Chat text size')} <span className="muted small">{phone ? fontSize + 2 : fontSize}px</span>
         </span>
         <input
           type="range"
@@ -1296,24 +1316,24 @@ function ChatLook({ design }: { design: DesignSettings }): ReactElement {
           max={22}
           step={1}
           value={fontSize}
-          aria-label="Chat text size"
+          aria-label={tr('Chat text size')}
           onChange={(e) => void update({ appearance: { fontSize: Number(e.target.value) } })}
         />
       </label>
       {!phone && (
-        <Row label="Density">
+        <Row label={tr('Density')}>
           <Choice
-            label="Density"
+            label={tr('Density')}
             value={appearance?.density ?? 'cozy'}
             onChange={(density) => void update({ appearance: { density } })}
             options={[
-              ['cozy', 'Cozy'],
-              ['compact', 'Compact'],
+              ['cozy', tr('Cozy')],
+              ['compact', tr('Compact')],
             ]}
           />
         </Row>
       )}
-      <p className="muted small">The sample chat at the top shows every change at once.</p>
+      <p className="muted small">{tr('The sample chat at the top shows every change at once.')}</p>
     </Group>
   );
 }

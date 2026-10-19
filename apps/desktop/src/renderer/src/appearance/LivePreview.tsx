@@ -5,6 +5,7 @@ import { useRiver } from '../store.ts';
 import { resolveDesign } from './engine.ts';
 import { useWallpaperLayers } from './use-wallpaper.ts';
 import { colorsOf } from './wallpaper.ts';
+import { tr } from '../i18n.ts';
 
 /**
  * A sample chat at the top of Appearance (2.18) that follows every choice at once: theme and
@@ -49,16 +50,16 @@ export function LivePreview({ design }: { design: DesignSettings }): ReactElemen
         <i className="lp__av lp__av--ana" />
         <span className="lp__who">
           <b>Ana</b>
-          <span className="lp__status">typing…</span>
+          <span className="lp__status">{tr('typing…')}</span>
         </span>
       </div>
       <div className="lp__chat">
-        <span className="lp__day">Today</span>
+        <span className="lp__day">{tr('Today')}</span>
         <div className="lp__msg">
           <i className="lp__av lp__av--ana" />
           <div className="lp__bubble">
             <b className="lp__name">Ana</b>
-            <span className="lp__text">Did you see the new wallpapers? 😍</span>
+            <span className="lp__text">{tr('Did you see the new wallpapers? 😍')}</span>
             <span className="lp__meta">9:41</span>
             <span className="lp__reaction">
               ❤️ <span>2</span>
@@ -68,8 +69,8 @@ export function LivePreview({ design }: { design: DesignSettings }): ReactElemen
         <div className="lp__msg lp__msg--mine">
           <i className="lp__av lp__av--me" />
           <div className="lp__bubble">
-            <b className="lp__name">You</b>
-            <span className="lp__text">Yes! Trying the doodles now 🎨</span>
+            <b className="lp__name">{tr('You')}</b>
+            <span className="lp__text">{tr('Yes! Trying the doodles now 🎨')}</span>
             <span className="lp__meta">9:42 ✓✓</span>
           </div>
         </div>
@@ -85,7 +86,7 @@ export function LivePreview({ design }: { design: DesignSettings }): ReactElemen
         </div>
       </div>
       <div className="lp__bar">
-        <span className="lp__input">Message</span>
+        <span className="lp__input">{tr('Message')}</span>
         <span className="lp__send">➤</span>
       </div>
     </div>

@@ -2,6 +2,7 @@ import { API_PREFIX } from '@river/protocol';
 import type { DiagnosticCheck } from '../shared/ipc.ts';
 import { HOME_SERVER } from '../shared/home-server.ts';
 import type { FetchBytes } from './http.ts';
+import { fill, msg, type Vars } from '../shared/i18n/index.ts';
 
 /**
  * Settings → System → Connection check (1.0.16), main-process half: can this
@@ -20,6 +21,8 @@ export interface DiagnosticsDeps {
   /** How long this start took, step by step (startup-timings.ts). */
   startup?: () => string | null;
   now?: () => number;
+  /** River's language (main's own translate); English without it. */
+  t?: (text: string, vars?: Vars) => string;
 }
 
 async function timed<T>(fn: () => Promise<T>, now: () => number): Promise<{ value: T; ms: number }> {
@@ -30,11 +33,17 @@ async function timed<T>(fn: () => Promise<T>, now: () => number): Promise<{ valu
 
 export async function runMainDiagnostics(deps: DiagnosticsDeps): Promise<DiagnosticCheck[]> {
   const now = deps.now ?? (() => performance.now());
+  const t = deps.t ?? fill;
   const checks: DiagnosticCheck[] = [
-    { id: 'app', label: 'River', status: 'ok', detail: `${deps.version} on ${deps.platform}` },
+    {
+      id: 'app',
+      label: 'River',
+      status: 'ok',
+      detail: t(msg('{version} on {platform}'), { version: deps.version, platform: deps.platform }),
+    },
   ];
   const startup = deps.startup?.();
-  if (startup) checks.push({ id: 'startup', label: 'Start-up', status: 'ok', detail: startup });
+  if (startup) checks.push({ id: 'startup', label: t(msg('Start-up')), status: 'ok', detail: startup });
 
   if (deps.homeServerEnabled) {
     try {
@@ -42,15 +51,23 @@ export async function runMainDiagnostics(deps: DiagnosticsDeps): Promise<Diagnos
         () => deps.fetchBytes(`${HOME_SERVER.relay}/${HOME_SERVER.topic}/json?poll=1&since=1m`, 64 * 1024),
         now,
       );
-      checks.push({ id: 'relay', label: 'Address relay', status: 'ok', detail: `reachable (${ms} ms)` });
+      checks.push({
+        id: 'relay',
+        label: t(msg('Address relay')),
+        status: 'ok',
+        detail: t(msg('reachable ({ms} ms)'), { ms }),
+      });
     } catch {
       checks.push({
         id: 'relay',
-        label: 'Address relay',
+        label: t(msg('Address relay')),
         status: 'warn',
-        detail: `${new URL(HOME_SERVER.relay).host} is not reachable`,
-        advice:
-          'River uses it to find its server when the server moves. A firewall, VPN or network filter may block it; River keeps working at the last known address.',
+        detail: t(msg('{host} is not reachable'), { host: new URL(HOME_SERVER.relay).host }),
+        advice: t(
+          msg(
+            'River uses it to find its server when the server moves. A firewall, VPN or network filter may block it; River keeps working at the last known address.',
+          ),
+        ),
       });
     }
   }
@@ -59,18 +76,21 @@ export async function runMainDiagnostics(deps: DiagnosticsDeps): Promise<Diagnos
   if (account.state !== 'registered' || !account.serverUrl) {
     checks.push({
       id: 'account',
-      label: 'Account',
+      label: t(msg('Account')),
       status: 'warn',
-      detail: 'not set up yet',
-      advice:
-        'Pick a username to create your account. If it stays stuck, the server may be offline right now.',
+      detail: t(msg('not set up yet')),
+      advice: t(
+        msg(
+          'Pick a username to create your account. If it stays stuck, the server may be offline right now.',
+        ),
+      ),
     });
   } else {
     checks.push({
       id: 'account',
-      label: 'Account',
+      label: t(msg('Account')),
       status: 'ok',
-      detail: account.username ? `@${account.username}` : 'created',
+      detail: account.username ? `@${account.username}` : t(msg('created')),
     });
     try {
       const { ms } = await timed(
@@ -79,19 +99,24 @@ export async function runMainDiagnostics(deps: DiagnosticsDeps): Promise<Diagnos
       );
       checks.push({
         id: 'server',
-        label: 'Server',
+        label: t(msg('Server')),
         status: ms > 1500 ? 'warn' : 'ok',
-        detail: `answers in ${ms} ms`,
-        ...(ms > 1500 ? { advice: 'The server is slow to answer; calls may take longer to connect.' } : {}),
+        detail: t(msg('answers in {ms} ms'), { ms }),
+        ...(ms > 1500
+          ? { advice: t(msg('The server is slow to answer; calls may take longer to connect.')) }
+          : {}),
       });
     } catch {
       checks.push({
         id: 'server',
-        label: 'Server',
+        label: t(msg('Server')),
         status: 'fail',
-        detail: 'not reachable',
-        advice:
-          'The PC that hosts the server may be off or changing address. River reconnects by itself when it is back.',
+        detail: t(msg('not reachable')),
+        advice: t(
+          msg(
+            'The PC that hosts the server may be off or changing address. River reconnects by itself when it is back.',
+          ),
+        ),
       });
     }
   }
@@ -99,19 +124,24 @@ export async function runMainDiagnostics(deps: DiagnosticsDeps): Promise<Diagnos
   const live = deps.connection();
   checks.push({
     id: 'live',
-    label: 'Live connection',
+    label: t(msg('Live connection')),
     status: live === 'online' ? 'ok' : live === 'connecting' ? 'warn' : 'fail',
-    detail: live === 'online' ? 'connected' : live,
-    ...(live === 'online' ? {} : { advice: 'Messages and voice need it. River retries by itself.' }),
+    detail:
+      live === 'online'
+        ? t(msg('connected'))
+        : live === 'connecting'
+          ? t(msg('connecting'))
+          : t(msg('offline')),
+    ...(live === 'online' ? {} : { advice: t(msg('Messages and voice need it. River retries by itself.')) }),
   });
 
   const host = deps.hosting();
   if (host.state !== 'off') {
     checks.push({
       id: 'hosting',
-      label: 'Hosting on this PC',
+      label: t(msg('Hosting on this PC')),
       status: host.state === 'online' ? 'ok' : 'warn',
-      detail: host.state === 'online' ? 'public address reachable' : host.state,
+      detail: host.state === 'online' ? t(msg('public address reachable')) : host.state,
     });
   }
   return checks;

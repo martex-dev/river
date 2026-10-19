@@ -4,6 +4,7 @@ import { KEYBIND_ACTIONS, KEYBIND_LABELS, comboLabel, withDefaults } from '../..
 import { togglePanel, useCommunity } from '../community/store.ts';
 import { useDm } from '../dm/store.ts';
 import { SECTIONS, useRiver, type Section } from '../store.ts';
+import { msg, tr, trn } from '../i18n.ts';
 
 interface Target {
   key: string;
@@ -14,16 +15,16 @@ interface Target {
 }
 
 const SECTION_LABEL: Record<Section, string> = {
-  home: 'Home',
-  messages: 'Messages',
-  communities: 'Communities',
-  social: 'Social',
-  calls: 'Calls',
-  files: 'Files',
-  contacts: 'Friends',
-  admin: 'Admin',
-  security: 'Security',
-  settings: 'Settings',
+  home: msg('Home'),
+  messages: msg('Messages'),
+  communities: msg('Communities'),
+  social: msg('Social'),
+  calls: msg('Calls'),
+  files: msg('Files'),
+  contacts: msg('Friends'),
+  admin: msg('Admin'),
+  security: msg('Security'),
+  settings: msg('Settings'),
 };
 
 /** Everything you can jump to: channels, conversations and River's sections. */
@@ -37,7 +38,7 @@ function useTargets(): Target[] {
       c.channels.map((ch) => ({
         key: `ch:${ch.id}`,
         label: ch.name,
-        hint: `${c.name}${(unread[ch.id] ?? 0) > 0 || ch.unread ? ' · unread' : ''}`,
+        hint: `${c.name}${(unread[ch.id] ?? 0) > 0 || ch.unread ? ` · ${tr('unread')}` : ''}`,
         symbol: ch.kind === 'voice' ? '🔊' : '#',
         go: () => {
           navigate('communities');
@@ -50,7 +51,12 @@ function useTargets(): Target[] {
       .map((c) => ({
         key: `dm:${c.riverId}`,
         label: c.name,
-        hint: c.kind === 'group' ? 'Group' : c.unread ? `${c.unread} unread` : 'Direct message',
+        hint:
+          c.kind === 'group'
+            ? tr('Group')
+            : c.unread
+              ? trn('{count} unread', c.unread)
+              : tr('Direct message'),
         symbol: c.kind === 'group' ? '👥' : '@',
         go: () => {
           navigate('messages');
@@ -60,8 +66,8 @@ function useTargets(): Target[] {
     // Admin exists only on the PC that hosts the server; it is reached from the rail there.
     const sections: Target[] = SECTIONS.filter((s) => s !== 'admin').map((s) => ({
       key: `s:${s}`,
-      label: SECTION_LABEL[s],
-      hint: 'Section',
+      label: tr(SECTION_LABEL[s]),
+      hint: tr('Section'),
       symbol: '›',
       go: () => navigate(s),
     }));
@@ -252,7 +258,7 @@ function Switcher({ onClose }: { onClose(): void }): ReactElement {
         className="switcher glass"
         role="dialog"
         aria-modal="true"
-        aria-label="Quick switcher"
+        aria-label={tr('Quick switcher')}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <input
@@ -262,7 +268,7 @@ function Switcher({ onClose }: { onClose(): void }): ReactElement {
           aria-expanded="true"
           aria-controls="switcher-results"
           aria-activedescendant={results[active] ? `switch-${results[active]!.key}` : undefined}
-          placeholder="Where would you like to go?"
+          placeholder={tr('Where would you like to go?')}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -280,7 +286,9 @@ function Switcher({ onClose }: { onClose(): void }): ReactElement {
           }}
         />
         <div className="switcher__results" id="switcher-results" role="listbox" ref={listRef}>
-          {results.length === 0 && <p className="muted small switcher__empty">Nothing matches “{query}”.</p>}
+          {results.length === 0 && (
+            <p className="muted small switcher__empty">{tr('Nothing matches “{query}”.', { query })}</p>
+          )}
           {results.map((t, i) => (
             <button
               key={t.key}
@@ -300,7 +308,7 @@ function Switcher({ onClose }: { onClose(): void }): ReactElement {
           ))}
         </div>
         <p className="switcher__tip muted small">
-          ↑ ↓ to move · Enter to open · Esc to close · Ctrl+/ for all shortcuts
+          {tr('↑ ↓ to move · Enter to open · Esc to close · Ctrl+/ for all shortcuts')}
         </p>
       </div>
     </div>
@@ -308,24 +316,24 @@ function Switcher({ onClose }: { onClose(): void }): ReactElement {
 }
 
 const SHORTCUTS: Array<[string, string]> = [
-  ['Ctrl+K', 'Quick switcher: jump to a channel, person or section'],
-  ['Ctrl+/', 'Show these shortcuts'],
-  ['Alt+← / Alt+→ (⌘[ / ⌘])', 'Back / forward (also the mouse buttons)'],
-  ['Alt+↑ / Alt+↓', 'Previous / next channel'],
-  ['Alt+Shift+↑ / Alt+Shift+↓', 'Previous / next unread channel'],
-  ['Ctrl+Alt+↑ / Ctrl+Alt+↓', 'Previous / next community'],
-  ['Ctrl+F', 'Search the community'],
-  ['Ctrl+= / Ctrl+− / Ctrl+0', 'Make everything bigger / smaller / normal size'],
-  ['Esc', 'Mark the channel read and jump to the newest message'],
-  ['Shift+Esc', 'Mark the whole community read'],
-  ['Any letter', 'Start typing a message (from anywhere in the channel)'],
-  ['Enter', 'Send the message'],
-  ['Shift+Enter', 'New line'],
-  ['↑ (empty message box)', 'Edit your last message'],
-  ['Tab or Enter', 'Accept a @mention or #channel suggestion'],
-  ['Esc (while writing)', 'Cancel a reply, close a dialog or panel'],
-  ['Push-to-talk key', 'Talk while held (set in User settings → Voice)'],
-  ['F or double-click a video', 'Fullscreen in a call'],
+  ['Ctrl+K', msg('Quick switcher: jump to a channel, person or section')],
+  ['Ctrl+/', msg('Show these shortcuts')],
+  ['Alt+← / Alt+→ (⌘[ / ⌘])', msg('Back / forward (also the mouse buttons)')],
+  ['Alt+↑ / Alt+↓', msg('Previous / next channel')],
+  ['Alt+Shift+↑ / Alt+Shift+↓', msg('Previous / next unread channel')],
+  ['Ctrl+Alt+↑ / Ctrl+Alt+↓', msg('Previous / next community')],
+  ['Ctrl+F', msg('Search the community')],
+  ['Ctrl+= / Ctrl+− / Ctrl+0', msg('Make everything bigger / smaller / normal size')],
+  ['Esc', msg('Mark the channel read and jump to the newest message')],
+  ['Shift+Esc', msg('Mark the whole community read')],
+  [msg('Any letter'), msg('Start typing a message (from anywhere in the channel)')],
+  ['Enter', msg('Send the message')],
+  ['Shift+Enter', msg('New line')],
+  [msg('↑ (empty message box)'), msg('Edit your last message')],
+  [msg('Tab or Enter'), msg('Accept a @mention or #channel suggestion')],
+  [msg('Esc (while writing)'), msg('Cancel a reply, close a dialog or panel')],
+  [msg('Push-to-talk key'), msg('Talk while held (set in User settings → Voice)')],
+  [msg('F or double-click a video'), msg('Fullscreen in a call')],
 ];
 
 function Shortcuts({ onClose }: { onClose(): void }): ReactElement {
@@ -336,7 +344,7 @@ function Shortcuts({ onClose }: { onClose(): void }): ReactElement {
     ...SHORTCUTS,
     ...KEYBIND_ACTIONS.filter((a) => binds[a]).map((a): [string, string] => [
       comboLabel(binds[a]),
-      KEYBIND_LABELS[a],
+      tr(KEYBIND_LABELS[a]),
     ]),
   ];
   useEffect(() => {
@@ -356,25 +364,27 @@ function Shortcuts({ onClose }: { onClose(): void }): ReactElement {
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2 id="shortcuts-title" className="card__title">
-          Keyboard shortcuts
+          {tr('Keyboard shortcuts')}
         </h2>
-        <dl className="shortcuts__list" tabIndex={0} aria-label="Shortcuts">
+        <dl className="shortcuts__list" tabIndex={0} aria-label={tr('Shortcuts')}>
           {rows.map(([keys, what]) => (
             <div key={keys} className="shortcuts__row">
               <dt>
-                {keys.split(' / ').map((k, i) => (
-                  <span key={k}>
-                    {i > 0 && ' / '}
-                    <kbd>{k}</kbd>
-                  </span>
-                ))}
+                {tr(keys)
+                  .split(' / ')
+                  .map((k, i) => (
+                    <span key={k}>
+                      {i > 0 && ' / '}
+                      <kbd>{k}</kbd>
+                    </span>
+                  ))}
               </dt>
-              <dd>{what}</dd>
+              <dd>{tr(what)}</dd>
             </div>
           ))}
         </dl>
         <button className="btn btn--ghost btn--small" autoFocus onClick={onClose}>
-          Close
+          {tr('Close')}
         </button>
       </div>
     </div>

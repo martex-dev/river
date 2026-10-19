@@ -24,6 +24,7 @@ import {
   type AppInfo,
   type DeepLink,
   type IdentityInfo,
+  type LinkProgress,
   type PassphraseResult,
   type PhoneFix,
   type PhoneStatus,
@@ -38,7 +39,7 @@ import type { FetchBytes } from './http.ts';
 import type { Hosting } from './host/hosting.ts';
 import type { HomeAccount } from './home-server.ts';
 import { isAllowedAppUrl } from './security.ts';
-import { friendlyError } from './errors.ts';
+import { friendlyText } from './errors.ts';
 import { parseSignup } from '../shared/invite-link.ts';
 import { isHomeLink } from '../shared/home-server.ts';
 import { checkServer } from './server-check.ts';
@@ -149,7 +150,8 @@ async function result<T>(fn: () => Promise<T> | T): Promise<Result<T>> {
   try {
     return { ok: true, value: await fn() };
   } catch (err) {
-    return { ok: false, message: say(friendlyError(err)) };
+    const { text, vars } = friendlyText(err);
+    return { ok: false, message: say(text, vars) };
   }
 }
 
@@ -510,7 +512,7 @@ export function registerIpc(deps: IpcDeps): void {
   );
   handle(IPC.accountLinkCancel, () => deps.link.cancel());
   handle(IPC.accountLinkAccept, () => result(() => deps.link.accept()));
-  handle(IPC.accountLinkStatus, () => deps.link.status());
+  handle(IPC.accountLinkStatus, () => sayProgress(deps.link.status()));
   handle(IPC.accountDevices, () => result(() => deps.link.devices()));
   handle(IPC.accountRemoveDevice, (_e, deviceId) =>
     result(async () => {
@@ -769,9 +771,16 @@ export function broadcastAccountStatus(
   };
 }
 
+/** A failed link's message, in River's language. */
+function sayProgress(progress: LinkProgress): LinkProgress {
+  return progress.state === 'failed'
+    ? { state: 'failed', message: say(progress.message, progress.vars) }
+    : progress;
+}
+
 export function broadcastLinkStatus(target: WebContents, link: LinkService): () => void {
   return link.onChange((progress) => {
-    if (!target.isDestroyed()) target.send(IPC.accountLinkChanged, progress);
+    if (!target.isDestroyed()) target.send(IPC.accountLinkChanged, sayProgress(progress));
   });
 }
 

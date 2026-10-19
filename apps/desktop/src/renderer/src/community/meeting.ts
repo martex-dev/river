@@ -1,3 +1,4 @@
+import { fill, msg, type Vars } from '../../../shared/i18n/index.ts';
 /**
  * Meetings in voice channels (2.13): speaker view, raised hands in order,
  * who is talking, and what the call can honestly say about itself. Pure, so it
@@ -79,31 +80,42 @@ export function handQueue(
 }
 
 /** "Ana is talking", "Ana and Ben are talking", "Ana, Ben and 3 others are talking". */
-export function talkingLine(names: readonly string[]): string | null {
+export function talkingLine(
+  names: readonly string[],
+  t: Translate = fill,
+  tn: (key: string, count: number, vars?: Vars) => string = (key, count, vars) =>
+    fill(key, { count, ...vars }),
+): string | null {
   if (names.length === 0) return null;
-  if (names.length === 1) return `${names[0]} is talking`;
-  if (names.length === 2) return `${names[0]} and ${names[1]} are talking`;
-  if (names.length === 3) return `${names[0]}, ${names[1]} and ${names[2]} are talking`;
-  return `${names[0]}, ${names[1]} and ${names.length - 2} others are talking`;
+  const [a, b, c] = names as [string, string, string];
+  if (names.length === 1) return t(msg('{name} is talking'), { name: a });
+  if (names.length === 2) return t(msg('{a} and {b} are talking'), { a, b });
+  if (names.length === 3) return t(msg('{a}, {b} and {c} are talking'), { a, b, c });
+  return tn('{a}, {b} and {count} others are talking', names.length - 2, { a, b });
 }
 
 /**
  * How the call's media travels, for the channel header. Every path is end-to-end encrypted;
  * what differs is whether it goes directly between devices or through the server.
  */
-export function encryptionNote(input: {
-  inCall: boolean;
-  others: number;
-  relayed: number;
-  large: boolean;
-}): string {
+export function encryptionNote(
+  input: {
+    inCall: boolean;
+    others: number;
+    relayed: number;
+    large: boolean;
+  },
+  t: Translate = fill,
+): string {
   const { inCall, others, relayed, large } = input;
-  if (!inCall || others === 0) return 'end-to-end encrypted';
-  if (large) return 'large room: voice through your server, end-to-end encrypted';
-  if (relayed === 0) return 'encrypted directly between devices (DTLS-SRTP)';
-  if (relayed === others) return 'voice through your server, end-to-end encrypted';
-  return `end-to-end encrypted · ${relayed} through your server`;
+  if (!inCall || others === 0) return t(msg('end-to-end encrypted'));
+  if (large) return t(msg('large room: voice through your server, end-to-end encrypted'));
+  if (relayed === 0) return t(msg('encrypted directly between devices (DTLS-SRTP)'));
+  if (relayed === others) return t(msg('voice through your server, end-to-end encrypted'));
+  return t(msg('end-to-end encrypted · {count} through your server'), { count: relayed });
 }
+
+type Translate = (text: string, vars?: Vars) => string;
 
 /**
  * What "Voice connected" may honestly say. Direct voice keeps flowing while

@@ -84,7 +84,7 @@ export function SoundboardButton({
                 key={sound.id}
                 className="soundboard__sound"
                 disabled={cooling}
-                title={`${sound.name} — right-click to hear it yourself`}
+                title={tr('{name} — right-click to hear it yourself', { name: sound.name })}
                 onClick={() => playSound(sound)}
                 onContextMenu={(e) => {
                   e.preventDefault();
@@ -355,7 +355,7 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
             {manage && (
               <button
                 className="btn btn--link btn--danger"
-                aria-label={`Remove ${sound.name}`}
+                aria-label={tr('Remove {name}', { name: sound.name })}
                 onClick={() =>
                   s.setModal({
                     kind: 'confirm',

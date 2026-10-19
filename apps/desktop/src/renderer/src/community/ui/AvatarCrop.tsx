@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.ts';
 import { useEffect, useRef, useState, type PointerEvent, type ReactElement } from 'react';
 import { Modal } from './common.tsx';
 
@@ -77,7 +78,7 @@ export function AvatarCropDialog(props: {
     setOffset(clampOffset({ x: d.ox + e.clientX - d.x, y: d.oy + e.clientY - d.y }, size, zoom));
   };
   return (
-    <Modal title="Position your picture" onClose={props.onClose}>
+    <Modal title={tr('Position your picture')} onClose={props.onClose}>
       <div
         className="avatar-crop"
         style={{ width: VIEW, height: VIEW }}
@@ -85,13 +86,13 @@ export function AvatarCropDialog(props: {
         onPointerMove={onMove}
         onPointerUp={() => (drag.current = null)}
         role="img"
-        aria-label="Drag to position your picture"
+        aria-label={tr('Drag to position your picture')}
       >
         <canvas ref={previewRef} width={VIEW} height={VIEW} />
       </div>
-      {failed && <p className="field__error">River could not read that picture.</p>}
+      {failed && <p className="field__error">{tr('River could not read that picture.')}</p>}
       <label className="avatar-crop__zoom">
-        <span className="field__label">Zoom</span>
+        <span className="field__label">{tr('Zoom')}</span>
         <input
           type="range"
           min={1}
@@ -107,10 +108,10 @@ export function AvatarCropDialog(props: {
       </label>
       <div className="modal__foot">
         <button className="btn btn--link" onClick={props.onClose}>
-          Cancel
+          {tr('Cancel')}
         </button>
         <button className="btn btn--primary" disabled={!size} onClick={save}>
-          Save
+          {tr('Save')}
         </button>
       </div>
     </Modal>

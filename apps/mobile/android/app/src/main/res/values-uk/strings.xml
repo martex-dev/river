@@ -44,6 +44,7 @@
     <string name="service_title">River на зв’язку</string>
     <string name="service_text">Нові повідомлення надходять, навіть коли River закритий. Вимкнути: «Налаштування → Система».</string>
     <string name="installer_could_not_open">Не вдалося відкрити інсталятор Android</string>
+    <string name="core_restarted">River перезапустив своє ядро. Спробуйте ще раз.</string>
     <plurals name="new_messages_count">
         <item quantity="one">%d нове повідомлення</item>
         <item quantity="few">%d нові повідомлення</item>
