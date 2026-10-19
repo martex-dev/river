@@ -5,7 +5,7 @@ import { DEFAULT_DESIGN, DEFAULT_DESIGN_PREFS } from '../src/shared/design.ts';
 import { contrast, mix } from '../src/renderer/src/appearance/color.ts';
 import { resolveDesign } from '../src/renderer/src/appearance/engine.ts';
 import { THEMES } from '../src/renderer/src/appearance/themes.ts';
-import { ROLE_COLORS } from '../src/renderer/src/community/ui/CommunitySettings.tsx';
+import { ROLE_COLORS } from '../src/renderer/src/community/role-colors.ts';
 
 /**
  * Communities in light themes (community sweep): mentions and status texts used fixed colours made
