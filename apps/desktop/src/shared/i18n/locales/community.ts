@@ -86,6 +86,32 @@ const TEXTS: Record<string, Record<Lang, string>> = {
     uk: 'має дозволи, яких у вас немає, тому ви не можете її запропонувати',
   },
 
+  // A role mention's details
+  '{role} — a role': {
+    bg: '{role} — роля',
+    de: '{role} – eine Rolle',
+    es: '{role}: un rol',
+    fr: '{role} — un rôle',
+    it: '{role} — un ruolo',
+    pl: '{role} — rola',
+    'pt-BR': '{role} — um cargo',
+    ru: '{role} — роль',
+    tr: '{role} — bir rol',
+    uk: '{role} — роль',
+  },
+  'you have it': {
+    bg: 'имате я',
+    de: 'du hast sie',
+    es: 'lo tienes',
+    fr: 'vous l’avez',
+    it: 'ce l’hai',
+    pl: 'masz ją',
+    'pt-BR': 'você tem',
+    ru: 'она у вас есть',
+    tr: 'sizde var',
+    uk: 'вона у вас є',
+  },
+
   // Removing things for everyone asks first
   Revoke: {
     bg: 'Отмени',

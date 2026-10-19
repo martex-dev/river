@@ -12,7 +12,7 @@ import {
   type SVGProps,
   type MouseEvent as ReactMouseEvent,
 } from 'react';
-import { msg, tr } from '../../i18n.ts';
+import { msg, tr, trn } from '../../i18n.ts';
 import { createPortal } from 'react-dom';
 import { placeWithin, pushOverlay, safeInsets, visibleBox } from '../../components/overlays.ts';
 import { menuItems, nextMenuItem, restoreFocus, trapTab } from '../../components/focus.ts';
@@ -1078,9 +1078,11 @@ function inline(text: string, ctx: InlineCtx, key: string): ReactNode[] {
           tabIndex={0}
           className={`mention mention--role ${role.mine ? 'mention--me' : ''}`}
           style={role.color ? ({ '--role': hex(role.color) } as CSSProperties) : undefined}
-          title={`${role.icon ? `${role.icon} ` : ''}${role.name} — a role${
-            role.members !== undefined ? ` · ${role.members} member${role.members === 1 ? '' : 's'}` : ''
-          }${role.mine ? ' · you have it' : ''}`}
+          title={[
+            `${role.icon ? `${role.icon} ` : ''}${tr('{role} — a role', { role: role.name })}`,
+            ...(role.members !== undefined ? [trn('{count} members', role.members)] : []),
+            ...(role.mine ? [tr('you have it')] : []),
+          ].join(' · ')}
         >
           @{role.name}
         </span>,
@@ -1089,24 +1091,18 @@ function inline(text: string, ctx: InlineCtx, key: string): ReactNode[] {
     } else if (token.startsWith('@')) {
       const raw = token.slice(1);
       const special = raw === 'everyone' || raw === 'here';
-      // Two-word mention only when it is a real member name; otherwise give the second word back.
-      const full = names.find((nm) => nm.toLowerCase() === raw.toLowerCase());
-      const single = names.find((nm) => nm.toLowerCase() === raw.split(' ')[0]!.toLowerCase());
-      if (special || full) {
-        const mine = special || (me !== null && raw.toLowerCase() === me.toLowerCase());
+      // A member's whole name, else their first word (the second word goes back), also before
+      // punctuation ("@Leo," "@Sam Rivera!"), as notifications find them.
+      const name = special ? undefined : mentionedName(raw, names);
+      if (special || name) {
+        const shown = name ?? raw;
+        const mine = special || (me !== null && shown.toLowerCase() === me.toLowerCase());
         out.push(
           <span key={k} className={`mention ${mine ? 'mention--me' : ''}`}>
-            @{full ?? raw}
+            @{shown}
           </span>,
         );
-      } else if (single) {
-        const rest = raw.slice(single.length);
-        const mine = me !== null && single.toLowerCase() === me.toLowerCase();
-        out.push(
-          <span key={k} className={`mention ${mine ? 'mention--me' : ''}`}>
-            @{single}
-          </span>,
-        );
+        const rest = name ? raw.slice(name.length) : '';
         if (rest) out.push(rest);
       } else out.push(token);
     }
@@ -1287,12 +1283,27 @@ export const ArrowDownIcon = (p: IconProps): ReactElement => (
 );
 
 /** The role a "@…" token names (two-word names allowed), if any. */
-function mentionedRole(raw: string, refs: MentionRefs): MentionRefs['roles'][number] | undefined {
+/**
+ * What follows an @ ("Sam Rivera", "Leo, see", "Plain.") as one of `names`: all of it, else its
+ * first word, either one also without punctuation after it. The name keeps its own spelling.
+ */
+function mentionedName(raw: string, names: readonly string[]): string | undefined {
   const lower = raw.toLowerCase();
-  return (
-    refs.roles.find((r) => r.name.toLowerCase() === lower) ??
-    refs.roles.find((r) => r.name.toLowerCase() === lower.split(' ')[0])
+  const first = lower.split(' ')[0]!;
+  const bare = (s: string): string => s.replace(/[.,!?;:)\]}'"»…]+$/, '');
+  for (const c of [lower, bare(lower), first, bare(first)]) {
+    const found = names.find((n) => n.toLowerCase() === c);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function mentionedRole(raw: string, refs: MentionRefs): MentionRefs['roles'][number] | undefined {
+  const name = mentionedName(
+    raw,
+    refs.roles.map((r) => r.name),
   );
+  return name === undefined ? undefined : refs.roles.find((r) => r.name === name);
 }
 
 /**

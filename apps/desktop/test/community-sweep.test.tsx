@@ -388,3 +388,27 @@ describe('timeouts', () => {
     expect(screen.getByRole('button', { name: 'Time out' })).toBeTruthy();
   });
 });
+
+describe('@mentions before punctuation', () => {
+  it('are highlighted as notifications count them', () => {
+    const refs = {
+      roles: [{ name: 'Plain', color: 0, mine: false, members: 2 }],
+      channels: [],
+    };
+    render(
+      <RichText
+        text="Hey @Leo, and @Sam Rivera! Ping @Plain. Not @Leonardo"
+        names={['Leo', 'Sam Rivera']}
+        me="Leo"
+        refs={refs}
+      />,
+    );
+    const marked = [...document.querySelectorAll('.mention')].map((m) => m.textContent);
+    expect(marked).toEqual(['@Leo', '@Sam Rivera', '@Plain']);
+    expect(document.querySelector('.mention--me')?.textContent).toBe('@Leo');
+    expect(document.body.textContent).toContain('@Leo, and @Sam Rivera! Ping @Plain. Not @Leonardo');
+    expect(document.querySelector('.mention--role')?.getAttribute('title')).toBe(
+      'Plain — a role · 2 members',
+    );
+  });
+});
