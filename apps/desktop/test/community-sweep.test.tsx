@@ -9,6 +9,8 @@ import { CommunitySettings } from '../src/renderer/src/community/ui/CommunitySet
 import { ProfileCard } from '../src/renderer/src/community/ui/Members.tsx';
 import { OnboardingSettings } from '../src/renderer/src/community/ui/Onboarding.tsx';
 import { Modals } from '../src/renderer/src/pages/CommunitiesPage.tsx';
+import { RichText } from '../src/renderer/src/community/ui/common.tsx';
+import { ChannelSettings, channelName } from '../src/renderer/src/community/ui/Dialogs.tsx';
 
 /** Regression tests for the communities sweep (desktop, after 2.21.2). */
 
@@ -271,5 +273,40 @@ describe('removing things for everyone', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Delete category' })));
     expect(action).toHaveBeenCalledWith({ a: 'deleteCategory', communityId: 'c', categoryId: 'k' });
     expect(useCommunity.getState().modal).toBeNull();
+  });
+});
+
+describe('#channel mentions', () => {
+  it('link channels named in any of River’s languages', () => {
+    const onChannel = vi.fn();
+    const refs = {
+      roles: [],
+      channels: [
+        { id: 'ru', name: 'общий' },
+        { id: 'de', name: 'spiele-für-alle' },
+        { id: 'en', name: 'general' },
+      ],
+      onChannel,
+    };
+    render(<RichText text="see #общий, #spiele-für-alle and #general!" names={[]} me={null} refs={refs} />);
+    fireEvent.click(screen.getByRole('button', { name: '#общий' }));
+    expect(onChannel).toHaveBeenCalledWith('ru');
+    fireEvent.click(screen.getByRole('button', { name: '#spiele-für-alle' }));
+    expect(onChannel).toHaveBeenCalledWith('de');
+    // Punctuation after a name is not part of it.
+    expect(screen.getByRole('button', { name: '#general' })).toBeTruthy();
+  });
+
+  it('a renamed text channel is saved as a channel name, so it can still be mentioned', async () => {
+    expect(channelName('  Game Night ', true)).toBe('game-night');
+    expect(channelName(' Lounge 2 ', false)).toBe('Lounge 2');
+    const c = community({ permissions: ALL_PERMISSIONS, myRank: Infinity, ownerId: 'me' });
+    render(<ChannelSettings community={c} channel={c.channels[0]!} />);
+    fireEvent.change(screen.getByLabelText('Channel name'), { target: { value: 'Game Night' } });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save changes' })));
+    expect(action).toHaveBeenCalledWith(
+      expect.objectContaining({ a: 'updateChannel', channelId: 'ch', name: 'game-night' }),
+    );
+    expect((screen.getByLabelText('Channel name') as HTMLInputElement).value).toBe('game-night');
   });
 });

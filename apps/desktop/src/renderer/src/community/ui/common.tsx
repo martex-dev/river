@@ -893,8 +893,9 @@ function Lines({ text, ctx, keyBase }: { text: string; ctx: InlineCtx; keyBase: 
   );
 }
 
+// #channel names in any of River's languages (Cyrillic, Greek, accented Latin): not only [\w-].
 const INLINE =
-  /(<a?:[A-Za-z0-9_]{2,32}:[A-Za-z0-9_-]{22}>|\\[\\*_~|`>#\-[\]()@<]|`[^`\n]+`|\|\|[^|\n]+\|\||\[[^\]\n]{1,200}\]\((?:https?:\/\/|mailto:|tel:)[^\s)]{1,2000}\)|https?:\/\/[^\s<>]+[^\s<>.,:;"')\]!?]|mailto:[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63})+|tel:\+?[0-9][0-9.-]{2,30}[0-9]|<t:\d{1,12}(?::[tTdDfFR])?>|\*\*\*[^*\n]+\*\*\*|\*\*(?:[^*\n]|\*[^*\n]+\*)+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|_[^_\n]+_|@everyone|@here|@[^\s@]+(?: [^\s@]+)?|#[\w-]+)/g;
+  /(<a?:[A-Za-z0-9_]{2,32}:[A-Za-z0-9_-]{22}>|\\[\\*_~|`>#\-[\]()@<]|`[^`\n]+`|\|\|[^|\n]+\|\||\[[^\]\n]{1,200}\]\((?:https?:\/\/|mailto:|tel:)[^\s)]{1,2000}\)|https?:\/\/[^\s<>]+[^\s<>.,:;"')\]!?]|mailto:[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63})+|tel:\+?[0-9][0-9.-]{2,30}[0-9]|<t:\d{1,12}(?::[tTdDfFR])?>|\*\*\*[^*\n]+\*\*\*|\*\*(?:[^*\n]|\*[^*\n]+\*)+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|_[^_\n]+_|@everyone|@here|@[^\s@]+(?: [^\s@]+)?|#[\w\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u024f\u0370-\u03ff\u0400-\u052f-]+)/g;
 
 export function openLink(url: string): void {
   // A link to a River message opens it here; anything else goes to the browser (or, for mailto:

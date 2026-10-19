@@ -162,6 +162,11 @@ export function InviteDialog({ community }: { community: CommunityView }): React
   );
 }
 
+/** A channel's name as saved: text channels lowercase with dashes for spaces ("game-night"). */
+export function channelName(name: string, text: boolean): string {
+  return text ? name.trim().toLowerCase().replace(/\s+/g, '-') : name.trim();
+}
+
 export function CreateChannelDialog(props: {
   community: CommunityView;
   kind: 'text' | 'voice';
@@ -172,7 +177,7 @@ export function CreateChannelDialog(props: {
   const [name, setName] = useState('');
   const [isPrivate, setPrivate] = useState(false);
   const [busy, setBusy] = useState(false);
-  const cleaned = kind === 'text' || kind === 'forum' ? name.toLowerCase().replace(/\s+/g, '-') : name;
+  const cleaned = channelName(name, kind === 'text' || kind === 'forum');
   const submit = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
     if (!cleaned.trim()) return;
@@ -679,9 +684,13 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
                   <button
                     className="btn btn--primary btn--small"
                     disabled={name.trim() === ''}
-                    onClick={() =>
-                      void s.run({ a: 'updateChannel', channelId: channel.id, name: name.trim(), topic })
-                    }
+                    onClick={() => {
+                      // Text channels are named as when they were made (lowercase, dashes), so a
+                      // renamed channel can still be #mentioned; the box shows what was saved.
+                      const saved = channelName(name, channel.kind === 'text');
+                      setName(saved);
+                      void s.run({ a: 'updateChannel', channelId: channel.id, name: saved, topic });
+                    }}
                   >
                     {tr('Save changes')}
                   </button>

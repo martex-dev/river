@@ -33,6 +33,11 @@ All notable changes to River are documented here. The format follows
   delete a webhook, delete a channel or category) goes back to where you were
   instead of closing settings altogether, and after deleting a role or kicking
   someone you are back on the same tab.
+- #channel links work for channels named in other languages: #общий or
+  #spiele-für-alle stayed plain text (only English letters were recognised),
+  although the suggestions offered them. Renaming a text channel now saves the
+  name the way new channels get it (lowercase, dashes for spaces), so a renamed
+  "Game Night" can still be mentioned as #game-night.
 
 ## [2.21.2] - 2026-10-19
 
