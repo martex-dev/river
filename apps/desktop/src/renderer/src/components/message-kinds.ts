@@ -1,3 +1,4 @@
+import { tr, trn } from '../i18n.ts';
 /**
  * Small pure helpers for how messages look (2.19), shared by direct messages and channels:
  * big emoji, one-line previews for replies, and long links shortened in bubbles.
@@ -56,13 +57,14 @@ export function attachmentLabel(attachments: ReadonlyArray<{ name: string; mime:
   if (!first) return '';
   const all = (test: (a: { name: string; mime: string }) => boolean): boolean => attachments.every(test);
   const n = attachments.length;
-  if (all((a) => a.name.startsWith(VOICE_NAME_PREFIX) && a.mime.startsWith('audio/'))) return 'Voice message';
-  if (all((a) => a.name.startsWith(STICKER_NAME_PREFIX) && a.mime.startsWith('image/'))) return 'Sticker';
-  if (all((a) => a.mime === 'image/gif')) return n > 1 ? `${n} GIFs` : 'GIF';
-  if (all((a) => a.mime.startsWith('image/'))) return n > 1 ? `${n} photos` : 'Photo';
-  if (all((a) => a.mime.startsWith('video/'))) return n > 1 ? `${n} videos` : 'Video';
-  if (all((a) => a.mime.startsWith('audio/'))) return n > 1 ? `${n} audio files` : 'Audio';
-  return n > 1 ? `${n} files` : `File: ${first.name}`;
+  if (all((a) => a.name.startsWith(VOICE_NAME_PREFIX) && a.mime.startsWith('audio/')))
+    return tr('Voice message');
+  if (all((a) => a.name.startsWith(STICKER_NAME_PREFIX) && a.mime.startsWith('image/'))) return tr('Sticker');
+  if (all((a) => a.mime === 'image/gif')) return n > 1 ? trn('{count} GIFs', n) : 'GIF';
+  if (all((a) => a.mime.startsWith('image/'))) return n > 1 ? trn('{count} photos', n) : tr('Photo');
+  if (all((a) => a.mime.startsWith('video/'))) return n > 1 ? trn('{count} videos', n) : tr('Video');
+  if (all((a) => a.mime.startsWith('audio/'))) return n > 1 ? trn('{count} audio files', n) : tr('Audio');
+  return n > 1 ? trn('{count} files', n) : tr('File: {name}', { name: first.name });
 }
 
 /** The message's text on one line, as plain as a preview should be: no Markdown, spoilers hidden. */
@@ -73,7 +75,7 @@ export function plainLine(text: string): string {
     .filter((l) => l.trim() && !/^-# ↪ /.test(l));
   const line = (lines[0] ?? '')
     .replace(/```/g, '')
-    .replace(/\|\|[^|\n]+\|\|/g, 'Spoiler')
+    .replace(/\|\|[^|\n]+\|\|/g, tr('Spoiler'))
     .replace(CUSTOM_TOKEN, (_m, name: string) => `:${name}:`)
     .replace(/\[([^\]\n]{1,200})\]\((?:https?|mailto|tel):[^\s)]+\)/g, '$1')
     .replace(/<t:(\d{1,12})(?::[tTdDfFR])?>/g, (_m, unix: string) =>
@@ -91,12 +93,12 @@ export function plainLine(text: string): string {
  * it holds — "Photo", "Voice message", "Poll: …" — as in Telegram.
  */
 export function replyPreview(m: Previewable): string {
-  if (m.deleted) return 'Deleted message';
-  if (m.poll) return `Poll: ${plainLine(m.poll.question) || 'a question'}`;
+  if (m.deleted) return tr('Deleted message');
+  if (m.poll) return tr('Poll: {question}', { question: plainLine(m.poll.question) || tr('a question') });
   const text = plainLine(m.text);
   const kind = attachmentLabel(m.attachments);
   if (text && kind) return `${kind} · ${text}`;
-  return text || kind || 'Message';
+  return text || kind || tr('Message');
 }
 
 /** Links longer than this show shortened in a message (the whole address on hover and long-press). */

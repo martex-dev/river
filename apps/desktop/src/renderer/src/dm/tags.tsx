@@ -1,3 +1,4 @@
+import { tr } from '../i18n.ts';
 import { useEffect, useState, type ReactElement } from 'react';
 import { create } from 'zustand';
 import { MAX_TAGS_PER_MESSAGE, TAG_RE, type MessageTags } from '../../../shared/dm.ts';
@@ -71,7 +72,7 @@ export function cleanTag(raw: string): string {
 export function TagChips({ tags }: { tags: readonly string[] | undefined }): ReactElement | null {
   if (!tags?.length) return null;
   return (
-    <div className="msg-tags" role="group" aria-label="Tags">
+    <div className="msg-tags" role="group" aria-label={tr('Tags')}>
       {tags.map((t) => (
         <span key={t} className="msg-tag">
           #{t}
@@ -89,7 +90,7 @@ export function TagFilter(props: {
 }): ReactElement | null {
   if (props.tags.length === 0) return null;
   return (
-    <div className="tag-filter" role="radiogroup" aria-label="Show tagged">
+    <div className="tag-filter" role="radiogroup" aria-label={tr('Show tagged')}>
       <button
         type="button"
         role="radio"
@@ -97,7 +98,7 @@ export function TagFilter(props: {
         className={`chip ${props.value === null ? 'is-on' : ''}`}
         onClick={() => props.onChange(null)}
       >
-        All
+        {tr('All')}
       </button>
       {props.tags.map((t) => (
         <button
@@ -129,19 +130,21 @@ export function TagDialog(props: { tagKey: string; onClose(): void }): ReactElem
     setTyped('');
   };
   return (
-    <Modal title="Tags" onClose={props.onClose}>
+    <Modal title={tr('Tags')} onClose={props.onClose}>
       <p className="muted small">
-        Up to {MAX_TAGS_PER_MESSAGE} tags, to find this again with the filter above your notes and saved
-        messages. Kept encrypted on this device only.
+        {tr(
+          'Up to {count} tags, to find this again with the filter above your notes and saved messages. Kept encrypted on this device only.',
+          { count: MAX_TAGS_PER_MESSAGE },
+        )}
       </p>
-      <div className="msg-tags" role="group" aria-label="This message's tags">
-        {tags.length === 0 && <span className="muted small">No tags yet.</span>}
+      <div className="msg-tags" role="group" aria-label={tr("This message's tags")}>
+        {tags.length === 0 && <span className="muted small">{tr('No tags yet.')}</span>}
         {tags.map((t) => (
           <button
             key={t}
             type="button"
             className="msg-tag"
-            aria-label={`Remove #${t}`}
+            aria-label={tr('Remove {name}', { name: `#${t}` })}
             onClick={() => setTags(tags.filter((x) => x !== t))}
           >
             #{t} ✕
@@ -155,24 +158,24 @@ export function TagDialog(props: { tagKey: string; onClose(): void }): ReactElem
         }}
       >
         <label className="textfield">
-          <span className="field__label">Add a tag</span>
+          <span className="field__label">{tr('Add a tag')}</span>
           <input
             autoFocus
             value={typed}
             maxLength={25}
-            placeholder="ideas"
+            placeholder={tr('ideas')}
             disabled={tags.length >= MAX_TAGS_PER_MESSAGE}
             onChange={(e) => setTyped(e.target.value)}
           />
         </label>
         {typed && !TAG_RE.test(candidate) && (
           <p className="muted small" role="status">
-            Letters, numbers, _ and - only.
+            {tr('Letters, numbers, _ and - only.')}
           </p>
         )}
       </form>
       {known.length > 0 && (
-        <div className="msg-tags" role="group" aria-label="Tags you used before">
+        <div className="msg-tags" role="group" aria-label={tr('Tags you used before')}>
           {known.slice(0, 20).map((t) => (
             <button
               key={t}
@@ -203,7 +206,7 @@ export function TagDialog(props: { tagKey: string; onClose(): void }): ReactElem
               });
           }}
         >
-          Save tags
+          {tr('Save tags')}
         </button>
       </div>
     </Modal>

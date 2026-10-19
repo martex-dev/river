@@ -1,3 +1,4 @@
+import { fill, msg, type Vars } from '../../../shared/i18n/index.ts';
 /**
  * Connection details for one person in a call (1.0.19): how the audio gets
  * there and how well. Pure, so it can be tested with plain stat objects.
@@ -49,13 +50,17 @@ export function readLinkStats(
 }
 
 /** "Direct · 38 ms · 0% loss", "Via server", … for a tile's tooltip. */
-export function describeLink(s: LinkStats): string {
-  if (s.path === 'connecting') return 'Connecting…';
+export function describeLink(s: LinkStats, t: (text: string, vars?: Vars) => string = fill): string {
+  if (s.path === 'connecting') return t(msg('Connecting…'));
   const parts = [
-    s.path === 'server' ? 'Via your server (encrypted)' : s.path === 'relay-turn' ? 'Via relay' : 'Direct',
+    s.path === 'server'
+      ? t(msg('Via your server (encrypted)'))
+      : s.path === 'relay-turn'
+        ? t(msg('Via relay'))
+        : t(msg('Direct')),
   ];
   if (s.rttMs !== null) parts.push(`${s.rttMs} ms`);
-  if (s.loss !== null) parts.push(`${Math.round(s.loss * 100)}% loss`);
+  if (s.loss !== null) parts.push(t(msg('{percent}% loss'), { percent: Math.round(s.loss * 100) }));
   return parts.join(' · ');
 }
 

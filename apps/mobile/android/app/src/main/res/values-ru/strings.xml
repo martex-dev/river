@@ -44,6 +44,7 @@
     <string name="service_title">River на связи</string>
     <string name="service_text">Новые сообщения приходят, даже когда River закрыт. Отключить: «Настройки → Система».</string>
     <string name="installer_could_not_open">Не удалось открыть установщик Android</string>
+    <string name="core_restarted">River перезапустил своё ядро. Попробуйте ещё раз.</string>
     <plurals name="new_messages_count">
         <item quantity="one">%d новое сообщение</item>
         <item quantity="few">%d новых сообщения</item>

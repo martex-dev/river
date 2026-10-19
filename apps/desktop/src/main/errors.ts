@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { UserFacingError } from './account/account-service.ts';
 import { CommunityError } from './community/community-service.ts';
 import { ApiError, NetworkError } from './http.ts';
-import { msg } from '../shared/i18n/index.ts';
+import { msg, type Vars } from '../shared/i18n/index.ts';
 
 /**
  * Turns any error into one plain sentence for the person using River: what
@@ -27,3 +27,22 @@ export function friendlyError(err: unknown): string {
   }
   return msg('Something went wrong. Check your connection and try again.');
 }
+
+/**
+ * The same, as a text to translate and the details to fill into it: errors with details
+ * ("You can have up to {count} folders.") keep them apart, so they read right in every language.
+ */
+export function friendlyText(err: unknown): { text: string; vars?: Vars } {
+  if (err instanceof CommunityError || err instanceof UserFacingError || err instanceof BackupError)
+    return err.vars ? { text: err.text, vars: err.vars } : { text: err.text };
+  return { text: friendlyError(err) };
+}
+
+/** BackupError's own texts (it lives in @river/crypto), marked here for translation. */
+export const BACKUP_TEXTS = [
+  msg('The recovery phrase has {expected} words; you entered {count}.'),
+  msg('"{word}" is not a recovery word. Check the spelling.'),
+  msg('The recovery phrase is not right — a word may be wrong or in the wrong order.'),
+  msg('This is not a River backup file.'),
+  msg('This recovery phrase does not open this backup.'),
+];

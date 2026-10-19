@@ -2,6 +2,7 @@ import { useEffect, type CSSProperties, type ReactElement } from 'react';
 import { create } from 'zustand';
 import { isMessageEffect, type MessageEffect } from '../../../shared/dm.ts';
 import { quiet } from './delight.tsx';
+import { msg } from '../i18n.ts';
 
 /**
  * Message effects (2.19): a message sent with confetti, hearts or fireworks plays them over the
@@ -11,10 +12,32 @@ import { quiet } from './delight.tsx';
  * the end-to-end encrypted message; apps before 2.19 ignore it.
  */
 
-export const EFFECT_LABELS: Record<MessageEffect, { emoji: string; name: string }> = {
-  confetti: { emoji: '🎉', name: 'Confetti' },
-  hearts: { emoji: '❤️', name: 'Hearts' },
-  fireworks: { emoji: '🎆', name: 'Fireworks' },
+/** Each effect's emoji and its texts (translated where they are shown). */
+export const EFFECT_LABELS: Record<
+  MessageEffect,
+  { emoji: string; name: string; sendWith: string; sentWith: string; again: string }
+> = {
+  confetti: {
+    emoji: '🎉',
+    name: msg('Confetti'),
+    sendWith: msg('Send with confetti'),
+    sentWith: msg('Sent with confetti'),
+    again: msg('Play the confetti effect again'),
+  },
+  hearts: {
+    emoji: '❤️',
+    name: msg('Hearts'),
+    sendWith: msg('Send with hearts'),
+    sentWith: msg('Sent with hearts'),
+    again: msg('Play the hearts effect again'),
+  },
+  fireworks: {
+    emoji: '🎆',
+    name: msg('Fireworks'),
+    sendWith: msg('Send with fireworks'),
+    sentWith: msg('Sent with fireworks'),
+    again: msg('Play the fireworks effect again'),
+  },
 };
 
 export interface EffectPiece {

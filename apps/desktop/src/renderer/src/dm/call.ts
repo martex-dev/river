@@ -1,3 +1,4 @@
+import { tr } from '../i18n.ts';
 import type { CallOutcome, DmEvent } from '../../../shared/dm.ts';
 import type { PhoneCallAction } from '../../../shared/ipc.ts';
 import { play } from '../community/sound.ts';
@@ -84,7 +85,7 @@ function watchConnect(callId: string): void {
   connectTimer = window.setTimeout(() => {
     const active = useDmCall.getState().active;
     if (active?.callId !== callId || active.state !== 'connecting') return;
-    useCommunity.getState().notify('The call could not connect.', 'error');
+    useCommunity.getState().notify(tr('The call could not connect.'), 'error');
     void endDmCall();
   }, CONNECT_TIMEOUT_MS);
 }
@@ -105,7 +106,7 @@ function watchLost(callId: string, call: VoiceCall, peer: string): void {
     heard = Math.max(heard, call.lastHeard(peer));
     if (Date.now() - heard < CALL_LOST_MS) return;
     window.clearInterval(lostTimer);
-    useCommunity.getState().notify('The call was lost.', 'error');
+    useCommunity.getState().notify(tr('The call was lost.'), 'error');
     void endDmCall();
   }, LOST_CHECK_MS);
 }
@@ -211,7 +212,7 @@ async function begin(
     // If the two cannot connect directly, voice goes through the server, encrypted end to end.
     new WebCodecsRelay(me, (to, payload) => window.river.voice.relay(to, payload)),
   );
-  call.nameOf = (id) => useDm.getState().conversations.find((x) => x.riverId === id)?.name ?? 'Someone';
+  call.nameOf = (id) => useDm.getState().conversations.find((x) => x.riverId === id)?.name ?? tr('Someone');
   call.muted = community.getState().selfMuted;
   call.deafened = community.getState().selfDeafened;
   community.setState({ call, callError: null });
@@ -235,8 +236,8 @@ async function begin(
       .getState()
       .notify(
         (err as Error).name === 'NotAllowedError'
-          ? 'River could not use your microphone. Allow microphone access in your system settings.'
-          : (err as Error).message || 'The call could not start.',
+          ? tr('River could not use your microphone. Allow microphone access in your system settings.')
+          : (err as Error).message || tr('The call could not start.'),
         'error',
       );
     return false;
@@ -255,7 +256,7 @@ async function begin(
       if (live())
         community
           .getState()
-          .notify('River could not start your camera, so this call is voice only for now.', 'error');
+          .notify(tr('River could not start your camera, so this call is voice only for now.'), 'error');
     });
   }
   if (!live()) return false;
@@ -278,7 +279,7 @@ export async function startDmCall(peer: string, video: boolean): Promise<void> {
   if (useDmCall.getState().active?.callId !== callId) return;
   timeoutTimer = window.setTimeout(() => {
     if (useDmCall.getState().active?.callId === callId && useDmCall.getState().active?.state === 'ringing') {
-      useCommunity.getState().notify('No answer.');
+      useCommunity.getState().notify(tr('No answer.'));
       void endDmCall();
     }
   }, RING_TIMEOUT_MS);
@@ -369,7 +370,7 @@ export function handlePhoneCall(e: PhoneCallAction): void {
 
 export function handleCallEvent(e: Extract<DmEvent, { t: 'call' }>): void {
   const { active, incoming } = useDmCall.getState();
-  const name = useDm.getState().conversations.find((c) => c.riverId === e.peer)?.name ?? 'They';
+  const name = useDm.getState().conversations.find((c) => c.riverId === e.peer)?.name ?? tr('They');
   /** Our own call to this person, still ringing on their side. */
   const calling =
     active?.callId === e.callId &&
@@ -427,7 +428,7 @@ export function handleCallEvent(e: Extract<DmEvent, { t: 'call' }>): void {
           stopRinging();
           useDmCall.setState({ incoming: null });
           logCall({ ...ringing, direction: 'in', connectedAt: null });
-          useCommunity.getState().notify(`Missed call from ${name}.`);
+          useCommunity.getState().notify(tr('Missed call from {name}.', { name }));
         }
       }, RING_TIMEOUT_MS);
       return;
@@ -451,7 +452,11 @@ export function handleCallEvent(e: Extract<DmEvent, { t: 'call' }>): void {
       if (!calling) return;
       useCommunity
         .getState()
-        .notify(e.kind === 'busy' ? `${name} is in another call.` : `${name} declined the call.`);
+        .notify(
+          e.kind === 'busy'
+            ? tr('{name} is in another call.', { name })
+            : tr('{name} declined the call.', { name }),
+        );
       void endDmCall(e.kind === 'busy' ? 'busy' : 'declined');
       return;
     case 'elsewhere':
@@ -467,7 +472,7 @@ export function handleCallEvent(e: Extract<DmEvent, { t: 'call' }>): void {
         useDmCall.setState({ incoming: null });
         // "end" carries no video flag: the invite said whether it was a video call.
         logCall({ ...incoming, direction: 'in', connectedAt: null });
-        useCommunity.getState().notify(`Missed call from ${name}.`);
+        useCommunity.getState().notify(tr('Missed call from {name}.', { name }));
       } else if (active?.callId === e.callId && active.peer === e.peer) {
         void endDmCall();
       }

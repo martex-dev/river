@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.ts';
 import { FavoriteStar } from './Favorites.tsx';
 import { isStickerFile } from './Stickers.tsx';
 import { isVoiceMessage, VoiceNote } from '../../components/VoiceMessage.tsx';
@@ -96,7 +97,7 @@ function useVisible(): [React.RefObject<HTMLDivElement | null>, boolean] {
 export async function saveAttachment(pointer: AttachmentPointer): Promise<void> {
   const res = await window.river.community.saveAttachment(pointer);
   if (!res.ok) useCommunity.getState().notify(res.message, 'error');
-  else if (res.value) useCommunity.getState().notify(`Saved ${pointer.name}`);
+  else if (res.value) useCommunity.getState().notify(tr('Saved {name}', { name: pointer.name }));
 }
 
 /**
@@ -196,7 +197,9 @@ function ImageAttachment({
         style={{ width, aspectRatio: String(ratio) }}
         role="button"
         tabIndex={0}
-        aria-label={alt ? `Image: ${alt}` : `Image ${pointer.name}`}
+        aria-label={
+          alt ? tr('Image: {description}', { description: alt }) : tr('Image {name}', { name: pointer.name })
+        }
         onClick={() => (url ? onOpen() : setManual(true))}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -218,12 +221,14 @@ function ImageAttachment({
         )}
         {alt && (
           <span className="attachment-image__alt" title={alt}>
-            ALT
+            {tr('ALT')}
           </span>
         )}
         {!url && !error && (visible || manual) && <span className="attachment-image__spinner" />}
         {!url && !error && !manual && pointer.size > AUTO_LOAD_BYTES && (
-          <span className="attachment-image__hint">Click to load · {formatBytes(pointer.size)}</span>
+          <span className="attachment-image__hint">
+            {tr('Click to load · {size}', { size: formatBytes(pointer.size) })}
+          </span>
         )}
         {error && <span className="attachment-image__hint attachment-image__hint--error">{error}</span>}
       </div>
@@ -254,13 +259,15 @@ function MediaAttachment({ pointer }: { pointer: AttachmentPointer }): ReactElem
             <strong>{pointer.name}</strong>
             <span className="muted small">
               {error ??
-                (load ? 'Decrypting…' : `${video ? 'Video' : 'Audio'} · ${formatBytes(pointer.size)}`)}
+                (load
+                  ? tr('Decrypting…')
+                  : `${video ? tr('Video') : tr('Audio')} · ${formatBytes(pointer.size)}`)}
             </span>
           </span>
         </button>
       )}
       <button className="btn btn--link attachment-media__save" onClick={() => void saveAttachment(pointer)}>
-        Save
+        {tr('Save')}
       </button>
     </div>
   );
@@ -278,8 +285,8 @@ function SpeedVideo({ url, name }: { url: string; name: string }): ReactElement 
       <button
         type="button"
         className="speed-video__speed"
-        aria-label={`Playback speed ${speed}×`}
-        title="Playback speed"
+        aria-label={tr('Playback speed {speed}×', { speed })}
+        title={tr('Playback speed')}
         onClick={() => {
           const n = VIDEO_SPEEDS[(VIDEO_SPEEDS.indexOf(speed) + 1) % VIDEO_SPEEDS.length]!;
           setSpeed(n);
@@ -315,7 +322,7 @@ function FileCard({ pointer }: { pointer: AttachmentPointer }): ReactElement {
         <strong title={pointer.name}>{pointer.name}</strong>
         <span className="muted small">
           {formatBytes(pointer.size)}
-          {icon === '⚠️' ? ' · program — only run it if you trust the sender' : ''}
+          {icon === '⚠️' ? ` · ${tr('program — only run it if you trust the sender')}` : ''}
         </span>
       </span>
       <button
@@ -326,7 +333,7 @@ function FileCard({ pointer }: { pointer: AttachmentPointer }): ReactElement {
           void saveAttachment(pointer).finally(() => setBusy(false));
         }}
       >
-        {busy ? 'Decrypting…' : 'Save'}
+        {busy ? tr('Decrypting…') : tr('Save')}
       </button>
     </div>
   );
@@ -402,7 +409,7 @@ function Lightbox({
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      useCommunity.getState().notify('River could not copy this image.', 'error');
+      useCommunity.getState().notify(tr('River could not copy this image.'), 'error');
     }
   };
   // Rendered into <body>, not inside the message: the message's swipe and taps stay out of it.
@@ -438,7 +445,7 @@ function Lightbox({
           {prev && (
             <button
               className="lightbox__nav lightbox__nav--prev"
-              aria-label="Previous picture"
+              aria-label={tr('Previous picture')}
               onClick={(e) => {
                 e.stopPropagation();
                 onNavigate?.(prev);
@@ -450,7 +457,7 @@ function Lightbox({
           {next && (
             <button
               className="lightbox__nav lightbox__nav--next"
-              aria-label="Next picture"
+              aria-label={tr('Next picture')}
               onClick={(e) => {
                 e.stopPropagation();
                 onNavigate?.(next);
@@ -467,21 +474,26 @@ function Lightbox({
         <span className="muted small lightbox__zoom" aria-live="polite">
           {Math.round(scale * 100)}%
         </span>
-        <button className="icon-btn" aria-label="Zoom out" disabled={scale <= 1} onClick={() => zoom(-1)}>
+        <button
+          className="icon-btn"
+          aria-label={tr('Zoom out')}
+          disabled={scale <= 1}
+          onClick={() => zoom(-1)}
+        >
           −
         </button>
-        <button className="icon-btn" aria-label="Zoom in" disabled={scale >= 8} onClick={() => zoom(1)}>
+        <button className="icon-btn" aria-label={tr('Zoom in')} disabled={scale >= 8} onClick={() => zoom(1)}>
           +
         </button>
         {pointer.mime.startsWith('image/') && (
           <button className="btn btn--ghost btn--small" onClick={() => void copy()}>
-            {copied ? 'Copied' : 'Copy image'}
+            {copied ? tr('Copied') : tr('Copy image')}
           </button>
         )}
         <button className="btn btn--ghost btn--small" onClick={() => void saveAttachment(pointer)}>
-          Save
+          {tr('Save')}
         </button>
-        <button className="icon-btn" aria-label="Close" onClick={onClose}>
+        <button className="icon-btn" aria-label={tr('Close')} onClick={onClose}>
           <XIcon />
         </button>
       </div>
@@ -595,7 +607,9 @@ async function prepare(file: File): Promise<{
   thumb?: string;
 }> {
   if (file.size > MAX_ATTACHMENT_BYTES)
-    throw new Error(`${file.name} is larger than ${formatBytes(MAX_ATTACHMENT_BYTES)}.`);
+    throw new Error(
+      tr('{name} is larger than {size}.', { name: file.name, size: formatBytes(MAX_ATTACHMENT_BYTES) }),
+    );
   const bytes = new Uint8Array(await file.arrayBuffer());
   const base = { name: file.name || 'file', mime: file.type || 'application/octet-stream', bytes };
   if (!INLINE_IMAGE.has(file.type)) return base;
@@ -624,7 +638,7 @@ async function prepare(file: File): Promise<{
 /** Thrown when the person cancels an upload. */
 export class UploadCancelled extends Error {
   constructor() {
-    super('Upload cancelled.');
+    super(tr('Upload cancelled.'));
   }
 }
 
@@ -666,11 +680,19 @@ export function PendingFiles(props: {
             <button
               type="button"
               className={`pending-file__alt ${p.alt ? 'is-set' : ''}`}
-              title={p.alt ? `Description: ${p.alt}` : 'Describe this picture for people who cannot see it'}
-              aria-label={p.alt ? `Edit description of ${p.file.name}` : `Describe ${p.file.name}`}
+              title={
+                p.alt
+                  ? tr('Description: {description}', { description: p.alt })
+                  : tr('Describe this picture for people who cannot see it')
+              }
+              aria-label={
+                p.alt
+                  ? tr('Edit description of {name}', { name: p.file.name })
+                  : tr('Describe {name}', { name: p.file.name })
+              }
               onClick={() => setEditing(editing === p.key ? null : p.key)}
             >
-              ALT
+              {tr('ALT')}
             </button>
           )}
           {editing === p.key && props.onAlt && (
@@ -679,8 +701,8 @@ export function PendingFiles(props: {
               autoFocus
               rows={3}
               maxLength={1000}
-              placeholder="Describe this picture"
-              aria-label={`Description of ${p.file.name}`}
+              placeholder={tr('Describe this picture')}
+              aria-label={tr('Description of {name}', { name: p.file.name })}
               defaultValue={p.alt ?? ''}
               onBlur={(e) => {
                 props.onAlt!(p.key, e.target.value.trim());
@@ -708,7 +730,7 @@ export function PendingFiles(props: {
           <span className="muted small">{formatBytes(p.file.size)}</span>
           <button
             className="pending-file__x"
-            aria-label={`Remove ${p.file.name}`}
+            aria-label={tr('Remove {name}', { name: p.file.name })}
             onClick={() => props.onRemove(p.key)}
           >
             <XIcon size={14} />

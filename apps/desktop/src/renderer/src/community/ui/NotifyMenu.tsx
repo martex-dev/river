@@ -12,12 +12,13 @@ import { useDm } from '../../dm/store.ts';
 import { useRiver } from '../../store.ts';
 import { playNotifySound } from '../sound.ts';
 import { MenuItem } from './common.tsx';
+import { msg, tr } from '../../i18n.ts';
 
 const LEVELS: Array<{ id: Override['level']; label: string }> = [
-  { id: 'default', label: 'Use the default' },
-  { id: 'all', label: 'All messages' },
-  { id: 'mentions', label: 'Only @mentions' },
-  { id: 'nothing', label: 'Nothing' },
+  { id: 'default', label: msg('Use the default') },
+  { id: 'all', label: msg('All messages') },
+  { id: 'mentions', label: msg('Only @mentions') },
+  { id: 'nothing', label: msg('Nothing') },
 ];
 
 /**
@@ -26,19 +27,23 @@ const LEVELS: Array<{ id: Override['level']; label: string }> = [
  */
 function chatLevels(group: boolean): Array<{ id: Override['level']; label: string }> {
   return [
-    { id: 'default', label: 'All messages' },
-    ...(group ? [{ id: 'mentions' as const, label: 'Only @mentions and replies' }] : []),
-    { id: 'nothing', label: 'Nothing' },
+    { id: 'default', label: msg('All messages') },
+    ...(group ? [{ id: 'mentions' as const, label: msg('Only @mentions and replies') }] : []),
+    { id: 'nothing', label: msg('Nothing') },
   ];
 }
 
 /** "Muted until 18:30", "Muted" (for good) or null. */
 export function mutedLabel(until: string | null | undefined, now = Date.now()): string | null {
   if (!until || Date.parse(until) <= now) return null;
-  if (until === FOREVER) return 'Muted';
+  if (until === FOREVER) return tr('Muted');
   const d = new Date(until);
   const sameDay = new Date(now).toDateString() === d.toDateString();
-  return `Muted until ${sameDay ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}`;
+  return tr('Muted until {when}', {
+    when: sameDay
+      ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+      : d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+  });
 }
 
 /**
@@ -64,10 +69,15 @@ export function NotifyMenuSection(props: {
     props.onDone();
   };
   const toggle = (menu: 'mute' | 'level' | 'sound'): void => setChoosing(choosing === menu ? null : menu);
-  const noun = props.kind === 'conversation' ? 'chat' : props.kind;
+  const muteText: [string, string] = {
+    channel: [msg('Mute channel'), msg('Unmute channel')],
+    category: [msg('Mute category'), msg('Unmute category')],
+    community: [msg('Mute community'), msg('Unmute community')],
+    conversation: [msg('Mute chat'), msg('Unmute chat')],
+  }[props.kind] as [string, string];
   const levels = props.kind === 'conversation' ? chatLevels(group) : LEVELS;
   const level = current?.level ?? 'default';
-  const levelLabel = (levels.find((l) => l.id === level) ?? levels[0]!).label;
+  const levelLabel = tr((levels.find((l) => l.id === level) ?? levels[0]!).label);
   const sound: NotifySound = current?.sound ?? 'default';
   const fallback = props.kind === 'conversation' ? 'dm' : 'message';
   return (
@@ -75,22 +85,22 @@ export function NotifyMenuSection(props: {
       <div className="menu__sep" role="separator" />
       {muted ? (
         <MenuItem icon={<span aria-hidden="true">🔔</span>} onClick={() => save({ muteUntil: null })}>
-          Unmute {noun}
+          {tr(muteText[1])}
           <span className="menu__hint">{mutedLabel(current?.muteUntil)}</span>
         </MenuItem>
       ) : (
         <MenuItem icon={<span aria-hidden="true">🔕</span>} onClick={() => toggle('mute')}>
-          Mute {noun} {choosing === 'mute' ? '▾' : '▸'}
+          {tr(muteText[0])} {choosing === 'mute' ? '▾' : '▸'}
         </MenuItem>
       )}
       {choosing === 'mute' &&
         MUTE_CHOICES.map((c) => (
           <MenuItem key={c.label} onClick={() => save({ muteUntil: muteUntil(c.ms) })}>
-            <span className="menu__indent">{c.label}</span>
+            <span className="menu__indent">{tr(c.label)}</span>
           </MenuItem>
         ))}
       <MenuItem icon={<span aria-hidden="true">⚙</span>} onClick={() => toggle('level')}>
-        Notifications {choosing === 'level' ? '▾' : '▸'}
+        {tr('Notifications')} {choosing === 'level' ? '▾' : '▸'}
         <span className="menu__hint">{levelLabel}</span>
       </MenuItem>
       {choosing === 'level' &&
@@ -98,13 +108,13 @@ export function NotifyMenuSection(props: {
           <MenuItem key={l.id} onClick={() => save({ level: l.id })}>
             <span className="menu__indent">
               {level === l.id ? '● ' : '○ '}
-              {l.label}
+              {tr(l.label)}
             </span>
           </MenuItem>
         ))}
       <MenuItem icon={<span aria-hidden="true">♪</span>} onClick={() => toggle('sound')}>
-        Sound {choosing === 'sound' ? '▾' : '▸'}
-        <span className="menu__hint">{NOTIFY_SOUND_LABELS[sound]}</span>
+        {tr('Sound')} {choosing === 'sound' ? '▾' : '▸'}
+        <span className="menu__hint">{tr(NOTIFY_SOUND_LABELS[sound])}</span>
       </MenuItem>
       {choosing === 'sound' &&
         NOTIFY_SOUNDS.map((s) => (
@@ -118,7 +128,7 @@ export function NotifyMenuSection(props: {
           >
             <span className="menu__indent">
               {sound === s ? '● ' : '○ '}
-              {NOTIFY_SOUND_LABELS[s]}
+              {tr(NOTIFY_SOUND_LABELS[s])}
             </span>
           </MenuItem>
         ))}
@@ -127,7 +137,8 @@ export function NotifyMenuSection(props: {
           icon={<span aria-hidden="true">@</span>}
           onClick={() => save({ suppressEveryone: !current?.suppressEveryone })}
         >
-          {current?.suppressEveryone ? '● ' : '○ '}Ignore @everyone and @here
+          {current?.suppressEveryone ? '● ' : '○ '}
+          {tr('Ignore @everyone and @here')}
         </MenuItem>
       )}
     </>

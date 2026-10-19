@@ -163,7 +163,8 @@ export type LinkProgress =
    * absent on the new device itself.
    */
   | { state: 'linked'; deviceName?: string }
-  | { state: 'failed'; message: string };
+  /** `message` is English with {placeholders}, `vars` fills them; main says it in River's language. */
+  | { state: 'failed'; message: string; vars?: Record<string, string | number> };
 
 /** One device of this account, from its signed device list. */
 export interface LinkedDevice {

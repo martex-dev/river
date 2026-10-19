@@ -44,6 +44,7 @@
     <string name="service_title">River bağlı</string>
     <string name="service_text">River kapalıyken de yeni mesajlar gelir. Ayarlar → Sistem’den kapatın.</string>
     <string name="installer_could_not_open">Android yükleyicisi açılamadı</string>
+    <string name="core_restarted">River çekirdeğini yeniden başlattı. Yeniden deneyin.</string>
     <plurals name="new_messages_count">
         <item quantity="one">%d yeni mesaj</item>
         <item quantity="other">%d yeni mesaj</item>

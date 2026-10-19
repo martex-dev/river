@@ -111,7 +111,7 @@ import {
   seal,
   sealBound,
 } from './sealed.ts';
-import { msg } from '../../shared/i18n/index.ts';
+import { fill, msg, translate, type Language, type Vars } from '../../shared/i18n/index.ts';
 
 /** The shape WebRTC expects for STUN/TURN servers. */
 export interface RTCIceServerLike {
@@ -148,10 +148,18 @@ export type KeyMessage =
  */
 export const ACCEPT_UNPROVEN_KEYS = false;
 
+/**
+ * A problem to show people. `text` is the sentence before its details are filled in and `vars`
+ * the details, so IPC can say it in River's language; `message` is the filled-in English.
+ */
 export class CommunityError extends Error {
-  constructor(message: string) {
-    super(message);
+  readonly text: string;
+  readonly vars: Vars | undefined;
+  constructor(text: string, vars?: Vars) {
+    super(fill(text, vars));
     this.name = 'CommunityError';
+    this.text = text;
+    this.vars = vars;
   }
 }
 
@@ -181,6 +189,8 @@ interface Deps {
   onCallChange?: (inCall: boolean) => void;
   /** How this person appears (status and custom status), 1.0.17. */
   presence?: Pick<PresenceTracker, 'status' | 'custom'>;
+  /** River's language, for sentences written here (the audit log). English without it. */
+  language?: () => Language;
 }
 
 interface SealedProfile {
@@ -379,6 +389,11 @@ export class CommunityService {
   private readonly liveLast = new Map<string, string>();
   /** The newest message each channel had when we last counted its unread messages. */
   private readonly caughtUp = new Map<string, string>();
+
+  /** A name or text this service writes itself (a member's placeholder name), in River's language. */
+  private t(text: string, vars?: Vars): string {
+    return translate(this.deps.language?.() ?? 'en', text, vars);
+  }
 
   constructor(deps: Deps) {
     this.deps = deps;
@@ -1097,7 +1112,7 @@ export class CommunityService {
       meta = ring.open<{ name: string; description?: string; icon?: unknown }>(c.id, 'meta', c.meta);
     } catch {
       // Sealed with a newer key we have not received yet.
-      meta = { name: 'Waiting for the community key…' };
+      meta = { name: this.t('Waiting for the community key…') };
     }
     const ownerId = c.ownerId ?? c.members.find((m) => m.role === 'owner')?.riverId ?? '';
     // Servers before 0.3 have no roles: synthesise @everyone so permissions still make sense.
@@ -1233,7 +1248,7 @@ export class CommunityService {
       .sort((a, b) => a.position - b.position);
     const categories: CategoryView[] = c.categories
       .map((k) => {
-        let name = 'Category';
+        let name = this.t('Category');
         try {
           name = String(ring.open<{ name: string }>(c.id, `category:${k.id}`, k.name).name).slice(0, 64);
         } catch {
@@ -1253,7 +1268,9 @@ export class CommunityService {
       } catch {
         // unreadable profile
       }
-      const name = profile.name ? String(profile.name).slice(0, 64) : `Member ${m.riverId.slice(0, 4)}`;
+      const name = profile.name
+        ? String(profile.name).slice(0, 64)
+        : this.t('Member {id}', { id: m.riverId.slice(0, 4) });
       this.knownNames.set(m.riverId, name);
       if (
         typeof profile.identityKey === 'string' &&
@@ -1357,7 +1374,7 @@ export class CommunityService {
             const o = ring.open<{ name?: unknown; key?: unknown }>(c.id, `webhook:${w.id}`, w.sealed);
             const key = typeof o.key === 'string' ? Buffer.from(o.key, 'base64url') : null;
             if (!key || key.length !== 32) return [];
-            const name = String(o.name ?? 'Webhook').slice(0, 40) || 'Webhook';
+            const name = String(o.name ?? this.t('Webhook')).slice(0, 40) || this.t('Webhook');
             this.webhookKeys.set(w.id, { name, key });
             const { sealed: _sealed, ...rest } = w;
             return [{ ...rest, name }];
@@ -1517,7 +1534,7 @@ export class CommunityService {
         communityId,
         channelId: m.channelId,
         sender: m.sender,
-        senderName: hook ? hook.name : (sender?.name ?? `Member ${m.sender.slice(0, 4)}`),
+        senderName: hook ? hook.name : (sender?.name ?? this.t('Member {id}', { id: m.sender.slice(0, 4) })),
         ...(hook ? { webhook: m.webhook! } : {}),
         text,
         poll: readPoll(body.poll),
@@ -1565,7 +1582,7 @@ export class CommunityService {
                     open<{ name: string }>(key, communityId, `thread:${m.id}`, m.thread.name).name,
                   ).slice(0, 64);
                 } catch {
-                  return 'Thread';
+                  return this.t('Thread');
                 }
               })(),
               count: m.thread.count,
@@ -2292,7 +2309,7 @@ export class CommunityService {
         );
         const community = this.requireCommunity(act.communityId);
         return res.entries.map((e) =>
-          describeAudit(e, community, (id) => this.knownNames.get(id)),
+          describeAudit(e, community, (id) => this.knownNames.get(id), this.deps.language?.()),
         ) as CommunityActionResult<A>;
       }
       case 'outboxSave': {
@@ -2469,8 +2486,8 @@ export class CommunityService {
           createdByName: i.createdBy
             ? (community.members.find((m) => m.riverId === i.createdBy)?.name ??
               this.knownNames.get(i.createdBy) ??
-              'Someone who left')
-            : 'Unknown',
+              this.t('Someone who left'))
+            : this.t('Unknown'),
         })) as CommunityActionResult<A>;
       }
       case 'createWebhook': {
@@ -2529,7 +2546,7 @@ export class CommunityService {
           riverId: b.riverId,
           bannedOn: b.bannedOn,
           until: b.until ?? null,
-          name: this.knownNames.get(b.riverId) ?? `Member ${b.riverId.slice(0, 4)}`,
+          name: this.knownNames.get(b.riverId) ?? this.t('Member {id}', { id: b.riverId.slice(0, 4) }),
         }));
         return bans as CommunityActionResult<A>;
       }
@@ -2612,7 +2629,9 @@ export class CommunityService {
         const count = (this.db().prepare('SELECT COUNT(*) AS n FROM favorite_media').get() as { n: number })
           .n;
         if (count >= MAX_FAVORITE_MEDIA)
-          throw new CommunityError(`You can keep up to ${MAX_FAVORITE_MEDIA} favourites.`);
+          throw new CommunityError(msg('You can keep up to {count} favourites.'), {
+            count: MAX_FAVORITE_MEDIA,
+          });
         const bytes = await this.downloadAttachment(p);
         this.db()
           .prepare(
@@ -2902,7 +2921,7 @@ export class CommunityService {
               ring.open<{ text?: unknown }>(act.communityId, `note:${n.id}`, n.data).text ?? '',
             ).slice(0, 1000);
           } catch {
-            text = '(cannot be read on this device)';
+            text = this.t('(cannot be read on this device)');
           }
           return {
             id: n.id,
@@ -2910,7 +2929,7 @@ export class CommunityService {
             authorName:
               community.members.find((m) => m.riverId === n.author)?.name ??
               this.knownNames.get(n.author) ??
-              'A former moderator',
+              this.t('A former moderator'),
             text,
             createdAt: n.createdAt,
           };
@@ -3006,7 +3025,7 @@ export class CommunityService {
       case 'addEmoji': {
         const existing = await this.emojis(act.communityId);
         if (existing.some((e) => e.name.toLowerCase() === act.name.toLowerCase()))
-          throw new CommunityError(`There is already an emoji called :${act.name}:.`);
+          throw new CommunityError(msg('There is already an emoji called :{name}:.'), { name: act.name });
         const emojiId = randomId();
         const data = seal(this.requireKey(act.communityId), act.communityId, `emoji:${emojiId}`, {
           name: act.name,
@@ -3025,7 +3044,7 @@ export class CommunityService {
         const emoji = existing.find((e) => e.id === act.emojiId);
         if (!emoji) throw new CommunityError(msg('That emoji no longer exists.'));
         if (existing.some((e) => e.id !== act.emojiId && e.name.toLowerCase() === act.name.toLowerCase()))
-          throw new CommunityError(`There is already an emoji called :${act.name}:.`);
+          throw new CommunityError(msg('There is already an emoji called :{name}:.'), { name: act.name });
         const data = seal(this.requireKey(act.communityId), act.communityId, `emoji:${act.emojiId}`, {
           name: act.name,
           image: emoji.image,
@@ -3180,7 +3199,7 @@ export class CommunityService {
         await this.deps.account.connect();
         res = await post();
       } else if (err instanceof ApiError && err.status === 413) {
-        throw new CommunityError(`${file.name} is larger than this server allows.`);
+        throw new CommunityError(msg('{name} is larger than this server allows.'), { name: file.name });
       } else return explain(err);
     }
     const { id } = attachmentUploadResponseSchema.parse(JSON.parse(Buffer.from(res).toString('utf8')));
@@ -3567,7 +3586,7 @@ export class CommunityService {
     if (!ring) throw new CommunityError(msg('Waiting for the community key…'));
     const community = this.requireCommunity(communityId);
     const name = (id: string | null): string =>
-      id ? (community.members.find((m) => m.riverId === id)?.name ?? 'Someone who left') : '';
+      id ? (community.members.find((m) => m.riverId === id)?.name ?? this.t('Someone who left')) : '';
     const res = await this.call(
       `/communities/${communityId}/reports`,
       'GET',
@@ -3589,7 +3608,7 @@ export class CommunityService {
         reporterName: name(r.reporter),
         target: r.target,
         targetName: name(r.target) || String(data.senderName ?? '').slice(0, 64),
-        reason: String(data.reason ?? 'Unreadable').slice(0, 500),
+        reason: String(data.reason ?? this.t('Unreadable')).slice(0, 500),
         text: String(data.text ?? '').slice(0, 2000),
         status: r.status,
         resolvedBy: r.resolvedBy,
@@ -3623,7 +3642,7 @@ export class CommunityService {
             id: e.id,
             communityId,
             createdBy: e.createdBy,
-            name: String(data.name ?? '').slice(0, 100) || 'Event',
+            name: String(data.name ?? '').slice(0, 100) || this.t('Event'),
             description: String(data.description ?? '').slice(0, 1000),
             place: String(data.place ?? '').slice(0, 200),
             startsAt: e.startsAt,

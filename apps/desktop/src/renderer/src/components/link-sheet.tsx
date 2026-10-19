@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { MenuItem, openLink, Popover } from '../community/ui/common.tsx';
 import { useCommunity } from '../community/store.ts';
 import { closeLinkSheet, useLinkSheet } from './link-sheet-store.ts';
+import { tr } from '../i18n.ts';
 
 /**
  * A link's whole address (2.19), for the links a message shows shortened: right-click it on a
@@ -9,9 +10,9 @@ import { closeLinkSheet, useLinkSheet } from './link-sheet-store.ts';
  * copied — the address in full, so you see where it goes before you go.
  */
 function label(url: string): { open: string; copy: string } {
-  if (url.startsWith('mailto:')) return { open: 'Write an email', copy: 'Copy email address' };
-  if (url.startsWith('tel:')) return { open: 'Call', copy: 'Copy phone number' };
-  return { open: 'Open link', copy: 'Copy link' };
+  if (url.startsWith('mailto:')) return { open: tr('Write an email'), copy: tr('Copy email address') };
+  if (url.startsWith('tel:')) return { open: tr('Call'), copy: tr('Copy phone number') };
+  return { open: tr('Open link'), copy: tr('Copy link') };
 }
 
 /** Mounted once with the app's overlays. */
@@ -41,7 +42,7 @@ export function LinkSheet(): ReactElement | null {
           closeLinkSheet();
           void navigator.clipboard
             ?.writeText(shown)
-            .then(() => useCommunity.getState().notify('Copied.'))
+            .then(() => useCommunity.getState().notify(tr('Copied.')))
             .catch(() => undefined);
         }}
       >

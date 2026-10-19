@@ -1,3 +1,4 @@
+import { tr } from '../i18n.ts';
 import { create } from 'zustand';
 import type { CallLinkView, DmEvent } from '../../../shared/dm.ts';
 import { parseCallLink } from '../../../shared/invite-link.ts';
@@ -138,18 +139,20 @@ function groupOf(groupId: string | null) {
 
 /** A person's name as this device knows them (the group's records, contacts). */
 export function personName(id: string, groupId: string | null): string {
-  if (id === me()) return useRiver.getState().identity?.displayName ?? 'You';
+  if (id === me()) return useRiver.getState().identity?.displayName ?? tr('You');
   const fromGroup = groupOf(groupId)?.members.find((m) => m.riverId === id)?.name;
   if (fromGroup) return fromGroup;
   const contact = useDm.getState().conversations.find((c) => c.kind === 'direct' && c.riverId === id)?.name;
-  return contact ?? `River ${id.slice(0, 8)}`;
+  return contact ?? tr('River {id}', { id: id.slice(0, 8) });
 }
 
 /** What a call is called: its group's name, or a call link's title (or its host). */
 export function callName(c: { groupId: string | null; host: string | null; title: string | null }): string {
-  if (c.groupId) return groupOf(c.groupId)?.name ?? 'Group call';
+  if (c.groupId) return groupOf(c.groupId)?.name ?? tr('Group call');
   if (c.title) return c.title;
-  return c.host && c.host !== me() ? `${personName(c.host, null)}'s call` : 'Your call link';
+  return c.host && c.host !== me()
+    ? tr("{name}'s call", { name: personName(c.host, null) })
+    : tr('Your call link');
 }
 
 /** Who may be in a call: the group's current members, or the people its link's host let in. */
@@ -265,7 +268,7 @@ export function handleRoster(e: { room: string; participants: string[] }): void 
 /** The server turned us away from a call's room: it is full. */
 export function handleRoomFull(): void {
   if (!useGroupCall.getState().active) return;
-  notify('That call is full.', 'error');
+  notify(tr('That call is full.'), 'error');
   void leaveGroupCall(false);
 }
 
@@ -314,7 +317,7 @@ function missedRing(ringing: NonNullable<ReturnType<typeof useDmCall.getState>['
     durationSec: 0,
     callId: ringing.callId,
   });
-  notify(`Missed group call in ${ringing.group.name}.`);
+  notify(tr('Missed group call in {name}.', { name: ringing.group.name }));
 }
 
 export function handleGroupCallEvent(e: Extract<DmEvent, { t: 'gcall' | 'knock' | 'knockAnswer' }>): void {
@@ -340,7 +343,7 @@ export function handleGroupCallEvent(e: Extract<DmEvent, { t: 'gcall' | 'knock' 
     }
     case 'decline':
       if (useGroupCall.getState().active?.callId === e.callId)
-        notify(`${personName(e.from, e.groupId ?? null)} can't join now.`);
+        notify(tr("{name} can't join now.", { name: personName(e.from, e.groupId ?? null) }));
       return;
     case 'ongoing':
       // A call started in a group while you are in another call: the group shows "Join".
@@ -355,7 +358,12 @@ export function handleGroupCallEvent(e: Extract<DmEvent, { t: 'gcall' | 'knock' 
         at: Date.now(),
         seen: false,
       });
-      notify(`${personName(e.from, e.groupId)} started a call in ${groupOf(e.groupId)?.name ?? 'a group'}.`);
+      notify(
+        tr('{name} started a call in {group}.', {
+          name: personName(e.from, e.groupId),
+          group: groupOf(e.groupId)?.name ?? tr('a group'),
+        }),
+      );
       return;
     case 'allow':
       setAllowed(e.callId, e.allowed);
@@ -424,14 +432,14 @@ function watchAlone(callId: string): void {
     }
     if (!active.connectedAt) {
       if (now - active.joinedAt > NOBODY_CAME_MS) {
-        notify('Nobody joined the call.');
+        notify(tr('Nobody joined the call.'));
         void leaveGroupCall();
       }
       return;
     }
     aloneSince ??= now;
     if (now - aloneSince > ALONE_MS) {
-      notify('Everyone else left the call.');
+      notify(tr('Everyone else left the call.'));
       void leaveGroupCall();
     }
   }, WATCHDOG_MS);
@@ -498,7 +506,7 @@ async function enter(x: Entry): Promise<boolean> {
   ]);
   if (!live()) return false;
   if (!info.groupCalls)
-    return fail("Your River server doesn't have group calls yet. Ask whoever runs it to update River.");
+    return fail(tr("Your River server doesn't have group calls yet. Ask whoever runs it to update River."));
   const scope = x.groupId ? { groupId: x.groupId } : {};
   if (!x.ring) {
     // Main checks you may take part, and stops it ringing here and on your other devices.
@@ -563,8 +571,8 @@ async function enter(x: Entry): Promise<boolean> {
     void window.river.dm.action({ a: 'groupCall', kind: 'leave', callId, ...scope });
     return fail(
       (err as Error).name === 'NotAllowedError'
-        ? 'River could not use your microphone. Allow microphone access in your system settings.'
-        : (err as Error).message || 'The call could not start.',
+        ? tr('River could not use your microphone. Allow microphone access in your system settings.')
+        : (err as Error).message || tr('The call could not start.'),
     );
   }
   if (!live() || call.closed) {
@@ -593,7 +601,7 @@ async function enter(x: Entry): Promise<boolean> {
   if (x.withVideo) {
     await call.setCamera(true).catch(() => {
       if (live())
-        notify('River could not start your camera, so you are in the call with voice only.', 'error');
+        notify(tr('River could not start your camera, so you are in the call with voice only.'), 'error');
     });
   }
   watchAlone(callId);
@@ -699,7 +707,12 @@ export async function ringAgain(people: string[]): Promise<void> {
     to: people,
   });
   if (!r.ok) notify(r.message, 'error');
-  else notify(people.length === 1 ? `Ringing ${personName(people[0]!, active.groupId)}…` : 'Ringing…');
+  else
+    notify(
+      people.length === 1
+        ? tr('Ringing {name}…', { name: personName(people[0]!, active.groupId) })
+        : tr('Ringing…'),
+    );
 }
 
 /**
@@ -777,7 +790,7 @@ export async function startLinkCall(link: CallLinkView): Promise<void> {
 export function offerCallLink(text: string): void {
   const parsed = parseCallLink(text);
   if (!parsed) {
-    notify('That call link is not complete. Ask for a new one.', 'error');
+    notify(tr('That call link is not complete. Ask for a new one.'), 'error');
     return;
   }
   const account = useRiver.getState().account;
@@ -793,14 +806,14 @@ export function offerCallLink(text: string): void {
     origin(parsed.serverUrl) !== origin(account.serverUrl) &&
     origin(parsed.serverUrl) !== origin(account.shareUrl)
   ) {
-    notify('That call link is for people on another River server.', 'error');
+    notify(tr('That call link is for people on another River server.'), 'error');
     return;
   }
   if (parsed.host === me()) {
     void window.river.dm.action({ a: 'callLinks' }).then((r) => {
       const mine = r.ok ? r.value.find((l) => l.id === parsed.link) : undefined;
       if (mine) void startLinkCall(mine);
-      else notify('That call link of yours no longer works.', 'error');
+      else notify(tr('That call link of yours no longer works.'), 'error');
     });
     return;
   }

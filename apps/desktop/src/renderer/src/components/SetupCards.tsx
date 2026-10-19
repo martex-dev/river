@@ -5,6 +5,7 @@ import { markLookChosen } from '../appearance/first-look.ts';
 import { useCommunity } from '../community/store.ts';
 import { useDm } from '../dm/store.ts';
 import { useRiver } from '../store.ts';
+import { tr } from '../i18n.ts';
 
 /**
  * What the one-screen first run (2.14) leaves for later, offered one card at a time at the top
@@ -52,7 +53,7 @@ function SignupNeeded(): ReactElement {
   return (
     <form
       className="username-prompt setup-card glass"
-      aria-label="Finish setting up your account"
+      aria-label={tr('Finish setting up your account')}
       onSubmit={(e) => {
         e.preventDefault();
         setBusy(true);
@@ -65,23 +66,23 @@ function SignupNeeded(): ReactElement {
       }}
     >
       <div>
-        <strong>One more step for your account</strong>
+        <strong>{tr('One more step for your account')}</strong>
         <p className="muted small">
-          River’s server only accepts people its owner invites. Paste the sign-up link they sent you.
+          {tr('River’s server only accepts people its owner invites. Paste the sign-up link they sent you.')}
         </p>
       </div>
       <div className="username-row">
         <label className="textfield setup-card__field">
-          <span className="sr-only">Sign-up link</span>
+          <span className="sr-only">{tr('Sign-up link')}</span>
           <input
             value={link}
             onChange={(e) => setLink(e.target.value)}
-            placeholder="Paste your sign-up link"
+            placeholder={tr('Paste your sign-up link')}
             spellCheck={false}
           />
         </label>
         <button className="btn btn--primary btn--small" disabled={busy || link.trim() === ''}>
-          {busy ? 'Setting up…' : 'Use link'}
+          {busy ? tr('Setting up…') : tr('Use link')}
         </button>
       </div>
       {error && <p className="field__error">{error}</p>}
@@ -107,15 +108,15 @@ function UsernamePrompt(): ReactElement {
   return (
     <form
       className="username-prompt glass"
-      aria-label="Choose a username"
+      aria-label={tr('Choose a username')}
       onSubmit={(e) => {
         e.preventDefault();
         void save();
       }}
     >
       <div>
-        <strong>Pick a username</strong>
-        <p className="muted small">It's how friends add you — like @alex. You can change it later.</p>
+        <strong>{tr('Pick a username')}</strong>
+        <p className="muted small">{tr("It's how friends add you — like @alex. You can change it later.")}</p>
       </div>
       <div className="username-row">
         <div className="textfield username-field">
@@ -128,22 +129,22 @@ function UsernamePrompt(): ReactElement {
               setValue(e.target.value);
               setError(null);
             }}
-            placeholder="username"
+            placeholder={tr('username')}
             autoCapitalize="none"
             spellCheck={false}
             maxLength={32}
-            aria-label="Username"
+            aria-label={tr('Username')}
           />
         </div>
         <button className="btn btn--primary btn--small" disabled={busy || value.trim().length < 3}>
-          {busy ? 'Saving…' : 'Save'}
+          {busy ? tr('Saving…') : tr('Save')}
         </button>
         <button
           type="button"
           className="btn btn--link btn--small"
           onClick={() => useSetupLater.setState({ username: true })}
         >
-          Later
+          {tr('Later')}
         </button>
       </div>
       {error && <p className="field__error">{error}</p>}
@@ -155,11 +156,11 @@ function UsernamePrompt(): ReactElement {
 function LookCard(): ReactElement {
   const openSettings = useRiver((r) => r.openSettings);
   return (
-    <section className="username-prompt setup-card glass" aria-label="Pick your look">
+    <section className="username-prompt setup-card glass" aria-label={tr('Pick your look')}>
       <div>
-        <strong>Pick your look</strong>
+        <strong>{tr('Pick your look')}</strong>
         <p className="muted small">
-          Skins, colours and backgrounds. You can change it any time in Settings → Appearance.
+          {tr('Skins, colours and backgrounds. You can change it any time in Settings → Appearance.')}
         </p>
       </div>
       <div className="username-row">
@@ -170,10 +171,10 @@ function LookCard(): ReactElement {
             openSettings('appearance');
           }}
         >
-          Choose a look
+          {tr('Choose a look')}
         </button>
         <button className="btn btn--link btn--small" onClick={() => void markLookChosen()}>
-          Keep this one
+          {tr('Keep this one')}
         </button>
       </div>
     </section>
@@ -223,12 +224,13 @@ function BackupNudge(): ReactElement | null {
     useSetupLater.setState({ backup: true });
   };
   return (
-    <section className="username-prompt setup-card glass" aria-label="Back up River">
+    <section className="username-prompt setup-card glass" aria-label={tr('Back up River')}>
       <div>
-        <strong>You have no backup yet</strong>
+        <strong>{tr('You have no backup yet')}</strong>
         <p className="muted small">
-          Your chats are kept only on your devices. A recovery phrase and a backup file bring them back if
-          this device is lost.
+          {tr(
+            'Your chats are kept only on your devices. A recovery phrase and a backup file bring them back if this device is lost.',
+          )}
         </p>
       </div>
       <div className="username-row">
@@ -239,10 +241,10 @@ function BackupNudge(): ReactElement | null {
             openSettings('backup');
           }}
         >
-          Set up a backup
+          {tr('Set up a backup')}
         </button>
         <button className="btn btn--link btn--small" onClick={later}>
-          Not now
+          {tr('Not now')}
         </button>
       </div>
     </section>

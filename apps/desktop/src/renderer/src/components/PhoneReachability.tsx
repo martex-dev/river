@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactElement } from 'react';
 import type { PhoneFix, PhoneStatus } from '../../../shared/ipc.ts';
 import { useRiver } from '../store.ts';
+import { msg, tr } from '../i18n.ts';
 
 /**
  * Android (2.11): what River needs to reach you while it is closed — River uses
@@ -77,24 +78,29 @@ export function usePhoneStatus(): {
 
 /** What Settings says about Stay connected: never "on" for a service Android has not started. */
 export function stayConnectedText(on: boolean, status: PhoneStatus): { ok: boolean; text: string } {
-  if (!on) return { ok: false, text: 'Off: messages and calls arrive only while River is open.' };
+  if (!on) return { ok: false, text: msg('Off: messages and calls arrive only while River is open.') };
   if (status.background && status.batteryExempt)
-    return { ok: true, text: 'On: messages and calls reach you while River is closed.' };
+    return { ok: true, text: msg('On: messages and calls reach you while River is closed.') };
   if (status.background)
     return {
       ok: false,
-      text: 'On for now, but Android may stop it: allow River in the background (Battery, below) so it keeps running.',
+      text: msg(
+        'On for now, but Android may stop it: allow River in the background (Battery, below) so it keeps running.',
+      ),
     };
   return {
     ok: false,
     text: status.batteryExempt
-      ? 'On, but Android has not started it yet. Open River again, or restart the phone.'
-      : 'On, but Android stopped it or has not started it: Stay connected needs River allowed in the background (Battery, below).',
+      ? msg('On, but Android has not started it yet. Open River again, or restart the phone.')
+      : msg(
+          'On, but Android stopped it or has not started it: Stay connected needs River allowed in the background (Battery, below).',
+        ),
   };
 }
 
-export const BATTERY_WHY =
-  'Android pauses apps in the background to save battery, which can hold back River’s messages and calls for many minutes. Android will ask whether River may always run in the background — allow it so they arrive at once.';
+export const BATTERY_WHY = msg(
+  'Android pauses apps in the background to save battery, which can hold back River’s messages and calls for many minutes. Android will ask whether River may always run in the background — allow it so they arrive at once.',
+);
 
 const FULL_SCREEN_KEY = 'river.phone.fullScreenAsked';
 
@@ -136,18 +142,20 @@ export function StayConnectedPrompt(): ReactElement | null {
       <section className="whats-new glass" aria-labelledby="stay-connected-title">
         <h2 id="stay-connected-title">
           {system.background
-            ? 'Get messages and calls without delay'
-            : 'Get messages and calls when River is closed?'}
+            ? tr('Get messages and calls without delay')
+            : tr('Get messages and calls when River is closed?')}
         </h2>
         <p className="small">
           {system.background
-            ? 'River stays connected while it is closed, so messages and calls reach you. '
-            : 'River does not use Google’s push service. To reach you while it is closed, it keeps its own connection, with a quiet “River is connected” notification, and uses some battery. '}
-          {status.batteryExempt ? '' : BATTERY_WHY}
+            ? tr('River stays connected while it is closed, so messages and calls reach you.')
+            : tr(
+                'River does not use Google’s push service. To reach you while it is closed, it keeps its own connection, with a quiet “River is connected” notification, and uses some battery.',
+              )}
+          {status.batteryExempt ? '' : ` ${tr(BATTERY_WHY)}`}
         </p>
         <div className="button-row">
           <button className="btn btn--ghost btn--small" onClick={() => void done({})}>
-            Not now
+            {tr('Not now')}
           </button>
           <button
             className="btn btn--primary btn--small"
@@ -158,7 +166,7 @@ export function StayConnectedPrompt(): ReactElement | null {
               })
             }
           >
-            {system.background ? 'Allow' : 'Turn on'}
+            {system.background ? tr('Allow') : tr('Turn on')}
           </button>
         </div>
       </section>
@@ -176,14 +184,15 @@ export function StayConnectedPrompt(): ReactElement | null {
     };
     return (
       <section className="whats-new glass" aria-labelledby="full-screen-title">
-        <h2 id="full-screen-title">Let calls cover the screen?</h2>
+        <h2 id="full-screen-title">{tr('Let calls cover the screen?')}</h2>
         <p className="small">
-          Android asks for one more permission so calls can cover the screen when your phone is locked, like a
-          phone call. Without it, a locked phone only shows a notification for a call.
+          {tr(
+            'Android asks for one more permission so calls can cover the screen when your phone is locked, like a phone call. Without it, a locked phone only shows a notification for a call.',
+          )}
         </p>
         <div className="button-row">
           <button className="btn btn--ghost btn--small" onClick={dismiss}>
-            Not now
+            {tr('Not now')}
           </button>
           <button
             className="btn btn--primary btn--small"
@@ -192,7 +201,7 @@ export function StayConnectedPrompt(): ReactElement | null {
               void fix('fullScreen');
             }}
           >
-            Open settings
+            {tr('Open settings')}
           </button>
         </div>
       </section>
@@ -213,7 +222,7 @@ function Row(props: {
       <span>
         <span className="toggle__label">{props.label}</span>
         <span className={`toggle__hint ${props.ok ? '' : 'phone-check__bad'}`}>
-          {props.ok ? props.okText : props.badText}
+          {tr(props.ok ? props.okText : props.badText)}
         </span>
       </span>
       {!props.ok && props.action && (
@@ -235,9 +244,9 @@ export function PhoneCallsSection(): ReactElement | null {
     return (
       <section aria-labelledby="phone-calls-title">
         <h3 id="phone-calls-title" className="field__label">
-          Calls and notifications
+          {tr('Calls and notifications')}
         </h3>
-        <p className="muted small">Checking this phone…</p>
+        <p className="muted small">{tr('Checking this phone…')}</p>
       </section>
     );
   }
@@ -246,10 +255,10 @@ export function PhoneCallsSection(): ReactElement | null {
   return (
     <section aria-labelledby="phone-calls-title">
       <h3 id="phone-calls-title" className="field__label">
-        Calls and notifications
+        {tr('Calls and notifications')}
       </h3>
       <Row
-        label="Stay connected"
+        label={tr('Stay connected')}
         ok={stay.ok}
         okText={stay.text}
         badText={stay.text}
@@ -257,7 +266,7 @@ export function PhoneCallsSection(): ReactElement | null {
           ? {}
           : {
               action: {
-                label: 'Turn on',
+                label: tr('Turn on'),
                 run: () =>
                   void updateSettings({ system: { background: true, backgroundAsked: true } }).then(() => {
                     refreshAfterStayConnected();
@@ -267,25 +276,27 @@ export function PhoneCallsSection(): ReactElement | null {
             })}
       />
       <Row
-        label="Battery"
+        label={tr('Battery')}
         ok={status.batteryExempt}
-        okText="River may run in the background without delays."
-        badText="Battery optimization may delay messages and calls, and Android may stop Stay connected."
-        action={{ label: 'Allow in background', run: () => void fix('battery') }}
+        okText={msg('River may run in the background without delays.')}
+        badText={msg(
+          'Battery optimization may delay messages and calls, and Android may stop Stay connected.',
+        )}
+        action={{ label: tr('Allow in background'), run: () => void fix('battery') }}
       />
       <Row
-        label="Full-screen calls"
+        label={tr('Full-screen calls')}
         ok={status.fullScreenCalls}
-        okText="Calls cover the screen when the phone is locked."
-        badText="Not allowed: a locked phone only shows a notification for calls."
-        action={{ label: 'Allow', run: () => void fix('fullScreen') }}
+        okText={msg('Calls cover the screen when the phone is locked.')}
+        badText={msg('Not allowed: a locked phone only shows a notification for calls.')}
+        action={{ label: tr('Allow'), run: () => void fix('fullScreen') }}
       />
       <Row
-        label="Notifications"
+        label={tr('Notifications')}
         ok={status.notifications}
-        okText="Allowed."
-        badText="Off: River cannot show messages or ring for calls."
-        action={{ label: 'Allow', run: () => void fix('notifications') }}
+        okText={msg('Allowed.')}
+        badText={msg('Off: River cannot show messages or ring for calls.')}
+        action={{ label: tr('Allow'), run: () => void fix('notifications') }}
       />
     </section>
   );

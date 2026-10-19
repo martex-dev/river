@@ -56,7 +56,7 @@ import type { IdentityService } from '../identity/identity-service.ts';
 import { clinkContent, gcallContent, GroupCalls } from './group-calls.ts';
 import type { Logger } from '../logger.ts';
 import { statement, type LocalDatabase } from '../storage/database.ts';
-import { msg } from '../../shared/i18n/index.ts';
+import { msg, translate, type Language, type Vars } from '../../shared/i18n/index.ts';
 
 /** How long a call invite rings (the same as the window's ring timeout). */
 const RING_MS = 45_000;
@@ -437,7 +437,7 @@ const PREKEY_RECHECK_MS = 6 * 60 * 60 * 1000;
 const SIGNED_ROTATE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** The name of your own notes conversation (2.9). */
-const NOTE_TO_SELF = 'Note to self';
+const NOTE_TO_SELF = msg('Note to self');
 
 interface Deps {
   db: () => LocalDatabase | null;
@@ -452,6 +452,8 @@ interface Deps {
    * them), and chats you start get the `newChatTimer` disappearing-messages timer (0 = off).
    */
   keep?: () => { historyDays: number; newChatTimer: number };
+  /** River's language, for names this service writes itself ("Note to self"). English without it. */
+  language?: () => Language;
 }
 
 interface MessageRow {
@@ -542,6 +544,11 @@ export class DmService {
   private historySweptAt = 0;
   /** A changed bio goes to friends once typing has settled (not once per save). */
   private bioShareTimer: NodeJS.Timeout | undefined;
+
+  /** A name this service writes itself ("Note to self"), in River's language. */
+  private t(text: string, vars?: Vars): string {
+    return translate(this.deps.language?.() ?? 'en', text, vars);
+  }
 
   constructor(deps: Deps) {
     this.deps = deps;
@@ -1750,14 +1757,16 @@ export class DmService {
   }
 
   nameOf(riverId: string, g?: GroupRow, l: Lookups = this.lookups()): string {
-    if (riverId === l.me) return l.myName ?? 'You';
+    if (riverId === l.me) return l.myName ?? this.t('You');
     const c = this.contactIn(l, riverId);
     if (c?.name) return c.name;
     if (g) {
       const p = this.profilesIn(l, g)[riverId];
       if (p?.name) return p.name;
     }
-    return this.deps.community.knownProfile(riverId)?.name ?? `River ${riverId.slice(0, 8)}`;
+    return (
+      this.deps.community.knownProfile(riverId)?.name ?? this.t('River {id}', { id: riverId.slice(0, 8) })
+    );
   }
 
   private avatarOf(riverId: string, g?: GroupRow, l: Lookups = this.lookups()): string | null {
@@ -2323,7 +2332,7 @@ export class DmService {
             list[i] = { id: act.id, name: act.name, peers };
           } else {
             if (list.length >= MAX_FOLDERS)
-              throw new CommunityError(`You can have up to ${MAX_FOLDERS} folders.`);
+              throw new CommunityError(msg('You can have up to {count} folders.'), { count: MAX_FOLDERS });
             list.push({ id: randomBytes(16).toString('base64url'), name: act.name, peers });
           }
           this.setMeta('folders', JSON.stringify(list));
@@ -2342,14 +2351,19 @@ export class DmService {
           const clash = list.find(
             (r) => r.id !== act.id && r.shortcut.toLowerCase() === shortcut.toLowerCase(),
           );
-          if (clash) throw new CommunityError(`You already have a saved reply called /${clash.shortcut}.`);
+          if (clash)
+            throw new CommunityError(msg('You already have a saved reply called /{name}.'), {
+              name: clash.shortcut,
+            });
           if (act.id) {
             const i = list.findIndex((r) => r.id === act.id);
             if (i < 0) throw new CommunityError(msg('That saved reply is gone.'));
             list[i] = { id: act.id, shortcut, text: act.text };
           } else {
             if (list.length >= MAX_SAVED_REPLIES)
-              throw new CommunityError(`You can have up to ${MAX_SAVED_REPLIES} saved replies.`);
+              throw new CommunityError(msg('You can have up to {count} saved replies.'), {
+                count: MAX_SAVED_REPLIES,
+              });
             list.push({ id: randomBytes(16).toString('base64url'), shortcut, text: act.text });
           }
           this.setMeta('savedReplies', JSON.stringify(list));
@@ -2374,7 +2388,9 @@ export class DmService {
           });
           if (next.length) {
             if (!tags[act.key] && Object.keys(tags).length >= MAX_TAGGED_MESSAGES)
-              throw new CommunityError(`You can tag up to ${MAX_TAGGED_MESSAGES} messages.`);
+              throw new CommunityError(msg('You can tag up to {count} messages.'), {
+                count: MAX_TAGGED_MESSAGES,
+              });
             tags[act.key] = next;
           } else delete tags[act.key];
           this.setMeta('messageTags', JSON.stringify(tags));
@@ -2681,7 +2697,9 @@ export class DmService {
             const existing = this.conversationIds();
             const pinned = Object.entries(prefs).filter(([id, x]) => x.pinnedAt && existing.has(id)).length;
             if (pinned >= MAX_PINNED) {
-              throw new CommunityError(`You can pin up to ${MAX_PINNED} conversations.`);
+              throw new CommunityError(msg('You can pin up to {count} conversations.'), {
+                count: MAX_PINNED,
+              });
             }
             p.pinnedAt = new Date().toISOString();
             p.archived = false;
@@ -2931,7 +2949,7 @@ export class DmService {
           if (act.a === 'addGroupMembers') {
             members = [...new Set([...members, ...act.members])];
             if (members.length > MAX_GROUP)
-              throw new CommunityError(`Groups can have up to ${MAX_GROUP} people.`);
+              throw new CommunityError(msg('Groups can have up to {count} people.'), { count: MAX_GROUP });
           }
           if (act.a === 'removeGroupMember') {
             if (act.member === this.me()) throw new CommunityError(msg('Use Leave group to leave.'));
@@ -3818,7 +3836,9 @@ export class DmService {
           members: [],
           isAdmin: false,
           ...(self ? { self: true } : {}),
-          name: self ? NOTE_TO_SELF : (c.name ?? known?.name ?? `River ${c.river_id.slice(0, 8)}`),
+          name: self
+            ? this.t(NOTE_TO_SELF)
+            : (c.name ?? known?.name ?? this.t('River {id}', { id: c.river_id.slice(0, 8) })),
           avatar: c.avatar ?? known?.avatar ?? null,
           state: c.state,
           last: lastView
@@ -3856,9 +3876,12 @@ export class DmService {
     if (g) return { name: g.name, group: true };
     const c = this.contact(conv);
     if (!c) return null;
-    if (c.river_id === this.me()) return { name: NOTE_TO_SELF, group: false };
+    if (c.river_id === this.me()) return { name: this.t(NOTE_TO_SELF), group: false };
     return {
-      name: c.name ?? this.deps.community.knownProfile(c.river_id)?.name ?? `River ${c.river_id.slice(0, 8)}`,
+      name:
+        c.name ??
+        this.deps.community.knownProfile(c.river_id)?.name ??
+        this.t('River {id}', { id: c.river_id.slice(0, 8) }),
       group: false,
     };
   }
@@ -3872,7 +3895,7 @@ export class DmService {
     if (!row) return;
     const view = this.view(row);
     const conv = this.conversationName(row.peer);
-    const name = conv?.group ? `${view.senderName} · ${conv.name}` : (conv?.name ?? 'Someone');
+    const name = conv?.group ? `${view.senderName} · ${conv.name}` : (conv?.name ?? this.t('Someone'));
     this.emit({ t: 'message', message: view, isNew, senderName: name });
   }
 }

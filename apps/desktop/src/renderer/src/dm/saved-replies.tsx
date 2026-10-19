@@ -1,3 +1,4 @@
+import { tr } from '../i18n.ts';
 import { useEffect, useState, type ReactElement } from 'react';
 import { create } from 'zustand';
 import { MAX_SAVED_REPLIES, TAG_RE, type SavedReply } from '../../../shared/dm.ts';
@@ -80,7 +81,7 @@ export function SavedReplySuggestions(props: {
   onPick(reply: SavedReply): void;
 }): ReactElement {
   return (
-    <div className="mention-menu" role="listbox" aria-label="Saved replies">
+    <div className="mention-menu" role="listbox" aria-label={tr('Saved replies')}>
       {props.choices.map((r, i) => (
         <button
           key={r.id}
@@ -118,7 +119,9 @@ export function SavedRepliesMenu(props: {
     <Popover x={props.x} y={props.y} onClose={props.onClose} className="menu saved-replies">
       {replies.length === 0 && (
         <p className="muted small saved-replies__note">
-          No saved replies yet. Save text you send often, then type / and its shortcut in any message box.
+          {tr(
+            'No saved replies yet. Save text you send often, then type / and its shortcut in any message box.',
+          )}
         </p>
       )}
       {replies.map((r) => (
@@ -130,7 +133,7 @@ export function SavedRepliesMenu(props: {
         </MenuItem>
       ))}
       <MenuItem icon={<span aria-hidden="true">✎</span>} onClick={() => setEditing(true)}>
-        {replies.length ? 'Edit saved replies…' : 'Add a saved reply…'}
+        {replies.length ? tr('Edit saved replies…') : tr('Add a saved reply…')}
       </MenuItem>
     </Popover>
   );
@@ -153,13 +156,14 @@ export function SavedRepliesDialog(props: { onClose(): void }): ReactElement {
     setText(r?.text ?? '');
   };
   return (
-    <Modal title="Saved replies" onClose={props.onClose}>
+    <Modal title={tr('Saved replies')} onClose={props.onClose}>
       <p className="muted small">
-        Type / and a shortcut in any message box to send one. Kept encrypted on this device only — your other
-        devices keep their own.
+        {tr(
+          'Type / and a shortcut in any message box to send one. Kept encrypted on this device only — your other devices keep their own.',
+        )}
       </p>
       {replies.length > 0 && (
-        <ul className="saved-replies-edit__list" aria-label="Your saved replies">
+        <ul className="saved-replies-edit__list" aria-label={tr('Your saved replies')}>
           {replies.map((r) => (
             <li key={r.id} className="saved-replies-edit__row">
               <div>
@@ -169,15 +173,15 @@ export function SavedRepliesDialog(props: { onClose(): void }): ReactElement {
               <button
                 type="button"
                 className="btn btn--ghost btn--small"
-                aria-label={`Edit /${r.shortcut}`}
+                aria-label={tr('Edit {name}', { name: `/${r.shortcut}` })}
                 onClick={() => startEdit(r)}
               >
-                Edit
+                {tr('Edit')}
               </button>
               <button
                 type="button"
                 className="btn btn--ghost btn--small btn--danger-text"
-                aria-label={`Delete /${r.shortcut}`}
+                aria-label={tr('Delete {name}', { name: `/${r.shortcut}` })}
                 onClick={() => {
                   void store
                     .getState()
@@ -187,7 +191,7 @@ export function SavedRepliesDialog(props: { onClose(): void }): ReactElement {
                     });
                 }}
               >
-                Delete
+                {tr('Delete')}
               </button>
             </li>
           ))}
@@ -208,31 +212,35 @@ export function SavedRepliesDialog(props: { onClose(): void }): ReactElement {
         }}
       >
         <label className="textfield">
-          <span className="field__label">Shortcut</span>
+          <span className="field__label">{tr('Shortcut')}</span>
           <input
             value={shortcut}
             maxLength={25}
-            placeholder="thanks"
+            placeholder={tr('thanks')}
             aria-describedby="saved-reply-shortcut-help"
             onChange={(e) => setShortcut(e.target.value)}
           />
         </label>
         <p id="saved-reply-shortcut-help" className="muted small">
-          Letters, numbers, _ and -, up to 24.
+          {tr('Letters, numbers, _ and -, up to 24.')}
         </p>
         <label className="textfield">
-          <span className="field__label">Text</span>
+          <span className="field__label">{tr('Text')}</span>
           <textarea value={text} maxLength={4000} rows={3} onChange={(e) => setText(e.target.value)} />
         </label>
-        {full && <p className="muted small">You can have up to {MAX_SAVED_REPLIES} saved replies.</p>}
+        {full && (
+          <p className="muted small">
+            {tr('You can have up to {count} saved replies.', { count: MAX_SAVED_REPLIES })}
+          </p>
+        )}
         <div className="modal__foot">
           {editing && (
             <button type="button" className="btn btn--ghost" onClick={() => startEdit(null)}>
-              Cancel
+              {tr('Cancel')}
             </button>
           )}
           <button className="btn btn--primary" disabled={!valid || busy || full}>
-            {editing ? 'Save changes' : 'Add saved reply'}
+            {editing ? tr('Save changes') : tr('Add saved reply')}
           </button>
         </div>
       </form>

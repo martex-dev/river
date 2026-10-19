@@ -76,7 +76,7 @@ export function CommunitiesPage(): ReactElement {
   const community = s.communities.find((c) => c.id === s.selectedCommunity) ?? null;
   const channel = community?.channels.find((ch) => ch.id === s.selectedChannel) ?? null;
 
-  if (!s.loaded) return <div className="page muted">Loading…</div>;
+  if (!s.loaded) return <div className="page muted">{tr('Loading…')}</div>;
   if (s.communities.length === 0 || communityStart) {
     return (
       <StartScreen
@@ -115,8 +115,10 @@ export function CommunityMain(props: {
         {community?.securing && (
           <div className="dm-banner dm-banner--warn" role="status">
             <span>
-              <strong>Securing this community after a member left…</strong> Until the new key reaches you,
-              messages here are still protected with the previous key, which the person who left also had.
+              <strong>{tr('Securing this community after a member left…')}</strong>{' '}
+              {tr(
+                'Until the new key reaches you, messages here are still protected with the previous key, which the person who left also had.',
+              )}
             </span>
           </div>
         )}
@@ -249,7 +251,7 @@ export function Toast(): ReactElement | null {
       <button
         type="button"
         className="river-toast__close"
-        aria-label="Dismiss notification"
+        aria-label={tr('Dismiss notification')}
         title={tr('Dismiss')}
         onClick={() => {
           holdToast(true);
@@ -289,7 +291,7 @@ export function VoiceHotkeys(): null {
           const call = s.call;
           void call
             .setCamera(!call.localTrack('camera'))
-            .catch(() => s.notify('Could not start your camera.', 'error'));
+            .catch(() => s.notify(tr('Could not start your camera.'), 'error'));
           return;
         }
         if (matches(binds.leaveVoice, e) && s.call) {
@@ -345,20 +347,20 @@ function CommunityMenu(props: {
   return (
     <Popover x={props.x} y={props.y} onClose={props.onClose} className="menu">
       <MenuItem onClick={run(() => s.markChannelsRead(c.channels.map((ch) => ch.id)))}>
-        Mark all as read
+        {tr('Mark all as read')}
       </MenuItem>
       {can(perms, Permission.CREATE_INVITE) && (
         <MenuItem onClick={run(() => s.setModal({ kind: 'invite', communityId: c.id }))}>
-          Invite people
+          {tr('Invite people')}
         </MenuItem>
       )}
       {settings && (
         <MenuItem onClick={run(() => s.setModal({ kind: 'community-settings', communityId: c.id }))}>
-          Community settings
+          {tr('Community settings')}
         </MenuItem>
       )}
       <MenuItem onClick={run(() => s.setModal({ kind: 'nickname', communityId: c.id }))}>
-        Change nickname
+        {tr('Change nickname')}
       </MenuItem>
       <NotifyMenuSection id={c.id} kind="community" onDone={props.onClose} />
       {c.ownerId !== props.me && (
@@ -367,16 +369,16 @@ function CommunityMenu(props: {
           onClick={run(() =>
             s.setModal({
               kind: 'confirm',
-              title: `Leave ${c.name}`,
-              body: 'You will not be able to rejoin unless someone invites you again.',
-              action: 'Leave community',
+              title: tr('Leave {name}', { name: c.name }),
+              body: tr('You will not be able to rejoin unless someone invites you again.'),
+              action: tr('Leave community'),
               run: async () => {
                 await s.run({ a: 'leave', communityId: c.id });
               },
             }),
           )}
         >
-          Leave community
+          {tr('Leave community')}
         </MenuItem>
       )}
     </Popover>

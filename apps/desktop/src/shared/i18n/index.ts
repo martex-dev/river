@@ -13,6 +13,29 @@ import { TR } from './locales/tr.ts';
 import { UK } from './locales/uk.ts';
 // The community screens' texts, every language side by side (community sweep).
 import { COMMUNITY } from './locales/community.ts';
+// The rest of the screens, every language side by side (the third sweep).
+import { byLanguage } from './locales/side-by-side.ts';
+import { MESSAGES } from './locales/messages.ts';
+import { CHAT } from './locales/chat.ts';
+import { APPEARANCE } from './locales/appearance.ts';
+import { CALLS } from './locales/calls.ts';
+import { DEVICES } from './locales/devices.ts';
+import { COMMUNITY_EXTRAS } from './locales/community-extras.ts';
+import { AUDIT_DIAGNOSTICS } from './locales/audit-diagnostics.ts';
+import { CORE_TEXTS } from './locales/core-texts.ts';
+import { UI_TEXTS } from './locales/ui-texts.ts';
+
+const SCREENS = byLanguage(
+  MESSAGES,
+  CHAT,
+  APPEARANCE,
+  CALLS,
+  DEVICES,
+  COMMUNITY_EXTRAS,
+  AUDIT_DIAGNOSTICS,
+  CORE_TEXTS,
+  UI_TEXTS,
+);
 
 export * from './languages.ts';
 export type { Dictionary, PluralForms } from './types.ts';
@@ -27,16 +50,16 @@ export { EN_PLURALS } from './locales/en.ts';
  */
 export const DICTIONARIES: Record<Language, Dictionary> = {
   en: EN_PLURALS,
-  bg: { ...BG, ...COMMUNITY.bg },
-  de: { ...DE, ...COMMUNITY.de },
-  es: { ...ES, ...COMMUNITY.es },
-  fr: { ...FR, ...COMMUNITY.fr },
-  it: { ...IT, ...COMMUNITY.it },
-  pl: { ...PL, ...COMMUNITY.pl },
-  'pt-BR': { ...PT_BR, ...COMMUNITY['pt-BR'] },
-  ru: { ...RU, ...COMMUNITY.ru },
-  tr: { ...TR, ...COMMUNITY.tr },
-  uk: { ...UK, ...COMMUNITY.uk },
+  bg: { ...BG, ...COMMUNITY.bg, ...SCREENS.bg },
+  de: { ...DE, ...COMMUNITY.de, ...SCREENS.de },
+  es: { ...ES, ...COMMUNITY.es, ...SCREENS.es },
+  fr: { ...FR, ...COMMUNITY.fr, ...SCREENS.fr },
+  it: { ...IT, ...COMMUNITY.it, ...SCREENS.it },
+  pl: { ...PL, ...COMMUNITY.pl, ...SCREENS.pl },
+  'pt-BR': { ...PT_BR, ...COMMUNITY['pt-BR'], ...SCREENS['pt-BR'] },
+  ru: { ...RU, ...COMMUNITY.ru, ...SCREENS.ru },
+  tr: { ...TR, ...COMMUNITY.tr, ...SCREENS.tr },
+  uk: { ...UK, ...COMMUNITY.uk, ...SCREENS.uk },
 };
 
 export type Vars = Record<string, string | number>;

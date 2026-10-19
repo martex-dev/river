@@ -1,4 +1,4 @@
-import { tr } from '../../i18n.ts';
+import { tr, trn } from '../../i18n.ts';
 import { useState, type DragEvent, type ReactElement } from 'react';
 import { forgetCall, lastCall } from '../rejoin.ts';
 import { callStatus } from '../meeting.ts';
@@ -47,16 +47,16 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
   const confirmLeave = (): void =>
     s.setModal({
       kind: 'confirm',
-      title: `Leave ${community.name}`,
-      body: `You will not be able to rejoin unless someone invites you again.`,
-      action: 'Leave community',
+      title: tr('Leave {name}', { name: community.name }),
+      body: tr('You will not be able to rejoin unless someone invites you again.'),
+      action: tr('Leave community'),
       run: async () => {
         await s.run({ a: 'leave', communityId: community.id });
       },
     });
 
   return (
-    <aside className="community__channels" aria-label="Channels">
+    <aside className="community__channels" aria-label={tr('Channels')}>
       {community.art?.banner && (
         <img className="community__banner" src={community.art.banner} alt="" draggable={false} />
       )}
@@ -134,7 +134,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
               s.setModal({ kind: 'nickname', communityId: community.id });
             }}
           >
-            Nickname &amp; picture here
+            {tr('Nickname & picture here')}
           </MenuItem>
           {community.ownerId !== me && (
             <MenuItem
@@ -151,8 +151,8 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
         </Popover>
       )}
       <div className="community__badges">
-        <span className="chip" title="Messages are encrypted with the community key">
-          <LockSmallIcon size={11} /> End-to-end encrypted
+        <span className="chip" title={tr('Messages are encrypted with the community key')}>
+          <LockSmallIcon size={11} /> {tr('End-to-end encrypted')}
         </span>
       </div>
       {can(perms, Permission.CREATE_INVITE) && (
@@ -160,7 +160,7 @@ export function ChannelSidebar(props: { community: CommunityView; me: string }):
           className="btn btn--ghost btn--small community__invite"
           onClick={() => s.setModal({ kind: 'invite', communityId: community.id })}
         >
-          Invite people
+          {tr('Invite people')}
         </button>
       )}
       <EventsRow community={community} />
@@ -263,7 +263,10 @@ export function ChannelRow(props: {
               onClick={() => {
                 setMenu(null);
                 void s.run({ a: 'duplicateChannel', channelId: ch.id, name: ch.name }).then((id) => {
-                  if (id) s.notify(`Made a copy of ${ch.kind === 'text' ? '#' : ''}${ch.name}.`);
+                  if (id)
+                    s.notify(
+                      tr('Made a copy of {name}.', { name: `${ch.kind === 'text' ? '#' : ''}${ch.name}` }),
+                    );
                 });
               }}
             >
@@ -279,7 +282,15 @@ export function ChannelRow(props: {
         <button
           className="channel__open"
           aria-current={active ? 'page' : undefined}
-          aria-label={`${ch.kind === 'text' ? 'Text' : 'Voice'} channel ${ch.name}${unread ? ', unread' : ''}`}
+          aria-label={
+            ch.kind === 'text'
+              ? unread
+                ? tr('Text channel {name}, unread', { name: ch.name })
+                : tr('Text channel {name}', { name: ch.name })
+              : unread
+                ? tr('Voice channel {name}, unread', { name: ch.name })
+                : tr('Voice channel {name}', { name: ch.name })
+          }
           onClick={open}
         >
           <span className="channel__icon">
@@ -309,12 +320,12 @@ export function ChannelRow(props: {
             {ch.name}
           </span>
           {ch.nsfw && (
-            <span className="channel__nsfw" title="Age-restricted (18+)">
+            <span className="channel__nsfw" title={tr('Age-restricted (18+)')}>
               18+
             </span>
           )}
           {ch.private && (
-            <span className="channel__lock" title="Private channel">
+            <span className="channel__lock" title={tr('Private channel')}>
               <LockSmallIcon size={12} />
             </span>
           )}
@@ -326,7 +337,10 @@ export function ChannelRow(props: {
           {ch.kind === 'voice' && ch.userLimit > 0 && (
             <span
               className={`channel__limit ${participants.length >= ch.userLimit ? 'is-full' : ''}`}
-              title={`${participants.length} of ${ch.userLimit} places taken`}
+              title={tr('{taken} of {limit} places taken.', {
+                taken: participants.length,
+                limit: ch.userLimit,
+              })}
             >
               {participants.length}/{ch.userLimit}
             </span>
@@ -335,8 +349,8 @@ export function ChannelRow(props: {
         {canManage && (
           <button
             className="channel__gear"
-            aria-label={`Edit ${ch.name}`}
-            title="Edit channel"
+            aria-label={tr('Edit {name}', { name: ch.name })}
+            title={tr('Edit channel')}
             onClick={() => s.setModal({ kind: 'channel-settings', channelId: ch.id })}
           >
             <GearIcon size={14} />
@@ -352,10 +366,10 @@ export function ChannelRow(props: {
             <div
               key={id}
               className={`channel__participant ${state?.reconnecting ? 'is-reconnecting' : ''}`}
-              title={state?.reconnecting ? 'Reconnecting…' : undefined}
+              title={state?.reconnecting ? tr('Reconnecting…') : undefined}
               role="button"
               tabIndex={0}
-              aria-label={`${m?.name ?? 'Someone'} in voice — open profile`}
+              aria-label={tr('{name} in voice — open profile', { name: m?.name ?? tr('Someone') })}
               onClick={(e) => m && setCard({ member: m, x: e.clientX + 12, y: e.clientY - 40 })}
               onContextMenu={(e) => {
                 e.preventDefault();
@@ -374,15 +388,15 @@ export function ChannelRow(props: {
                 className="channel__participant-name"
                 style={m?.color ? { color: `#${m.color.toString(16).padStart(6, '0')}` } : undefined}
               >
-                {m?.name ?? 'Someone'}
-                {id === me ? ' (you)' : ''}
+                {m?.name ?? tr('Someone')}
+                {id === me ? ` ${tr('(you)')}` : ''}
               </span>
-              {state?.reconnecting && <span className="voice-reconnecting">reconnecting…</span>}
-              {state?.streaming && <span className="live-badge">LIVE</span>}
+              {state?.reconnecting && <span className="voice-reconnecting">{tr('reconnecting…')}</span>}
+              {state?.streaming && <span className="live-badge">{tr('LIVE')}</span>}
               {(state?.serverMuted || state?.muted) && (
                 <span
                   className={`voice-icon ${state.serverMuted ? 'voice-icon--server' : ''}`}
-                  title={state.serverMuted ? 'Server muted' : 'Muted'}
+                  title={state.serverMuted ? tr('Server muted') : tr('Muted')}
                 >
                   <MicOffIcon size={13} />
                 </span>
@@ -390,7 +404,7 @@ export function ChannelRow(props: {
               {(state?.deafened || state?.serverDeafened) && (
                 <span
                   className={`voice-icon ${state.serverDeafened ? 'voice-icon--server' : ''}`}
-                  title={state.serverDeafened ? 'Server deafened' : 'Deafened'}
+                  title={state.serverDeafened ? tr('Server deafened') : tr('Deafened')}
                 >
                   <HeadphonesOffIcon size={13} />
                 </span>
@@ -449,14 +463,14 @@ export function VoicePanel({
               useRiver.getState().navigate('communities');
             }}
           >
-            {channel?.name ?? 'Voice'} / {channelCommunity.name}
+            {channel?.name ?? tr('Voice')} / {channelCommunity.name}
           </button>
         </div>
       </div>
       <div className="voice-panel__actions">
         {screen && (
-          <span className="live-badge" title="You are sharing your screen">
-            <ScreenIcon size={12} /> LIVE
+          <span className="live-badge" title={tr('You are sharing your screen')}>
+            <ScreenIcon size={12} /> {tr('LIVE')}
           </span>
         )}
         <button
@@ -525,12 +539,10 @@ export function EventsRow({ community }: { community: CommunityView }): ReactEle
     >
       <span aria-hidden="true">📅</span>
       <span className="events-row__text">
-        <strong>
-          {active.length ? `${active.length} ${active.length === 1 ? 'event' : 'events'}` : 'Events'}
-        </strong>
+        <strong>{active.length ? trn('{count} events', active.length) : tr('Events')}</strong>
         {next && <span className="muted small">{`${next.name} · ${whenLabel(next)}`}</span>}
       </span>
-      {live && <span className="live-badge">LIVE</span>}
+      {live && <span className="live-badge">{tr('LIVE')}</span>}
     </button>
   );
 }
@@ -554,7 +566,7 @@ export function UserPanel({ me, community }: { me: string; community?: Community
       <button
         className="user-panel__me"
         aria-haspopup="menu"
-        aria-label="Set your status"
+        aria-label={tr('Set your status')}
         onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
           setStatusMenu({ x: r.left, y: r.top - 8 - 300 });
@@ -593,24 +605,24 @@ export function UserPanel({ me, community }: { me: string; community?: Community
       )}
       <button
         className={`icon-btn ${s.selfMuted ? 'icon-btn--off' : ''}`}
-        aria-label={s.selfMuted ? 'Unmute' : 'Mute'}
-        title={s.selfMuted ? 'Unmute (Ctrl+Shift+M)' : 'Mute (Ctrl+Shift+M)'}
+        aria-label={s.selfMuted ? tr('Unmute') : tr('Mute')}
+        title={`${s.selfMuted ? tr('Unmute') : tr('Mute')} (Ctrl+Shift+M)`}
         onClick={s.toggleMute}
       >
         {s.selfMuted ? <MicOffIcon size={18} /> : <MicIcon size={18} />}
       </button>
       <button
         className={`icon-btn ${s.selfDeafened ? 'icon-btn--off' : ''}`}
-        aria-label={s.selfDeafened ? 'Undeafen' : 'Deafen'}
-        title={s.selfDeafened ? 'Undeafen (Ctrl+Shift+D)' : 'Deafen (Ctrl+Shift+D)'}
+        aria-label={s.selfDeafened ? tr('Undeafen') : tr('Deafen')}
+        title={`${s.selfDeafened ? tr('Undeafen') : tr('Deafen')} (Ctrl+Shift+D)`}
         onClick={s.toggleDeafen}
       >
         {s.selfDeafened ? <HeadphonesOffIcon size={18} /> : <HeadphonesIcon size={18} />}
       </button>
       <button
         className="icon-btn"
-        aria-label="Settings"
-        title="Settings"
+        aria-label={tr('Settings')}
+        title={tr('Settings')}
         onClick={() => useRiver.getState().openSettings('account')}
       >
         <GearIcon size={18} />

@@ -1,147 +1,179 @@
 import type { AuditEntry } from '@river/protocol';
 import type { AuditView, CommunityView } from '../../shared/ipc.ts';
+import { msg, translate, translatePlural, type Language, type Vars } from '../../shared/i18n/index.ts';
 
 /**
  * Turns an audit entry (IDs and numbers from the server) into a sentence,
  * using the names this device can decrypt. Unknown IDs stay generic.
+ * Each sentence is written whole in every language (no English pieces glued on).
  */
 export function describeAudit(
   e: AuditEntry,
   community: CommunityView,
   knownName: (riverId: string) => string | undefined,
+  /** River's language (English by default). */
+  lang: Language = 'en',
 ): AuditView {
+  const t = (text: string, vars?: Vars): string => translate(lang, text, vars);
+  const tn = (key: string, count: number, vars?: Vars): string => translatePlural(lang, key, count, vars);
   const person = (id: string | null): string =>
-    (id && (community.members.find((m) => m.riverId === id)?.name ?? knownName(id))) ?? 'someone';
+    (id && (community.members.find((m) => m.riverId === id)?.name ?? knownName(id))) ?? t('someone');
   const role = (id: string | null): string =>
-    community.roles.find((r) => r.id === id)?.name ?? 'a role that was deleted';
+    community.roles.find((r) => r.id === id)?.name ?? t('a role that was deleted');
   const channel = (id: string | null): string => {
     const ch = community.channels.find((c) => c.id === id);
-    return ch ? (ch.kind === 'text' ? `#${ch.name}` : ch.name) : 'a channel';
+    return ch ? (ch.kind === 'text' ? `#${ch.name}` : ch.name) : t('a channel');
   };
   const category = (id: string | null): string =>
-    community.categories.find((k) => k.id === id)?.name ?? 'a category';
+    community.categories.find((k) => k.id === id)?.name ?? t('a category');
   const roles = (ids: unknown): string =>
     Array.isArray(ids) ? ids.map((id) => role(String(id))).join(', ') : '';
   const changes = (d: Record<string, unknown>, labels: Record<string, string>): string => {
     const what = Object.keys(labels)
       .filter((k) => d[k] !== undefined)
-      .map((k) => labels[k]);
+      .map((k) => t(labels[k]!));
     return what.length ? ` (${what.join(', ')})` : '';
   };
   const d = e.details;
-  const t = e.target;
+  const target = e.target;
+  const when = (): string => (typeof d.until === 'string' ? new Date(d.until).toLocaleString() : t('later'));
+  const inChannel = (): string => channel(typeof d.channelId === 'string' ? d.channelId : null);
   const summary = ((): string => {
     switch (e.action) {
       case 'event.create':
-        return 'planned an event';
+        return t('planned an event');
       case 'event.update':
-        return 'changed an event';
+        return t('changed an event');
       case 'event.cancel':
-        return 'cancelled an event';
+        return t('cancelled an event');
       case 'event.delete':
-        return 'deleted an event';
+        return t('deleted an event');
       case 'emoji.create':
-        return 'added a custom emoji';
+        return t('added a custom emoji');
       case 'report.resolved':
-        return `resolved a report about ${person(t)}`;
+        return t('resolved a report about {name}', { name: person(target) });
       case 'report.dismissed':
-        return `dismissed a report about ${person(t)}`;
+        return t('dismissed a report about {name}', { name: person(target) });
       case 'report.open':
-        return `reopened a report about ${person(t)}`;
+        return t('reopened a report about {name}', { name: person(target) });
       case 'sticker.create':
-        return 'added a sticker';
+        return t('added a sticker');
       case 'sticker.delete':
-        return 'removed a sticker';
+        return t('removed a sticker');
       case 'sound.create':
-        return 'added a soundboard sound';
+        return t('added a soundboard sound');
       case 'sound.update':
-        return 'changed a soundboard sound';
+        return t('changed a soundboard sound');
       case 'sound.delete':
-        return 'removed a soundboard sound';
+        return t('removed a soundboard sound');
       case 'emoji.update':
-        return 'renamed a custom emoji';
+        return t('renamed a custom emoji');
       case 'emoji.delete':
-        return 'removed a custom emoji';
+        return t('removed a custom emoji');
       case 'member.join':
-        return 'joined the community';
+        return t('joined the community');
       case 'member.leave':
-        return 'left the community';
+        return t('left the community');
       case 'message.purge': {
         const n = Number(d.count ?? 0);
-        return `deleted ${n} message${n === 1 ? '' : 's'} by ${person(t)}`;
+        return tn('deleted {count} messages by {name}', n, { name: person(target) });
       }
       case 'member.tempban':
-        return `made ${person(t)}'s ban end ${typeof d.until === 'string' ? new Date(d.until).toLocaleString() : 'later'}`;
+        return t("made {name}'s ban end {when}", { name: person(target), when: when() });
       case 'note.create':
-        return `added a moderator note about ${person(t)}`;
+        return t('added a moderator note about {name}', { name: person(target) });
       case 'note.delete':
-        return `removed a moderator note about ${person(t)}`;
+        return t('removed a moderator note about {name}', { name: person(target) });
       case 'community.onboarding':
         return d.screening
-          ? 'changed the rules (new members must accept them)'
-          : 'changed the rules and onboarding';
+          ? t('changed the rules (new members must accept them)')
+          : t('changed the rules and onboarding');
       case 'member.selfRoles':
-        return 'picked their roles';
+        return t('picked their roles');
       case 'message.bulkDelete': {
         const n = Number(d.count ?? 0);
-        return `deleted ${n} message${n === 1 ? '' : 's'} in ${channel(typeof d.channelId === 'string' ? d.channelId : null)}`;
+        return tn('deleted {count} messages in {channel}', n, { channel: inChannel() });
       }
       case 'member.tempRole':
-        return `gave ${person(t)} ${role(typeof d.role === 'string' ? d.role : null)} for a while`;
+        return t('gave {name} {role} for a while', {
+          name: person(target),
+          role: role(typeof d.role === 'string' ? d.role : null),
+        });
       case 'voice.move':
-        return 'moved someone to another voice channel';
+        return t('moved someone to another voice channel');
       case 'webhook.create':
-        return 'made a webhook';
+        return t('made a webhook');
       case 'webhook.revoke':
-        return 'deleted a webhook';
+        return t('deleted a webhook');
       case 'invite.revoke':
-        return 'revoked an invite';
+        return t('revoked an invite');
       case 'member.kick':
-        return `kicked ${person(t)}`;
+        return t('kicked {name}', { name: person(target) });
       case 'member.ban':
-        return `banned ${person(t)}`;
+        return t('banned {name}', { name: person(target) });
       case 'member.unban':
-        return `unbanned ${person(t)}`;
+        return t('unbanned {name}', { name: person(target) });
       case 'member.timeout':
-        return `timed out ${person(t)} until ${typeof d.until === 'string' ? new Date(d.until).toLocaleString() : 'later'}`;
+        return t('timed out {name} until {when}', { name: person(target), when: when() });
       case 'member.timeout.end':
-        return `ended the timeout of ${person(t)}`;
+        return t('ended the timeout of {name}', { name: person(target) });
       case 'member.roles': {
         const added = roles(d.added);
         const removed = roles(d.removed);
-        if (added && removed) return `gave ${person(t)} ${added} and removed ${removed}`;
-        if (added) return `gave ${person(t)} ${added}`;
-        if (removed) return `removed ${removed} from ${person(t)}`;
-        return `changed the roles of ${person(t)}`;
+        const name = person(target);
+        if (added && removed) return t('gave {name} {added} and removed {removed}', { name, added, removed });
+        if (added) return t('gave {name} {added}', { name, added });
+        if (removed) return t('removed {removed} from {name}', { name, removed });
+        return t('changed the roles of {name}', { name });
       }
       case 'role.create':
-        return `created the role ${role(t)}`;
+        return t('created the role {role}', { role: role(target) });
       case 'role.update':
-        return `changed the role ${role(t)}${changes(d, { name: 'name', color: 'colour', before: 'permissions', position: 'position' })}`;
+        return (
+          t('changed the role {role}', { role: role(target) }) +
+          changes(d, {
+            name: msg('name'),
+            color: msg('colour'),
+            before: msg('permissions'),
+            position: msg('position'),
+          })
+        );
       case 'role.delete':
-        return 'deleted a role';
+        return t('deleted a role');
       case 'role.reorder':
-        return 'rearranged the roles';
+        return t('rearranged the roles');
       case 'channel.create':
-        return `created ${channel(t)}`;
+        return t('created {channel}', { channel: channel(target) });
       case 'channel.update':
-        return `changed ${channel(t)}${changes(d, { name: 'name', overwrites: 'permissions', parentId: 'category', position: 'order', synced: 'permission sync' })}`;
+        return (
+          t('changed {channel}', { channel: channel(target) }) +
+          changes(d, {
+            name: msg('name'),
+            overwrites: msg('permissions'),
+            parentId: msg('category'),
+            position: msg('order'),
+            synced: msg('permission sync'),
+          })
+        );
       case 'channel.delete':
-        return 'deleted a channel';
+        return t('deleted a channel');
       case 'category.create':
-        return `created the category ${category(t)}`;
+        return t('created the category {category}', { category: category(target) });
       case 'category.update':
-        return `changed the category ${category(t)}${changes(d, { name: 'name', overwrites: 'permissions' })}`;
+        return (
+          t('changed the category {category}', { category: category(target) }) +
+          changes(d, { name: msg('name'), overwrites: msg('permissions') })
+        );
       case 'category.delete':
-        return 'deleted a category';
+        return t('deleted a category');
       case 'channels.reorder':
-        return 'rearranged the channel list';
+        return t('rearranged the channel list');
       case 'invite.create':
-        return 'created an invite link';
+        return t('created an invite link');
       case 'message.delete':
-        return `deleted a message by ${person(t)} in ${channel(typeof d.channelId === 'string' ? d.channelId : null)}`;
+        return t('deleted a message by {name} in {channel}', { name: person(target), channel: inChannel() });
       case 'community.update':
-        return "changed the community's name, icon or description";
+        return t("changed the community's name, icon or description");
       default:
         return e.action;
     }

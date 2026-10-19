@@ -48,4 +48,93 @@ export const EN_PLURALS: Dictionary = {
   '{count} hours': { one: '{count} hour', other: '{count} hours' },
   '{count} minutes': { one: '{count} minute', other: '{count} minutes' },
   '{count} seconds': { one: '{count} second', other: '{count} seconds' },
+  '{count} scheduled messages · next {when}': {
+    one: '{count} scheduled message · next {when}',
+    other: '{count} scheduled messages · next {when}',
+  },
+  'Delete {count} messages for me': {
+    one: 'Delete {count} message for me',
+    other: 'Delete {count} messages for me',
+  },
+  '{count} people are typing…': { one: '{count} person is typing…', other: '{count} people are typing…' },
+  '{count} new messages since {when}': {
+    one: '{count} new message since {when}',
+    other: '{count} new messages since {when}',
+  },
+  '{count} replies': { one: '{count} reply', other: '{count} replies' },
+  '{count} results': { one: '{count} result', other: '{count} results' },
+  'Delete {count} messages?': { one: 'Delete {count} message?', other: 'Delete {count} messages?' },
+  'Deleted {count} messages.': { one: 'Deleted {count} message.', other: 'Deleted {count} messages.' },
+  '{count} files': { one: '{count} file', other: '{count} files' },
+  '{count} chats have wallpapers of their own.': {
+    one: '{count} chat has a wallpaper of its own.',
+    other: '{count} chats have wallpapers of their own.',
+  },
+  'Group video call · {count} people': {
+    one: 'Group video call · {count} person',
+    other: 'Group video call · {count} people',
+  },
+  'Group call · {count} people': { one: 'Group call · {count} person', other: 'Group call · {count} people' },
+  '{a}, {b} and {count} others': { one: '{a}, {b} and {count} other', other: '{a}, {b} and {count} others' },
+  '{count} people · voice through your server, end-to-end encrypted': {
+    one: '{count} person · voice through your server, end-to-end encrypted',
+    other: '{count} people · voice through your server, end-to-end encrypted',
+  },
+  '{count} people · end-to-end encrypted': {
+    one: '{count} person · end-to-end encrypted',
+    other: '{count} people · end-to-end encrypted',
+  },
+  'Starts in {count} min': { one: 'Starts in {count} min', other: 'Starts in {count} min' },
+  '{count} interested · by {name}': {
+    one: '{count} interested · by {name}',
+    other: '{count} interested · by {name}',
+  },
+  '{count} min left': { one: '{count} min left', other: '{count} min left' },
+  '{count} h left': { one: '{count} h left', other: '{count} h left' },
+  '{count} days left': { one: '{count} day left', other: '{count} days left' },
+  '{count} votes': { one: '{count} vote', other: '{count} votes' },
+  'Folder {name}, {count} communities, open': {
+    one: 'Folder {name}, {count} community, open',
+    other: 'Folder {name}, {count} communities, open',
+  },
+  'Folder {name}, {count} communities, closed': {
+    one: 'Folder {name}, {count} community, closed',
+    other: 'Folder {name}, {count} communities, closed',
+  },
+  '{count} in channel': { one: '{count} in channel', other: '{count} in channel' },
+  '{names} are here.': { one: '{names} is here.', other: '{names} are here.' },
+  'deleted {count} messages by {name}': {
+    one: 'deleted {count} message by {name}',
+    other: 'deleted {count} messages by {name}',
+  },
+  'deleted {count} messages in {channel}': {
+    one: 'deleted {count} message in {channel}',
+    other: 'deleted {count} messages in {channel}',
+  },
+  'sent {count} files': { one: 'sent {count} file', other: 'sent {count} files' },
+  '{a}, {b} and {count} others are talking': {
+    one: '{a}, {b} and {count} other are talking',
+    other: '{a}, {b} and {count} others are talking',
+  },
+  'You left voice after {count} minutes alone.': {
+    one: 'You left voice after {count} minute alone.',
+    other: 'You left voice after {count} minutes alone.',
+  },
+  '{count} events': { one: '{count} event', other: '{count} events' },
+  '{count} GIFs': { one: '{count} GIF', other: '{count} GIFs' },
+  '{count} photos': { one: '{count} photo', other: '{count} photos' },
+  '{count} videos': { one: '{count} video', other: '{count} videos' },
+  '{count} audio files': { one: '{count} audio file', other: '{count} audio files' },
+  'Sharing {count} files and text. Pick a conversation; it opens with this in the message box, and nothing is sent until you press Send.':
+    {
+      one: 'Sharing {count} file and text. Pick a conversation; it opens with this in the message box, and nothing is sent until you press Send.',
+      other:
+        'Sharing {count} files and text. Pick a conversation; it opens with this in the message box, and nothing is sent until you press Send.',
+    },
+  'Sharing {count} files. Pick a conversation; it opens with this in the message box, and nothing is sent until you press Send.':
+    {
+      one: 'Sharing {count} file. Pick a conversation; it opens with this in the message box, and nothing is sent until you press Send.',
+      other:
+        'Sharing {count} files. Pick a conversation; it opens with this in the message box, and nothing is sent until you press Send.',
+    },
 };

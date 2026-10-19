@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.ts';
 import { useState, type ReactElement } from 'react';
 import type { ChatMessage } from '../../../../shared/ipc.ts';
 import { AttachmentList } from './Attachments.tsx';
@@ -20,9 +21,11 @@ export function MediaGallery(props: {
   // One page at a time: pressing again while one loads does nothing.
   const [loading, setLoading] = useState(false);
   return (
-    <div className="media-gallery" aria-label="Gallery">
+    <div className="media-gallery" aria-label={tr('Gallery')}>
       {posts.length === 0 && (
-        <p className="muted media-gallery__empty">No pictures or videos yet. Drop some into the box below.</p>
+        <p className="muted media-gallery__empty">
+          {tr('No pictures or videos yet. Drop some into the box below.')}
+        </p>
       )}
       <div className="media-gallery__grid">
         {posts.map((m) => (
@@ -49,7 +52,7 @@ export function MediaGallery(props: {
             void Promise.resolve(props.onLoadOlder()).finally(() => setLoading(false));
           }}
         >
-          {loading ? 'Decrypting…' : 'Load older'}
+          {loading ? tr('Decrypting…') : tr('Load older')}
         </button>
       )}
     </div>

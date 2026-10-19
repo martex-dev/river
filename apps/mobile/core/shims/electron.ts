@@ -2,6 +2,7 @@ import { ask, handle, on, ui } from '../host.ts';
 import { expectExport } from '../exports.ts';
 import { native } from '../native.ts';
 import { phonePlatform } from '../platform.ts';
+import { resolveLanguage, systemLanguage, translate } from '../../../desktop/src/shared/i18n/index.ts';
 
 /**
  * The few Electron main-process APIs River's IPC layer touches, mapped to the
@@ -72,7 +73,10 @@ export const dialog = {
    */
   async showSaveDialog(a: unknown, b?: unknown): Promise<{ canceled: boolean; filePath?: string }> {
     const options = optionsOf<SaveOptions>(a, b);
-    const name = (options.defaultPath ?? 'River file').split('/').pop() ?? 'River file';
+    // A file without a name of its own gets one in the phone's language.
+    const lang = resolveLanguage('system', systemLanguage());
+    const fallback = translate(lang, 'River file');
+    const name = (options.defaultPath ?? fallback).split('/').pop() ?? fallback;
     const choice = await ask<{ canceled: boolean; filePath?: string; export?: boolean }>('saveFile', {
       name,
       filters: options.filters ?? [],

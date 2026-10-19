@@ -2,6 +2,7 @@ import type jsQRFn from 'jsqr';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Modal } from '../community/ui/common.tsx';
 import { haptic } from './gestures.ts';
+import { tr } from '../i18n.ts';
 
 /** The browser's own QR reader where it has one (Android, macOS); jsQR everywhere else. */
 interface Detector {
@@ -102,7 +103,7 @@ export function QrScanner(props: {
         }
         void scan();
       })
-      .catch(() => setError('River could not open the camera. Check that River may use it.'));
+      .catch(() => setError(tr('River could not open the camera. Check that River may use it.')));
     return () => {
       stopped = true;
       if (timer) clearTimeout(timer);
@@ -116,7 +117,7 @@ export function QrScanner(props: {
         <p className="field__error">{error}</p>
       ) : (
         <div className="qr-scanner">
-          <video ref={video} className="qr-scanner__video" muted playsInline aria-label="Camera" />
+          <video ref={video} className="qr-scanner__video" muted playsInline aria-label={tr('Camera')} />
           <span className="qr-scanner__frame" aria-hidden="true" />
         </div>
       )}
@@ -125,7 +126,7 @@ export function QrScanner(props: {
       </p>
       <div className="button-row">
         <button className="btn btn--ghost" onClick={props.onClose}>
-          Cancel
+          {tr('Cancel')}
         </button>
       </div>
     </Modal>
