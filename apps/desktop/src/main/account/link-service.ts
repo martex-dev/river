@@ -14,6 +14,7 @@ import { ApiError, type RequestJson } from '../http.ts';
 import type { IdentityService } from '../identity/identity-service.ts';
 import type { Logger } from '../logger.ts';
 import { UserFacingError, type AccountService } from './account-service.ts';
+import { msg } from '../../shared/i18n/index.ts';
 
 /**
  * Linking devices (1.3, ADR 0006): one River account on several devices.
@@ -279,9 +280,9 @@ export class LinkService {
   async start(): Promise<LinkProgress> {
     const status = this.deps.account.status();
     if (status.state !== 'registered' || !this.deps.account.sessionToken()) {
-      throw new UserFacingError('Connect to your server first, then try again.');
+      throw new UserFacingError(msg('Connect to your server first, then try again.'));
     }
-    if (this.confirming) throw new UserFacingError('A device is being linked right now. Wait a moment.');
+    if (this.confirming) throw new UserFacingError(msg('A device is being linked right now. Wait a moment.'));
     this.stop();
     // This attempt; one started (or a cancel) while the mailbox is being reserved replaces it.
     const attempt = this.attempt;
@@ -308,14 +309,14 @@ export class LinkService {
     const poll = async (): Promise<void> => {
       const offer = this.offer;
       if (!offer) return;
-      if (Date.now() > offer.expires) throw new UserFacingError('The link code expired. Start again.');
+      if (Date.now() > offer.expires) throw new UserFacingError(msg('The link code expired. Start again.'));
       const state = await this.mailbox(offer.serverUrl, offer.id).catch(() => null);
       if (!state?.hello || !state.mac) return this.later(poll, attempt);
       const expected = Buffer.from(helloMac(offer.secret, state.hello), 'base64url');
       const got = Buffer.from(state.mac, 'base64url');
       if (expected.length !== got.length || !timingSafeEqual(expected, got)) {
         throw new UserFacingError(
-          'Something without your code tried to use it. Nothing was linked. Start again.',
+          msg('Something without your code tried to use it. Nothing was linked. Start again.'),
         );
       }
       offer.hello = state.hello;
@@ -328,7 +329,7 @@ export class LinkService {
   /** The person confirmed: add the new device to this account and send it the account. */
   async confirm(): Promise<{ deviceId: number }> {
     // Pressed twice: the second would publish a list built from the same old version.
-    if (this.confirming) throw new UserFacingError('This device is already being linked.');
+    if (this.confirming) throw new UserFacingError(msg('This device is already being linked.'));
     this.confirming = true;
     try {
       return await this.confirmOnce();
@@ -340,27 +341,27 @@ export class LinkService {
   private async confirmOnce(): Promise<{ deviceId: number }> {
     const offer = this.offer;
     const hello = offer?.hello;
-    if (!offer || !hello) throw new UserFacingError('No device is waiting to be linked.');
+    if (!offer || !hello) throw new UserFacingError(msg('No device is waiting to be linked.'));
     // The server forgets the mailbox when the code runs out: linking now would add a device
     // that never receives the account.
     if (Date.now() > offer.expires) {
       this.fail('The link code expired. Start again.');
-      throw new UserFacingError('The link code expired. Start again.');
+      throw new UserFacingError(msg('The link code expired. Start again.'));
     }
     const list = await this.deps.account.deviceList();
-    if (this.offer !== offer) throw new UserFacingError('Linking was cancelled.');
+    if (this.offer !== offer) throw new UserFacingError(msg('Linking was cancelled.'));
     if (list.devices.length >= MAX_DEVICES) {
       throw new UserFacingError(`An account can have ${MAX_DEVICES} devices. Remove one first.`);
     }
     if (list.devices.some((d) => d.authKey === hello.authKey))
-      throw new UserFacingError('That device is already linked.');
+      throw new UserFacingError(msg('That device is already linked.'));
     const used = new Set(list.devices.map((d) => d.deviceId));
     let deviceId = 2;
     while (used.has(deviceId)) deviceId++;
 
     // Everything that can fail locally happens before the device list changes.
     const identity = this.deps.identity.protocolIdentity();
-    if (!identity) throw new UserFacingError('Unlock River first.');
+    if (!identity) throw new UserFacingError(msg('Unlock River first.'));
     const provision: Provision = {
       v: 1,
       riverId: identity.riverId,
@@ -518,7 +519,7 @@ export class LinkService {
   async remove(rawDeviceId: unknown): Promise<void> {
     const deviceId = z.number().int().min(1).max(64).parse(rawDeviceId);
     if (deviceId === this.deps.account.deviceId())
-      throw new UserFacingError('This is the device you are using.');
+      throw new UserFacingError(msg('This is the device you are using.'));
     const list = await this.deps.account.deviceList();
     if (!list.devices.some((d) => d.deviceId === deviceId)) return;
     await this.deps.account.publishDeviceList({
@@ -538,7 +539,7 @@ export class LinkService {
   async accept(): Promise<LinkProgress> {
     const pending = this.pendingJoin;
     if (!pending || this.progress.state !== 'review') {
-      throw new UserFacingError('There is nothing to link right now.');
+      throw new UserFacingError(msg('There is nothing to link right now.'));
     }
     this.pendingJoin = null;
     try {
@@ -557,7 +558,7 @@ export class LinkService {
 
   async join(rawCode: unknown, rawDeviceName: unknown): Promise<LinkProgress> {
     if (this.deps.identity.get() || this.deps.account.status().state !== 'none') {
-      throw new UserFacingError('This device already has a River account.');
+      throw new UserFacingError(msg('This device already has a River account.'));
     }
     const text = typeof rawCode === 'string' ? rawCode : '';
     let fallback: string | null = null;
@@ -568,8 +569,10 @@ export class LinkService {
     if (!code) {
       throw new UserFacingError(
         text.trim().startsWith('river:') || fallback
-          ? 'That is not a River link code.'
-          : 'Paste the whole link (it starts with river://) — this code alone does not say which server to use.',
+          ? msg('That is not a River link code.')
+          : msg(
+              'Paste the whole link (it starts with river://) — this code alone does not say which server to use.',
+            ),
       );
     }
     const deviceName = z.string().trim().min(1).max(64).catch('New device').parse(rawDeviceName);
@@ -592,10 +595,10 @@ export class LinkService {
       );
     } catch (err) {
       if (err instanceof ApiError && err.status === 409)
-        throw new UserFacingError('That link code was already used.');
+        throw new UserFacingError(msg('That link code was already used.'));
       if (err instanceof ApiError && err.status === 404) {
         throw new UserFacingError(
-          'That server does not support linking devices yet. Update River on it first.',
+          msg('That server does not support linking devices yet. Update River on it first.'),
         );
       }
       throw err;
@@ -604,7 +607,7 @@ export class LinkService {
     const attempt = this.attempt;
     const poll = async (): Promise<void> => {
       const state = await this.mailbox(code.serverUrl, id).catch(() => undefined);
-      if (state === null) throw new UserFacingError('The link code expired. Start again.');
+      if (state === null) throw new UserFacingError(msg('The link code expired. Start again.'));
       if (!state?.provision || !state.deviceId) return this.later(poll, attempt);
       let provision: Provision;
       try {
@@ -616,10 +619,10 @@ export class LinkService {
         );
         provision = provisionSchema.parse(JSON.parse(Buffer.from(opened).toString('utf8')));
       } catch {
-        throw new UserFacingError('The link could not be opened. Start again.');
+        throw new UserFacingError(msg('The link could not be opened. Start again.'));
       }
       if (provision.deviceId !== state.deviceId || provision.serverUrl !== code.serverUrl) {
-        throw new UserFacingError('The link did not match. Start again.');
+        throw new UserFacingError(msg('The link did not match. Start again.'));
       }
       linkKey.privateKey.fill(0);
       // Show whose account this is before taking it on: a code someone else made (a web page
@@ -642,7 +645,9 @@ export class LinkService {
         discard();
         void decline().catch(() => undefined);
         throw new UserFacingError(
-          'That code is for a different account. This device holds the messages of the account it was removed from: link it with a code from a device of that account.',
+          msg(
+            'That code is for a different account. This device holds the messages of the account it was removed from: link it with a code from a device of that account.',
+          ),
         );
       }
       this.pendingJoin = {

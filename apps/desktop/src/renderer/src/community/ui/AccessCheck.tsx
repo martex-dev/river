@@ -1,7 +1,8 @@
 import { useState, type ReactElement } from 'react';
-import { PERMISSION_INFO, Permission } from '@river/protocol/permissions';
+import { tr } from '../../i18n.ts';
 import { explainPermission } from '../../../../shared/permission-explain.ts';
 import type { ChannelView, CommunityView } from '../../../../shared/ipc.ts';
+import { infoOf } from './CommunitySettings.tsx';
 
 /**
  * Check someone's access in this channel, with the changes you have not
@@ -18,13 +19,11 @@ export function AccessCheck(props: {
   const [open, setOpen] = useState<number | null>(null);
   const [now] = useState(() => Date.now());
   const member = community.members.find((m) => m.riverId === who);
-  const labelOf = (bit: number): string =>
-    PERMISSION_INFO.find((p) => Permission[p.key] === bit)?.label ?? 'Permission';
   return (
     <div className="access-check">
-      <div className="field__label">Check someone&apos;s access here</div>
-      <select aria-label="Member to check" value={who} onChange={(e) => setWho(e.target.value)}>
-        <option value="">Choose a member…</option>
+      <div className="field__label">{tr("Check someone's access here")}</div>
+      <select aria-label={tr('Member to check')} value={who} onChange={(e) => setWho(e.target.value)}>
+        <option value="">{tr('Choose a member…')}</option>
         {community.members.map((m) => (
           <option key={m.riverId} value={m.riverId}>
             {m.name}
@@ -51,6 +50,7 @@ export function AccessCheck(props: {
                 },
               },
               bit,
+              tr,
             );
             return (
               <li key={bit} className={`access-check__item ${e.allowed ? 'is-yes' : 'is-no'}`}>
@@ -60,8 +60,8 @@ export function AccessCheck(props: {
                   onClick={() => setOpen(open === bit ? null : bit)}
                 >
                   <span aria-hidden="true">{e.allowed ? '✓' : '✕'}</span>
-                  <span>{labelOf(bit)}</span>
-                  <span className="muted small">{e.allowed ? 'can' : "can't"}</span>
+                  <span>{infoOf(bit).label}</span>
+                  <span className="muted small">{e.allowed ? tr('can') : tr("can't")}</span>
                 </button>
                 {open === bit && (
                   <ol className="access-check__why muted small">
@@ -75,7 +75,7 @@ export function AccessCheck(props: {
           })}
         </ul>
       )}
-      <p className="muted small">Includes changes you have not saved yet. Click a line to see why.</p>
+      <p className="muted small">{tr('Includes changes you have not saved yet. Click a line to see why.')}</p>
     </div>
   );
 }

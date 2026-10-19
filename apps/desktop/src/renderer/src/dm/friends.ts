@@ -1,14 +1,15 @@
 import { play } from '../community/sound.ts';
+import { msg, tr } from '../i18n.ts';
 import { useRiver } from '../store.ts';
 import { useDm } from './store.ts';
 
-export const GREETING = "Hi! Let's be friends on River 👋";
+export const GREETING = msg("Hi! Let's be friends on River 👋");
 
 /**
  * Opens an end-to-end encrypted conversation and sends a first message. On the
  * other side it arrives as a request they can accept, which makes you friends.
  */
-export async function sendFriendRequest(riverId: string, text: string = GREETING): Promise<boolean> {
+export async function sendFriendRequest(riverId: string, text: string = tr(GREETING)): Promise<boolean> {
   const dm = useDm.getState();
   const conversation = await dm.run({ a: 'open', peer: riverId });
   if (!conversation) return false;
@@ -34,7 +35,7 @@ function openChat(riverId: string): void {
  * - you blocked them: nothing happens until you unblock them;
  * - anyone else gets a request.
  */
-export async function addFriend(riverId: string, text: string = GREETING): Promise<AddFriendResult> {
+export async function addFriend(riverId: string, text: string = tr(GREETING)): Promise<AddFriendResult> {
   switch (friendState(riverId)) {
     case 'friend':
       openChat(riverId);
@@ -56,20 +57,25 @@ export async function addFriend(riverId: string, text: string = GREETING): Promi
 
 /** The line to show after addFriend. */
 export function addFriendMessage(result: AddFriendResult, name?: string): string {
-  const who = name ?? 'This person';
   switch (result) {
     case 'sent':
-      return 'Friend request sent';
+      return tr('Friend request sent');
     case 'friend':
-      return `${who} is already your friend — here is your chat.`;
+      return name
+        ? tr('{name} is already your friend — here is your chat.', { name })
+        : tr('This person is already your friend — here is your chat.');
     case 'already-sent':
-      return `You already sent ${name ?? 'them'} a friend request. It waits for their answer.`;
+      return name
+        ? tr('You already sent {name} a friend request. It waits for their answer.', { name })
+        : tr('You already sent them a friend request. It waits for their answer.');
     case 'accepted':
-      return `You are now friends${name ? ` with ${name}` : ''}`;
+      return name ? tr('You are now friends with {name}', { name }) : tr('You are now friends');
     case 'blocked':
-      return `You blocked ${name ?? 'this person'}. Unblock them in Messages first.`;
+      return name
+        ? tr('You blocked {name}. Unblock them in Messages first.', { name })
+        : tr('You blocked this person. Unblock them in Messages first.');
     case 'failed':
-      return 'Could not send the request. Try again.';
+      return tr('Could not send the request. Try again.');
   }
 }
 

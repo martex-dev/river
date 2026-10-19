@@ -1,4 +1,5 @@
 import { isIP } from 'node:net';
+import { msg } from '../shared/i18n/index.ts';
 
 /** Hosts that only forward to somewhere else, so the real destination is hidden. */
 const SHORTENERS = new Set([
@@ -24,10 +25,10 @@ export function linkWarnings(url: URL): string[] {
   const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
   const out: string[] = [];
   if (host.split('.').some((label) => label.startsWith('xn--')))
-    out.push('⚠ This address uses unusual characters that can imitate another site.');
-  if (isIP(host)) out.push('⚠ This link goes to a raw IP address, not a named website.');
+    out.push(msg('⚠ This address uses unusual characters that can imitate another site.'));
+  if (isIP(host)) out.push(msg('⚠ This link goes to a raw IP address, not a named website.'));
   if (SHORTENERS.has(host.replace(/^www\./, '')))
-    out.push('⚠ This is a short link: it hides where it really goes.');
-  if (url.protocol === 'http:') out.push('This link is not encrypted (http).');
+    out.push(msg('⚠ This is a short link: it hides where it really goes.'));
+  if (url.protocol === 'http:') out.push(msg('This link is not encrypted (http).'));
   return out;
 }

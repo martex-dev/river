@@ -87,8 +87,9 @@ final class IncomingCall {
     NotificationManager nm = context.getSystemService(NotificationManager.class);
     if (nm == null) return;
     NotificationChannel calls =
-        new NotificationChannel(CHANNEL, "Incoming calls", NotificationManager.IMPORTANCE_HIGH);
-    calls.setDescription("Rings and shows the call screen when someone calls you");
+        new NotificationChannel(
+            CHANNEL, context.getString(io.github.martexdev.river.R.string.incoming_channel_name), NotificationManager.IMPORTANCE_HIGH);
+    calls.setDescription(context.getString(io.github.martexdev.river.R.string.incoming_channel_description));
     // Silent channel: Ringer plays the ringtone in a loop and vibrates, following the ringer mode.
     calls.setSound(null, null);
     calls.enableVibration(false);
@@ -260,7 +261,7 @@ final class IncomingCall {
         new NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
             .setContentTitle(name)
-            .setContentText(video ? "Incoming video call" : "Incoming voice call")
+            .setContentText(context.getString(video ? io.github.martexdev.river.R.string.incoming_video : io.github.martexdev.river.R.string.incoming_voice))
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)

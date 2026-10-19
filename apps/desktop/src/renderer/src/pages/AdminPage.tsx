@@ -5,11 +5,12 @@ import { play } from '../community/sound.ts';
 import { useCommunity } from '../community/store.ts';
 import { useDm } from '../dm/store.ts';
 import { useRiver } from '../store.ts';
+import { msg, tr, trn } from '../i18n.ts';
 
 const TIMEOUTS: Array<[string, number]> = [
-  ['1 hour', 60 * 60 * 1000],
-  ['1 day', 24 * 60 * 60 * 1000],
-  ['1 week', 7 * 24 * 60 * 60 * 1000],
+  [msg('1 hour'), 60 * 60 * 1000],
+  [msg('1 day'), 24 * 60 * 60 * 1000],
+  [msg('1 week'), 7 * 24 * 60 * 60 * 1000],
 ];
 
 type Confirm =
@@ -51,7 +52,7 @@ export function AdminPage(): ReactElement {
   const nameOf = (riverId: string): string => {
     const u = usernames.get(riverId);
     if (u) return `@${u}`;
-    return names.get(riverId) ?? `River user ${riverId.slice(0, 8)}`;
+    return names.get(riverId) ?? tr('River user {id}', { id: riverId.slice(0, 8) });
   };
 
   const apply = useCallback((res: Awaited<ReturnType<typeof window.river.admin.overview>>): void => {
@@ -76,7 +77,7 @@ export function AdminPage(): ReactElement {
     setConfirm(null);
     if (!res.ok) {
       play('error');
-      setError(res.message ?? 'That did not work.');
+      setError(res.message ?? tr('That did not work.'));
       return;
     }
     play('success');
@@ -93,11 +94,12 @@ export function AdminPage(): ReactElement {
   return (
     <div className="page admin">
       <header className="page__header">
-        <div className="eyebrow">Admin</div>
-        <h1 className="page__title">Your River server</h1>
+        <div className="eyebrow">{tr('Admin')}</div>
+        <h1 className="page__title">{tr('Your River server')}</h1>
         <p className="page__lead">
-          Everyone who uses River through your server, and every community on it. The server never sees
-          messages or names; names show for people you share a community or a conversation with.
+          {tr(
+            'Everyone who uses River through your server, and every community on it. The server never sees messages or names; names show for people you share a community or a conversation with.',
+          )}
         </p>
       </header>
 
@@ -109,10 +111,10 @@ export function AdminPage(): ReactElement {
 
       {data && (
         <div className="admin__stats" role="list">
-          <Stat label="People" value={data.accounts.length} />
-          <Stat label="Online now" value={online} />
-          <Stat label="Communities" value={data.communities.length} />
-          <Stat label="Timed out or banned" value={suspended} />
+          <Stat label={tr('People')} value={data.accounts.length} />
+          <Stat label={tr('Online now')} value={online} />
+          <Stat label={tr('Communities')} value={data.communities.length} />
+          <Stat label={tr('Timed out or banned')} value={suspended} />
         </div>
       )}
 
@@ -121,18 +123,18 @@ export function AdminPage(): ReactElement {
       <section className="glass card admin__section" aria-labelledby="admin-people">
         <div className="admin__head">
           <h2 id="admin-people" className="card__title">
-            People
+            {tr('People')}
           </h2>
           <input
             className="admin__search"
-            aria-label="Search people"
-            placeholder="Search by name or ID"
+            aria-label={tr('Search people')}
+            placeholder={tr('Search by name or ID')}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
         </div>
-        {!data && !error && <p className="muted small">Loading…</p>}
-        {data && people.length === 0 && <p className="muted small">Nobody matches.</p>}
+        {!data && !error && <p className="muted small">{tr('Loading…')}</p>}
+        {data && people.length === 0 && <p className="muted small">{tr('Nobody matches.')}</p>}
         <ul className="admin__list">
           {people.map((a) => {
             const name = nameOf(a.riverId);
@@ -143,22 +145,25 @@ export function AdminPage(): ReactElement {
                 <div className="admin__who">
                   <span
                     className={`status-dot ${a.online ? 'status-dot--active' : ''}`}
-                    aria-label={a.online ? 'Online' : 'Offline'}
+                    aria-label={a.online ? tr('Online') : tr('Offline')}
                     role="img"
                   />
                   <div>
                     <strong>{name}</strong>
-                    {isMe && <span className="chip admin__chip">You</span>}
+                    {isMe && <span className="chip admin__chip">{tr('You')}</span>}
                     {a.suspendedUntil && (
                       <span className="chip chip--error admin__chip">
-                        {banned ? 'Banned' : `Timed out until ${new Date(a.suspendedUntil).toLocaleString()}`}
+                        {banned
+                          ? tr('Banned')
+                          : tr('Timed out until {time}', {
+                              time: new Date(a.suspendedUntil).toLocaleString(),
+                            })}
                       </span>
                     )}
                     <div className="muted small">
-                      Joined {a.createdOn} · {a.communities}{' '}
-                      {a.communities === 1 ? 'community' : 'communities'} · {a.devices}{' '}
-                      {a.devices === 1 ? 'device' : 'devices'}
-                      {a.suspendReason ? ` · Reason: ${a.suspendReason}` : ''}
+                      {tr('Joined {date}', { date: a.createdOn })} ·{' '}
+                      {trn('{count} communities', a.communities)} · {trn('{count} devices', a.devices)}
+                      {a.suspendReason ? ` · ${tr('Reason: {reason}', { reason: a.suspendReason })}` : ''}
                     </div>
                   </div>
                 </div>
@@ -172,13 +177,13 @@ export function AdminPage(): ReactElement {
                           void act(`un:${a.riverId}`, () => window.river.admin.unsuspend(a.riverId))
                         }
                       >
-                        {banned ? 'Unban' : 'End timeout'}
+                        {banned ? tr('Unban') : tr('End timeout')}
                       </button>
                     ) : (
                       <>
                         <select
                           className="admin__timeout"
-                          aria-label={`Time out ${name}`}
+                          aria-label={tr('Time out {name}', { name })}
                           value=""
                           disabled={busy !== null}
                           onChange={(e) => {
@@ -188,10 +193,10 @@ export function AdminPage(): ReactElement {
                             void act(`to:${a.riverId}`, () => window.river.admin.suspend(a.riverId, until));
                           }}
                         >
-                          <option value="">Time out…</option>
+                          <option value="">{tr('Time out…')}</option>
                           {TIMEOUTS.map(([label, ms]) => (
                             <option key={label} value={ms}>
-                              {label}
+                              {tr(label)}
                             </option>
                           ))}
                         </select>
@@ -200,7 +205,7 @@ export function AdminPage(): ReactElement {
                           disabled={busy !== null}
                           onClick={() => setConfirm({ kind: 'ban', account: a, name })}
                         >
-                          Ban
+                          {tr('Ban')}
                         </button>
                       </>
                     )}
@@ -209,7 +214,7 @@ export function AdminPage(): ReactElement {
                       disabled={busy !== null}
                       onClick={() => setConfirm({ kind: 'delete-account', account: a, name })}
                     >
-                      Remove
+                      {tr('Remove')}
                     </button>
                   </div>
                 )}
@@ -221,19 +226,19 @@ export function AdminPage(): ReactElement {
 
       <section className="glass card admin__section" aria-labelledby="admin-communities">
         <h2 id="admin-communities" className="card__title">
-          Communities
+          {tr('Communities')}
         </h2>
-        {data && data.communities.length === 0 && <p className="muted small">No communities yet.</p>}
+        {data && data.communities.length === 0 && <p className="muted small">{tr('No communities yet.')}</p>}
         <ul className="admin__list">
           {(data?.communities ?? []).map((c) => {
-            const name = communityNames.get(c.id) ?? 'A community you are not in';
+            const name = communityNames.get(c.id) ?? tr('A community you are not in');
             return (
               <li key={c.id} className="admin__row">
                 <div>
                   <strong>{name}</strong>
                   <div className="muted small">
-                    Owner {nameOf(c.owner)} · {c.members} {c.members === 1 ? 'member' : 'members'} ·{' '}
-                    {c.channels} {c.channels === 1 ? 'channel' : 'channels'} · created {c.createdOn}
+                    {tr('Owner {name}', { name: nameOf(c.owner) })} · {trn('{count} members', c.members)} ·{' '}
+                    {trn('{count} channels', c.channels)} · {tr('created {date}', { date: c.createdOn })}
                   </div>
                 </div>
                 <div className="admin__actions">
@@ -242,7 +247,7 @@ export function AdminPage(): ReactElement {
                     disabled={busy !== null}
                     onClick={() => setConfirm({ kind: 'delete-community', community: c, name })}
                   >
-                    Delete
+                    {tr('Delete')}
                   </button>
                 </div>
               </li>
@@ -303,16 +308,23 @@ function ConfirmBody(props: {
   const c = props.confirm;
   const title =
     c.kind === 'ban'
-      ? `Ban ${c.name}?`
+      ? tr('Ban {name}?', { name: c.name })
       : c.kind === 'delete-account'
-        ? `Remove ${c.name}?`
-        : `Delete ${c.name}?`;
+        ? tr('Remove {name}?', { name: c.name })
+        : tr('Delete {name}?', { name: c.name });
   const body =
     c.kind === 'ban'
-      ? 'They are signed out at once and cannot use River on your server until you unban them. Nothing is deleted.'
+      ? tr(
+          'They are signed out at once and cannot use River on your server until you unban them. Nothing is deleted.',
+        )
       : c.kind === 'delete-account'
-        ? 'Their account leaves your server: they are removed from every community, communities they own are deleted, and they would need to create a new account. Messages they already sent stay.'
-        : `The community, its channels and its messages are deleted for all ${c.community.members} members. This cannot be undone.`;
+        ? tr(
+            'Their account leaves your server: they are removed from every community, communities they own are deleted, and they would need to create a new account. Messages they already sent stay.',
+          )
+        : trn(
+            'The community, its channels and its messages are deleted for all {count} members. This cannot be undone.',
+            c.community.members,
+          );
   return (
     <>
       <h2 id="admin-confirm-title" className="card__title">
@@ -321,7 +333,7 @@ function ConfirmBody(props: {
       <p className="modal__text">{body}</p>
       {c.kind === 'ban' && (
         <label className="textfield">
-          <span className="field__label">Reason (optional, shown to them)</span>
+          <span className="field__label">{tr('Reason (optional, shown to them)')}</span>
           <input value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} />
         </label>
       )}
@@ -331,10 +343,14 @@ function ConfirmBody(props: {
           disabled={props.busy}
           onClick={() => props.onConfirm(reason.trim())}
         >
-          {c.kind === 'ban' ? 'Ban' : c.kind === 'delete-account' ? 'Remove account' : 'Delete community'}
+          {c.kind === 'ban'
+            ? tr('Ban')
+            : c.kind === 'delete-account'
+              ? tr('Remove account')
+              : tr('Delete community')}
         </button>
         <button className="btn btn--ghost" autoFocus onClick={props.onCancel}>
-          Cancel
+          {tr('Cancel')}
         </button>
       </div>
     </>
@@ -378,7 +394,7 @@ function SignupControls(props: { data: AdminOverview; onChanged(): void }): Reac
       },
       (err: unknown) => {
         play('error');
-        setError((err as Error).message || 'That did not work. Try again.');
+        setError((err as Error).message || tr('That did not work. Try again.'));
       },
     );
   };
@@ -386,19 +402,19 @@ function SignupControls(props: { data: AdminOverview; onChanged(): void }): Reac
   return (
     <section className="glass card admin__section" aria-labelledby="admin-signups">
       <h2 id="admin-signups" className="card__title">
-        Accounts you create
+        {tr('Accounts you create')}
       </h2>
       <div className="admin__mode">
         <span className="muted small">
           {inviteOnly
-            ? 'Invite-only: only people you make a sign-up link for can join.'
-            : 'Open: anyone who downloads River can create an account here.'}
+            ? tr('Invite-only: only people you make a sign-up link for can join.')
+            : tr('Open: anyone who downloads River can create an account here.')}
         </span>
         <button
           className="btn btn--ghost btn--small"
           onClick={() => change(() => window.river.admin.setSignupMode(inviteOnly ? 'open' : 'invite'))}
         >
-          {inviteOnly ? 'Allow anyone to join' : 'Make invite-only'}
+          {inviteOnly ? tr('Allow anyone to join') : tr('Make invite-only')}
         </button>
       </div>
 
@@ -413,11 +429,11 @@ function SignupControls(props: { data: AdminOverview; onChanged(): void }): Reac
               setUsername(e.target.value);
               setError(null);
             }}
-            placeholder="username"
+            placeholder={tr('username')}
             autoCapitalize="none"
             spellCheck={false}
             maxLength={32}
-            aria-label="Username for the new account"
+            aria-label={tr('Username for the new account')}
           />
         </div>
         <button
@@ -425,7 +441,7 @@ function SignupControls(props: { data: AdminOverview; onChanged(): void }): Reac
           disabled={busy || username.trim().length < 3}
           onClick={() => void create()}
         >
-          {busy ? 'Creating…' : 'Create account'}
+          {busy ? tr('Creating…') : tr('Create account')}
         </button>
       </div>
       {error && <p className="field__error">{error}</p>}
@@ -433,8 +449,9 @@ function SignupControls(props: { data: AdminOverview; onChanged(): void }): Reac
       {made && (
         <div className="admin__signup-link">
           <span>
-            Send this link to <strong>@{made.username}</strong> — they open it in River and the account is
-            theirs:
+            {tr('Send this link to @{username} — they open it in River and the account is theirs:', {
+              username: made.username,
+            })}
           </span>
           <code>{made.link}</code>
           <button
@@ -447,19 +464,19 @@ function SignupControls(props: { data: AdminOverview; onChanged(): void }): Reac
                 },
                 () => {
                   play('error');
-                  setError('Could not copy the link. Select it and copy it yourself.');
+                  setError(tr('Could not copy the link. Select it and copy it yourself.'));
                 },
               )
             }
           >
-            {copied ? 'Copied ✓' : 'Copy link'}
+            {copied ? tr('Copied ✓') : tr('Copy link')}
           </button>
         </div>
       )}
 
       {props.data.signups.length > 0 && (
         <div className="admin__signups">
-          <p className="muted small">Waiting to be claimed:</p>
+          <p className="muted small">{tr('Waiting to be claimed:')}</p>
           {props.data.signups.map((s) => (
             <div key={s.username} className="admin__row">
               <strong>@{s.username}</strong>
@@ -467,7 +484,7 @@ function SignupControls(props: { data: AdminOverview; onChanged(): void }): Reac
                 className="btn btn--link btn--small"
                 onClick={() => change(() => window.river.admin.deleteSignup(s.username))}
               >
-                Cancel
+                {tr('Cancel')}
               </button>
             </div>
           ))}

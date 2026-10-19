@@ -1,4 +1,5 @@
 import { Permission, TIMEOUT_DENIES } from '@river/protocol/permissions';
+import { fill, type Vars } from './i18n/index.ts';
 
 /**
  * "Why can (or can't) this person do that here?" (1.0.26). Follows the same
@@ -30,21 +31,26 @@ export interface Explanation {
   because: string[];
 }
 
-export function explainPermission(input: ExplainInput, bit: number): Explanation {
+/** `t` says it in River's language (the renderer's tr); without one, in English. */
+export function explainPermission(
+  input: ExplainInput,
+  bit: number,
+  t: (text: string, vars?: Vars) => string = fill,
+): Explanation {
   const { member, roles } = input;
   if (member.riverId === input.ownerId)
-    return { allowed: true, because: ['They own the community: owners can do everything.'] };
+    return { allowed: true, because: [t('They own the community: owners can do everything.')] };
   const byId = new Map(roles.map((r) => [r.id, r]));
   const name = (id: string): string =>
-    id === input.everyoneRoleId ? '@everyone' : (byId.get(id)?.name ?? 'a role');
+    id === input.everyoneRoleId ? '@everyone' : (byId.get(id)?.name ?? t('a role'));
   const because: string[] = [];
   const everyone = byId.get(input.everyoneRoleId);
   let allowed = !!((everyone?.permissions ?? 0) & bit);
-  because.push(`@everyone ${allowed ? 'allows' : 'does not allow'} it.`);
+  because.push(allowed ? t('@everyone allows it.') : t('@everyone does not allow it.'));
   const granting = member.roles.filter((id) => ((byId.get(id)?.permissions ?? 0) & bit) !== 0);
   if (!allowed && granting.length) {
     allowed = true;
-    because.push(`Their role ${granting.map(name).join(', ')} allows it.`);
+    because.push(t('Their role {role} allows it.', { role: granting.map(name).join(', ') }));
   }
   const admin = member.roles.find(
     (id) => ((byId.get(id)?.permissions ?? 0) & Permission.ADMINISTRATOR) !== 0,
@@ -54,7 +60,9 @@ export function explainPermission(input: ExplainInput, bit: number): Explanation
       allowed: true,
       because: [
         ...because,
-        `${admin ? `Their role ${name(admin)}` : '@everyone'} has Administrator, which allows everything.`,
+        admin
+          ? t('Their role {role} has Administrator, which allows everything.', { role: name(admin) })
+          : t('@everyone has Administrator, which allows everything.'),
       ],
     };
   }
@@ -63,11 +71,11 @@ export function explainPermission(input: ExplainInput, bit: number): Explanation
     const ow = ch.overwrites.find((o) => o.roleId === input.everyoneRoleId);
     if (ow && ow.deny & bit) {
       allowed = false;
-      because.push(`In #${ch.name}, @everyone is denied it.`);
+      because.push(t('In #{channel}, @everyone is denied it.', { channel: ch.name }));
     }
     if (ow && ow.allow & bit) {
       allowed = true;
-      because.push(`In #${ch.name}, @everyone is allowed it.`);
+      because.push(t('In #{channel}, @everyone is allowed it.', { channel: ch.name }));
     }
     const mine = ch.overwrites.filter(
       (o) => o.roleId !== input.everyoneRoleId && member.roles.includes(o.roleId),
@@ -77,25 +85,32 @@ export function explainPermission(input: ExplainInput, bit: number): Explanation
     if (denying.length && !allowing.length) {
       allowed = false;
       because.push(
-        `In #${ch.name}, their role ${denying.map((o) => name(o.roleId)).join(', ')} is denied it.`,
+        t('In #{channel}, their role {role} is denied it.', {
+          channel: ch.name,
+          role: denying.map((o) => name(o.roleId)).join(', '),
+        }),
       );
     }
     if (allowing.length) {
       allowed = true;
+      const vars = { channel: ch.name, role: allowing.map((o) => name(o.roleId)).join(', ') };
       because.push(
-        `In #${ch.name}, their role ${allowing.map((o) => name(o.roleId)).join(', ')} is allowed it${
-          denying.length ? ' (an allow on a role beats a deny on another)' : ''
-        }.`,
+        denying.length
+          ? t(
+              'In #{channel}, their role {role} is allowed it (an allow on a role beats a deny on another).',
+              vars,
+            )
+          : t('In #{channel}, their role {role} is allowed it.', vars),
       );
     }
   }
   if (member.pending && allowed && bit !== Permission.VIEW_CHANNELS) {
     allowed = false;
-    because.push('They have not accepted the rules yet, so they can only read.');
+    because.push(t('They have not accepted the rules yet, so they can only read.'));
   }
   if (member.timedOut && allowed && bit & TIMEOUT_DENIES) {
     allowed = false;
-    because.push('They are timed out.');
+    because.push(t('They are timed out.'));
   }
   if (ch?.announcement && bit === Permission.SEND_MESSAGES && allowed) {
     const manages =
@@ -104,7 +119,11 @@ export function explainPermission(input: ExplainInput, bit: number): Explanation
       Permission.MANAGE_MESSAGES;
     if (!manages) {
       allowed = false;
-      because.push(`#${ch.name} is an announcement channel: only people who manage messages post there.`);
+      because.push(
+        t('#{channel} is an announcement channel: only people who manage messages post there.', {
+          channel: ch.name,
+        }),
+      );
     }
   }
   return { allowed, because };

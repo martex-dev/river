@@ -5,6 +5,7 @@ import type { HostRuntime } from '../../shared/ipc.ts';
 import type { Logger } from '../logger.ts';
 import type { FromServerProcess, ToServerProcess } from './server-messages.ts';
 import type { FunnelProvider } from './tailscale.ts';
+import { msg } from '../../shared/i18n/index.ts';
 
 /** The community server, running in its own process (see src/host/server-process.ts). */
 export interface ServerHandle {
@@ -319,7 +320,7 @@ export class HostManager {
         this.serverDelay = RESTART_MIN_MS;
       }
       this.deps.log.warn(`host: server stopped (code ${code}); restarting`);
-      this.set('reconnecting', 'Restarting the community server…');
+      this.set('reconnecting', msg('Restarting the community server…'));
       this.later(this.serverDelay, () => this.launchServer());
       this.serverDelay = Math.min(this.serverDelay * 2, RESTART_MAX_MS);
     });
@@ -377,7 +378,7 @@ export class HostManager {
       try {
         this.tunnelBinary = await this.deps.ensureTunnelTool((fraction) => {
           this.progress = fraction;
-          this.set('preparing', 'Setting up your public address (one-time download)…');
+          this.set('preparing', msg('Setting up your public address (one-time download)…'));
         });
         this.progress = undefined;
       } catch (err) {
@@ -390,7 +391,7 @@ export class HostManager {
       }
     }
     if (!this.wanted || this.tunnel) return;
-    if (this.state !== 'online') this.set('starting', 'Opening your public address…');
+    if (this.state !== 'online') this.set('starting', msg('Opening your public address…'));
     const startedAt = Date.now();
     this.servedPort = this.port;
     const tunnel = this.deps.spawnTunnel(this.tunnelBinary, this.local());
@@ -407,7 +408,7 @@ export class HostManager {
       if (!this.wanted) return;
       if (Date.now() - startedAt > STABLE_AFTER_MS) this.tunnelDelay = RESTART_MIN_MS;
       this.deps.log.warn(`host: tunnel stopped (code ${code}); reopening`);
-      this.set('reconnecting', 'Reconnecting to the internet…');
+      this.set('reconnecting', msg('Reconnecting to the internet…'));
       this.later(this.tunnelDelay, () => void this.launchTunnel());
       this.tunnelDelay = Math.min(this.tunnelDelay * 2, RESTART_MAX_MS);
     });
@@ -459,7 +460,7 @@ export class HostManager {
     if (this.watchFailures >= WATCH_FAILURES) {
       this.watchFailures = 0;
       this.deps.log.warn('host: public address stopped answering; reopening');
-      this.set('reconnecting', 'Reconnecting to the internet…');
+      this.set('reconnecting', msg('Reconnecting to the internet…'));
       if (this.via === 'tailscale') {
         // Try the permanent address again; meanwhile a quick tunnel keeps members connected.
         this.via = null;
@@ -492,7 +493,7 @@ export class HostManager {
       if (check.state !== 'ready') this.permanentProblem = null;
       if (changed) this.emit();
       if (check.state !== 'ready') return false;
-      if (this.state !== 'online') this.set('starting', 'Opening your permanent address…');
+      if (this.state !== 'online') this.set('starting', msg('Opening your permanent address…'));
       const port = this.port;
       try {
         await funnel.open(this.local(), (link) => {
@@ -528,7 +529,7 @@ export class HostManager {
       }
       if (!current()) return false;
       this.deps.log.warn('host: the permanent address did not answer; using the quick tunnel');
-      this.permanentProblem = 'Tailscale is signed in, but your permanent address did not answer.';
+      this.permanentProblem = msg('Tailscale is signed in, but your permanent address did not answer.');
       this.emit();
       return false;
     } catch (err) {

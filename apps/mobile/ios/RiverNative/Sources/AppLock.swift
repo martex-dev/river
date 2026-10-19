@@ -68,7 +68,7 @@ final class AppLock {
     private func prompt() {
         guard !prompting else { return }
         prompting = true
-        LAContext().evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock River") { ok, _ in
+        LAContext().evaluatePolicy(.deviceOwnerAuthentication, localizedReason: NSLocalizedString("Unlock River", comment: "Face ID / passcode prompt")) { ok, _ in
             DispatchQueue.main.async {
                 self.prompting = false
                 if ok {
@@ -85,7 +85,7 @@ final class AppLock {
         box.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         box.backgroundColor = UIColor(red: 0x0B / 255, green: 0x12 / 255, blue: 0x22 / 255, alpha: 1)
         let button = UIButton(type: .system)
-        button.setTitle("Unlock River", for: .normal)
+        button.setTitle(NSLocalizedString("Unlock River", comment: "Lock screen button"), for: .normal)
         button.titleLabel?.font = .preferredFont(forTextStyle: .title3)
         button.addTarget(self, action: #selector(tap), for: .touchUpInside)
         button.translatesAutoresizingMaskIntoConstraints = false

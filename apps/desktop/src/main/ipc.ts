@@ -59,6 +59,7 @@ import type { SocialAction } from '../shared/social.ts';
 import type { DmAction, DmEvent } from '../shared/dm.ts';
 import { desktopCapturer } from 'electron';
 import { releasePageUrl } from './updater/verify-download.ts';
+import { fill, msg, resolveLanguage, translate, type Vars } from '../shared/i18n/index.ts';
 
 /** What the IPC layer needs of an updater: the desktop's UpdateService, or River for Android's. */
 export interface UpdatesApi {
@@ -73,6 +74,11 @@ export interface UpdatesApi {
 export interface IpcDeps {
   appInfo: () => AppInfo;
   settings: SettingsStore;
+  /**
+   * The computer's or phone's language, for messages in River's language when it follows the
+   * system (Settings → Appearance → Language). Without it: English.
+   */
+  locale?: () => string;
   updates: UpdatesApi | null;
   updatesDisabledReason: string;
   devServerUrl: string | undefined;
@@ -135,12 +141,15 @@ export interface IpcDeps {
   >;
 }
 
-/** Turns any error into a message that is safe to show. */
+/** Says a message in River's language; registerIpc sets it (English until then). */
+let say: (text: string, vars?: Vars) => string = fill;
+
+/** Turns any error into a message that is safe to show, in River's language. */
 async function result<T>(fn: () => Promise<T> | T): Promise<Result<T>> {
   try {
     return { ok: true, value: await fn() };
   } catch (err) {
-    return { ok: false, message: friendlyError(err) };
+    return { ok: false, message: say(friendlyError(err)) };
   }
 }
 
@@ -160,6 +169,9 @@ function assertTrustedSender(event: IpcMainInvokeEvent, devServerUrl: string | u
 }
 
 export function registerIpc(deps: IpcDeps): void {
+  const t = (text: string, vars?: Vars): string =>
+    translate(resolveLanguage(deps.settings.get().appearance.language, deps.locale?.() ?? 'en'), text, vars);
+  say = t;
   const handle = (channel: string, fn: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown): void => {
     ipcMain.handle(channel, (event, ...args) => {
       assertTrustedSender(event, deps.devServerUrl);
@@ -259,6 +271,7 @@ export function registerIpc(deps: IpcDeps): void {
       storage: deps.storage.getStatus(),
       identity: deps.identity.get(),
       account: deps.account.status(),
+      t,
     }),
   );
 
@@ -276,7 +289,7 @@ export function registerIpc(deps: IpcDeps): void {
     if (!server || (await deps.homeAccount.isHomeServer(server))) {
       await deps.homeAccount.ensure({ force: true });
       if (deps.account.status().state === 'none')
-        throw new UserFacingError('River could not set up your account. Try again in a moment.');
+        throw new UserFacingError(msg('River could not set up your account. Try again in a moment.'));
       return;
     }
     await deps.account.register(server);
@@ -354,7 +367,7 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.backupRestore, (_e, file, phrase) =>
     result(async () => {
       if (!(file instanceof Uint8Array) || file.byteLength > 1024 * 1024 * 1024) {
-        throw new BackupError('That file is too large to be a River backup.');
+        throw new BackupError(msg('That file is too large to be a River backup.'));
       }
       deps.backup.restore(file, z.string().max(1000).parse(phrase));
       await deps.afterRestore();
@@ -513,7 +526,7 @@ export function registerIpc(deps: IpcDeps): void {
     result(async () => {
       const before = deps.account.status();
       if (before.state !== 'registered' || !before.missing)
-        throw new UserFacingError('Your account is fine — nothing to set up again.');
+        throw new UserFacingError(msg('Your account is fine — nothing to set up again.'));
       // The new account is made first; the old one is forgotten only once that worked (a refusal,
       // such as "the account is still there", leaves this device as it was and says why).
       if (await deps.homeAccount.isHomeServer(before.serverUrl)) {
@@ -543,7 +556,7 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.accountRedeemSignup, (_e, link) =>
     result(async () => {
       const parsed = parseSignup(z.string().max(2048).parse(link));
-      if (!parsed) throw new UserFacingError('That is not a valid River sign-up link.');
+      if (!parsed) throw new UserFacingError(msg('That is not a valid River sign-up link.'));
       const server = isHomeLink(parsed.serverUrl) ? await deps.homeAccount.locate() : parsed.serverUrl;
       const status = await deps.account.register(server, parsed.code);
       deps.settings.update({ server: { url: server } });
@@ -562,7 +575,7 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.accountExport, (event) =>
     result(async () => {
       const db = deps.storage.db();
-      if (!db) throw new UserFacingError('Unlock River first.');
+      if (!db) throw new UserFacingError(msg('Unlock River first.'));
       const data = buildExport(db, deps.settings.get(), deps.appInfo().version);
       const win = BrowserWindow.fromWebContents(event.sender);
       const options = {
@@ -597,7 +610,9 @@ export function registerIpc(deps: IpcDeps): void {
     } catch (err) {
       return {
         ok: false,
-        message: err instanceof UserFacingError ? err.message : 'Something went wrong creating your account.',
+        message: t(
+          err instanceof UserFacingError ? err.message : msg('Something went wrong creating your account.'),
+        ),
       };
     }
   });
@@ -635,7 +650,10 @@ export function registerIpc(deps: IpcDeps): void {
       return { ok: false, reason: 'wrong-passphrase' };
     }
   });
-  handle(IPC.serverCheck, (_e, url) => checkServer(url, deps.fetchBytes));
+  handle(IPC.serverCheck, async (_e, url) => {
+    const res = await checkServer(url, deps.fetchBytes);
+    return res.ok ? res : { ...res, message: t(res.message) };
+  });
   // The window-buttons area follows the theme (1.0.45). Only two hex colours are accepted.
   const titleBarSchema = z.object({
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
@@ -664,12 +682,14 @@ export function registerIpc(deps: IpcDeps): void {
       const mail = url.protocol === 'mailto:';
       const ask = {
         type: 'question' as const,
-        title: mail ? 'Write an email' : 'Call a number',
-        message: mail ? 'Write to this address in your mail app?' : 'Call this number with your phone app?',
+        title: mail ? t('Write an email') : t('Call a number'),
+        message: mail
+          ? t('Write to this address in your mail app?')
+          : t('Call this number with your phone app?'),
         detail: `${url.pathname}
 
-Only do this if you trust the person who sent it.`,
-        buttons: [mail ? 'Open mail app' : 'Call', 'Cancel'],
+${t('Only do this if you trust the person who sent it.')}`,
+        buttons: [mail ? t('Open mail app') : t('Call'), t('Cancel')],
         defaultId: 0,
         cancelId: 1,
       };
@@ -683,14 +703,14 @@ Only do this if you trust the person who sent it.`,
     const warnings = linkWarnings(url);
     const options = {
       type: warnings.some((w) => w.startsWith('⚠')) ? ('warning' as const) : ('question' as const),
-      title: 'Open link',
-      message: `Open this link in your browser?`,
+      title: t('Open link'),
+      message: t('Open this link in your browser?'),
       detail: `${url.hostname}
 
 ${url.href}
-${warnings.length ? `\n${warnings.join('\n')}\n` : ''}
-Links can lead anywhere. Only open it if you trust where it goes.`,
-      buttons: ['Open link', 'Cancel'],
+${warnings.length ? `\n${warnings.map((w) => t(w)).join('\n')}\n` : ''}
+${t('Links can lead anywhere. Only open it if you trust where it goes.')}`,
+      buttons: [t('Open link'), t('Cancel')],
       defaultId: 0,
       cancelId: 1,
     };
@@ -792,34 +812,42 @@ export function broadcastStorageStatus(target: WebContents, storage: StorageServ
   });
 }
 
-function storageItem(status: StorageStatus): SecurityStatus['items'][number] {
-  const base = { id: 'storage', label: 'Encrypted local storage' };
+function storageItem(
+  status: StorageStatus,
+  t: (text: string, vars?: Vars) => string,
+): SecurityStatus['items'][number] {
+  const base = { id: 'storage', label: t('Encrypted local storage') };
   switch (status.state) {
     case 'open':
       return {
         ...base,
         indicator: 'active',
-        value: status.protection === 'passphrase' ? 'Active · passphrase' : 'Active',
+        value: status.protection === 'passphrase' ? t('Active · passphrase') : t('Active'),
         detail:
           status.protection === 'passphrase'
-            ? 'River\u2019s local database is encrypted with SQLCipher (AES-256). Its key is sealed with your passphrase (Argon2id), which River asks for each time it starts.'
-            : `River\u2019s local database is encrypted with SQLCipher (AES-256). Its key is protected by ${status.keystore}, so other user accounts on this computer cannot read it.`,
+            ? t(
+                'River’s local database is encrypted with SQLCipher (AES-256). Its key is sealed with your passphrase (Argon2id), which River asks for each time it starts.',
+              )
+            : t(
+                'River’s local database is encrypted with SQLCipher (AES-256). Its key is protected by {keystore}, so other user accounts on this computer cannot read it.',
+                { keystore: status.keystore },
+              ),
       };
     case 'error':
-      return { ...base, indicator: 'warning', value: 'Unavailable', detail: status.message };
+      return { ...base, indicator: 'warning', value: t('Unavailable'), detail: t(status.message) };
     case 'opening':
       return {
         ...base,
         indicator: 'inactive',
-        value: 'Opening…',
-        detail: 'River is opening its local database.',
+        value: t('Opening…'),
+        detail: t('River is opening its local database.'),
       };
     default:
       return {
         ...base,
         indicator: 'warning',
-        value: 'Locked',
-        detail: 'River\u2019s local data stays encrypted until you enter your passphrase.',
+        value: t('Locked'),
+        detail: t('River’s local data stays encrypted until you enter your passphrase.'),
       };
   }
 }
@@ -830,12 +858,15 @@ export function securityStatus({
   storage,
   identity,
   account,
+  t = fill,
 }: {
   updatesEnabled: boolean;
   serverUrl: string | null;
   storage: StorageStatus;
   identity: IdentityInfo | null;
   account: AccountStatus;
+  /** Says it in River's language; without it, English. */
+  t?: (text: string, vars?: Vars) => string;
 }): SecurityStatus {
   const serverHost =
     account.state === 'registered' ? account.server : serverUrl ? new URL(serverUrl).host : null;
@@ -843,75 +874,91 @@ export function securityStatus({
     items: [
       {
         id: 'e2ee',
-        label: 'End-to-end encryption',
+        label: t('End-to-end encryption'),
         indicator: 'active',
-        value: 'Direct messages and communities',
-        detail:
+        value: t('Direct messages and communities'),
+        detail: t(
           'Direct messages and 1:1 call setup use the Signal protocol (libsignal: PQXDH with post-quantum keys and the Double Ratchet), so each message has its own key and past messages stay safe if a key leaks later. Communities encrypt names, messages and call setup with a shared community key (AES-256-GCM) that travels only inside invite links — anyone with an invite link can read the community, and removing someone does not change the key yet. Files use a fresh key each (AES-256-CBC + HMAC-SHA256). Voice, video and screen sharing go directly between participants, encrypted with DTLS-SRTP. The server still sees who messages whom and when.',
+        ),
       },
       identity
         ? {
             id: 'identity',
-            label: 'Identity',
+            label: t('Identity'),
             indicator: 'active',
             value: identity.fingerprint.split(' ').slice(0, 2).join(' ') + ' …',
-            detail:
+            detail: t(
               'Your identity key was created on this device and its private half never leaves it. Contacts will verify the fingerprint below to make sure they are really talking to you.',
+            ),
           }
         : {
             id: 'identity',
-            label: 'Identity',
+            label: t('Identity'),
             indicator: 'inactive',
-            value: 'Not created',
-            detail: 'Create your identity to get a fingerprint your contacts can verify.',
+            value: t('Not created'),
+            detail: t('Create your identity to get a fingerprint your contacts can verify.'),
           },
       {
         id: 'server',
-        label: 'Server message access',
+        label: t('Server message access'),
         indicator: 'inactive',
-        value: serverHost ? `None · ${serverHost}` : 'No server configured',
+        value: serverHost ? t('None · {host}', { host: serverHost }) : t('No server configured'),
         detail:
           account.state === 'registered'
-            ? `Your account on ${serverHost} holds your River ID, your @username if you chose one, your public keys and your signed device list. Direct messages, community messages, profiles and files reach it only end-to-end encrypted — it passes them on and keeps them for devices that are offline, but cannot read them. It does see who messages whom and when.`
+            ? t(
+                'Your account on {host} holds your River ID, your @username if you chose one, your public keys and your signed device list. Direct messages, community messages, profiles and files reach it only end-to-end encrypted — it passes them on and keeps them for devices that are offline, but cannot read them. It does see who messages whom and when.',
+                { host: serverHost ?? '' },
+              )
             : serverHost
-              ? `River is set to use ${serverHost}, but you have no account there yet, so the server holds none of your data.`
-              : 'River is not set to use any server, so no server holds any of your data.',
+              ? t(
+                  'River is set to use {host}, but you have no account there yet, so the server holds none of your data.',
+                  { host: serverHost },
+                )
+              : t('River is not set to use any server, so no server holds any of your data.'),
       },
       {
         id: 'updates',
-        label: 'Update signatures',
+        label: t('Update signatures'),
         indicator: updatesEnabled ? 'active' : 'warning',
-        value: updatesEnabled ? 'Enforced' : 'Updater off in this build',
-        detail:
+        value: updatesEnabled ? t('Enforced') : t('Updater off in this build'),
+        detail: t(
           'An update is installed only if its release manifest is signed by a River Ed25519 key built into this app and the downloaded file is listed in it.',
+        ),
       },
       {
         id: 'sandbox',
-        label: 'Interface sandbox',
+        label: t('Interface sandbox'),
         indicator: 'active',
-        value: 'Active',
-        detail:
+        value: t('Active'),
+        detail: t(
           'The interface runs in a sandboxed process with a strict content security policy. It has no access to files, keys or the network.',
+        ),
       },
-      storageItem(storage),
+      storageItem(storage, t),
       account.state === 'registered'
         ? {
             id: 'devices',
-            label: 'Devices',
+            label: t('Devices'),
             indicator: account.connection === 'error' ? 'warning' : 'active',
-            value: `${account.devices} · signed list v${account.listVersion}`,
+            value: t('{count} · signed list v{version}', {
+              count: account.devices,
+              version: account.listVersion,
+            }),
             detail:
               account.connection === 'error'
-                ? (account.message ?? 'The device list could not be verified.')
-                : 'Your devices are listed in a record signed by your identity key. River checks that signature every time it connects, so the server cannot add a device to your account without you noticing.',
+                ? t(account.message ?? msg('The device list could not be verified.'))
+                : t(
+                    'Your devices are listed in a record signed by your identity key. River checks that signature every time it connects, so the server cannot add a device to your account without you noticing.',
+                  ),
           }
         : {
             id: 'devices',
-            label: 'Devices',
+            label: t('Devices'),
             indicator: 'inactive',
-            value: 'This device only',
-            detail:
+            value: t('This device only'),
+            detail: t(
               'Your device list starts when you create an account. Then you can link your other phones and computers in Settings → Account → Devices; each one is added to a list signed by your identity key.',
+            ),
           },
     ],
     releaseKeys: TRUSTED_RELEASE_KEYS.map((k) => ({ keyId: k.keyId, comment: k.comment })),

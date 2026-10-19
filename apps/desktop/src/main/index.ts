@@ -18,6 +18,7 @@ import { autoUpdater } from 'electron-updater';
 import { TRUSTED_RELEASE_KEYS } from '@river/release';
 import { channelOfVersion } from '@river/release/channels';
 import { IPC, type AppInfo, type DeepLink } from '../shared/ipc.ts';
+import { msg, resolveLanguage, translate, type Vars } from '../shared/i18n/index.ts';
 import {
   broadcastAccountStatus,
   broadcastCommunityEvents,
@@ -183,6 +184,9 @@ async function start(): Promise<void> {
   log.info(`River ${app.getVersion()} starting on ${process.platform}-${process.arch}`);
 
   const settings = new SettingsStore(join(app.getPath('userData'), 'settings.json'), log);
+  /** What main says itself (dialogs, the tray) is in River's language, as the window is. */
+  const t = (text: string, vars?: Vars): string =>
+    translate(resolveLanguage(settings.get().appearance.language, app.getLocale()), text, vars);
   // Settings → Privacy → Proxy (2.13), applied before anything connects. Chromium's sessions: main's
   // requests, the window (calls), and the updater's own session. Without a proxy: the system's.
   const proxySessions = (): Electron.Session[] => [
@@ -452,10 +456,13 @@ async function start(): Promise<void> {
         if (!source || window.isDestroyed()) return answer({});
         const { response } = await dialog.showMessageBox(window, {
           type: 'question',
-          title: 'River — share your screen',
-          message: 'Share your screen?',
-          detail: `People in this call will see “${source.name}” until you press Stop sharing on the red bar at the top of that screen.`,
-          buttons: ['Share', 'Cancel'],
+          title: t('River — share your screen'),
+          message: t('Share your screen?'),
+          detail: t(
+            'People in this call will see “{source}” until you press Stop sharing on the red bar at the top of that screen.',
+            { source: source.name },
+          ),
+          buttons: [t('Share'), t('Cancel')],
           defaultId: 0,
           cancelId: 1,
         });
@@ -499,7 +506,7 @@ async function start(): Promise<void> {
   });
 
   const updatesEnabled = app.isPackaged || process.env.RIVER_DEV_UPDATES === 'true';
-  const updatesDisabledReason = 'Automatic updates are disabled in development builds.';
+  const updatesDisabledReason = msg('Automatic updates are disabled in development builds.');
   let updates: UpdateService | null = null;
   if (updatesEnabled) {
     autoUpdater.logger = log;
@@ -538,6 +545,7 @@ async function start(): Promise<void> {
   registerIpc({
     appInfo,
     settings,
+    locale: () => app.getLocale(),
     updates,
     updatesDisabledReason,
     devServerUrl,
@@ -624,7 +632,7 @@ async function start(): Promise<void> {
   window.webContents.once('destroyed', endShare);
   // Running for a while with a window up counts as a healthy start.
   window.once('ready-to-show', () => setTimeout(() => health.markHealthy(), HEALTHY_AFTER_MS));
-  watchWindow(window, log, process.argv.includes('--hidden'));
+  watchWindow(window, log, process.argv.includes('--hidden'), t);
   // Settings → Appearance → interface size.
   const applyZoom = (): void => {
     if (!window.isDestroyed()) window.webContents.setZoomFactor(settings.get().appearance.zoom);
@@ -807,13 +815,14 @@ async function start(): Promise<void> {
     if (hosting.status().enabled && hosting.manager.status().state !== 'off') {
       const { response } = await dialog.showMessageBox({
         type: 'question',
-        buttons: ['Keep River running', 'Quit anyway'],
+        buttons: [t('Keep River running'), t('Quit anyway')],
         defaultId: 0,
         cancelId: 0,
-        title: 'Quit River?',
-        message: 'Your communities go offline while River is closed.',
-        detail:
+        title: t('Quit River?'),
+        message: t('Your communities go offline while River is closed.'),
+        detail: t(
           'This PC hosts them. Members can still open River and write; their messages are sent when River runs here again.',
+        ),
       });
       if (response !== 1) return;
     }
@@ -823,24 +832,24 @@ async function start(): Promise<void> {
   const trayLabel = (): string => {
     const h = hosting.status();
     if (!h.enabled) return 'River';
-    return h.state === 'online' ? 'River — hosting your communities' : 'River — starting hosting…';
+    return h.state === 'online' ? t('River — hosting your communities') : t('River — starting hosting…');
   };
   const refreshTray = (): void => {
     const h = hosting.status();
     tray.setToolTip(trayLabel());
     tray.setContextMenu(
       Menu.buildFromTemplate([
-        { label: 'Open River', click: show },
+        { label: t('Open River'), click: show },
         ...(h.enabled
           ? [
               {
-                label: h.state === 'online' ? 'Hosting: online' : 'Hosting: connecting…',
+                label: h.state === 'online' ? t('Hosting: online') : t('Hosting: connecting…'),
                 enabled: false,
               },
             ]
           : []),
         { type: 'separator' },
-        { label: 'Quit River', click: () => void quitFromTray() },
+        { label: t('Quit River'), click: () => void quitFromTray() },
       ]),
     );
   };
@@ -863,8 +872,8 @@ async function start(): Promise<void> {
     if (!told && Notification.isSupported()) {
       told = true;
       new Notification({
-        title: 'River is still running',
-        body: 'Calls and messages keep coming in. Quit from the River icon in the tray.',
+        title: t('River is still running'),
+        body: t('Calls and messages keep coming in. Quit from the River icon in the tray.'),
         silent: true,
       }).show();
     }
@@ -887,7 +896,12 @@ async function start(): Promise<void> {
  * even if the first paint never comes, a crashed page is reloaded, and a page
  * that keeps crashing is replaced by a plain explanation.
  */
-function watchWindow(window: BrowserWindow, log: ReturnType<typeof createFileLogger>, hidden: boolean): void {
+function watchWindow(
+  window: BrowserWindow,
+  log: ReturnType<typeof createFileLogger>,
+  hidden: boolean,
+  t: (text: string, vars?: Vars) => string,
+): void {
   let painted = false;
   window.once('ready-to-show', () => {
     painted = true;
@@ -912,10 +926,13 @@ function watchWindow(window: BrowserWindow, log: ReturnType<typeof createFileLog
     void dialog
       .showMessageBox(window, {
         type: 'error',
-        title: "River's window keeps closing",
-        message: "River's window keeps closing",
-        detail: `The interface stopped ${reloads + 1} times (${details.reason}). Try again, or quit and start River with --disable-gpu. The log is in ${join(app.getPath('userData'), 'logs')}.`,
-        buttons: ['Try again', 'Quit River'],
+        title: t("River's window keeps closing"),
+        message: t("River's window keeps closing"),
+        detail: t(
+          'The interface stopped {times} times ({reason}). Try again, or quit and start River with --disable-gpu. The log is in {folder}.',
+          { times: reloads + 1, reason: details.reason, folder: join(app.getPath('userData'), 'logs') },
+        ),
+        buttons: [t('Try again'), t('Quit River')],
         defaultId: 0,
         cancelId: 1,
       })

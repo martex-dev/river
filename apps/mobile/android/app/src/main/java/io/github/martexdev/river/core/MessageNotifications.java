@@ -139,7 +139,7 @@ final class MessageNotifications {
         new Chat(named ? (group != null && !group.isEmpty() ? group : title) : null, number, lockScreen));
     if (sender != null && !sender.isEmpty()) {
       NotificationCompat.MessagingStyle style =
-          new NotificationCompat.MessagingStyle(new Person.Builder().setName("You").build());
+          new NotificationCompat.MessagingStyle(new Person.Builder().setName(context.getString(io.github.martexdev.river.R.string.you)).build());
       if (group != null && !group.isEmpty()) style.setConversationTitle(group).setGroupConversation(true);
       for (Line l : list) {
         String who = l.sender == null || l.sender.isEmpty() ? title : l.sender;
@@ -148,7 +148,7 @@ final class MessageNotifications {
       b.setStyle(style);
     } else if (number > 1) {
       // Previews hide names: only how many, never who or what.
-      b.setContentText(number + " new messages");
+      b.setContentText(context.getResources().getQuantityString(io.github.martexdev.river.R.plurals.new_messages_count, number, number));
     }
     if (lockScreen) {
       b.setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
@@ -158,7 +158,7 @@ final class MessageNotifications {
               new NotificationCompat.Builder(context, channel)
                   .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
                   .setContentTitle("River")
-                  .setContentText("New message")
+                  .setContentText(context.getString(io.github.martexdev.river.R.string.new_message))
                   .build());
     }
   }
@@ -212,7 +212,7 @@ final class MessageNotifications {
               new NotificationCompat.Builder(context, channel)
                   .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
                   .setContentTitle("River")
-                  .setContentText("New messages")
+                  .setContentText(context.getString(io.github.martexdev.river.R.string.new_messages))
                   .build());
     }
     try {
@@ -254,8 +254,9 @@ final class MessageNotifications {
     if (nm.getNotificationChannel(id) == null) {
       String name = Character.toUpperCase(sound.charAt(0)) + sound.substring(1);
       NotificationChannel c =
-          new NotificationChannel(id, "Messages · " + name, NotificationManager.IMPORTANCE_HIGH);
-      c.setDescription("Chats and channels you gave the " + name + " sound");
+          new NotificationChannel(
+              id, context.getString(io.github.martexdev.river.R.string.tone_channel_name, name), NotificationManager.IMPORTANCE_HIGH);
+      c.setDescription(context.getString(io.github.martexdev.river.R.string.tone_channel_description, name));
       c.enableVibration(true);
       c.setLockscreenVisibility(android.app.Notification.VISIBILITY_PRIVATE);
       c.setSound(

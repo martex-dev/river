@@ -3,8 +3,8 @@ import { Permission } from '@river/protocol/permissions';
 import { EMOJI_NAME } from '../../../../shared/community-actions.ts';
 import type { CommunityView } from '../../../../shared/ipc.ts';
 import { useCommunity } from '../store.ts';
-import { tr } from '../../i18n.ts';
 import { can } from './common.tsx';
+import { rich, tr } from '../../i18n.ts';
 
 /** Largest image kept as it is (animated GIFs); anything else is redrawn at 128 px. */
 const MAX_KEEP_BYTES = 64 * 1024;
@@ -88,15 +88,19 @@ export function EmojiSettings({ community }: { community: CommunityView }): Reac
   };
   return (
     <div className="settings-page">
-      <h2>Emoji</h2>
+      <h2>{tr('Emoji')}</h2>
       <p className="muted small">
-        Everyone here can use these with <code>:name:</code> in messages and reactions. Click a name to rename
-        it. Pictures and names are end-to-end encrypted. Up to 100.
+        {rich(
+          tr(
+            'Everyone here can use these with {code} in messages and reactions. Click a name to rename it. Pictures and names are end-to-end encrypted. Up to 100.',
+          ),
+          { code: <code>:name:</code> },
+        )}
       </p>
       {manage && (
         <div className="emoji-upload">
           <button className="btn btn--primary btn--small" onClick={() => fileRef.current?.click()}>
-            Upload emoji
+            {tr('Upload emoji')}
           </button>
           <input
             ref={fileRef}
@@ -107,17 +111,17 @@ export function EmojiSettings({ community }: { community: CommunityView }): Reac
               const file = e.target.files?.[0];
               e.target.value = '';
               if (!file) return;
-              if (file.size > 5 * 1024 * 1024) return s.notify('That image is too large.', 'error');
+              if (file.size > 5 * 1024 * 1024) return s.notify(tr('That image is too large.'), 'error');
               void toEmojiImage(file)
                 .then((image) => setPending({ name: emojiNameFrom(file.name), image }))
-                .catch(() => s.notify('River could not read that image.', 'error'));
+                .catch(() => s.notify(tr('River could not read that image.'), 'error'));
             }}
           />
           {pending && (
             <div className="emoji-upload__pending">
               <img className="custom-emoji custom-emoji--big" src={pending.image} alt="" />
               <label className="textfield">
-                <span className="field__label">Name</span>
+                <span className="field__label">{tr('Name')}</span>
                 <input
                   autoFocus
                   value={pending.name}
@@ -125,23 +129,23 @@ export function EmojiSettings({ community }: { community: CommunityView }): Reac
                   onChange={(e) => setPending({ ...pending, name: e.target.value })}
                 />
               </label>
-              {!nameOk && <span className="field__error">2–32 letters, numbers or _</span>}
+              {!nameOk && <span className="field__error">{tr('2–32 letters, numbers or _')}</span>}
               <button
                 className="btn btn--primary btn--small"
                 disabled={!nameOk || busy}
                 onClick={() => void save()}
               >
-                Add
+                {tr('Add')}
               </button>
               <button className="btn btn--link" onClick={() => setPending(null)}>
-                Cancel
+                {tr('Cancel')}
               </button>
             </div>
           )}
         </div>
       )}
       {emojis.length === 0 ? (
-        <p className="muted">No custom emoji yet.</p>
+        <p className="muted">{tr('No custom emoji yet.')}</p>
       ) : (
         <ul className="emoji-list">
           {emojis.map((e) => (
@@ -157,7 +161,7 @@ export function EmojiSettings({ community }: { community: CommunityView }): Reac
                 >
                   <input
                     autoFocus
-                    aria-label={`New name for :${e.name}:`}
+                    aria-label={tr('New name for :{name}:', { name: e.name })}
                     value={renaming.name}
                     maxLength={32}
                     onChange={(ev) => setRenaming({ id: e.id, name: ev.target.value })}
@@ -165,13 +169,13 @@ export function EmojiSettings({ community }: { community: CommunityView }): Reac
                     onKeyDown={(ev) => ev.key === 'Escape' && setRenaming(null)}
                   />
                   <button className="btn btn--small" disabled={!EMOJI_NAME.test(renaming.name)}>
-                    Save
+                    {tr('Save')}
                   </button>
                 </form>
               ) : manage ? (
                 <button
                   className="btn btn--link emoji-list__name"
-                  title="Rename"
+                  title={tr('Rename')}
                   onClick={() => setRenaming({ id: e.id, name: e.name })}
                 >
                   <code>:{e.name}:</code>
@@ -182,7 +186,7 @@ export function EmojiSettings({ community }: { community: CommunityView }): Reac
               {manage && (
                 <button
                   className="btn btn--link btn--danger"
-                  aria-label={`Remove :${e.name}:`}
+                  aria-label={tr('Remove :{name}:', { name: e.name })}
                   onClick={() =>
                     s.setModal({
                       kind: 'confirm',
@@ -200,7 +204,7 @@ export function EmojiSettings({ community }: { community: CommunityView }): Reac
                     })
                   }
                 >
-                  Remove
+                  {tr('Remove')}
                 </button>
               )}
             </li>

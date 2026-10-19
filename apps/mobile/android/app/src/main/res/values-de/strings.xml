@@ -1,0 +1,51 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- River's Android texts in this language (the app's screens are translated in shared/i18n). -->
+<resources>
+    <string name="screen_crashed">Der River-Bildschirm ist mehrmals hintereinander abgestürzt. Öffne River erneut.</string>
+    <string name="notice_channel_name">River-Updates und Status</string>
+    <string name="notice_channel_description">Ein Update wartet auf die Installation, oder River bleibt nicht mehr verbunden</string>
+    <string name="notice_update_title">River-Update bereit</string>
+    <string name="notice_update_text">Tippe zum Installieren.</string>
+    <string name="notice_stopped_title">River wurde beendet</string>
+    <string name="notice_stopped_text">Tippe, um dich neu zu verbinden. Erlaube River im Hintergrund (Einstellungen → System), damit Android es weiterlaufen lässt.</string>
+    <string name="lock_prompt_title">River entsperren</string>
+    <string name="lock_title">River ist gesperrt</string>
+    <string name="lock_unlock">Entsperren</string>
+    <string name="call_channel_name">Laufende Anrufe</string>
+    <string name="call_channel_description">Wird angezeigt, während du in einem Anruf oder Sprachkanal bist</string>
+    <string name="call_in_a_call">Im Anruf</string>
+    <string name="call_using_mic">River nutzt das Mikrofon. Tippe, um zurückzukehren.</string>
+    <string name="core_storage_failed">River konnte seinen Speicher nicht öffnen: %1$s</string>
+    <string name="core_crashed">Der River-Kern ist mehrmals hintereinander abgestürzt. Schließe River und öffne es erneut.</string>
+    <string name="core_new_message_open">Neue Nachricht – öffne River</string>
+    <string name="new_message">Neue Nachricht</string>
+    <string name="new_messages">Neue Nachrichten</string>
+    <string name="reply_not_sent_title">Antwort nicht gesendet</string>
+    <string name="reply_not_sent_text">River war geschlossen. Öffne River, um sie zu senden.</string>
+    <string name="messages_channel_name">Nachrichten</string>
+    <string name="messages_channel_description">Neue Nachrichten und Erwähnungen, während River im Hintergrund ist</string>
+    <string name="action_reply">Antworten</string>
+    <string name="action_mark_read">Als gelesen markieren</string>
+    <string name="core_start_failed">River konnte nicht starten</string>
+    <string name="incoming_channel_name">Eingehende Anrufe</string>
+    <string name="incoming_channel_description">Klingelt und zeigt den Anrufbildschirm, wenn dich jemand anruft</string>
+    <string name="incoming_video">Eingehender Videoanruf</string>
+    <string name="incoming_voice">Eingehender Sprachanruf</string>
+    <string name="call_kind_video">River-Videoanruf</string>
+    <string name="call_kind_voice">River-Sprachanruf</string>
+    <string name="ringing">Klingelt …</string>
+    <string name="decline">Ablehnen</string>
+    <string name="answer">Annehmen</string>
+    <string name="you">Du</string>
+    <string name="tone_channel_name">Nachrichten · %1$s</string>
+    <string name="tone_channel_description">Chats und Kanäle mit dem Ton %1$s</string>
+    <string name="service_channel_name">Verbunden bleiben</string>
+    <string name="service_channel_description">Wird angezeigt, solange River im Hintergrund verbunden bleibt</string>
+    <string name="service_title">River ist verbunden</string>
+    <string name="service_text">Neue Nachrichten kommen an, auch wenn River geschlossen ist. Ausschalten unter Einstellungen → System.</string>
+    <string name="installer_could_not_open">Der Android-Installer ließ sich nicht öffnen</string>
+    <plurals name="new_messages_count">
+        <item quantity="one">%d neue Nachricht</item>
+        <item quantity="other">%d neue Nachrichten</item>
+    </plurals>
+</resources>

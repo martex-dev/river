@@ -134,7 +134,7 @@ public class MainActivity extends BridgeActivity implements CoreHost.Screen {
                         () -> {
                           android.widget.Toast.makeText(
                                   getApplicationContext(),
-                                  "River's screen stopped several times in a row. Open River again.",
+                                  getApplicationContext().getString(io.github.martexdev.river.R.string.screen_crashed),
                                   android.widget.Toast.LENGTH_LONG)
                               .show();
                           finish();

@@ -3,6 +3,7 @@ import { Permission } from '@river/protocol/permissions';
 import type { CommunityView } from '../../../../shared/ipc.ts';
 import { useCommunity } from '../store.ts';
 import { can } from './common.tsx';
+import { rich, tr } from '../../i18n.ts';
 
 /**
  * Community settings → Webhooks (1.0.32, ADR 0004). Outside services post with
@@ -23,9 +24,9 @@ export function WebhooksPanel({ community }: { community: CommunityView }): Reac
   const [copied, setCopied] = useState(false);
   const active = (community.webhooks ?? []).filter((w) => !w.revoked);
   const who = (id: string): string =>
-    community.members.find((m) => m.riverId === id)?.name ?? 'Someone who left';
+    community.members.find((m) => m.riverId === id)?.name ?? tr('Someone who left');
   const channelName = (id: string): string =>
-    community.channels.find((c) => c.id === id)?.name ?? 'deleted channel';
+    community.channels.find((c) => c.id === id)?.name ?? tr('deleted channel');
 
   const create = async (): Promise<void> => {
     if (!name.trim() || !channelId) return;
@@ -39,47 +40,48 @@ export function WebhooksPanel({ community }: { community: CommunityView }): Reac
 
   return (
     <div className="settings-page">
-      <h2>Webhooks</h2>
+      <h2>{tr('Webhooks')}</h2>
       <p className="muted small">
-        Let a script or another service post into a channel. It encrypts each post itself with a key that is
-        only in the webhook address, so the server still cannot read it. Anyone with the address can post as
-        the webhook (not read), so keep it secret.
+        {tr(
+          'Let a script or another service post into a channel. It encrypts each post itself with a key that is only in the webhook address, so the server still cannot read it. Anyone with the address can post as the webhook (not read), so keep it secret.',
+        )}
       </p>
 
       {address && (
         <div className="field" role="status">
-          <strong>Copy this address now — River will not show it again.</strong>
+          <strong>{tr('Copy this address now — River will not show it again.')}</strong>
           <div className="webhook-address">
             <code>{address}</code>
             <button
               className="btn btn--small"
               onClick={() => void navigator.clipboard.writeText(address).then(() => setCopied(true))}
             >
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? tr('Copied') : tr('Copy')}
             </button>
           </div>
           <p className="muted small">
-            Post with <code>scripts/webhook/post.mjs</code> from the River repository, or any tool that
-            follows ADR 0004.
+            {rich(tr('Post with {script} from the River repository, or any tool that follows ADR 0004.'), {
+              script: <code>scripts/webhook/post.mjs</code>,
+            })}
           </p>
         </div>
       )}
 
       {channels.length === 0 ? (
         <p className="muted">
-          Webhooks can post only in text channels you manage; there are none here for you.
+          {tr('Webhooks can post only in text channels you manage; there are none here for you.')}
         </p>
       ) : (
         <div className="row">
           <input
-            aria-label="Webhook name"
-            placeholder="Name, e.g. Build bot"
+            aria-label={tr('Webhook name')}
+            placeholder={tr('Name, e.g. Build bot')}
             value={name}
             maxLength={40}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void create()}
           />
-          <select aria-label="Channel" value={channelId} onChange={(e) => setChannelId(e.target.value)}>
+          <select aria-label={tr('Channel')} value={channelId} onChange={(e) => setChannelId(e.target.value)}>
             {channels.map((c) => (
               <option key={c.id} value={c.id}>
                 #{c.name}
@@ -91,13 +93,13 @@ export function WebhooksPanel({ community }: { community: CommunityView }): Reac
             disabled={!name.trim()}
             onClick={() => void create()}
           >
-            Create webhook
+            {tr('Create webhook')}
           </button>
         </div>
       )}
 
       {active.length === 0 ? (
-        <p className="muted">No webhooks yet.</p>
+        <p className="muted">{tr('No webhooks yet.')}</p>
       ) : (
         <ul className="report-list">
           {active.map((w) => (
@@ -105,8 +107,11 @@ export function WebhooksPanel({ community }: { community: CommunityView }): Reac
               <div className="report__head">
                 <strong>{w.name}</strong>
                 <span className="muted small">
-                  posts in #{channelName(w.channelId)} · made by {who(w.createdBy)} ·{' '}
-                  {new Date(w.createdAt).toLocaleDateString()}
+                  {tr('posts in #{channel} · made by {name}', {
+                    channel: channelName(w.channelId),
+                    name: who(w.createdBy),
+                  })}{' '}
+                  · {new Date(w.createdAt).toLocaleDateString()}
                 </span>
               </div>
               {manages(w.channelId) && (
@@ -116,9 +121,11 @@ export function WebhooksPanel({ community }: { community: CommunityView }): Reac
                     onClick={() =>
                       s.setModal({
                         kind: 'confirm',
-                        title: `Delete ${w.name}`,
-                        body: 'Its address stops working at once; anything using it can no longer post. This cannot be undone.',
-                        action: 'Delete webhook',
+                        title: tr('Delete {name}', { name: w.name }),
+                        body: tr(
+                          'Its address stops working at once; anything using it can no longer post. This cannot be undone.',
+                        ),
+                        action: tr('Delete webhook'),
                         run: async () => {
                           await s.run({ a: 'revokeWebhook', communityId: community.id, webhookId: w.id });
                         },
@@ -127,7 +134,7 @@ export function WebhooksPanel({ community }: { community: CommunityView }): Reac
                       })
                     }
                   >
-                    Delete
+                    {tr('Delete')}
                   </button>
                 </div>
               )}

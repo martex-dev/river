@@ -7,6 +7,7 @@ import {
   sealBackup,
 } from '@river/crypto';
 import type { LocalDatabase } from '../storage/database.ts';
+import { msg } from '../../shared/i18n/index.ts';
 
 /**
  * Encrypted backups of everything needed to get your account back on a new
@@ -69,7 +70,7 @@ export class BackupService {
 
   private require(): LocalDatabase {
     const db = this.db();
-    if (!db) throw new BackupError('River is locked.');
+    if (!db) throw new BackupError(msg('River is locked.'));
     return db;
   }
 
@@ -131,7 +132,7 @@ export class BackupService {
     this.migratePhraseShown();
     if (this.meta('recovery_phrase_shown') === null) {
       throw new BackupError(
-        'Show your recovery phrase and write it down first: without it, no backup can be opened.',
+        msg('Show your recovery phrase and write it down first: without it, no backup can be opened.'),
       );
     }
     const tables: BackupFile['tables'] = {};
@@ -182,12 +183,14 @@ export class BackupService {
   restore(file: Uint8Array, phrase: string): void {
     const db = this.require();
     if (db.prepare('SELECT 1 FROM identity').get()) {
-      throw new BackupError('This River already has an identity. Restore only works on a fresh install.');
+      throw new BackupError(
+        msg('This River already has an identity. Restore only works on a fresh install.'),
+      );
     }
     const secret = parseRecoveryPhrase(phrase);
     const data = openBackup<BackupFile>(secret, file);
     if (data?.format !== 'river-backup' || data.version !== 1 || typeof data.tables !== 'object') {
-      throw new BackupError('This backup was made by a newer River. Update River and try again.');
+      throw new BackupError(msg('This backup was made by a newer River. Update River and try again.'));
     }
     const decode = (v: Cell): unknown =>
       v && typeof v === 'object' && '$b64' in v ? Buffer.from(String(v.$b64), 'base64') : v;

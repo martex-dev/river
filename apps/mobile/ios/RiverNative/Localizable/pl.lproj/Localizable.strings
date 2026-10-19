@@ -1,0 +1,9 @@
+/* River's native iOS texts (the screens are translated in shared/i18n). */
+"Unlock River" = "Odblokuj River";
+"River's core stopped several times in a row. Close River and open it again." = "Rdzeń River zatrzymał się kilka razy z rzędu. Zamknij River i otwórz go ponownie.";
+"Reply" = "Odpowiedz";
+"Send" = "Wyślij";
+"Mark as read" = "Oznacz jako przeczytane";
+"Reply not sent" = "Nie wysłano odpowiedzi";
+"Open River to send it." = "Otwórz River, aby ją wysłać.";
+"River could not start" = "Nie udało się uruchomić River";

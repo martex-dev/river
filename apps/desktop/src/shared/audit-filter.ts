@@ -1,11 +1,12 @@
 import type { AuditView } from './ipc.ts';
+import { msg } from './i18n/index.ts';
 
 /** Groups of audit actions for the audit log's filter (1.0.24). */
 export const AUDIT_GROUPS: Array<{ id: string; label: string; prefixes: string[] }> = [
-  { id: 'members', label: 'Members', prefixes: ['member.', 'invite.'] },
+  { id: 'members', label: msg('Members'), prefixes: ['member.', 'invite.'] },
   {
     id: 'moderation',
-    label: 'Moderation',
+    label: msg('Moderation'),
     prefixes: [
       'member.kick',
       'member.ban',
@@ -17,11 +18,11 @@ export const AUDIT_GROUPS: Array<{ id: string; label: string; prefixes: string[]
       'note.',
     ],
   },
-  { id: 'roles', label: 'Roles', prefixes: ['role.', 'member.roles', 'member.selfRoles'] },
-  { id: 'channels', label: 'Channels', prefixes: ['channel.', 'category.', 'thread.'] },
-  { id: 'community', label: 'Community', prefixes: ['community.'] },
-  { id: 'expressions', label: 'Emoji & sounds', prefixes: ['emoji.', 'sound.'] },
-  { id: 'events', label: 'Events', prefixes: ['event.'] },
+  { id: 'roles', label: msg('Roles'), prefixes: ['role.', 'member.roles', 'member.selfRoles'] },
+  { id: 'channels', label: msg('Channels'), prefixes: ['channel.', 'category.', 'thread.'] },
+  { id: 'community', label: msg('Community'), prefixes: ['community.'] },
+  { id: 'expressions', label: msg('Emoji & sounds'), prefixes: ['emoji.', 'sound.'] },
+  { id: 'events', label: msg('Events'), prefixes: ['event.'] },
 ];
 
 export interface AuditFilter {

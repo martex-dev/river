@@ -4,6 +4,7 @@ import { UserFacingError, type AccountService } from './account/account-service.
 import type { FetchBytes, RequestJson } from './http.ts';
 import type { Logger } from './logger.ts';
 import { latestNote } from './community/server-locator.ts';
+import { msg } from '../shared/i18n/index.ts';
 
 const MAX_RELAY_BYTES = 256 * 1024;
 /** First retries come quickly (a tunnel blip lasts seconds), then settle at once a minute. */
@@ -96,7 +97,7 @@ export class HomeAccount {
   /** River's server's current address (verified), for links made with its permanent address. */
   locate(): Promise<string> {
     if (!this.deps.enabled) {
-      throw new UserFacingError('This development build does not use River’s server.');
+      throw new UserFacingError(msg('This development build does not use River’s server.'));
     }
     return locateHomeServer(this.deps);
   }
@@ -208,7 +209,7 @@ export class HomeAccount {
   private async attempt(force = false): Promise<void> {
     if (!this.deps.enabled) {
       throw new UserFacingError(
-        'This development build does not use River’s server. Choose “Use a different server”.',
+        msg('This development build does not use River’s server. Choose “Use a different server”.'),
       );
     }
     if (!this.needed(force)) return;

@@ -5,6 +5,7 @@ import { useRiver } from '../../store.ts';
 import { celebrate } from '../fx.tsx';
 import { play } from '../sound.ts';
 import { useCommunity } from '../store.ts';
+import { tr } from '../../i18n.ts';
 
 /** Joins with an invite link and opens the community, with sound and celebration. */
 export async function joinWithLink(link: string): Promise<string | null> {
@@ -14,7 +15,7 @@ export async function joinWithLink(link: string): Promise<string | null> {
     return res.message;
   }
   play('communityJoin');
-  celebrate(`Welcome to ${res.value.name}`);
+  celebrate(tr('Welcome to {name}', { name: res.value.name }));
   await useCommunity.getState().load();
   useCommunity.getState().select(res.value.id);
   useRiver.getState().navigate('communities');
@@ -56,7 +57,7 @@ export function StartScreen(props: {
     setBusy('create');
     setError(null);
     const serverUrl = otherServer ? server.trim() : '';
-    setStep(props.hasAccount ? null : 'Setting up your account and your community…');
+    setStep(props.hasAccount ? null : tr('Setting up your account and your community…'));
     const res = await window.river.community.create(name.trim(), {
       template,
       ...(!props.hasAccount && serverUrl ? { serverUrl } : {}),
@@ -68,7 +69,7 @@ export function StartScreen(props: {
       return setError(res.message);
     }
     play('communityJoin');
-    celebrate(`${res.value.name} is ready`);
+    celebrate(tr('{name} is ready', { name: res.value.name }));
     if (!props.hasAccount) await useRiver.getState().setAccount(await window.river.account.status());
     await useCommunity.getState().load();
     useCommunity.getState().select(res.value.id);
@@ -78,10 +79,10 @@ export function StartScreen(props: {
   return (
     <div className="page start">
       <header className="page__header">
-        <div className="eyebrow">Communities</div>
-        <h1 className="page__title">Bring your people together</h1>
+        <div className="eyebrow">{tr('Communities')}</div>
+        <h1 className="page__title">{tr('Bring your people together')}</h1>
         <p className="page__lead">
-          Private spaces with text, voice and video — encrypted with a key only members have.
+          {tr('Private spaces with text, voice and video — encrypted with a key only members have.')}
         </p>
       </header>
       {error && (
@@ -97,10 +98,10 @@ export function StartScreen(props: {
           void join(link);
         }}
       >
-        <h2 className="card__title">Got an invite?</h2>
+        <h2 className="card__title">{tr('Got an invite?')}</h2>
         <div className="start__join-row">
           <input
-            aria-label="Invite link"
+            aria-label={tr('Invite link')}
             value={link}
             onChange={(e) => setLink(e.target.value)}
             onPaste={(e) => {
@@ -112,19 +113,19 @@ export function StartScreen(props: {
                 void join(pasted);
               }
             }}
-            placeholder="Paste an invite link"
+            placeholder={tr('Paste an invite link')}
             spellCheck={false}
           />
           <button className="btn btn--primary" disabled={busy !== null || link.trim() === ''}>
-            {busy === 'join' ? 'Joining…' : 'Join community'}
+            {busy === 'join' ? tr('Joining…') : tr('Join community')}
           </button>
         </div>
-        <p className="muted small">River sets everything up, including your account.</p>
+        <p className="muted small">{tr('River sets everything up, including your account.')}</p>
       </form>
 
       <form className="glass card start__create" onSubmit={(e) => void create(e)}>
-        <h2 className="card__title">Or start your own</h2>
-        <div className="templates" role="radiogroup" aria-label="Community template">
+        <h2 className="card__title">{tr('Or start your own')}</h2>
+        <div className="templates" role="radiogroup" aria-label={tr('Community template')}>
           {COMMUNITY_TEMPLATES.map((t) => (
             <button
               key={t.id}
@@ -137,12 +138,15 @@ export function StartScreen(props: {
               <span className="template__emoji" aria-hidden="true">
                 {t.emoji}
               </span>
-              <strong>{t.label}</strong>
-              <span className="muted small">{t.description}</span>
+              <strong>{tr(t.label)}</strong>
+              <span className="muted small">{tr(t.description)}</span>
             </button>
           ))}
         </div>
-        <div className="template-preview" aria-label={`${chosen.label} channels`}>
+        <div
+          className="template-preview"
+          aria-label={tr('{template} channels', { template: tr(chosen.label) })}
+        >
           {chosen.layout.map((g) => (
             <div key={g.category ?? 'loose'} className="template-preview__group">
               {g.category && <span className="template-preview__category">{g.category}</span>}
@@ -156,17 +160,17 @@ export function StartScreen(props: {
         </div>
         <div className="start__fields">
           <label className="textfield">
-            <span className="field__label">Community name</span>
+            <span className="field__label">{tr('Community name')}</span>
             <input
               value={name}
               maxLength={64}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. The Crew"
+              placeholder={tr('e.g. The Crew')}
             />
           </label>
           {!props.hasAccount && otherServer && (
             <label className="textfield">
-              <span className="field__label">Server address</span>
+              <span className="field__label">{tr('Server address')}</span>
               <input
                 value={server}
                 onChange={(e) => setServer(e.target.value)}
@@ -185,16 +189,16 @@ export function StartScreen(props: {
               (!props.hasAccount && otherServer && server.trim() === '')
             }
           >
-            {busy === 'create' ? 'Creating…' : 'Create community'}
+            {busy === 'create' ? tr('Creating…') : tr('Create community')}
           </button>
           {!props.hasAccount && (
             <button type="button" className="btn btn--link" onClick={() => setOtherServer((v) => !v)}>
-              {otherServer ? 'Use River’s server' : 'Use a different server'}
+              {otherServer ? tr('Use River’s server') : tr('Use a different server')}
             </button>
           )}
           {props.canCancel && (
             <button type="button" className="btn btn--link" onClick={props.onDone}>
-              ← Back to my communities
+              ← {tr('Back to my communities')}
             </button>
           )}
         </div>

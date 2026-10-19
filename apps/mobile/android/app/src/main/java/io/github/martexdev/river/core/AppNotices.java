@@ -43,8 +43,9 @@ final class AppNotices {
     NotificationManager nm = context.getSystemService(NotificationManager.class);
     if (nm == null) return;
     NotificationChannel channel =
-        new NotificationChannel(CHANNEL, "River updates and status", NotificationManager.IMPORTANCE_LOW);
-    channel.setDescription("An update waiting for you to install it, or River no longer staying connected");
+        new NotificationChannel(
+            CHANNEL, context.getString(io.github.martexdev.river.R.string.notice_channel_name), NotificationManager.IMPORTANCE_LOW);
+    channel.setDescription(context.getString(io.github.martexdev.river.R.string.notice_channel_description));
     channel.setShowBadge(false);
     nm.createNotificationChannel(channel);
   }
@@ -78,7 +79,12 @@ final class AppNotices {
             session,
             confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-    return post(context, UPDATE, "River update ready", "Tap to install it.", tap);
+    return post(
+        context,
+        UPDATE,
+        context.getString(io.github.martexdev.river.R.string.notice_update_title),
+        context.getString(io.github.martexdev.river.R.string.notice_update_text),
+        tap);
   }
 
   static void cancelUpdate(Context context) {
@@ -94,8 +100,8 @@ final class AppNotices {
     post(
         context,
         STOPPED,
-        "River was stopped",
-        "Tap to reconnect. Allow River in the background (Settings → System) so Android keeps it running.",
+        context.getString(io.github.martexdev.river.R.string.notice_stopped_title),
+        context.getString(io.github.martexdev.river.R.string.notice_stopped_text),
         tap);
   }
 

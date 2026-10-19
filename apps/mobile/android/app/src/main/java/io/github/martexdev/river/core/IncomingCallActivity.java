@@ -264,7 +264,7 @@ public final class IncomingCallActivity extends Activity {
         new android.widget.FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-    TextView kind = text(video ? "River video call" : "River voice call", 15, 0xCCFFFFFF, false);
+    TextView kind = text(getString(video ? io.github.martexdev.river.R.string.call_kind_video : io.github.martexdev.river.R.string.call_kind_voice), 15, 0xCCFFFFFF, false);
     kind.setLetterSpacing(0.04f);
     root.addView(kind);
 
@@ -276,7 +276,7 @@ public final class IncomingCallActivity extends Activity {
     who.setMaxLines(2);
     who.setEllipsize(android.text.TextUtils.TruncateAt.END);
     root.addView(who);
-    root.addView(text("Ringing…", 17, 0xB3FFFFFF, false));
+    root.addView(text(getString(io.github.martexdev.river.R.string.ringing), 17, 0xB3FFFFFF, false));
 
     root.addView(new View(this), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
@@ -287,11 +287,11 @@ public final class IncomingCallActivity extends Activity {
     LinearLayout.LayoutParams half =
         new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
     row.addView(
-        button("Decline", 0xFFFF3B30, io.github.martexdev.river.R.drawable.ic_call_end, false, v -> decline()),
+        button(getString(io.github.martexdev.river.R.string.decline), 0xFFFF3B30, io.github.martexdev.river.R.drawable.ic_call_end, false, v -> decline()),
         half);
     row.addView(
         button(
-            "Answer",
+            getString(io.github.martexdev.river.R.string.answer),
             0xFF34C759,
             video
                 ? io.github.martexdev.river.R.drawable.ic_call_video

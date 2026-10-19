@@ -73,15 +73,17 @@ function PhoneCallLinks(props: { busy: boolean }): ReactElement {
     };
   }, [made]);
   return (
-    <ul className="plist pcall-links" aria-label="Call links">
+    <ul className="plist pcall-links" aria-label={tr('Call links')}>
       <li>
         <button className="prow pcall-links__new" onClick={() => void createCallLink(false)}>
           <span className="pcall-links__icon" aria-hidden="true">
             <LinkIcon size={22} />
           </span>
           <span className="prow__main">
-            <strong className="prow__name">Create call link</strong>
-            <span className="prow__preview">Anyone with it can ask to join; you let each person in</span>
+            <strong className="prow__name">{tr('Create call link')}</strong>
+            <span className="prow__preview">
+              {tr('Anyone with it can ask to join; you let each person in')}
+            </span>
           </span>
         </button>
       </li>
@@ -92,27 +94,34 @@ function PhoneCallLinks(props: { busy: boolean }): ReactElement {
               {l.video ? <VideoIcon size={22} /> : <LinkIcon size={22} />}
             </span>
             <span className="prow__main">
-              <strong className="prow__name">{l.title ?? (l.video ? 'Video call link' : 'Call link')}</strong>
+              <strong className="prow__name">
+                {l.title ?? (l.video ? tr('Video call link') : tr('Call link'))}
+              </strong>
               <span className="prow__preview">
-                Until {new Date(l.expiresAt).toLocaleDateString([], { day: 'numeric', month: 'short' })} ·{' '}
-                {l.admitted.length} let in
+                {tr('Until {time}', {
+                  time: new Date(l.expiresAt).toLocaleDateString(dateLocale(), {
+                    day: 'numeric',
+                    month: 'short',
+                  }),
+                })}{' '}
+                · {trn('{count} let in', l.admitted.length)}
               </span>
             </span>
             <button
               className="pcall-links__action"
-              aria-label="Copy call link"
+              aria-label={tr('Copy call link')}
               onClick={() =>
                 void navigator.clipboard
                   .writeText(l.url)
-                  .then(() => notify('Call link copied.'))
-                  .catch(() => notify('Could not copy the link.', 'error'))
+                  .then(() => notify(tr('Call link copied.')))
+                  .catch(() => notify(tr('Could not copy the link.'), 'error'))
               }
             >
               <CopyIcon size={22} />
             </button>
             <button
               className="pcall-links__action"
-              aria-label="Start the call of this link"
+              aria-label={tr('Start the call of this link')}
               disabled={props.busy}
               onClick={() => void startLinkCall(l)}
             >
@@ -120,7 +129,7 @@ function PhoneCallLinks(props: { busy: boolean }): ReactElement {
             </button>
             <button
               className="pcall-links__action pcall-links__action--danger"
-              aria-label="Stop this call link"
+              aria-label={tr('Stop this call link')}
               onClick={() =>
                 void window.river.dm
                   .action({ a: 'revokeCallLink', link: l.id })

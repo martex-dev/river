@@ -148,7 +148,7 @@ public final class AppLock {
             });
     prompt.authenticate(
         new BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Unlock River")
+            .setTitle(activity.getString(io.github.martexdev.river.R.string.lock_prompt_title))
             .setAllowedAuthenticators(AUTHENTICATORS)
             .build());
   }
@@ -161,12 +161,12 @@ public final class AppLock {
     box.setBackgroundColor(Color.parseColor("#0B1222"));
     box.setClickable(true);
     TextView title = new TextView(activity);
-    title.setText("River is locked");
+    title.setText(io.github.martexdev.river.R.string.lock_title);
     title.setTextColor(Color.WHITE);
     title.setTextSize(20);
     title.setGravity(Gravity.CENTER);
     Button unlock = new Button(activity);
-    unlock.setText("Unlock");
+    unlock.setText(io.github.martexdev.river.R.string.lock_unlock);
     unlock.setOnClickListener(v -> prompt());
     box.addView(title);
     box.addView(unlock);
