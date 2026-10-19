@@ -123,13 +123,20 @@ beforeAll(async () => {
   await until(() => ui.evaluate(() => 'river' in globalThis));
 }, 240_000);
 
+/** A clean-up step that may hang (a connection the emulator keeps open): given up on after `ms`. */
+const bounded = (step: Promise<unknown> | undefined, ms = 15_000): Promise<unknown> =>
+  Promise.race([
+    (step ?? Promise.resolve()).catch(() => undefined),
+    new Promise((done) => setTimeout(done, ms).unref?.()),
+  ]);
+
 afterAll(async () => {
-  await device?.close().catch(() => undefined);
+  await bounded(device?.close());
   for (const l of locals.splice(0)) l.close();
-  await server?.close();
-  await serverDb?.close();
+  await bounded(server?.close());
+  await bounded(serverDb?.close());
   rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
-});
+}, 90_000);
 
 describe('River for Android on an emulator', { timeout: 180_000 }, () => {
   it('keeps the UI and the client core apart', async () => {
