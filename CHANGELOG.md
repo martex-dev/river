@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.21.4] - 2026-10-19
+
+**Most of River in your language: Friends, Feed, Files, Admin, community settings, Settings, errors, and the phone's own notifications and call screens.**
+
 ### Changed
 
 - Languages: Friends, Social (posts and stories), Files, Admin, the community
