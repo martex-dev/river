@@ -13,8 +13,10 @@ Pod::Spec.new do |s|
   s.swift_version = '5'
   s.source_files = 'Sources/**/*.swift'
   # The client core bundle, copied here by `npm run sync:ios` before `pod install` (CocoaPods
-  # only picks up resources that exist when it runs).
-  s.resources = ['core']
+  # only picks up resources that exist when it runs). Localizable/: the native texts (alerts,
+  # notification actions) in each language River speaks — the screens are translated in
+  # shared/i18n — copied into the app bundle, so NSLocalizedString finds them.
+  s.resources = ['core', 'Localizable/*.lproj']
   s.dependency 'Capacitor'
   s.dependency 'LibSignalClient'
   s.dependency 'SQLCipher', '4.10.0'

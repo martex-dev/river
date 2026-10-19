@@ -21,6 +21,7 @@ import {
   type OsKeystore,
 } from './key-file.ts';
 import { CLIENT_MIGRATIONS } from './migrations.ts';
+import { msg } from '../../shared/i18n/index.ts';
 
 export interface StorageServiceDeps {
   dir: string;
@@ -98,8 +99,9 @@ export class StorageService {
       this.set({
         state: 'error',
         code: 'keystore-unavailable',
-        message:
+        message: msg(
           'River cannot reach your system keyring to unlock its local data. Unlock or restore your keyring and restart River.',
+        ),
       });
       return this.status;
     }
@@ -189,24 +191,26 @@ export class StorageService {
         this.set({
           state: 'error',
           code: 'newer-data',
-          message:
+          message: msg(
             'Your local River data was created by a newer version of River. Install the latest River to open it.',
+          ),
         });
       } else if (err instanceof MigrationError) {
         this.set({
           state: 'error',
           code: 'migration-failed',
-          message:
+          message: msg(
             'River could not upgrade its local data. Nothing was changed; a backup was kept. Please report this problem.',
+          ),
         });
       } else if (err instanceof WrongKeyError) {
         this.set({
           state: 'error',
           code: 'corrupt',
-          message: 'River could not decrypt its local data with the stored key.',
+          message: msg('River could not decrypt its local data with the stored key.'),
         });
       } else {
-        this.set({ state: 'error', code: 'unknown', message: 'River could not open its local data.' });
+        this.set({ state: 'error', code: 'unknown', message: msg('River could not open its local data.') });
       }
     }
   }
@@ -220,7 +224,7 @@ export class StorageService {
       this.set({
         state: 'error',
         code: 'corrupt',
-        message: 'River’s local key file is damaged. Your data has not been changed.',
+        message: msg('River’s local key file is damaged. Your data has not been changed.'),
       });
       return 'corrupt';
     }

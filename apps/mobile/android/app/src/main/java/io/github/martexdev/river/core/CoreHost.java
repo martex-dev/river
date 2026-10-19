@@ -205,7 +205,7 @@ public final class CoreHost {
     try {
       nativeInterface = new RiverNative(context);
     } catch (java.io.IOException e) {
-      fatal("River could not open its storage: " + e.getMessage());
+      fatal(context.getString(io.github.martexdev.river.R.string.core_storage_failed, e.getMessage()));
       return;
     }
     WebViewAssetLoader assets =
@@ -380,7 +380,7 @@ public final class CoreHost {
     Listener l = listener;
     if (l != null) l.onCoreRestarted();
     if (crashes.size() > 3) {
-      fatal("River's core stopped several times in a row. Close River and open it again.");
+      fatal(context.getString(io.github.martexdev.river.R.string.core_crashed));
       return;
     }
     start();
@@ -424,7 +424,7 @@ public final class CoreHost {
           new NotificationCompat.Builder(context, CHANNEL)
               .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
               .setContentTitle("River")
-              .setContentText("New message — open River")
+              .setContentText(context.getString(io.github.martexdev.river.R.string.core_new_message_open))
               .setAutoCancel(true)
               .setOnlyAlertOnce(true)
               .setSilent(true)
@@ -433,7 +433,7 @@ public final class CoreHost {
                   new NotificationCompat.Builder(context, CHANNEL)
                       .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
                       .setContentTitle("River")
-                      .setContentText("New message")
+                      .setContentText(context.getString(io.github.martexdev.river.R.string.new_message))
                       .build())
               .setContentIntent(tap);
       try {
@@ -590,8 +590,8 @@ public final class CoreHost {
     NotificationCompat.Builder b =
         new NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
-            .setContentTitle("Reply not sent")
-            .setContentText("River was closed. Open River to send it.")
+            .setContentTitle(context.getString(io.github.martexdev.river.R.string.reply_not_sent_title))
+            .setContentText(context.getString(io.github.martexdev.river.R.string.reply_not_sent_text))
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(tap);
@@ -1188,8 +1188,10 @@ public final class CoreHost {
     if (nm == null) return;
     // Pops up, sounds and vibrates (the phone's notification sound); the lock screen shows only
     // what each notification allows (MessageNotifications).
-    NotificationChannel channel = new NotificationChannel(CHANNEL, "Messages", NotificationManager.IMPORTANCE_HIGH);
-    channel.setDescription("New messages and mentions while River is in the background");
+    NotificationChannel channel =
+        new NotificationChannel(
+            CHANNEL, context.getString(io.github.martexdev.river.R.string.messages_channel_name), NotificationManager.IMPORTANCE_HIGH);
+    channel.setDescription(context.getString(io.github.martexdev.river.R.string.messages_channel_description));
     channel.enableVibration(true);
     channel.setLockscreenVisibility(android.app.Notification.VISIBILITY_PRIVATE);
     nm.createNotificationChannel(channel);
@@ -1346,9 +1348,10 @@ public final class CoreHost {
               | (android.os.Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
       PendingIntent action = PendingIntent.getBroadcast(context, n, replied, flags);
       androidx.core.app.RemoteInput input =
-          new androidx.core.app.RemoteInput.Builder(NotificationReplyReceiver.KEY_TEXT).setLabel("Reply").build();
+          new androidx.core.app.RemoteInput.Builder(NotificationReplyReceiver.KEY_TEXT).setLabel(context.getString(io.github.martexdev.river.R.string.action_reply))
+              .build();
       b.addAction(
-          new NotificationCompat.Action.Builder(0, "Reply", action)
+          new NotificationCompat.Action.Builder(0, context.getString(io.github.martexdev.river.R.string.action_reply), action)
               .addRemoteInput(input)
               .setAllowGeneratedReplies(false)
               .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY)
@@ -1365,7 +1368,7 @@ public final class CoreHost {
           PendingIntent.getBroadcast(
               context, n, read, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
       b.addAction(
-          new NotificationCompat.Action.Builder(0, "Mark as read", readIntent)
+          new NotificationCompat.Action.Builder(0, context.getString(io.github.martexdev.river.R.string.action_mark_read), readIntent)
               .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ)
               .setShowsUserInterface(false)
               .build());
@@ -1395,7 +1398,7 @@ public final class CoreHost {
           Screen s = screen;
           if (s == null) return;
           new AlertDialog.Builder(s.activity())
-              .setTitle("River could not start")
+              .setTitle(io.github.martexdev.river.R.string.core_start_failed)
               .setMessage(details)
               .setPositiveButton(android.R.string.ok, null)
               .show();

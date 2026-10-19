@@ -3,6 +3,7 @@ import { computePermissions } from '@river/protocol/permissions';
 import type { CommunityView } from '../../../../shared/ipc.ts';
 import { infoOf } from './CommunitySettings.tsx';
 import { hex } from './common.tsx';
+import { tr } from '../../i18n.ts';
 
 export type Overwrite = { roleId: string; allow: number; deny: number };
 export type BitState = 'allow' | 'deny' | 'inherit';
@@ -67,7 +68,7 @@ export function PermissionEditor(props: {
   return (
     <div className="overwrites">
       <div className="overwrites__roles">
-        <div className="field__label">Roles</div>
+        <div className="field__label">{tr('Roles')}</div>
         {community.roles.map((r) => (
           <button
             key={r.id}
@@ -99,8 +100,8 @@ export function PermissionEditor(props: {
                   className={`tri__opt tri__opt--deny ${value === 'deny' ? 'is-on' : ''}`}
                   role="radio"
                   aria-checked={value === 'deny'}
-                  aria-label="Deny"
-                  title="Deny"
+                  aria-label={tr('Deny')}
+                  title={tr('Deny')}
                   onClick={() => set(bit, 'deny')}
                 >
                   ✕
@@ -109,8 +110,8 @@ export function PermissionEditor(props: {
                   className={`tri__opt ${value === 'inherit' ? 'is-on' : ''}`}
                   role="radio"
                   aria-checked={value === 'inherit'}
-                  aria-label="Inherit"
-                  title="Inherit from roles"
+                  aria-label={tr('Inherit')}
+                  title={tr('Inherit from roles')}
                   onClick={() => set(bit, 'inherit')}
                 >
                   /
@@ -119,8 +120,8 @@ export function PermissionEditor(props: {
                   className={`tri__opt tri__opt--allow ${value === 'allow' ? 'is-on' : ''}`}
                   role="radio"
                   aria-checked={value === 'allow'}
-                  aria-label="Allow"
-                  title={allowable ? 'Allow' : 'You can only allow permissions you have yourself'}
+                  aria-label={tr('Allow')}
+                  title={allowable ? tr('Allow') : tr('You can only allow permissions you have yourself')}
                   disabled={!allowable}
                   onClick={() => set(bit, 'allow')}
                 >

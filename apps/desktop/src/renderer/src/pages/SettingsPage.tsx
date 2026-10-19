@@ -1,5 +1,5 @@
 import { isPhone } from '../../../shared/platform.ts';
-import { LANGUAGES, languageInfo, msg, resolveLanguage, tr, useLanguage, useT } from '../i18n.ts';
+import { LANGUAGES, languageInfo, msg, resolveLanguage, rich, tr, useLanguage, useT } from '../i18n.ts';
 import { dateLocale } from '../time.ts';
 import { Suspense, lazy, useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { BackupPanel } from '../components/BackupPanel.tsx';
@@ -67,7 +67,7 @@ const CHANNELS: Array<{ id: ReleaseChannel; name: string; text: string }> = [
 export function describeUpdate(status: UpdateStatus, phone = false): string {
   switch (status.state) {
     case 'disabled':
-      return status.reason;
+      return tr(status.reason);
     case 'idle':
       return tr('Not checked yet.');
     case 'checking':
@@ -111,7 +111,7 @@ export function describeUpdate(status: UpdateStatus, phone = false): string {
         version: status.version,
       });
     case 'error':
-      return status.message;
+      return tr(status.message);
   }
 }
 
@@ -646,7 +646,7 @@ export function MissingAccount({
       disabled={busy !== null}
       onClick={() => setConfirming(true)}
     >
-      {busy === 'relink' ? 'Preparing…' : 'Link this device again'}
+      {busy === 'relink' ? tr('Preparing…') : tr('Link this device again')}
     </button>
   );
   return (
@@ -659,15 +659,19 @@ export function MissingAccount({
             disabled={busy !== null}
             onClick={() => void startOver()}
           >
-            {busy === 'setup' ? 'Setting up…' : 'Set up my account again'}
+            {busy === 'setup' ? tr('Setting up…') : tr('Set up my account again')}
           </button>
         )}
         {!linkFirst && linkButton}
       </div>
       <p className="muted small">
         {account.removed
-          ? 'On a device that still has your account, open Settings → Account → Devices → Link a new device, then use its code here.'
-          : 'Set up again: a new account for your identity — same name and messages here; rejoin communities with an invite. Link again: if this device was removed, join your account from a device that still has it.'}
+          ? tr(
+              'On a device that still has your account, open Settings → Account → Devices → Link a new device, then use its code here.',
+            )
+          : tr(
+              'Set up again: a new account for your identity — same name and messages here; rejoin communities with an invite. Link again: if this device was removed, join your account from a device that still has it.',
+            )}
       </p>
       {error && (
         <p className="field__error" role="alert">
@@ -675,18 +679,18 @@ export function MissingAccount({
         </p>
       )}
       {confirming && (
-        <Modal title="Link this device again?" onClose={() => setConfirming(false)}>
+        <Modal title={tr('Link this device again?')} onClose={() => setConfirming(false)}>
           <p>
-            River forgets the account and identity on this device, then you link it again with a code from a
-            device that still has your account. Your messages and contacts on this device stay, and only work
-            again with the same account.
+            {tr(
+              'River forgets the account and identity on this device, then you link it again with a code from a device that still has your account. Your messages and contacts on this device stay, and only work again with the same account.',
+            )}
           </p>
           <div className="modal__foot">
             <button className="btn btn--link" onClick={() => setConfirming(false)}>
-              Cancel
+              {tr('Cancel')}
             </button>
             <button className="btn btn--primary" disabled={busy !== null} onClick={() => void relink()}>
-              {busy === 'relink' ? 'Preparing…' : 'Continue'}
+              {busy === 'relink' ? tr('Preparing…') : tr('Continue')}
             </button>
           </div>
         </Modal>
@@ -706,16 +710,16 @@ function ExportData(): ReactElement {
   };
   return (
     <div className="field export-data">
-      <div className="field__label">Your data</div>
+      <div className="field__label">{tr('Your data')}</div>
       <p className="muted small">
-        Save a readable copy (JSON) of what this device keeps: your profile, settings, contacts, direct
-        messages, groups, calls, your posts and saved messages. It never contains your keys. Keep it somewhere
-        safe — it is not encrypted.
+        {tr(
+          'Save a readable copy (JSON) of what this device keeps: your profile, settings, contacts, direct messages, groups, calls, your posts and saved messages. It never contains your keys. Keep it somewhere safe — it is not encrypted.',
+        )}
       </p>
       <button className="btn btn--ghost btn--small" disabled={state === 'busy'} onClick={() => void run()}>
-        {state === 'busy' ? 'Preparing…' : 'Export my data'}
+        {state === 'busy' ? tr('Preparing…') : tr('Export my data')}
       </button>
-      {state === 'done' && <span className="muted small"> Saved.</span>}
+      {state === 'done' && <span className="muted small"> {tr('Saved.')}</span>}
       {state !== 'idle' && state !== 'busy' && state !== 'done' && (
         <span className="field__error">{state}</span>
       )}
@@ -736,38 +740,38 @@ function DeleteAccount(): ReactElement {
     setBusy(false);
     if (!res.ok) return setError(res.message);
     setOpen(false);
-    useCommunity.getState().notify('Your account was deleted.');
+    useCommunity.getState().notify(tr('Your account was deleted.'));
     void useCommunity.getState().load();
   };
   return (
     <section className="danger-zone">
-      <h3>Delete account</h3>
+      <h3>{tr('Delete account')}</h3>
       <p className="muted small">
-        Removes your account from your server for good: you leave every community (communities you own are
-        deleted), and your keys and devices are removed there. Messages you already sent stay where they are,
-        encrypted. Your identity and the messages on this device stay on this device.
+        {tr(
+          'Removes your account from your server for good: you leave every community (communities you own are deleted), and your keys and devices are removed there. Messages you already sent stay where they are, encrypted. Your identity and the messages on this device stay on this device.',
+        )}
       </p>
       <button className="btn btn--danger btn--small" onClick={() => setOpen(true)}>
-        Delete account…
+        {tr('Delete account…')}
       </button>
       {open && (
-        <Modal title="Delete your account?" onClose={() => setOpen(false)}>
-          <p>This cannot be undone. Type DELETE to confirm.</p>
+        <Modal title={tr('Delete your account?')} onClose={() => setOpen(false)}>
+          <p>{tr('This cannot be undone. Type DELETE to confirm.')}</p>
           <label className="textfield">
-            <span className="field__label">Confirmation</span>
+            <span className="field__label">{tr('Confirmation')}</span>
             <input autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="DELETE" />
           </label>
           {error && <p className="field__error">{error}</p>}
           <div className="modal__foot">
             <button className="btn btn--link" onClick={() => setOpen(false)}>
-              Keep my account
+              {tr('Keep my account')}
             </button>
             <button
               className="btn btn--danger"
               disabled={typed !== 'DELETE' || busy}
               onClick={() => void run()}
             >
-              {busy ? 'Deleting…' : 'Delete account'}
+              {busy ? tr('Deleting…') : tr('Delete account')}
             </button>
           </div>
         </Modal>
@@ -788,7 +792,7 @@ function ServerSetup({ settings }: { settings: Settings }): ReactElement {
   const validate = (): string | null => {
     const parsed = serverUrlSchema.safeParse(draft);
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Invalid address');
+      setError(tr(parsed.error.issues[0]?.message ?? 'Invalid address'));
       return null;
     }
     setError(null);
@@ -823,13 +827,14 @@ function ServerSetup({ settings }: { settings: Settings }): ReactElement {
 
   return (
     <div className="panel">
-      <h2 className="panel__title">Server</h2>
+      <h2 className="panel__title">{tr('Server')}</h2>
       <p className="muted">
-        River uses a server to deliver encrypted messages between devices. Anyone can run one. The server
-        never receives your keys or readable messages.
+        {tr(
+          'River uses a server to deliver encrypted messages between devices. Anyone can run one. The server never receives your keys or readable messages.',
+        )}
       </p>
       <label className="textfield">
-        <span className="field__label">Server address</span>
+        <span className="field__label">{tr('Server address')}</span>
         <input
           type="url"
           inputMode="url"
@@ -845,22 +850,22 @@ function ServerSetup({ settings }: { settings: Settings }): ReactElement {
         />
       </label>
       <p id="server-hint" className={error ? 'field__error' : 'muted small'}>
-        {error ?? 'Must start with https:// (http:// is allowed only for a server on this computer).'}
+        {error ?? tr('Must start with https:// (http:// is allowed only for a server on this computer).')}
       </p>
       <div className="button-row">
         <button className="btn btn--ghost" disabled={busy || draft.trim() === ''} onClick={() => void test()}>
-          {busy ? 'Testing…' : 'Test connection'}
+          {busy ? tr('Testing…') : tr('Test connection')}
         </button>
         <button
           className="btn btn--primary"
           disabled={draft.trim() === '' || draft.trim() === settings.server.url}
           onClick={() => void save()}
         >
-          Save
+          {tr('Save')}
         </button>
         {settings.server.url && (
           <button className="btn btn--link" onClick={() => void remove()}>
-            Remove server
+            {tr('Remove server')}
           </button>
         )}
       </div>
@@ -868,30 +873,35 @@ function ServerSetup({ settings }: { settings: Settings }): ReactElement {
         <div className={`server-check ${check.ok ? 'is-ok' : 'is-bad'}`} role="status">
           {check.ok ? (
             <>
-              <strong>River server reachable</strong>
+              <strong>{tr('River server reachable')}</strong>
               <span className="muted small">
-                Server <span className="mono">{check.version}</span> · protocol{' '}
-                <span className="mono">v{check.protocol}</span> · compatible
+                {rich(tr('Server {version} · protocol {protocol} · compatible'), {
+                  version: <span className="mono">{check.version}</span>,
+                  protocol: <span className="mono">v{check.protocol}</span>,
+                })}
               </span>
             </>
           ) : (
             <>
-              <strong>Connection failed</strong>
+              <strong>{tr('Connection failed')}</strong>
               <span className="muted small">{check.message}</span>
             </>
           )}
         </div>
       )}
       <p className="muted small">
-        Testing sends one anonymous request for the server’s version — nothing about you.
+        {tr('Testing sends one anonymous request for the server’s version — nothing about you.')}
       </p>
 
       {settings.server.url && (
         <div className="create-account">
-          <h3 className="card__title">Create your account on {new URL(settings.server.url).host}</h3>
+          <h3 className="card__title">
+            {tr('Create your account on {host}', { host: new URL(settings.server.url).host })}
+          </h3>
           <p className="muted small">
-            River registers your River ID, your public identity key and a new key for this device. No phone
-            number, e-mail or name is sent. Your display name stays on this computer.
+            {tr(
+              'River registers your River ID, your public identity key and a new key for this device. No phone number, e-mail or name is sent. Your display name stays on this computer.',
+            )}
           </p>
           {createError && (
             <p className="field__error" role="alert">
@@ -913,7 +923,7 @@ function ServerSetup({ settings }: { settings: Settings }): ReactElement {
                   .finally(() => setCreating(false));
               }}
             >
-              {creating ? 'Creating account…' : 'Create account'}
+              {creating ? tr('Creating account…') : tr('Create account')}
             </button>
           </div>
         </div>

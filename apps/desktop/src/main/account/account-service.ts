@@ -24,6 +24,7 @@ import { ApiError, NetworkError, type RequestJson } from '../http.ts';
 import type { IdentityService } from '../identity/identity-service.ts';
 import type { Logger } from '../logger.ts';
 import type { LocalDatabase } from '../storage/database.ts';
+import { msg } from '../../shared/i18n/index.ts';
 
 interface AccountRow {
   server_url: string;
@@ -157,13 +158,13 @@ export class AccountService {
   ): Promise<AccountStatus> {
     const db = this.deps.db();
     const signer = this.deps.identity.signer();
-    if (!db || !signer) throw new UserFacingError('Create your identity before creating an account.');
+    if (!db || !signer) throw new UserFacingError(msg('Create your identity before creating an account.'));
     const replacing = options.replaceMissing === true;
     if (replacing && !this.missing)
-      throw new UserFacingError('Your account is fine — nothing to set up again.');
-    if (this.row() && !replacing) throw new UserFacingError('This device already has an account.');
+      throw new UserFacingError(msg('Your account is fine — nothing to set up again.'));
+    if (this.row() && !replacing) throw new UserFacingError(msg('This device already has an account.'));
     const parsedUrl = serverUrlSchema.safeParse(rawServerUrl);
-    if (!parsedUrl.success) throw new UserFacingError('Set a valid server address first.');
+    if (!parsedUrl.success) throw new UserFacingError(msg('Set a valid server address first.'));
     const server = parsedUrl.data;
     const { requestJson } = this.deps;
 
@@ -174,7 +175,9 @@ export class AccountService {
         versionResponseSchema,
       );
       if (checkCompatibility(version.protocol) !== 'compatible') {
-        throw new UserFacingError('This server uses a River protocol version this app does not support.');
+        throw new UserFacingError(
+          msg('This server uses a River protocol version this app does not support.'),
+        );
       }
 
       const device = generateKeyPair();
@@ -216,7 +219,7 @@ export class AccountService {
         registerResponseSchema,
       );
       if (res.riverId !== signer.riverId || res.deviceId !== 1) {
-        throw new UserFacingError('The server answered for a different account.');
+        throw new UserFacingError(msg('The server answered for a different account.'));
       }
 
       try {
@@ -272,8 +275,8 @@ export class AccountService {
   ): Promise<AccountStatus> {
     const db = this.deps.db();
     const signer = this.deps.identity.signer();
-    if (!db || !signer) throw new UserFacingError('Link this device first.');
-    if (this.row()) throw new UserFacingError('This device already has an account.');
+    if (!db || !signer) throw new UserFacingError(msg('Link this device first.'));
+    if (this.row()) throw new UserFacingError(msg('This device already has an account.'));
     const server = serverUrlSchema.parse(rawServerUrl);
     const { requestJson } = this.deps;
     try {
@@ -301,7 +304,7 @@ export class AccountService {
         verify(signer.publicKey, deviceListMessage(listBytes), unb64(account.deviceListSignature)) &&
         list.devices.some((d) => d.deviceId === deviceId && d.authKey === b64(device.publicKey));
       if (!genuine)
-        throw new UserFacingError('The server returned account data that does not match the link.');
+        throw new UserFacingError(msg('The server returned account data that does not match the link.'));
       db.prepare('DELETE FROM server_instance').run();
       db.prepare(
         `INSERT INTO account (id, server_url, river_id, device_id, device_public_key, device_private_key,
@@ -334,7 +337,7 @@ export class AccountService {
     const row = this.row();
     const signer = this.deps.identity.signer();
     if (!row || !signer || !this.token)
-      throw new UserFacingError('Connect to your server first, then try again.');
+      throw new UserFacingError(msg('Connect to your server first, then try again.'));
     const account = await this.deps.requestJson(
       `${row.server_url}${API_PREFIX}/accounts/me`,
       { method: 'GET', token: this.token },
@@ -342,12 +345,16 @@ export class AccountService {
     );
     const listBytes = unb64(account.deviceList);
     if (!verify(signer.publicKey, deviceListMessage(listBytes), unb64(account.deviceListSignature))) {
-      throw new UserFacingError('The server returned a device list that is not signed by your identity.');
+      throw new UserFacingError(
+        msg('The server returned a device list that is not signed by your identity.'),
+      );
     }
     const list = parseDeviceList(listBytes);
     // An older list could bring back a removed device: never go backwards.
     if (list.riverId !== row.river_id || list.version < row.device_list_version) {
-      throw new UserFacingError('The server returned an older or foreign device list. Nothing was changed.');
+      throw new UserFacingError(
+        msg('The server returned an older or foreign device list. Nothing was changed.'),
+      );
     }
     return list;
   }
@@ -358,7 +365,7 @@ export class AccountService {
     const signer = this.deps.identity.signer();
     const db = this.deps.db();
     if (!row || !signer || !db || !this.token) {
-      throw new UserFacingError('Connect to your server first, then try again.');
+      throw new UserFacingError(msg('Connect to your server first, then try again.'));
     }
     const listBytes = Buffer.from(JSON.stringify(list), 'utf8');
     const signature = signer.sign(deviceListMessage(listBytes));
@@ -583,9 +590,9 @@ export class AccountService {
    */
   async deleteAccount(): Promise<void> {
     const row = this.row();
-    if (!row) throw new UserFacingError('There is no account to delete.');
+    if (!row) throw new UserFacingError(msg('There is no account to delete.'));
     const token = this.token ?? (await this.connect(), this.token);
-    if (!token) throw new UserFacingError('Connect to your server first, then try again.');
+    if (!token) throw new UserFacingError(msg('Connect to your server first, then try again.'));
     const { requestJson } = this.deps;
     const { challenge } = await requestJson(
       `${row.server_url}${API_PREFIX}/auth/challenge`,
@@ -612,8 +619,8 @@ export class AccountService {
    */
   forgetMissing(): string {
     const row = this.row();
-    if (!row) throw new UserFacingError('There is no account to set up again.');
-    if (!this.missing) throw new UserFacingError('Your account is fine — nothing to set up again.');
+    if (!row) throw new UserFacingError(msg('There is no account to set up again.'));
+    if (!this.missing) throw new UserFacingError(msg('Your account is fine — nothing to set up again.'));
     this.token = null;
     this.missing = false;
     const db = this.deps.db();
@@ -633,8 +640,8 @@ export class AccountService {
   forgetForRelink(): string {
     const row = this.row();
     const db = this.deps.db();
-    if (!row || !db) throw new UserFacingError('There is no account to link again.');
-    if (!this.missing) throw new UserFacingError('Your account is fine — this device is still linked.');
+    if (!row || !db) throw new UserFacingError(msg('There is no account to link again.'));
+    if (!this.missing) throw new UserFacingError(msg('Your account is fine — this device is still linked.'));
     db.transaction(() => {
       db.prepare('DELETE FROM account WHERE id = 1').run();
       db.prepare('DELETE FROM server_instance').run();
@@ -690,7 +697,7 @@ export class AccountService {
   /** Finds someone by @username, to add them as a friend. */
   async lookupUser(rawUsername: unknown): Promise<{ username: string; riverId: string }> {
     const row = this.row();
-    if (!row || !this.token) throw new UserFacingError('Connect to your server first, then try again.');
+    if (!row || !this.token) throw new UserFacingError(msg('Connect to your server first, then try again.'));
     const username = (typeof rawUsername === 'string' ? rawUsername : '').trim().replace(/^@/, '');
     try {
       return await this.deps.requestJson(
@@ -707,8 +714,8 @@ export class AccountService {
   async setUsername(rawUsername: unknown): Promise<AccountStatus> {
     const db = this.deps.db();
     const row = this.row();
-    if (!db || !row) throw new UserFacingError('Create your account first.');
-    if (!this.token) throw new UserFacingError('Connect to your server first, then try again.');
+    if (!db || !row) throw new UserFacingError(msg('Create your account first.'));
+    if (!this.token) throw new UserFacingError(msg('Connect to your server first, then try again.'));
     // "@alice" is how people write it; the username itself has no @.
     const username = typeof rawUsername === 'string' ? rawUsername.trim().replace(/^@+/, '') : '';
     try {
@@ -753,8 +760,9 @@ export class AccountService {
   }
 }
 
-const REMOVED_MESSAGE =
-  'Your account is still on this server, but this device was removed from it. Link this device again from one of your devices that still has your account.';
+const REMOVED_MESSAGE = msg(
+  'Your account is still on this server, but this device was removed from it. Link this device again from one of your devices that still has your account.',
+);
 
 /** This device was one of several (or was linked to the account): a refusal most likely means it was removed. */
 function wasLinked(row: AccountRow): boolean {
@@ -778,18 +786,18 @@ export class UserFacingError extends Error {
 function toUserFacing(err: unknown): UserFacingError {
   if (err instanceof UserFacingError) return err;
   if (err instanceof NetworkError)
-    return new UserFacingError('Could not reach the server. Check the address and your connection.', {
+    return new UserFacingError(msg('Could not reach the server. Check the address and your connection.'), {
       unreachable: true,
     });
   if (err instanceof ApiError) {
     const code = { code: err.code };
     switch (err.code) {
       case 'registration_closed':
-        return new UserFacingError('This server is not accepting new accounts.', code);
+        return new UserFacingError(msg('This server is not accepting new accounts.'), code);
       case 'account_exists':
-        return new UserFacingError('Your identity already has an account on this server.', code);
+        return new UserFacingError(msg('Your identity already has an account on this server.'), code);
       case 'rate_limited':
-        return new UserFacingError('The server is busy. Try again in a minute.', code);
+        return new UserFacingError(msg('The server is busy. Try again in a minute.'), code);
       case 'username_taken':
       case 'bad_username':
       case 'signup_invite_only':
@@ -797,10 +805,10 @@ function toUserFacing(err: unknown): UserFacingError {
       case 'account_suspended':
         return new UserFacingError(err.message, code);
       case 'unauthorized':
-        return new UserFacingError('The server did not recognise this device.', code);
+        return new UserFacingError(msg('The server did not recognise this device.'), code);
       default:
-        return new UserFacingError('The server rejected the request.', code);
+        return new UserFacingError(msg('The server rejected the request.'), code);
     }
   }
-  return new UserFacingError('Something went wrong talking to the server.');
+  return new UserFacingError(msg('Something went wrong talking to the server.'));
 }

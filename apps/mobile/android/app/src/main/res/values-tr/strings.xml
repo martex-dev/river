@@ -1,0 +1,51 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- River's Android texts in this language (the app's screens are translated in shared/i18n). -->
+<resources>
+    <string name="screen_crashed">River ekranı art arda birkaç kez durdu. River’ı yeniden açın.</string>
+    <string name="notice_channel_name">River güncellemeleri ve durumu</string>
+    <string name="notice_channel_description">Yüklenmeyi bekleyen bir güncelleme ya da artık bağlı kalmayan River</string>
+    <string name="notice_update_title">River güncellemesi hazır</string>
+    <string name="notice_update_text">Yüklemek için dokunun.</string>
+    <string name="notice_stopped_title">River durduruldu</string>
+    <string name="notice_stopped_text">Yeniden bağlanmak için dokunun. Android’in çalışır tutması için River’a arka planda izin verin (Ayarlar → Sistem).</string>
+    <string name="lock_prompt_title">River’ın kilidini aç</string>
+    <string name="lock_title">River kilitli</string>
+    <string name="lock_unlock">Kilidi aç</string>
+    <string name="call_channel_name">Süren aramalar</string>
+    <string name="call_channel_description">Bir aramada veya ses kanalındayken gösterilir</string>
+    <string name="call_in_a_call">Aramada</string>
+    <string name="call_using_mic">River mikrofonu kullanıyor. Geri dönmek için dokunun.</string>
+    <string name="core_storage_failed">River depolamasını açamadı: %1$s</string>
+    <string name="core_crashed">River’ın çekirdeği art arda birkaç kez durdu. River’ı kapatıp yeniden açın.</string>
+    <string name="core_new_message_open">Yeni mesaj — River’ı açın</string>
+    <string name="new_message">Yeni mesaj</string>
+    <string name="new_messages">Yeni mesajlar</string>
+    <string name="reply_not_sent_title">Yanıt gönderilmedi</string>
+    <string name="reply_not_sent_text">River kapalıydı. Göndermek için River’ı açın.</string>
+    <string name="messages_channel_name">Mesajlar</string>
+    <string name="messages_channel_description">River arka plandayken yeni mesajlar ve bahsetmeler</string>
+    <string name="action_reply">Yanıtla</string>
+    <string name="action_mark_read">Okundu olarak işaretle</string>
+    <string name="core_start_failed">River başlatılamadı</string>
+    <string name="incoming_channel_name">Gelen aramalar</string>
+    <string name="incoming_channel_description">Biri sizi aradığında çalar ve arama ekranını gösterir</string>
+    <string name="incoming_video">Gelen görüntülü arama</string>
+    <string name="incoming_voice">Gelen sesli arama</string>
+    <string name="call_kind_video">River görüntülü araması</string>
+    <string name="call_kind_voice">River sesli araması</string>
+    <string name="ringing">Çalıyor…</string>
+    <string name="decline">Reddet</string>
+    <string name="answer">Yanıtla</string>
+    <string name="you">Siz</string>
+    <string name="tone_channel_name">Mesajlar · %1$s</string>
+    <string name="tone_channel_description">%1$s sesini verdiğiniz sohbetler ve kanallar</string>
+    <string name="service_channel_name">Bağlı kalma</string>
+    <string name="service_channel_description">River arka planda bağlı kaldığı sürece gösterilir</string>
+    <string name="service_title">River bağlı</string>
+    <string name="service_text">River kapalıyken de yeni mesajlar gelir. Ayarlar → Sistem’den kapatın.</string>
+    <string name="installer_could_not_open">Android yükleyicisi açılamadı</string>
+    <plurals name="new_messages_count">
+        <item quantity="one">%d yeni mesaj</item>
+        <item quantity="other">%d yeni mesaj</item>
+    </plurals>
+</resources>

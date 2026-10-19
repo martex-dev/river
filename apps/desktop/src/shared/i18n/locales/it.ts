@@ -631,6 +631,1364 @@ export const IT: Dictionary = {
   Undeafen: 'Riattiva audio',
   Unmute: 'Riattiva microfono',
 
+  'Create your identity before creating an account.': 'Crea la tua identità prima di creare un account.',
+  'This device already has an account.': 'Questo dispositivo ha già un account.',
+  'Set a valid server address first.': 'Imposta prima un indirizzo server valido.',
+  'This server uses a River protocol version this app does not support.':
+    'Questo server usa una versione del protocollo River non supportata da questa app.',
+  'The server answered for a different account.': 'Il server ha risposto per un altro account.',
+  'Link this device first.': 'Collega prima questo dispositivo.',
+  'The server returned account data that does not match the link.':
+    'Il server ha restituito dati dell’account che non corrispondono al link.',
+  'Connect to your server first, then try again.': 'Collegati prima al tuo server, poi riprova.',
+  'The server returned a device list that is not signed by your identity.':
+    'Il server ha restituito un elenco di dispositivi non firmato dalla tua identità.',
+  'The server returned an older or foreign device list. Nothing was changed.':
+    'Il server ha restituito un elenco di dispositivi vecchio o estraneo. Non è stato cambiato nulla.',
+  'There is no account to delete.': 'Non c’è nessun account da eliminare.',
+  'There is no account to set up again.': 'Non c’è nessun account da configurare di nuovo.',
+  'There is no account to link again.': 'Non c’è nessun account da ricollegare.',
+  'Your account is fine — this device is still linked.':
+    'Il tuo account è a posto: questo dispositivo è ancora collegato.',
+  'Create your account first.': 'Crea prima il tuo account.',
+  'Your account is still on this server, but this device was removed from it. Link this device again from one of your devices that still has your account.':
+    'Il tuo account è ancora su questo server, ma questo dispositivo è stato rimosso. Ricollegalo da un altro tuo dispositivo che ha ancora l’account.',
+  'This server is not accepting new accounts.': 'Questo server non accetta nuovi account.',
+  'Your identity already has an account on this server.':
+    'La tua identità ha già un account su questo server.',
+  'The server is busy. Try again in a minute.': 'Il server è occupato. Riprova tra un minuto.',
+  'The server did not recognise this device.': 'Il server non ha riconosciuto questo dispositivo.',
+  'The server rejected the request.': 'Il server ha rifiutato la richiesta.',
+  'Something went wrong talking to the server.':
+    'Qualcosa è andato storto nella comunicazione con il server.',
+  'A device is being linked right now. Wait a moment.':
+    'Si sta collegando un dispositivo in questo momento. Aspetta un attimo.',
+  'The link code expired. Start again.': 'Il codice di collegamento è scaduto. Ricomincia.',
+  'Something without your code tried to use it. Nothing was linked. Start again.':
+    'Qualcosa senza il tuo codice ha provato a usarlo. Non è stato collegato nulla. Ricomincia.',
+  'This device is already being linked.': 'Questo dispositivo è già in fase di collegamento.',
+  'No device is waiting to be linked.': 'Nessun dispositivo è in attesa di collegamento.',
+  'Linking was cancelled.': 'Il collegamento è stato annullato.',
+  'That device is already linked.': 'Quel dispositivo è già collegato.',
+  'This is the device you are using.': 'È il dispositivo che stai usando.',
+  'There is nothing to link right now.': 'Al momento non c’è nulla da collegare.',
+  'This device already has a River account.': 'Questo dispositivo ha già un account River.',
+  'That is not a River link code.': 'Non è un codice di collegamento River.',
+  'Paste the whole link (it starts with river://) — this code alone does not say which server to use.':
+    'Incolla il link intero (inizia con river://): il codice da solo non dice quale server usare.',
+  'That link code was already used.': 'Quel codice di collegamento è già stato usato.',
+  'That server does not support linking devices yet. Update River on it first.':
+    'Quel server non supporta ancora il collegamento dei dispositivi. Aggiorna prima River sul server.',
+  'The link could not be opened. Start again.': 'Non è stato possibile aprire il link. Ricomincia.',
+  'The link did not match. Start again.': 'Il link non corrispondeva. Ricomincia.',
+  'That code is for a different account. This device holds the messages of the account it was removed from: link it with a code from a device of that account.':
+    'Quel codice è di un altro account. Questo dispositivo contiene i messaggi dell’account da cui è stato rimosso: collegalo con un codice di un dispositivo di quell’account.',
+  'River is locked.': 'River è bloccato.',
+  'Show your recovery phrase and write it down first: without it, no backup can be opened.':
+    'Mostra prima la frase di recupero e scrivila: senza di essa nessun backup può essere aperto.',
+  'This River already has an identity. Restore only works on a fresh install.':
+    'Questo River ha già un’identità. Il ripristino funziona solo su un’installazione nuova.',
+  'This backup was made by a newer River. Update River and try again.':
+    'Questo backup è stato creato da un River più recente. Aggiorna River e riprova.',
+  'You are banned from this community.': 'Sei stato bannato da questa community.',
+  'Create an account first.': 'Crea prima un account.',
+  "You're offline. River will reconnect by itself.": 'Sei offline. River si riconnetterà da solo.',
+  'That is not a valid River invite link.': 'Non è un link d’invito River valido.',
+  'This invite is for a different River server than the one your account is on.':
+    'Questo invito è per un server River diverso da quello del tuo account.',
+  'This invite has expired or was already used too many times.':
+    'Questo invito è scaduto o è già stato usato troppe volte.',
+  'This invite link is damaged: its key does not match the community.':
+    'Questo link d’invito è danneggiato: la sua chiave non corrisponde alla community.',
+  'Only pictures and GIFs can be favourites.': 'Solo immagini e GIF possono essere preferiti.',
+  'That file is too large to keep as a favourite.':
+    'Questo file è troppo grande per tenerlo tra i preferiti.',
+  'That favourite is gone.': 'Quel preferito non c’è più.',
+  'River could not find that message to edit. Scroll to it and try again.':
+    'River non ha trovato il messaggio da modificare. Scorri fino a lui e riprova.',
+  'Polls cannot be edited.': 'I sondaggi non si possono modificare.',
+  'Waiting for the community key…': 'In attesa della chiave della community…',
+  'That sound no longer exists.': 'Quel suono non esiste più.',
+  'That message is no longer here.': 'Quel messaggio non c’è più.',
+  'That emoji no longer exists.': 'Quell’emoji non esiste più.',
+  'That event no longer exists.': 'Quell’evento non esiste più.',
+  'This file failed its integrity check and was not opened.':
+    'Questo file non ha superato il controllo di integrità e non è stato aperto.',
+  'Attachments are not available.': 'Gli allegati non sono disponibili.',
+  'Signal too large': 'Segnale troppo grande',
+  "You're offline": 'Sei offline',
+  'Unknown channel': 'Canale sconosciuto',
+  'Unknown community': 'Community sconosciuta',
+
+  'Create your identity first.': 'Crea prima la tua identità.',
+  'You are not in this group.': 'Non sei in questo gruppo.',
+  'The message could not be delivered to anyone in the group.':
+    'Non è stato possibile consegnare il messaggio a nessuno nel gruppo.',
+  'The server offered an older device list for this person than River has already seen. Messages were not sent.':
+    'Il server ha offerto per questa persona un elenco di dispositivi più vecchio di quello già visto da River. I messaggi non sono stati inviati.',
+  'That person has not set up messaging yet.': 'Questa persona non ha ancora configurato i messaggi.',
+  'That person is not on your River server.': 'Questa persona non è sul tuo server River.',
+  'The server offered a different safety key for this person than the one in your shared community. Messages were not sent.':
+    'Il server ha offerto per questa persona una chiave di sicurezza diversa da quella della vostra community in comune. I messaggi non sono stati inviati.',
+  'This person’s device list is not signed by their identity key. Messages were not sent.':
+    'L’elenco dei dispositivi di questa persona non è firmato con la sua chiave d’identità. I messaggi non sono stati inviati.',
+  'The server returned keys for someone else.': 'Il server ha restituito le chiavi di qualcun altro.',
+  'That folder is gone.': 'Quella cartella non c’è più.',
+  'That saved reply is gone.': 'Quella risposta salvata non c’è più.',
+  'That call is not in a group.': 'Quella chiamata non è in un gruppo.',
+  'That is your own River ID.': 'È il tuo River ID.',
+  'You can only edit your own messages.': 'Puoi modificare solo i tuoi messaggi.',
+  'That message is gone.': 'Quel messaggio non c’è più.',
+  'You can only delete your own messages for everyone.': 'Puoi eliminare per tutti solo i tuoi messaggi.',
+  'Choose a time at least a minute from now.': 'Scegli un orario ad almeno un minuto da adesso.',
+  'Choose a time within a year.': 'Scegli un orario entro un anno.',
+  'You have 100 messages waiting already.': 'Hai già 100 messaggi in attesa.',
+  'You can set a timer once you are friends.': 'Puoi impostare un timer quando sarete amici.',
+  'Send a message first to set up encryption.': 'Invia prima un messaggio per configurare la crittografia.',
+  'The safety number changed while it was on screen. Compare the new number before verifying.':
+    'Il numero di sicurezza è cambiato mentre era sullo schermo. Confronta il nuovo numero prima di verificare.',
+  'Add at least one other person.': 'Aggiungi almeno un’altra persona.',
+  'Only group admins can change the group.': 'Solo gli amministratori del gruppo possono modificarlo.',
+  'Use Leave group to leave.': 'Per uscire usa «Esci dal gruppo».',
+  'You can only call your contacts.': 'Puoi chiamare solo i tuoi contatti.',
+  'Unblock this person to message them.': 'Sblocca questa persona per scriverle.',
+  'Please check what you entered.': 'Controlla quello che hai inserito.',
+  "Can't reach your River server. Check your internet connection; River keeps trying.":
+    'Impossibile raggiungere il tuo server River. Controlla la connessione a internet; River continua a provare.',
+  "You're doing that too fast. Wait a few seconds and try again.":
+    'Stai andando troppo veloce. Aspetta qualche secondo e riprova.',
+  "That's too large to send.": 'È troppo grande per essere inviato.',
+  'Your session ended. River is signing you in again; try once more.':
+    'La sessione è scaduta. River ti sta facendo accedere di nuovo; riprova.',
+  'You do not have permission to do that.': 'Non hai il permesso di farlo.',
+  'That no longer exists.': 'Non esiste più.',
+  'Your River server had a problem. Try again in a moment.':
+    'Il tuo server River ha avuto un problema. Riprova tra poco.',
+  'Something went wrong. Check your connection and try again.':
+    'Qualcosa è andato storto. Controlla la connessione e riprova.',
+  'This development build does not use River’s server.':
+    'Questa build di sviluppo non usa il server di River.',
+  'This development build does not use River’s server. Choose “Use a different server”.':
+    'Questa build di sviluppo non usa il server di River. Scegli «Usa un altro server».',
+  'The downloaded cloudflared did not match the expected fingerprint, so River did not use it.':
+    'Il cloudflared scaricato non corrispondeva all’impronta prevista, quindi River non l’ha usato.',
+  'The cloudflared download is larger than expected.':
+    'Il download di cloudflared è più grande del previsto.',
+  'Could not unpack cloudflared.': 'Impossibile estrarre cloudflared.',
+  'Restarting the community server…': 'Riavvio del server delle community…',
+  'Setting up your public address (one-time download)…':
+    'Configurazione del tuo indirizzo pubblico (download una tantum)…',
+  'Opening your public address…': 'Apertura del tuo indirizzo pubblico…',
+  'Reconnecting to the internet…': 'Riconnessione a internet…',
+  'Opening your permanent address…': 'Apertura del tuo indirizzo permanente…',
+  'Tailscale is signed in, but your permanent address did not answer.':
+    'Tailscale ha effettuato l’accesso, ma il tuo indirizzo permanente non ha risposto.',
+  'Tailscale is not installed.': 'Tailscale non è installato.',
+  'River could not set up your account. Try again in a moment.':
+    'River non è riuscito a configurare il tuo account. Riprova tra poco.',
+  'That file is too large to be a River backup.':
+    'Questo file è troppo grande per essere un backup di River.',
+  'Your account is fine — nothing to set up again.':
+    'Il tuo account è a posto: non c’è nulla da riconfigurare.',
+  'That is not a valid River sign-up link.': 'Non è un link di registrazione River valido.',
+  'Unlock River first.': 'Sblocca prima River.',
+  'Something went wrong creating your account.': 'Qualcosa è andato storto nella creazione del tuo account.',
+  'Write an email': 'Scrivi un’email',
+  'Call a number': 'Chiama un numero',
+  'Write to this address in your mail app?': 'Scrivere a questo indirizzo nella tua app di posta?',
+  'Call this number with your phone app?': 'Chiamare questo numero con l’app Telefono?',
+  'Only do this if you trust the person who sent it.': 'Fallo solo se ti fidi di chi te l’ha inviato.',
+  'Open mail app': 'Apri l’app di posta',
+  Call: 'Chiama',
+  'Open link': 'Apri link',
+  'Open this link in your browser?': 'Aprire questo link nel browser?',
+  'Links can lead anywhere. Only open it if you trust where it goes.':
+    'I link possono portare ovunque. Aprilo solo se ti fidi della destinazione.',
+  'Encrypted local storage': 'Archiviazione locale crittografata',
+  'Active · passphrase': 'Attivo · passphrase',
+  Active: 'Attivo',
+  'River’s local database is encrypted with SQLCipher (AES-256). Its key is sealed with your passphrase (Argon2id), which River asks for each time it starts.':
+    'Il database locale di River è crittografato con SQLCipher (AES-256). La sua chiave è sigillata con la tua passphrase (Argon2id), che River chiede a ogni avvio.',
+  'River’s local database is encrypted with SQLCipher (AES-256). Its key is protected by {keystore}, so other user accounts on this computer cannot read it.':
+    'Il database locale di River è crittografato con SQLCipher (AES-256). La sua chiave è protetta da {keystore}, quindi gli altri utenti di questo computer non possono leggerlo.',
+  Unavailable: 'Non disponibile',
+  'Opening…': 'Apertura…',
+  'River is opening its local database.': 'River sta aprendo il database locale.',
+  Locked: 'Bloccato',
+  'River’s local data stays encrypted until you enter your passphrase.':
+    'I dati locali di River restano crittografati finché non inserisci la passphrase.',
+
+  'End-to-end encryption': 'Crittografia end-to-end',
+  'Direct messages and communities': 'Messaggi diretti e community',
+  'Direct messages and 1:1 call setup use the Signal protocol (libsignal: PQXDH with post-quantum keys and the Double Ratchet), so each message has its own key and past messages stay safe if a key leaks later. Communities encrypt names, messages and call setup with a shared community key (AES-256-GCM) that travels only inside invite links — anyone with an invite link can read the community, and removing someone does not change the key yet. Files use a fresh key each (AES-256-CBC + HMAC-SHA256). Voice, video and screen sharing go directly between participants, encrypted with DTLS-SRTP. The server still sees who messages whom and when.':
+    'I messaggi diretti e l’avvio delle chiamate 1:1 usano il protocollo Signal (libsignal: PQXDH con chiavi post-quantistiche e Double Ratchet), quindi ogni messaggio ha la sua chiave e i messaggi passati restano al sicuro se in seguito una chiave trapela. Le community cifrano nomi, messaggi e avvio delle chiamate con una chiave condivisa della community (AES-256-GCM) che viaggia solo nei link d’invito: chiunque abbia un link d’invito può leggere la community, e rimuovere qualcuno per ora non cambia la chiave. Ogni file usa una chiave nuova (AES-256-CBC + HMAC-SHA256). Voce, video e condivisione schermo passano direttamente tra i partecipanti, crittografati con DTLS-SRTP. Il server vede comunque chi scrive a chi e quando.',
+  Identity: 'Identità',
+  'Your identity key was created on this device and its private half never leaves it. Contacts will verify the fingerprint below to make sure they are really talking to you.':
+    'La tua chiave d’identità è stata creata su questo dispositivo e la sua metà privata non lo lascia mai. I contatti verificheranno l’impronta qui sotto per essere sicuri di parlare davvero con te.',
+  'Not created': 'Non creata',
+  'Create your identity to get a fingerprint your contacts can verify.':
+    'Crea la tua identità per avere un’impronta che i contatti possono verificare.',
+  'Server message access': 'Accesso del server ai messaggi',
+  'None · {host}': 'Nessuno · {host}',
+  'No server configured': 'Nessun server configurato',
+  'Your account on {host} holds your River ID, your @username if you chose one, your public keys and your signed device list. Direct messages, community messages, profiles and files reach it only end-to-end encrypted — it passes them on and keeps them for devices that are offline, but cannot read them. It does see who messages whom and when.':
+    'Il tuo account su {host} contiene il tuo River ID, il tuo @nomeutente se ne hai scelto uno, le tue chiavi pubbliche e l’elenco firmato dei tuoi dispositivi. Messaggi diretti, messaggi delle community, profili e file gli arrivano solo crittografati end-to-end: li inoltra e li conserva per i dispositivi offline, ma non può leggerli. Vede però chi scrive a chi e quando.',
+  'River is set to use {host}, but you have no account there yet, so the server holds none of your data.':
+    'River è impostato per usare {host}, ma non hai ancora un account lì, quindi il server non ha nessun tuo dato.',
+  'River is not set to use any server, so no server holds any of your data.':
+    'River non è impostato per usare alcun server, quindi nessun server ha i tuoi dati.',
+  'Update signatures': 'Firme degli aggiornamenti',
+  Enforced: 'Obbligatorie',
+  'Updater off in this build': 'Aggiornamenti disattivati in questa build',
+  'An update is installed only if its release manifest is signed by a River Ed25519 key built into this app and the downloaded file is listed in it.':
+    'Un aggiornamento viene installato solo se il suo manifesto è firmato con una chiave Ed25519 di River integrata in questa app e il file scaricato vi è elencato.',
+  'Interface sandbox': 'Sandbox dell’interfaccia',
+  'The interface runs in a sandboxed process with a strict content security policy. It has no access to files, keys or the network.':
+    'L’interfaccia gira in un processo isolato con una rigorosa content security policy. Non ha accesso a file, chiavi o rete.',
+  '{count} · signed list v{version}': '{count} · elenco firmato v{version}',
+  'The device list could not be verified.': 'Non è stato possibile verificare l’elenco dei dispositivi.',
+  'Your devices are listed in a record signed by your identity key. River checks that signature every time it connects, so the server cannot add a device to your account without you noticing.':
+    'I tuoi dispositivi sono elencati in un registro firmato con la tua chiave d’identità. River controlla la firma a ogni connessione, quindi il server non può aggiungere un dispositivo al tuo account senza che te ne accorga.',
+  'This device only': 'Solo questo dispositivo',
+  'Your device list starts when you create an account. Then you can link your other phones and computers in Settings → Account → Devices; each one is added to a list signed by your identity key.':
+    'L’elenco dei dispositivi parte quando crei un account. Poi puoi collegare gli altri telefoni e computer in Impostazioni → Account → Dispositivi; ognuno viene aggiunto a un elenco firmato con la tua chiave d’identità.',
+  '⚠ This address uses unusual characters that can imitate another site.':
+    '⚠ Questo indirizzo usa caratteri insoliti che possono imitare un altro sito.',
+  '⚠ This link goes to a raw IP address, not a named website.':
+    '⚠ Questo link porta a un indirizzo IP, non a un sito con un nome.',
+  '⚠ This is a short link: it hides where it really goes.':
+    '⚠ È un link abbreviato: nasconde dove porta davvero.',
+  'This link is not encrypted (http).': 'Questo link non è crittografato (http).',
+  Compatible: 'Compatibile',
+  'This server needs a newer version of River. Update River to use it.':
+    'Questo server richiede una versione più recente di River. Aggiorna River per usarlo.',
+  'This server runs an older River protocol than this app supports.':
+    'Questo server usa un protocollo River più vecchio di quello supportato da questa app.',
+  'Invalid address': 'Indirizzo non valido',
+  'That address is not a River server.': 'Quell’indirizzo non è un server River.',
+  'Could not reach the server. Check the address and your connection.':
+    'Impossibile raggiungere il server. Controlla l’indirizzo e la connessione.',
+  'The post could not be delivered to anyone. Check your connection and try again.':
+    'Il post non è stato consegnato a nessuno. Controlla la connessione e riprova.',
+  'Your reaction could not be sent. Check your connection and try again.':
+    'Non è stato possibile inviare la tua reazione. Controlla la connessione e riprova.',
+  'Your comment could not be sent. Check your connection and try again.':
+    'Non è stato possibile inviare il tuo commento. Controlla la connessione e riprova.',
+  'River cannot reach your system keyring to unlock its local data. Unlock or restore your keyring and restart River.':
+    'River non riesce a raggiungere il portachiavi di sistema per sbloccare i dati locali. Sblocca o ripristina il portachiavi e riavvia River.',
+  'Your local River data was created by a newer version of River. Install the latest River to open it.':
+    'I tuoi dati locali di River sono stati creati da una versione più recente di River. Installa l’ultima versione di River per aprirli.',
+  'River could not upgrade its local data. Nothing was changed; a backup was kept. Please report this problem.':
+    'River non è riuscito ad aggiornare i dati locali. Non è stato cambiato nulla; è stato tenuto un backup. Segnala il problema, per favore.',
+  'River could not decrypt its local data with the stored key.':
+    'River non è riuscito a decifrare i dati locali con la chiave salvata.',
+  'River could not open its local data.': 'River non è riuscito ad aprire i dati locali.',
+  'River’s local key file is damaged. Your data has not been changed.':
+    'Il file della chiave locale di River è danneggiato. I tuoi dati non sono stati modificati.',
+
+  Administrator: 'Amministratore',
+  'Every permission, in every channel. Grant carefully.':
+    'Ogni permesso, in ogni canale. Concedilo con attenzione.',
+  'Manage community': 'Gestire la community',
+  'Rename the community and change its description.': 'Rinominare la community e cambiarne la descrizione.',
+  'Manage roles': 'Gestire i ruoli',
+  'Create and edit roles below their own, and assign them.':
+    'Creare e modificare ruoli inferiori al proprio e assegnarli.',
+  'Manage channels': 'Gestire i canali',
+  'Create, rename, reorder, delete channels and set channel permissions.':
+    'Creare, rinominare, riordinare, eliminare canali e impostarne i permessi.',
+  'Kick members': 'Espellere membri',
+  'Remove members (they can rejoin with an invite).': 'Rimuovere membri (possono rientrare con un invito).',
+  'Ban members': 'Bannare membri',
+  'Remove members and stop them rejoining.': 'Rimuovere membri e impedire che rientrino.',
+  'Time out members': 'Mettere in timeout i membri',
+  'Stop members below them from talking, reacting and joining voice for a while.':
+    'Impedire per un po’ ai membri sottostanti di scrivere, reagire ed entrare in voce.',
+  'View audit log': 'Vedere il registro attività',
+  'See who changed roles, channels and settings, and who moderated whom.':
+    'Vedere chi ha cambiato ruoli, canali e impostazioni, e chi ha moderato chi.',
+  'Create invites': 'Creare inviti',
+  'Make invite links.': 'Creare link d’invito.',
+  'View channels': 'Vedere i canali',
+  'See channels and read messages.': 'Vedere i canali e leggere i messaggi.',
+  'Send messages': 'Inviare messaggi',
+  'Post in text channels.': 'Scrivere nei canali di testo.',
+  'Send images and files.': 'Inviare immagini e file.',
+  'Add reactions': 'Aggiungere reazioni',
+  'React to messages.': 'Reagire ai messaggi.',
+  'Mention @everyone': 'Menzionare @everyone',
+  'Notify everyone at once.': 'Avvisare tutti insieme.',
+  'Manage messages': 'Gestire i messaggi',
+  "Delete other people's messages.": 'Eliminare i messaggi degli altri.',
+  'Pin messages': 'Fissare messaggi',
+  'Pin and unpin messages.': 'Fissare e sbloccare i messaggi.',
+  'Connect to voice': 'Connettersi alla voce',
+  'Join voice channels.': 'Entrare nei canali vocali.',
+  Speak: 'Parlare',
+  'Talk in voice channels.': 'Parlare nei canali vocali.',
+  'Video & screen share': 'Video e condivisione schermo',
+  'Turn on camera or share a screen in voice.': 'Accendere la fotocamera o condividere lo schermo in voce.',
+  'Mute & deafen members': 'Silenziare e assordare i membri',
+  'Server-mute or server-deafen others in voice.':
+    'Silenziare o assordare altri in voce per tutto il server.',
+  'Move & disconnect members': 'Spostare e disconnettere i membri',
+  'Move people between voice channels or disconnect them.':
+    'Spostare persone tra canali vocali o disconnetterle.',
+  'Manage events': 'Gestire gli eventi',
+  'Create, edit and cancel scheduled events.': 'Creare, modificare e annullare eventi in programma.',
+  'Manage emoji & sounds': 'Gestire emoji e suoni',
+  'Add, rename and remove the community’s custom emoji and soundboard sounds.':
+    'Aggiungere, rinominare e rimuovere emoji personalizzate e suoni della community.',
+  'Priority speaker': 'Oratore prioritario',
+  'In voice, turn on Priority speaker so everyone else is turned down while they talk.':
+    'In voce, attivare Oratore prioritario per abbassare tutti gli altri mentre si parla.',
+  "Check someone's access here": 'Controlla l’accesso di qualcuno qui',
+  'Member to check': 'Membro da controllare',
+  'Choose a member…': 'Scegli un membro…',
+  can: 'può',
+  "can't": 'non può',
+  'Includes changes you have not saved yet. Click a line to see why.':
+    'Include le modifiche non ancora salvate. Fai clic su una riga per vedere perché.',
+  'Saved.': 'Salvato.',
+  Picture: 'Immagine',
+  'Community picture': 'Immagine della community',
+  'Choose…': 'Scegli…',
+  Remove: 'Rimuovi',
+  Banner: 'Banner',
+  'Community banner': 'Banner della community',
+  'That banner is too detailed to keep small; try another picture.':
+    'Il banner è troppo dettagliato per restare leggero; prova un’altra immagine.',
+  'River could not read that picture.': 'River non è riuscito a leggere l’immagine.',
+  'Pictures are end-to-end encrypted like the rest of the community.':
+    'Le immagini sono crittografate end-to-end come il resto della community.',
+  'They own the community: owners can do everything.':
+    'È il proprietario della community: i proprietari possono fare tutto.',
+  'a role': 'un ruolo',
+  '@everyone allows it.': '@everyone lo consente.',
+  '@everyone does not allow it.': '@everyone non lo consente.',
+  'Their role {role} allows it.': 'Il suo ruolo {role} lo consente.',
+  'Their role {role} has Administrator, which allows everything.':
+    'Il suo ruolo {role} ha Amministratore, che consente tutto.',
+  '@everyone has Administrator, which allows everything.': '@everyone ha Amministratore, che consente tutto.',
+  'In #{channel}, @everyone is denied it.': 'In #{channel}, a @everyone è negato.',
+  'In #{channel}, @everyone is allowed it.': 'In #{channel}, a @everyone è consentito.',
+  'In #{channel}, their role {role} is denied it.': 'In #{channel}, al suo ruolo {role} è negato.',
+  'In #{channel}, their role {role} is allowed it (an allow on a role beats a deny on another).':
+    'In #{channel}, al suo ruolo {role} è consentito (un consenso su un ruolo vince su un divieto su un altro).',
+  'In #{channel}, their role {role} is allowed it.': 'In #{channel}, al suo ruolo {role} è consentito.',
+  'They have not accepted the rules yet, so they can only read.':
+    'Non ha ancora accettato le regole, quindi può solo leggere.',
+  'They are timed out.': 'È in timeout.',
+  '#{channel} is an announcement channel: only people who manage messages post there.':
+    '#{channel} è un canale di annunci: scrive solo chi gestisce i messaggi.',
+  Moderation: 'Moderazione',
+  Channels: 'Canali',
+  'Emoji & sounds': 'Emoji e suoni',
+  Spam: 'Spam',
+  'Harassment or hate': 'Molestie o odio',
+  'Inappropriate content': 'Contenuto inappropriato',
+  'Scam or phishing': 'Truffa o phishing',
+  'Something else': 'Altro',
+  'Mute / unmute': 'Silenzia / riattiva',
+  'Deafen / undeafen': 'Silenzia audio / riattiva audio',
+  'Camera on / off': 'Fotocamera accesa / spenta',
+  'Leave voice': 'Esci dalla voce',
+  'Quick switcher': 'Cambio rapido',
+  'Bigger interface': 'Interfaccia più grande',
+  'Smaller interface': 'Interfaccia più piccola',
+  'Normal size': 'Dimensione normale',
+  'Previous channel': 'Canale precedente',
+  'Next channel': 'Canale successivo',
+  'Previous community': 'Community precedente',
+  'Next community': 'Community successiva',
+  'Mark as read / close': 'Segna come letto / chiudi',
+  'Not set': 'Non impostato',
+  'Chat, memes and a place to hang out.': 'Chat, meme e un posto dove stare insieme.',
+  Gaming: 'Gaming',
+  'Find a squad, share clips, jump into voice.': 'Trova una squadra, condividi clip, entra in voce.',
+  'Study group': 'Gruppo di studio',
+  'Homework help, notes and quiet study rooms.':
+    'Aiuto per i compiti, appunti e stanze di studio tranquille.',
+  'Club or team': 'Club o squadra',
+  'Announcements, events and meetups.': 'Annunci, eventi e incontri.',
+  'Start from scratch': 'Parti da zero',
+  'One text and one voice channel.': 'Un canale di testo e uno vocale.',
+
+  'Delete {name}': 'Elimina {name}',
+  'This permanently deletes the community, its channels and all messages for everyone. This cannot be undone.':
+    'Questo elimina per sempre la community, i suoi canali e tutti i messaggi per tutti. Non si può annullare.',
+  'Delete community': 'Elimina community',
+  Icon: 'Icona',
+  'Community icon': 'Icona della community',
+  Initials: 'Iniziali',
+  'Icon {emoji}': 'Icona {emoji}',
+  'Community name': 'Nome della community',
+  Description: 'Descrizione',
+  'Names and descriptions are encrypted with the community key; the server cannot read them.':
+    'Nomi e descrizioni sono crittografati con la chiave della community; il server non può leggerli.',
+  'General permissions': 'Permessi generali',
+  'Membership permissions': 'Permessi dei membri',
+  'Text permissions': 'Permessi di testo',
+  'Voice permissions': 'Permessi vocali',
+  'Advanced permissions': 'Permessi avanzati',
+  Permission: 'Permesso',
+  'new role': 'nuovo ruolo',
+  'Members get every permission from all their roles. Higher roles can manage lower ones. The owner can do everything. Drag roles to reorder them.':
+    'I membri ottengono tutti i permessi di tutti i loro ruoli. I ruoli più alti gestiscono quelli più bassi. Il proprietario può fare tutto. Trascina i ruoli per riordinarli.',
+  'Members with this role lose it. This cannot be undone.':
+    'I membri con questo ruolo lo perdono. Non si può annullare.',
+  'You can only edit roles below your highest role.':
+    'Puoi modificare solo i ruoli sotto il tuo ruolo più alto.',
+  'Role name': 'Nome del ruolo',
+  'Role colour': 'Colore del ruolo',
+  'Default colour': 'Colore predefinito',
+  'Colour {hex}': 'Colore {hex}',
+  'Custom colour': 'Colore personalizzato',
+  'Role icon': 'Icona del ruolo',
+  'Role icon {emoji}, change': 'Icona del ruolo {emoji}, cambia',
+  'Choose a role icon': 'Scegli un’icona per il ruolo',
+  'Shown next to the names of people with this role.': 'Mostrata accanto al nome di chi ha questo ruolo.',
+  'Allow anyone to @mention this role': 'Consenti a tutti di @menzionare questo ruolo',
+  'Members can ping everyone with this role. People who may mention @everyone can always mention every role.':
+    'I membri possono avvisare tutti quelli con questo ruolo. Chi può menzionare @everyone può sempre menzionare ogni ruolo.',
+  'Show members with this role separately': 'Mostra a parte i membri con questo ruolo',
+  'Online members with this role get their own group in the member list.':
+    'I membri online con questo ruolo hanno un gruppo tutto loro nell’elenco dei membri.',
+  '@everyone applies to every member of the community. Use it for the defaults.':
+    '@everyone vale per ogni membro della community. Usalo per le impostazioni predefinite.',
+  '{name} (copy)': '{name} (copia)',
+  'Made a copy of {name}.': 'Creata una copia di {name}.',
+  'Duplicate role': 'Duplica ruolo',
+  'Members — {count}': 'Membri — {count}',
+  'Search members': 'Cerca membri',
+  'Change roles of selected members': 'Cambia i ruoli dei membri selezionati',
+  '{count} selected': '{count} selezionati',
+  'Give a role to the selected members': 'Assegna un ruolo ai membri selezionati',
+  'Give role…': 'Assegna ruolo…',
+  'Remove a role from the selected members': 'Togli un ruolo ai membri selezionati',
+  'Remove role…': 'Togli ruolo…',
+  Clear: 'Cancella',
+  'Select {name}': 'Seleziona {name}',
+  'Remove {role} from {name}': 'Togli {role} a {name}',
+  'Add role to {name}': 'Aggiungi un ruolo a {name}',
+  '+ Role': '+ Ruolo',
+  'Kick {name}': 'Espelli {name}',
+  '{name} will be removed. They can rejoin with a new invite.':
+    '{name} verrà rimosso. Potrà rientrare con un nuovo invito.',
+  Kick: 'Espelli',
+  Ban: 'Banna',
+  'Nobody is banned.': 'Nessuno è bannato.',
+  'Banned on {date}': 'Bannato il {date}',
+  'until {time}': 'fino al {time}',
+  'Revoke ban': 'Revoca ban',
+  'Changes to roles, channels and settings, and moderation, for the last 90 days. The server keeps only IDs; names are filled in on your computer.':
+    'Modifiche a ruoli, canali e impostazioni, e moderazione, degli ultimi 90 giorni. Il server conserva solo gli ID; i nomi vengono aggiunti sul tuo computer.',
+  'Kind of change': 'Tipo di modifica',
+  Everything: 'Tutto',
+  Who: 'Chi',
+  Anyone: 'Chiunque',
+  'Search the audit log': 'Cerca nel registro attività',
+  Copy: 'Copia',
+  'Nothing has happened yet.': 'Non è ancora successo nulla.',
+  'Nothing matches.': 'Nessun risultato.',
+  'Load older': 'Carica precedenti',
+  'For good': 'Per sempre',
+  'For 1 hour': 'Per 1 ora',
+  'For 1 day': 'Per 1 giorno',
+  'For 1 week': 'Per 1 settimana',
+  'For 30 days': 'Per 30 giorni',
+  "Don't delete any": 'Non eliminarne nessuno',
+  'From the last hour': 'Dell’ultima ora',
+  'From the last 6 hours': 'Delle ultime 6 ore',
+  'From the last 24 hours': 'Delle ultime 24 ore',
+  'From the last 3 days': 'Degli ultimi 3 giorni',
+  'From the last 7 days': 'Degli ultimi 7 giorni',
+  '{name} was banned.': '{name} è stato bannato.',
+  'Ban {name}': 'Banna {name}',
+  '{name} will be removed from {community} and cannot rejoin until the ban ends or someone unbans them.':
+    '{name} verrà rimosso da {community} e non potrà rientrare finché il ban non scade o qualcuno non lo revoca.',
+  '{name} will be removed from the community and cannot rejoin until the ban ends or someone unbans them.':
+    '{name} verrà rimosso dalla community e non potrà rientrare finché il ban non scade o qualcuno non lo revoca.',
+  'How long': 'Per quanto tempo',
+  'Delete their messages': 'Elimina i suoi messaggi',
+  'Invite friends to {name}': 'Invita amici in {name}',
+  'Send this link privately. Anyone with it can join and read this community. It works 100 times and expires in 7 days.':
+    'Invia questo link in privato. Chiunque lo abbia può entrare e leggere questa community. Funziona 100 volte e scade tra 7 giorni.',
+  'Creating link…': 'Creazione del link…',
+  'Copied ✓': 'Copiato ✓',
+  'Copy link': 'Copia link',
+  'Channel type': 'Tipo di canale',
+  Text: 'Testo',
+  Voice: 'Voce',
+  Forum: 'Forum',
+  Stage: 'Palco',
+  'Messages, emoji, opinions and puns': 'Messaggi, emoji, opinioni e giochi di parole',
+  'Hang out with voice, video and screen share': 'Stare insieme con voce, video e condivisione schermo',
+  'Organised posts with titles and tags, each with its own replies':
+    'Post ordinati con titoli e tag, ognuno con le sue risposte',
+  'Talks and events: speakers on stage, everyone else listens':
+    'Talk ed eventi: oratori sul palco, tutti gli altri ascoltano',
+  'Channel name': 'Nome del canale',
+  'new-channel': 'nuovo-canale',
+  'Private channel': 'Canale privato',
+  'Only selected roles (and admins) will be able to see this channel.':
+    'Solo i ruoli scelti (e gli amministratori) potranno vedere questo canale.',
+  'Category name': 'Nome della categoria',
+  'New category': 'Nuova categoria',
+  'Category names are encrypted like channel names. Drag channels onto a category to move them.':
+    'I nomi delle categorie sono crittografati come quelli dei canali. Trascina i canali su una categoria per spostarli.',
+  'Category settings': 'Impostazioni della categoria',
+  Permissions: 'Permessi',
+  "Its channels stay and move out of the category. Channels synced to it keep the category's permissions as their own, so private channels stay private.":
+    'I suoi canali restano ed escono dalla categoria. I canali sincronizzati mantengono i permessi della categoria come propri, quindi quelli privati restano privati.',
+  'Delete category': 'Elimina categoria',
+  'Category permissions': 'Permessi della categoria',
+  'Channels you add to this category follow these permissions until you give them their own.':
+    'I canali che aggiungi a questa categoria seguono questi permessi finché non ne dai loro di propri.',
+  Off: 'Disattivato',
+  '5 seconds': '5 secondi',
+  '10 seconds': '10 secondi',
+  '30 seconds': '30 secondi',
+  '1 minute': '1 minuto',
+  '2 minutes': '2 minuti',
+  '5 minutes': '5 minuti',
+  '10 minutes': '10 minuti',
+  '2 hours': '2 ore',
+  '6 hours': '6 ore',
+  'Channel settings': 'Impostazioni del canale',
+  'This deletes the channel and all of its messages for everyone. This cannot be undone.':
+    'Questo elimina il canale e tutti i suoi messaggi per tutti. Non si può annullare.',
+  'Delete channel': 'Elimina canale',
+  'Channel topic': 'Argomento del canale',
+  'Let everyone know how to use this channel!': 'Spiega a tutti come usare questo canale!',
+  'Age-restricted (18+)': 'Vietato ai minori (18+)',
+  'People confirm they are 18 or older before opening this channel.':
+    'Le persone confermano di avere almeno 18 anni prima di aprire questo canale.',
+  'Media channel': 'Canale multimediale',
+  'Opens as a gallery of the pictures and videos shared here; the chat is one click away.':
+    'Si apre come una galleria delle immagini e dei video condivisi qui; la chat è a un clic.',
+  'Every message starts a post with a title and its own replies, shown as a list of posts.':
+    'Ogni messaggio apre un post con un titolo e le sue risposte, mostrati come elenco di post.',
+  'Announcement channel': 'Canale di annunci',
+  'Only people who can manage messages post here; everyone else reads and reacts.':
+    'Qui scrive solo chi gestisce i messaggi; tutti gli altri leggono e reagiscono.',
+  Slowmode: 'Modalità lenta',
+  'How long members wait between messages. People who manage messages are not slowed down.':
+    'Quanto aspettano i membri tra un messaggio e l’altro. Chi gestisce i messaggi non è rallentato.',
+  'For talks and events: people join as listeners, raise a hand to ask to speak, and moderators invite speakers.':
+    'Per talk ed eventi: si entra come ascoltatori, si alza la mano per chiedere la parola e i moderatori invitano gli oratori.',
+  'User limit': 'Limite di utenti',
+  'No limit': 'Nessun limite',
+  'People who can move members can always join.': 'Chi può spostare i membri può sempre entrare.',
+  Category: 'Categoria',
+  'No category': 'Nessuna categoria',
+  Order: 'Ordine',
+  'Move up': 'Sposta su',
+  'Move down': 'Sposta giù',
+  'Channel permissions': 'Permessi del canale',
+  'Override what each role can do in this channel only.':
+    'Cambia cosa può fare ogni ruolo solo in questo canale.',
+  "Synced with {category}: this channel uses the category's permissions. Changing them here gives the channel its own.":
+    'Sincronizzato con {category}: questo canale usa i permessi della categoria. Se li cambi qui, il canale avrà i suoi.',
+  'This channel has its own permissions, not those of {category}.':
+    'Questo canale ha permessi propri, non quelli di {category}.',
+  'Sync with category': 'Sincronizza con la categoria',
+  'Hide this channel from @everyone. Then allow the roles that should see it.':
+    'Nascondi questo canale a @everyone. Poi consenti i ruoli che devono vederlo.',
+  'Picture set for this community.': 'Immagine impostata per questa community.',
+  'Back to your usual picture here.': 'Qui torna la tua immagine abituale.',
+  'Picture in this community': 'Immagine in questa community',
+  'Your usual picture': 'La tua immagine abituale',
+  'Use my usual picture': 'Usa la mia immagine abituale',
+  'Nickname in {name}': 'Nickname in {name}',
+  Nickname: 'Nickname',
+  'Your River name': 'Il tuo nome su River',
+  'Only members of this community see it. It is encrypted like the rest of your profile.':
+    'Lo vedono solo i membri di questa community. È crittografato come il resto del profilo.',
+  'Reset to my River name': 'Torna al mio nome su River',
+
+  'Everyone here can use these with {code} in messages and reactions. Click a name to rename it. Pictures and names are end-to-end encrypted. Up to 100.':
+    'Tutti qui possono usarle con {code} nei messaggi e nelle reazioni. Fai clic su un nome per rinominarlo. Immagini e nomi sono crittografati end-to-end. Fino a 100.',
+  'Upload emoji': 'Carica emoji',
+  'That image is too large.': 'L’immagine è troppo grande.',
+  'River could not read that image.': 'River non è riuscito a leggere l’immagine.',
+  Name: 'Nome',
+  '2–32 letters, numbers or _': '2–32 lettere, numeri o _',
+  Add: 'Aggiungi',
+  'No custom emoji yet.': 'Ancora nessuna emoji personalizzata.',
+  'New name for :{name}:': 'Nuovo nome per :{name}:',
+  Rename: 'Rinomina',
+  'Remove :{name}:': 'Rimuovi :{name}:',
+  channel: 'canale',
+  'Someone who left': 'Qualcuno che è uscito',
+  'Copied.': 'Copiato.',
+  'Counted on your device from messages you can read; the server cannot see them, so it cannot count them.':
+    'Contato sul tuo dispositivo dai messaggi che puoi leggere; il server non li vede, quindi non può contarli.',
+  members: 'membri',
+  'online now': 'online ora',
+  'joined this week': 'entrati questa settimana',
+  'Messages per day': 'Messaggi al giorno',
+  Period: 'Periodo',
+  'Some busy channels have more history than River counted.':
+    'Alcuni canali molto attivi hanno più cronologia di quanta River ne abbia contata.',
+  'Busiest channels': 'Canali più attivi',
+  'No messages yet.': 'Ancora nessun messaggio.',
+  'Most active people': 'Persone più attive',
+  'Counting…': 'Conteggio…',
+  'New members per week': 'Nuovi membri a settimana',
+  'New members per week, last 8 weeks': 'Nuovi membri a settimana, ultime 8 settimane',
+  'Active invite links, who made them and who joined with them. Revoking stops a link from working; people who already joined stay.':
+    'Link d’invito attivi, chi li ha creati e chi è entrato con essi. Revocare un link lo disattiva; chi è già entrato resta.',
+  'No active invites.': 'Nessun invito attivo.',
+  '{uses} of {max} uses': '{uses} di {max} utilizzi',
+  'expires {date}': 'scade il {date}',
+  'made {date}': 'creato il {date}',
+  'Joined with it: {names}': 'Entrati con questo: {names}',
+  Revoke: 'Revoca',
+  'Members · {count}': 'Membri · {count}',
+  'Close members': 'Chiudi membri',
+  'Community owner': 'Proprietario della community',
+  '{name} will be removed from {community}. They can rejoin with a new invite.':
+    '{name} verrà rimosso da {community}. Potrà rientrare con un nuovo invito.',
+  '{name} will be removed from {community} and cannot rejoin until unbanned.':
+    '{name} verrà rimosso da {community} e non potrà rientrare finché il ban non viene revocato.',
+  'Timed out until {time}': 'In timeout fino al {time}',
+  'Copy River ID': 'Copia River ID',
+  'River ID copied.': 'River ID copiato.',
+  'Copy ID': 'Copia ID',
+  'Member of {community} since {date}': 'Membro di {community} dal {date}',
+  'About me': 'Su di me',
+  'Until {time}': 'Fino al {time}',
+  'Remove {name}': 'Rimuovi {name}',
+  'Add role': 'Aggiungi ruolo',
+  'No roles': 'Nessun ruolo',
+  For: 'Per',
+  Good: 'Sempre',
+  '1 day': '1 giorno',
+  '1 week': '1 settimana',
+  '30 days': '30 giorni',
+  'User volume': 'Volume dell’utente',
+  'Volume for {name}': 'Volume di {name}',
+  'Server unmute': 'Riattiva microfono (server)',
+  'Server mute': 'Silenzia (server)',
+  'Server undeafen': 'Riattiva audio (server)',
+  'Server deafen': 'Silenzia audio (server)',
+  'Move {name} to another voice channel': 'Sposta {name} in un altro canale vocale',
+  'Move to…': 'Sposta in…',
+  'Make {name} the owner?': 'Rendere {name} il proprietario?',
+  '{name} will own {community} and can do everything, including deleting it. You become an ordinary member with the roles you have. Only they can hand it back.':
+    '{name} diventerà proprietario di {community} e potrà fare tutto, anche eliminarla. Tu diventerai un membro normale con i tuoi ruoli. Solo quella persona potrà restituirtela.',
+  'Transfer ownership': 'Trasferisci la proprietà',
+  'You are friends': 'Siete amici',
+  'Friends ✓': 'Amici ✓',
+  'Wants to be friends': 'Vuole essere tuo amico',
+  'Request sent ✓': 'Richiesta inviata ✓',
+  'Friend request sent': 'Richiesta di amicizia inviata',
+  'Add friend': 'Aggiungi amico',
+  '60 seconds': '60 secondi',
+  '{name} is timed out': '{name} è in timeout',
+  'Timeout ended for {name}': 'Timeout terminato per {name}',
+  'End timeout': 'Termina timeout',
+  'Time out': 'Timeout',
+  'Timeout length': 'Durata del timeout',
+  'Moderator notes · only moderators see these': 'Note dei moderatori · le vedono solo i moderatori',
+  'Remove note': 'Rimuovi nota',
+  'Add a note': 'Aggiungi una nota',
+  'Add a moderator note': 'Aggiungi una nota del moderatore',
+  'What new members see first. Rules and the welcome note are end-to-end encrypted.':
+    'Ciò che i nuovi membri vedono per primo. Regole e messaggio di benvenuto sono crittografati end-to-end.',
+  'Welcome note': 'Messaggio di benvenuto',
+  "Glad you're here! Start in #general and say hi.": 'Che bello averti qui! Inizia da #general e saluta.',
+  Rules: 'Regole',
+  'Add a rule (e.g. Be kind)': 'Aggiungi una regola (es. Sii gentile)',
+  'New rule': 'Nuova regola',
+  'New members must accept the rules': 'I nuovi membri devono accettare le regole',
+  'Until they do, they can read but not post, react or join voice. People already here are not asked.':
+    'Fino ad allora possono leggere ma non scrivere, reagire o entrare in voce. A chi è già qui non viene chiesto.',
+  'Roles members can pick themselves': 'Ruoli che i membri possono scegliere',
+  'Create a role (for example "Gamer") to offer it here.':
+    'Crea un ruolo (per esempio «Gamer») per offrirlo qui.',
+  "can moderate, so it can't be self-assigned": 'può moderare, quindi non si può scegliere da soli',
+  'Word filter saved.': 'Filtro parole salvato.',
+  'Word filter turned off.': 'Filtro parole disattivato.',
+  'Word filter': 'Filtro parole',
+  'One word or phrase per line. Matching ignores case, accents and look-alikes like 4 for a. Your server cannot read messages, so every River app applies the filter itself — a modified app could ignore it. People who manage messages always see everything.':
+    'Una parola o frase per riga. Il confronto ignora maiuscole, accenti e caratteri simili come 4 per a. Il server non può leggere i messaggi, quindi ogni app River applica il filtro da sé: un’app modificata potrebbe ignorarlo. Chi gestisce i messaggi vede sempre tutto.',
+  'Filtered words': 'Parole filtrate',
+  'Hide messages with these words (members can still show them)':
+    'Nascondi i messaggi con queste parole (i membri possono comunque mostrarli)',
+  'Also stop people from sending them': 'E impedisci anche di inviarli',
+  'Save filter': 'Salva filtro',
+  'Turn off filter': 'Disattiva filtro',
+  'Welcome to {name}!': 'Benvenuto in {name}!',
+  'Rules of {name}': 'Regole di {name}',
+  'Welcome to {name}': 'Benvenuto in {name}',
+  'Before you join in, please read the rules:': 'Prima di partecipare, leggi le regole:',
+  "This community asks new members to agree to its rules before joining in. Its rules could not be shown here; by continuing you agree to follow them and the moderators' guidance.":
+    'Questa community chiede ai nuovi membri di accettare le regole prima di partecipare. Non è stato possibile mostrarle qui; continuando accetti di seguirle insieme alle indicazioni dei moderatori.',
+  "I've read and agree to the rules": 'Ho letto e accetto le regole',
+  'Join the conversation': 'Partecipa alla conversazione',
+  'Choose what fits you. You can change it any time from the community menu.':
+    'Scegli ciò che fa per te. Puoi cambiarlo quando vuoi dal menu della community.',
+  Skip: 'Salta',
+
+  'That is a link code for a new device. Open it on the device you are adding, on its welcome screen.':
+    'È un codice di collegamento per un nuovo dispositivo. Aprilo sul dispositivo che stai aggiungendo, nella sua schermata di benvenuto.',
+  'That friend link is not complete. Ask for a new one, or add them by @username.':
+    'Questo link amico è incompleto. Chiedine uno nuovo o aggiungi la persona con il suo @nomeutente.',
+  'That sign-up link is for a new account — you already have one.':
+    'Questo link di registrazione è per un nuovo account: ne hai già uno.',
+  'Join this community?': 'Entrare in questa community?',
+  "You've been invited to a River community. Joining shares your River name and avatar with its members.":
+    'Sei stato invitato in una community River. Entrando, i membri vedranno il tuo nome e il tuo avatar di River.',
+  'Not now': 'Non ora',
+  'Join community': 'Entra nella community',
+  'Create your account here?': 'Creare qui il tuo account?',
+  'This link would create your River account on {host}. That server will know your River ID and which devices you use, never your messages. Continue only if you trust whoever sent you this link.':
+    'Questo link creerebbe il tuo account River su {host}. Quel server conoscerà il tuo River ID e i dispositivi che usi, mai i tuoi messaggi. Continua solo se ti fidi di chi ti ha mandato il link.',
+  'This sign-up link is not valid.': 'Questo link di registrazione non è valido.',
+  'Your account is ready': 'Il tuo account è pronto',
+  'Creating…': 'Creazione…',
+  'Create account': 'Crea account',
+  'You need an account first: join or create a community.':
+    'Prima ti serve un account: entra in una community o creane una.',
+  "That's your own friend link.": 'È il tuo link amico.',
+  'Add a friend?': 'Aggiungere un amico?',
+  'This is a River friend link.': 'È un link amico di River.',
+  'You pasted a River ID.': 'Hai incollato un River ID.',
+  'River will send them “{greeting}” as an end-to-end encrypted request.':
+    'River le invierà «{greeting}» come richiesta crittografata end-to-end.',
+  'Setting up your account… The button works as soon as it is ready.':
+    'Configurazione dell’account… Il pulsante funzionerà appena è pronto.',
+  'You are already friends': 'Siete già amici',
+  'Send friend request': 'Invia richiesta di amicizia',
+  Deny: 'Nega',
+  Inherit: 'Eredita',
+  'Inherit from roles': 'Eredita dai ruoli',
+  Allow: 'Consenti',
+  'You can only allow permissions you have yourself': 'Puoi consentire solo i permessi che hai tu',
+  "Thanks — {name}'s moderators will take a look.": 'Grazie: i moderatori di {name} daranno un’occhiata.',
+  'An attachment': 'Un allegato',
+  'What is wrong with it?': 'Cosa c’è che non va?',
+  'Anything to add? (optional)': 'Qualcosa da aggiungere? (facoltativo)',
+  'Only people who moderate messages in {name} see reports — never River or the server operator. They see who reported and a copy of the message, encrypted like everything else here.':
+    'Solo chi modera i messaggi in {name} vede le segnalazioni, mai River o chi gestisce il server. Vedono chi ha segnalato e una copia del messaggio, crittografata come tutto il resto qui.',
+  Report: 'Segnala',
+  Open: 'Aperte',
+  Resolved: 'Risolte',
+  Dismissed: 'Archiviate',
+  'Messages members reported. Each shows the message as the reporter saw it; open the original to check it. Handling a report is recorded in the audit log.':
+    'Messaggi segnalati dai membri. Ognuno mostra il messaggio come l’ha visto chi l’ha segnalato; apri l’originale per controllare. La gestione di una segnalazione viene registrata nel registro attività.',
+  'Which reports': 'Quali segnalazioni',
+  'Open ({count})': 'Aperte ({count})',
+  'Nothing to review. 🎉': 'Niente da controllare. 🎉',
+  'No reports yet.': 'Ancora nessuna segnalazione.',
+  '{reporter} reported {name} in #{channel}': '{reporter} ha segnalato {name} in #{channel}',
+  'Resolved by {name}': 'Risolta da {name}',
+  'Dismissed by {name}': 'Archiviata da {name}',
+  'Open message': 'Apri messaggio',
+  Resolve: 'Risolvi',
+  Reopen: 'Riapri',
+  'You cannot speak in this channel': 'Non puoi parlare in questo canale',
+  'Click to play for everyone · right-click to preview':
+    'Fai clic per riprodurre per tutti · clic destro per l’anteprima',
+  'No sounds yet.': 'Ancora nessun suono.',
+  'Add some': 'Aggiungine',
+  'Sounds can be up to {size} KB.': 'I suoni possono pesare fino a {size} KB.',
+  'Sounds can be up to {seconds} seconds long.': 'I suoni possono durare fino a {seconds} secondi.',
+  'Use an MP3, OGG, WAV or WebM file.': 'Usa un file MP3, OGG, WAV o WebM.',
+  'River could not read that sound.': 'River non è riuscito a leggere il suono.',
+  'Short sounds anyone who may speak can play in voice channels; pick one as your entrance sound. Sounds are end-to-end encrypted. Up to 48, each up to {seconds} seconds.':
+    'Suoni brevi che chiunque possa parlare può riprodurre nei canali vocali; scegline uno come suono d’ingresso. I suoni sono crittografati end-to-end. Fino a 48, ognuno fino a {seconds} secondi.',
+  'Upload sound': 'Carica suono',
+  'Choose an emoji for this sound': 'Scegli un’emoji per questo suono',
+  Preview: 'Anteprima',
+  'Emoji for {name}': 'Emoji per {name}',
+  'New name for {name}': 'Nuovo nome per {name}',
+  'Preview {name}': 'Ascolta {name}',
+  'Plays for everyone when you join a voice channel here':
+    'Suona per tutti quando entri in un canale vocale qui',
+  'Your entrance sound': 'Il tuo suono d’ingresso',
+  'Use as entrance': 'Usa all’ingresso',
+  'Setting up your account and your community…': 'Configurazione dell’account e della community…',
+  '{name} is ready': '{name} è pronta',
+  'Bring your people together': 'Riunisci la tua gente',
+  'Private spaces with text, voice and video — encrypted with a key only members have.':
+    'Spazi privati con testo, voce e video, crittografati con una chiave che hanno solo i membri.',
+  'Got an invite?': 'Hai un invito?',
+  'Invite link': 'Link d’invito',
+  'River sets everything up, including your account.': 'River configura tutto, compreso il tuo account.',
+  'Or start your own': 'Oppure creane una tua',
+  'Community template': 'Modello di community',
+  '{template} channels': 'Canali: {template}',
+  'e.g. The Crew': 'es. La Compagnia',
+  'Server address': 'Indirizzo del server',
+  'Create community': 'Crea community',
+  'Use River’s server': 'Usa il server di River',
+  'Use a different server': 'Usa un altro server',
+  'Back to my communities': 'Torna alle mie community',
+  '[a sticker that is no longer here]': '[uno sticker che non c’è più]',
+  'Sticker: {name}': 'Sticker: {name}',
+  'Search stickers': 'Cerca sticker',
+  'Stickers come from your communities. Join or make one to add stickers.':
+    'Gli sticker arrivano dalle tue community. Entra in una o creane una per aggiungerne.',
+  'No stickers yet. Community admins add them in community settings → Stickers.':
+    'Ancora nessuno sticker. Gli amministratori li aggiungono in Impostazioni della community → Sticker.',
+  'Send sticker {name}': 'Invia lo sticker {name}',
+  'No stickers here yet.': 'Qui non ci sono ancora sticker.',
+  'Big pictures anyone here can send with the 🗒️ button. End-to-end encrypted. Up to 60.':
+    'Immagini grandi che chiunque qui può inviare con il pulsante 🗒️. Crittografate end-to-end. Fino a 60.',
+  'Upload sticker': 'Carica sticker',
+  'River could not make a sticker from that picture (try a smaller one).':
+    'River non è riuscito a creare uno sticker da quell’immagine (provane una più piccola).',
+  'No stickers yet.': 'Ancora nessuno sticker.',
+  'Remove sticker {name}': 'Rimuovi lo sticker {name}',
+
+  'Profile saved': 'Profilo salvato',
+  'Preview of your profile card': 'Anteprima della tua scheda profilo',
+  'Change avatar': 'Cambia avatar',
+  'Display name (optional)': 'Nome visualizzato (facoltativo)',
+  Pronouns: 'Pronomi',
+  'she/her, they/them…': 'lei, lui, loro…',
+  'A little about you': 'Qualcosa su di te',
+  'Banner colour': 'Colore del banner',
+  'No banner colour': 'Nessun colore del banner',
+  'Banner colour {hex}': 'Colore del banner {hex}',
+  'Your profile is encrypted separately for each community you are in; the server only stores ciphertext. About me is also your bio on your social profile.':
+    'Il tuo profilo è crittografato separatamente per ogni community in cui sei; il server conserva solo testo cifrato. «Su di me» è anche la tua bio nel profilo social.',
+  'River ID': 'River ID',
+  '` (backtick)': '` (apice inverso)',
+  'Input device': 'Dispositivo di ingresso',
+  Default: 'Predefinito',
+  Microphone: 'Microfono',
+  'Output device': 'Dispositivo di uscita',
+  Speakers: 'Altoparlanti',
+  "Let's check": 'Proviamo',
+  'Stop testing': 'Interrompi la prova',
+  'Microphone level': 'Livello del microfono',
+  'Input mode': 'Modalità di ingresso',
+  'Voice activity': 'Attività vocale',
+  'Set input sensitivity automatically': 'Imposta la sensibilità automaticamente',
+  'River sends your voice all the time and filters noise. Turn off to choose how loud you must be.':
+    'River invia la tua voce di continuo e filtra il rumore. Disattiva per scegliere quanto forte devi parlare.',
+  'Input sensitivity': 'Sensibilità di ingresso',
+  "Your voice is sent while the meter is past the line (it turns green). Press Let's check to see it.":
+    'La tua voce viene inviata mentre l’indicatore supera la linea (diventa verde). Premi «Proviamo» per vederlo.',
+  Shortcut: 'Scorciatoia',
+  'Press a key…': 'Premi un tasto…',
+  'Push to talk works while the River window is focused.':
+    'Premi per parlare funziona mentre la finestra di River è attiva.',
+  'Voice volume · {percent}%': 'Volume della voce · {percent}%',
+  'How loud everyone sounds in calls and voice channels. Above 100% River boosts the sound and keeps it from distorting.':
+    'Quanto forte si sentono tutti in chiamate e canali vocali. Oltre il 100% River amplifica il suono senza distorcerlo.',
+  'Soundboard volume': 'Volume della soundboard',
+  "How loud other people's soundboard sounds play for you (0 turns them off).":
+    'Quanto forte senti i suoni degli altri (0 li disattiva).',
+  "Leave voice when you're alone": 'Esci dalla voce quando resti da solo',
+  Never: 'Mai',
+  'After 5 minutes': 'Dopo 5 minuti',
+  'After 15 minutes': 'Dopo 15 minuti',
+  'After 30 minutes': 'Dopo 30 minuti',
+  'After an hour': 'Dopo un’ora',
+  'Voice processing': 'Elaborazione della voce',
+  'Noise suppression': 'Soppressione del rumore',
+  'Filters background noise like fans and keyboards.': 'Filtra i rumori di fondo come ventole e tastiere.',
+  'Echo cancellation': 'Cancellazione dell’eco',
+  'Stops others hearing themselves through your speakers.':
+    'Evita che gli altri si sentano attraverso i tuoi altoparlanti.',
+  'Keyboard shortcuts': 'Scorciatoie da tastiera',
+  'Desktop notifications': 'Notifiche desktop',
+  'Shown when River is in the background.': 'Mostrate quando River è in background.',
+  'Banners inside River': 'Banner dentro River',
+  'While River is open, a small banner shows new messages from other chats and channels. Tap it to open the chat. Muted chats stay quiet.':
+    'Con River aperto, un piccolo banner mostra i nuovi messaggi di altre chat e canali. Toccalo per aprire la chat. Le chat silenziate restano mute.',
+  'Unread count on River’s icon': 'Contatore dei non letti sull’icona di River',
+  'The number of unread messages and mentions on River’s taskbar or dock icon (and the iPhone’s app icon). Muted chats are not counted. On Android the launcher shows it from River’s notifications.':
+    'Il numero di messaggi e menzioni non letti sull’icona di River nella barra delle applicazioni o nel Dock (e sull’icona dell’app su iPhone). Le chat silenziate non contano. Su Android lo mostra il launcher dalle notifiche di River.',
+  'Count archived chats': 'Conta le chat archiviate',
+  'Unread messages in archived chats count on the Chats and Home badges and on River’s icon. Off: archived chats wait quietly in Archived. Message requests are never counted.':
+    'I messaggi non letti nelle chat archiviate contano nei badge di Chat e Home e sull’icona di River. Disattivato: le chat archiviate aspettano in silenzio in Archiviate. Le richieste di messaggi non contano mai.',
+  'Reactions to my messages': 'Reazioni ai miei messaggi',
+  'A sound and a small notice when someone reacts to something you wrote (while that channel is loaded).':
+    'Un suono e un piccolo avviso quando qualcuno reagisce a qualcosa che hai scritto (mentre il canale è caricato).',
+  'Notify me about': 'Avvisami per',
+  'All messages': 'Tutti i messaggi',
+  'Only @mentions': 'Solo @menzioni',
+  Sounds: 'Suoni',
+  'Short sounds for messages, voice, calls, friends and the interface.':
+    'Suoni brevi per messaggi, voce, chiamate, amici e interfaccia.',
+  'Sound volume — {percent}%': 'Volume dei suoni — {percent}%',
+  'Play the {sound} sound': 'Riproduci il suono «{sound}»',
+  'Sending, receiving, mentions, direct messages and reactions.':
+    'Invio, ricezione, menzioni, messaggi diretti e reazioni.',
+  Send: 'Invio',
+  Mention: 'Menzione',
+  'Direct message': 'Messaggio diretto',
+  Reaction: 'Reazione',
+  'Voice channels': 'Canali vocali',
+  'Joining, leaving, mute, deafen, push-to-talk and screen sharing.':
+    'Entrata, uscita, microfono spento, audio spento, premi per parlare e condivisione schermo.',
+  'You join': 'Entri tu',
+  'Someone joins': 'Qualcuno entra',
+  'Someone leaves': 'Qualcuno esce',
+  'Go live': 'In diretta',
+  'Push-to-talk': 'Premi per parlare',
+  'Ringing, connected and call ended.': 'Squillo, connessa e chiamata terminata.',
+  Ringing: 'Squillo',
+  Ended: 'Terminata',
+  'Friends and communities': 'Amici e community',
+  'Friend requests, new friends and joining a community.':
+    'Richieste di amicizia, nuovi amici e ingresso in una community.',
+  'Friend request': 'Richiesta di amicizia',
+  'New friend': 'Nuovo amico',
+  'Joined a community': 'Entrato in una community',
+  Interface: 'Interfaccia',
+  'Copied, saved and something went wrong.': 'Copiato, salvato e qualcosa è andato storto.',
+  Done: 'Fatto',
+  Error: 'Errore',
+  'Use Ctrl or Alt with a key (or an F key), so typing never sets it off.':
+    'Usa Ctrl o Alt con un tasto (o un tasto F), così scrivere non lo attiva mai.',
+  '{shortcut} is already used for {action}.': '{shortcut} è già usato per «{action}».',
+  '{action}: {shortcut}. Click to change.': '{action}: {shortcut}. Fai clic per cambiare.',
+  'Press keys…': 'Premi i tasti…',
+  'Restore defaults': 'Ripristina predefiniti',
+  'Shortcuts work while River is focused. Press Esc to stop changing one.':
+    'Le scorciatoie funzionano con River attivo. Premi Esc per smettere di cambiarne una.',
+  'deleted channel': 'canale eliminato',
+  'Let a script or another service post into a channel. It encrypts each post itself with a key that is only in the webhook address, so the server still cannot read it. Anyone with the address can post as the webhook (not read), so keep it secret.':
+    'Permetti a uno script o a un altro servizio di pubblicare in un canale. Cifra ogni post con una chiave presente solo nell’indirizzo del webhook, quindi il server continua a non poterlo leggere. Chiunque abbia l’indirizzo può pubblicare come il webhook (non leggere), quindi tienilo segreto.',
+  'Copy this address now — River will not show it again.':
+    'Copia ora questo indirizzo: River non lo mostrerà più.',
+  Copied: 'Copiato',
+  'Post with {script} from the River repository, or any tool that follows ADR 0004.':
+    'Pubblica con {script} dal repository di River o con qualsiasi strumento che segua l’ADR 0004.',
+  'Webhooks can post only in text channels you manage; there are none here for you.':
+    'I webhook possono pubblicare solo nei canali di testo che gestisci; qui non ce ne sono per te.',
+  'Webhook name': 'Nome del webhook',
+  'Name, e.g. Build bot': 'Nome, es. Bot di build',
+  'Create webhook': 'Crea webhook',
+  'No webhooks yet.': 'Ancora nessun webhook.',
+  'posts in #{channel} · made by {name}': 'pubblica in #{channel} · creato da {name}',
+  'Its address stops working at once; anything using it can no longer post. This cannot be undone.':
+    'Il suo indirizzo smette subito di funzionare; nulla che lo usi potrà più pubblicare. Non si può annullare.',
+  'Delete webhook': 'Elimina webhook',
+
+  'Backup saved. Keep the file and your recovery phrase in different places.':
+    'Backup salvato. Tieni il file e la frase di recupero in posti diversi.',
+  'Backup & recovery': 'Backup e recupero',
+  "If this computer is lost or replaced, a backup file plus your recovery phrase brings back your River ID, contacts, communities, messages and posts. Without the phrase the file is unreadable — to River's server, and to anyone else.":
+    'Se perdi o sostituisci questo computer, un file di backup e la frase di recupero riportano il tuo River ID, contatti, community, messaggi e post. Senza la frase il file è illeggibile, per il server di River e per chiunque altro.',
+  '1. Your recovery phrase': '1. La tua frase di recupero',
+  '18 words. Write them on paper and keep them somewhere safe. Anyone with these words and a backup file can become you; River will never ask you for them.':
+    '18 parole. Scrivile su carta e tienile al sicuro. Chiunque abbia queste parole e un file di backup può diventare te; River non te le chiederà mai.',
+  'Recovery phrase': 'Frase di recupero',
+  'Hide phrase': 'Nascondi frase',
+  'Show recovery phrase': 'Mostra frase di recupero',
+  'Create my recovery phrase': 'Crea la mia frase di recupero',
+  '2. Save a backup file': '2. Salva un file di backup',
+  'Last backup: {time}. Make a new one now and then — it only contains what existed when you made it.':
+    'Ultimo backup: {time}. Fanne uno nuovo ogni tanto: contiene solo ciò che esisteva quando l’hai creato.',
+  'You have no backup yet.': 'Non hai ancora un backup.',
+  'Show your recovery phrase (step 1) and write it down first — without it, a backup can never be opened.':
+    'Mostra prima la frase di recupero (passo 1) e scrivila: senza di essa un backup non si può mai aprire.',
+  'Save encrypted backup…': 'Salva backup crittografato…',
+  'To restore: install River on the new computer and choose {restore} on the first screen. Files you received are referenced by the backup, not copied into it; recent ones can still be downloaded.':
+    'Per ripristinare: installa River sul nuovo computer e scegli {restore} nella prima schermata. I file ricevuti sono collegati dal backup, non copiati al suo interno; quelli recenti si possono ancora scaricare.',
+  'Backup file (.riverbackup)': 'File di backup (.riverbackup)',
+  'Recovery phrase (18 words)': 'Frase di recupero (18 parole)',
+  'Restoring…': 'Ripristino…',
+  Restore: 'Ripristina',
+  'Setting up your public address (one-time download, {percent}%)…':
+    'Configurazione del tuo indirizzo pubblico (download una tantum, {percent}%)…',
+  'Starting…': 'Avvio…',
+  'Online — members can reach your communities': 'Online: i membri possono raggiungere le tue community',
+  'today at {time}': 'oggi alle {time}',
+  'Checking…': 'Verifica…',
+  'Keep my communities online from this PC': 'Tieni online le mie community da questo PC',
+  'Free, and no account anywhere. River runs your community server and gives it a public address. Your communities live on this PC: nothing is deleted when it restarts, and River backs them up every day.':
+    'Gratis e senza account da nessuna parte. River esegue il tuo server delle community e gli dà un indirizzo pubblico. Le tue community vivono su questo PC: al riavvio non si cancella nulla e River ne fa il backup ogni giorno.',
+  'Host communities on this PC': 'Ospita community su questo PC',
+  'Stop hosting?': 'Interrompere l’hosting?',
+  'Members can’t reach the communities on this PC until you turn hosting back on. Nothing is deleted.':
+    'I membri non raggiungeranno le community su questo PC finché non riattivi l’hosting. Non si cancella nulla.',
+  'Stop hosting': 'Interrompi hosting',
+  'Keep hosting': 'Continua l’hosting',
+  'River Host, the separate host from River 1.0.8, is set up on this PC and running. Turning this on moves your community into River — same members, same messages — and removes River Host. Its folder stays as a backup.':
+    'River Host, l’host separato di River 1.0.8, è configurato su questo PC ed è attivo. Attivando questa opzione la tua community passa in River (stessi membri, stessi messaggi) e River Host viene rimosso. La sua cartella resta come backup.',
+  'River Host, the separate host from River 1.0.8, is set up on this PC. Turning this on moves your community into River — same members, same messages — and removes River Host. Its folder stays as a backup.':
+    'River Host, l’host separato di River 1.0.8, è configurato su questo PC. Attivando questa opzione la tua community passa in River (stessi membri, stessi messaggi) e River Host viene rimosso. La sua cartella resta come backup.',
+  'Download progress': 'Avanzamento del download',
+  'Copy address': 'Copia indirizzo',
+  'Permanent address, free through Tailscale. It never changes, and members stay connected.':
+    'Indirizzo permanente, gratis tramite Tailscale. Non cambia mai e i membri restano connessi.',
+  'This address changes every so often. Members’ River apps find the new one by themselves.':
+    'Questo indirizzo cambia ogni tanto. Le app River dei membri trovano da sole quello nuovo.',
+  'Address announcements are off, so members need the new address after a restart.':
+    'Gli annunci dell’indirizzo sono disattivati, quindi dopo un riavvio i membri hanno bisogno del nuovo indirizzo.',
+  'Last backup {when}': 'Ultimo backup {when}',
+  'No backup yet': 'Ancora nessun backup',
+  'Backing up…': 'Backup in corso…',
+  'Back up now': 'Fai il backup ora',
+  'Open hosting folder': 'Apri cartella dell’hosting',
+  'Keep this PC awake while hosting': 'Tieni sveglio questo PC durante l’hosting',
+  'Stops the PC from going to sleep by itself so members can always reach you. The screen can still turn off.':
+    'Impedisce al PC di andare in sospensione da solo, così i membri ti raggiungono sempre. Lo schermo può comunque spegnersi.',
+  'While hosting is on, River keeps running in the tray when you close the window. It does not start by itself when you sign in to Linux: open River after restarting this PC.':
+    'Con l’hosting attivo, River resta nell’area di notifica quando chiudi la finestra. Non si avvia da solo all’accesso a Linux: apri River dopo aver riavviato il PC.',
+  'While hosting is on, River starts with your PC and keeps running in the tray when you close the window.':
+    'Con l’hosting attivo, River si avvia con il PC e resta nell’area di notifica quando chiudi la finestra.',
+  'Members can always open River and write: if this PC is off, their messages wait on their devices and arrive when it is back.':
+    'I membri possono sempre aprire River e scrivere: se il PC è spento, i loro messaggi aspettano sui loro dispositivi e arrivano quando torna.',
+  'One last step: allow your permanent address': 'Ultimo passo: consenti il tuo indirizzo permanente',
+  'Tailscale asks you once to allow a public address for this PC.':
+    'Tailscale ti chiede una sola volta di consentire un indirizzo pubblico per questo PC.',
+  'Allow in Tailscale': 'Consenti in Tailscale',
+  'Your permanent address is not working yet': 'Il tuo indirizzo permanente non funziona ancora',
+  'Members still reach you at the changing address above; River tries the permanent one again every few minutes. In Tailscale, check that Funnel and HTTPS are allowed for this PC.':
+    'I membri ti raggiungono ancora all’indirizzo variabile qui sopra; River riprova quello permanente ogni pochi minuti. In Tailscale, controlla che Funnel e HTTPS siano consentiti per questo PC.',
+  'Try again now': 'Riprova ora',
+  'Switching to your permanent address…': 'Passaggio al tuo indirizzo permanente…',
+  'Tailscale is signed in. This can take a minute the first time.':
+    'Tailscale ha effettuato l’accesso. La prima volta può richiedere un minuto.',
+  'Get a permanent address — free': 'Ottieni un indirizzo permanente, gratis',
+  'Calls and chats stay connected, and your invite links always work. Only this PC needs it; members install nothing extra.':
+    'Chiamate e chat restano connesse e i tuoi link d’invito funzionano sempre. Serve solo a questo PC; i membri non installano nulla in più.',
+  'Install Tailscale (free).': 'Installa Tailscale (gratis).',
+  'Download Tailscale': 'Scarica Tailscale',
+  'Open Tailscale and sign in — Google, Microsoft or GitHub all work.':
+    'Apri Tailscale e accedi: vanno bene Google, Microsoft o GitHub.',
+  "That's it: River switches over by itself.": 'Ecco fatto: River passa da solo.',
+  'I did it — check now': 'Fatto: controlla ora',
+  "Hi! Let's be friends on River 👋": 'Ciao! Diventiamo amici su River 👋',
+  '{name} is already your friend — here is your chat.': '{name} è già tuo amico: ecco la vostra chat.',
+  'This person is already your friend — here is your chat.':
+    'Questa persona è già tua amica: ecco la vostra chat.',
+  'You already sent {name} a friend request. It waits for their answer.':
+    'Hai già inviato a {name} una richiesta di amicizia. Aspetta la sua risposta.',
+  'You already sent them a friend request. It waits for their answer.':
+    'Le hai già inviato una richiesta di amicizia. Aspetta la sua risposta.',
+  'You are now friends with {name}': 'Ora sei amico di {name}',
+  'You are now friends': 'Ora siete amici',
+  'You blocked {name}. Unblock them in Messages first.': 'Hai bloccato {name}. Prima sbloccalo in Messaggi.',
+  'You blocked this person. Unblock them in Messages first.':
+    'Hai bloccato questa persona. Prima sbloccala in Messaggi.',
+  'Could not send the request. Try again.': 'Non è stato possibile inviare la richiesta. Riprova.',
+
+  'River user {id}': 'Utente River {id}',
+  'That did not work.': 'Non ha funzionato.',
+  'Your River server': 'Il tuo server River',
+  'Everyone who uses River through your server, and every community on it. The server never sees messages or names; names show for people you share a community or a conversation with.':
+    'Tutti quelli che usano River tramite il tuo server e ogni community su di esso. Il server non vede mai messaggi o nomi; i nomi compaiono per le persone con cui condividi una community o una conversazione.',
+  'Online now': 'Online ora',
+  'Timed out or banned': 'In timeout o bannati',
+  'Search people': 'Cerca persone',
+  'Search by name or ID': 'Cerca per nome o ID',
+  'Nobody matches.': 'Nessuno corrisponde.',
+  Banned: 'Bannato',
+  'Joined {date}': 'Iscritto il {date}',
+  'Reason: {reason}': 'Motivo: {reason}',
+  Unban: 'Rimuovi ban',
+  'Time out {name}': 'Metti in timeout {name}',
+  'Time out…': 'Timeout…',
+  'No communities yet.': 'Ancora nessuna community.',
+  'A community you are not in': 'Una community di cui non fai parte',
+  'Owner {name}': 'Proprietario: {name}',
+  'created {date}': 'creata il {date}',
+  'Ban {name}?': 'Bannare {name}?',
+  'Remove {name}?': 'Rimuovere {name}?',
+  'Delete {name}?': 'Eliminare {name}?',
+  'They are signed out at once and cannot use River on your server until you unban them. Nothing is deleted.':
+    'Viene disconnesso subito e non può usare River sul tuo server finché non togli il ban. Non si cancella nulla.',
+  'Their account leaves your server: they are removed from every community, communities they own are deleted, and they would need to create a new account. Messages they already sent stay.':
+    'Il suo account lascia il tuo server: viene rimosso da ogni community, quelle di sua proprietà vengono eliminate e dovrebbe creare un nuovo account. I messaggi già inviati restano.',
+  'Reason (optional, shown to them)': 'Motivo (facoltativo, gli viene mostrato)',
+  'Remove account': 'Rimuovi account',
+  'That did not work. Try again.': 'Non ha funzionato. Riprova.',
+  'Accounts you create': 'Account che crei',
+  'Invite-only: only people you make a sign-up link for can join.':
+    'Solo su invito: può entrare solo chi riceve da te un link di registrazione.',
+  'Open: anyone who downloads River can create an account here.':
+    'Aperto: chiunque scarichi River può creare un account qui.',
+  'Allow anyone to join': 'Consenti a chiunque di entrare',
+  'Make invite-only': 'Rendi solo su invito',
+  'Username for the new account': 'Nome utente del nuovo account',
+  'Send this link to @{username} — they open it in River and the account is theirs:':
+    'Invia questo link a @{username}: lo apre in River e l’account è suo:',
+  'Could not copy the link. Select it and copy it yourself.':
+    'Impossibile copiare il link. Selezionalo e copialo tu.',
+  'Waiting to be claimed:': 'In attesa di essere riscattati:',
+  Images: 'Immagini',
+  Videos: 'Video',
+  Documents: 'Documenti',
+  'Your files': 'I tuoi file',
+  'Everything shared with you in messages and posts. Each file is encrypted with its own key and only decrypted on this computer when you open or save it.':
+    'Tutto ciò che è stato condiviso con te in messaggi e post. Ogni file è crittografato con una chiave propria e viene decifrato su questo computer solo quando lo apri o lo salvi.',
+  'Files appear here once you have an account and share something.':
+    'I file compaiono qui quando hai un account e condividi qualcosa.',
+  'File type': 'Tipo di file',
+  'Search by name or person': 'Cerca per nome o persona',
+  'No files yet.': 'Ancora nessun file.',
+  'Show in chat': 'Mostra nella chat',
+  'Your people': 'La tua gente',
+  'Setting up your account… River keeps trying by itself, and friends can be added as soon as it is ready.':
+    'Configurazione dell’account… River continua a provare da solo e potrai aggiungere amici appena è pronto.',
+  'Your account needs the sign-up link from whoever runs your River server — paste it in the card above.':
+    'Il tuo account ha bisogno del link di registrazione di chi gestisce il tuo server River: incollalo nella scheda qui sopra.',
+  'Friends need an account on a River server. Join or create a community first — it only takes a moment.':
+    'Per gli amici serve un account su un server River. Prima entra in una community o creane una: ci vuole un attimo.',
+  'Go to Communities': 'Vai alle community',
+  Pending: 'In attesa',
+  'River never uploads an address book. Add people with a link, or from a community.':
+    'River non carica mai una rubrica. Aggiungi persone con un link o da una community.',
+  'Search friends': 'Cerca amici',
+  'All friends': 'Tutti gli amici',
+  Requests: 'Richieste',
+  'No friends are online right now.': 'Al momento nessun amico è online.',
+  'No friends yet.': 'Ancora nessun amico.',
+  'No friend requests right now.': 'Al momento nessuna richiesta di amicizia.',
+  "You haven't blocked anyone.": 'Non hai bloccato nessuno.',
+  'Request sent — waiting for them to accept': 'Richiesta inviata: in attesa che la accetti',
+  'Safety number verified': 'Numero di sicurezza verificato',
+  'Safety number changed': 'Numero di sicurezza cambiato',
+  'Open chat': 'Apri chat',
+  'Cancel request': 'Annulla richiesta',
+  'Voice call': 'Chiamata vocale',
+  Accept: 'Accetta',
+  'Read message': 'Leggi messaggio',
+  Ignore: 'Ignora',
+  Unblock: 'Sblocca',
+  "That's you!": 'Sei tu!',
+  'That QR code is not a River friend code.': 'Questo codice QR non è un codice amico di River.',
+  "That's your own code.": 'È il tuo codice.',
+  'Type their username — like @alex. They get your message as a request.':
+    'Scrivi il suo nome utente, tipo @alex. Riceverà il tuo messaggio come richiesta.',
+  "Friend's username": 'Nome utente dell’amico',
+  'Scan QR code': 'Scansiona codice QR',
+  "Scan a friend's QR code": 'Scansiona il codice QR di un amico',
+  'Point the camera at the QR code in their River: Friends → Add friend → Show QR code.':
+    'Inquadra il codice QR nel suo River: Amici → Aggiungi amico → Mostra codice QR.',
+  'You are @{username}': 'Sei @{username}',
+  'You are on River': 'Sei su River',
+  'Share your username and people can add you. Or send them your link.':
+    'Condividi il tuo nome utente e potranno aggiungerti. Oppure invia il tuo link.',
+  'Choose a username in Settings → Account so people can add you by name. You can still share your link.':
+    'Scegli un nome utente in Impostazioni → Account così possono aggiungerti per nome. Puoi comunque condividere il tuo link.',
+  'Copy friend link': 'Copia link amico',
+  'Hide QR code': 'Nascondi codice QR',
+  'Show QR code': 'Mostra codice QR',
+  'Your friend link as a QR code': 'Il tuo link amico come codice QR',
+  'Your friend scans this in River to send you a friend request.':
+    'Il tuo amico lo scansiona in River per inviarti una richiesta di amicizia.',
+  'Join me in {community}: {link}': 'Unisciti a me in {community}: {link}',
+  'Invite to {community} sent to {name}': 'Invito a {community} inviato a {name}',
+  'Invite {name} to a community': 'Invita {name} in una community',
+  'Invited to {community}': 'Invitato in {community}',
+  'Invite to a community': 'Invita in una community',
+  'River Security Center': 'Centro sicurezza di River',
+  'What is protected, right now': 'Cosa è protetto, adesso',
+  'This page only shows what this version of River actually does. Features that are not built yet are marked as planned, never as active.':
+    'Questa pagina mostra solo ciò che questa versione di River fa davvero. Le funzioni non ancora pronte sono indicate come previste, mai come attive.',
+  'Your identity': 'La tua identità',
+  'Read these words to a contact (in person or on a call) and ask them to compare with what River shows for you. If they match, nobody has swapped your key. To check a contact, open your conversation with them and choose View safety number; once you mark it verified, River warns you and stops sending if it ever changes.':
+    'Leggi queste parole a un contatto (di persona o in chiamata) e chiedigli di confrontarle con ciò che River mostra per te. Se corrispondono, nessuno ha sostituito la tua chiave. Per verificare un contatto, apri la vostra conversazione e scegli «Vedi il numero di sicurezza»; una volta segnato come verificato, River ti avvisa e smette di inviare se cambia.',
+  'Security status': 'Stato della sicurezza',
+  'Release signing keys': 'Chiavi di firma delle release',
+  'Updates are installed only when signed by one of these keys, which are built into this copy of River.':
+    'Gli aggiornamenti vengono installati solo se firmati da una di queste chiavi, integrate in questa copia di River.',
+  'Honest limits': 'Limiti onesti',
+  'River is not an anonymity network and cannot hide that you use it.':
+    'River non è una rete di anonimato e non può nascondere che lo usi.',
+  'Malware on an unlocked device can read anything you can.':
+    'Un malware su un dispositivo sbloccato può leggere tutto ciò che puoi leggere tu.',
+  'People you message can always screenshot or forward what you send.':
+    'Le persone a cui scrivi possono sempre fare screenshot o inoltrare ciò che invii.',
+  'River has not had an independent security audit yet.':
+    'River non ha ancora avuto un audit di sicurezza indipendente.',
+  'Threat model': 'Modello delle minacce',
+  'Privacy policy': 'Informativa sulla privacy',
+  'Report a vulnerability': 'Segnala una vulnerabilità',
+  'Share with your people': 'Condividi con la tua gente',
+  'Posts and stories go only to people you choose, end-to-end encrypted. Join a community or create an account first.':
+    'Post e storie arrivano solo alle persone che scegli, crittografati end-to-end. Prima entra in una community o crea un account.',
+  'Your friends are the people you have accepted in Messages.':
+    'I tuoi amici sono le persone che hai accettato in Messaggi.',
+  'Friends — {count}': 'Amici — {count}',
+  'Share something with your friends…': 'Condividi qualcosa con i tuoi amici…',
+  'Nothing here yet': 'Qui non c’è ancora niente',
+  'Posts from your contacts appear here. Add people in Messages (or from a community) and share your first post — only the people you choose can see it.':
+    'Qui compaiono i post dei tuoi contatti. Aggiungi persone in Messaggi (o da una community) e condividi il tuo primo post: lo vedranno solo le persone che scegli.',
+  Stories: 'Storie',
+  'Your story': 'La tua storia',
+  'Add to your story': 'Aggiungi alla tua storia',
+  'View your profile': 'Vedi il tuo profilo',
+  'Encrypting photos…': 'Crittografia delle foto…',
+  'Sharing…': 'Condivisione…',
+  'Added to your story': 'Aggiunto alla tua storia',
+  Shared: 'Condiviso',
+  'Could not share.': 'Impossibile condividere.',
+  'Create post': 'Crea post',
+  'Say something (shown for 24 hours)…': 'Scrivi qualcosa (visibile per 24 ore)…',
+  'What do you want to share?': 'Cosa vuoi condividere?',
+  'Photos & videos': 'Foto e video',
+  'Add photos or videos': 'Aggiungi foto o video',
+  'Who can see this': 'Chi può vederlo',
+  'All friends ({count})': 'Tutti gli amici ({count})',
+  'Only people I choose': 'Solo le persone che scelgo',
+  "Encrypted separately for each person who can see it. River's server only relays ciphertext.":
+    'Crittografato separatamente per ogni persona che può vederlo. Il server di River inoltra solo testo cifrato.',
+  'Share to story': 'Condividi nella storia',
+  Post: 'Pubblica',
+  'Post options': 'Opzioni del post',
+  'Delete post': 'Elimina post',
+  'It will be removed for everyone you shared it with.':
+    'Verrà rimosso per tutti quelli con cui l’hai condiviso.',
+  Unlike: 'Non mi piace più',
+  Like: 'Mi piace',
+  React: 'Reagisci',
+  'Add a comment…': 'Aggiungi un commento…',
+  'Add a comment': 'Aggiungi un commento',
+  "{name}'s story": 'Storia di {name}',
+  'Close story': 'Chiudi storia',
+  'This story could not be loaded.': 'Impossibile caricare questa storia.',
+  'Video story': 'Storia video',
+  Previous: 'Precedente',
+  Next: 'Successiva',
+  'Seen by {count}': 'Vista da {count}',
+  'Replied to your story: {text}': 'Ha risposto alla tua storia: {text}',
+  'Sent to {name}': 'Inviato a {name}',
+  'Reply to {name}…': 'Rispondi a {name}…',
+  'Reply to {name}': 'Rispondi a {name}',
+  'Bio saved': 'Bio salvata',
+  'Your bio': 'La tua bio',
+  'Add a short bio.': 'Aggiungi una breve bio.',
+  'Edit bio': 'Modifica bio',
+  Close: 'Chiudi',
+  'No posts yet.': 'Ancora nessun post.',
+
+  'River — share your screen': 'River — condividi lo schermo',
+  'Share your screen?': 'Condividere lo schermo?',
+  'People in this call will see “{source}” until you press Stop sharing on the red bar at the top of that screen.':
+    'Le persone nella chiamata vedranno «{source}» finché non premi Interrompi condivisione sulla barra rossa in cima a quello schermo.',
+  Share: 'Condividi',
+  'Automatic updates are disabled in development builds.':
+    'Gli aggiornamenti automatici sono disattivati nelle build di sviluppo.',
+  'Keep River running': 'Lascia River in esecuzione',
+  'Quit anyway': 'Esci comunque',
+  'Quit River?': 'Uscire da River?',
+  'Your communities go offline while River is closed.':
+    'Le tue community vanno offline finché River è chiuso.',
+  'This PC hosts them. Members can still open River and write; their messages are sent when River runs here again.':
+    'Questo PC le ospita. I membri possono comunque aprire River e scrivere; i loro messaggi partono quando River torna attivo qui.',
+  'River — hosting your communities': 'River — ospita le tue community',
+  'River — starting hosting…': 'River — avvio dell’hosting…',
+  'Open River': 'Apri River',
+  'Hosting: online': 'Hosting: online',
+  'Hosting: connecting…': 'Hosting: connessione…',
+  'Quit River': 'Esci da River',
+  'River is still running': 'River è ancora attivo',
+  'Calls and messages keep coming in. Quit from the River icon in the tray.':
+    'Chiamate e messaggi continuano ad arrivare. Esci dall’icona di River nell’area di notifica.',
+  "River's window keeps closing": 'La finestra di River continua a chiudersi',
+  'The interface stopped {times} times ({reason}). Try again, or quit and start River with --disable-gpu. The log is in {folder}.':
+    'L’interfaccia si è fermata {times} volte ({reason}). Riprova, oppure esci e avvia River con --disable-gpu. Il registro è in {folder}.',
+  'An update was downloaded but its signature did not verify, so it was not installed. Your current version is unchanged.':
+    'È stato scaricato un aggiornamento, ma la firma non è stata verificata, quindi non è stato installato. La tua versione attuale non cambia.',
+  'Could not reach the update server. River will try again later.':
+    'Impossibile raggiungere il server degli aggiornamenti. River riproverà più tardi.',
+  'Checking for updates failed. River will try again later.':
+    'Il controllo degli aggiornamenti non è riuscito. River riproverà più tardi.',
+  'The update download failed. River will try again later.':
+    'Il download dell’aggiornamento non è riuscito. River riproverà più tardi.',
+  'The update could not be completed. Your current version is unchanged.':
+    'Non è stato possibile completare l’aggiornamento. La tua versione attuale non cambia.',
+  'Keep them': 'Tienili',
+  '90 days': '90 giorni',
+  '1 year': '1 anno',
+  'Keep messages on this device': 'Conserva i messaggi su questo dispositivo',
+  'Disappearing messages for new chats': 'Messaggi a scomparsa per le nuove chat',
+  'Direct and group messages older than you choose are deleted from this device. The people you talk to, and your other devices, keep their own copies. Community channels live on their server and are not affected. Chats you start from now on get the disappearing-messages timer; chats you already have keep theirs.':
+    'I messaggi diretti e di gruppo più vecchi di quanto scegli vengono eliminati da questo dispositivo. Le persone con cui parli e gli altri tuoi dispositivi conservano le proprie copie. I canali delle community vivono sul loro server e non sono interessati. Le chat che inizi da ora ricevono il timer dei messaggi a scomparsa; quelle che hai già mantengono il loro.',
+  Test: 'Test',
+  'Connect through a proxy (Tor)': 'Connetti tramite un proxy (Tor)',
+  'On: River connects to its server only through {kind} proxy {address}.':
+    'Attivo: River si connette al suo server solo tramite il proxy {kind} {address}.',
+  'Off: River connects to its server directly.': 'Disattivo: River si connette direttamente al suo server.',
+  'What it hides: your IP address from your River server (and from the address relay and GitHub’s update checks). What it does not hide: your account, who you talk to and when — the server still sees that, and your messages were already end-to-end encrypted. While it is on, calls never connect directly: voice goes through a TURN relay or your server, so the people you call do not see your address either, and video or screen sharing work only if your server offers a TURN relay. Link previews are off. If the proxy stops, River does not connect at all — it never falls back to a direct connection. A server on this computer, and hosting from this PC, do not use the proxy. Computers only for now.':
+    'Cosa nasconde: il tuo indirizzo IP al tuo server River (e al relay degli indirizzi e ai controlli degli aggiornamenti di GitHub). Cosa non nasconde: il tuo account, con chi parli e quando: il server lo vede comunque, e i tuoi messaggi erano già crittografati end-to-end. Finché è attivo, le chiamate non si connettono mai direttamente: la voce passa da un relay TURN o dal tuo server, quindi nemmeno chi chiami vede il tuo indirizzo, e video o condivisione schermo funzionano solo se il tuo server offre un relay TURN. Le anteprime dei link sono disattivate. Se il proxy si ferma, River non si connette affatto: non ripiega mai su una connessione diretta. Un server su questo computer e l’hosting da questo PC non usano il proxy. Per ora solo su computer.',
+  Type: 'Tipo',
+  Address: 'Indirizzo',
+  Port: 'Porta',
+  'Testing…': 'Prova in corso…',
+  'Test connection': 'Prova la connessione',
+  'Turn on': 'Attiva',
+  'Turn off': 'Disattiva',
+  'Preparing…': 'Preparazione…',
+  'Link this device again': 'Ricollega questo dispositivo',
+  'Setting up…': 'Configurazione…',
+  'Set up my account again': 'Configura di nuovo il mio account',
+  'On a device that still has your account, open Settings → Account → Devices → Link a new device, then use its code here.':
+    'Su un dispositivo che ha ancora il tuo account, apri Impostazioni → Account → Dispositivi → Collega un nuovo dispositivo, poi usa qui il suo codice.',
+  'Set up again: a new account for your identity — same name and messages here; rejoin communities with an invite. Link again: if this device was removed, join your account from a device that still has it.':
+    'Configura di nuovo: un nuovo account per la tua identità, stesso nome e messaggi qui; rientra nelle community con un invito. Ricollega: se questo dispositivo è stato rimosso, uniscilo al tuo account da un dispositivo che ce l’ha ancora.',
+  'Link this device again?': 'Ricollegare questo dispositivo?',
+  'River forgets the account and identity on this device, then you link it again with a code from a device that still has your account. Your messages and contacts on this device stay, and only work again with the same account.':
+    'River dimentica account e identità su questo dispositivo, poi lo ricolleghi con un codice da un dispositivo che ha ancora il tuo account. Messaggi e contatti su questo dispositivo restano e funzionano di nuovo solo con lo stesso account.',
+  Continue: 'Continua',
+  'Your data': 'I tuoi dati',
+  'Save a readable copy (JSON) of what this device keeps: your profile, settings, contacts, direct messages, groups, calls, your posts and saved messages. It never contains your keys. Keep it somewhere safe — it is not encrypted.':
+    'Salva una copia leggibile (JSON) di ciò che conserva questo dispositivo: profilo, impostazioni, contatti, messaggi diretti, gruppi, chiamate, post e messaggi salvati. Non contiene mai le tue chiavi. Tienila al sicuro: non è crittografata.',
+  'Export my data': 'Esporta i miei dati',
+  'Your account was deleted.': 'Il tuo account è stato eliminato.',
+  'Delete account': 'Elimina account',
+  'Removes your account from your server for good: you leave every community (communities you own are deleted), and your keys and devices are removed there. Messages you already sent stay where they are, encrypted. Your identity and the messages on this device stay on this device.':
+    'Rimuove per sempre il tuo account dal server: esci da tutte le community (quelle tue vengono eliminate) e lì vengono rimossi chiavi e dispositivi. I messaggi già inviati restano dove sono, crittografati. La tua identità e i messaggi su questo dispositivo restano qui.',
+  'Delete account…': 'Elimina account…',
+  'Delete your account?': 'Eliminare il tuo account?',
+  'This cannot be undone. Type DELETE to confirm.': 'Non si può annullare. Scrivi DELETE per confermare.',
+  Confirmation: 'Conferma',
+  'Keep my account': 'Mantieni il mio account',
+  'Deleting…': 'Eliminazione…',
+  Server: 'Server',
+  'River uses a server to deliver encrypted messages between devices. Anyone can run one. The server never receives your keys or readable messages.':
+    'River usa un server per consegnare messaggi crittografati tra dispositivi. Chiunque può gestirne uno. Il server non riceve mai le tue chiavi né messaggi leggibili.',
+  'Must start with https:// (http:// is allowed only for a server on this computer).':
+    'Deve iniziare con https:// (http:// è consentito solo per un server su questo computer).',
+  'Remove server': 'Rimuovi server',
+  'River server reachable': 'Server River raggiungibile',
+  'Server {version} · protocol {protocol} · compatible':
+    'Server {version} · protocollo {protocol} · compatibile',
+  'Connection failed': 'Connessione non riuscita',
+  'Testing sends one anonymous request for the server’s version — nothing about you.':
+    'La prova invia una sola richiesta anonima per la versione del server: nulla su di te.',
+  'Create your account on {host}': 'Crea il tuo account su {host}',
+  'River registers your River ID, your public identity key and a new key for this device. No phone number, e-mail or name is sent. Your display name stays on this computer.':
+    'River registra il tuo River ID, la tua chiave d’identità pubblica e una nuova chiave per questo dispositivo. Non vengono inviati numero di telefono, email o nome. Il nome visualizzato resta su questo computer.',
+  'Creating account…': 'Creazione dell’account…',
+  'Anyone with it can ask to join; you let each person in':
+    'Chiunque lo abbia può chiedere di entrare; fai entrare tu ogni persona',
+  'Enter a full address, like https://river.example.org':
+    'Inserisci un indirizzo completo, come https://river.example.org',
+  'The server address must start with https://': 'L’indirizzo del server deve iniziare con https://',
+  'The address must not contain a password, query or #fragment':
+    'L’indirizzo non deve contenere password, query o #frammento',
+  'Enter a host name or address, like 127.0.0.1': 'Inserisci un nome host o un indirizzo, come 127.0.0.1',
+  'Hosting runs on a computer. Phones join communities hosted elsewhere.':
+    'L’hosting funziona su un computer. I telefoni entrano in community ospitate altrove.',
+  'River on iPhone cannot update itself: iOS only lets you install a new version by sideloading its IPA again. Get it from the download page.':
+    'River su iPhone non può aggiornarsi da solo: iOS permette di installare una nuova versione solo reinstallandone l’IPA in sideloading. Scaricala dalla pagina di download.',
+  'River {version} is signed with a different key than the River installed on this phone (early Android builds were signed with one-off preview keys), so Android cannot install it as an update. To get it, uninstall River and install the new version from the download page. Uninstalling deletes River’s data on this phone — your identity, messages and settings — unless you make a backup first in Settings → Backup.':
+    'River {version} è firmato con una chiave diversa da quella del River installato su questo telefono (le prime build Android erano firmate con chiavi di anteprima monouso), quindi Android non può installarlo come aggiornamento. Per averlo, disinstalla River e installa la nuova versione dalla pagina di download. La disinstallazione elimina i dati di River su questo telefono (identità, messaggi e impostazioni), a meno che prima tu non faccia un backup in Impostazioni → Backup.',
+  'River found an update whose signature did not verify, so it was not downloaded. Your current version is unchanged.':
+    'River ha trovato un aggiornamento la cui firma non è stata verificata, quindi non è stato scaricato. La tua versione attuale non cambia.',
+  'An update was downloaded but did not match River’s signed release, so it was not installed. Your current version is unchanged.':
+    'È stato scaricato un aggiornamento che non corrispondeva alla release firmata di River, quindi non è stato installato. La tua versione attuale non cambia.',
+  'The newest River release has no download for this phone’s processor. Your current version is unchanged.':
+    'L’ultima release di River non ha un download per il processore di questo telefono. La tua versione attuale non cambia.',
+  'Android did not install the update ({reason}). Your current version is unchanged.':
+    'Android non ha installato l’aggiornamento ({reason}). La tua versione attuale non cambia.',
+  'Android did not install the update. Your current version is unchanged.':
+    'Android non ha installato l’aggiornamento. La tua versione attuale non cambia.',
+
   // Counted texts (many: millions)
   'Back, {count} unread': { one: 'Indietro, {count} da leggere', other: 'Indietro, {count} da leggere' },
   'Group call · {group} ({count} people)': {
@@ -661,4 +2019,84 @@ export const IT: Dictionary = {
   '{tab}, {count} mentions': { one: '{tab}, {count} menzione', other: '{tab}, {count} menzioni' },
   '{tab}, {count} missed': { one: '{tab}, {count} persa', other: '{tab}, {count} perse' },
   '{tab}, {count} unread': { one: '{tab}, {count} da leggere', other: '{tab}, {count} da leggere' },
+  'Gave {role} to {done} of {count} members.': {
+    one: '{role} assegnato a {done} membro su {count}.',
+    many: '{role} assegnato a {done} membri su {count}.',
+    other: '{role} assegnato a {done} membri su {count}.',
+  },
+  'Took {role} from {done} of {count} members.': {
+    one: '{role} tolto a {done} membro su {count}.',
+    many: '{role} tolto a {done} membri su {count}.',
+    other: '{role} tolto a {done} membri su {count}.',
+  },
+  'Copied {count} entries.': {
+    one: 'Copiata {count} voce.',
+    many: 'Copiate {count} di voci.',
+    other: 'Copiate {count} voci.',
+  },
+  '{count} synced channels follow these permissions. Channels with their own permissions keep them.': {
+    one: '{count} canale sincronizzato segue questi permessi. I canali con permessi propri li mantengono.',
+    many: '{count} di canali sincronizzati seguono questi permessi. I canali con permessi propri li mantengono.',
+    other:
+      '{count} canali sincronizzati seguono questi permessi. I canali con permessi propri li mantengono.',
+  },
+  '{count} people': { one: '{count} persona', many: '{count} di persone', other: '{count} persone' },
+  'last {count} days': {
+    one: 'ultimo {count} giorno',
+    many: 'ultimi {count} di giorni',
+    other: 'ultimi {count} giorni',
+  },
+  'messages, last {count} days': {
+    one: 'messaggi, ultimo {count} giorno',
+    many: 'messaggi, ultimi {count} di giorni',
+    other: 'messaggi, ultimi {count} giorni',
+  },
+  '{count} days': { one: '{count} giorno', many: '{count} di giorni', other: '{count} giorni' },
+  'Messages per day over the last {count} days': {
+    one: 'Messaggi al giorno nell’ultimo {count} giorno',
+    many: 'Messaggi al giorno negli ultimi {count} di giorni',
+    other: 'Messaggi al giorno negli ultimi {count} giorni',
+  },
+  '{count} weeks ago': {
+    one: '{count} settimana fa',
+    many: '{count} di settimane fa',
+    other: '{count} settimane fa',
+  },
+  '{count} communities': {
+    one: '{count} community',
+    many: '{count} di community',
+    other: '{count} community',
+  },
+  '{count} devices': {
+    one: '{count} dispositivo',
+    many: '{count} di dispositivi',
+    other: '{count} dispositivi',
+  },
+  '{count} channels': { one: '{count} canale', many: '{count} di canali', other: '{count} canali' },
+  'The community, its channels and its messages are deleted for all {count} members. This cannot be undone.':
+    {
+      one: 'La community, i suoi canali e i messaggi vengono eliminati per il suo {count} membro. Non si può annullare.',
+      many: 'La community, i suoi canali e i messaggi vengono eliminati per tutti i {count} di membri. Non si può annullare.',
+      other:
+        'La community, i suoi canali e i messaggi vengono eliminati per tutti i {count} membri. Non si può annullare.',
+    },
+  '{count} mutual communities': {
+    one: '{count} community in comune',
+    many: '{count} di community in comune',
+    other: '{count} community in comune',
+  },
+  'shared with {count} people': {
+    one: 'condiviso con {count} persona',
+    many: 'condiviso con {count} di persone',
+    other: 'condiviso con {count} persone',
+  },
+  'View all {count} comments': {
+    one: 'Vedi {count} commento',
+    many: 'Vedi tutti i {count} di commenti',
+    other: 'Vedi tutti i {count} commenti',
+  },
+  '{count} weeks': { one: '{count} settimana', many: '{count} di settimane', other: '{count} settimane' },
+  '{count} hours': { one: '{count} ora', many: '{count} di ore', other: '{count} ore' },
+  '{count} minutes': { one: '{count} minuto', many: '{count} di minuti', other: '{count} minuti' },
+  '{count} seconds': { one: '{count} secondo', many: '{count} di secondi', other: '{count} secondi' },
 };

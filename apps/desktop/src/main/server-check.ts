@@ -8,13 +8,14 @@ import {
 import { serverUrlSchema } from '../shared/settings.ts';
 import type { ServerCheckResult } from '../shared/ipc.ts';
 import type { FetchBytes } from './http.ts';
+import { msg } from '../shared/i18n/index.ts';
 
 const MAX_VERSION_BYTES = 16 * 1024;
 
 const COMPATIBILITY_MESSAGE: Record<Compatibility, string> = {
-  compatible: 'Compatible',
-  'client-too-old': 'This server needs a newer version of River. Update River to use it.',
-  'server-too-old': 'This server runs an older River protocol than this app supports.',
+  compatible: msg('Compatible'),
+  'client-too-old': msg('This server needs a newer version of River. Update River to use it.'),
+  'server-too-old': msg('This server runs an older River protocol than this app supports.'),
 };
 
 /**
@@ -27,7 +28,7 @@ export async function checkServer(rawUrl: unknown, fetchBytes: FetchBytes): Prom
     return {
       ok: false,
       reason: 'invalid-url',
-      message: parsedUrl.error.issues[0]?.message ?? 'Invalid address',
+      message: parsedUrl.error.issues[0]?.message ?? msg('Invalid address'),
     };
   }
   const url = parsedUrl.data;
@@ -38,13 +39,13 @@ export async function checkServer(rawUrl: unknown, fetchBytes: FetchBytes): Prom
   } catch (err) {
     const message = (err as Error).message ?? '';
     if (/too large/.test(message))
-      return { ok: false, reason: 'not-river', message: 'That address is not a River server.' };
+      return { ok: false, reason: 'not-river', message: msg('That address is not a River server.') };
     if (/HTTP \d+/.test(message))
-      return { ok: false, reason: 'not-river', message: 'That address is not a River server.' };
+      return { ok: false, reason: 'not-river', message: msg('That address is not a River server.') };
     return {
       ok: false,
       reason: 'unreachable',
-      message: 'Could not reach the server. Check the address and your connection.',
+      message: msg('Could not reach the server. Check the address and your connection.'),
     };
   }
 
@@ -52,7 +53,7 @@ export async function checkServer(rawUrl: unknown, fetchBytes: FetchBytes): Prom
   try {
     info = versionResponseSchema.parse(JSON.parse(Buffer.from(bytes).toString('utf8')));
   } catch {
-    return { ok: false, reason: 'not-river', message: 'That address is not a River server.' };
+    return { ok: false, reason: 'not-river', message: msg('That address is not a River server.') };
   }
 
   const compatibility = checkCompatibility(info.protocol);

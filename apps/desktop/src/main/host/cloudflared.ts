@@ -12,6 +12,7 @@ import {
 } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { join } from 'node:path';
+import { msg } from '../../shared/i18n/index.ts';
 
 /**
  * cloudflared opens the public address for a community hosted on this PC
@@ -118,7 +119,7 @@ export async function ensureCloudflared(o: EnsureOptions): Promise<string> {
   if (digest !== asset.sha256) {
     rmSync(part, { force: true });
     throw new TunnelToolError(
-      'The downloaded cloudflared did not match the expected fingerprint, so River did not use it.',
+      msg('The downloaded cloudflared did not match the expected fingerprint, so River did not use it.'),
     );
   }
   if (asset.archive) {
@@ -146,7 +147,8 @@ async function download(
   const res = await fetchImpl(url, { redirect: 'follow', signal: AbortSignal.timeout(10 * 60_000) });
   if (!res.ok || !res.body) throw new TunnelToolError(`Could not download cloudflared (HTTP ${res.status}).`);
   const declared = Number(res.headers.get('content-length') ?? 0);
-  if (declared > MAX_BYTES) throw new TunnelToolError('The cloudflared download is larger than expected.');
+  if (declared > MAX_BYTES)
+    throw new TunnelToolError(msg('The cloudflared download is larger than expected.'));
   const hash = createHash('sha256');
   const file = await open(to, 'w');
   let total = 0;
@@ -158,7 +160,7 @@ async function download(
       total += value.byteLength;
       if (total > MAX_BYTES) {
         await reader.cancel();
-        throw new TunnelToolError('The cloudflared download is larger than expected.');
+        throw new TunnelToolError(msg('The cloudflared download is larger than expected.'));
       }
       hash.update(value);
       await file.write(value);
@@ -197,7 +199,7 @@ function systemUntar(archive: string, into: string): Promise<void> {
     const child = spawn('/usr/bin/tar', ['-xzf', archive, '-C', into], { stdio: 'ignore' });
     child.on('error', reject);
     child.on('exit', (code) =>
-      code === 0 ? resolve() : reject(new TunnelToolError('Could not unpack cloudflared.')),
+      code === 0 ? resolve() : reject(new TunnelToolError(msg('Could not unpack cloudflared.'))),
     );
   });
 }

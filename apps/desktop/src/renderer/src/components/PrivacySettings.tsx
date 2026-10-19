@@ -1,6 +1,6 @@
 import { useState, type ReactElement } from 'react';
 import type { DiagnosticCheck } from '../../../shared/ipc.ts';
-import { TIMER_CHOICES, timerLabel } from '../../../shared/dm.ts';
+import { TIMER_CHOICES } from '../../../shared/dm.ts';
 import {
   HISTORY_DAY_CHOICES,
   proxySettingsSchema,
@@ -8,14 +8,16 @@ import {
   type Settings,
 } from '../../../shared/settings.ts';
 import { useRiver } from '../store.ts';
+import { msg, tr } from '../i18n.ts';
+import { timerText } from '../time.ts';
 
 const DAYS_LABEL: Record<number, string> = {
-  0: 'Keep them',
-  1: '1 day',
-  7: '1 week',
-  30: '30 days',
-  90: '90 days',
-  365: '1 year',
+  0: msg('Keep them'),
+  1: msg('1 day'),
+  7: msg('1 week'),
+  30: msg('30 days'),
+  90: msg('90 days'),
+  365: msg('1 year'),
 };
 
 /**
@@ -29,37 +31,36 @@ export function PrivacySettings({ settings, phone }: { settings: Settings; phone
     <>
       <div className="two-col">
         <label className="textfield">
-          <span className="field__label">Keep messages on this device</span>
+          <span className="field__label">{tr('Keep messages on this device')}</span>
           <select
             value={privacy.historyDays}
             onChange={(e) => void updateSettings({ privacy: { historyDays: Number(e.target.value) } })}
           >
             {HISTORY_DAY_CHOICES.map((d) => (
               <option key={d} value={d}>
-                {DAYS_LABEL[d]}
+                {tr(DAYS_LABEL[d] ?? '')}
               </option>
             ))}
           </select>
         </label>
         <label className="textfield">
-          <span className="field__label">Disappearing messages for new chats</span>
+          <span className="field__label">{tr('Disappearing messages for new chats')}</span>
           <select
             value={privacy.newChatTimer}
             onChange={(e) => void updateSettings({ privacy: { newChatTimer: Number(e.target.value) } })}
           >
             {TIMER_CHOICES.map((t) => (
               <option key={t} value={t}>
-                {timerLabel(t)}
+                {timerText(t)}
               </option>
             ))}
           </select>
         </label>
       </div>
       <p className="muted small">
-        Direct and group messages older than you choose are deleted from this device. The people you talk to,
-        and your other devices, keep their own copies. Community channels live on their server and are not
-        affected. Chats you start from now on get the disappearing-messages timer; chats you already have keep
-        theirs.
+        {tr(
+          'Direct and group messages older than you choose are deleted from this device. The people you talk to, and your other devices, keep their own copies. Community channels live on their server and are not affected. Chats you start from now on get the disappearing-messages timer; chats you already have keep theirs.',
+        )}
       </p>
       {!phone && <ProxySettingsPanel current={privacy.proxy} />}
     </>
@@ -80,7 +81,7 @@ function ProxySettingsPanel({ current }: { current: ProxySettings }): ReactEleme
   const parsed = (): ProxySettings | null => {
     const result = proxySettingsSchema.safeParse({ ...draft, port: Number(portText) });
     if (result.success) return result.data;
-    setError(result.error.issues[0]?.message ?? 'Check the address and port');
+    setError(tr(result.error.issues[0]?.message ?? 'Check the address and port'));
     return null;
   };
   const save = async (mode: ProxySettings['mode']): Promise<void> => {
@@ -97,7 +98,7 @@ function ProxySettingsPanel({ current }: { current: ProxySettings }): ReactEleme
     try {
       setChecks(await window.river.privacy.checkProxy(proxy));
     } catch (err) {
-      setChecks([{ id: 'error', label: 'Test', status: 'fail', detail: (err as Error).message }]);
+      setChecks([{ id: 'error', label: tr('Test'), status: 'fail', detail: (err as Error).message }]);
     } finally {
       setBusy(false);
     }
@@ -111,21 +112,20 @@ function ProxySettingsPanel({ current }: { current: ProxySettings }): ReactEleme
   return (
     <section className="field" aria-labelledby="proxy-title">
       <h3 id="proxy-title" className="field__label">
-        Connect through a proxy (Tor)
+        {tr('Connect through a proxy (Tor)')}
       </h3>
       <p className="muted small" role="status">
         {on
-          ? `On: River connects to its server only through ${current.mode === 'socks5' ? 'SOCKS5' : 'HTTP'} proxy ${current.host}:${current.port}.`
-          : 'Off: River connects to its server directly.'}
+          ? tr('On: River connects to its server only through {kind} proxy {address}.', {
+              kind: current.mode === 'socks5' ? 'SOCKS5' : 'HTTP',
+              address: `${current.host}:${current.port}`,
+            })
+          : tr('Off: River connects to its server directly.')}
       </p>
       <p className="muted small">
-        What it hides: your IP address from your River server (and from the address relay and GitHub’s update
-        checks). What it does not hide: your account, who you talk to and when — the server still sees that,
-        and your messages were already end-to-end encrypted. While it is on, calls never connect directly:
-        voice goes through a TURN relay or your server, so the people you call do not see your address either,
-        and video or screen sharing work only if your server offers a TURN relay. Link previews are off. If
-        the proxy stops, River does not connect at all — it never falls back to a direct connection. A server
-        on this computer, and hosting from this PC, do not use the proxy. Computers only for now.
+        {tr(
+          'What it hides: your IP address from your River server (and from the address relay and GitHub’s update checks). What it does not hide: your account, who you talk to and when — the server still sees that, and your messages were already end-to-end encrypted. While it is on, calls never connect directly: voice goes through a TURN relay or your server, so the people you call do not see your address either, and video or screen sharing work only if your server offers a TURN relay. Link previews are off. If the proxy stops, River does not connect at all — it never falls back to a direct connection. A server on this computer, and hosting from this PC, do not use the proxy. Computers only for now.',
+        )}
       </p>
       <div className="linkrow">
         <button className="btn btn--ghost btn--small" onClick={() => preset(9050)}>
@@ -137,7 +137,7 @@ function ProxySettingsPanel({ current }: { current: ProxySettings }): ReactEleme
       </div>
       <div className="two-col">
         <label className="textfield">
-          <span className="field__label">Type</span>
+          <span className="field__label">{tr('Type')}</span>
           <select
             value={draft.mode}
             onChange={(e) => setDraft({ ...draft, mode: e.target.value as ProxySettings['mode'] })}
@@ -147,7 +147,7 @@ function ProxySettingsPanel({ current }: { current: ProxySettings }): ReactEleme
           </select>
         </label>
         <label className="textfield">
-          <span className="field__label">Address</span>
+          <span className="field__label">{tr('Address')}</span>
           <input
             value={draft.host}
             onChange={(e) => setDraft({ ...draft, host: e.target.value })}
@@ -157,7 +157,7 @@ function ProxySettingsPanel({ current }: { current: ProxySettings }): ReactEleme
           />
         </label>
         <label className="textfield">
-          <span className="field__label">Port</span>
+          <span className="field__label">{tr('Port')}</span>
           <input
             value={portText}
             inputMode="numeric"
@@ -173,14 +173,14 @@ function ProxySettingsPanel({ current }: { current: ProxySettings }): ReactEleme
       )}
       <div className="linkrow">
         <button className="btn" onClick={() => void test()} disabled={busy}>
-          {busy ? 'Testing…' : 'Test connection'}
+          {busy ? tr('Testing…') : tr('Test connection')}
         </button>
         <button className="btn btn--primary" onClick={() => void save(draft.mode)}>
-          {on ? 'Save' : 'Turn on'}
+          {on ? tr('Save') : tr('Turn on')}
         </button>
         {on && (
           <button className="btn btn--ghost" onClick={() => void save('off')}>
-            Turn off
+            {tr('Turn off')}
           </button>
         )}
       </div>

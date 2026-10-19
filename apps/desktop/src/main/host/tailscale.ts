@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { msg } from '../../shared/i18n/index.ts';
 
 /**
  * A permanent public address for a server hosted on this PC, free, through
@@ -122,7 +123,7 @@ export function tailscaleFunnel(opts: {
     },
     async open(localUrl, onApproval) {
       const bin = binary();
-      if (!bin) throw new Error('Tailscale is not installed.');
+      if (!bin) throw new Error(msg('Tailscale is not installed.'));
       // --bg: Tailscale keeps serving by itself (also after River restarts); --yes: no prompts.
       const res = await run(bin, ['funnel', '--bg', '--yes', '--https=443', localUrl], {
         timeoutMs: APPROVAL_WAIT_MS,

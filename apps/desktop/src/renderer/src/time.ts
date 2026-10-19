@@ -98,3 +98,13 @@ export function fullWhen(when: string | number | Date): string {
     ...(h12 === undefined ? {} : { hour12: h12 }),
   });
 }
+
+/** A disappearing-message time ("1 week", "5 minutes") in River's language (shared timerLabel is English). */
+export function timerText(seconds: number): string {
+  if (!seconds) return tr('Off');
+  if (seconds % 604_800 === 0) return trn('{count} weeks', seconds / 604_800);
+  if (seconds % 86_400 === 0) return trn('{count} days', seconds / 86_400);
+  if (seconds % 3600 === 0) return trn('{count} hours', seconds / 3600);
+  if (seconds % 60 === 0) return trn('{count} minutes', seconds / 60);
+  return trn('{count} seconds', seconds);
+}

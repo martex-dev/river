@@ -3,6 +3,7 @@ import { ExternalIcon } from '../components/Icons.tsx';
 import { IdentityFingerprint } from '../components/IdentityFingerprint.tsx';
 import { StatusDot } from '../components/StatusDot.tsx';
 import { useRiver } from '../store.ts';
+import { tr } from '../i18n.ts';
 
 /** Groups a hex key ID like "626db4cbb389fc32" as "626D B4CB B389 FC32". */
 export function groupHex(hex: string): string {
@@ -16,11 +17,12 @@ export function SecurityPage(): ReactElement {
   return (
     <div className="page security">
       <header className="page__header">
-        <div className="eyebrow">River Security Center</div>
-        <h1 className="page__title">What is protected, right now</h1>
+        <div className="eyebrow">{tr('River Security Center')}</div>
+        <h1 className="page__title">{tr('What is protected, right now')}</h1>
         <p className="page__lead">
-          This page only shows what this version of River actually does. Features that are not built yet are
-          marked as planned, never as active.
+          {tr(
+            'This page only shows what this version of River actually does. Features that are not built yet are marked as planned, never as active.',
+          )}
         </p>
       </header>
 
@@ -28,23 +30,23 @@ export function SecurityPage(): ReactElement {
         <section className="glass card identity-card" aria-labelledby="identity-title">
           <div className="card__head">
             <h2 id="identity-title" className="card__title">
-              Your identity{identity.displayName ? ` · ${identity.displayName}` : ''}
+              {tr('Your identity')}
+              {identity.displayName ? ` · ${identity.displayName}` : ''}
             </h2>
-            <span className="muted small mono" title="River ID">
+            <span className="muted small mono" title={tr('River ID')}>
               {identity.riverId}
             </span>
           </div>
           <p className="muted small">
-            Read these words to a contact (in person or on a call) and ask them to compare with what River
-            shows for you. If they match, nobody has swapped your key. To check a contact, open your
-            conversation with them and choose View safety number; once you mark it verified, River warns you
-            and stops sending if it ever changes.
+            {tr(
+              'Read these words to a contact (in person or on a call) and ask them to compare with what River shows for you. If they match, nobody has swapped your key. To check a contact, open your conversation with them and choose View safety number; once you mark it verified, River warns you and stops sending if it ever changes.',
+            )}
           </p>
           <IdentityFingerprint identity={identity} />
         </section>
       )}
 
-      <section className="glass board" aria-label="Security status">
+      <section className="glass board" aria-label={tr('Security status')}>
         {(security?.items ?? []).map((item) => (
           <details key={item.id} className="board__row">
             <summary>
@@ -62,11 +64,12 @@ export function SecurityPage(): ReactElement {
       <div className="security__grid">
         <section className="glass card" aria-labelledby="keys-title">
           <h2 id="keys-title" className="card__title">
-            Release signing keys
+            {tr('Release signing keys')}
           </h2>
           <p className="muted small">
-            Updates are installed only when signed by one of these keys, which are built into this copy of
-            River.
+            {tr(
+              'Updates are installed only when signed by one of these keys, which are built into this copy of River.',
+            )}
           </p>
           <ul className="keylist">
             {(security?.releaseKeys ?? []).map((k) => (
@@ -79,23 +82,23 @@ export function SecurityPage(): ReactElement {
         </section>
         <section className="glass card" aria-labelledby="limits-title">
           <h2 id="limits-title" className="card__title">
-            Honest limits
+            {tr('Honest limits')}
           </h2>
           <ul className="plainlist muted">
-            <li>River is not an anonymity network and cannot hide that you use it.</li>
-            <li>Malware on an unlocked device can read anything you can.</li>
-            <li>People you message can always screenshot or forward what you send.</li>
-            <li>River has not had an independent security audit yet.</li>
+            <li>{tr('River is not an anonymity network and cannot hide that you use it.')}</li>
+            <li>{tr('Malware on an unlocked device can read anything you can.')}</li>
+            <li>{tr('People you message can always screenshot or forward what you send.')}</li>
+            <li>{tr('River has not had an independent security audit yet.')}</li>
           </ul>
           <div className="linkrow">
             <button className="btn btn--link" onClick={() => void window.river.links.open('threatModel')}>
-              Threat model <ExternalIcon size={14} />
+              {tr('Threat model')} <ExternalIcon size={14} />
             </button>
             <button className="btn btn--link" onClick={() => void window.river.links.open('privacy')}>
-              Privacy policy <ExternalIcon size={14} />
+              {tr('Privacy policy')} <ExternalIcon size={14} />
             </button>
             <button className="btn btn--link" onClick={() => void window.river.links.open('security')}>
-              Report a vulnerability <ExternalIcon size={14} />
+              {tr('Report a vulnerability')} <ExternalIcon size={14} />
             </button>
           </div>
         </section>

@@ -111,6 +111,7 @@ import {
   seal,
   sealBound,
 } from './sealed.ts';
+import { msg } from '../../shared/i18n/index.ts';
 
 /** The shape WebRTC expects for STUN/TURN servers. */
 export interface RTCIceServerLike {
@@ -210,14 +211,14 @@ export function readCustomStatus(
 
 const AVATAR_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+=*$/;
 
-const NOT_FOUND_TEXT = 'That no longer exists.';
+const NOT_FOUND_TEXT = msg('That no longer exists.');
 
 /** Server error codes turned into messages people understand. */
 function explain(err: unknown): never {
   if (err instanceof ApiError) {
     if (err.code === 'forbidden')
       throw new CommunityError(err.message || 'You do not have permission to do that.');
-    if (err.code === 'banned') throw new CommunityError('You are banned from this community.');
+    if (err.code === 'banned') throw new CommunityError(msg('You are banned from this community.'));
     if (err.code === 'mailbox_full' || err.code === 'quota_exceeded') throw new CommunityError(err.message);
     if (err.code === 'not_found') throw new CommunityError(NOT_FOUND_TEXT);
     if (err.status === 400 && err.message && err.message !== 'Bad request')
@@ -459,14 +460,14 @@ export class CommunityService {
 
   private server(): string {
     const s = this.deps.account.status();
-    if (s.state !== 'registered') throw new CommunityError('Create an account first.');
+    if (s.state !== 'registered') throw new CommunityError(msg('Create an account first.'));
     return s.serverUrl;
   }
 
   /** The address for links other people open (never this PC's 127.0.0.1). */
   private shareServer(): string {
     const s = this.deps.account.status();
-    if (s.state !== 'registered') throw new CommunityError('Create an account first.');
+    if (s.state !== 'registered') throw new CommunityError(msg('Create an account first.'));
     return s.shareUrl;
   }
 
@@ -476,7 +477,7 @@ export class CommunityService {
       await this.deps.account.connect();
       token = this.deps.account.sessionToken();
     }
-    if (!token) throw new CommunityError("You're offline. River will reconnect by itself.");
+    if (!token) throw new CommunityError(msg("You're offline. River will reconnect by itself."));
     return token;
   }
 
@@ -1008,7 +1009,7 @@ export class CommunityService {
 
   private db(): LocalDatabase {
     const db = this.deps.db();
-    if (!db) throw new CommunityError('River is locked.');
+    if (!db) throw new CommunityError(msg('River is locked.'));
     return db;
   }
 
@@ -1760,7 +1761,7 @@ export class CommunityService {
    */
   async join(rawLink: unknown, ensureAccount: (serverUrl: string) => Promise<void>): Promise<CommunityView> {
     const invite = typeof rawLink === 'string' ? parseInvite(rawLink) : null;
-    if (!invite) throw new CommunityError('That is not a valid River invite link.');
+    if (!invite) throw new CommunityError(msg('That is not a valid River invite link.'));
     if (this.deps.account.status().state === 'none') await ensureAccount(invite.serverUrl);
     const account = this.deps.account.status();
     // A server on a home PC changes address when the PC restarts, so an invite may name an old
@@ -1780,8 +1781,8 @@ export class CommunityService {
       if (err instanceof ApiError && err.code === 'invalid_invite') {
         throw new CommunityError(
           elsewhere
-            ? 'This invite is for a different River server than the one your account is on.'
-            : 'This invite has expired or was already used too many times.',
+            ? msg('This invite is for a different River server than the one your account is on.')
+            : msg('This invite has expired or was already used too many times.'),
         );
       }
       throw err;
@@ -1793,7 +1794,7 @@ export class CommunityService {
         epoch = open<{ epoch: number }>(invite.key, res.id, 'invite', res.inviteCheck).epoch;
       else open(invite.key, res.id, 'meta', res.meta);
     } catch {
-      throw new CommunityError('This invite link is damaged: its key does not match the community.');
+      throw new CommunityError(msg('This invite link is damaged: its key does not match the community.'));
     }
     if (!Number.isInteger(epoch) || epoch < 0) epoch = 0;
     // The community ID comes from the server, not from the link. A community this device already
@@ -2605,9 +2606,9 @@ export class CommunityService {
           break;
         }
         if (!p.mime.startsWith('image/'))
-          throw new CommunityError('Only pictures and GIFs can be favourites.');
+          throw new CommunityError(msg('Only pictures and GIFs can be favourites.'));
         if (p.size > MAX_FAVORITE_BYTES)
-          throw new CommunityError('That file is too large to keep as a favourite.');
+          throw new CommunityError(msg('That file is too large to keep as a favourite.'));
         const count = (this.db().prepare('SELECT COUNT(*) AS n FROM favorite_media').get() as { n: number })
           .n;
         if (count >= MAX_FAVORITE_MEDIA)
@@ -2647,7 +2648,7 @@ export class CommunityService {
       case 'favoriteMediaBytes': {
         const row = this.db().prepare('SELECT bytes FROM favorite_media WHERE id = ?').get(act.id) as
           { bytes: Uint8Array } | undefined;
-        if (!row) throw new CommunityError('That favourite is gone.');
+        if (!row) throw new CommunityError(msg('That favourite is gone.'));
         return new Uint8Array(row.bytes) as CommunityActionResult<A>;
       }
       case 'sendFavorite': {
@@ -2656,7 +2657,7 @@ export class CommunityService {
           .get(act.id) as
           | { name: string; mime: string; width: number | null; height: number | null; bytes: Uint8Array }
           | undefined;
-        if (!row) throw new CommunityError('That favourite is gone.');
+        if (!row) throw new CommunityError(msg('That favourite is gone.'));
         // A fresh encrypted copy for this message: attachments are never shared between messages.
         const pointer = await this.upload({
           name: row.name,
@@ -2674,8 +2675,10 @@ export class CommunityService {
         // Never re-seal from what is shown: an edit made without the original body would drop
         // its files, reply, descriptions, tags, preview and sticker (and ping again).
         if (!original?.sealed || !original.chat.mine || !ring)
-          throw new CommunityError('River could not find that message to edit. Scroll to it and try again.');
-        if (original.chat.poll) throw new CommunityError('Polls cannot be edited.');
+          throw new CommunityError(
+            msg('River could not find that message to edit. Scroll to it and try again.'),
+          );
+        if (original.chat.poll) throw new CommunityError(msg('Polls cannot be edited.'));
         // The message's own key: its reactions are tagged with it and must keep matching.
         const opened = ring.openBoundWith<Record<string, unknown>>(
           communityId,
@@ -2843,7 +2846,7 @@ export class CommunityService {
         return (await this.sounds(act.communityId)) as CommunityActionResult<A>;
       case 'stickers': {
         const ring = this.keys.get(act.communityId);
-        if (!ring) throw new CommunityError('Waiting for the community key…');
+        if (!ring) throw new CommunityError(msg('Waiting for the community key…'));
         const res = await this.call(
           `/communities/${act.communityId}/stickers`,
           'GET',
@@ -2884,7 +2887,7 @@ export class CommunityService {
         break;
       case 'notes': {
         const ring = this.keys.get(act.communityId);
-        if (!ring) throw new CommunityError('Waiting for the community key…');
+        if (!ring) throw new CommunityError(msg('Waiting for the community key…'));
         const community = this.requireCommunity(act.communityId);
         const res = await this.call(
           `/communities/${act.communityId}/members/${act.riverId}/notes`,
@@ -2946,7 +2949,7 @@ export class CommunityService {
       }
       case 'updateSound': {
         const sound = (await this.sounds(act.communityId)).find((x) => x.id === act.soundId);
-        if (!sound) throw new CommunityError('That sound no longer exists.');
+        if (!sound) throw new CommunityError(msg('That sound no longer exists.'));
         const data = seal(this.requireKey(act.communityId), act.communityId, `sound:${act.soundId}`, {
           name: act.name ?? sound.name,
           emoji: act.emoji !== undefined ? act.emoji : sound.emoji,
@@ -2983,7 +2986,7 @@ export class CommunityService {
           break;
         }
         const m = (await this.findMessage(act.channelId, act.messageId))?.chat;
-        if (!m) throw new CommunityError('That message is no longer here.');
+        if (!m) throw new CommunityError(msg('That message is no longer here.'));
         this.db()
           .prepare(
             `INSERT INTO saved_messages (message_id, community_id, channel_id, sender_name, text, sent_at, saved_at)
@@ -3020,7 +3023,7 @@ export class CommunityService {
       case 'renameEmoji': {
         const existing = await this.emojis(act.communityId);
         const emoji = existing.find((e) => e.id === act.emojiId);
-        if (!emoji) throw new CommunityError('That emoji no longer exists.');
+        if (!emoji) throw new CommunityError(msg('That emoji no longer exists.'));
         if (existing.some((e) => e.id !== act.emojiId && e.name.toLowerCase() === act.name.toLowerCase()))
           throw new CommunityError(`There is already an emoji called :${act.name}:.`);
         const data = seal(this.requireKey(act.communityId), act.communityId, `emoji:${act.emojiId}`, {
@@ -3055,7 +3058,7 @@ export class CommunityService {
       }
       case 'updateEvent': {
         const current = [...this.eventCache.values()].flat().find((e) => e.id === act.eventId);
-        if (!current) throw new CommunityError('That event no longer exists.');
+        if (!current) throw new CommunityError(msg('That event no longer exists.'));
         const contentChanged =
           act.name !== undefined || act.description !== undefined || act.place !== undefined;
         await this.call(
@@ -3221,7 +3224,7 @@ export class CommunityService {
         size: pointer.size,
       });
     } catch {
-      throw new CommunityError('This file failed its integrity check and was not opened.');
+      throw new CommunityError(msg('This file failed its integrity check and was not opened.'));
     }
     const copy = new Uint8Array(plain);
     // Another download of the same file may have finished meanwhile: count it once.
@@ -3348,7 +3351,7 @@ export class CommunityService {
   }
 
   private requireBytes(): RequestBytes {
-    if (!this.deps.requestBytes) throw new CommunityError('Attachments are not available.');
+    if (!this.deps.requestBytes) throw new CommunityError(msg('Attachments are not available.'));
     return this.deps.requestBytes;
   }
 
@@ -3424,7 +3427,7 @@ export class CommunityService {
       ? signSignal({ communityId, channelId, from: signer.riverId, to }, payload, (m) => signer.sign(m))
       : payload;
     const data = seal(this.requireKey(communityId), communityId, `signal:${channelId}`, body);
-    if (data.length > 30_000) throw new CommunityError('Signal too large');
+    if (data.length > 30_000) throw new CommunityError(msg('Signal too large'));
     const event = { t: 'signal', to: z.uuid().parse(to), data };
     if (this.socketState === 'online' && this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(event));
@@ -3517,7 +3520,7 @@ export class CommunityService {
 
   async emojis(communityId: string): Promise<EmojiView[]> {
     const ring = this.keys.get(communityId);
-    if (!ring) throw new CommunityError('Waiting for the community key…');
+    if (!ring) throw new CommunityError(msg('Waiting for the community key…'));
     const res = await this.call(`/communities/${communityId}/emojis`, 'GET', undefined, emojisResponseSchema);
     return res.emojis.flatMap((e): EmojiView[] => {
       try {
@@ -3537,7 +3540,7 @@ export class CommunityService {
 
   async sounds(communityId: string): Promise<SoundView[]> {
     const ring = this.keys.get(communityId);
-    if (!ring) throw new CommunityError('Waiting for the community key…');
+    if (!ring) throw new CommunityError(msg('Waiting for the community key…'));
     const res = await this.call(`/communities/${communityId}/sounds`, 'GET', undefined, soundsResponseSchema);
     return res.sounds.flatMap((x): SoundView[] => {
       try {
@@ -3561,7 +3564,7 @@ export class CommunityService {
 
   async reports(communityId: string): Promise<ReportView[]> {
     const ring = this.keys.get(communityId);
-    if (!ring) throw new CommunityError('Waiting for the community key…');
+    if (!ring) throw new CommunityError(msg('Waiting for the community key…'));
     const community = this.requireCommunity(communityId);
     const name = (id: string | null): string =>
       id ? (community.members.find((m) => m.riverId === id)?.name ?? 'Someone who left') : '';
@@ -3606,7 +3609,7 @@ export class CommunityService {
 
   async events(communityId: string): Promise<EventView[]> {
     const ring = this.keys.get(communityId);
-    if (!ring) throw new CommunityError('Waiting for the community key…');
+    if (!ring) throw new CommunityError(msg('Waiting for the community key…'));
     const res = await this.call(`/communities/${communityId}/events`, 'GET', undefined, eventsResponseSchema);
     const views = res.events.flatMap((e): EventView[] => {
       try {
@@ -4070,7 +4073,8 @@ export class CommunityService {
   }
 
   private sendEvent(event: unknown): void {
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) throw new CommunityError("You're offline");
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN)
+      throw new CommunityError(msg("You're offline"));
     this.socket.send(JSON.stringify(event));
   }
 
@@ -4103,13 +4107,13 @@ export class CommunityService {
 
   private communityOf(channelId: string): string {
     const communityId = this.channelToCommunity.get(channelId);
-    if (!communityId) throw new CommunityError('Unknown channel');
+    if (!communityId) throw new CommunityError(msg('Unknown channel'));
     return communityId;
   }
 
   private requireCommunity(communityId: string): CommunityView {
     const c = this.communities.find((x) => x.id === communityId);
-    if (!c) throw new CommunityError('Unknown community');
+    if (!c) throw new CommunityError(msg('Unknown community'));
     return c;
   }
 
@@ -4121,7 +4125,7 @@ export class CommunityService {
   private requireRing(communityId: string): KeyRing {
     if (!this.keys.has(communityId)) this.loadKeys();
     const ring = this.keys.get(communityId);
-    if (!ring) throw new CommunityError('Unknown community');
+    if (!ring) throw new CommunityError(msg('Unknown community'));
     return ring;
   }
 

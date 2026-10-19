@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react';
+import { rich, tr } from '../i18n.ts';
 
 /** Settings → Backup: recovery phrase and encrypted backup files. */
 export function BackupPanel(): ReactElement {
@@ -23,7 +24,7 @@ export function BackupPanel(): ReactElement {
       if (!res.ok) setMessage({ text: res.message, ok: false });
       else if (res.value)
         setMessage({
-          text: 'Backup saved. Keep the file and your recovery phrase in different places.',
+          text: tr('Backup saved. Keep the file and your recovery phrase in different places.'),
           ok: true,
         });
     } finally {
@@ -36,22 +37,23 @@ export function BackupPanel(): ReactElement {
 
   return (
     <div className="panel">
-      <h2 className="panel__title">Backup & recovery</h2>
+      <h2 className="panel__title">{tr('Backup & recovery')}</h2>
       <p className="muted">
-        If this computer is lost or replaced, a backup file plus your recovery phrase brings back your River
-        ID, contacts, communities, messages and posts. Without the phrase the file is unreadable — to River's
-        server, and to anyone else.
+        {tr(
+          "If this computer is lost or replaced, a backup file plus your recovery phrase brings back your River ID, contacts, communities, messages and posts. Without the phrase the file is unreadable — to River's server, and to anyone else.",
+        )}
       </p>
 
       <div className="backup-step">
-        <h3 className="card__title">1. Your recovery phrase</h3>
+        <h3 className="card__title">{tr('1. Your recovery phrase')}</h3>
         <p className="muted small">
-          18 words. Write them on paper and keep them somewhere safe. Anyone with these words and a backup
-          file can become you; River will never ask you for them.
+          {tr(
+            '18 words. Write them on paper and keep them somewhere safe. Anyone with these words and a backup file can become you; River will never ask you for them.',
+          )}
         </p>
         {phrase ? (
           <>
-            <ol className="phrase" aria-label="Recovery phrase">
+            <ol className="phrase" aria-label={tr('Recovery phrase')}>
               {phrase.map((w, i) => (
                 <li key={i}>
                   <span className="phrase__n">{i + 1}</span>
@@ -60,7 +62,7 @@ export function BackupPanel(): ReactElement {
               ))}
             </ol>
             <button className="btn btn--ghost btn--small" onClick={() => setPhrase(null)}>
-              Hide phrase
+              {tr('Hide phrase')}
             </button>
           </>
         ) : (
@@ -73,22 +75,26 @@ export function BackupPanel(): ReactElement {
               })
             }
           >
-            {status?.hasPhrase ? 'Show recovery phrase' : 'Create my recovery phrase'}
+            {status?.hasPhrase ? tr('Show recovery phrase') : tr('Create my recovery phrase')}
           </button>
         )}
       </div>
 
       <div className="backup-step">
-        <h3 className="card__title">2. Save a backup file</h3>
+        <h3 className="card__title">{tr('2. Save a backup file')}</h3>
         <p className="muted small">
           {status?.lastBackupAt
-            ? `Last backup: ${new Date(status.lastBackupAt).toLocaleString()}. Make a new one now and then — it only contains what existed when you made it.`
-            : 'You have no backup yet.'}
+            ? tr(
+                'Last backup: {time}. Make a new one now and then — it only contains what existed when you made it.',
+                { time: new Date(status.lastBackupAt).toLocaleString() },
+              )
+            : tr('You have no backup yet.')}
         </p>
         {needsPhrase && (
           <p className="muted small" id="backup-needs-phrase">
-            Show your recovery phrase (step 1) and write it down first — without it, a backup can never be
-            opened.
+            {tr(
+              'Show your recovery phrase (step 1) and write it down first — without it, a backup can never be opened.',
+            )}
           </p>
         )}
         <button
@@ -97,7 +103,7 @@ export function BackupPanel(): ReactElement {
           aria-describedby={needsPhrase ? 'backup-needs-phrase' : undefined}
           onClick={() => void create()}
         >
-          {busy ? 'Encrypting…' : 'Save encrypted backup…'}
+          {busy ? tr('Encrypting…') : tr('Save encrypted backup…')}
         </button>
         {message && (
           <p className={message.ok ? 'muted small' : 'field__error'} role="status">
@@ -107,9 +113,12 @@ export function BackupPanel(): ReactElement {
       </div>
 
       <p className="muted small">
-        To restore: install River on the new computer and choose <strong>Restore from a backup</strong> on the
-        first screen. Files you received are referenced by the backup, not copied into it; recent ones can
-        still be downloaded.
+        {rich(
+          tr(
+            'To restore: install River on the new computer and choose {restore} on the first screen. Files you received are referenced by the backup, not copied into it; recent ones can still be downloaded.',
+          ),
+          { restore: <strong>{tr('Restore from a backup')}</strong> },
+        )}
       </p>
     </div>
   );
@@ -141,13 +150,13 @@ export function RestoreForm(props: { onBack(): void; onRestored(): void }): Reac
         void restore();
       }}
     >
-      <h1 className="onboarding__title">Restore from a backup</h1>
+      <h1 className="onboarding__title">{tr('Restore from a backup')}</h1>
       <label className="textfield">
-        <span className="field__label">Backup file (.riverbackup)</span>
+        <span className="field__label">{tr('Backup file (.riverbackup)')}</span>
         <input type="file" accept=".riverbackup" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
       </label>
       <label className="textfield">
-        <span className="field__label">Recovery phrase (18 words)</span>
+        <span className="field__label">{tr('Recovery phrase (18 words)')}</span>
         <textarea
           className="restore__phrase"
           rows={3}
@@ -164,10 +173,10 @@ export function RestoreForm(props: { onBack(): void; onRestored(): void }): Reac
       )}
       <div className="button-row">
         <button type="button" className="btn btn--ghost" onClick={props.onBack}>
-          Back
+          {tr('Back')}
         </button>
         <button type="submit" className="btn btn--primary" disabled={busy || !file || !phrase.trim()}>
-          {busy ? 'Restoring…' : 'Restore'}
+          {busy ? tr('Restoring…') : tr('Restore')}
         </button>
       </div>
     </form>

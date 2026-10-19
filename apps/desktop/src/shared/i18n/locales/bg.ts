@@ -634,6 +634,1364 @@ export const BG: Dictionary = {
   Undeafen: 'Чуй отново',
   Unmute: 'Със звук',
 
+  'Create your identity before creating an account.': 'Създайте самоличността си, преди да създадете акаунт.',
+  'This device already has an account.': 'Това устройство вече има акаунт.',
+  'Set a valid server address first.': 'Първо задайте валиден адрес на сървър.',
+  'This server uses a River protocol version this app does not support.':
+    'Този сървър използва версия на протокола на River, която това приложение не поддържа.',
+  'The server answered for a different account.': 'Сървърът отговори за друг акаунт.',
+  'Link this device first.': 'Първо свържете това устройство.',
+  'The server returned account data that does not match the link.':
+    'Сървърът върна данни за акаунт, които не съвпадат с връзката.',
+  'Connect to your server first, then try again.': 'Първо се свържете със сървъра си, после опитайте пак.',
+  'The server returned a device list that is not signed by your identity.':
+    'Сървърът върна списък с устройства, който не е подписан от вашата самоличност.',
+  'The server returned an older or foreign device list. Nothing was changed.':
+    'Сървърът върна по-стар или чужд списък с устройства. Нищо не е променено.',
+  'There is no account to delete.': 'Няма акаунт за изтриване.',
+  'There is no account to set up again.': 'Няма акаунт за повторна настройка.',
+  'There is no account to link again.': 'Няма акаунт за повторно свързване.',
+  'Your account is fine — this device is still linked.':
+    'Акаунтът ви е наред — това устройство е все още свързано.',
+  'Create your account first.': 'Първо създайте акаунта си.',
+  'Your account is still on this server, but this device was removed from it. Link this device again from one of your devices that still has your account.':
+    'Акаунтът ви е все още на този сървър, но това устройство е премахнато от него. Свържете го отново от друго ваше устройство, което все още има акаунта.',
+  'This server is not accepting new accounts.': 'Този сървър не приема нови акаунти.',
+  'Your identity already has an account on this server.': 'Самоличността ви вече има акаунт на този сървър.',
+  'The server is busy. Try again in a minute.': 'Сървърът е зает. Опитайте пак след минута.',
+  'The server did not recognise this device.': 'Сървърът не разпозна това устройство.',
+  'The server rejected the request.': 'Сървърът отхвърли заявката.',
+  'Something went wrong talking to the server.': 'Нещо се обърка при връзката със сървъра.',
+  'A device is being linked right now. Wait a moment.': 'В момента се свързва устройство. Изчакайте малко.',
+  'The link code expired. Start again.': 'Кодът за свързване изтече. Започнете отначало.',
+  'Something without your code tried to use it. Nothing was linked. Start again.':
+    'Нещо без вашия код се опита да го използва. Нищо не е свързано. Започнете отначало.',
+  'This device is already being linked.': 'Това устройство вече се свързва.',
+  'No device is waiting to be linked.': 'Няма устройство, което чака свързване.',
+  'Linking was cancelled.': 'Свързването беше отменено.',
+  'That device is already linked.': 'Това устройство вече е свързано.',
+  'This is the device you are using.': 'Това е устройството, което използвате.',
+  'There is nothing to link right now.': 'В момента няма какво да се свързва.',
+  'This device already has a River account.': 'Това устройство вече има акаунт в River.',
+  'That is not a River link code.': 'Това не е код за свързване на River.',
+  'Paste the whole link (it starts with river://) — this code alone does not say which server to use.':
+    'Поставете цялата връзка (започва с river://) — само кодът не казва кой сървър да се използва.',
+  'That link code was already used.': 'Този код за свързване вече е използван.',
+  'That server does not support linking devices yet. Update River on it first.':
+    'Този сървър още не поддържа свързване на устройства. Първо обновете River на него.',
+  'The link could not be opened. Start again.': 'Връзката не можа да се отвори. Започнете отначало.',
+  'The link did not match. Start again.': 'Връзката не съвпадна. Започнете отначало.',
+  'That code is for a different account. This device holds the messages of the account it was removed from: link it with a code from a device of that account.':
+    'Този код е за друг акаунт. Това устройство пази съобщенията на акаунта, от който е премахнато: свържете го с код от устройство на този акаунт.',
+  'River is locked.': 'River е заключен.',
+  'Show your recovery phrase and write it down first: without it, no backup can be opened.':
+    'Първо покажете фразата си за възстановяване и я запишете: без нея нито едно резервно копие не може да се отвори.',
+  'This River already has an identity. Restore only works on a fresh install.':
+    'Този River вече има самоличност. Възстановяването работи само при нова инсталация.',
+  'This backup was made by a newer River. Update River and try again.':
+    'Това резервно копие е направено с по-нов River. Обновете River и опитайте пак.',
+  'You are banned from this community.': 'Имате бан в тази общност.',
+  'Create an account first.': 'Първо създайте акаунт.',
+  "You're offline. River will reconnect by itself.": 'Нямате връзка. River ще се свърже отново сам.',
+  'That is not a valid River invite link.': 'Това не е валидна покана за River.',
+  'This invite is for a different River server than the one your account is on.':
+    'Тази покана е за друг сървър на River, а не за този, на който е акаунтът ви.',
+  'This invite has expired or was already used too many times.':
+    'Тази покана е изтекла или вече е използвана твърде много пъти.',
+  'This invite link is damaged: its key does not match the community.':
+    'Тази покана е повредена: ключът ѝ не съвпада с общността.',
+  'Only pictures and GIFs can be favourites.': 'Само снимки и GIF-ове могат да бъдат любими.',
+  'That file is too large to keep as a favourite.': 'Този файл е твърде голям, за да е в любими.',
+  'That favourite is gone.': 'Този любим елемент вече го няма.',
+  'River could not find that message to edit. Scroll to it and try again.':
+    'River не намери съобщението за редактиране. Превъртете до него и опитайте пак.',
+  'Polls cannot be edited.': 'Анкетите не могат да се редактират.',
+  'Waiting for the community key…': 'Изчаква се ключът на общността…',
+  'That sound no longer exists.': 'Този звук вече не съществува.',
+  'That message is no longer here.': 'Това съобщение вече го няма.',
+  'That emoji no longer exists.': 'Това емоджи вече не съществува.',
+  'That event no longer exists.': 'Това събитие вече не съществува.',
+  'This file failed its integrity check and was not opened.':
+    'Този файл не мина проверката за цялост и не беше отворен.',
+  'Attachments are not available.': 'Прикачените файлове не са достъпни.',
+  'Signal too large': 'Сигналът е твърде голям',
+  "You're offline": 'Нямате връзка',
+  'Unknown channel': 'Непознат канал',
+  'Unknown community': 'Непозната общност',
+
+  'Create your identity first.': 'Първо създайте самоличността си.',
+  'You are not in this group.': 'Не сте в тази група.',
+  'The message could not be delivered to anyone in the group.':
+    'Съобщението не можа да бъде доставено на никого в групата.',
+  'The server offered an older device list for this person than River has already seen. Messages were not sent.':
+    'Сървърът предложи по-стар списък с устройства за този човек, отколкото River вече е виждал. Съобщенията не са изпратени.',
+  'That person has not set up messaging yet.': 'Този човек още не е настроил съобщенията.',
+  'That person is not on your River server.': 'Този човек не е на вашия сървър на River.',
+  'The server offered a different safety key for this person than the one in your shared community. Messages were not sent.':
+    'Сървърът предложи различен ключ за сигурност за този човек от този във вашата обща общност. Съобщенията не са изпратени.',
+  'This person’s device list is not signed by their identity key. Messages were not sent.':
+    'Списъкът с устройства на този човек не е подписан с ключа на самоличността му. Съобщенията не са изпратени.',
+  'The server returned keys for someone else.': 'Сървърът върна ключове за друг човек.',
+  'That folder is gone.': 'Тази папка вече я няма.',
+  'That saved reply is gone.': 'Този запазен отговор вече го няма.',
+  'That call is not in a group.': 'Това обаждане не е в група.',
+  'That is your own River ID.': 'Това е вашето собствено River ID.',
+  'You can only edit your own messages.': 'Можете да редактирате само свои съобщения.',
+  'That message is gone.': 'Това съобщение вече го няма.',
+  'You can only delete your own messages for everyone.': 'Можете да изтривате за всички само свои съобщения.',
+  'Choose a time at least a minute from now.': 'Изберете час поне минута след сега.',
+  'Choose a time within a year.': 'Изберете час в рамките на година.',
+  'You have 100 messages waiting already.': 'Вече имате 100 чакащи съобщения.',
+  'You can set a timer once you are friends.': 'Можете да зададете таймер, щом станете приятели.',
+  'Send a message first to set up encryption.': 'Първо изпратете съобщение, за да се настрои шифроването.',
+  'The safety number changed while it was on screen. Compare the new number before verifying.':
+    'Кодът за сигурност се промени, докато беше на екрана. Сравнете новия код, преди да потвърдите.',
+  'Add at least one other person.': 'Добавете поне още един човек.',
+  'Only group admins can change the group.': 'Само администраторите на групата могат да я променят.',
+  'Use Leave group to leave.': 'За да излезете, използвайте „Напусни групата“.',
+  'You can only call your contacts.': 'Можете да се обаждате само на контактите си.',
+  'Unblock this person to message them.': 'Отблокирайте този човек, за да му пишете.',
+  'Please check what you entered.': 'Проверете какво сте въвели.',
+  "Can't reach your River server. Check your internet connection; River keeps trying.":
+    'Няма връзка с вашия сървър на River. Проверете интернета си; River продължава да опитва.',
+  "You're doing that too fast. Wait a few seconds and try again.":
+    'Правите това твърде бързо. Изчакайте няколко секунди и опитайте пак.',
+  "That's too large to send.": 'Това е твърде голямо за изпращане.',
+  'Your session ended. River is signing you in again; try once more.':
+    'Сесията ви приключи. River ви вписва отново; опитайте още веднъж.',
+  'You do not have permission to do that.': 'Нямате разрешение за това.',
+  'That no longer exists.': 'Това вече не съществува.',
+  'Your River server had a problem. Try again in a moment.':
+    'Вашият сървър на River има проблем. Опитайте пак след малко.',
+  'Something went wrong. Check your connection and try again.':
+    'Нещо се обърка. Проверете връзката си и опитайте пак.',
+  'This development build does not use River’s server.': 'Тази тестова версия не използва сървъра на River.',
+  'This development build does not use River’s server. Choose “Use a different server”.':
+    'Тази тестова версия не използва сървъра на River. Изберете „Използвай друг сървър“.',
+  'The downloaded cloudflared did not match the expected fingerprint, so River did not use it.':
+    'Изтегленият cloudflared не съвпадна с очаквания отпечатък, затова River не го използва.',
+  'The cloudflared download is larger than expected.':
+    'Изтеглянето на cloudflared е по-голямо от очакваното.',
+  'Could not unpack cloudflared.': 'Неуспешно разархивиране на cloudflared.',
+  'Restarting the community server…': 'Сървърът на общностите се рестартира…',
+  'Setting up your public address (one-time download)…':
+    'Настройва се публичният ви адрес (еднократно изтегляне)…',
+  'Opening your public address…': 'Отваря се публичният ви адрес…',
+  'Reconnecting to the internet…': 'Повторно свързване с интернет…',
+  'Opening your permanent address…': 'Отваря се постоянният ви адрес…',
+  'Tailscale is signed in, but your permanent address did not answer.':
+    'Tailscale е вписан, но постоянният ви адрес не отговори.',
+  'Tailscale is not installed.': 'Tailscale не е инсталиран.',
+  'River could not set up your account. Try again in a moment.':
+    'River не успя да настрои акаунта ви. Опитайте пак след малко.',
+  'That file is too large to be a River backup.':
+    'Този файл е твърде голям, за да е резервно копие на River.',
+  'Your account is fine — nothing to set up again.':
+    'Акаунтът ви е наред — няма нужда от повторна настройка.',
+  'That is not a valid River sign-up link.': 'Това не е валидна връзка за регистрация в River.',
+  'Unlock River first.': 'Първо отключете River.',
+  'Something went wrong creating your account.': 'Нещо се обърка при създаването на акаунта ви.',
+  'Write an email': 'Напиши имейл',
+  'Call a number': 'Обади се на номер',
+  'Write to this address in your mail app?': 'Да пишете ли на този адрес в имейл приложението си?',
+  'Call this number with your phone app?': 'Да се обадите ли на този номер с приложението за телефон?',
+  'Only do this if you trust the person who sent it.':
+    'Направете го само ако имате доверие на човека, който го изпрати.',
+  'Open mail app': 'Отвори имейл приложението',
+  Call: 'Обади се',
+  'Open link': 'Отвори връзката',
+  'Open this link in your browser?': 'Да се отвори ли тази връзка в браузъра?',
+  'Links can lead anywhere. Only open it if you trust where it goes.':
+    'Връзките могат да водят навсякъде. Отворете я само ако имате доверие на мястото, към което води.',
+  'Encrypted local storage': 'Шифровано локално хранилище',
+  'Active · passphrase': 'Активно · парола',
+  Active: 'Активно',
+  'River’s local database is encrypted with SQLCipher (AES-256). Its key is sealed with your passphrase (Argon2id), which River asks for each time it starts.':
+    'Локалната база данни на River е шифрована със SQLCipher (AES-256). Ключът ѝ е запечатан с вашата парола (Argon2id), която River иска при всяко стартиране.',
+  'River’s local database is encrypted with SQLCipher (AES-256). Its key is protected by {keystore}, so other user accounts on this computer cannot read it.':
+    'Локалната база данни на River е шифрована със SQLCipher (AES-256). Ключът ѝ е защитен от {keystore}, така че другите потребители на този компютър не могат да я четат.',
+  Unavailable: 'Недостъпно',
+  'Opening…': 'Отваряне…',
+  'River is opening its local database.': 'River отваря локалната си база данни.',
+  Locked: 'Заключено',
+  'River’s local data stays encrypted until you enter your passphrase.':
+    'Локалните данни на River остават шифровани, докато не въведете паролата си.',
+
+  'End-to-end encryption': 'Шифроване от край до край',
+  'Direct messages and communities': 'Лични съобщения и общности',
+  'Direct messages and 1:1 call setup use the Signal protocol (libsignal: PQXDH with post-quantum keys and the Double Ratchet), so each message has its own key and past messages stay safe if a key leaks later. Communities encrypt names, messages and call setup with a shared community key (AES-256-GCM) that travels only inside invite links — anyone with an invite link can read the community, and removing someone does not change the key yet. Files use a fresh key each (AES-256-CBC + HMAC-SHA256). Voice, video and screen sharing go directly between participants, encrypted with DTLS-SRTP. The server still sees who messages whom and when.':
+    'Личните съобщения и настройката на разговори 1:1 използват протокола Signal (libsignal: PQXDH с пост-квантови ключове и Double Ratchet), така че всяко съобщение има собствен ключ, а старите съобщения остават защитени, ако по-късно изтече ключ. Общностите шифроват имена, съобщения и настройка на разговори с общ ключ на общността (AES-256-GCM), който пътува само в поканите — всеки с покана може да чете общността, а премахването на някого засега не сменя ключа. Всеки файл получава нов ключ (AES-256-CBC + HMAC-SHA256). Гласът, видеото и споделянето на екрана вървят директно между участниците, шифровани с DTLS-SRTP. Сървърът все пак вижда кой на кого пише и кога.',
+  Identity: 'Самоличност',
+  'Your identity key was created on this device and its private half never leaves it. Contacts will verify the fingerprint below to make sure they are really talking to you.':
+    'Ключът на самоличността ви е създаден на това устройство и частната му половина никога не го напуска. Контактите ви ще проверят отпечатъка по-долу, за да са сигурни, че наистина говорят с вас.',
+  'Not created': 'Не е създадена',
+  'Create your identity to get a fingerprint your contacts can verify.':
+    'Създайте самоличността си, за да получите отпечатък, който контактите ви могат да проверят.',
+  'Server message access': 'Достъп на сървъра до съобщения',
+  'None · {host}': 'Няма · {host}',
+  'No server configured': 'Няма настроен сървър',
+  'Your account on {host} holds your River ID, your @username if you chose one, your public keys and your signed device list. Direct messages, community messages, profiles and files reach it only end-to-end encrypted — it passes them on and keeps them for devices that are offline, but cannot read them. It does see who messages whom and when.':
+    'Акаунтът ви на {host} съдържа вашето River ID, @потребителското ви име, ако сте избрали такова, публичните ви ключове и подписания ви списък с устройства. Личните съобщения, съобщенията в общности, профилите и файловете стигат до него само шифровани от край до край — той ги препраща и пази за устройства без връзка, но не може да ги чете. Все пак вижда кой на кого пише и кога.',
+  'River is set to use {host}, but you have no account there yet, so the server holds none of your data.':
+    'River е настроен да използва {host}, но още нямате акаунт там, така че сървърът не пази ваши данни.',
+  'River is not set to use any server, so no server holds any of your data.':
+    'River не е настроен да използва сървър, така че никой сървър не пази ваши данни.',
+  'Update signatures': 'Подписи на обновленията',
+  Enforced: 'Задължителни',
+  'Updater off in this build': 'Обновяването е изключено в тази версия',
+  'An update is installed only if its release manifest is signed by a River Ed25519 key built into this app and the downloaded file is listed in it.':
+    'Обновление се инсталира само ако манифестът му е подписан с Ed25519 ключ на River, вграден в това приложение, и изтегленият файл е описан в него.',
+  'Interface sandbox': 'Пясъчник за интерфейса',
+  'The interface runs in a sandboxed process with a strict content security policy. It has no access to files, keys or the network.':
+    'Интерфейсът работи в изолиран процес със строга политика за сигурност на съдържанието. Няма достъп до файлове, ключове или мрежата.',
+  '{count} · signed list v{version}': '{count} · подписан списък v{version}',
+  'The device list could not be verified.': 'Списъкът с устройства не можа да бъде проверен.',
+  'Your devices are listed in a record signed by your identity key. River checks that signature every time it connects, so the server cannot add a device to your account without you noticing.':
+    'Устройствата ви са в запис, подписан с ключа на самоличността ви. River проверява подписа при всяко свързване, така че сървърът не може да добави устройство към акаунта ви, без да забележите.',
+  'This device only': 'Само това устройство',
+  'Your device list starts when you create an account. Then you can link your other phones and computers in Settings → Account → Devices; each one is added to a list signed by your identity key.':
+    'Списъкът ви с устройства започва, щом създадете акаунт. След това можете да свържете другите си телефони и компютри от Настройки → Акаунт → Устройства; всяко се добавя в списък, подписан с ключа на самоличността ви.',
+  '⚠ This address uses unusual characters that can imitate another site.':
+    '⚠ Този адрес използва необичайни знаци, които може да имитират друг сайт.',
+  '⚠ This link goes to a raw IP address, not a named website.':
+    '⚠ Тази връзка води към IP адрес, а не към сайт с име.',
+  '⚠ This is a short link: it hides where it really goes.':
+    '⚠ Това е кратка връзка: тя крие накъде всъщност води.',
+  'This link is not encrypted (http).': 'Тази връзка не е шифрована (http).',
+  Compatible: 'Съвместим',
+  'This server needs a newer version of River. Update River to use it.':
+    'Този сървър изисква по-нова версия на River. Обновете River, за да го използвате.',
+  'This server runs an older River protocol than this app supports.':
+    'Този сървър използва по-стар протокол на River, отколкото това приложение поддържа.',
+  'Invalid address': 'Невалиден адрес',
+  'That address is not a River server.': 'Този адрес не е сървър на River.',
+  'Could not reach the server. Check the address and your connection.':
+    'Няма връзка със сървъра. Проверете адреса и връзката си.',
+  'The post could not be delivered to anyone. Check your connection and try again.':
+    'Публикацията не можа да бъде доставена на никого. Проверете връзката си и опитайте пак.',
+  'Your reaction could not be sent. Check your connection and try again.':
+    'Реакцията ви не можа да бъде изпратена. Проверете връзката си и опитайте пак.',
+  'Your comment could not be sent. Check your connection and try again.':
+    'Коментарът ви не можа да бъде изпратен. Проверете връзката си и опитайте пак.',
+  'River cannot reach your system keyring to unlock its local data. Unlock or restore your keyring and restart River.':
+    'River няма достъп до системния ви държател на ключове, за да отключи локалните си данни. Отключете или възстановете държателя и рестартирайте River.',
+  'Your local River data was created by a newer version of River. Install the latest River to open it.':
+    'Локалните ви данни в River са създадени от по-нова версия на River. Инсталирайте най-новия River, за да ги отворите.',
+  'River could not upgrade its local data. Nothing was changed; a backup was kept. Please report this problem.':
+    'River не успя да обнови локалните си данни. Нищо не е променено; запазено е резервно копие. Моля, съобщете за проблема.',
+  'River could not decrypt its local data with the stored key.':
+    'River не успя да дешифрира локалните си данни със запазения ключ.',
+  'River could not open its local data.': 'River не успя да отвори локалните си данни.',
+  'River’s local key file is damaged. Your data has not been changed.':
+    'Локалният файл с ключа на River е повреден. Данните ви не са променени.',
+
+  Administrator: 'Администратор',
+  'Every permission, in every channel. Grant carefully.':
+    'Всички разрешения във всеки канал. Давайте внимателно.',
+  'Manage community': 'Управление на общността',
+  'Rename the community and change its description.': 'Преименуване на общността и смяна на описанието ѝ.',
+  'Manage roles': 'Управление на ролите',
+  'Create and edit roles below their own, and assign them.':
+    'Създаване и редактиране на роли под собствената и раздаването им.',
+  'Manage channels': 'Управление на каналите',
+  'Create, rename, reorder, delete channels and set channel permissions.':
+    'Създаване, преименуване, подреждане и изтриване на канали и задаване на разрешенията им.',
+  'Kick members': 'Изгонване на членове',
+  'Remove members (they can rejoin with an invite).': 'Премахване на членове (могат да се върнат с покана).',
+  'Ban members': 'Баниране на членове',
+  'Remove members and stop them rejoining.': 'Премахване на членове без право да се върнат.',
+  'Time out members': 'Временно ограничаване на членове',
+  'Stop members below them from talking, reacting and joining voice for a while.':
+    'Временно спиране на членове с по-ниска роля да пишат, реагират и влизат в гласови канали.',
+  'View audit log': 'Преглед на дневника на одита',
+  'See who changed roles, channels and settings, and who moderated whom.':
+    'Вижда кой е променил роли, канали и настройки и кой кого е модерирал.',
+  'Create invites': 'Създаване на покани',
+  'Make invite links.': 'Създаване на покани.',
+  'View channels': 'Преглед на канали',
+  'See channels and read messages.': 'Вижда канали и чете съобщения.',
+  'Send messages': 'Изпращане на съобщения',
+  'Post in text channels.': 'Писане в текстови канали.',
+  'Send images and files.': 'Изпращане на изображения и файлове.',
+  'Add reactions': 'Добавяне на реакции',
+  'React to messages.': 'Реагиране на съобщения.',
+  'Mention @everyone': 'Споменаване на @everyone',
+  'Notify everyone at once.': 'Известяване на всички наведнъж.',
+  'Manage messages': 'Управление на съобщения',
+  "Delete other people's messages.": 'Изтриване на чужди съобщения.',
+  'Pin messages': 'Закачане на съобщения',
+  'Pin and unpin messages.': 'Закачане и откачане на съобщения.',
+  'Connect to voice': 'Влизане в гласови канали',
+  'Join voice channels.': 'Влизане в гласови канали.',
+  Speak: 'Говорене',
+  'Talk in voice channels.': 'Говорене в гласови канали.',
+  'Video & screen share': 'Видео и споделяне на екрана',
+  'Turn on camera or share a screen in voice.':
+    'Включване на камерата или споделяне на екрана в гласов канал.',
+  'Mute & deafen members': 'Заглушаване на членове',
+  'Server-mute or server-deafen others in voice.':
+    'Заглушаване на микрофона или звука на други в гласов канал за целия сървър.',
+  'Move & disconnect members': 'Преместване и изключване на членове',
+  'Move people between voice channels or disconnect them.':
+    'Преместване на хора между гласови канали или изключването им.',
+  'Manage events': 'Управление на събития',
+  'Create, edit and cancel scheduled events.': 'Създаване, редактиране и отмяна на планирани събития.',
+  'Manage emoji & sounds': 'Управление на емоджи и звуци',
+  'Add, rename and remove the community’s custom emoji and soundboard sounds.':
+    'Добавяне, преименуване и премахване на собствените емоджи и звуци на общността.',
+  'Priority speaker': 'Приоритетен говорител',
+  'In voice, turn on Priority speaker so everyone else is turned down while they talk.':
+    'В гласов канал включва „Приоритетен говорител“, така че всички други се заглушават, докато говори.',
+  "Check someone's access here": 'Проверете достъпа на някого тук',
+  'Member to check': 'Член за проверка',
+  'Choose a member…': 'Изберете член…',
+  can: 'може',
+  "can't": 'не може',
+  'Includes changes you have not saved yet. Click a line to see why.':
+    'Включва още незапазените промени. Щракнете на ред, за да видите защо.',
+  'Saved.': 'Запазено.',
+  Picture: 'Снимка',
+  'Community picture': 'Снимка на общността',
+  'Choose…': 'Избери…',
+  Remove: 'Премахни',
+  Banner: 'Банер',
+  'Community banner': 'Банер на общността',
+  'That banner is too detailed to keep small; try another picture.':
+    'Банерът е твърде детайлен, за да остане малък; опитайте друга снимка.',
+  'River could not read that picture.': 'River не успя да прочете тази снимка.',
+  'Pictures are end-to-end encrypted like the rest of the community.':
+    'Снимките са шифровани от край до край като останалата част от общността.',
+  'They own the community: owners can do everything.':
+    'Те са собственици на общността: собствениците могат всичко.',
+  'a role': 'роля',
+  '@everyone allows it.': '@everyone го позволява.',
+  '@everyone does not allow it.': '@everyone не го позволява.',
+  'Their role {role} allows it.': 'Ролята им {role} го позволява.',
+  'Their role {role} has Administrator, which allows everything.':
+    'Ролята им {role} има „Администратор“, което позволява всичко.',
+  '@everyone has Administrator, which allows everything.':
+    '@everyone има „Администратор“, което позволява всичко.',
+  'In #{channel}, @everyone is denied it.': 'В #{channel} това е забранено за @everyone.',
+  'In #{channel}, @everyone is allowed it.': 'В #{channel} това е позволено за @everyone.',
+  'In #{channel}, their role {role} is denied it.': 'В #{channel} това е забранено за ролята им {role}.',
+  'In #{channel}, their role {role} is allowed it (an allow on a role beats a deny on another).':
+    'В #{channel} това е позволено за ролята им {role} (разрешение за една роля бие забрана за друга).',
+  'In #{channel}, their role {role} is allowed it.': 'В #{channel} това е позволено за ролята им {role}.',
+  'They have not accepted the rules yet, so they can only read.':
+    'Още не са приели правилата, затова могат само да четат.',
+  'They are timed out.': 'Временно са ограничени.',
+  '#{channel} is an announcement channel: only people who manage messages post there.':
+    '#{channel} е канал за обявления: там пишат само хората, които управляват съобщения.',
+  Moderation: 'Модерация',
+  Channels: 'Канали',
+  'Emoji & sounds': 'Емоджи и звуци',
+  Spam: 'Спам',
+  'Harassment or hate': 'Тормоз или омраза',
+  'Inappropriate content': 'Неподходящо съдържание',
+  'Scam or phishing': 'Измама или фишинг',
+  'Something else': 'Нещо друго',
+  'Mute / unmute': 'Изключи / включи микрофона',
+  'Deafen / undeafen': 'Изключи / включи звука',
+  'Camera on / off': 'Камера вкл. / изкл.',
+  'Leave voice': 'Напусни гласовия канал',
+  'Quick switcher': 'Бързо превключване',
+  'Bigger interface': 'По-голям интерфейс',
+  'Smaller interface': 'По-малък интерфейс',
+  'Normal size': 'Нормален размер',
+  'Previous channel': 'Предишен канал',
+  'Next channel': 'Следващ канал',
+  'Previous community': 'Предишна общност',
+  'Next community': 'Следваща общност',
+  'Mark as read / close': 'Маркирай като прочетено / затвори',
+  'Not set': 'Не е зададено',
+  'Chat, memes and a place to hang out.': 'Чат, мемета и място за разпускане.',
+  Gaming: 'Игри',
+  'Find a squad, share clips, jump into voice.':
+    'Намерете отбор, споделяйте клипове, влизайте в гласов канал.',
+  'Study group': 'Учебна група',
+  'Homework help, notes and quiet study rooms.': 'Помощ за домашни, записки и тихи стаи за учене.',
+  'Club or team': 'Клуб или отбор',
+  'Announcements, events and meetups.': 'Обявления, събития и срещи.',
+  'Start from scratch': 'Започни от нулата',
+  'One text and one voice channel.': 'Един текстов и един гласов канал.',
+
+  'Delete {name}': 'Изтрий {name}',
+  'This permanently deletes the community, its channels and all messages for everyone. This cannot be undone.':
+    'Това изтрива завинаги общността, каналите ѝ и всички съобщения за всички. Не може да се отмени.',
+  'Delete community': 'Изтрий общността',
+  Icon: 'Икона',
+  'Community icon': 'Икона на общността',
+  Initials: 'Инициали',
+  'Icon {emoji}': 'Икона {emoji}',
+  'Community name': 'Име на общността',
+  Description: 'Описание',
+  'Names and descriptions are encrypted with the community key; the server cannot read them.':
+    'Имената и описанията са шифровани с ключа на общността; сървърът не може да ги чете.',
+  'General permissions': 'Общи разрешения',
+  'Membership permissions': 'Разрешения за членство',
+  'Text permissions': 'Текстови разрешения',
+  'Voice permissions': 'Гласови разрешения',
+  'Advanced permissions': 'Разширени разрешения',
+  Permission: 'Разрешение',
+  'new role': 'нова роля',
+  'Members get every permission from all their roles. Higher roles can manage lower ones. The owner can do everything. Drag roles to reorder them.':
+    'Членовете получават всички разрешения от всичките си роли. По-високите роли управляват по-ниските. Собственикът може всичко. Плъзгайте ролите, за да ги подредите.',
+  'Members with this role lose it. This cannot be undone.':
+    'Членовете с тази роля я губят. Не може да се отмени.',
+  'You can only edit roles below your highest role.':
+    'Можете да редактирате само роли под най-високата си роля.',
+  'Role name': 'Име на ролята',
+  'Role colour': 'Цвят на ролята',
+  'Default colour': 'Цвят по подразбиране',
+  'Colour {hex}': 'Цвят {hex}',
+  'Custom colour': 'Свой цвят',
+  'Role icon': 'Икона на ролята',
+  'Role icon {emoji}, change': 'Икона на ролята {emoji}, смени',
+  'Choose a role icon': 'Изберете икона на ролята',
+  'Shown next to the names of people with this role.': 'Показва се до имената на хората с тази роля.',
+  'Allow anyone to @mention this role': 'Всеки може да @споменава тази роля',
+  'Members can ping everyone with this role. People who may mention @everyone can always mention every role.':
+    'Членовете могат да известяват всички с тази роля. Който може да споменава @everyone, винаги може да споменава всяка роля.',
+  'Show members with this role separately': 'Показвай членовете с тази роля отделно',
+  'Online members with this role get their own group in the member list.':
+    'Членовете на линия с тази роля получават собствена група в списъка с членове.',
+  '@everyone applies to every member of the community. Use it for the defaults.':
+    '@everyone важи за всеки член на общността. Използвайте я за настройките по подразбиране.',
+  '{name} (copy)': '{name} (копие)',
+  'Made a copy of {name}.': 'Създадено е копие на {name}.',
+  'Duplicate role': 'Дублирай ролята',
+  'Members — {count}': 'Членове — {count}',
+  'Search members': 'Търси членове',
+  'Change roles of selected members': 'Смяна на ролите на избраните членове',
+  '{count} selected': 'Избрани: {count}',
+  'Give a role to the selected members': 'Дай роля на избраните членове',
+  'Give role…': 'Дай роля…',
+  'Remove a role from the selected members': 'Премахни роля от избраните членове',
+  'Remove role…': 'Премахни роля…',
+  Clear: 'Изчисти',
+  'Select {name}': 'Избери {name}',
+  'Remove {role} from {name}': 'Премахни {role} от {name}',
+  'Add role to {name}': 'Добави роля на {name}',
+  '+ Role': '+ Роля',
+  'Kick {name}': 'Изгони {name}',
+  '{name} will be removed. They can rejoin with a new invite.':
+    '{name} ще бъде премахнат(а). Може да се върне с нова покана.',
+  Kick: 'Изгони',
+  Ban: 'Бан',
+  'Nobody is banned.': 'Никой няма бан.',
+  'Banned on {date}': 'Бан на {date}',
+  'until {time}': 'до {time}',
+  'Revoke ban': 'Премахни бана',
+  'Changes to roles, channels and settings, and moderation, for the last 90 days. The server keeps only IDs; names are filled in on your computer.':
+    'Промени в роли, канали и настройки, както и модерация, за последните 90 дни. Сървърът пази само ID; имената се попълват на вашия компютър.',
+  'Kind of change': 'Вид промяна',
+  Everything: 'Всичко',
+  Who: 'Кой',
+  Anyone: 'Всеки',
+  'Search the audit log': 'Търси в дневника на одита',
+  Copy: 'Копирай',
+  'Nothing has happened yet.': 'Още нищо не се е случило.',
+  'Nothing matches.': 'Няма съвпадения.',
+  'Load older': 'Зареди по-стари',
+  'For good': 'Завинаги',
+  'For 1 hour': 'За 1 час',
+  'For 1 day': 'За 1 ден',
+  'For 1 week': 'За 1 седмица',
+  'For 30 days': 'За 30 дни',
+  "Don't delete any": 'Не изтривай нищо',
+  'From the last hour': 'От последния час',
+  'From the last 6 hours': 'От последните 6 часа',
+  'From the last 24 hours': 'От последните 24 часа',
+  'From the last 3 days': 'От последните 3 дни',
+  'From the last 7 days': 'От последните 7 дни',
+  '{name} was banned.': '{name} получи бан.',
+  'Ban {name}': 'Бан за {name}',
+  '{name} will be removed from {community} and cannot rejoin until the ban ends or someone unbans them.':
+    '{name} ще бъде премахнат(а) от {community} и не може да се върне, докато банът не изтече или някой не го премахне.',
+  '{name} will be removed from the community and cannot rejoin until the ban ends or someone unbans them.':
+    '{name} ще бъде премахнат(а) от общността и не може да се върне, докато банът не изтече или някой не го премахне.',
+  'How long': 'Колко време',
+  'Delete their messages': 'Изтрий съобщенията им',
+  'Invite friends to {name}': 'Поканете приятели в {name}',
+  'Send this link privately. Anyone with it can join and read this community. It works 100 times and expires in 7 days.':
+    'Изпратете тази връзка лично. Всеки с нея може да влезе и да чете общността. Работи 100 пъти и изтича след 7 дни.',
+  'Creating link…': 'Създава се връзка…',
+  'Copied ✓': 'Копирано ✓',
+  'Copy link': 'Копирай връзката',
+  'Channel type': 'Вид канал',
+  Text: 'Текстов',
+  Voice: 'Гласов',
+  Forum: 'Форум',
+  Stage: 'Сцена',
+  'Messages, emoji, opinions and puns': 'Съобщения, емоджи, мнения и каламбури',
+  'Hang out with voice, video and screen share': 'Общувайте с глас, видео и споделяне на екрана',
+  'Organised posts with titles and tags, each with its own replies':
+    'Подредени публикации със заглавия и етикети, всяка със свои отговори',
+  'Talks and events: speakers on stage, everyone else listens':
+    'Беседи и събития: говорителите са на сцената, останалите слушат',
+  'Channel name': 'Име на канала',
+  'new-channel': 'нов-канал',
+  'Private channel': 'Частен канал',
+  'Only selected roles (and admins) will be able to see this channel.':
+    'Само избрани роли (и администраторите) ще виждат този канал.',
+  'Category name': 'Име на категорията',
+  'New category': 'Нова категория',
+  'Category names are encrypted like channel names. Drag channels onto a category to move them.':
+    'Имената на категориите са шифровани като имената на каналите. Плъзнете канали върху категория, за да ги преместите.',
+  'Category settings': 'Настройки на категорията',
+  Permissions: 'Разрешения',
+  "Its channels stay and move out of the category. Channels synced to it keep the category's permissions as their own, so private channels stay private.":
+    'Каналите ѝ остават и излизат от категорията. Синхронизираните с нея канали запазват разрешенията на категорията като свои, така че частните канали остават частни.',
+  'Delete category': 'Изтрий категорията',
+  'Category permissions': 'Разрешения на категорията',
+  'Channels you add to this category follow these permissions until you give them their own.':
+    'Каналите, които добавите в тази категория, следват тези разрешения, докато не им зададете собствени.',
+  Off: 'Изключено',
+  '5 seconds': '5 секунди',
+  '10 seconds': '10 секунди',
+  '30 seconds': '30 секунди',
+  '1 minute': '1 минута',
+  '2 minutes': '2 минути',
+  '5 minutes': '5 минути',
+  '10 minutes': '10 минути',
+  '2 hours': '2 часа',
+  '6 hours': '6 часа',
+  'Channel settings': 'Настройки на канала',
+  'This deletes the channel and all of its messages for everyone. This cannot be undone.':
+    'Това изтрива канала и всичките му съобщения за всички. Не може да се отмени.',
+  'Delete channel': 'Изтрий канала',
+  'Channel topic': 'Тема на канала',
+  'Let everyone know how to use this channel!': 'Кажете на всички как да използват този канал!',
+  'Age-restricted (18+)': 'С възрастово ограничение (18+)',
+  'People confirm they are 18 or older before opening this channel.':
+    'Хората потвърждават, че са навършили 18, преди да отворят този канал.',
+  'Media channel': 'Медиен канал',
+  'Opens as a gallery of the pictures and videos shared here; the chat is one click away.':
+    'Отваря се като галерия от снимките и видеата, споделени тук; чатът е на едно щракване.',
+  'Every message starts a post with a title and its own replies, shown as a list of posts.':
+    'Всяко съобщение започва публикация със заглавие и свои отговори, показана в списък с публикации.',
+  'Announcement channel': 'Канал за обявления',
+  'Only people who can manage messages post here; everyone else reads and reacts.':
+    'Тук пишат само хората, които управляват съобщения; останалите четат и реагират.',
+  Slowmode: 'Бавен режим',
+  'How long members wait between messages. People who manage messages are not slowed down.':
+    'Колко дълго членовете чакат между съобщенията. Хората, които управляват съобщения, не се забавят.',
+  'For talks and events: people join as listeners, raise a hand to ask to speak, and moderators invite speakers.':
+    'За беседи и събития: хората влизат като слушатели, вдигат ръка, за да поискат думата, а модераторите канят говорители.',
+  'User limit': 'Ограничение на потребителите',
+  'No limit': 'Без ограничение',
+  'People who can move members can always join.':
+    'Хората, които могат да местят членове, винаги могат да влизат.',
+  Category: 'Категория',
+  'No category': 'Без категория',
+  Order: 'Ред',
+  'Move up': 'Премести нагоре',
+  'Move down': 'Премести надолу',
+  'Channel permissions': 'Разрешения на канала',
+  'Override what each role can do in this channel only.':
+    'Променете какво може всяка роля само в този канал.',
+  "Synced with {category}: this channel uses the category's permissions. Changing them here gives the channel its own.":
+    'Синхронизиран с {category}: този канал използва разрешенията на категорията. Ако ги промените тук, каналът ще има свои.',
+  'This channel has its own permissions, not those of {category}.':
+    'Този канал има свои разрешения, а не тези на {category}.',
+  'Sync with category': 'Синхронизирай с категорията',
+  'Hide this channel from @everyone. Then allow the roles that should see it.':
+    'Скрийте този канал от @everyone. После разрешете ролите, които трябва да го виждат.',
+  'Picture set for this community.': 'Снимката е зададена за тази общност.',
+  'Back to your usual picture here.': 'Тук отново е обичайната ви снимка.',
+  'Picture in this community': 'Снимка в тази общност',
+  'Your usual picture': 'Обичайната ви снимка',
+  'Use my usual picture': 'Използвай обичайната ми снимка',
+  'Nickname in {name}': 'Псевдоним в {name}',
+  Nickname: 'Псевдоним',
+  'Your River name': 'Вашето име в River',
+  'Only members of this community see it. It is encrypted like the rest of your profile.':
+    'Вижда се само от членовете на тази общност. Шифрован е като останалата част от профила ви.',
+  'Reset to my River name': 'Върни името ми в River',
+
+  'Everyone here can use these with {code} in messages and reactions. Click a name to rename it. Pictures and names are end-to-end encrypted. Up to 100.':
+    'Всички тук могат да ги използват с {code} в съобщения и реакции. Щракнете върху име, за да го преименувате. Снимките и имената са шифровани от край до край. До 100.',
+  'Upload emoji': 'Качи емоджи',
+  'That image is too large.': 'Изображението е твърде голямо.',
+  'River could not read that image.': 'River не успя да прочете изображението.',
+  Name: 'Име',
+  '2–32 letters, numbers or _': '2–32 букви, цифри или _',
+  Add: 'Добави',
+  'No custom emoji yet.': 'Още няма собствени емоджи.',
+  'New name for :{name}:': 'Ново име за :{name}:',
+  Rename: 'Преименувай',
+  'Remove :{name}:': 'Премахни :{name}:',
+  channel: 'канал',
+  'Someone who left': 'Някой, който е напуснал',
+  'Copied.': 'Копирано.',
+  'Counted on your device from messages you can read; the server cannot see them, so it cannot count them.':
+    'Преброено на вашето устройство от съобщенията, които можете да четете; сървърът не ги вижда, затова не може да ги брои.',
+  members: 'членове',
+  'online now': 'на линия сега',
+  'joined this week': 'влезли тази седмица',
+  'Messages per day': 'Съобщения на ден',
+  Period: 'Период',
+  'Some busy channels have more history than River counted.':
+    'Някои оживени канали имат повече история, отколкото River е преброил.',
+  'Busiest channels': 'Най-оживени канали',
+  'No messages yet.': 'Още няма съобщения.',
+  'Most active people': 'Най-активни хора',
+  'Counting…': 'Броене…',
+  'New members per week': 'Нови членове на седмица',
+  'New members per week, last 8 weeks': 'Нови членове на седмица, последните 8 седмици',
+  'Active invite links, who made them and who joined with them. Revoking stops a link from working; people who already joined stay.':
+    'Активните покани, кой ги е създал и кой е влязъл с тях. Отмяната спира връзката; вече влезлите остават.',
+  'No active invites.': 'Няма активни покани.',
+  '{uses} of {max} uses': '{uses} от {max} използвания',
+  'expires {date}': 'изтича на {date}',
+  'made {date}': 'създадена на {date}',
+  'Joined with it: {names}': 'Влезли с нея: {names}',
+  Revoke: 'Отмени',
+  'Members · {count}': 'Членове · {count}',
+  'Close members': 'Затвори членовете',
+  'Community owner': 'Собственик на общността',
+  '{name} will be removed from {community}. They can rejoin with a new invite.':
+    '{name} ще бъде премахнат(а) от {community}. Може да се върне с нова покана.',
+  '{name} will be removed from {community} and cannot rejoin until unbanned.':
+    '{name} ще бъде премахнат(а) от {community} и не може да се върне, докато банът не бъде премахнат.',
+  'Timed out until {time}': 'Ограничен(а) до {time}',
+  'Copy River ID': 'Копирай River ID',
+  'River ID copied.': 'River ID е копиран.',
+  'Copy ID': 'Копирай ID',
+  'Member of {community} since {date}': 'Член на {community} от {date}',
+  'About me': 'За мен',
+  'Until {time}': 'До {time}',
+  'Remove {name}': 'Премахни {name}',
+  'Add role': 'Добави роля',
+  'No roles': 'Няма роли',
+  For: 'За',
+  Good: 'Завинаги',
+  '1 day': '1 ден',
+  '1 week': '1 седмица',
+  '30 days': '30 дни',
+  'User volume': 'Сила на звука на потребителя',
+  'Volume for {name}': 'Сила на звука за {name}',
+  'Server unmute': 'Включи микрофона за сървъра',
+  'Server mute': 'Заглуши за сървъра',
+  'Server undeafen': 'Включи звука за сървъра',
+  'Server deafen': 'Изключи звука за сървъра',
+  'Move {name} to another voice channel': 'Премести {name} в друг гласов канал',
+  'Move to…': 'Премести в…',
+  'Make {name} the owner?': 'Да стане ли {name} собственик?',
+  '{name} will own {community} and can do everything, including deleting it. You become an ordinary member with the roles you have. Only they can hand it back.':
+    '{name} ще притежава {community} и ще може всичко, включително да я изтрие. Вие ставате обикновен член с ролите, които имате. Само новият собственик може да ви я върне.',
+  'Transfer ownership': 'Прехвърли собствеността',
+  'You are friends': 'Приятели сте',
+  'Friends ✓': 'Приятели ✓',
+  'Wants to be friends': 'Иска да сте приятели',
+  'Request sent ✓': 'Заявката е изпратена ✓',
+  'Friend request sent': 'Поканата за приятелство е изпратена',
+  'Add friend': 'Добави приятел',
+  '60 seconds': '60 секунди',
+  '{name} is timed out': '{name} е временно ограничен(а)',
+  'Timeout ended for {name}': 'Ограничението на {name} приключи',
+  'End timeout': 'Прекрати ограничението',
+  'Time out': 'Временно ограничи',
+  'Timeout length': 'Продължителност на ограничението',
+  'Moderator notes · only moderators see these': 'Бележки на модераторите · виждат ги само модераторите',
+  'Remove note': 'Премахни бележката',
+  'Add a note': 'Добави бележка',
+  'Add a moderator note': 'Добави бележка на модератор',
+  'What new members see first. Rules and the welcome note are end-to-end encrypted.':
+    'Какво виждат първо новите членове. Правилата и приветствието са шифровани от край до край.',
+  'Welcome note': 'Приветствие',
+  "Glad you're here! Start in #general and say hi.":
+    'Радваме се, че сте тук! Започнете от #general и кажете здрасти.',
+  Rules: 'Правила',
+  'Add a rule (e.g. Be kind)': 'Добави правило (напр. Бъдете мили)',
+  'New rule': 'Ново правило',
+  'New members must accept the rules': 'Новите членове трябва да приемат правилата',
+  'Until they do, they can read but not post, react or join voice. People already here are not asked.':
+    'Дотогава могат да четат, но не и да пишат, реагират или влизат в гласови канали. Вече влезлите не се питат.',
+  'Roles members can pick themselves': 'Роли, които членовете избират сами',
+  'Create a role (for example "Gamer") to offer it here.':
+    'Създайте роля (например „Геймър“), за да я предложите тук.',
+  "can moderate, so it can't be self-assigned": 'може да модерира, затова не може да се избира сам',
+  'Word filter saved.': 'Филтърът за думи е запазен.',
+  'Word filter turned off.': 'Филтърът за думи е изключен.',
+  'Word filter': 'Филтър за думи',
+  'One word or phrase per line. Matching ignores case, accents and look-alikes like 4 for a. Your server cannot read messages, so every River app applies the filter itself — a modified app could ignore it. People who manage messages always see everything.':
+    'По една дума или фраза на ред. Сравняването пренебрегва главни букви, ударения и подобни знаци като 4 вместо a. Сървърът ви не може да чете съобщения, затова всяко приложение River прилага филтъра само — променено приложение може да го пренебрегне. Хората, които управляват съобщения, винаги виждат всичко.',
+  'Filtered words': 'Филтрирани думи',
+  'Hide messages with these words (members can still show them)':
+    'Скривай съобщения с тези думи (членовете пак могат да ги покажат)',
+  'Also stop people from sending them': 'И спирай хората да ги изпращат',
+  'Save filter': 'Запази филтъра',
+  'Turn off filter': 'Изключи филтъра',
+  'Welcome to {name}!': 'Добре дошли в {name}!',
+  'Rules of {name}': 'Правила на {name}',
+  'Welcome to {name}': 'Добре дошли в {name}',
+  'Before you join in, please read the rules:': 'Преди да се включите, моля, прочетете правилата:',
+  "This community asks new members to agree to its rules before joining in. Its rules could not be shown here; by continuing you agree to follow them and the moderators' guidance.":
+    'Тази общност иска новите членове да приемат правилата ѝ, преди да се включат. Правилата не могат да се покажат тук; продължавайки, се съгласявате да ги спазвате и да следвате указанията на модераторите.',
+  "I've read and agree to the rules": 'Прочетох и приемам правилата',
+  'Join the conversation': 'Включи се в разговора',
+  'Choose what fits you. You can change it any time from the community menu.':
+    'Изберете каквото ви подхожда. Можете да го смените по всяко време от менюто на общността.',
+  Skip: 'Пропусни',
+
+  'That is a link code for a new device. Open it on the device you are adding, on its welcome screen.':
+    'Това е код за свързване на ново устройство. Отворете го на устройството, което добавяте, на началния му екран.',
+  'That friend link is not complete. Ask for a new one, or add them by @username.':
+    'Тази покана за приятелство не е пълна. Поискайте нова или добавете човека по @потребителско име.',
+  'That sign-up link is for a new account — you already have one.':
+    'Тази връзка за регистрация е за нов акаунт — вие вече имате.',
+  'Join this community?': 'Да влезете ли в тази общност?',
+  "You've been invited to a River community. Joining shares your River name and avatar with its members.":
+    'Поканени сте в общност в River. Ако влезете, членовете ѝ ще виждат името и аватара ви в River.',
+  'Not now': 'Не сега',
+  'Join community': 'Влез в общността',
+  'Create your account here?': 'Да създадете ли акаунта си тук?',
+  'This link would create your River account on {host}. That server will know your River ID and which devices you use, never your messages. Continue only if you trust whoever sent you this link.':
+    'Тази връзка ще създаде акаунта ви в River на {host}. Сървърът ще знае вашето River ID и кои устройства използвате, но никога съобщенията ви. Продължете само ако имате доверие на изпратилия връзката.',
+  'This sign-up link is not valid.': 'Тази връзка за регистрация не е валидна.',
+  'Your account is ready': 'Акаунтът ви е готов',
+  'Creating…': 'Създаване…',
+  'Create account': 'Създай акаунт',
+  'You need an account first: join or create a community.':
+    'Първо ви трябва акаунт: влезте в общност или създайте такава.',
+  "That's your own friend link.": 'Това е вашата собствена покана за приятелство.',
+  'Add a friend?': 'Да добавите ли приятел?',
+  'This is a River friend link.': 'Това е покана за приятелство в River.',
+  'You pasted a River ID.': 'Поставихте River ID.',
+  'River will send them “{greeting}” as an end-to-end encrypted request.':
+    'River ще им изпрати „{greeting}“ като заявка, шифрована от край до край.',
+  'Setting up your account… The button works as soon as it is ready.':
+    'Акаунтът ви се настройва… Бутонът ще работи веднага щом е готов.',
+  'You are already friends': 'Вече сте приятели',
+  'Send friend request': 'Изпрати покана за приятелство',
+  Deny: 'Забрани',
+  Inherit: 'Наследи',
+  'Inherit from roles': 'Наследи от ролите',
+  Allow: 'Позволи',
+  'You can only allow permissions you have yourself':
+    'Можете да позволявате само разрешения, които имате сами',
+  "Thanks — {name}'s moderators will take a look.": 'Благодарим — модераторите на {name} ще погледнат.',
+  'An attachment': 'Прикачен файл',
+  'What is wrong with it?': 'Какво не е наред?',
+  'Anything to add? (optional)': 'Нещо да добавите? (по желание)',
+  'Only people who moderate messages in {name} see reports — never River or the server operator. They see who reported and a copy of the message, encrypted like everything else here.':
+    'Докладите виждат само хората, които модерират съобщенията в {name} — никога River или операторът на сървъра. Те виждат кой е докладвал и копие на съобщението, шифровано като всичко тук.',
+  Report: 'Докладвай',
+  Open: 'Отворени',
+  Resolved: 'Решени',
+  Dismissed: 'Отхвърлени',
+  'Messages members reported. Each shows the message as the reporter saw it; open the original to check it. Handling a report is recorded in the audit log.':
+    'Съобщения, докладвани от членове. Всяко е показано така, както го е видял докладващият; отворете оригинала, за да проверите. Обработката на доклад се записва в дневника на одита.',
+  'Which reports': 'Кои доклади',
+  'Open ({count})': 'Отворени ({count})',
+  'Nothing to review. 🎉': 'Няма нищо за преглед. 🎉',
+  'No reports yet.': 'Още няма доклади.',
+  '{reporter} reported {name} in #{channel}': '{reporter} докладва {name} в #{channel}',
+  'Resolved by {name}': 'Решено от {name}',
+  'Dismissed by {name}': 'Отхвърлено от {name}',
+  'Open message': 'Отвори съобщението',
+  Resolve: 'Реши',
+  Reopen: 'Отвори отново',
+  'You cannot speak in this channel': 'Не можете да говорите в този канал',
+  'Click to play for everyone · right-click to preview':
+    'Щракнете, за да пуснете за всички · десен бутон за преглед',
+  'No sounds yet.': 'Още няма звуци.',
+  'Add some': 'Добави',
+  'Sounds can be up to {size} KB.': 'Звуците може да са до {size} KB.',
+  'Sounds can be up to {seconds} seconds long.': 'Звуците може да са до {seconds} секунди.',
+  'Use an MP3, OGG, WAV or WebM file.': 'Използвайте файл MP3, OGG, WAV или WebM.',
+  'River could not read that sound.': 'River не успя да прочете звука.',
+  'Short sounds anyone who may speak can play in voice channels; pick one as your entrance sound. Sounds are end-to-end encrypted. Up to 48, each up to {seconds} seconds.':
+    'Кратки звуци, които всеки с право да говори може да пуска в гласови канали; изберете един за звук при влизане. Звуците са шифровани от край до край. До 48, всеки до {seconds} секунди.',
+  'Upload sound': 'Качи звук',
+  'Choose an emoji for this sound': 'Изберете емоджи за този звук',
+  Preview: 'Преглед',
+  'Emoji for {name}': 'Емоджи за {name}',
+  'New name for {name}': 'Ново име за {name}',
+  'Preview {name}': 'Прослушай {name}',
+  'Plays for everyone when you join a voice channel here':
+    'Пуска се за всички, когато влезете в гласов канал тук',
+  'Your entrance sound': 'Вашият звук при влизане',
+  'Use as entrance': 'Използвай при влизане',
+  'Setting up your account and your community…': 'Настройват се акаунтът и общността ви…',
+  '{name} is ready': '{name} е готова',
+  'Bring your people together': 'Съберете своите хора',
+  'Private spaces with text, voice and video — encrypted with a key only members have.':
+    'Лични пространства с текст, глас и видео — шифровани с ключ, който имат само членовете.',
+  'Got an invite?': 'Имате ли покана?',
+  'Invite link': 'Покана',
+  'River sets everything up, including your account.': 'River настройва всичко, включително акаунта ви.',
+  'Or start your own': 'Или създайте своя',
+  'Community template': 'Шаблон на общност',
+  '{template} channels': 'Канали: {template}',
+  'e.g. The Crew': 'напр. Бандата',
+  'Server address': 'Адрес на сървъра',
+  'Create community': 'Създай общност',
+  'Use River’s server': 'Използвай сървъра на River',
+  'Use a different server': 'Използвай друг сървър',
+  'Back to my communities': 'Обратно към общностите ми',
+  '[a sticker that is no longer here]': '[стикер, който вече го няма]',
+  'Sticker: {name}': 'Стикер: {name}',
+  'Search stickers': 'Търси стикери',
+  'Stickers come from your communities. Join or make one to add stickers.':
+    'Стикерите идват от общностите ви. Влезте в общност или създайте такава, за да добавите стикери.',
+  'No stickers yet. Community admins add them in community settings → Stickers.':
+    'Още няма стикери. Администраторите ги добавят от настройките на общността → Стикери.',
+  'Send sticker {name}': 'Изпрати стикер {name}',
+  'No stickers here yet.': 'Тук още няма стикери.',
+  'Big pictures anyone here can send with the 🗒️ button. End-to-end encrypted. Up to 60.':
+    'Големи картинки, които всеки тук може да изпрати с бутона 🗒️. Шифровани от край до край. До 60.',
+  'Upload sticker': 'Качи стикер',
+  'River could not make a sticker from that picture (try a smaller one).':
+    'River не успя да направи стикер от тази картинка (опитайте по-малка).',
+  'No stickers yet.': 'Още няма стикери.',
+  'Remove sticker {name}': 'Премахни стикера {name}',
+
+  'Profile saved': 'Профилът е запазен',
+  'Preview of your profile card': 'Преглед на профилната ви карта',
+  'Change avatar': 'Смени аватара',
+  'Display name (optional)': 'Показвано име (по желание)',
+  Pronouns: 'Местоимения',
+  'she/her, they/them…': 'тя, той, те…',
+  'A little about you': 'Малко за вас',
+  'Banner colour': 'Цвят на банера',
+  'No banner colour': 'Без цвят на банера',
+  'Banner colour {hex}': 'Цвят на банера {hex}',
+  'Your profile is encrypted separately for each community you are in; the server only stores ciphertext. About me is also your bio on your social profile.':
+    'Профилът ви се шифрова поотделно за всяка общност, в която сте; сървърът пази само шифрован текст. „За мен“ е и биото в социалния ви профил.',
+  'River ID': 'River ID',
+  '` (backtick)': '` (обратен апостроф)',
+  'Input device': 'Входно устройство',
+  Default: 'По подразбиране',
+  Microphone: 'Микрофон',
+  'Output device': 'Изходно устройство',
+  Speakers: 'Високоговорители',
+  "Let's check": 'Да проверим',
+  'Stop testing': 'Спри теста',
+  'Microphone level': 'Ниво на микрофона',
+  'Input mode': 'Режим на въвеждане',
+  'Voice activity': 'Гласова активност',
+  'Set input sensitivity automatically': 'Задавай чувствителността автоматично',
+  'River sends your voice all the time and filters noise. Turn off to choose how loud you must be.':
+    'River предава гласа ви постоянно и филтрира шума. Изключете, за да изберете колко силно трябва да говорите.',
+  'Input sensitivity': 'Чувствителност на входа',
+  "Your voice is sent while the meter is past the line (it turns green). Press Let's check to see it.":
+    'Гласът ви се предава, докато индикаторът е след чертата (става зелен). Натиснете „Да проверим“, за да го видите.',
+  Shortcut: 'Клавишна комбинация',
+  'Press a key…': 'Натиснете клавиш…',
+  'Push to talk works while the River window is focused.':
+    '„Натисни, за да говориш“ работи, докато прозорецът на River е активен.',
+  'Voice volume · {percent}%': 'Сила на гласа · {percent}%',
+  'How loud everyone sounds in calls and voice channels. Above 100% River boosts the sound and keeps it from distorting.':
+    'Колко силно звучат всички в разговори и гласови канали. Над 100% River усилва звука и не допуска изкривяване.',
+  'Soundboard volume': 'Сила на звуковия панел',
+  "How loud other people's soundboard sounds play for you (0 turns them off).":
+    'Колко силно чувате звуците от панела на другите (0 ги изключва).',
+  "Leave voice when you're alone": 'Напускай гласовия канал, когато сте сами',
+  Never: 'Никога',
+  'After 5 minutes': 'След 5 минути',
+  'After 15 minutes': 'След 15 минути',
+  'After 30 minutes': 'След 30 минути',
+  'After an hour': 'След час',
+  'Voice processing': 'Обработка на гласа',
+  'Noise suppression': 'Потискане на шума',
+  'Filters background noise like fans and keyboards.': 'Филтрира фонов шум като вентилатори и клавиатури.',
+  'Echo cancellation': 'Потискане на ехото',
+  'Stops others hearing themselves through your speakers.':
+    'Не позволява другите да се чуват през вашите високоговорители.',
+  'Keyboard shortcuts': 'Клавишни комбинации',
+  'Desktop notifications': 'Известия на работния плот',
+  'Shown when River is in the background.': 'Показват се, когато River е във фонов режим.',
+  'Banners inside River': 'Банери в River',
+  'While River is open, a small banner shows new messages from other chats and channels. Tap it to open the chat. Muted chats stay quiet.':
+    'Докато River е отворен, малък банер показва новите съобщения от други чатове и канали. Докоснете го, за да отворите чата. Заглушените чатове мълчат.',
+  'Unread count on River’s icon': 'Брой непрочетени върху иконата на River',
+  'The number of unread messages and mentions on River’s taskbar or dock icon (and the iPhone’s app icon). Muted chats are not counted. On Android the launcher shows it from River’s notifications.':
+    'Броят непрочетени съобщения и споменавания върху иконата на River в лентата на задачите или дока (и иконата на iPhone). Заглушените чатове не се броят. На Android стартовият екран го показва от известията на River.',
+  'Count archived chats': 'Броене на архивираните чатове',
+  'Unread messages in archived chats count on the Chats and Home badges and on River’s icon. Off: archived chats wait quietly in Archived. Message requests are never counted.':
+    'Непрочетените в архивираните чатове се броят в значките на Чатове и Начало и върху иконата на River. Изключено: архивираните чатове чакат тихо в Архив. Заявките за съобщения никога не се броят.',
+  'Reactions to my messages': 'Реакции на моите съобщения',
+  'A sound and a small notice when someone reacts to something you wrote (while that channel is loaded).':
+    'Звук и кратко известие, когато някой реагира на нещо ваше (докато каналът е зареден).',
+  'Notify me about': 'Известявай ме за',
+  'All messages': 'Всички съобщения',
+  'Only @mentions': 'Само @споменавания',
+  Sounds: 'Звуци',
+  'Short sounds for messages, voice, calls, friends and the interface.':
+    'Кратки звуци за съобщения, глас, разговори, приятели и интерфейса.',
+  'Sound volume — {percent}%': 'Сила на звуците — {percent}%',
+  'Play the {sound} sound': 'Пусни звука „{sound}“',
+  'Sending, receiving, mentions, direct messages and reactions.':
+    'Изпращане, получаване, споменавания, лични съобщения и реакции.',
+  Send: 'Изпращане',
+  Mention: 'Споменаване',
+  'Direct message': 'Лично съобщение',
+  Reaction: 'Реакция',
+  'Voice channels': 'Гласови канали',
+  'Joining, leaving, mute, deafen, push-to-talk and screen sharing.':
+    'Влизане, излизане, заглушаване на микрофона и звука, „натисни, за да говориш“ и споделяне на екрана.',
+  'You join': 'Вие влизате',
+  'Someone joins': 'Някой влиза',
+  'Someone leaves': 'Някой излиза',
+  'Go live': 'Излъчване на живо',
+  'Push-to-talk': 'Натисни, за да говориш',
+  'Ringing, connected and call ended.': 'Звънене, свързване и край на разговора.',
+  Ringing: 'Звънене',
+  Ended: 'Край',
+  'Friends and communities': 'Приятели и общности',
+  'Friend requests, new friends and joining a community.':
+    'Покани за приятелство, нови приятели и влизане в общност.',
+  'Friend request': 'Покана за приятелство',
+  'New friend': 'Нов приятел',
+  'Joined a community': 'Влизане в общност',
+  Interface: 'Интерфейс',
+  'Copied, saved and something went wrong.': 'Копирано, запазено и грешка.',
+  Done: 'Готово',
+  Error: 'Грешка',
+  'Use Ctrl or Alt with a key (or an F key), so typing never sets it off.':
+    'Използвайте Ctrl или Alt с клавиш (или F клавиш), за да не се задейства при писане.',
+  '{shortcut} is already used for {action}.': '{shortcut} вече се използва за „{action}“.',
+  '{action}: {shortcut}. Click to change.': '{action}: {shortcut}. Щракнете, за да смените.',
+  'Press keys…': 'Натиснете клавиши…',
+  'Restore defaults': 'Възстанови по подразбиране',
+  'Shortcuts work while River is focused. Press Esc to stop changing one.':
+    'Комбинациите работят, докато River е активен. Натиснете Esc, за да спрете промяната.',
+  'deleted channel': 'изтрит канал',
+  'Let a script or another service post into a channel. It encrypts each post itself with a key that is only in the webhook address, so the server still cannot read it. Anyone with the address can post as the webhook (not read), so keep it secret.':
+    'Позволете на скрипт или друга услуга да публикува в канал. Тя шифрова всяка публикация сама с ключ, който е само в адреса на уебхука, така че сървърът пак не може да я чете. Всеки с адреса може да публикува като уебхука (но не и да чете), затова го пазете в тайна.',
+  'Copy this address now — River will not show it again.':
+    'Копирайте адреса сега — River няма да го покаже отново.',
+  Copied: 'Копирано',
+  'Post with {script} from the River repository, or any tool that follows ADR 0004.':
+    'Публикувайте с {script} от хранилището на River или с всеки инструмент, който следва ADR 0004.',
+  'Webhooks can post only in text channels you manage; there are none here for you.':
+    'Уебхуците могат да публикуват само в текстови канали, които управлявате; тук няма такива за вас.',
+  'Webhook name': 'Име на уебхука',
+  'Name, e.g. Build bot': 'Име, напр. Бот за компилации',
+  'Create webhook': 'Създай уебхук',
+  'No webhooks yet.': 'Още няма уебхуци.',
+  'posts in #{channel} · made by {name}': 'публикува в #{channel} · създаден от {name}',
+  'Its address stops working at once; anything using it can no longer post. This cannot be undone.':
+    'Адресът спира да работи веднага; нищо, което го използва, вече не може да публикува. Не може да се отмени.',
+  'Delete webhook': 'Изтрий уебхука',
+
+  'Backup saved. Keep the file and your recovery phrase in different places.':
+    'Резервното копие е запазено. Пазете файла и фразата за възстановяване на различни места.',
+  'Backup & recovery': 'Резервно копие и възстановяване',
+  "If this computer is lost or replaced, a backup file plus your recovery phrase brings back your River ID, contacts, communities, messages and posts. Without the phrase the file is unreadable — to River's server, and to anyone else.":
+    'Ако този компютър бъде изгубен или сменен, файлът с резервно копие и фразата за възстановяване връщат вашето River ID, контакти, общности, съобщения и публикации. Без фразата файлът е нечетим — за сървъра на River и за всеки друг.',
+  '1. Your recovery phrase': '1. Вашата фраза за възстановяване',
+  '18 words. Write them on paper and keep them somewhere safe. Anyone with these words and a backup file can become you; River will never ask you for them.':
+    '18 думи. Запишете ги на хартия и ги пазете на сигурно място. Всеки с тези думи и файл с резервно копие може да стане вас; River никога няма да ви ги поиска.',
+  'Recovery phrase': 'Фраза за възстановяване',
+  'Hide phrase': 'Скрий фразата',
+  'Show recovery phrase': 'Покажи фразата за възстановяване',
+  'Create my recovery phrase': 'Създай фраза за възстановяване',
+  '2. Save a backup file': '2. Запазете файл с резервно копие',
+  'Last backup: {time}. Make a new one now and then — it only contains what existed when you made it.':
+    'Последно копие: {time}. Правете ново от време на време — то съдържа само това, което е съществувало при създаването му.',
+  'You have no backup yet.': 'Още нямате резервно копие.',
+  'Show your recovery phrase (step 1) and write it down first — without it, a backup can never be opened.':
+    'Първо покажете фразата си за възстановяване (стъпка 1) и я запишете — без нея резервното копие никога не може да се отвори.',
+  'Save encrypted backup…': 'Запази шифровано резервно копие…',
+  'To restore: install River on the new computer and choose {restore} on the first screen. Files you received are referenced by the backup, not copied into it; recent ones can still be downloaded.':
+    'За възстановяване: инсталирайте River на новия компютър и изберете {restore} на първия екран. Получените файлове са посочени в копието, а не копирани в него; скорошните все още могат да се изтеглят.',
+  'Backup file (.riverbackup)': 'Файл с резервно копие (.riverbackup)',
+  'Recovery phrase (18 words)': 'Фраза за възстановяване (18 думи)',
+  'Restoring…': 'Възстановяване…',
+  Restore: 'Възстанови',
+  'Setting up your public address (one-time download, {percent}%)…':
+    'Настройва се публичният ви адрес (еднократно изтегляне, {percent}%)…',
+  'Starting…': 'Стартиране…',
+  'Online — members can reach your communities': 'На линия — членовете имат достъп до общностите ви',
+  'today at {time}': 'днес в {time}',
+  'Checking…': 'Проверка…',
+  'Keep my communities online from this PC': 'Дръж общностите ми на линия от този компютър',
+  'Free, and no account anywhere. River runs your community server and gives it a public address. Your communities live on this PC: nothing is deleted when it restarts, and River backs them up every day.':
+    'Безплатно и без акаунт никъде. River пуска сървъра на общностите ви и му дава публичен адрес. Общностите ви живеят на този компютър: нищо не се изтрива при рестарт, а River ги архивира всеки ден.',
+  'Host communities on this PC': 'Хоствай общности на този компютър',
+  'Stop hosting?': 'Да спре ли хостването?',
+  'Members can’t reach the communities on this PC until you turn hosting back on. Nothing is deleted.':
+    'Членовете нямат достъп до общностите на този компютър, докато не включите отново хостването. Нищо не се изтрива.',
+  'Stop hosting': 'Спри хостването',
+  'Keep hosting': 'Продължи хостването',
+  'River Host, the separate host from River 1.0.8, is set up on this PC and running. Turning this on moves your community into River — same members, same messages — and removes River Host. Its folder stays as a backup.':
+    'River Host, отделният хост от River 1.0.8, е настроен на този компютър и работи. Ако включите това, общността ви се премества в River — същите членове, същите съобщения — и River Host се премахва. Папката му остава като резервно копие.',
+  'River Host, the separate host from River 1.0.8, is set up on this PC. Turning this on moves your community into River — same members, same messages — and removes River Host. Its folder stays as a backup.':
+    'River Host, отделният хост от River 1.0.8, е настроен на този компютър. Ако включите това, общността ви се премества в River — същите членове, същите съобщения — и River Host се премахва. Папката му остава като резервно копие.',
+  'Download progress': 'Напредък на изтеглянето',
+  'Copy address': 'Копирай адреса',
+  'Permanent address, free through Tailscale. It never changes, and members stay connected.':
+    'Постоянен адрес, безплатно чрез Tailscale. Никога не се сменя и членовете остават свързани.',
+  'This address changes every so often. Members’ River apps find the new one by themselves.':
+    'Този адрес се сменя от време на време. Приложенията River на членовете намират новия сами.',
+  'Address announcements are off, so members need the new address after a restart.':
+    'Обявяването на адреса е изключено, затова след рестарт членовете трябва да получат новия адрес.',
+  'Last backup {when}': 'Последно копие {when}',
+  'No backup yet': 'Още няма копие',
+  'Backing up…': 'Архивиране…',
+  'Back up now': 'Архивирай сега',
+  'Open hosting folder': 'Отвори папката за хостване',
+  'Keep this PC awake while hosting': 'Дръж компютъра буден по време на хостване',
+  'Stops the PC from going to sleep by itself so members can always reach you. The screen can still turn off.':
+    'Не позволява на компютъра да заспи сам, за да имат членовете винаги достъп. Екранът пак може да се изключва.',
+  'While hosting is on, River keeps running in the tray when you close the window. It does not start by itself when you sign in to Linux: open River after restarting this PC.':
+    'Докато хостването е включено, River продължава да работи в системната област, когато затворите прозореца. Не се стартира сам при влизане в Linux: отворете River след рестарт на компютъра.',
+  'While hosting is on, River starts with your PC and keeps running in the tray when you close the window.':
+    'Докато хостването е включено, River се стартира с компютъра и продължава да работи в системната област, когато затворите прозореца.',
+  'Members can always open River and write: if this PC is off, their messages wait on their devices and arrive when it is back.':
+    'Членовете винаги могат да отворят River и да пишат: ако компютърът е изключен, съобщенията им чакат на устройствата им и пристигат, когато се върне.',
+  'One last step: allow your permanent address': 'Последна стъпка: разрешете постоянния си адрес',
+  'Tailscale asks you once to allow a public address for this PC.':
+    'Tailscale ще ви попита веднъж дали разрешавате публичен адрес за този компютър.',
+  'Allow in Tailscale': 'Разреши в Tailscale',
+  'Your permanent address is not working yet': 'Постоянният ви адрес още не работи',
+  'Members still reach you at the changing address above; River tries the permanent one again every few minutes. In Tailscale, check that Funnel and HTTPS are allowed for this PC.':
+    'Членовете още стигат до вас през променящия се адрес по-горе; River опитва постоянния отново на всеки няколко минути. В Tailscale проверете дали Funnel и HTTPS са разрешени за този компютър.',
+  'Try again now': 'Опитай пак сега',
+  'Switching to your permanent address…': 'Превключване към постоянния ви адрес…',
+  'Tailscale is signed in. This can take a minute the first time.':
+    'Tailscale е вписан. Първия път това може да отнеме минута.',
+  'Get a permanent address — free': 'Вземете постоянен адрес — безплатно',
+  'Calls and chats stay connected, and your invite links always work. Only this PC needs it; members install nothing extra.':
+    'Разговорите и чатовете остават свързани, а поканите ви винаги работят. Нужно е само на този компютър; членовете не инсталират нищо допълнително.',
+  'Install Tailscale (free).': 'Инсталирайте Tailscale (безплатно).',
+  'Download Tailscale': 'Изтегли Tailscale',
+  'Open Tailscale and sign in — Google, Microsoft or GitHub all work.':
+    'Отворете Tailscale и влезте — работят Google, Microsoft и GitHub.',
+  "That's it: River switches over by itself.": 'Това е: River превключва сам.',
+  'I did it — check now': 'Готово — провери сега',
+  "Hi! Let's be friends on River 👋": 'Здрасти! Да станем приятели в River 👋',
+  '{name} is already your friend — here is your chat.': '{name} вече ви е приятел — ето чата ви.',
+  'This person is already your friend — here is your chat.': 'Този човек вече ви е приятел — ето чата ви.',
+  'You already sent {name} a friend request. It waits for their answer.':
+    'Вече изпратихте покана за приятелство на {name}. Тя чака отговор.',
+  'You already sent them a friend request. It waits for their answer.':
+    'Вече им изпратихте покана за приятелство. Тя чака отговор.',
+  'You are now friends with {name}': 'Вече сте приятели с {name}',
+  'You are now friends': 'Вече сте приятели',
+  'You blocked {name}. Unblock them in Messages first.':
+    'Блокирали сте {name}. Първо го отблокирайте в Съобщения.',
+  'You blocked this person. Unblock them in Messages first.':
+    'Блокирали сте този човек. Първо го отблокирайте в Съобщения.',
+  'Could not send the request. Try again.': 'Заявката не можа да бъде изпратена. Опитайте пак.',
+
+  'River user {id}': 'Потребител на River {id}',
+  'That did not work.': 'Не се получи.',
+  'Your River server': 'Вашият сървър на River',
+  'Everyone who uses River through your server, and every community on it. The server never sees messages or names; names show for people you share a community or a conversation with.':
+    'Всички, които използват River чрез вашия сървър, и всяка общност на него. Сървърът никога не вижда съобщения или имена; имената се показват за хората, с които имате обща общност или разговор.',
+  'Online now': 'На линия сега',
+  'Timed out or banned': 'Ограничени или с бан',
+  'Search people': 'Търси хора',
+  'Search by name or ID': 'Търси по име или ID',
+  'Nobody matches.': 'Няма съвпадения.',
+  Banned: 'С бан',
+  'Joined {date}': 'Присъединил се {date}',
+  'Reason: {reason}': 'Причина: {reason}',
+  Unban: 'Премахни бана',
+  'Time out {name}': 'Временно ограничи {name}',
+  'Time out…': 'Временно ограничение…',
+  'No communities yet.': 'Още няма общности.',
+  'A community you are not in': 'Общност, в която не сте',
+  'Owner {name}': 'Собственик {name}',
+  'created {date}': 'създадена {date}',
+  'Ban {name}?': 'Бан за {name}?',
+  'Remove {name}?': 'Да се премахне ли {name}?',
+  'Delete {name}?': 'Да се изтрие ли {name}?',
+  'They are signed out at once and cannot use River on your server until you unban them. Nothing is deleted.':
+    'Излизат веднага и не могат да използват River на вашия сървър, докато не премахнете бана. Нищо не се изтрива.',
+  'Their account leaves your server: they are removed from every community, communities they own are deleted, and they would need to create a new account. Messages they already sent stay.':
+    'Акаунтът напуска сървъра ви: човекът се премахва от всяка общност, общностите му се изтриват и ще трябва да създаде нов акаунт. Вече изпратените съобщения остават.',
+  'Reason (optional, shown to them)': 'Причина (по желание, вижда я)',
+  'Remove account': 'Премахни акаунта',
+  'That did not work. Try again.': 'Не се получи. Опитайте пак.',
+  'Accounts you create': 'Акаунти, които създавате',
+  'Invite-only: only people you make a sign-up link for can join.':
+    'Само с покана: могат да влизат само хората, за които създадете връзка за регистрация.',
+  'Open: anyone who downloads River can create an account here.':
+    'Отворено: всеки, който изтегли River, може да създаде акаунт тук.',
+  'Allow anyone to join': 'Позволи на всеки да влиза',
+  'Make invite-only': 'Само с покана',
+  'Username for the new account': 'Потребителско име за новия акаунт',
+  'Send this link to @{username} — they open it in River and the account is theirs:':
+    'Изпратете тази връзка на @{username} — отваря я в River и акаунтът е негов:',
+  'Could not copy the link. Select it and copy it yourself.':
+    'Връзката не можа да се копира. Маркирайте я и я копирайте сами.',
+  'Waiting to be claimed:': 'Чакат да бъдат поети:',
+  Images: 'Изображения',
+  Videos: 'Видеа',
+  Documents: 'Документи',
+  'Your files': 'Вашите файлове',
+  'Everything shared with you in messages and posts. Each file is encrypted with its own key and only decrypted on this computer when you open or save it.':
+    'Всичко, споделено с вас в съобщения и публикации. Всеки файл е шифрован със собствен ключ и се дешифрира на този компютър само когато го отворите или запазите.',
+  'Files appear here once you have an account and share something.':
+    'Файловете се появяват тук, щом имате акаунт и споделите нещо.',
+  'File type': 'Вид файл',
+  'Search by name or person': 'Търси по име или човек',
+  'No files yet.': 'Още няма файлове.',
+  'Show in chat': 'Покажи в чата',
+  'Your people': 'Вашите хора',
+  'Setting up your account… River keeps trying by itself, and friends can be added as soon as it is ready.':
+    'Акаунтът ви се настройва… River продължава да опитва сам, а приятели можете да добавяте веднага щом е готов.',
+  'Your account needs the sign-up link from whoever runs your River server — paste it in the card above.':
+    'Акаунтът ви се нуждае от връзката за регистрация от човека, който поддържа вашия сървър на River — поставете я в картата по-горе.',
+  'Friends need an account on a River server. Join or create a community first — it only takes a moment.':
+    'За приятели е нужен акаунт на сървър на River. Първо влезте в общност или създайте такава — отнема само миг.',
+  'Go to Communities': 'Към общностите',
+  Pending: 'Чакащи',
+  'River never uploads an address book. Add people with a link, or from a community.':
+    'River никога не качва адресна книга. Добавяйте хора с връзка или от общност.',
+  'Search friends': 'Търси приятели',
+  'All friends': 'Всички приятели',
+  Requests: 'Заявки',
+  'No friends are online right now.': 'В момента няма приятели на линия.',
+  'No friends yet.': 'Още нямате приятели.',
+  'No friend requests right now.': 'В момента няма покани за приятелство.',
+  "You haven't blocked anyone.": 'Не сте блокирали никого.',
+  'Request sent — waiting for them to accept': 'Заявката е изпратена — чака да бъде приета',
+  'Safety number verified': 'Кодът за сигурност е потвърден',
+  'Safety number changed': 'Кодът за сигурност се промени',
+  'Open chat': 'Отвори чата',
+  'Cancel request': 'Отмени заявката',
+  'Voice call': 'Гласово обаждане',
+  Accept: 'Приеми',
+  'Read message': 'Прочети съобщението',
+  Ignore: 'Игнорирай',
+  Unblock: 'Отблокирай',
+  "That's you!": 'Това сте вие!',
+  'That QR code is not a River friend code.': 'Този QR код не е код за приятелство в River.',
+  "That's your own code.": 'Това е вашият собствен код.',
+  'Type their username — like @alex. They get your message as a request.':
+    'Въведете потребителското му име — например @alex. Ще получи съобщението ви като заявка.',
+  "Friend's username": 'Потребителско име на приятеля',
+  'Scan QR code': 'Сканирай QR код',
+  "Scan a friend's QR code": 'Сканирайте QR кода на приятел',
+  'Point the camera at the QR code in their River: Friends → Add friend → Show QR code.':
+    'Насочете камерата към QR кода в неговия River: Приятели → Добави приятел → Покажи QR кода.',
+  'You are @{username}': 'Вие сте @{username}',
+  'You are on River': 'Вие сте в River',
+  'Share your username and people can add you. Or send them your link.':
+    'Споделете потребителското си име и хората ще могат да ви добавят. Или им изпратете връзката си.',
+  'Choose a username in Settings → Account so people can add you by name. You can still share your link.':
+    'Изберете потребителско име от Настройки → Акаунт, за да могат хората да ви добавят по име. Пак можете да споделяте връзката си.',
+  'Copy friend link': 'Копирай поканата за приятелство',
+  'Hide QR code': 'Скрий QR кода',
+  'Show QR code': 'Покажи QR кода',
+  'Your friend link as a QR code': 'Вашата покана за приятелство като QR код',
+  'Your friend scans this in River to send you a friend request.':
+    'Приятелят ви го сканира в River, за да ви изпрати покана за приятелство.',
+  'Join me in {community}: {link}': 'Ела при мен в {community}: {link}',
+  'Invite to {community} sent to {name}': 'Поканата за {community} е изпратена на {name}',
+  'Invite {name} to a community': 'Покани {name} в общност',
+  'Invited to {community}': 'Поканен в {community}',
+  'Invite to a community': 'Покани в общност',
+  'River Security Center': 'Център за сигурност на River',
+  'What is protected, right now': 'Какво е защитено в момента',
+  'This page only shows what this version of River actually does. Features that are not built yet are marked as planned, never as active.':
+    'Тази страница показва само какво наистина прави тази версия на River. Функциите, които още не са направени, са отбелязани като планирани, никога като активни.',
+  'Your identity': 'Вашата самоличност',
+  'Read these words to a contact (in person or on a call) and ask them to compare with what River shows for you. If they match, nobody has swapped your key. To check a contact, open your conversation with them and choose View safety number; once you mark it verified, River warns you and stops sending if it ever changes.':
+    'Прочетете тези думи на контакт (лично или по телефона) и го помолете да ги сравни с това, което River показва за вас. Ако съвпадат, никой не е подменил ключа ви. За да проверите контакт, отворете разговора си с него и изберете „Виж кода за сигурност“; щом го отбележите като потвърден, River ще ви предупреди и ще спре изпращането, ако някога се промени.',
+  'Security status': 'Състояние на сигурността',
+  'Release signing keys': 'Ключове за подписване на версии',
+  'Updates are installed only when signed by one of these keys, which are built into this copy of River.':
+    'Обновленията се инсталират само ако са подписани с един от тези ключове, вградени в това копие на River.',
+  'Honest limits': 'Честни ограничения',
+  'River is not an anonymity network and cannot hide that you use it.':
+    'River не е мрежа за анонимност и не може да скрие, че го използвате.',
+  'Malware on an unlocked device can read anything you can.':
+    'Зловреден софтуер на отключено устройство може да чете всичко, което и вие.',
+  'People you message can always screenshot or forward what you send.':
+    'Хората, на които пишете, винаги могат да направят снимка на екрана или да препратят каквото изпращате.',
+  'River has not had an independent security audit yet.':
+    'River все още не е минал независим одит на сигурността.',
+  'Threat model': 'Модел на заплахите',
+  'Privacy policy': 'Политика за поверителност',
+  'Report a vulnerability': 'Докладвай уязвимост',
+  'Share with your people': 'Споделяйте със своите хора',
+  'Posts and stories go only to people you choose, end-to-end encrypted. Join a community or create an account first.':
+    'Публикациите и историите стигат само до хората, които изберете, шифровани от край до край. Първо влезте в общност или създайте акаунт.',
+  'Your friends are the people you have accepted in Messages.':
+    'Приятелите ви са хората, които сте приели в Съобщения.',
+  'Friends — {count}': 'Приятели — {count}',
+  'Share something with your friends…': 'Споделете нещо с приятелите си…',
+  'Nothing here yet': 'Тук още няма нищо',
+  'Posts from your contacts appear here. Add people in Messages (or from a community) and share your first post — only the people you choose can see it.':
+    'Тук се появяват публикациите на контактите ви. Добавете хора в Съобщения (или от общност) и споделете първата си публикация — виждат я само хората, които изберете.',
+  Stories: 'Истории',
+  'Your story': 'Вашата история',
+  'Add to your story': 'Добави към историята си',
+  'View your profile': 'Виж профила си',
+  'Encrypting photos…': 'Снимките се шифроват…',
+  'Sharing…': 'Споделяне…',
+  'Added to your story': 'Добавено към историята ви',
+  Shared: 'Споделено',
+  'Could not share.': 'Неуспешно споделяне.',
+  'Create post': 'Създай публикация',
+  'Say something (shown for 24 hours)…': 'Кажете нещо (показва се 24 часа)…',
+  'What do you want to share?': 'Какво искате да споделите?',
+  'Photos & videos': 'Снимки и видеа',
+  'Add photos or videos': 'Добави снимки или видеа',
+  'Who can see this': 'Кой може да вижда това',
+  'All friends ({count})': 'Всички приятели ({count})',
+  'Only people I choose': 'Само избрани от мен хора',
+  "Encrypted separately for each person who can see it. River's server only relays ciphertext.":
+    'Шифрова се поотделно за всеки, който може да го вижда. Сървърът на River само препраща шифрован текст.',
+  'Share to story': 'Сподели в историята',
+  Post: 'Публикувай',
+  'Post options': 'Опции на публикацията',
+  'Delete post': 'Изтрий публикацията',
+  'It will be removed for everyone you shared it with.':
+    'Ще бъде премахната за всички, с които сте я споделили.',
+  Unlike: 'Махни харесването',
+  Like: 'Харесай',
+  React: 'Реагирай',
+  'Add a comment…': 'Добави коментар…',
+  'Add a comment': 'Добави коментар',
+  "{name}'s story": 'Историята на {name}',
+  'Close story': 'Затвори историята',
+  'This story could not be loaded.': 'Тази история не можа да се зареди.',
+  'Video story': 'Видео история',
+  Previous: 'Предишна',
+  Next: 'Следваща',
+  'Seen by {count}': 'Видяна от {count}',
+  'Replied to your story: {text}': 'Отговор на историята ви: {text}',
+  'Sent to {name}': 'Изпратено на {name}',
+  'Reply to {name}…': 'Отговор на {name}…',
+  'Reply to {name}': 'Отговори на {name}',
+  'Bio saved': 'Биото е запазено',
+  'Your bio': 'Вашето био',
+  'Add a short bio.': 'Добавете кратко био.',
+  'Edit bio': 'Редактирай биото',
+  Close: 'Затвори',
+  'No posts yet.': 'Още няма публикации.',
+
+  'River — share your screen': 'River — споделяне на екрана',
+  'Share your screen?': 'Да споделите ли екрана си?',
+  'People in this call will see “{source}” until you press Stop sharing on the red bar at the top of that screen.':
+    'Хората в разговора ще виждат „{source}“, докато не натиснете „Спри споделянето“ в червената лента в горната част на този екран.',
+  Share: 'Сподели',
+  'Automatic updates are disabled in development builds.':
+    'Автоматичните обновления са изключени в тестовите версии.',
+  'Keep River running': 'Остави River да работи',
+  'Quit anyway': 'Изход въпреки това',
+  'Quit River?': 'Изход от River?',
+  'Your communities go offline while River is closed.':
+    'Общностите ви са без връзка, докато River е затворен.',
+  'This PC hosts them. Members can still open River and write; their messages are sent when River runs here again.':
+    'Този компютър ги хоства. Членовете пак могат да отворят River и да пишат; съобщенията им ще се изпратят, когато River отново работи тук.',
+  'River — hosting your communities': 'River — хоства общностите ви',
+  'River — starting hosting…': 'River — хостването се стартира…',
+  'Open River': 'Отвори River',
+  'Hosting: online': 'Хостване: на линия',
+  'Hosting: connecting…': 'Хостване: свързване…',
+  'Quit River': 'Изход от River',
+  'River is still running': 'River продължава да работи',
+  'Calls and messages keep coming in. Quit from the River icon in the tray.':
+    'Обажданията и съобщенията продължават да пристигат. Излезте от иконата на River в системната област.',
+  "River's window keeps closing": 'Прозорецът на River продължава да се затваря',
+  'The interface stopped {times} times ({reason}). Try again, or quit and start River with --disable-gpu. The log is in {folder}.':
+    'Интерфейсът спря {times} пъти ({reason}). Опитайте пак или излезте и стартирайте River с --disable-gpu. Дневникът е в {folder}.',
+  'An update was downloaded but its signature did not verify, so it was not installed. Your current version is unchanged.':
+    'Обновлението беше изтеглено, но подписът му не мина проверка, затова не е инсталирано. Текущата ви версия е непроменена.',
+  'Could not reach the update server. River will try again later.':
+    'Няма връзка със сървъра за обновления. River ще опита пак по-късно.',
+  'Checking for updates failed. River will try again later.':
+    'Проверката за обновления не успя. River ще опита пак по-късно.',
+  'The update download failed. River will try again later.':
+    'Изтеглянето на обновлението не успя. River ще опита пак по-късно.',
+  'The update could not be completed. Your current version is unchanged.':
+    'Обновлението не можа да завърши. Текущата ви версия е непроменена.',
+  'Keep them': 'Пази ги',
+  '90 days': '90 дни',
+  '1 year': '1 година',
+  'Keep messages on this device': 'Пази съобщенията на това устройство',
+  'Disappearing messages for new chats': 'Изчезващи съобщения за нови чатове',
+  'Direct and group messages older than you choose are deleted from this device. The people you talk to, and your other devices, keep their own copies. Community channels live on their server and are not affected. Chats you start from now on get the disappearing-messages timer; chats you already have keep theirs.':
+    'Личните и груповите съобщения, по-стари от избраното, се изтриват от това устройство. Хората, с които говорите, и другите ви устройства пазят свои копия. Каналите на общностите живеят на сървъра си и не се засягат. Чатовете, които започнете отсега нататък, получават таймера за изчезващи съобщения; съществуващите запазват своя.',
+  Test: 'Тест',
+  'Connect through a proxy (Tor)': 'Свързване през прокси (Tor)',
+  'On: River connects to its server only through {kind} proxy {address}.':
+    'Включено: River се свързва със сървъра си само през {kind} прокси {address}.',
+  'Off: River connects to its server directly.': 'Изключено: River се свързва със сървъра си директно.',
+  'What it hides: your IP address from your River server (and from the address relay and GitHub’s update checks). What it does not hide: your account, who you talk to and when — the server still sees that, and your messages were already end-to-end encrypted. While it is on, calls never connect directly: voice goes through a TURN relay or your server, so the people you call do not see your address either, and video or screen sharing work only if your server offers a TURN relay. Link previews are off. If the proxy stops, River does not connect at all — it never falls back to a direct connection. A server on this computer, and hosting from this PC, do not use the proxy. Computers only for now.':
+    'Какво скрива: IP адреса ви от сървъра на River (и от препращането на адреси и проверките за обновления в GitHub). Какво не скрива: акаунта ви, с кого и кога говорите — сървърът пак вижда това, а съобщенията ви и без това са шифровани от край до край. Докато е включено, разговорите никога не се свързват директно: гласът минава през TURN или сървъра ви, така че хората, на които се обаждате, също не виждат адреса ви, а видео и споделяне на екрана работят само ако сървърът предлага TURN. Прегледите на връзки са изключени. Ако проксито спре, River изобщо не се свързва — никога не преминава към директна връзка. Сървър на този компютър и хостване от него не използват проксито. Засега само за компютри.',
+  Type: 'Вид',
+  Address: 'Адрес',
+  Port: 'Порт',
+  'Testing…': 'Проверка…',
+  'Test connection': 'Провери връзката',
+  'Turn on': 'Включи',
+  'Turn off': 'Изключи',
+  'Preparing…': 'Подготовка…',
+  'Link this device again': 'Свържи това устройство отново',
+  'Setting up…': 'Настройване…',
+  'Set up my account again': 'Настрой акаунта ми отново',
+  'On a device that still has your account, open Settings → Account → Devices → Link a new device, then use its code here.':
+    'На устройство, което още има акаунта ви, отворете Настройки → Акаунт → Устройства → Свържи ново устройство и използвайте кода му тук.',
+  'Set up again: a new account for your identity — same name and messages here; rejoin communities with an invite. Link again: if this device was removed, join your account from a device that still has it.':
+    'Настрой отново: нов акаунт за самоличността ви — същото име и съобщения тук; влизате отново в общностите с покана. Свържи отново: ако това устройство е премахнато, присъединете го към акаунта от устройство, което още го има.',
+  'Link this device again?': 'Да се свърже ли това устройство отново?',
+  'River forgets the account and identity on this device, then you link it again with a code from a device that still has your account. Your messages and contacts on this device stay, and only work again with the same account.':
+    'River забравя акаунта и самоличността на това устройство, след което го свързвате отново с код от устройство, което още има акаунта ви. Съобщенията и контактите на това устройство остават и работят отново само със същия акаунт.',
+  Continue: 'Продължи',
+  'Your data': 'Вашите данни',
+  'Save a readable copy (JSON) of what this device keeps: your profile, settings, contacts, direct messages, groups, calls, your posts and saved messages. It never contains your keys. Keep it somewhere safe — it is not encrypted.':
+    'Запазете четимо копие (JSON) на това, което пази това устройство: профил, настройки, контакти, лични съобщения, групи, обаждания, публикации и запазени съобщения. Никога не съдържа ключовете ви. Пазете го на сигурно място — не е шифровано.',
+  'Export my data': 'Експортирай данните ми',
+  'Your account was deleted.': 'Акаунтът ви беше изтрит.',
+  'Delete account': 'Изтрий акаунта',
+  'Removes your account from your server for good: you leave every community (communities you own are deleted), and your keys and devices are removed there. Messages you already sent stay where they are, encrypted. Your identity and the messages on this device stay on this device.':
+    'Премахва акаунта ви от сървъра завинаги: напускате всички общности (тези, които притежавате, се изтриват), а ключовете и устройствата ви се премахват там. Вече изпратените съобщения остават, шифровани. Самоличността и съобщенията на това устройство остават на него.',
+  'Delete account…': 'Изтрий акаунта…',
+  'Delete your account?': 'Да изтриете ли акаунта си?',
+  'This cannot be undone. Type DELETE to confirm.': 'Не може да се отмени. Въведете DELETE за потвърждение.',
+  Confirmation: 'Потвърждение',
+  'Keep my account': 'Запази акаунта ми',
+  'Deleting…': 'Изтриване…',
+  Server: 'Сървър',
+  'River uses a server to deliver encrypted messages between devices. Anyone can run one. The server never receives your keys or readable messages.':
+    'River използва сървър, за да доставя шифровани съобщения между устройства. Всеки може да пусне такъв. Сървърът никога не получава ключовете ви или четими съобщения.',
+  'Must start with https:// (http:// is allowed only for a server on this computer).':
+    'Трябва да започва с https:// (http:// е позволено само за сървър на този компютър).',
+  'Remove server': 'Премахни сървъра',
+  'River server reachable': 'Сървърът на River е достъпен',
+  'Server {version} · protocol {protocol} · compatible': 'Сървър {version} · протокол {protocol} · съвместим',
+  'Connection failed': 'Неуспешна връзка',
+  'Testing sends one anonymous request for the server’s version — nothing about you.':
+    'Проверката изпраща една анонимна заявка за версията на сървъра — нищо за вас.',
+  'Create your account on {host}': 'Създайте акаунта си на {host}',
+  'River registers your River ID, your public identity key and a new key for this device. No phone number, e-mail or name is sent. Your display name stays on this computer.':
+    'River регистрира вашето River ID, публичния ключ на самоличността ви и нов ключ за това устройство. Не се изпращат телефон, имейл или име. Показваното ви име остава на този компютър.',
+  'Creating account…': 'Създаване на акаунт…',
+  'Anyone with it can ask to join; you let each person in':
+    'Всеки с нея може да поиска да влезе; вие пускате всеки поотделно',
+  'Enter a full address, like https://river.example.org':
+    'Въведете пълен адрес, напр. https://river.example.org',
+  'The server address must start with https://': 'Адресът на сървъра трябва да започва с https://',
+  'The address must not contain a password, query or #fragment':
+    'Адресът не трябва да съдържа парола, заявка или #фрагмент',
+  'Enter a host name or address, like 127.0.0.1': 'Въведете име на хост или адрес, напр. 127.0.0.1',
+  'Hosting runs on a computer. Phones join communities hosted elsewhere.':
+    'Хостването работи на компютър. Телефоните влизат в общности, хоствани другаде.',
+  'River on iPhone cannot update itself: iOS only lets you install a new version by sideloading its IPA again. Get it from the download page.':
+    'River за iPhone не може да се обновява сам: iOS позволява нова версия само чрез повторно инсталиране на IPA файла. Изтеглете я от страницата за изтегляне.',
+  'River {version} is signed with a different key than the River installed on this phone (early Android builds were signed with one-off preview keys), so Android cannot install it as an update. To get it, uninstall River and install the new version from the download page. Uninstalling deletes River’s data on this phone — your identity, messages and settings — unless you make a backup first in Settings → Backup.':
+    'River {version} е подписан с различен ключ от River, инсталиран на този телефон (ранните версии за Android бяха подписани с еднократни тестови ключове), затова Android не може да го инсталира като обновление. За да го получите, деинсталирайте River и инсталирайте новата версия от страницата за изтегляне. Деинсталирането изтрива данните на River на този телефон — самоличност, съобщения и настройки — освен ако първо не направите резервно копие от Настройки → Резервно копие.',
+  'River found an update whose signature did not verify, so it was not downloaded. Your current version is unchanged.':
+    'River намери обновление, чийто подпис не мина проверка, затова не е изтеглено. Текущата ви версия е непроменена.',
+  'An update was downloaded but did not match River’s signed release, so it was not installed. Your current version is unchanged.':
+    'Обновлението беше изтеглено, но не съвпадна с подписаната версия на River, затова не е инсталирано. Текущата ви версия е непроменена.',
+  'The newest River release has no download for this phone’s processor. Your current version is unchanged.':
+    'Най-новата версия на River няма файл за процесора на този телефон. Текущата ви версия е непроменена.',
+  'Android did not install the update ({reason}). Your current version is unchanged.':
+    'Android не инсталира обновлението ({reason}). Текущата ви версия е непроменена.',
+  'Android did not install the update. Your current version is unchanged.':
+    'Android не инсталира обновлението. Текущата ви версия е непроменена.',
+
   // Counted texts
   'Back, {count} unread': { one: 'Назад, {count} непрочетено', other: 'Назад, {count} непрочетени' },
   'Group call · {group} ({count} people)': {
@@ -663,4 +2021,45 @@ export const BG: Dictionary = {
   '{tab}, {count} mentions': { one: '{tab}, {count} споменаване', other: '{tab}, {count} споменавания' },
   '{tab}, {count} missed': { one: '{tab}, {count} пропуснато', other: '{tab}, {count} пропуснати' },
   '{tab}, {count} unread': { one: '{tab}, {count} непрочетено', other: '{tab}, {count} непрочетени' },
+  'Gave {role} to {done} of {count} members.': {
+    one: '{role} е дадена на {done} от {count} член.',
+    other: '{role} е дадена на {done} от {count} членове.',
+  },
+  'Took {role} from {done} of {count} members.': {
+    one: '{role} е отнета от {done} от {count} член.',
+    other: '{role} е отнета от {done} от {count} членове.',
+  },
+  'Copied {count} entries.': { one: 'Копиран е {count} запис.', other: 'Копирани са {count} записа.' },
+  '{count} synced channels follow these permissions. Channels with their own permissions keep them.': {
+    one: '{count} синхронизиран канал следва тези разрешения. Каналите със свои разрешения ги запазват.',
+    other: '{count} синхронизирани канала следват тези разрешения. Каналите със свои разрешения ги запазват.',
+  },
+  '{count} people': { one: '{count} човек', other: '{count} души' },
+  'last {count} days': { one: 'последния {count} ден', other: 'последните {count} дни' },
+  'messages, last {count} days': {
+    one: 'съобщения, последния {count} ден',
+    other: 'съобщения, последните {count} дни',
+  },
+  '{count} days': { one: '{count} ден', other: '{count} дни' },
+  'Messages per day over the last {count} days': {
+    one: 'Съобщения на ден за последния {count} ден',
+    other: 'Съобщения на ден за последните {count} дни',
+  },
+  '{count} weeks ago': { one: 'преди {count} седмица', other: 'преди {count} седмици' },
+  '{count} communities': { one: '{count} общност', other: '{count} общности' },
+  '{count} devices': { one: '{count} устройство', other: '{count} устройства' },
+  '{count} channels': { one: '{count} канал', other: '{count} канала' },
+  'The community, its channels and its messages are deleted for all {count} members. This cannot be undone.':
+    {
+      one: 'Общността, каналите и съобщенията ѝ се изтриват за {count} член. Не може да се отмени.',
+      other:
+        'Общността, каналите и съобщенията ѝ се изтриват за всичките {count} членове. Не може да се отмени.',
+    },
+  '{count} mutual communities': { one: '{count} обща общност', other: '{count} общи общности' },
+  'shared with {count} people': { one: 'споделено с {count} човек', other: 'споделено с {count} души' },
+  'View all {count} comments': { one: 'Виж {count} коментар', other: 'Виж всички {count} коментара' },
+  '{count} weeks': { one: '{count} седмица', other: '{count} седмици' },
+  '{count} hours': { one: '{count} час', other: '{count} часа' },
+  '{count} minutes': { one: '{count} минута', other: '{count} минути' },
+  '{count} seconds': { one: '{count} секунда', other: '{count} секунди' },
 };

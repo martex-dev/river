@@ -40,8 +40,8 @@ export function SoundboardButton({
     <>
       <button
         className={`round-btn ${open ? 'round-btn--on' : ''}`}
-        aria-label="Soundboard"
-        title={mayPlay ? 'Soundboard' : 'You cannot speak in this channel'}
+        aria-label={tr('Soundboard')}
+        title={mayPlay ? tr('Soundboard') : tr('You cannot speak in this channel')}
         disabled={!mayPlay}
         onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
@@ -55,13 +55,13 @@ export function SoundboardButton({
       {open && (
         <Popover x={open.x} y={open.y} onClose={() => setOpen(null)} className="soundboard">
           <div className="soundboard__head">
-            <strong>Soundboard</strong>
-            <span className="muted small">Click to play for everyone · right-click to preview</span>
+            <strong>{tr('Soundboard')}</strong>
+            <span className="muted small">{tr('Click to play for everyone · right-click to preview')}</span>
           </div>
-          {sounds === undefined && <p className="muted small">Loading…</p>}
+          {sounds === undefined && <p className="muted small">{tr('Loading…')}</p>}
           {sounds?.length === 0 && (
             <p className="muted small">
-              No sounds yet.
+              {tr('No sounds yet.')}
               {can(community.permissions, Permission.MANAGE_EXPRESSIONS) && (
                 <>
                   {' '}
@@ -72,7 +72,7 @@ export function SoundboardButton({
                       s.setModal({ kind: 'community-settings', communityId: community.id, tab: 'sounds' });
                     }}
                   >
-                    Add some
+                    {tr('Add some')}
                   </button>
                 </>
               )}
@@ -159,16 +159,22 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
 
   const choose = async (file: File): Promise<void> => {
     if (file.size > SOUND_MAX_BYTES)
-      return s.notify(`Sounds can be up to ${Math.round(SOUND_MAX_BYTES / 1024)} KB.`, 'error');
+      return s.notify(
+        tr('Sounds can be up to {size} KB.', { size: Math.round(SOUND_MAX_BYTES / 1024) }),
+        'error',
+      );
     try {
       const seconds = await durationOf(file);
       if (seconds > SOUND_MAX_SECONDS)
-        return s.notify(`Sounds can be up to ${SOUND_MAX_SECONDS} seconds long.`, 'error');
+        return s.notify(
+          tr('Sounds can be up to {seconds} seconds long.', { seconds: SOUND_MAX_SECONDS }),
+          'error',
+        );
       const audio = await readAsDataUrl(file);
-      if (!SOUND_DATA_URL.test(audio)) return s.notify('Use an MP3, OGG, WAV or WebM file.', 'error');
+      if (!SOUND_DATA_URL.test(audio)) return s.notify(tr('Use an MP3, OGG, WAV or WebM file.'), 'error');
       setPending({ name: soundNameFrom(file.name), emoji: null, audio });
     } catch {
-      s.notify('River could not read that sound.', 'error');
+      s.notify(tr('River could not read that sound.'), 'error');
     }
   };
   const add = async (): Promise<void> => {
@@ -189,15 +195,17 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
   };
   return (
     <div className="settings-page">
-      <h2>Soundboard</h2>
+      <h2>{tr('Soundboard')}</h2>
       <p className="muted small">
-        Short sounds anyone who may speak can play in voice channels; pick one as your entrance sound. Sounds
-        are end-to-end encrypted. Up to 48, each up to {SOUND_MAX_SECONDS} seconds.
+        {tr(
+          'Short sounds anyone who may speak can play in voice channels; pick one as your entrance sound. Sounds are end-to-end encrypted. Up to 48, each up to {seconds} seconds.',
+          { seconds: SOUND_MAX_SECONDS },
+        )}
       </p>
       {manage && (
         <div className="emoji-upload">
           <button className="btn btn--primary btn--small" onClick={() => fileRef.current?.click()}>
-            Upload sound
+            {tr('Upload sound')}
           </button>
           <input
             ref={fileRef}
@@ -214,7 +222,7 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
             <div className="emoji-upload__pending">
               <button
                 className="role-icon-field__pick"
-                aria-label="Choose an emoji for this sound"
+                aria-label={tr('Choose an emoji for this sound')}
                 onClick={(e) => {
                   const r = e.currentTarget.getBoundingClientRect();
                   setPicker({ x: r.left, y: r.bottom + 6, for: 'pending' });
@@ -223,7 +231,7 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
                 {pending.emoji ?? '＋'}
               </button>
               <label className="textfield">
-                <span className="field__label">Name</span>
+                <span className="field__label">{tr('Name')}</span>
                 <input
                   autoFocus
                   value={pending.name}
@@ -237,17 +245,17 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
                   playLocally({ id: 'pending', name: pending.name, emoji: null, audio: pending.audio }, 0.8)
                 }
               >
-                ▶ Preview
+                ▶ {tr('Preview')}
               </button>
               <button
                 className="btn btn--primary btn--small"
                 disabled={!pending.name.trim() || busy}
                 onClick={() => void add()}
               >
-                Add
+                {tr('Add')}
               </button>
               <button className="btn btn--link" onClick={() => setPending(null)}>
-                Cancel
+                {tr('Cancel')}
               </button>
             </div>
           )}
@@ -268,15 +276,15 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
           />
         </Popover>
       )}
-      {sounds === undefined && <p className="muted">Loading…</p>}
-      {sounds?.length === 0 && <p className="muted">No sounds yet.</p>}
+      {sounds === undefined && <p className="muted">{tr('Loading…')}</p>}
+      {sounds?.length === 0 && <p className="muted">{tr('No sounds yet.')}</p>}
       <ul className="emoji-list sound-list">
         {sounds?.map((sound) => (
           <li key={sound.id} className="emoji-list__item">
             <button
               className="role-icon-field__pick"
               disabled={!manage}
-              aria-label={`Emoji for ${sound.name}`}
+              aria-label={tr('Emoji for {name}', { name: sound.name })}
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
                 setPicker({ x: r.left, y: r.bottom + 6, for: sound.id });
@@ -307,7 +315,7 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
               >
                 <input
                   autoFocus
-                  aria-label={`New name for ${sound.name}`}
+                  aria-label={tr('New name for {name}', { name: sound.name })}
                   value={renaming.name}
                   maxLength={32}
                   onChange={(e) => setRenaming({ id: sound.id, name: e.target.value })}
@@ -315,13 +323,13 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
                   onKeyDown={(e) => e.key === 'Escape' && setRenaming(null)}
                 />
                 <button className="btn btn--small" disabled={!renaming.name.trim()}>
-                  Save
+                  {tr('Save')}
                 </button>
               </form>
             ) : manage ? (
               <button
                 className="btn btn--link"
-                title="Rename"
+                title={tr('Rename')}
                 onClick={() => setRenaming({ id: sound.id, name: sound.name })}
               >
                 {sound.name}
@@ -331,7 +339,7 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
             )}
             <button
               className="btn btn--ghost btn--small"
-              aria-label={`Preview ${sound.name}`}
+              aria-label={tr('Preview {name}', { name: sound.name })}
               onClick={() => playLocally(sound, Math.max(volume, 0.3))}
             >
               ▶
@@ -339,10 +347,10 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
             <button
               className={`btn btn--small ${entrance === sound.id ? 'btn--primary' : 'btn--ghost'}`}
               aria-pressed={entrance === sound.id}
-              title="Plays for everyone when you join a voice channel here"
+              title={tr('Plays for everyone when you join a voice channel here')}
               onClick={() => setEntrance(entrance === sound.id ? null : sound.id)}
             >
-              {entrance === sound.id ? 'Your entrance sound' : 'Use as entrance'}
+              {entrance === sound.id ? tr('Your entrance sound') : tr('Use as entrance')}
             </button>
             {manage && (
               <button
@@ -363,7 +371,7 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
                   })
                 }
               >
-                Remove
+                {tr('Remove')}
               </button>
             )}
           </li>

@@ -134,7 +134,8 @@ public final class CoreHost: NSObject {
         let now = Date()
         crashes = crashes.filter { now.timeIntervalSince($0) < 60 } + [now]
         if crashes.count > 3 {
-            fatal("River's core stopped several times in a row. Close River and open it again.")
+            fatal(
+                NSLocalizedString("River's core stopped several times in a row. Close River and open it again.", comment: "Core crashed"))
             return
         }
         // The new page asks for its settings again (app lock, …) as it starts.
@@ -364,10 +365,11 @@ public final class CoreHost: NSObject {
     private static func categories() -> Set<UNNotificationCategory> {
         // Reply from the notification: the text goes to the core, which sends it encrypted.
         let action = UNTextInputNotificationAction(
-            identifier: replyAction, title: "Reply", options: [],
-            textInputButtonTitle: "Send", textInputPlaceholder: "Reply")
+            identifier: replyAction, title: NSLocalizedString("Reply", comment: "Notification action"), options: [],
+            textInputButtonTitle: NSLocalizedString("Send", comment: "Notification reply button"),
+            textInputPlaceholder: NSLocalizedString("Reply", comment: "Notification action"))
         // Mark as read (2.17): the core marks the conversation read, without opening River.
-        let read = UNNotificationAction(identifier: readAction, title: "Mark as read", options: [])
+        let read = UNNotificationAction(identifier: readAction, title: NSLocalizedString("Mark as read", comment: "Notification action"), options: [])
         return [
             UNNotificationCategory(
                 identifier: replyCategory, actions: [action], intentIdentifiers: [], options: [.customDismissAction]),
@@ -476,8 +478,8 @@ public final class CoreHost: NSObject {
     /// A reply that could not be sent (River's core no longer waits for it): say so.
     private func replyFailed() {
         let content = UNMutableNotificationContent()
-        content.title = "Reply not sent"
-        content.body = "Open River to send it."
+        content.title = NSLocalizedString("Reply not sent", comment: "Notification")
+        content.body = NSLocalizedString("Open River to send it.", comment: "Notification")
         content.categoryIdentifier = CoreHost.plainCategory
         UNUserNotificationCenter.current().add(
             UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
@@ -520,7 +522,8 @@ public final class CoreHost: NSObject {
     private func fatal(_ details: String) {
         NSLog("[River] the client core failed to start: %@", String(details.prefix(2000)))
         DispatchQueue.main.async {
-            let alert = UIAlertController(title: "River could not start", message: details, preferredStyle: .alert)
+            let alert = UIAlertController(
+                title: NSLocalizedString("River could not start", comment: "Alert title"), message: details, preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "OK", style: .default))
             self.top()?.present(alert, animated: true)
         }

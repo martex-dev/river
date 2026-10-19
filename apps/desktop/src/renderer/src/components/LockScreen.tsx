@@ -18,7 +18,7 @@ export function LockScreen({ status }: { status: StorageStatus }): ReactElement 
     return (
       <Shell title={tr('River can’t open its local data')}>
         <p className="lock__text" role="alert">
-          {status.message}
+          {tr(status.message)}
         </p>
       </Shell>
     );

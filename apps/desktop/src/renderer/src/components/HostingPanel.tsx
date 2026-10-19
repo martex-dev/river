@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactElement } from 'react';
 import type { HostStatus } from '../../../shared/ipc.ts';
 import { play } from '../community/sound.ts';
 import { useRiver } from '../store.ts';
+import { tr } from '../i18n.ts';
 
 /** Live hosting status from main (pushed on every change). */
 export function useHostStatus(): HostStatus | null {
@@ -24,17 +25,19 @@ export function useHostStatus(): HostStatus | null {
 export function describeHost(s: HostStatus): string {
   switch (s.state) {
     case 'off':
-      return 'Off';
+      return tr('Off');
     case 'preparing':
-      return `Setting up your public address (one-time download${
-        s.progress !== undefined ? `, ${Math.round(s.progress * 100)}%` : ''
-      })…`;
+      return s.progress !== undefined
+        ? tr('Setting up your public address (one-time download, {percent}%)…', {
+            percent: Math.round(s.progress * 100),
+          })
+        : tr('Setting up your public address (one-time download)…');
     case 'starting':
-      return s.message ?? 'Starting…';
+      return s.message ? tr(s.message) : tr('Starting…');
     case 'online':
-      return 'Online — members can reach your communities';
+      return tr('Online — members can reach your communities');
     case 'reconnecting':
-      return s.message ?? 'Reconnecting…';
+      return s.message ? tr(s.message) : tr('Reconnecting…');
   }
 }
 
@@ -42,7 +45,7 @@ function since(iso: string): string {
   const d = new Date(iso);
   const sameDay = d.toDateString() === new Date().toDateString();
   return sameDay
-    ? `today at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    ? tr('today at {time}', { time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })
     : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }
 
@@ -73,26 +76,26 @@ export function HostingPanel(): ReactElement {
     return true;
   };
 
-  if (!status) return <p className="muted small">Checking…</p>;
+  if (!status) return <p className="muted small">{tr('Checking…')}</p>;
   const dot =
     status.state === 'online' ? 'status-dot--active' : status.state === 'off' ? '' : 'status-dot--warning';
 
   return (
     <section className="hosting" aria-labelledby="hosting-title">
       <h3 id="hosting-title" className="sr-only">
-        Host on this PC
+        {tr('Host on this PC')}
       </h3>
       <div className={`hosting__hero ${status.enabled ? 'is-on' : ''}`}>
         <div>
-          <strong className="hosting__headline">Keep my communities online from this PC</strong>
+          <strong className="hosting__headline">{tr('Keep my communities online from this PC')}</strong>
           <p className="muted small">
-            Free, and no account anywhere. River runs your community server and gives it a public address.
-            Your communities live on this PC: nothing is deleted when it restarts, and River backs them up
-            every day.
+            {tr(
+              'Free, and no account anywhere. River runs your community server and gives it a public address. Your communities live on this PC: nothing is deleted when it restarts, and River backs them up every day.',
+            )}
           </p>
         </div>
         <label className="toggle hosting__switch">
-          <span className="sr-only">Host communities on this PC</span>
+          <span className="sr-only">{tr('Host communities on this PC')}</span>
           <input
             type="checkbox"
             role="switch"
@@ -123,8 +126,10 @@ export function HostingPanel(): ReactElement {
       {confirmOff && (
         <div className="hosting__confirm" role="alertdialog" aria-labelledby="hosting-off-title">
           <p id="hosting-off-title">
-            <strong>Stop hosting?</strong> Members can’t reach the communities on this PC until you turn
-            hosting back on. Nothing is deleted.
+            <strong>{tr('Stop hosting?')}</strong>{' '}
+            {tr(
+              'Members can’t reach the communities on this PC until you turn hosting back on. Nothing is deleted.',
+            )}
           </p>
           <div className="button-row">
             <button
@@ -134,10 +139,10 @@ export function HostingPanel(): ReactElement {
                 void run('toggle', () => window.river.host.disable());
               }}
             >
-              Stop hosting
+              {tr('Stop hosting')}
             </button>
             <button className="btn btn--ghost btn--small" autoFocus onClick={() => setConfirmOff(false)}>
-              Keep hosting
+              {tr('Keep hosting')}
             </button>
           </div>
         </div>
@@ -145,9 +150,13 @@ export function HostingPanel(): ReactElement {
 
       {!status.enabled && status.legacy !== 'none' && (
         <p className="hosting__note small">
-          River Host, the separate host from River 1.0.8, is set up on this PC
-          {status.legacy === 'running' ? ' and running' : ''}. Turning this on moves your community into River
-          — same members, same messages — and removes River Host. Its folder stays as a backup.
+          {status.legacy === 'running'
+            ? tr(
+                'River Host, the separate host from River 1.0.8, is set up on this PC and running. Turning this on moves your community into River — same members, same messages — and removes River Host. Its folder stays as a backup.',
+              )
+            : tr(
+                'River Host, the separate host from River 1.0.8, is set up on this PC. Turning this on moves your community into River — same members, same messages — and removes River Host. Its folder stays as a backup.',
+              )}
         </p>
       )}
 
@@ -162,7 +171,7 @@ export function HostingPanel(): ReactElement {
               className="hosting__progress"
               value={status.progress}
               max={1}
-              aria-label="Download progress"
+              aria-label={tr('Download progress')}
             />
           )}
           {status.address && (
@@ -177,25 +186,30 @@ export function HostingPanel(): ReactElement {
                   })
                 }
               >
-                {copied ? 'Copied ✓' : 'Copy address'}
+                {copied ? tr('Copied ✓') : tr('Copy address')}
               </button>
             </div>
           )}
           {status.via === 'tailscale' ? (
             <p className="muted small">
-              ✓ Permanent address, free through Tailscale. It never changes, and members stay connected.
+              ✓{' '}
+              {tr('Permanent address, free through Tailscale. It never changes, and members stay connected.')}
             </p>
           ) : (
             <p className="muted small">
               {status.followable
-                ? 'This address changes every so often. Members’ River apps find the new one by themselves.'
-                : 'Address announcements are off, so members need the new address after a restart.'}
+                ? tr(
+                    'This address changes every so often. Members’ River apps find the new one by themselves.',
+                  )
+                : tr('Address announcements are off, so members need the new address after a restart.')}
             </p>
           )}
           {status.via !== 'tailscale' && <PermanentAddress status={status} />}
           <div className="hosting__backup">
             <span className="small">
-              {status.lastBackupAt ? `Last backup ${since(status.lastBackupAt)}` : 'No backup yet'}
+              {status.lastBackupAt
+                ? tr('Last backup {when}', { when: since(status.lastBackupAt) })
+                : tr('No backup yet')}
             </span>
             <div className="button-row">
               <button
@@ -207,13 +221,13 @@ export function HostingPanel(): ReactElement {
                   })
                 }
               >
-                {busy === 'backup' ? 'Backing up…' : 'Back up now'}
+                {busy === 'backup' ? tr('Backing up…') : tr('Back up now')}
               </button>
               <button
                 className="btn btn--ghost btn--small"
                 onClick={() => void window.river.host.openFolder()}
               >
-                Open hosting folder
+                {tr('Open hosting folder')}
               </button>
             </div>
           </div>
@@ -224,10 +238,11 @@ export function HostingPanel(): ReactElement {
         <>
           <label className="toggle">
             <span>
-              <span className="toggle__label">Keep this PC awake while hosting</span>
+              <span className="toggle__label">{tr('Keep this PC awake while hosting')}</span>
               <span className="toggle__hint">
-                Stops the PC from going to sleep by itself so members can always reach you. The screen can
-                still turn off.
+                {tr(
+                  'Stops the PC from going to sleep by itself so members can always reach you. The screen can still turn off.',
+                )}
               </span>
             </span>
             <input
@@ -242,10 +257,15 @@ export function HostingPanel(): ReactElement {
           </label>
           <p className="muted small">
             {linux
-              ? 'While hosting is on, River keeps running in the tray when you close the window. It does not start by itself when you sign in to Linux: open River after restarting this PC.'
-              : 'While hosting is on, River starts with your PC and keeps running in the tray when you close the window.'}{' '}
-            Members can always open River and write: if this PC is off, their messages wait on their devices
-            and arrive when it is back.
+              ? tr(
+                  'While hosting is on, River keeps running in the tray when you close the window. It does not start by itself when you sign in to Linux: open River after restarting this PC.',
+                )
+              : tr(
+                  'While hosting is on, River starts with your PC and keeps running in the tray when you close the window.',
+                )}{' '}
+            {tr(
+              'Members can always open River and write: if this PC is off, their messages wait on their devices and arrive when it is back.',
+            )}
           </p>
         </>
       )}
@@ -266,14 +286,14 @@ function PermanentAddress({ status }: { status: HostStatus }): ReactElement | nu
   if (status.needsApproval) {
     return (
       <div className="hosting__permanent" role="status">
-        <strong>One last step: allow your permanent address</strong>
-        <p className="small">Tailscale asks you once to allow a public address for this PC.</p>
+        <strong>{tr('One last step: allow your permanent address')}</strong>
+        <p className="small">{tr('Tailscale asks you once to allow a public address for this PC.')}</p>
         <div className="button-row">
           <button
             className="btn btn--primary btn--small"
             onClick={() => void window.river.host.approveAddress()}
           >
-            Allow in Tailscale
+            {tr('Allow in Tailscale')}
           </button>
         </div>
       </div>
@@ -283,15 +303,16 @@ function PermanentAddress({ status }: { status: HostStatus }): ReactElement | nu
     // Never "Switching…" while nothing is switching: say what went wrong and what River does now.
     return (
       <div className="hosting__permanent" role="status">
-        <strong>Your permanent address is not working yet</strong>
+        <strong>{tr('Your permanent address is not working yet')}</strong>
         <p className="small">
-          {status.permanentProblem} Members still reach you at the changing address above; River tries the
-          permanent one again every few minutes. In Tailscale, check that Funnel and HTTPS are allowed for
-          this PC.
+          {tr(status.permanentProblem)}{' '}
+          {tr(
+            'Members still reach you at the changing address above; River tries the permanent one again every few minutes. In Tailscale, check that Funnel and HTTPS are allowed for this PC.',
+          )}
         </p>
         <div className="button-row">
           <button className="btn btn--ghost btn--small" disabled={checking} onClick={check}>
-            {checking ? 'Checking…' : 'Try again now'}
+            {checking ? tr('Checking…') : tr('Try again now')}
           </button>
         </div>
       </div>
@@ -300,36 +321,37 @@ function PermanentAddress({ status }: { status: HostStatus }): ReactElement | nu
   if (status.permanent === 'ready') {
     return (
       <div className="hosting__permanent" role="status">
-        <strong>Switching to your permanent address…</strong>
-        <p className="small">Tailscale is signed in. This can take a minute the first time.</p>
+        <strong>{tr('Switching to your permanent address…')}</strong>
+        <p className="small">{tr('Tailscale is signed in. This can take a minute the first time.')}</p>
       </div>
     );
   }
   return (
     <div className="hosting__permanent">
-      <strong>Get a permanent address — free</strong>
+      <strong>{tr('Get a permanent address — free')}</strong>
       <p className="small">
-        Calls and chats stay connected, and your invite links always work. Only this PC needs it; members
-        install nothing extra.
+        {tr(
+          'Calls and chats stay connected, and your invite links always work. Only this PC needs it; members install nothing extra.',
+        )}
       </p>
       <ol className="hosting__steps small">
         <li className={status.permanent === 'signed-out' ? 'is-done' : ''}>
-          Install Tailscale (free).{' '}
+          {tr('Install Tailscale (free).')}{' '}
           {status.permanent !== 'signed-out' && (
             <button
               className="btn btn--link btn--small"
               onClick={() => void window.river.links.open('tailscale')}
             >
-              Download Tailscale
+              {tr('Download Tailscale')}
             </button>
           )}
         </li>
-        <li>Open Tailscale and sign in — Google, Microsoft or GitHub all work.</li>
-        <li>That&apos;s it: River switches over by itself.</li>
+        <li>{tr('Open Tailscale and sign in — Google, Microsoft or GitHub all work.')}</li>
+        <li>{tr("That's it: River switches over by itself.")}</li>
       </ol>
       <div className="button-row">
         <button className="btn btn--ghost btn--small" disabled={checking} onClick={check}>
-          {checking ? 'Checking…' : 'I did it — check now'}
+          {checking ? tr('Checking…') : tr('I did it — check now')}
         </button>
       </div>
     </div>

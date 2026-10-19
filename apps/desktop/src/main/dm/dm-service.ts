@@ -56,6 +56,7 @@ import type { IdentityService } from '../identity/identity-service.ts';
 import { clinkContent, gcallContent, GroupCalls } from './group-calls.ts';
 import type { Logger } from '../logger.ts';
 import { statement, type LocalDatabase } from '../storage/database.ts';
+import { msg } from '../../shared/i18n/index.ts';
 
 /** How long a call invite rings (the same as the window's ring timeout). */
 const RING_MS = 45_000;
@@ -572,7 +573,7 @@ export class DmService {
       setMeta: (key, value) => this.setMeta(key, value),
       shareUrl: () => {
         const s = this.deps.account.status();
-        if (s.state !== 'registered') throw new CommunityError('Create an account first.');
+        if (s.state !== 'registered') throw new CommunityError(msg('Create an account first.'));
         return s.shareUrl;
       },
       isFriend: (riverId) => this.contact(riverId)?.state === 'accepted',
@@ -685,7 +686,7 @@ export class DmService {
 
   private db(): LocalDatabase {
     const db = this.deps.db();
-    if (!db) throw new CommunityError('River is locked.');
+    if (!db) throw new CommunityError(msg('River is locked.'));
     if (!this.recovered.has(db)) {
       this.recovered.add(db);
       // Messages still 'sending' when River last stopped were never confirmed: show them as failed.
@@ -745,7 +746,7 @@ export class DmService {
 
   private protocol(): RiverProtocol {
     const identity = this.deps.identity.protocolIdentity();
-    if (!identity) throw new CommunityError('Create your identity first.');
+    if (!identity) throw new CommunityError(msg('Create your identity first.'));
     if (this.protocolCache && this.protocolOwner === identity.riverId) return this.protocolCache;
     const protocol = new RiverProtocol({ ...identity, deviceId: this.deviceId() }, this.storage());
     protocol.onIdentityChanged = (riverId) => {
@@ -1676,7 +1677,7 @@ export class DmService {
       return [];
     }
     const g = this.group(conv);
-    if (!g || g.state === 'left') throw new CommunityError('You are not in this group.');
+    if (!g || g.state === 'left') throw new CommunityError(msg('You are not in this group.'));
     const me = this.me();
     const failed: string[] = [];
     // Typing goes to nobody you blocked (they still get the group's messages, or the group breaks).
@@ -1697,7 +1698,7 @@ export class DmService {
       }
     }
     if (others.length && failed.length === others.length && !ephemeral) {
-      throw new CommunityError('The message could not be delivered to anyone in the group.');
+      throw new CommunityError(msg('The message could not be delivered to anyone in the group.'));
     }
     return failed;
   }
@@ -2097,7 +2098,9 @@ export class DmService {
     const sameKey = !stored || Buffer.from(stored).equals(identityKey);
     if (sameKey && list.version < floor) {
       throw new CommunityError(
-        'The server offered an older device list for this person than River has already seen. Messages were not sent.',
+        msg(
+          'The server offered an older device list for this person than River has already seen. Messages were not sent.',
+        ),
       );
     }
     const devices: Array<{ deviceId: number; registrationId: number }> = [];
@@ -2110,7 +2113,7 @@ export class DmService {
       }
       devices.push({ deviceId: d.deviceId, registrationId: d.registrationId });
     }
-    if (!devices.length) throw new CommunityError('That person has not set up messaging yet.');
+    if (!devices.length) throw new CommunityError(msg('That person has not set up messaging yet.'));
     // This list is now the newest seen for the key River holds (libsignal accepted a new one, if any).
     const nowStored = peer === this.me() ? null : protocol.identityOf(peer);
     const adopted = !nowStored || Buffer.from(nowStored).equals(identityKey);
@@ -2184,31 +2187,34 @@ export class DmService {
     try {
       res = await this.deps.community.api(`/keys/${peer}`, 'GET', undefined, keyBundleResponseSchema);
     } catch (err) {
-      if (err instanceof CommunityError) throw new CommunityError('That person is not on your River server.');
+      if (err instanceof CommunityError)
+        throw new CommunityError(msg('That person is not on your River server.'));
       throw err;
     }
     const identityKey = Buffer.from(res.identityKey, 'base64');
     // This account's own devices share its identity key: a list under any other key is not ours.
     const own = peer === this.me() ? this.ownIdentityKey() : null;
     if (own && !Buffer.from(own).equals(identityKey)) {
-      throw new CommunityError('The server returned a device list that is not signed by your identity.');
+      throw new CommunityError(msg('The server returned a device list that is not signed by your identity.'));
     }
     // Shared communities carry the person's identity key sealed with a community key the server
     // cannot read; if the server hands out a different key, refuse.
     const fromCommunity = peer === this.me() ? null : this.deps.community.communityIdentityKey(peer);
     if (fromCommunity && fromCommunity !== res.identityKey) {
       throw new CommunityError(
-        'The server offered a different safety key for this person than the one in your shared community. Messages were not sent.',
+        msg(
+          'The server offered a different safety key for this person than the one in your shared community. Messages were not sent.',
+        ),
       );
     }
     const listBytes = Buffer.from(res.deviceList, 'base64');
     if (!verify(identityKey, deviceListMessage(listBytes), Buffer.from(res.deviceListSignature, 'base64'))) {
       throw new CommunityError(
-        'This person’s device list is not signed by their identity key. Messages were not sent.',
+        msg('This person’s device list is not signed by their identity key. Messages were not sent.'),
       );
     }
     const list = deviceListSchema.parse(JSON.parse(listBytes.toString('utf8')));
-    if (list.riverId !== peer) throw new CommunityError('The server returned keys for someone else.');
+    if (list.riverId !== peer) throw new CommunityError(msg('The server returned keys for someone else.'));
     return { res, identityKey, list };
   }
 
@@ -2313,7 +2319,7 @@ export class DmService {
           const peers = [...new Set(act.peers)];
           if (act.id) {
             const i = list.findIndex((f) => f.id === act.id);
-            if (i < 0) throw new CommunityError('That folder is gone.');
+            if (i < 0) throw new CommunityError(msg('That folder is gone.'));
             list[i] = { id: act.id, name: act.name, peers };
           } else {
             if (list.length >= MAX_FOLDERS)
@@ -2339,7 +2345,7 @@ export class DmService {
           if (clash) throw new CommunityError(`You already have a saved reply called /${clash.shortcut}.`);
           if (act.id) {
             const i = list.findIndex((r) => r.id === act.id);
-            if (i < 0) throw new CommunityError('That saved reply is gone.');
+            if (i < 0) throw new CommunityError(msg('That saved reply is gone.'));
             list[i] = { id: act.id, shortcut, text: act.text };
           } else {
             if (list.length >= MAX_SAVED_REPLIES)
@@ -2441,7 +2447,7 @@ export class DmService {
                 : 'missed'));
           // A group call is logged by its group; any other call by a person (2.18).
           if ((act.kind === 'group') !== isGroupId(act.peer))
-            throw new CommunityError('That call is not in a group.');
+            throw new CommunityError(msg('That call is not in a group.'));
           this.db()
             .prepare(
               'INSERT INTO call_log (id, peer, direction, video, started_at, answered, duration_sec, kind, people) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -2535,7 +2541,7 @@ export class DmService {
           return out(rows.map((r) => this.view(r, l)));
         }
         case 'open': {
-          if (act.peer === this.me()) throw new CommunityError('That is your own River ID.');
+          if (act.peer === this.me()) throw new CommunityError(msg('That is your own River ID.'));
           await this.prepareSessions(act.peer);
           const known = this.deps.community.knownProfile(act.peer);
           this.upsertContact(act.peer, 'accepted', act.name ?? known?.name ?? null, known?.avatar ?? null);
@@ -2547,7 +2553,7 @@ export class DmService {
         case 'edit': {
           const row = this.row(act.id);
           if (!row || row.sender !== this.me() || row.peer !== act.peer)
-            throw new CommunityError('You can only edit your own messages.');
+            throw new CommunityError(msg('You can only edit your own messages.'));
           // The window names this device's handle; the wire carries the message's own ID.
           const wire = this.wireId(row);
           await this.deliver(act.peer, {
@@ -2563,7 +2569,8 @@ export class DmService {
         }
         case 'pin': {
           const row = this.row(act.id);
-          if (!row || row.peer !== act.peer || row.deleted) throw new CommunityError('That message is gone.');
+          if (!row || row.peer !== act.peer || row.deleted)
+            throw new CommunityError(msg('That message is gone.'));
           const ref = { id: this.wireId(row), author: row.sender };
           await this.deliver(act.peer, {
             v: 1,
@@ -2581,7 +2588,7 @@ export class DmService {
           if (!row || row.peer !== act.peer) return out(null);
           if (act.forEveryone) {
             if (row.sender !== this.me())
-              throw new CommunityError('You can only delete your own messages for everyone.');
+              throw new CommunityError(msg('You can only delete your own messages for everyone.'));
             await this.deliver(act.peer, {
               v: 1,
               t: 'delete',
@@ -2614,10 +2621,11 @@ export class DmService {
         case 'schedule': {
           const when = Date.parse(act.sendAt);
           if (when < Date.now() + 30_000)
-            throw new CommunityError('Choose a time at least a minute from now.');
-          if (when > Date.now() + 366 * 86_400_000) throw new CommunityError('Choose a time within a year.');
+            throw new CommunityError(msg('Choose a time at least a minute from now.'));
+          if (when > Date.now() + 366 * 86_400_000)
+            throw new CommunityError(msg('Choose a time within a year.'));
           const list = this.scheduledList();
-          if (list.length >= 100) throw new CommunityError('You have 100 messages waiting already.');
+          if (list.length >= 100) throw new CommunityError(msg('You have 100 messages waiting already.'));
           const item: ScheduledItem = {
             id: randomBytes(16).toString('base64url'),
             peer: act.peer,
@@ -2651,9 +2659,9 @@ export class DmService {
         case 'setTimer': {
           if (isGroupId(act.peer)) {
             const g = this.group(act.peer);
-            if (!g || g.state === 'left') throw new CommunityError('You are not in this group.');
+            if (!g || g.state === 'left') throw new CommunityError(msg('You are not in this group.'));
           } else if (this.contact(act.peer)?.state !== 'accepted') {
-            throw new CommunityError('You can set a timer once you are friends.');
+            throw new CommunityError(msg('You can set a timer once you are friends.'));
           }
           await this.deliver(act.peer, {
             v: 1,
@@ -2822,7 +2830,7 @@ export class DmService {
             await this.prepareSessions(act.peer);
             theirs = this.protocol().identityOf(act.peer);
           }
-          if (!mine || !theirs) throw new CommunityError('Send a message first to set up encryption.');
+          if (!mine || !theirs) throw new CommunityError(msg('Send a message first to set up encryption.'));
           const n = safetyNumber(
             { riverId: mine.riverId, publicKey: mine.publicKey },
             { riverId: act.peer, publicKey: theirs },
@@ -2856,7 +2864,9 @@ export class DmService {
               !this.protocol().setVerified(act.peer, true, theirs)
             )
               throw new CommunityError(
-                'The safety number changed while it was on screen. Compare the new number before verifying.',
+                msg(
+                  'The safety number changed while it was on screen. Compare the new number before verifying.',
+                ),
               );
           }
           this.db().prepare('UPDATE contacts SET key_changed = 0 WHERE river_id = ?').run(act.peer);
@@ -2872,7 +2882,7 @@ export class DmService {
         case 'createGroup': {
           const me = this.me();
           const members = [...new Set([me, ...act.members])].slice(0, MAX_GROUP);
-          if (members.length < 2) throw new CommunityError('Add at least one other person.');
+          if (members.length < 2) throw new CommunityError(msg('Add at least one other person.'));
           // Make sure everyone can receive (has set up messaging) before creating the group.
           for (const m of members) if (m !== me) await this.prepareSessions(m);
           const g: GroupRow = {
@@ -2894,7 +2904,7 @@ export class DmService {
         case 'setGroupIcon': {
           const g = this.group(act.peer);
           if (!g || !this.list(g.admins).includes(this.me())) {
-            throw new CommunityError('Only group admins can change the group.');
+            throw new CommunityError(msg('Only group admins can change the group.'));
           }
           const next: GroupRow = { ...g, icon: act.icon };
           this.saveGroup(next);
@@ -2908,14 +2918,14 @@ export class DmService {
           const isAdmin = (x: GroupRow | undefined): x is GroupRow =>
             !!x && x.state !== 'left' && this.list(x.admins).includes(this.me());
           let g = this.group(act.peer);
-          if (!isAdmin(g)) throw new CommunityError('Only group admins can change the group.');
+          if (!isAdmin(g)) throw new CommunityError(msg('Only group admins can change the group.'));
           let removed: string[] = [];
           if (act.a === 'addGroupMembers') {
             const before = this.list(g.members);
             for (const m of act.members) if (!before.includes(m)) await this.prepareSessions(m);
             // The group may have changed while we waited (someone left): start from what it is now.
             g = this.group(act.peer);
-            if (!isAdmin(g)) throw new CommunityError('Only group admins can change the group.');
+            if (!isAdmin(g)) throw new CommunityError(msg('Only group admins can change the group.'));
           }
           let members = this.list(g.members);
           if (act.a === 'addGroupMembers') {
@@ -2924,7 +2934,7 @@ export class DmService {
               throw new CommunityError(`Groups can have up to ${MAX_GROUP} people.`);
           }
           if (act.a === 'removeGroupMember') {
-            if (act.member === this.me()) throw new CommunityError('Use Leave group to leave.');
+            if (act.member === this.me()) throw new CommunityError(msg('Use Leave group to leave.'));
             removed = [act.member];
             members = members.filter((m) => m !== act.member);
           }
@@ -2958,7 +2968,7 @@ export class DmService {
         }
         case 'call':
           if (act.peer === this.me() || this.contact(act.peer)?.state !== 'accepted')
-            throw new CommunityError('You can only call your contacts.');
+            throw new CommunityError(msg('You can only call your contacts.'));
           // Answered, declined or ended here: the call no longer rings for a window that opens later.
           if (act.kind !== 'signal' && act.kind !== 'invite')
             this.endRinging(
@@ -3052,14 +3062,14 @@ export class DmService {
   private async sendMessage(act: SendAct, reuseId?: string): Promise<DirectMessageView> {
     const group = isGroupId(act.peer) ? this.group(act.peer) : undefined;
     if (isGroupId(act.peer)) {
-      if (!group || group.state === 'left') throw new CommunityError('You are not in this group.');
+      if (!group || group.state === 'left') throw new CommunityError(msg('You are not in this group.'));
       if (group.state === 'request') {
         this.saveGroup({ ...group, state: 'accepted' });
         this.prefetchConversation(group.id);
       }
     } else {
       const contact = this.contact(act.peer);
-      if (contact?.state === 'blocked') throw new CommunityError('Unblock this person to message them.');
+      if (contact?.state === 'blocked') throw new CommunityError(msg('Unblock this person to message them.'));
       if (!contact || contact.state === 'request') {
         this.upsertContact(act.peer, 'accepted');
         // Writing back accepts a request: its files are kept now.
