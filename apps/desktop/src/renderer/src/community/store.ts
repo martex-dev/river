@@ -53,7 +53,17 @@ export type Modal =
   | { kind: 'report'; communityId: string; message: ChatMessage }
   | { kind: 'pick-roles'; communityId: string }
   | { kind: 'ban'; communityId: string; riverId: string; name: string; then?: Modal }
-  | { kind: 'confirm'; title: string; body: string; action: string; run: () => Promise<void> };
+  | {
+      kind: 'confirm';
+      title: string;
+      body: string;
+      action: string;
+      run: () => Promise<void>;
+      /** The dialog it was asked from (a settings tab): back to it on Cancel… */
+      back?: Modal;
+      /** …and where to go once done (nowhere when the thing it was about is gone). */
+      then?: Modal;
+    };
 
 export type CommunityTab =
   | 'overview'
@@ -204,6 +214,21 @@ const OLDER_PAGES_PER_LOAD = 10;
  * Whether to offer older messages. From main's answer once known (it counts what the server sent,
  * so a page of messages from before you joined does not hide the rest); until then the guess.
  */
+/**
+ * Opens one of the panels over a channel (pinned messages, search, saved messages) and closes the
+ * others, which sit in the same place; asked again (or `open` false), closes it.
+ */
+export function togglePanel(panel: 'pins' | 'search' | 'saved', open?: boolean): void {
+  const s = useCommunity.getState();
+  const shown = { pins: s.showPins, search: s.showSearch, saved: s.showSaved }[panel];
+  const on = open ?? !shown;
+  useCommunity.setState({
+    showPins: on && panel === 'pins',
+    showSearch: on && panel === 'search',
+    showSaved: on && panel === 'saved',
+  });
+}
+
 export function canLoadOlder(noMore: Record<string, boolean>, channelId: string, shown: number): boolean {
   const known = noMore[channelId];
   return known === undefined ? shown >= 100 : !known;

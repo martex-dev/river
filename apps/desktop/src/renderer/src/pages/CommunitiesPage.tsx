@@ -174,7 +174,8 @@ export function Overlays(): ReactElement {
   );
 }
 
-function Modals({ me }: { me: string }): ReactElement | null {
+/** The open community dialog (exported for tests). */
+export function Modals({ me }: { me: string }): ReactElement | null {
   const s = useCommunity();
   const modal = s.modal;
   if (!modal) return null;

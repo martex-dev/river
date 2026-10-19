@@ -4,6 +4,8 @@ import type { CommunityView } from '../../../../shared/ipc.ts';
 import { attempt } from '../attempt.ts';
 import { useCommunity } from '../store.ts';
 import { Modal, Toggle, can, hex } from './common.tsx';
+import { tr } from '../../i18n.ts';
+import { roleReach, type RoleReach } from '../../../../shared/role-order.ts';
 import { parseWords, type FilterMode } from '../../../../shared/word-filter.ts';
 
 /** Permissions a self-assignable role may not have (the server refuses them too). */
@@ -39,7 +41,12 @@ export function OnboardingSettings({ community }: { community: CommunityView }):
     JSON.stringify(rules) !== JSON.stringify(community.rules) ||
     screening !== community.screening ||
     JSON.stringify([...selfRoles].sort()) !== JSON.stringify([...community.selfRoles].sort());
-  const roles = community.roles.filter((r) => !r.everyone && r.position < community.myRank);
+  // Roles you could give members yourself (2.20.2), and the ones offered already (kept as they are).
+  const roles = community.roles.filter(
+    (r) => !r.everyone && (r.position < community.myRank || community.selfRoles.includes(r.id)),
+  );
+  const reach = (r: (typeof roles)[number]): RoleReach =>
+    roleReach(r, { myRank: community.myRank, permissions: community.permissions });
   const addRule = (): void => {
     const r = draft.trim().slice(0, 300);
     if (!r || rules.length >= 20) return;
@@ -138,11 +145,16 @@ export function OnboardingSettings({ community }: { community: CommunityView }):
       <div className="self-roles">
         {roles.map((r) => {
           const ok = offerable(r.permissions);
+          // An offered role can always be taken off the list (or kept); a new one only if it is in
+          // your reach: members give it to themselves, so it must be one you could give them.
+          const offered = community.selfRoles.includes(r.id);
+          const inReach = reach(r).ok;
+          const usable = offered || (ok && inReach);
           return (
-            <label key={r.id} className={`self-roles__item ${ok ? '' : 'is-disabled'}`}>
+            <label key={r.id} className={`self-roles__item ${usable ? '' : 'is-disabled'}`}>
               <input
                 type="checkbox"
-                disabled={!ok}
+                disabled={!usable}
                 checked={selfRoles.includes(r.id)}
                 onChange={(e) =>
                   setSelfRoles(e.target.checked ? [...selfRoles, r.id] : selfRoles.filter((x) => x !== r.id))
@@ -152,14 +164,21 @@ export function OnboardingSettings({ community }: { community: CommunityView }):
                 {r.icon ? `${r.icon} ` : ''}
                 {r.name}
               </span>
-              {!ok && <span className="muted small"> — can moderate, so it can't be self-assigned</span>}
+              {!usable && (
+                <span className="muted small">
+                  {' — '}
+                  {!ok
+                    ? tr("can moderate, so it can't be self-assigned")
+                    : tr('has permissions you do not have, so you cannot offer it')}
+                </span>
+              )}
             </label>
           );
         })}
       </div>
       {dirty && (
         <div className="save-bar">
-          <span>Careful — you have unsaved changes!</span>
+          <span>{tr('Careful — you have unsaved changes!')}</span>
           <button
             className="btn btn--link"
             onClick={() => {
@@ -169,10 +188,10 @@ export function OnboardingSettings({ community }: { community: CommunityView }):
               setSelfRoles(community.selfRoles);
             }}
           >
-            Reset
+            {tr('Reset')}
           </button>
           <button className="btn btn--primary btn--small" disabled={busy} onClick={() => void save()}>
-            Save changes
+            {tr('Save changes')}
           </button>
         </div>
       )}

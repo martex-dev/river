@@ -6,6 +6,9 @@ import { useRiver } from '../../store.ts';
 import { friendState, sendFriendRequest } from '../../dm/friends.ts';
 import { useDm } from '../../dm/store.ts';
 import { useCommunity } from '../store.ts';
+import { tr } from '../../i18n.ts';
+import { roleReach } from '../../../../shared/role-order.ts';
+import { OUT_OF_REACH_NOTE } from '../role-reach.ts';
 import { phoneShellActive } from '../../phone/mode.ts';
 import { Avatar, CrownIcon, CustomStatus, Popover, XIcon, can, hex, presenceOf } from './common.tsx';
 
@@ -136,10 +139,16 @@ export function ProfileCard(props: {
   const assignable = community.roles.filter(
     (r) =>
       !r.everyone &&
-      (community.ownerId === me || r.position < community.myRank) &&
-      (r.permissions & ~perms) === 0,
+      (community.ownerId === me || roleReach(r, { myRank: community.myRank, permissions: perms }).ok),
   );
+  const unreachable = community.roles.some((r) => !r.everyone && !assignable.includes(r));
   const roles = community.roles.filter((r) => member.roles.includes(r.id));
+  // Owners and administrators are never restricted by a timeout (the server refuses one).
+  const admin =
+    member.owner ||
+    community.roles.some(
+      (r) => (r.everyone || member.roles.includes(r.id)) && can(r.permissions, Permission.ADMINISTRATOR),
+    );
   const voiceChannel = Object.entries(community.voice).find(([, ids]) => ids.includes(member.riverId))?.[0];
   const voiceState = community.voiceStates[member.riverId];
   const volume = settings?.voice.userVolumes[member.riverId] ?? 1;
@@ -199,7 +208,7 @@ export function ProfileCard(props: {
             <CustomStatus member={member} />
           </div>
         )}
-        {member.timeoutUntil && (
+        {member.timeoutUntil && !admin && (
           <div className="chip chip--error profile-card__timeout">
             Timed out until{' '}
             {new Date(member.timeoutUntil).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
@@ -275,6 +284,11 @@ export function ProfileCard(props: {
         </div>
         {adding && (
           <div className="role-picker">
+            {unreachable && (
+              <p className="muted small role-picker__note" role="note">
+                {tr(OUT_OF_REACH_NOTE)}
+              </p>
+            )}
             <label className="role-picker__for">
               <span className="muted small">For</span>
               <select value={giveFor} onChange={(e) => setGiveFor(Number(e.target.value))}>
@@ -418,7 +432,7 @@ export function ProfileCard(props: {
                     ))}
                 </select>
               )}
-            {outranks && can(perms, Permission.MODERATE_MEMBERS) && (
+            {outranks && can(perms, Permission.MODERATE_MEMBERS) && (!admin || member.timeoutUntil) && (
               <TimeoutButton community={community} member={member} onDone={props.onDone} />
             )}
             {outranks && can(perms, Permission.KICK_MEMBERS) && (

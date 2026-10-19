@@ -448,7 +448,7 @@
 }
 .icon-btn--danger:hover:not(:disabled) {
   background: rgb(var(--danger-rgb) / 0.18);
-  color: #ff6b6e;
+  color: var(--danger);
 }
 
 /* ---------- Avatar ---------- */
@@ -870,7 +870,7 @@
   transform: scale(1.18);
 }
 .msg__action--danger:hover {
-  color: #ff6b6e;
+  color: var(--danger);
 }
 .msg__edit textarea {
   width: 100%;
@@ -937,16 +937,18 @@
   opacity: 1;
 }
 
+/* @names and #channels in the theme's colours: River's fixed pale lilac and yellow vanished on
+   light themes. Text mixed with the readable accent stays above 4.5:1 on every theme (light-themes.test.ts). */
 .mention {
   padding: 0 3px;
   border-radius: 4px;
-  background: rgb(var(--accent-2-rgb) / 0.2);
-  color: #c9cdff;
+  background: rgb(var(--accent-2-rgb) / 0.16);
+  color: color-mix(in srgb, var(--accent-2-text) 60%, var(--text));
   font-weight: 500;
 }
 .mention--me {
   background: rgb(var(--warn-rgb) / 0.22);
-  color: #ffd27a;
+  color: var(--text);
 }
 .md-code {
   padding: 1px 5px;
@@ -1271,7 +1273,7 @@
   font-weight: 500;
 }
 .member__crown {
-  color: #faa81a;
+  color: var(--warn);
 }
 
 /* ---------- Popovers, menus, profile card ---------- */
@@ -1316,7 +1318,7 @@
   outline: none;
 }
 .menu-item--danger {
-  color: #ff6b6e;
+  color: var(--danger);
 }
 .menu-item--danger:focus-visible,
 .menu-item--danger:hover:not(:disabled) {
@@ -1658,7 +1660,7 @@
   background: #e6e6e6;
 }
 .round-btn--off {
-  color: #ff6b6e;
+  color: var(--danger);
 }
 .round-btn--danger {
   background: #da373c;
@@ -1678,7 +1680,7 @@
   background: #a12828;
 }
 .btn--danger-text {
-  color: #ff6b6e;
+  color: var(--danger);
 }
 
 /* ---------- Screen picker ---------- */
@@ -1895,7 +1897,7 @@
   color: var(--text);
 }
 .settings-tab--danger {
-  color: #ff6b6e;
+  color: var(--danger);
 }
 .settings-layout__body {
   position: relative;
@@ -2132,6 +2134,15 @@ input.switch:disabled {
 }
 .role-row__main.is-active {
   background: var(--surface-hover);
+}
+/* A role out of your reach (2.20.2): its title says why. */
+.role-row__lock {
+  flex: none;
+  font-size: 11px;
+  opacity: 0.8;
+}
+.role-picker__note {
+  margin: 2px 6px 6px;
 }
 .role-row__main.has-overwrite::after {
   content: '•';
@@ -2658,7 +2669,7 @@ input.switch:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #8fb7ff;
+  color: var(--accent-text);
 }
 .lightbox {
   position: fixed;
@@ -3593,7 +3604,8 @@ input.switch:disabled {
 /* ---------- Mentions (1.0.4) ---------- */
 .mention--role {
   background: color-mix(in srgb, var(--role, var(--accent-2)) 22%, transparent);
-  color: color-mix(in srgb, var(--role, #c9cdff) 75%, white);
+  /* Any role colour (black, white, yellow) still reads: mostly the theme's text, tinted by the role. */
+  color: color-mix(in srgb, var(--role, var(--accent-2-text)) 30%, var(--text));
 }
 .mention--role.mention--me {
   box-shadow: 0 0 0 1px rgb(var(--warn-rgb) / 0.6);
@@ -3605,7 +3617,8 @@ input.switch:disabled {
   transition: background var(--dur-fast);
 }
 .mention--channel:hover {
-  background: rgb(var(--accent-2-rgb) / 0.35);
+  background: rgb(var(--accent-2-rgb) / 0.22);
+  color: var(--text);
   text-decoration: underline;
 }
 .mention--channel:focus-visible {
@@ -3624,12 +3637,15 @@ input.switch:disabled {
   height: 20px;
   border-radius: 50%;
   background: rgb(var(--accent-2-rgb) / 0.3);
-  color: #fff;
+  color: var(--text);
   font-size: 11px;
   font-weight: 700;
 }
 .mention-menu__label {
   font-weight: 600;
+}
+.mention-menu__label--role {
+  color: color-mix(in srgb, var(--role) 30%, var(--text));
 }
 .mention-menu__hint {
   margin-left: auto;
@@ -3878,7 +3894,21 @@ input.switch:disabled {
   white-space: nowrap;
 }
 .thread-panel__name.is-editable {
+  min-width: 0;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
   cursor: text;
+}
+.thread-panel__name.is-editable:hover {
+  background: var(--surface-hover);
+}
+.thread-panel__name.is-editable:focus-visible {
+  outline: 2px solid var(--focus);
 }
 .thread-panel__rename input {
   width: 100%;
@@ -3980,7 +4010,7 @@ input.switch:disabled {
 }
 .channel__limit.is-full {
   background: rgb(var(--danger-rgb) / 0.18);
-  color: #ff9a9c;
+  color: var(--danger);
 }
 .tile:focus-visible {
   outline: 3px solid var(--accent);
@@ -4194,7 +4224,7 @@ input.switch:disabled {
   --border-strong: rgb(var(--line-rgb) / 0.6);
 }
 :root[data-contrast='high'] :focus-visible {
-  outline: 3px solid #ffd27a !important;
+  outline: 3px solid var(--focus) !important;
   outline-offset: 2px;
 }
 :root[data-contrast='high'] .channel.is-muted .channel__name,
@@ -4723,10 +4753,10 @@ input.switch:disabled {
   border: 1px solid currentColor;
 }
 .report__status--open {
-  color: #f0b232;
+  color: var(--warn);
 }
 .report__status--resolved {
-  color: #23a55a;
+  color: var(--ok);
 }
 .report__status--dismissed {
   color: var(--text-dim);
@@ -5431,10 +5461,10 @@ input.switch:disabled {
   background: var(--surface-hover);
 }
 .access-check__item.is-yes .access-check__row > span:first-child {
-  color: #23a55a;
+  color: var(--ok);
 }
 .access-check__item.is-no .access-check__row > span:first-child {
-  color: #da373c;
+  color: var(--danger);
 }
 .access-check__why {
   margin: 0 0 6px 30px;
@@ -5569,7 +5599,7 @@ input.switch:disabled {
   border-radius: 4px;
   font-size: 9px;
   font-weight: 800;
-  color: #da373c;
+  color: var(--danger);
   border: 1px solid currentColor;
 }
 
@@ -5598,7 +5628,7 @@ input.switch:disabled {
 }
 .msg__filter-chip {
   margin-left: 6px;
-  color: #f0b232;
+  color: var(--warn);
   border-color: rgb(var(--warn-rgb) / 0.5);
   text-transform: none;
   letter-spacing: 0;
@@ -5658,7 +5688,7 @@ input.switch:disabled {
   color: var(--text-dim);
 }
 .call-note.is-missed {
-  color: #da373c;
+  color: var(--danger);
 }
 
 /* Role drag and drop (1.0.30) */

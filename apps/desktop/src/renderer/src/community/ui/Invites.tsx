@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactElement } from 'react';
 import type { InviteView } from '../../../../shared/community-actions.ts';
 import type { CommunityView } from '../../../../shared/ipc.ts';
 import { useCommunity } from '../store.ts';
+import { tr } from '../../i18n.ts';
 
 /** Community settings → Invites (1.0.31): who made each invite, who joined with it, revoke. */
 export function InvitesPanel({ community }: { community: CommunityView }): ReactElement {
@@ -10,6 +11,7 @@ export function InvitesPanel({ community }: { community: CommunityView }): React
   const load = (): void =>
     void s.run({ a: 'invites', communityId: community.id }).then((r) => setInvites(r ?? []));
   useEffect(load, [community.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const here = { kind: 'community-settings', communityId: community.id, tab: 'invites' } as const;
   const name = (id: string): string =>
     community.members.find((m) => m.riverId === id)?.name ?? 'Someone who left';
   return (
@@ -38,10 +40,22 @@ export function InvitesPanel({ community }: { community: CommunityView }): React
               <button
                 className="btn btn--ghost btn--small btn--danger-text"
                 onClick={() =>
-                  void s.run({ a: 'revokeInvite', communityId: community.id, inviteId: i.id }).then(load)
+                  s.setModal({
+                    kind: 'confirm',
+                    title: tr('Revoke this invite?'),
+                    body: tr(
+                      'The link stops working at once for anyone who has not used it yet. People who joined with it stay. This cannot be undone.',
+                    ),
+                    action: tr('Revoke invite'),
+                    run: async () => {
+                      await s.run({ a: 'revokeInvite', communityId: community.id, inviteId: i.id });
+                    },
+                    back: here,
+                    then: here,
+                  })
                 }
               >
-                Revoke
+                {tr('Revoke')}
               </button>
             </div>
           </li>

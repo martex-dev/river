@@ -3,7 +3,7 @@ import { hasTag, savedTagKey, TagChips, TagDialog, TagFilter, tagsIn, useTags } 
 import { phoneShellActive } from '../../phone/mode.ts';
 import { clockDateTime } from '../../time.ts';
 import { useCommunity } from '../store.ts';
-import { XIcon } from './common.tsx';
+import { XIcon, usePanelLayer } from './common.tsx';
 
 /**
  * Saved messages (1.0.19): everything you bookmarked, across communities, on this device only.
@@ -11,6 +11,7 @@ import { XIcon } from './common.tsx';
  */
 export function SavedPanel(): ReactElement {
   const s = useCommunity();
+  usePanelLayer(() => useCommunity.setState({ showSaved: false }));
   const saved = useCommunity((x) => x.saved);
   const tags = useTags();
   const [filter, setFilter] = useState<string | null>(null);

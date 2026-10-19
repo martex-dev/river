@@ -6,6 +6,55 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.21.3] - 2026-10-19
+
+**Communities on computers: ten fixes — readable mentions in light themes, roles that match what the server allows, confirmations before removing things.**
+
+### Fixed
+
+- Communities in light themes: @mentions, #channel links and mentions of you
+  were a fixed pale lilac or yellow made for dark themes and nearly vanished on
+  light ones. They now use the theme's colours (at least 4.5:1 on every theme),
+  role mentions stay readable whatever the role's colour, and danger, warning
+  and success texts (Kick, Delete, "18+", a full voice channel, report states)
+  use the theme's readable colours. In high contrast, the focus ring is the
+  theme's focus colour instead of a pale yellow lost on light themes.
+- Community settings → Roles follows the "roles in reach" rule of 2.20.2: a
+  role below yours that has a permission you lack (Ban members, say) showed as
+  editable, movable and deletable, and saving it failed with an error from the
+  server. It is now locked (🔒), the editor names the permissions you lack, and
+  Move up/down and drag and drop move roles around it instead of failing.
+  Where roles are given (the member list, profile cards), a note says why some
+  roles are not offered.
+- Rules & roles: a manager below a self-assignable role offered by someone
+  higher could not save the rules or the welcome note at all ("You can only
+  offer roles below your highest role"). Roles offered already stay offered;
+  new ones are offered only within your reach, and the list says why a role
+  cannot be offered.
+- Community settings: revoking an invite and removing a custom emoji, sticker
+  or soundboard sound happened at the first click, for everyone. Each now asks
+  first. Cancel on any confirmation asked from settings (delete a role, kick,
+  delete a webhook, delete a channel or category) goes back to where you were
+  instead of closing settings altogether, and after deleting a role or kicking
+  someone you are back on the same tab.
+- #channel links work for channels named in other languages: #общий or
+  #spiele-für-alle stayed plain text (only English letters were recognised),
+  although the suggestions offered them. Renaming a text channel now saves the
+  name the way new channels get it (lowercase, dashes for spaces), so a renamed
+  "Game Night" can still be mentioned as #game-night.
+- An @mention followed by punctuation ("@Leo," "@Sam Rivera!" "@Moderators.")
+  was not highlighted, though it notified the person. It is now, and a role
+  mention's details (on hover) are in your language.
+- A thread's name could be renamed only by double-clicking it, so not with the
+  keyboard. It is a button now (click or Enter renames).
+- Pinned messages, search and saved messages in a channel opened on top of one
+  another in the same place (two lists drawn over each other). One shows at a
+  time now, Escape closes it, and focus goes back to the button that opened it.
+- Timing out an administrator "worked" (the moderator was told so and the
+  profile said "Timed out until …") but restricted nothing, as administrators
+  are never timed out. The server now refuses it with a reason, and River no
+  longer offers Time out for administrators (an old timeout can still be ended).
+
 ## [2.21.2] - 2026-10-19
 
 **Messages are told apart by who sent them, so nobody can take over someone else's message.**

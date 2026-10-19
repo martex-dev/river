@@ -2391,13 +2391,14 @@ export class CommunityService {
       case 'moveRole':
       case 'placeRole': {
         const community = this.requireCommunity(act.communityId);
-        // Only roles below your own move, among the positions they already have.
+        // Only roles in your reach move (below your own, nothing you lack), among their positions.
         const changes = roleOrderChanges(
           community.roles.filter((r) => !r.everyone),
           community.myRank,
           act.a === 'moveRole'
             ? { roleId: act.roleId, direction: act.direction }
             : { roleId: act.roleId, aboveId: act.aboveId },
+          community.permissions,
         );
         if (!changes.length) break;
         // All at once where the server can (nothing half done); older servers one by one.
