@@ -9,6 +9,7 @@ import { isPhone } from '../../../../shared/platform.ts';
 import { useRiver } from '../../store.ts';
 import { useOutbox } from '../outbox.ts';
 import { useCommunity } from '../store.ts';
+import { tr } from '../../i18n.ts';
 import { AttachmentList } from './Attachments.tsx';
 import { Avatar, RichText, XIcon, can, hex, memberOf } from './common.tsx';
 
@@ -98,14 +99,19 @@ export function ThreadPanel(props: {
               onBlur={() => setRenaming(null)}
             />
           </form>
-        ) : (
-          <strong
-            className={`thread-panel__name ${mayEdit ? 'is-editable' : ''}`}
-            title={mayEdit ? 'Rename thread' : undefined}
-            onDoubleClick={() => mayEdit && setRenaming(thread?.name ?? '')}
+        ) : mayEdit ? (
+          // A button, so the keyboard can rename it too (it was a double-click on the name only).
+          <button
+            type="button"
+            className="thread-panel__name is-editable"
+            title={tr('Rename thread')}
+            aria-label={tr('Rename thread {name}', { name: thread?.name ?? '' })}
+            onClick={() => setRenaming(thread?.name ?? '')}
           >
             {thread?.name ?? 'Thread'}
-          </strong>
+          </button>
+        ) : (
+          <strong className="thread-panel__name">{thread?.name ?? 'Thread'}</strong>
         )}
         {thread?.archived && <span className="chip">Archived</span>}
         <span className="thread-panel__actions">

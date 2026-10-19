@@ -453,6 +453,29 @@ describe('communities', () => {
       expect((await assign(a, member.token, cid, third.riverId, [banners.rid])).statusCode).toBe(200);
     });
 
+    it('a manager below an offered role can still save the rules (community sweep)', async () => {
+      const a = await start();
+      const owner = await user(a);
+      const { cid } = await createCommunity(a, owner.token);
+      const mod = await join(a, owner.token, cid);
+      // New roles go in at the bottom: "gamer" ends up above the managers' role.
+      const gamer = await role(a, owner.token, cid, 0);
+      const managers = await role(a, owner.token, cid, Permission.MANAGE_ROLES | Permission.MANAGE_COMMUNITY);
+      expect((await assign(a, owner.token, cid, mod.riverId, [managers.rid])).statusCode).toBe(200);
+      const put = (token: string, selfRoles: string[]) =>
+        status(a, 'PUT', `/v1/communities/${cid}/onboarding`, token, {
+          onboarding: sealed(),
+          screening: false,
+          selfRoles,
+        });
+      expect(await put(owner.token, [gamer.rid])).toBe(200);
+      // The settings send the whole list back with the new rules: the offered role above stays.
+      expect(await put(mod.token, [gamer.rid])).toBe(200);
+      // Taking it off the list is fine; offering it again is not the manager's to do.
+      expect(await put(mod.token, [])).toBe(200);
+      expect(await put(mod.token, [gamer.rid])).toBe(403);
+    });
+
     it('ownership can be handed to a member, only by the owner', async () => {
       const a = await start();
       const owner = await user(a);
@@ -1387,6 +1410,15 @@ describe('communities', () => {
       expect(
         await status(a, 'POST', `/v1/channels/${text}/messages`, member.token, { id: id(), body: sealed() }),
       ).toBe(201);
+
+      // An administrator would not be restricted at all: refused, not "timed out" in name only.
+      const admins = await role(a, owner.token, cid, Permission.ADMINISTRATOR);
+      await assign(a, owner.token, cid, member.riverId, [admins.rid]);
+      expect(await status(a, 'PUT', url(member.riverId), owner.token, { until: soon })).toBe(400);
+      expect(
+        (await fetchCommunity(a, owner.token, cid)).members.find((m) => m.riverId === member.riverId),
+      ).toMatchObject({ timeoutUntil: null });
+      expect(await status(a, 'PUT', url(member.riverId), owner.token, { until: null })).toBe(200);
     });
 
     it('a timeout also stops editing, reacting, threads and pins (2.20)', async () => {

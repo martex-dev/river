@@ -122,6 +122,8 @@ export function WebhooksPanel({ community }: { community: CommunityView }): Reac
                         run: async () => {
                           await s.run({ a: 'revokeWebhook', communityId: community.id, webhookId: w.id });
                         },
+                        back: { kind: 'community-settings', communityId: community.id, tab: 'webhooks' },
+                        then: { kind: 'community-settings', communityId: community.id, tab: 'webhooks' },
                       })
                     }
                   >

@@ -15,12 +15,14 @@ import { useRiver } from '../../store.ts';
 export function ConfirmDialog({ modal }: { modal: Extract<ModalState, { kind: 'confirm' }> }): ReactElement {
   const s = useCommunity();
   const [busy, setBusy] = useState(false);
+  // Asked from a settings tab: Cancel goes back to it rather than closing everything.
+  const back = (): void => s.setModal(modal.back ?? null);
   return (
-    <Modal title={modal.title} onClose={() => s.setModal(null)}>
+    <Modal title={modal.title} onClose={back}>
       <p className="modal__text">{modal.body}</p>
       <div className="modal__foot">
-        <button className="btn btn--link" onClick={() => s.setModal(null)}>
-          Cancel
+        <button className="btn btn--link" onClick={back}>
+          {tr('Cancel')}
         </button>
         <button
           className="btn btn--danger"
@@ -31,7 +33,7 @@ export function ConfirmDialog({ modal }: { modal: Extract<ModalState, { kind: 'c
             const before = useCommunity.getState().modal;
             void modal.run().finally(() => {
               // Close unless the action opened another dialog.
-              if (useCommunity.getState().modal === before) s.setModal(null);
+              if (useCommunity.getState().modal === before) s.setModal(modal.then ?? null);
             });
           }}
         >
@@ -160,6 +162,11 @@ export function InviteDialog({ community }: { community: CommunityView }): React
   );
 }
 
+/** A channel's name as saved: text channels lowercase with dashes for spaces ("game-night"). */
+export function channelName(name: string, text: boolean): string {
+  return text ? name.trim().toLowerCase().replace(/\s+/g, '-') : name.trim();
+}
+
 export function CreateChannelDialog(props: {
   community: CommunityView;
   kind: 'text' | 'voice';
@@ -170,7 +177,7 @@ export function CreateChannelDialog(props: {
   const [name, setName] = useState('');
   const [isPrivate, setPrivate] = useState(false);
   const [busy, setBusy] = useState(false);
-  const cleaned = kind === 'text' || kind === 'forum' ? name.toLowerCase().replace(/\s+/g, '-') : name;
+  const cleaned = channelName(name, kind === 'text' || kind === 'forum');
   const submit = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
     if (!cleaned.trim()) return;
@@ -334,6 +341,8 @@ export function CategoryDialog(props: { community: CommunityView; categoryId?: s
                     categoryId: existing.id,
                   });
                 },
+                // Cancel keeps the category's settings open; once deleted there is nothing to show.
+                back: { kind: 'category', communityId: props.community.id, categoryId: existing.id },
               })
             }
           >
@@ -516,6 +525,7 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
                 run: async () => {
                   await s.run({ a: 'deleteChannel', channelId: channel.id });
                 },
+                back: { kind: 'channel-settings', channelId: channel.id },
               })
             }
           >
@@ -674,9 +684,13 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
                   <button
                     className="btn btn--primary btn--small"
                     disabled={name.trim() === ''}
-                    onClick={() =>
-                      void s.run({ a: 'updateChannel', channelId: channel.id, name: name.trim(), topic })
-                    }
+                    onClick={() => {
+                      // Text channels are named as when they were made (lowercase, dashes), so a
+                      // renamed channel can still be #mentioned; the box shows what was saved.
+                      const saved = channelName(name, channel.kind === 'text');
+                      setName(saved);
+                      void s.run({ a: 'updateChannel', channelId: channel.id, name: saved, topic });
+                    }}
                   >
                     {tr('Save changes')}
                   </button>

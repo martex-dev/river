@@ -3,6 +3,7 @@ import { Permission } from '@river/protocol/permissions';
 import { EMOJI_NAME } from '../../../../shared/community-actions.ts';
 import type { CommunityView } from '../../../../shared/ipc.ts';
 import { useCommunity } from '../store.ts';
+import { tr } from '../../i18n.ts';
 import { can } from './common.tsx';
 
 /** Largest image kept as it is (animated GIFs); anything else is redrawn at 128 px. */
@@ -183,7 +184,20 @@ export function EmojiSettings({ community }: { community: CommunityView }): Reac
                   className="btn btn--link btn--danger"
                   aria-label={`Remove :${e.name}:`}
                   onClick={() =>
-                    void s.run({ a: 'deleteEmoji', emojiId: e.id }).then(() => s.loadEmojis(community.id))
+                    s.setModal({
+                      kind: 'confirm',
+                      title: tr('Remove :{name}:?', { name: e.name }),
+                      body: tr(
+                        'It disappears for everyone here, also from messages that already use it. This cannot be undone.',
+                      ),
+                      action: tr('Remove emoji'),
+                      run: async () => {
+                        await s.run({ a: 'deleteEmoji', emojiId: e.id });
+                        await s.loadEmojis(community.id);
+                      },
+                      back: { kind: 'community-settings', communityId: community.id, tab: 'emoji' },
+                      then: { kind: 'community-settings', communityId: community.id, tab: 'emoji' },
+                    })
                   }
                 >
                   Remove

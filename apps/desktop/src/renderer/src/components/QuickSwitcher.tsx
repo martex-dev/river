@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { sidebarGroups } from '../../../shared/layout.ts';
 import { KEYBIND_ACTIONS, KEYBIND_LABELS, comboLabel, withDefaults } from '../../../shared/keybinds.ts';
-import { useCommunity } from '../community/store.ts';
+import { togglePanel, useCommunity } from '../community/store.ts';
 import { useDm } from '../dm/store.ts';
 import { SECTIONS, useRiver, type Section } from '../store.ts';
 
@@ -200,7 +200,7 @@ export function QuickSwitcher(): ReactElement | null {
         void useRiver.getState().updateSettings({ appearance: { zoom: next } });
       } else if (mod && !e.shiftKey && e.code === 'KeyF' && useRiver.getState().section === 'communities') {
         e.preventDefault();
-        useCommunity.setState({ showSearch: true });
+        togglePanel('search', true);
       } else if (e.key === 'Escape' && !typingSomewhere(e.target) && !somethingOpen()) {
         // After this key press is fully handled, so other Esc handlers are never disturbed.
         const whole = e.shiftKey;
