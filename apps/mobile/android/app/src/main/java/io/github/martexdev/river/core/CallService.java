@@ -59,8 +59,9 @@ public final class CallService extends Service {
     NotificationManager nm = getSystemService(NotificationManager.class);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
       NotificationChannel channel =
-          new NotificationChannel(CHANNEL, "Calls in progress", NotificationManager.IMPORTANCE_LOW);
-      channel.setDescription("Shown while you are in a call or a voice channel");
+          new NotificationChannel(
+              CHANNEL, getString(io.github.martexdev.river.R.string.call_channel_name), NotificationManager.IMPORTANCE_LOW);
+      channel.setDescription(getString(io.github.martexdev.river.R.string.call_channel_description));
       channel.setShowBadge(false);
       nm.createNotificationChannel(channel);
     }
@@ -72,12 +73,13 @@ public final class CallService extends Service {
     Intent hangUp = new Intent(this, CallService.class).setAction(ACTION_HANG_UP);
     PendingIntent hangUpIntent = PendingIntent.getService(this, 1, hangUp, PendingIntent.FLAG_IMMUTABLE);
     Intent open = new Intent(this, RiverService.ACTIVITY).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-    Person who = new Person.Builder().setName(title == null || title.isEmpty() ? "In a call" : title).build();
+    String shown = title == null || title.isEmpty() ? getString(io.github.martexdev.river.R.string.call_in_a_call) : title;
+    Person who = new Person.Builder().setName(shown).build();
     NotificationCompat.Builder b =
         new NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
-            .setContentTitle(title == null || title.isEmpty() ? "In a call" : title)
-            .setContentText("River is using the microphone. Tap to return.")
+            .setContentTitle(shown)
+            .setContentText(getString(io.github.martexdev.river.R.string.call_using_mic))
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_LOW)

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { serverUrlSchema } from './settings.ts';
+import { msg } from './i18n/index.ts';
 
 /**
  * Starting layouts for a new community, so creating one is a single click.
@@ -20,9 +21,9 @@ export type TemplateId = (typeof TEMPLATE_IDS)[number];
 export const COMMUNITY_TEMPLATES: readonly CommunityTemplate[] = [
   {
     id: 'friends',
-    label: 'Friends',
+    label: msg('Friends'),
     emoji: '🫶',
-    description: 'Chat, memes and a place to hang out.',
+    description: msg('Chat, memes and a place to hang out.'),
     layout: [
       {
         category: 'Text channels',
@@ -43,9 +44,9 @@ export const COMMUNITY_TEMPLATES: readonly CommunityTemplate[] = [
   },
   {
     id: 'gaming',
-    label: 'Gaming',
+    label: msg('Gaming'),
     emoji: '🎮',
-    description: 'Find a squad, share clips, jump into voice.',
+    description: msg('Find a squad, share clips, jump into voice.'),
     layout: [
       {
         category: 'Info',
@@ -74,9 +75,9 @@ export const COMMUNITY_TEMPLATES: readonly CommunityTemplate[] = [
   },
   {
     id: 'study',
-    label: 'Study group',
+    label: msg('Study group'),
     emoji: '📚',
-    description: 'Homework help, notes and quiet study rooms.',
+    description: msg('Homework help, notes and quiet study rooms.'),
     layout: [
       {
         category: 'Study',
@@ -97,9 +98,9 @@ export const COMMUNITY_TEMPLATES: readonly CommunityTemplate[] = [
   },
   {
     id: 'club',
-    label: 'Club or team',
+    label: msg('Club or team'),
     emoji: '🏆',
-    description: 'Announcements, events and meetups.',
+    description: msg('Announcements, events and meetups.'),
     layout: [
       {
         category: 'Info',
@@ -120,9 +121,9 @@ export const COMMUNITY_TEMPLATES: readonly CommunityTemplate[] = [
   },
   {
     id: 'blank',
-    label: 'Start from scratch',
+    label: msg('Start from scratch'),
     emoji: '✨',
-    description: 'One text and one voice channel.',
+    description: msg('One text and one voice channel.'),
     layout: [
       {
         category: null,

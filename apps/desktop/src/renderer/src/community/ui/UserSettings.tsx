@@ -1,4 +1,4 @@
-import { tr } from '../../i18n.ts';
+import { msg, tr } from '../../i18n.ts';
 import { AvatarCropDialog, keepAnimated } from './AvatarCrop.tsx';
 import {
   DEFAULT_KEYBINDS,
@@ -110,17 +110,17 @@ export function Profile(): ReactElement {
       setDraft(next);
       const updated = await window.river.identity.get();
       if (updated) await useRiver.getState().identityCreated(updated);
-      s.notify('Profile saved');
+      s.notify(tr('Profile saved'));
     } finally {
       setSaving(false);
     }
   };
   return (
     <div className="settings-page">
-      <h2>My profile</h2>
+      <h2>{tr('My profile')}</h2>
       <div className="profile-editor">
         <div className="profile-editor__avatar">
-          <div className="profile-preview" aria-label="Preview of your profile card">
+          <div className="profile-preview" aria-label={tr('Preview of your profile card')}>
             <div
               className="profile-card__banner"
               style={draft.banner !== null ? { background: hex(draft.banner) } : undefined}
@@ -134,18 +134,18 @@ export function Profile(): ReactElement {
               />
             </div>
             <div className="profile-preview__body">
-              <strong>{draft.name || 'Your name'}</strong>
+              <strong>{draft.name || tr('Your name')}</strong>
               {draft.pronouns && <span className="muted small">{draft.pronouns}</span>}
               {draft.bio && <p className="profile-preview__bio">{draft.bio}</p>}
             </div>
           </div>
           <div className="button-row">
             <button className="btn btn--ghost btn--small" onClick={() => fileRef.current?.click()}>
-              Change avatar
+              {tr('Change avatar')}
             </button>
             {draft.avatar && (
               <button className="btn btn--link" onClick={() => set({ avatar: null })}>
-                Remove
+                {tr('Remove')}
               </button>
             )}
           </div>
@@ -158,7 +158,7 @@ export function Profile(): ReactElement {
               const file = e.target.files?.[0];
               e.target.value = '';
               if (!file) return;
-              if (file.size > 15 * 1024 * 1024) return s.notify('That image is too large.', 'error');
+              if (file.size > 15 * 1024 * 1024) return s.notify(tr('That image is too large.'), 'error');
               void keepAnimated(file).then((gif) => (gif ? set({ avatar: gif }) : setCropping(file)));
             }}
           />
@@ -175,37 +175,37 @@ export function Profile(): ReactElement {
         </div>
         <div className="profile-editor__fields">
           <label className="textfield">
-            <span className="field__label">Display name (optional)</span>
+            <span className="field__label">{tr('Display name (optional)')}</span>
             <input value={draft.name} maxLength={64} onChange={(e) => set({ name: e.target.value })} />
           </label>
           <label className="textfield">
-            <span className="field__label">Pronouns</span>
+            <span className="field__label">{tr('Pronouns')}</span>
             <input
               value={draft.pronouns}
               maxLength={40}
-              placeholder="she/her, they/them…"
+              placeholder={tr('she/her, they/them…')}
               onChange={(e) => set({ pronouns: e.target.value })}
             />
           </label>
           <label className="textfield">
             <span className="field__label">
-              About me <span className="muted small">{190 - draft.bio.length}</span>
+              {tr('About me')} <span className="muted small">{190 - draft.bio.length}</span>
             </span>
             <textarea
               value={draft.bio}
               maxLength={190}
               rows={3}
-              placeholder="A little about you"
+              placeholder={tr('A little about you')}
               onChange={(e) => set({ bio: e.target.value })}
             />
           </label>
           <fieldset className="field">
-            <legend className="field__label">Banner colour</legend>
+            <legend className="field__label">{tr('Banner colour')}</legend>
             <div className="swatches">
               <button
                 type="button"
                 className={`swatch swatch--none ${draft.banner === null ? 'is-selected' : ''}`}
-                aria-label="No banner colour"
+                aria-label={tr('No banner colour')}
                 aria-pressed={draft.banner === null}
                 onClick={() => set({ banner: null })}
               />
@@ -215,7 +215,7 @@ export function Profile(): ReactElement {
                   key={c}
                   className={`swatch ${draft.banner === c ? 'is-selected' : ''}`}
                   style={{ background: hex(c) }}
-                  aria-label={`Banner colour ${hex(c)}`}
+                  aria-label={tr('Banner colour {hex}', { hex: hex(c) })}
                   aria-pressed={draft.banner === c}
                   onClick={() => set({ banner: c })}
                 />
@@ -223,10 +223,11 @@ export function Profile(): ReactElement {
             </div>
           </fieldset>
           <p className="muted small">
-            Your profile is encrypted separately for each community you are in; the server only stores
-            ciphertext. About me is also your bio on your social profile.
+            {tr(
+              'Your profile is encrypted separately for each community you are in; the server only stores ciphertext. About me is also your bio on your social profile.',
+            )}
           </p>
-          <div className="field__label">River ID</div>
+          <div className="field__label">{tr('River ID')}</div>
           <code className="mono small">{identity?.riverId}</code>
         </div>
       </div>
@@ -249,7 +250,7 @@ const keyLabel = (code: string): string =>
   code
     .replace(/^Key/, '')
     .replace(/^Digit/, '')
-    .replace('Backquote', '` (backtick)')
+    .replace('Backquote', tr('` (backtick)'))
     .replace(/([a-z])([A-Z])/g, '$1 $2');
 
 export function VoiceSettings(): ReactElement {
@@ -347,32 +348,32 @@ export function VoiceSettings(): ReactElement {
 
   return (
     <div className="settings-page">
-      <h2>Voice & video</h2>
+      <h2>{tr('Voice & video')}</h2>
       <div className="two-col">
         <label className="textfield">
-          <span className="field__label">Input device</span>
+          <span className="field__label">{tr('Input device')}</span>
           <select
             value={voice.inputDeviceId ?? ''}
             onChange={(e) => apply({ inputDeviceId: e.target.value || null })}
           >
-            <option value="">Default</option>
+            <option value="">{tr('Default')}</option>
             {inputs.map((d) => (
               <option key={d.deviceId} value={d.deviceId}>
-                {d.label || 'Microphone'}
+                {d.label || tr('Microphone')}
               </option>
             ))}
           </select>
         </label>
         <label className="textfield">
-          <span className="field__label">Output device</span>
+          <span className="field__label">{tr('Output device')}</span>
           <select
             value={voice.outputDeviceId ?? ''}
             onChange={(e) => apply({ outputDeviceId: e.target.value || null })}
           >
-            <option value="">Default</option>
+            <option value="">{tr('Default')}</option>
             {outputs.map((d) => (
               <option key={d.deviceId} value={d.deviceId}>
-                {d.label || 'Speakers'}
+                {d.label || tr('Speakers')}
               </option>
             ))}
           </select>
@@ -380,12 +381,12 @@ export function VoiceSettings(): ReactElement {
       </div>
       <div className="mic-test">
         <button className="btn btn--ghost btn--small" onClick={() => setLevel(level === null ? 0 : null)}>
-          {level === null ? "Let's check" : 'Stop testing'}
+          {level === null ? tr("Let's check") : tr('Stop testing')}
         </button>
         <div
           className="meter"
           role="meter"
-          aria-label="Microphone level"
+          aria-label={tr('Microphone level')}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round((level ?? 0) * 100)}
@@ -399,7 +400,7 @@ export function VoiceSettings(): ReactElement {
           )}
         </div>
       </div>
-      <div className="field__label">Input mode</div>
+      <div className="field__label">{tr('Input mode')}</div>
       <div className="radio-cards">
         <label className={`radio-card ${voice.inputMode === 'voice' ? 'is-active' : ''}`}>
           <input
@@ -407,7 +408,7 @@ export function VoiceSettings(): ReactElement {
             checked={voice.inputMode === 'voice'}
             onChange={() => apply({ inputMode: 'voice' })}
           />
-          Voice activity
+          {tr('Voice activity')}
         </label>
         <label className={`radio-card ${voice.inputMode === 'push-to-talk' ? 'is-active' : ''}`}>
           <input
@@ -415,20 +416,22 @@ export function VoiceSettings(): ReactElement {
             checked={voice.inputMode === 'push-to-talk'}
             onChange={() => apply({ inputMode: 'push-to-talk' })}
           />
-          Push to talk
+          {tr('Push to talk')}
         </label>
       </div>
       {voice.inputMode === 'voice' && (
         <div className="sensitivity">
           <Toggle
-            label="Set input sensitivity automatically"
-            help="River sends your voice all the time and filters noise. Turn off to choose how loud you must be."
+            label={tr('Set input sensitivity automatically')}
+            help={tr(
+              'River sends your voice all the time and filters noise. Turn off to choose how loud you must be.',
+            )}
             checked={voice.sensitivity === null}
             onChange={(auto) => apply({ sensitivity: auto ? null : 0.15 })}
           />
           {voice.sensitivity !== null && (
             <label className="sensitivity__slider">
-              <span className="field__label">Input sensitivity</span>
+              <span className="field__label">{tr('Input sensitivity')}</span>
               <input
                 type="range"
                 min={0}
@@ -438,8 +441,9 @@ export function VoiceSettings(): ReactElement {
                 onChange={(e) => apply({ sensitivity: Number(e.target.value) / 100 })}
               />
               <span className="muted small">
-                Your voice is sent while the meter is past the line (it turns green). Press Let&apos;s check
-                to see it.
+                {tr(
+                  "Your voice is sent while the meter is past the line (it turns green). Press Let's check to see it.",
+                )}
               </span>
             </label>
           )}
@@ -447,16 +451,18 @@ export function VoiceSettings(): ReactElement {
       )}
       {voice.inputMode === 'push-to-talk' && (
         <div className="ptt">
-          <span className="field__label">Shortcut</span>
+          <span className="field__label">{tr('Shortcut')}</span>
           <button className={`keycap ${capturing ? 'is-capturing' : ''}`} onClick={() => setCapturing(true)}>
-            {capturing ? 'Press a key…' : keyLabel(voice.pushToTalkKey)}
+            {capturing ? tr('Press a key…') : keyLabel(voice.pushToTalkKey)}
           </button>
-          <p className="muted small">Push to talk works while the River window is focused.</p>
+          <p className="muted small">{tr('Push to talk works while the River window is focused.')}</p>
         </div>
       )}
       <label className="sensitivity__slider">
         <span className="field__label">
-          Voice volume · {Math.round((voice.outputVolume ?? (phone ? PHONE_OUTPUT_VOLUME : 1)) * 100)}%
+          {tr('Voice volume · {percent}%', {
+            percent: Math.round((voice.outputVolume ?? (phone ? PHONE_OUTPUT_VOLUME : 1)) * 100),
+          })}
         </span>
         <input
           type="range"
@@ -468,8 +474,9 @@ export function VoiceSettings(): ReactElement {
           onChange={(e) => apply({ outputVolume: Number(e.target.value) / 100 })}
         />
         <span className="muted small">
-          How loud everyone sounds in calls and voice channels. Above 100% River boosts the sound and keeps it
-          from distorting.
+          {tr(
+            'How loud everyone sounds in calls and voice channels. Above 100% River boosts the sound and keeps it from distorting.',
+          )}
           {voice.outputVolume !== null && (
             <>
               {' '}
@@ -481,48 +488,48 @@ export function VoiceSettings(): ReactElement {
         </span>
       </label>
       <label className="sensitivity__slider">
-        <span className="field__label">Soundboard volume</span>
+        <span className="field__label">{tr('Soundboard volume')}</span>
         <input
           type="range"
           min={0}
           max={100}
           value={Math.round(voice.soundboardVolume * 100)}
           aria-valuetext={
-            voice.soundboardVolume === 0 ? 'Off' : `${Math.round(voice.soundboardVolume * 100)}%`
+            voice.soundboardVolume === 0 ? tr('Off') : `${Math.round(voice.soundboardVolume * 100)}%`
           }
           onChange={(e) => apply({ soundboardVolume: Number(e.target.value) / 100 })}
         />
         <span className="muted small">
-          How loud other people&apos;s soundboard sounds play for you (0 turns them off).
+          {tr("How loud other people's soundboard sounds play for you (0 turns them off).")}
         </span>
       </label>
       <label className="textfield">
-        <span className="field__label">Leave voice when you're alone</span>
+        <span className="field__label">{tr("Leave voice when you're alone")}</span>
         <select
           value={voice.leaveAloneMinutes}
           onChange={(e) => apply({ leaveAloneMinutes: Number(e.target.value) })}
         >
-          <option value={0}>Never</option>
-          <option value={5}>After 5 minutes</option>
-          <option value={15}>After 15 minutes</option>
-          <option value={30}>After 30 minutes</option>
-          <option value={60}>After an hour</option>
+          <option value={0}>{tr('Never')}</option>
+          <option value={5}>{tr('After 5 minutes')}</option>
+          <option value={15}>{tr('After 15 minutes')}</option>
+          <option value={30}>{tr('After 30 minutes')}</option>
+          <option value={60}>{tr('After an hour')}</option>
         </select>
       </label>
-      <div className="perm-group__title">Voice processing</div>
+      <div className="perm-group__title">{tr('Voice processing')}</div>
       <Toggle
-        label="Noise suppression"
-        help="Filters background noise like fans and keyboards."
+        label={tr('Noise suppression')}
+        help={tr('Filters background noise like fans and keyboards.')}
         checked={voice.noiseSuppression}
         onChange={(v) => apply({ noiseSuppression: v })}
       />
       <Toggle
-        label="Echo cancellation"
-        help="Stops others hearing themselves through your speakers."
+        label={tr('Echo cancellation')}
+        help={tr('Stops others hearing themselves through your speakers.')}
         checked={voice.echoCancellation}
         onChange={(v) => apply({ echoCancellation: v })}
       />
-      <div className="perm-group__title">Keyboard shortcuts</div>
+      <div className="perm-group__title">{tr('Keyboard shortcuts')}</div>
       <KeybindEditor />
     </div>
   );
@@ -535,39 +542,47 @@ export function NotificationSettings(): ReactElement {
   if (!n) return <div className="settings-page" />;
   return (
     <div className="settings-page">
-      <h2>Notifications</h2>
+      <h2>{tr('Notifications')}</h2>
       <Toggle
-        label="Desktop notifications"
-        help="Shown when River is in the background."
+        label={tr('Desktop notifications')}
+        help={tr('Shown when River is in the background.')}
         checked={n.desktop}
         onChange={(v) => void update({ notifications: { desktop: v } })}
       />
       <Toggle
-        label="Banners inside River"
-        help="While River is open, a small banner shows new messages from other chats and channels. Tap it to open the chat. Muted chats stay quiet."
+        label={tr('Banners inside River')}
+        help={tr(
+          'While River is open, a small banner shows new messages from other chats and channels. Tap it to open the chat. Muted chats stay quiet.',
+        )}
         checked={n.banners}
         onChange={(v) => void update({ notifications: { banners: v } })}
       />
       <Toggle
-        label="Unread count on River’s icon"
-        help="The number of unread messages and mentions on River’s taskbar or dock icon (and the iPhone’s app icon). Muted chats are not counted. On Android the launcher shows it from River’s notifications."
+        label={tr('Unread count on River’s icon')}
+        help={tr(
+          'The number of unread messages and mentions on River’s taskbar or dock icon (and the iPhone’s app icon). Muted chats are not counted. On Android the launcher shows it from River’s notifications.',
+        )}
         checked={n.badge}
         onChange={(v) => void update({ notifications: { badge: v } })}
       />
       <Toggle
-        label="Count archived chats"
-        help="Unread messages in archived chats count on the Chats and Home badges and on River’s icon. Off: archived chats wait quietly in Archived. Message requests are never counted."
+        label={tr('Count archived chats')}
+        help={tr(
+          'Unread messages in archived chats count on the Chats and Home badges and on River’s icon. Off: archived chats wait quietly in Archived. Message requests are never counted.',
+        )}
         checked={n.countArchived}
         onChange={(v) => void update({ notifications: { countArchived: v } })}
       />
       <Toggle
-        label="Reactions to my messages"
-        help="A sound and a small notice when someone reacts to something you wrote (while that channel is loaded)."
+        label={tr('Reactions to my messages')}
+        help={tr(
+          'A sound and a small notice when someone reacts to something you wrote (while that channel is loaded).',
+        )}
         checked={n.reactions}
         onChange={(v) => void update({ notifications: { reactions: v } })}
       />
       <fieldset className="field">
-        <legend className="field__label">Notify me about</legend>
+        <legend className="field__label">{tr('Notify me about')}</legend>
         <div className="radio-cards">
           <label className={`radio-card ${n.mode === 'all' ? 'is-active' : ''}`}>
             <input
@@ -577,7 +592,7 @@ export function NotificationSettings(): ReactElement {
               checked={n.mode === 'all'}
               onChange={() => void update({ notifications: { mode: 'all' } })}
             />
-            All messages
+            {tr('All messages')}
           </label>
           <label className={`radio-card ${n.mode === 'mentions' ? 'is-active' : ''}`}>
             <input
@@ -587,14 +602,14 @@ export function NotificationSettings(): ReactElement {
               checked={n.mode === 'mentions'}
               onChange={() => void update({ notifications: { mode: 'mentions' } })}
             />
-            Only @mentions
+            {tr('Only @mentions')}
           </label>
         </div>
       </fieldset>
       {/* What notifications show: Settings → Notifications → Notification preview, below. */}
       <Toggle
-        label="Sounds"
-        help="Short sounds for messages, voice, calls, friends and the interface."
+        label={tr('Sounds')}
+        help={tr('Short sounds for messages, voice, calls, friends and the interface.')}
         checked={n.sounds}
         onChange={(v) => {
           void update({ notifications: { sounds: v } }).then(() => {
@@ -605,7 +620,9 @@ export function NotificationSettings(): ReactElement {
       {n.sounds && (
         <>
           <label className="slider-field">
-            <span className="field__label">Sound volume — {Math.round(n.soundVolume * 100)}%</span>
+            <span className="field__label">
+              {tr('Sound volume — {percent}%', { percent: Math.round(n.soundVolume * 100) })}
+            </span>
             <input
               type="range"
               min={0}
@@ -621,8 +638,8 @@ export function NotificationSettings(): ReactElement {
             {SOUND_GROUPS.map((group) => (
               <div key={group} className="sound-group">
                 <Toggle
-                  label={SOUND_GROUP_INFO[group].label}
-                  help={SOUND_GROUP_INFO[group].help}
+                  label={tr(SOUND_GROUP_INFO[group].label)}
+                  help={tr(SOUND_GROUP_INFO[group].help)}
                   checked={n.soundGroups[group]}
                   onChange={(v) =>
                     void update({ notifications: { soundGroups: { ...n.soundGroups, [group]: v } } })
@@ -633,10 +650,10 @@ export function NotificationSettings(): ReactElement {
                     <button
                       key={sound}
                       className="chip chip--button"
-                      aria-label={`Play the ${label} sound`}
+                      aria-label={tr('Play the {sound} sound', { sound: tr(label) })}
                       onClick={() => play(sound, true)}
                     >
-                      ▶ {label}
+                      ▶ {tr(label)}
                     </button>
                   ))}
                 </div>
@@ -654,53 +671,53 @@ const SOUND_GROUP_INFO: Record<
   { label: string; help: string; previews: Array<[SoundName, string]> }
 > = {
   messages: {
-    label: 'Messages',
-    help: 'Sending, receiving, mentions, direct messages and reactions.',
+    label: msg('Messages'),
+    help: msg('Sending, receiving, mentions, direct messages and reactions.'),
     previews: [
-      ['send', 'Send'],
-      ['message', 'Message'],
-      ['mention', 'Mention'],
-      ['dm', 'Direct message'],
-      ['reaction', 'Reaction'],
+      ['send', msg('Send')],
+      ['message', msg('Message')],
+      ['mention', msg('Mention')],
+      ['dm', msg('Direct message')],
+      ['reaction', msg('Reaction')],
     ],
   },
   voice: {
-    label: 'Voice channels',
-    help: 'Joining, leaving, mute, deafen, push-to-talk and screen sharing.',
+    label: msg('Voice channels'),
+    help: msg('Joining, leaving, mute, deafen, push-to-talk and screen sharing.'),
     previews: [
-      ['selfJoin', 'You join'],
-      ['join', 'Someone joins'],
-      ['leave', 'Someone leaves'],
-      ['mute', 'Mute'],
-      ['deafen', 'Deafen'],
-      ['streamStart', 'Go live'],
-      ['pttOn', 'Push-to-talk'],
+      ['selfJoin', msg('You join')],
+      ['join', msg('Someone joins')],
+      ['leave', msg('Someone leaves')],
+      ['mute', msg('Mute')],
+      ['deafen', msg('Deafen')],
+      ['streamStart', msg('Go live')],
+      ['pttOn', msg('Push-to-talk')],
     ],
   },
   calls: {
-    label: 'Calls',
-    help: 'Ringing, connected and call ended.',
+    label: msg('Calls'),
+    help: msg('Ringing, connected and call ended.'),
     previews: [
-      ['ring', 'Ringing'],
-      ['callConnected', 'Connected'],
-      ['callEnded', 'Ended'],
+      ['ring', msg('Ringing')],
+      ['callConnected', msg('Connected')],
+      ['callEnded', msg('Ended')],
     ],
   },
   social: {
-    label: 'Friends and communities',
-    help: 'Friend requests, new friends and joining a community.',
+    label: msg('Friends and communities'),
+    help: msg('Friend requests, new friends and joining a community.'),
     previews: [
-      ['friendRequest', 'Friend request'],
-      ['friendAdded', 'New friend'],
-      ['communityJoin', 'Joined a community'],
+      ['friendRequest', msg('Friend request')],
+      ['friendAdded', msg('New friend')],
+      ['communityJoin', msg('Joined a community')],
     ],
   },
   interface: {
-    label: 'Interface',
-    help: 'Copied, saved and something went wrong.',
+    label: msg('Interface'),
+    help: msg('Copied, saved and something went wrong.'),
     previews: [
-      ['success', 'Done'],
-      ['error', 'Error'],
+      ['success', msg('Done')],
+      ['error', msg('Error')],
     ],
   },
 };
@@ -725,13 +742,19 @@ function KeybindEditor(): ReactElement {
       if (!usable(combo)) {
         setProblem({
           action: capturing,
-          text: 'Use Ctrl or Alt with a key (or an F key), so typing never sets it off.',
+          text: tr('Use Ctrl or Alt with a key (or an F key), so typing never sets it off.'),
         });
         return;
       }
       const clash = clashOf(combo, binds, capturing);
       if (clash) {
-        setProblem({ action: capturing, text: `${comboLabel(combo, mac)} is already used for ${clash}.` });
+        setProblem({
+          action: capturing,
+          text: tr('{shortcut} is already used for {action}.', {
+            shortcut: comboLabel(combo, mac),
+            action: tr(clash),
+          }),
+        });
         return;
       }
       setProblem(null);
@@ -744,23 +767,26 @@ function KeybindEditor(): ReactElement {
     <div className="keybinds">
       {KEYBIND_ACTIONS.map((action) => (
         <div key={action} className="keybinds__row">
-          <span>{KEYBIND_LABELS[action]}</span>
+          <span>{tr(KEYBIND_LABELS[action])}</span>
           <button
             className={`keycap ${capturing === action ? 'is-capturing' : ''}`}
-            aria-label={`${KEYBIND_LABELS[action]}: ${comboLabel(binds[action], mac)}. Click to change.`}
+            aria-label={tr('{action}: {shortcut}. Click to change.', {
+              action: tr(KEYBIND_LABELS[action]),
+              shortcut: tr(comboLabel(binds[action], mac)),
+            })}
             onClick={() => {
               setProblem(null);
               setCapturing(capturing === action ? null : action);
             }}
           >
-            {capturing === action ? 'Press keys…' : comboLabel(binds[action], mac)}
+            {capturing === action ? tr('Press keys…') : tr(comboLabel(binds[action], mac))}
           </button>
           {binds[action] && (
             <button
               className="btn btn--link btn--small"
               onClick={() => void update({ voice: { keybinds: { ...binds, [action]: '' } } })}
             >
-              Clear
+              {tr('Clear')}
             </button>
           )}
           {problem?.action === action && <span className="field__error">{problem.text}</span>}
@@ -770,9 +796,11 @@ function KeybindEditor(): ReactElement {
         className="btn btn--link btn--small"
         onClick={() => void update({ voice: { keybinds: { ...DEFAULT_KEYBINDS } } })}
       >
-        Restore defaults
+        {tr('Restore defaults')}
       </button>
-      <p className="muted small">Shortcuts work while River is focused. Press Esc to stop changing one.</p>
+      <p className="muted small">
+        {tr('Shortcuts work while River is focused. Press Esc to stop changing one.')}
+      </p>
     </div>
   );
 }

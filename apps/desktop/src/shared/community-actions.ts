@@ -3,6 +3,7 @@ import { POLL_LIMITS } from './poll.ts';
 import { z } from 'zod';
 import type { AuditView, ChatMessage } from './ipc.ts';
 import { communityIconSchema } from './templates.ts';
+import { msg } from './i18n/index.ts';
 
 /**
  * Community operations the renderer may request. Main parses every request
@@ -643,11 +644,11 @@ export interface ReportView {
 }
 
 export const REPORT_REASONS = [
-  'Spam',
-  'Harassment or hate',
-  'Inappropriate content',
-  'Scam or phishing',
-  'Something else',
+  msg('Spam'),
+  msg('Harassment or hate'),
+  msg('Inappropriate content'),
+  msg('Scam or phishing'),
+  msg('Something else'),
 ];
 
 export interface FavoriteMediaView {

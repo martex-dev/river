@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { app } from 'electron';
 import {
+  msg,
   resolveLanguage,
   systemLanguage,
   translate,
@@ -83,10 +84,11 @@ const keystore: OsKeystore = {
     Buffer.from(native('keystore.unwrap', { data: Buffer.from(wrapped).toString('base64') }), 'base64'),
 };
 
-const PHONE = 'Hosting runs on a computer. Phones join communities hosted elsewhere.';
+const PHONE = msg('Hosting runs on a computer. Phones join communities hosted elsewhere.');
 /** Sideloaded iPhone apps cannot replace themselves: iOS only installs an IPA that is signed again. */
-const IOS_UPDATES =
-  'River on iPhone cannot update itself: iOS only lets you install a new version by sideloading its IPA again. Get it from the download page.';
+const IOS_UPDATES = msg(
+  'River on iPhone cannot update itself: iOS only lets you install a new version by sideloading its IPA again. Get it from the download page.',
+);
 
 /** Hosting is a desktop feature: the phone reports it as off and refuses to start it. */
 const noHosting: IpcDeps['hosting'] = {
@@ -571,12 +573,14 @@ async function start(): Promise<void> {
           dir: join(userData, 'updates'),
           trustedKeys: TRUSTED_RELEASE_KEYS,
           log,
+          t,
         })
       : null;
   updates?.start();
   registerIpc({
     appInfo,
     settings,
+    locale: systemLanguage,
     updates,
     updatesDisabledReason: IOS_UPDATES,
     devServerUrl: undefined,

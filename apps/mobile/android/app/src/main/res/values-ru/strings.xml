@@ -1,0 +1,53 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- River's Android texts in this language (the app's screens are translated in shared/i18n). -->
+<resources>
+    <string name="screen_crashed">Экран River несколько раз подряд остановился. Откройте River снова.</string>
+    <string name="notice_channel_name">Обновления и состояние River</string>
+    <string name="notice_channel_description">Обновление ждёт установки, или River больше не на связи</string>
+    <string name="notice_update_title">Обновление River готово</string>
+    <string name="notice_update_text">Нажмите, чтобы установить.</string>
+    <string name="notice_stopped_title">River остановлен</string>
+    <string name="notice_stopped_text">Нажмите, чтобы переподключиться. Разрешите River работать в фоне («Настройки → Система»), чтобы Android его не закрывал.</string>
+    <string name="lock_prompt_title">Разблокировать River</string>
+    <string name="lock_title">River заблокирован</string>
+    <string name="lock_unlock">Разблокировать</string>
+    <string name="call_channel_name">Текущие звонки</string>
+    <string name="call_channel_description">Показывается во время звонка или в голосовом канале</string>
+    <string name="call_in_a_call">Идёт звонок</string>
+    <string name="call_using_mic">River использует микрофон. Нажмите, чтобы вернуться.</string>
+    <string name="core_storage_failed">River не смог открыть хранилище: %1$s</string>
+    <string name="core_crashed">Ядро River несколько раз подряд остановилось. Закройте River и откройте снова.</string>
+    <string name="core_new_message_open">Новое сообщение — откройте River</string>
+    <string name="new_message">Новое сообщение</string>
+    <string name="new_messages">Новые сообщения</string>
+    <string name="reply_not_sent_title">Ответ не отправлен</string>
+    <string name="reply_not_sent_text">River был закрыт. Откройте River, чтобы отправить.</string>
+    <string name="messages_channel_name">Сообщения</string>
+    <string name="messages_channel_description">Новые сообщения и упоминания, пока River в фоне</string>
+    <string name="action_reply">Ответить</string>
+    <string name="action_mark_read">Прочитано</string>
+    <string name="core_start_failed">Не удалось запустить River</string>
+    <string name="incoming_channel_name">Входящие звонки</string>
+    <string name="incoming_channel_description">Звонит и показывает экран вызова, когда вам звонят</string>
+    <string name="incoming_video">Входящий видеозвонок</string>
+    <string name="incoming_voice">Входящий голосовой звонок</string>
+    <string name="call_kind_video">Видеозвонок River</string>
+    <string name="call_kind_voice">Голосовой звонок River</string>
+    <string name="ringing">Звонок…</string>
+    <string name="decline">Отклонить</string>
+    <string name="answer">Ответить</string>
+    <string name="you">Вы</string>
+    <string name="tone_channel_name">Сообщения · %1$s</string>
+    <string name="tone_channel_description">Чаты и каналы со звуком %1$s</string>
+    <string name="service_channel_name">Оставаться на связи</string>
+    <string name="service_channel_description">Показывается, пока River на связи в фоне</string>
+    <string name="service_title">River на связи</string>
+    <string name="service_text">Новые сообщения приходят, даже когда River закрыт. Отключить: «Настройки → Система».</string>
+    <string name="installer_could_not_open">Не удалось открыть установщик Android</string>
+    <plurals name="new_messages_count">
+        <item quantity="one">%d новое сообщение</item>
+        <item quantity="few">%d новых сообщения</item>
+        <item quantity="many">%d новых сообщений</item>
+        <item quantity="other">%d нового сообщения</item>
+    </plurals>
+</resources>

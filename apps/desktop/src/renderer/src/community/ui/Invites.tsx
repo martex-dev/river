@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactElement } from 'react';
 import type { InviteView } from '../../../../shared/community-actions.ts';
 import type { CommunityView } from '../../../../shared/ipc.ts';
 import { useCommunity } from '../store.ts';
+import { tr } from '../../i18n.ts';
 
 /** Community settings → Invites (1.0.31): who made each invite, who joined with it, revoke. */
 export function InvitesPanel({ community }: { community: CommunityView }): ReactElement {
@@ -11,28 +12,34 @@ export function InvitesPanel({ community }: { community: CommunityView }): React
     void s.run({ a: 'invites', communityId: community.id }).then((r) => setInvites(r ?? []));
   useEffect(load, [community.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const name = (id: string): string =>
-    community.members.find((m) => m.riverId === id)?.name ?? 'Someone who left';
+    community.members.find((m) => m.riverId === id)?.name ?? tr('Someone who left');
   return (
     <div className="settings-page">
-      <h2>Invites</h2>
+      <h2>{tr('Invites')}</h2>
       <p className="muted small">
-        Active invite links, who made them and who joined with them. Revoking stops a link from working;
-        people who already joined stay.
+        {tr(
+          'Active invite links, who made them and who joined with them. Revoking stops a link from working; people who already joined stay.',
+        )}
       </p>
-      {invites === null && <p className="muted">Loading…</p>}
-      {invites?.length === 0 && <p className="muted">No active invites.</p>}
+      {invites === null && <p className="muted">{tr('Loading…')}</p>}
+      {invites?.length === 0 && <p className="muted">{tr('No active invites.')}</p>}
       <ul className="report-list">
         {invites?.map((i) => (
           <li key={i.id} className="report">
             <div className="report__head">
               <strong>{i.createdByName}</strong>
               <span className="muted small">
-                {i.uses} of {i.maxUses} uses · expires {new Date(i.expiresAt).toLocaleDateString()}
-                {i.createdAt ? ` · made ${new Date(i.createdAt).toLocaleDateString()}` : ''}
+                {tr('{uses} of {max} uses', { uses: i.uses, max: i.maxUses })} ·{' '}
+                {tr('expires {date}', { date: new Date(i.expiresAt).toLocaleDateString() })}
+                {i.createdAt
+                  ? ` · ${tr('made {date}', { date: new Date(i.createdAt).toLocaleDateString() })}`
+                  : ''}
               </span>
             </div>
             {i.joined.length > 0 && (
-              <div className="muted small">Joined with it: {i.joined.map(name).join(', ')}</div>
+              <div className="muted small">
+                {tr('Joined with it: {names}', { names: i.joined.map(name).join(', ') })}
+              </div>
             )}
             <div className="report__actions">
               <button
@@ -41,7 +48,7 @@ export function InvitesPanel({ community }: { community: CommunityView }): React
                   void s.run({ a: 'revokeInvite', communityId: community.id, inviteId: i.id }).then(load)
                 }
               >
-                Revoke
+                {tr('Revoke')}
               </button>
             </div>
           </li>

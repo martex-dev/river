@@ -2,6 +2,7 @@ import { useRef, useState, type ReactElement } from 'react';
 import type { CommunityView } from '../../../../shared/ipc.ts';
 import { useCommunity } from '../store.ts';
 import { AvatarCropDialog } from './AvatarCrop.tsx';
+import { tr } from '../../i18n.ts';
 
 /** A banner from a picture: 960×320, cropped to the middle, as WebP (or PNG). */
 async function toBanner(file: File): Promise<string> {
@@ -28,24 +29,24 @@ export function CommunityArtFields({ community }: { community: CommunityView }):
   const [cropping, setCropping] = useState<File | null>(null);
   const save = (patch: { icon?: string | null; banner?: string | null }): void =>
     void s.run({ a: 'updateArt', communityId: community.id, ...patch }).then((r) => {
-      if (r !== null) s.notify('Saved.');
+      if (r !== null) s.notify(tr('Saved.'));
     });
   return (
     <div className="community-art">
       <div className="community-art__item">
-        <span className="field__label">Picture</span>
+        <span className="field__label">{tr('Picture')}</span>
         {community.art?.icon ? (
-          <img className="community-art__icon" src={community.art.icon} alt="Community picture" />
+          <img className="community-art__icon" src={community.art.icon} alt={tr('Community picture')} />
         ) : (
           <span className="community-art__icon" aria-hidden="true" />
         )}
         <div className="community-art__actions">
           <button className="btn btn--ghost btn--small" onClick={() => iconRef.current?.click()}>
-            Choose…
+            {tr('Choose…')}
           </button>
           {community.art?.icon && (
             <button className="btn btn--link btn--small" onClick={() => save({ icon: null })}>
-              Remove
+              {tr('Remove')}
             </button>
           )}
         </div>
@@ -62,19 +63,19 @@ export function CommunityArtFields({ community }: { community: CommunityView }):
         />
       </div>
       <div className="community-art__item">
-        <span className="field__label">Banner</span>
+        <span className="field__label">{tr('Banner')}</span>
         {community.art?.banner ? (
-          <img className="community-art__banner" src={community.art.banner} alt="Community banner" />
+          <img className="community-art__banner" src={community.art.banner} alt={tr('Community banner')} />
         ) : (
           <span className="community-art__banner" aria-hidden="true" />
         )}
         <div className="community-art__actions">
           <button className="btn btn--ghost btn--small" onClick={() => bannerRef.current?.click()}>
-            Choose…
+            {tr('Choose…')}
           </button>
           {community.art?.banner && (
             <button className="btn btn--link btn--small" onClick={() => save({ banner: null })}>
-              Remove
+              {tr('Remove')}
             </button>
           )}
         </div>
@@ -90,9 +91,9 @@ export function CommunityArtFields({ community }: { community: CommunityView }):
             void toBanner(file).then(
               (banner) =>
                 banner.length > 110_000
-                  ? s.notify('That banner is too detailed to keep small; try another picture.', 'error')
+                  ? s.notify(tr('That banner is too detailed to keep small; try another picture.'), 'error')
                   : save({ banner }),
-              () => s.notify('River could not read that picture.', 'error'),
+              () => s.notify(tr('River could not read that picture.'), 'error'),
             );
           }}
         />
@@ -107,7 +108,7 @@ export function CommunityArtFields({ community }: { community: CommunityView }):
           }}
         />
       )}
-      <p className="muted small">Pictures are end-to-end encrypted like the rest of the community.</p>
+      <p className="muted small">{tr('Pictures are end-to-end encrypted like the rest of the community.')}</p>
     </div>
   );
 }

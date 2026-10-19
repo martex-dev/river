@@ -4,6 +4,7 @@ import type { CommunityView } from '../../../../shared/ipc.ts';
 import { StickerIcon } from '../../phone/icons.tsx';
 import { useCommunity } from '../store.ts';
 import { Popover, StillPicture, can, holdStill } from './common.tsx';
+import { tr } from '../../i18n.ts';
 
 const MAX_SIDE = 320;
 /** GIFs this small are kept as they are, so they stay animated. */
@@ -50,14 +51,20 @@ export function StickerImage({ id }: { id: string }): ReactElement {
     }
     return null;
   });
-  if (!sticker) return <span className="muted small">[a sticker that is no longer here]</span>;
+  if (!sticker) return <span className="muted small">{tr('[a sticker that is no longer here]')}</span>;
   if (holdStill(sticker.image))
-    return <StillPicture src={sticker.image} className="sticker" label={`Sticker: ${sticker.name}`} />;
+    return (
+      <StillPicture
+        src={sticker.image}
+        className="sticker"
+        label={tr('Sticker: {name}', { name: sticker.name })}
+      />
+    );
   return (
     <img
       className="sticker"
       src={sticker.image}
-      alt={`Sticker: ${sticker.name}`}
+      alt={tr('Sticker: {name}', { name: sticker.name })}
       title={sticker.name}
       draggable={false}
     />
@@ -112,8 +119,8 @@ export function MyStickersButton(props: {
       <button
         type="button"
         className="icon-btn"
-        aria-label="Stickers"
-        title="Stickers"
+        aria-label={tr('Stickers')}
+        title={tr('Stickers')}
         disabled={props.disabled}
         onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
@@ -127,16 +134,16 @@ export function MyStickersButton(props: {
           <input
             className="emoji-picker__search"
             autoFocus
-            placeholder="Search stickers"
-            aria-label="Search stickers"
+            placeholder={tr('Search stickers')}
+            aria-label={tr('Search stickers')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           {groups.length === 0 && (
             <p className="muted small">
               {communities.length === 0
-                ? 'Stickers come from your communities. Join or make one to add stickers.'
-                : 'No stickers yet. Community admins add them in community settings → Stickers.'}
+                ? tr('Stickers come from your communities. Join or make one to add stickers.')
+                : tr('No stickers yet. Community admins add them in community settings → Stickers.')}
             </p>
           )}
           {groups.map(({ c, list }) => (
@@ -148,7 +155,7 @@ export function MyStickersButton(props: {
                     key={x.id}
                     className="sticker-picker__item"
                     title={x.name}
-                    aria-label={`Send sticker ${x.name}`}
+                    aria-label={tr('Send sticker {name}', { name: x.name })}
                     onClick={() => {
                       setOpen(null);
                       const file = stickerFile(x.name, x.image);
@@ -189,8 +196,8 @@ export function StickerButton({
       <button
         type="button"
         className="icon-btn"
-        aria-label="Stickers"
-        title="Stickers"
+        aria-label={tr('Stickers')}
+        title={tr('Stickers')}
         onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
           setOpen(open ? null : { x: r.left - 260, y: r.top - 340 });
@@ -203,15 +210,15 @@ export function StickerButton({
           <input
             className="emoji-picker__search"
             autoFocus
-            placeholder="Search stickers"
-            aria-label="Search stickers"
+            placeholder={tr('Search stickers')}
+            aria-label={tr('Search stickers')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          {stickers === undefined && <p className="muted small">Loading…</p>}
+          {stickers === undefined && <p className="muted small">{tr('Loading…')}</p>}
           {stickers?.length === 0 && (
             <p className="muted small">
-              No stickers here yet.
+              {tr('No stickers here yet.')}
               {can(community.permissions, Permission.MANAGE_EXPRESSIONS) && (
                 <>
                   {' '}
@@ -222,7 +229,7 @@ export function StickerButton({
                       s.setModal({ kind: 'community-settings', communityId: community.id, tab: 'stickers' });
                     }}
                   >
-                    Add some
+                    {tr('Add some')}
                   </button>
                 </>
               )}
@@ -234,7 +241,7 @@ export function StickerButton({
                 key={x.id}
                 className="sticker-picker__item"
                 title={x.name}
-                aria-label={`Send sticker ${x.name}`}
+                aria-label={tr('Send sticker {name}', { name: x.name })}
                 onClick={() => {
                   setOpen(null);
                   void s.run({ a: 'send', channelId, text: '', sticker: x.id });
@@ -279,14 +286,14 @@ export function StickerSettings({ community }: { community: CommunityView }): Re
   };
   return (
     <div className="settings-page">
-      <h2>Stickers</h2>
+      <h2>{tr('Stickers')}</h2>
       <p className="muted small">
-        Big pictures anyone here can send with the 🗒️ button. End-to-end encrypted. Up to 60.
+        {tr('Big pictures anyone here can send with the 🗒️ button. End-to-end encrypted. Up to 60.')}
       </p>
       {manage && (
         <div className="emoji-upload">
           <button className="btn btn--primary btn--small" onClick={() => fileRef.current?.click()}>
-            Upload sticker
+            {tr('Upload sticker')}
           </button>
           <input
             ref={fileRef}
@@ -297,14 +304,17 @@ export function StickerSettings({ community }: { community: CommunityView }): Re
               const file = e.target.files?.[0];
               e.target.value = '';
               if (!file) return;
-              if (file.size > 8 * 1024 * 1024) return s.notify('That image is too large.', 'error');
+              if (file.size > 8 * 1024 * 1024) return s.notify(tr('That image is too large.'), 'error');
               void toStickerImage(file)
                 .then((image) => {
                   if (image.length > 190_000) throw new Error('big');
                   setPending({ name: file.name.replace(/\.[^.]+$/, '').slice(0, 30) || 'sticker', image });
                 })
                 .catch(() =>
-                  s.notify('River could not make a sticker from that picture (try a smaller one).', 'error'),
+                  s.notify(
+                    tr('River could not make a sticker from that picture (try a smaller one).'),
+                    'error',
+                  ),
                 );
             }}
           />
@@ -312,7 +322,7 @@ export function StickerSettings({ community }: { community: CommunityView }): Re
             <div className="emoji-upload__pending">
               <img className="sticker sticker--preview" src={pending.image} alt="" />
               <label className="textfield">
-                <span className="field__label">Name</span>
+                <span className="field__label">{tr('Name')}</span>
                 <input
                   autoFocus
                   value={pending.name}
@@ -325,17 +335,17 @@ export function StickerSettings({ community }: { community: CommunityView }): Re
                 disabled={!pending.name.trim() || busy}
                 onClick={() => void add()}
               >
-                Add
+                {tr('Add')}
               </button>
               <button className="btn btn--link" onClick={() => setPending(null)}>
-                Cancel
+                {tr('Cancel')}
               </button>
             </div>
           )}
         </div>
       )}
-      {stickers === undefined && <p className="muted">Loading…</p>}
-      {stickers?.length === 0 && <p className="muted">No stickers yet.</p>}
+      {stickers === undefined && <p className="muted">{tr('Loading…')}</p>}
+      {stickers?.length === 0 && <p className="muted">{tr('No stickers yet.')}</p>}
       <div className="sticker-grid">
         {stickers?.map((x) => (
           <figure key={x.id} className="sticker-grid__item">
@@ -344,12 +354,12 @@ export function StickerSettings({ community }: { community: CommunityView }): Re
             {manage && (
               <button
                 className="btn btn--link btn--danger btn--small"
-                aria-label={`Remove sticker ${x.name}`}
+                aria-label={tr('Remove sticker {name}', { name: x.name })}
                 onClick={() =>
                   void s.run({ a: 'deleteSticker', stickerId: x.id }).then(() => s.loadStickers(community.id))
                 }
               >
-                Remove
+                {tr('Remove')}
               </button>
             )}
           </figure>

@@ -25,6 +25,7 @@ import {
 import { useDm } from '../dm/store.ts';
 import { useSocial } from '../social/store.ts';
 import { useRiver } from '../store.ts';
+import { tr, trn } from '../i18n.ts';
 
 const STORY_MS = 6000;
 /** Media still not ready after this long: the viewer moves on instead of waiting forever. */
@@ -36,7 +37,7 @@ const TAP_MS = 250;
 
 function ago(iso: string): string {
   const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
-  if (s < 60) return 'just now';
+  if (s < 60) return tr('just now');
   if (s < 3600) return `${Math.floor(s / 60)}m`;
   if (s < 86_400) return `${Math.floor(s / 3600)}h`;
   return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
@@ -76,11 +77,12 @@ export function SocialPage(): ReactElement {
     return (
       <div className="page">
         <header className="page__header">
-          <div className="eyebrow">Social</div>
-          <h1 className="page__title">Share with your people</h1>
+          <div className="eyebrow">{tr('Social')}</div>
+          <h1 className="page__title">{tr('Share with your people')}</h1>
           <p className="page__lead">
-            Posts and stories go only to people you choose, end-to-end encrypted. Join a community or create
-            an account first.
+            {tr(
+              'Posts and stories go only to people you choose, end-to-end encrypted. Join a community or create an account first.',
+            )}
           </p>
         </header>
       </div>
@@ -107,7 +109,7 @@ export function SocialPage(): ReactElement {
         </button>
       ))}
       {feed?.friends.length === 0 && (
-        <p className="muted small">Your friends are the people you have accepted in Messages.</p>
+        <p className="muted small">{tr('Your friends are the people you have accepted in Messages.')}</p>
       )}
     </>
   );
@@ -118,7 +120,7 @@ export function SocialPage(): ReactElement {
         <div className="social__narrow">
           <MyCard onProfile={openMine} />
           <button className="btn btn--ghost btn--small" onClick={() => setFriendsOpen(true)}>
-            Friends — {feed?.friends.length ?? 0}
+            {tr('Friends — {count}', { count: feed?.friends.length ?? 0 })}
           </button>
         </div>
         <StoriesRail
@@ -132,15 +134,16 @@ export function SocialPage(): ReactElement {
           onAdd={() => setComposer('story')}
         />
         <button className="social__compose glass" onClick={() => setComposer('post')}>
-          <Avatar id={me?.riverId ?? 'me'} name={me?.displayName ?? 'You'} size={36} />
-          <span className="muted">Share something with your friends…</span>
+          <Avatar id={me?.riverId ?? 'me'} name={me?.displayName ?? tr('You')} size={36} />
+          <span className="muted">{tr('Share something with your friends…')}</span>
         </button>
         {feed && feed.posts.length === 0 && (
           <div className="social__empty glass">
-            <h2>Nothing here yet</h2>
+            <h2>{tr('Nothing here yet')}</h2>
             <p className="muted">
-              Posts from your contacts appear here. Add people in Messages (or from a community) and share
-              your first post — only the people you choose can see it.
+              {tr(
+                'Posts from your contacts appear here. Add people in Messages (or from a community) and share your first post — only the people you choose can see it.',
+              )}
             </p>
           </div>
         )}
@@ -152,13 +155,16 @@ export function SocialPage(): ReactElement {
         <MyCard onProfile={openMine} />
         <div className="glass social__friends">
           <div className="channel-group__head">
-            <span>Friends — {feed?.friends.length ?? 0}</span>
+            <span>{tr('Friends — {count}', { count: feed?.friends.length ?? 0 })}</span>
           </div>
           {friendList}
         </div>
       </aside>
       {friendsOpen && (
-        <Modal title={`Friends — ${feed?.friends.length ?? 0}`} onClose={() => setFriendsOpen(false)}>
+        <Modal
+          title={tr('Friends — {count}', { count: feed?.friends.length ?? 0 })}
+          onClose={() => setFriendsOpen(false)}
+        >
           <div className="social__friends">{friendList}</div>
         </Modal>
       )}
@@ -184,16 +190,16 @@ export function StoriesRail(props: {
   const groups = props.feed?.stories ?? [];
   const hasMine = groups.some((g) => g.mine);
   return (
-    <div className="stories" aria-label="Stories">
+    <div className="stories" aria-label={tr('Stories')}>
       {!hasMine && (
         <button className="story-bubble" onClick={props.onAdd}>
           <span className="story-bubble__ring story-bubble__ring--add">
-            <Avatar id={me?.riverId ?? 'me'} name={me?.displayName ?? 'You'} size={58} />
+            <Avatar id={me?.riverId ?? 'me'} name={me?.displayName ?? tr('You')} size={58} />
             <span className="story-bubble__plus">
               <PlusIcon size={14} />
             </span>
           </span>
-          <span className="story-bubble__name">Your story</span>
+          <span className="story-bubble__name">{tr('Your story')}</span>
         </button>
       )}
       {groups.map((g) => (
@@ -201,17 +207,17 @@ export function StoriesRail(props: {
           <span className={`story-bubble__ring ${g.unseen ? 'is-unseen' : ''}`}>
             <Avatar id={g.riverId} name={g.name} avatar={g.avatar} size={58} />
           </span>
-          <span className="story-bubble__name">{g.mine ? 'Your story' : g.name}</span>
+          <span className="story-bubble__name">{g.mine ? tr('Your story') : g.name}</span>
         </button>
       ))}
       {hasMine && (
-        <button className="story-bubble" onClick={props.onAdd} title="Add to your story">
+        <button className="story-bubble" onClick={props.onAdd} title={tr('Add to your story')}>
           <span className="story-bubble__ring story-bubble__ring--add">
             <span className="story-bubble__addicon">
               <PlusIcon size={22} />
             </span>
           </span>
-          <span className="story-bubble__name">Add</span>
+          <span className="story-bubble__name">{tr('Add')}</span>
         </button>
       )}
     </div>
@@ -222,10 +228,10 @@ function MyCard({ onProfile }: { onProfile(): void }): ReactElement {
   const identity = useRiver((r) => r.identity);
   return (
     <button className="glass social__me" onClick={onProfile}>
-      <Avatar id={identity?.riverId ?? 'me'} name={identity?.displayName ?? 'You'} size={44} />
+      <Avatar id={identity?.riverId ?? 'me'} name={identity?.displayName ?? tr('You')} size={44} />
       <span className="dm-row__text">
-        <strong>{identity?.displayName ?? 'You'}</strong>
-        <span className="muted small">View your profile</span>
+        <strong>{identity?.displayName ?? tr('You')}</strong>
+        <span className="muted small">{tr('View your profile')}</span>
       </span>
     </button>
   );
@@ -261,30 +267,30 @@ export function Composer(props: {
   const share = async (): Promise<void> => {
     if ((!text.trim() && !files.length) || busy) return;
     try {
-      setBusy(files.length ? 'Encrypting photos…' : 'Sharing…');
+      setBusy(files.length ? tr('Encrypting photos…') : tr('Sharing…'));
       const attachments = files.length ? await uploadAll(files, () => undefined, 'dm') : [];
-      setBusy('Sharing…');
+      setBusy(tr('Sharing…'));
       const done = await social.run({ a: 'post', kind: props.kind, text, attachments, audience });
       if (done) {
-        useCommunity.getState().notify(story ? 'Added to your story' : 'Shared');
+        useCommunity.getState().notify(story ? tr('Added to your story') : tr('Shared'));
         props.onClose();
       }
     } catch (err) {
-      useCommunity.getState().notify((err as Error).message || 'Could not share.', 'error');
+      useCommunity.getState().notify((err as Error).message || tr('Could not share.'), 'error');
     } finally {
       setBusy(null);
     }
   };
 
   return (
-    <Modal title={story ? 'Add to your story' : 'Create post'} onClose={props.onClose}>
+    <Modal title={story ? tr('Add to your story') : tr('Create post')} onClose={props.onClose}>
       <div className="composer">
         <textarea
           autoFocus
           value={text}
           maxLength={2000}
           rows={story ? 3 : 5}
-          placeholder={story ? 'Say something (shown for 24 hours)…' : 'What do you want to share?'}
+          placeholder={story ? tr('Say something (shown for 24 hours)…') : tr('What do you want to share?')}
           onChange={(e) => setText(e.target.value)}
           onPaste={(e) => {
             const pasted = [...e.clipboardData.files];
@@ -305,7 +311,7 @@ export function Composer(props: {
         )}
         <div className="composer__row">
           <button className="btn btn--ghost btn--small" onClick={() => fileRef.current?.click()}>
-            📷 Photos & videos
+            📷 {tr('Photos & videos')}
           </button>
           <input
             ref={fileRef}
@@ -313,7 +319,7 @@ export function Composer(props: {
             accept="image/*,video/*"
             multiple
             hidden
-            aria-label="Add photos or videos"
+            aria-label={tr('Add photos or videos')}
             onChange={(e) => {
               if (e.target.files?.length) add(e.target.files);
               e.target.value = '';
@@ -321,12 +327,12 @@ export function Composer(props: {
           />
           <select
             className="composer__audience"
-            aria-label="Who can see this"
+            aria-label={tr('Who can see this')}
             value={audience === 'friends' ? 'friends' : 'custom'}
             onChange={(e) => setAudience(e.target.value === 'friends' ? 'friends' : [])}
           >
-            <option value="friends">👥 All friends ({props.friends.length})</option>
-            <option value="custom">🔒 Only people I choose</option>
+            <option value="friends">👥 {tr('All friends ({count})', { count: props.friends.length })}</option>
+            <option value="custom">🔒 {tr('Only people I choose')}</option>
           </select>
         </div>
         {audience !== 'friends' && (
@@ -351,7 +357,7 @@ export function Composer(props: {
           </div>
         )}
         <p className="muted small">
-          Encrypted separately for each person who can see it. River's server only relays ciphertext.
+          {tr("Encrypted separately for each person who can see it. River's server only relays ciphertext.")}
         </p>
         <div className="modal__foot">
           <button
@@ -361,7 +367,7 @@ export function Composer(props: {
             }
             onClick={() => void share()}
           >
-            {busy ?? (story ? 'Share to story' : 'Post')}
+            {busy ?? (story ? tr('Share to story') : tr('Post'))}
           </button>
         </div>
       </div>
@@ -377,7 +383,7 @@ function PostCard({ post, onProfile }: { post: PostView; onProfile(id: string): 
   const [showAll, setShowAll] = useState(false);
   const liked = post.reactions.some((r) => r.emoji === '❤️' && r.mine);
   const comments = showAll ? post.comments : post.comments.slice(-3);
-  const myName = useRiver((r) => r.identity?.displayName) ?? 'You';
+  const myName = useRiver((r) => r.identity?.displayName) ?? tr('You');
   return (
     <article className="post glass">
       <header className="post__head">
@@ -387,16 +393,14 @@ function PostCard({ post, onProfile }: { post: PostView; onProfile(id: string): 
             <strong>{post.authorName}</strong>
             <span className="muted small">
               {ago(post.createdAt)}
-              {post.mine
-                ? ` · shared with ${post.audience} ${post.audience === 1 ? 'person' : 'people'}`
-                : ''}
+              {post.mine ? ` · ${trn('shared with {count} people', post.audience)}` : ''}
             </span>
           </span>
         </button>
         {post.mine && (
           <button
             className="icon-btn"
-            aria-label="Post options"
+            aria-label={tr('Post options')}
             onClick={(e) => {
               const r = e.currentTarget.getBoundingClientRect();
               setMenu({ x: r.right - 200, y: r.bottom + 4 });
@@ -415,16 +419,16 @@ function PostCard({ post, onProfile }: { post: PostView; onProfile(id: string): 
               setMenu(null);
               useCommunity.getState().setModal({
                 kind: 'confirm',
-                title: 'Delete post',
-                body: 'It will be removed for everyone you shared it with.',
-                action: 'Delete',
+                title: tr('Delete post'),
+                body: tr('It will be removed for everyone you shared it with.'),
+                action: tr('Delete'),
                 run: async () => {
                   await social.run({ a: 'deletePost', postId: post.id });
                 },
               });
             }}
           >
-            Delete post
+            {tr('Delete post')}
           </MenuItem>
         </Popover>
       )}
@@ -441,14 +445,14 @@ function PostCard({ post, onProfile }: { post: PostView; onProfile(id: string): 
       <div className="post__actions">
         <button
           className={`post__like ${liked ? 'is-on' : ''}`}
-          aria-label={liked ? 'Unlike' : 'Like'}
+          aria-label={liked ? tr('Unlike') : tr('Like')}
           onClick={() => void social.run({ a: 'react', postId: post.id, emoji: '❤️', on: !liked })}
         >
           {liked ? '❤️' : '🤍'}
         </button>
         <button
           className="post__like"
-          aria-label="React"
+          aria-label={tr('React')}
           onClick={(e) => setPicker({ x: e.clientX, y: e.clientY - 320 })}
         >
           😊
@@ -465,7 +469,7 @@ function PostCard({ post, onProfile }: { post: PostView; onProfile(id: string): 
       </div>
       {post.comments.length > 3 && !showAll && (
         <button className="btn btn--link post__more" onClick={() => setShowAll(true)}>
-          View all {post.comments.length} comments
+          {trn('View all {count} comments', post.comments.length)}
         </button>
       )}
       <div className="post__comments">
@@ -492,12 +496,12 @@ function PostCard({ post, onProfile }: { post: PostView; onProfile(id: string): 
         <input
           value={comment}
           maxLength={1000}
-          placeholder="Add a comment…"
-          aria-label="Add a comment"
+          placeholder={tr('Add a comment…')}
+          aria-label={tr('Add a comment')}
           onChange={(e) => setComment(e.target.value)}
         />
         <button className="btn btn--link" disabled={!comment.trim()}>
-          Post
+          {tr('Post')}
         </button>
       </form>
       {picker && (
@@ -715,7 +719,7 @@ export function StoryViewer(props: {
   };
 
   return (
-    <div className="story-viewer" role="dialog" aria-label={`${group.name}'s story`}>
+    <div className="story-viewer" role="dialog" aria-label={tr("{name}'s story", { name: group.name })}>
       <div
         ref={frameRef}
         className="story-viewer__frame"
@@ -742,15 +746,15 @@ export function StoryViewer(props: {
         </div>
         <header className="story-viewer__head">
           <Avatar id={group.riverId} name={group.name} avatar={group.avatar} size={32} />
-          <strong>{group.mine ? 'Your story' : group.name}</strong>
+          <strong>{group.mine ? tr('Your story') : group.name}</strong>
           <span className="muted small">{ago(story.createdAt)}</span>
-          <button className="icon-btn" aria-label="Close story" onClick={props.onClose}>
+          <button className="icon-btn" aria-label={tr('Close story')} onClick={props.onClose}>
             <XIcon />
           </button>
         </header>
         <div className="story-viewer__content">
           {media && brokenMedia ? (
-            <div className="story-viewer__textonly muted small">This story could not be loaded.</div>
+            <div className="story-viewer__textonly muted small">{tr('This story could not be loaded.')}</div>
           ) : url && isVideo ? (
             <video
               key={story.id}
@@ -759,7 +763,7 @@ export function StoryViewer(props: {
               muted
               autoPlay
               playsInline
-              aria-label={story.text || 'Video story'}
+              aria-label={story.text || tr('Video story')}
               onLoadedMetadata={(e) => {
                 const ms = e.currentTarget.duration * 1000;
                 if (Number.isFinite(ms) && ms > 0) setVideoMs({ id: story.id, ms });
@@ -781,12 +785,20 @@ export function StoryViewer(props: {
           )}
           {media && story.text && <div className="story-viewer__caption">{story.text}</div>}
         </div>
-        <button className="story-viewer__nav story-viewer__nav--prev" aria-label="Previous" onClick={prev} />
-        <button className="story-viewer__nav story-viewer__nav--next" aria-label="Next" onClick={next} />
+        <button
+          className="story-viewer__nav story-viewer__nav--prev"
+          aria-label={tr('Previous')}
+          onClick={prev}
+        />
+        <button
+          className="story-viewer__nav story-viewer__nav--next"
+          aria-label={tr('Next')}
+          onClick={next}
+        />
         <footer className="story-viewer__foot">
           {story.mine ? (
             <span className="muted small">
-              👁 Seen by {story.viewers.length}
+              👁 {tr('Seen by {count}', { count: story.viewers.length })}
               {story.viewers.length ? `: ${story.viewers.map((v) => v.name).join(', ')}` : ''}
             </span>
           ) : (
@@ -798,14 +810,20 @@ export function StoryViewer(props: {
                 setReply('');
                 void useDm
                   .getState()
-                  .run({ a: 'send', peer: group.riverId, text: `Replied to your story: ${text}` })
-                  .then((ok) => ok && useCommunity.getState().notify(`Sent to ${group.name}`));
+                  .run({
+                    a: 'send',
+                    peer: group.riverId,
+                    text: tr('Replied to your story: {text}', { text }),
+                  })
+                  .then(
+                    (ok) => ok && useCommunity.getState().notify(tr('Sent to {name}', { name: group.name })),
+                  );
               }}
             >
               <input
                 value={reply}
-                placeholder={`Reply to ${group.name}…`}
-                aria-label={`Reply to ${group.name}`}
+                placeholder={tr('Reply to {name}…', { name: group.name })}
+                aria-label={tr('Reply to {name}', { name: group.name })}
                 onFocus={() => setPaused(true)}
                 onBlur={() => setPaused(false)}
                 onChange={(e) => setReply(e.target.value)}
@@ -844,7 +862,7 @@ export function ProfileModal(props: {
   return (
     <Modal onClose={props.onClose} wide className="profile-modal">
       {!profile ? (
-        <p className="muted">Loading…</p>
+        <p className="muted">{tr('Loading…')}</p>
       ) : (
         <>
           <div className="profile-modal__head">
@@ -863,7 +881,7 @@ export function ProfileModal(props: {
                       if (saved === null) return;
                       setProfile({ ...profile, bio: saved });
                       setBio(null);
-                      useCommunity.getState().notify('Bio saved');
+                      useCommunity.getState().notify(tr('Bio saved'));
                     });
                   }}
                 >
@@ -871,28 +889,28 @@ export function ProfileModal(props: {
                     value={bio}
                     maxLength={300}
                     rows={3}
-                    aria-label="Your bio"
+                    aria-label={tr('Your bio')}
                     onChange={(e) => setBio(e.target.value)}
                     autoFocus
                   />
                   <div className="button-row">
                     <button className="btn btn--primary btn--small" disabled={saving}>
-                      {saving ? 'Saving…' : 'Save'}
+                      {saving ? tr('Saving…') : tr('Save')}
                     </button>
                     <button type="button" className="btn btn--link" onClick={() => setBio(null)}>
-                      Cancel
+                      {tr('Cancel')}
                     </button>
                   </div>
                 </form>
               ) : (
                 <p className="profile-modal__bio">
-                  {profile.bio || (profile.isMe ? 'Add a short bio.' : '')}
+                  {profile.bio || (profile.isMe ? tr('Add a short bio.') : '')}
                 </p>
               )}
               <div className="button-row">
                 {profile.isMe && bio === null && (
                   <button className="btn btn--ghost btn--small" onClick={() => setBio(profile.bio)}>
-                    Edit bio
+                    {tr('Edit bio')}
                   </button>
                 )}
                 {!profile.isMe && (
@@ -903,17 +921,21 @@ export function ProfileModal(props: {
                       void useDm.getState().open(profile.riverId, profile.name);
                     }}
                   >
-                    Message
+                    {tr('Message')}
                   </button>
                 )}
               </div>
             </div>
-            <button className="icon-btn profile-modal__close" aria-label="Close" onClick={props.onClose}>
+            <button
+              className="icon-btn profile-modal__close"
+              aria-label={tr('Close')}
+              onClick={props.onClose}
+            >
               <XIcon />
             </button>
           </div>
           <div className="profile-modal__posts">
-            {profile.posts.length === 0 && <p className="muted">No posts yet.</p>}
+            {profile.posts.length === 0 && <p className="muted">{tr('No posts yet.')}</p>}
             {profile.posts.map((p) => (
               <PostCard key={p.id} post={p} onProfile={() => undefined} />
             ))}

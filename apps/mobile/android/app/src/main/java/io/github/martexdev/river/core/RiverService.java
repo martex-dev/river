@@ -82,16 +82,17 @@ public final class RiverService extends Service {
     NotificationManager nm = getSystemService(NotificationManager.class);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
       NotificationChannel channel =
-          new NotificationChannel(CHANNEL, "Staying connected", NotificationManager.IMPORTANCE_MIN);
-      channel.setDescription("Shown while River stays connected in the background");
+          new NotificationChannel(
+              CHANNEL, getString(io.github.martexdev.river.R.string.service_channel_name), NotificationManager.IMPORTANCE_MIN);
+      channel.setDescription(getString(io.github.martexdev.river.R.string.service_channel_description));
       channel.setShowBadge(false);
       nm.createNotificationChannel(channel);
     }
     NotificationCompat.Builder b =
         new NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(io.github.martexdev.river.R.drawable.ic_stat_river)
-            .setContentTitle("River is connected")
-            .setContentText("New messages arrive while River is closed. Turn off in Settings → System.")
+            .setContentTitle(getString(io.github.martexdev.river.R.string.service_title))
+            .setContentText(getString(io.github.martexdev.river.R.string.service_text))
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_MIN);
     Intent open = new Intent(this, ACTIVITY).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);

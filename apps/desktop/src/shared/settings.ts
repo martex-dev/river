@@ -4,6 +4,7 @@ import { RELEASE_CHANNELS } from '@river/release/channels';
 import { DEFAULT_DESIGN, compactDesignImages, designSettingsSchema } from './design.ts';
 import { NOTIFY_SOUNDS } from './notify-sounds.ts';
 import { LANGUAGE_IDS } from './i18n/languages.ts';
+import { msg } from './i18n/index.ts';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
@@ -21,18 +22,18 @@ export const serverUrlSchema = z
     try {
       url = new URL(value);
     } catch {
-      ctx.addIssue({ code: 'custom', message: 'Enter a full address, like https://river.example.org' });
+      ctx.addIssue({ code: 'custom', message: msg('Enter a full address, like https://river.example.org') });
       return z.NEVER;
     }
     const local = LOOPBACK_HOSTS.has(url.hostname);
     if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) {
-      ctx.addIssue({ code: 'custom', message: 'The server address must start with https://' });
+      ctx.addIssue({ code: 'custom', message: msg('The server address must start with https://') });
       return z.NEVER;
     }
     if (url.username || url.password || url.search || url.hash) {
       ctx.addIssue({
         code: 'custom',
-        message: 'The address must not contain a password, query or #fragment',
+        message: msg('The address must not contain a password, query or #fragment'),
       });
       return z.NEVER;
     }
@@ -50,7 +51,7 @@ export const proxyHostSchema = z
   .regex(
     /^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*|\[[0-9A-Fa-f:.]{2,45}\])$/,
     {
-      message: 'Enter a host name or address, like 127.0.0.1',
+      message: msg('Enter a host name or address, like 127.0.0.1'),
     },
   );
 

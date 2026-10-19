@@ -14,6 +14,7 @@ import type { DmService, SocialContent } from '../dm/dm-service.ts';
 import type { IdentityService } from '../identity/identity-service.ts';
 import type { Logger } from '../logger.ts';
 import type { LocalDatabase } from '../storage/database.ts';
+import { msg } from '../../shared/i18n/index.ts';
 
 const STORY_MS = 24 * 60 * 60 * 1000;
 const RELAY_DELAY_MS = 1500;
@@ -125,7 +126,7 @@ export class SocialService {
 
   private db(): LocalDatabase {
     const db = this.deps.db();
-    if (!db) throw new CommunityError('River is locked.');
+    if (!db) throw new CommunityError(msg('River is locked.'));
     return db;
   }
 
@@ -496,7 +497,7 @@ export class SocialService {
           this.db().prepare('DELETE FROM posts WHERE id = ?').run(id);
           this.changed();
           throw new CommunityError(
-            'The post could not be delivered to anyone. Check your connection and try again.',
+            msg('The post could not be delivered to anyone. Check your connection and try again.'),
           );
         }
         // Those who did not get it yet get it later (a copy they already have is ignored).
@@ -542,7 +543,9 @@ export class SocialService {
             // Not sent: it does not stay looking sent.
             this.setReaction(post.id, me, act.emoji, had);
             this.changed();
-            throw new CommunityError('Your reaction could not be sent. Check your connection and try again.');
+            throw new CommunityError(
+              msg('Your reaction could not be sent. Check your connection and try again.'),
+            );
           }
         }
         return out(true);
@@ -584,7 +587,9 @@ export class SocialService {
             const { [commentId]: _gone, ...pending } = this.pendingComments();
             this.setPendingComments(pending);
             this.changed();
-            throw new CommunityError('Your comment could not be sent. Check your connection and try again.');
+            throw new CommunityError(
+              msg('Your comment could not be sent. Check your connection and try again.'),
+            );
           }
         }
         return out(commentId);

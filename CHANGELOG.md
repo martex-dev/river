@@ -6,6 +6,19 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Languages: Friends, Social (posts and stories), Files, Admin, the community
+  dialogs (create, join, invite, ban, channel and category settings) and every
+  Community settings tab (overview, rules & roles, word filter, roles and
+  permissions, members, emoji, stickers, soundboard, bans, invites, webhooks,
+  reports, insights, audit log), Settings → Profile, Backup, Security, Privacy,
+  Voice & video, Notifications, Hosting and Account, the phone's call-links list,
+  River's error messages (from its server, accounts, linking, backups, hosting
+  and updates, on computers and phones), the link and screen-share questions, the
+  tray menu, and Android's and iPhone's own notifications, call screen and lock
+  screen now speak all eleven languages.
+
 ## [2.21.0] - 2026-10-19
 
 **River in eleven languages, and thirteen phone fixes (group calls over a locked phone, big emoji, call links on the phone).**

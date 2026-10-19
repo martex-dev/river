@@ -7,6 +7,7 @@ import { useRiver } from '../../store.ts';
 import { useCommunity } from '../store.ts';
 import { Modal } from './common.tsx';
 import { joinWithLink } from './StartScreen.tsx';
+import { rich, tr } from '../../i18n.ts';
 
 const editable = (el: EventTarget | null): boolean =>
   el instanceof HTMLElement && (el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
@@ -16,7 +17,9 @@ function offer(link: DeepLink): void {
   const s = useCommunity.getState();
   if (link.kind === 'device') {
     s.notify(
-      'That is a link code for a new device. Open it on the device you are adding, on its welcome screen.',
+      tr(
+        'That is a link code for a new device. Open it on the device you are adding, on its welcome screen.',
+      ),
       'error',
     );
     return;
@@ -36,7 +39,8 @@ function offer(link: DeepLink): void {
     // The request goes through your own server: a bare River ID is enough to ask.
     if (friend)
       s.setModal({ kind: 'add-friend', riverId: friend.riverId, serverUrl: friend.serverUrl ?? '' });
-    else s.notify('That friend link is not complete. Ask for a new one, or add them by @username.', 'error');
+    else
+      s.notify(tr('That friend link is not complete. Ask for a new one, or add them by @username.'), 'error');
     return;
   }
   // A sign-up link is for someone without an account yet. It names the server the account would
@@ -45,7 +49,7 @@ function offer(link: DeepLink): void {
   if (useRiver.getState().account.state === 'none') {
     useRiver.getState().navigate('communities');
     s.setModal({ kind: 'signup', link: link.link });
-  } else s.notify('That sign-up link is for a new account — you already have one.', 'error');
+  } else s.notify(tr('That sign-up link is for a new account — you already have one.'), 'error');
 }
 
 /**
@@ -97,14 +101,16 @@ export function JoinInviteDialog({ link }: { link: string }): ReactElement {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
-    <Modal title="Join this community?" onClose={() => s.setModal(null)}>
+    <Modal title={tr('Join this community?')} onClose={() => s.setModal(null)}>
       <p className="modal__text">
-        You've been invited to a River community. Joining shares your River name and avatar with its members.
+        {tr(
+          "You've been invited to a River community. Joining shares your River name and avatar with its members.",
+        )}
       </p>
       {error && <p className="field__error">{error}</p>}
       <div className="modal__foot">
         <button className="btn btn--link" onClick={() => s.setModal(null)}>
-          Not now
+          {tr('Not now')}
         </button>
         <button
           className="btn btn--primary"
@@ -119,7 +125,7 @@ export function JoinInviteDialog({ link }: { link: string }): ReactElement {
             });
           }}
         >
-          {busy ? 'Joining…' : 'Join community'}
+          {busy ? tr('Joining…') : tr('Join community')}
         </button>
       </div>
     </Modal>
@@ -134,22 +140,21 @@ export function SignupDialog({ link }: { link: string }): ReactElement {
   const parsed = parseSignup(link);
   const host = parsed ? new URL(parsed.serverUrl).host : null;
   return (
-    <Modal title="Create your account here?" onClose={() => s.setModal(null)}>
+    <Modal title={tr('Create your account here?')} onClose={() => s.setModal(null)}>
       <p className="modal__text">
-        {host ? (
-          <>
-            This link would create your River account on <strong>{host}</strong>. That server will know your
-            River ID and which devices you use, never your messages. Continue only if you trust whoever sent
-            you this link.
-          </>
-        ) : (
-          'This sign-up link is not valid.'
-        )}
+        {host
+          ? rich(
+              tr(
+                'This link would create your River account on {host}. That server will know your River ID and which devices you use, never your messages. Continue only if you trust whoever sent you this link.',
+              ),
+              { host: <strong>{host}</strong> },
+            )
+          : tr('This sign-up link is not valid.')}
       </p>
       {error && <p className="field__error">{error}</p>}
       <div className="modal__foot">
         <button className="btn btn--link" onClick={() => s.setModal(null)}>
-          Not now
+          {tr('Not now')}
         </button>
         <button
           className="btn btn--primary"
@@ -161,12 +166,12 @@ export function SignupDialog({ link }: { link: string }): ReactElement {
               setBusy(false);
               if (!res.ok) return setError(res.message);
               useRiver.getState().setAccount(res.value);
-              s.notify('Your account is ready');
+              s.notify(tr('Your account is ready'));
               s.setModal(null);
             });
           }}
         >
-          {busy ? 'Creating…' : 'Create account'}
+          {busy ? tr('Creating…') : tr('Create account')}
         </button>
       </div>
     </Modal>
@@ -184,25 +189,27 @@ export function AddFriendDialog(props: { riverId: string; serverUrl: string }): 
   const problem = settingUp
     ? null
     : account.state !== 'registered'
-      ? 'You need an account first: join or create a community.'
+      ? tr('You need an account first: join or create a community.')
       : account.riverId === props.riverId
-        ? "That's your own friend link."
+        ? tr("That's your own friend link.")
         : null;
   return (
-    <Modal title="Add a friend?" onClose={() => s.setModal(null)}>
+    <Modal title={tr('Add a friend?')} onClose={() => s.setModal(null)}>
       <p className="modal__text">
-        {props.serverUrl ? 'This is a River friend link.' : 'You pasted a River ID.'}{' '}
-        {`River will send them “${GREETING}” as an end-to-end encrypted request.`}
+        {props.serverUrl ? tr('This is a River friend link.') : tr('You pasted a River ID.')}{' '}
+        {tr('River will send them “{greeting}” as an end-to-end encrypted request.', {
+          greeting: tr(GREETING),
+        })}
       </p>
       {(problem ?? error) && <p className="field__error">{problem ?? error}</p>}
       {settingUp && (
         <p className="muted small" role="status">
-          Setting up your account… The button works as soon as it is ready.
+          {tr('Setting up your account… The button works as soon as it is ready.')}
         </p>
       )}
       <div className="modal__foot">
         <button className="btn btn--link" onClick={() => s.setModal(null)}>
-          Not now
+          {tr('Not now')}
         </button>
         <button
           className="btn btn--primary"
@@ -214,12 +221,12 @@ export function AddFriendDialog(props: { riverId: string; serverUrl: string }): 
             void addFriend(props.riverId).then((result) => {
               setBusy(false);
               if (result === 'failed' || result === 'blocked') return setError(addFriendMessage(result));
-              s.notify(result === 'friend' ? 'You are already friends' : addFriendMessage(result));
+              s.notify(result === 'friend' ? tr('You are already friends') : addFriendMessage(result));
               s.setModal(null);
             });
           }}
         >
-          {busy ? 'Sending…' : 'Send friend request'}
+          {busy ? tr('Sending…') : tr('Send friend request')}
         </button>
       </div>
     </Modal>

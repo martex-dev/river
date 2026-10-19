@@ -401,7 +401,7 @@ public final class UpdateOps {
         if (AppNotices.updateReady(context, session, confirm)) return;
       }
       Consumer<String> reply = installs.remove(session);
-      if (reply != null) reply.accept(status("failed", "Android's installer could not open"));
+      if (reply != null) reply.accept(status("failed", context.getString(io.github.martexdev.river.R.string.installer_could_not_open)));
       return;
     }
     AppNotices.cancelUpdate(context);

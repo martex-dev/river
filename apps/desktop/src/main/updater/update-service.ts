@@ -7,6 +7,7 @@ import {
 } from '@river/release/channels';
 import type { UpdateStatus } from '../../shared/ipc.ts';
 import type { Logger } from '../logger.ts';
+import { msg } from '../../shared/i18n/index.ts';
 
 /** The subset of electron-updater's AppUpdater River relies on (lets tests use a fake). */
 export interface UpdaterLike {
@@ -277,16 +278,18 @@ function clampPercent(p: number): number {
 function friendlyMessage(code: string, raw: string): string {
   switch (code) {
     case 'verification-failed':
-      return 'An update was downloaded but its signature did not verify, so it was not installed. Your current version is unchanged.';
+      return msg(
+        'An update was downloaded but its signature did not verify, so it was not installed. Your current version is unchanged.',
+      );
     case 'check-failed':
     case 'updater-error':
       return /net::|ENOTFOUND|ECONN|ETIMEDOUT|EAI_AGAIN/.test(raw)
-        ? 'Could not reach the update server. River will try again later.'
-        : 'Checking for updates failed. River will try again later.';
+        ? msg('Could not reach the update server. River will try again later.')
+        : msg('Checking for updates failed. River will try again later.');
     case 'download-failed':
-      return 'The update download failed. River will try again later.';
+      return msg('The update download failed. River will try again later.');
     default:
-      return 'The update could not be completed. Your current version is unchanged.';
+      return msg('The update could not be completed. Your current version is unchanged.');
   }
 }
 

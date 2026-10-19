@@ -1,4 +1,4 @@
-import { tr } from '../../i18n.ts';
+import { msg, tr, trn } from '../../i18n.ts';
 import { CommunityArtFields } from './CommunityArt.tsx';
 import { InsightsPanel } from './Insights.tsx';
 import { StickerSettings } from './Stickers.tsx';
@@ -54,7 +54,7 @@ export function CommunitySettings(props: {
   return (
     <Modal onClose={close} full title={undefined}>
       <div className="settings-layout">
-        <nav className="settings-layout__nav" aria-label="Community settings">
+        <nav className="settings-layout__nav" aria-label={tr('Community settings')}>
           <div className="settings-layout__heading">{community.name}</div>
           {visible.map(([id, label]) => (
             <button
@@ -73,22 +73,28 @@ export function CommunitySettings(props: {
                 onClick={() =>
                   s.setModal({
                     kind: 'confirm',
-                    title: `Delete ${community.name}`,
-                    body: 'This permanently deletes the community, its channels and all messages for everyone. This cannot be undone.',
-                    action: 'Delete community',
+                    title: tr('Delete {name}', { name: community.name }),
+                    body: tr(
+                      'This permanently deletes the community, its channels and all messages for everyone. This cannot be undone.',
+                    ),
+                    action: tr('Delete community'),
                     run: async () => {
                       await s.run({ a: 'deleteCommunity', communityId: community.id });
                     },
                   })
                 }
               >
-                Delete community
+                {tr('Delete community')}
               </button>
             </>
           )}
         </nav>
         <section className="settings-layout__body">
-          <button className="settings-layout__close icon-btn" aria-label="Close settings" onClick={close}>
+          <button
+            className="settings-layout__close icon-btn"
+            aria-label={tr('Close settings')}
+            onClick={close}
+          >
             <XIcon />
           </button>
           {tab === 'overview' && <Overview community={community} />}
@@ -123,15 +129,15 @@ function Overview({ community }: { community: CommunityView }): ReactElement {
   const dirty = name !== community.name || description !== community.description || icon !== community.icon;
   return (
     <div className="settings-page">
-      <h2>Overview</h2>
+      <h2>{tr('Overview')}</h2>
       <CommunityArtFields community={community} />
-      <div className="field__label">Icon</div>
-      <div className="icon-picker" role="radiogroup" aria-label="Community icon">
+      <div className="field__label">{tr('Icon')}</div>
+      <div className="icon-picker" role="radiogroup" aria-label={tr('Community icon')}>
         <button
           type="button"
           role="radio"
           aria-checked={icon === null}
-          aria-label="Initials"
+          aria-label={tr('Initials')}
           className={`icon-picker__item icon-picker__item--initials ${icon === null ? 'is-active' : ''}`}
           onClick={() => setIcon(null)}
         >
@@ -143,7 +149,7 @@ function Overview({ community }: { community: CommunityView }): ReactElement {
             type="button"
             role="radio"
             aria-checked={icon === e}
-            aria-label={`Icon ${e}`}
+            aria-label={tr('Icon {emoji}', { emoji: e })}
             className={`icon-picker__item ${icon === e ? 'is-active' : ''}`}
             onClick={() => setIcon(e)}
           >
@@ -152,11 +158,11 @@ function Overview({ community }: { community: CommunityView }): ReactElement {
         ))}
       </div>
       <label className="textfield">
-        <span className="field__label">Community name</span>
+        <span className="field__label">{tr('Community name')}</span>
         <input value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
       </label>
       <label className="textfield">
-        <span className="field__label">Description</span>
+        <span className="field__label">{tr('Description')}</span>
         <textarea
           value={description}
           maxLength={300}
@@ -165,7 +171,7 @@ function Overview({ community }: { community: CommunityView }): ReactElement {
         />
       </label>
       <p className="muted small">
-        Names and descriptions are encrypted with the community key; the server cannot read them.
+        {tr('Names and descriptions are encrypted with the community key; the server cannot read them.')}
       </p>
       {dirty && (
         <div className="save-bar">
@@ -242,9 +248,19 @@ export const PERMISSION_GROUPS: Array<[string, number[]]> = [
   ['Advanced', [Permission.ADMINISTRATOR]],
 ];
 
+/** Each group's title (PERMISSION_GROUPS' names are the keys). */
+const GROUP_TITLES: Record<string, string> = {
+  General: msg('General permissions'),
+  Membership: msg('Membership permissions'),
+  Text: msg('Text permissions'),
+  Voice: msg('Voice permissions'),
+  Advanced: msg('Advanced permissions'),
+};
+
+/** A permission's name and help, in River's language (permission-texts.ts lists them). */
 export const infoOf = (bit: number): { label: string; help: string } => {
   const entry = PERMISSION_INFO.find((p) => Permission[p.key] === bit);
-  return entry ? { label: entry.label, help: entry.help } : { label: 'Permission', help: '' };
+  return entry ? { label: tr(entry.label), help: tr(entry.help) } : { label: tr('Permission'), help: '' };
 };
 
 function Roles({ community, me }: { community: CommunityView; me: string }): ReactElement {
@@ -263,7 +279,7 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
     const id = await s.run({
       a: 'createRole',
       communityId: community.id,
-      name: 'new role',
+      name: tr('new role'),
       color: ROLE_COLORS[community.roles.length % ROLE_COLORS.length]!,
       permissions: 0,
     });
@@ -274,14 +290,15 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
     <div className="settings-page settings-page--split">
       <div className="role-list">
         <div className="role-list__head">
-          <h2>Roles</h2>
+          <h2>{tr('Roles')}</h2>
           <button className="btn btn--primary btn--small" onClick={() => void create()}>
             {tr('Create role')}
           </button>
         </div>
         <p className="muted small">
-          Members get every permission from all their roles. Higher roles can manage lower ones. The owner can
-          do everything. Drag roles to reorder them.
+          {tr(
+            'Members get every permission from all their roles. Higher roles can manage lower ones. The owner can do everything. Drag roles to reorder them.',
+          )}
         </p>
         {community.roles.map((r, i) => {
           const others = community.roles.filter((x) => !x.everyone);
@@ -337,9 +354,9 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
                         setRoleMenu(null);
                         s.setModal({
                           kind: 'confirm',
-                          title: `Delete ${r.name}`,
-                          body: 'Members with this role lose it. This cannot be undone.',
-                          action: 'Delete role',
+                          title: tr('Delete {name}', { name: r.name }),
+                          body: tr('Members with this role lose it. This cannot be undone.'),
+                          action: tr('Delete role'),
                           run: async () => {
                             await s.run({ a: 'deleteRole', communityId: community.id, roleId: r.id });
                             s.setModal({
@@ -370,7 +387,7 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
                 <span className="role-row__move">
                   <button
                     className="icon-btn"
-                    aria-label={`Move ${r.name} up`}
+                    aria-label={tr('Move {name} up', { name: r.name })}
                     disabled={idx === 0 || (!isOwner && (others[idx - 1]?.position ?? 0) >= community.myRank)}
                     onClick={() =>
                       void s.run({ a: 'moveRole', communityId: community.id, roleId: r.id, direction: 1 })
@@ -380,7 +397,7 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
                   </button>
                   <button
                     className="icon-btn"
-                    aria-label={`Move ${r.name} down`}
+                    aria-label={tr('Move {name} down', { name: r.name })}
                     disabled={idx === others.length - 1 || i === community.roles.length - 1}
                     onClick={() =>
                       void s.run({ a: 'moveRole', communityId: community.id, roleId: r.id, direction: -1 })
@@ -441,12 +458,12 @@ function RoleEditor(props: {
 
   return (
     <div className="role-editor">
-      <h3>Edit role — {role.name}</h3>
-      {!editable && <p className="field__error">You can only edit roles below your highest role.</p>}
+      <h3>{tr('Edit role — {name}', { name: role.name })}</h3>
+      {!editable && <p className="field__error">{tr('You can only edit roles below your highest role.')}</p>}
       {!role.everyone && (
         <>
           <label className="textfield">
-            <span className="field__label">Role name</span>
+            <span className="field__label">{tr('Role name')}</span>
             <input
               value={name}
               maxLength={64}
@@ -454,11 +471,11 @@ function RoleEditor(props: {
               onChange={(e) => setName(e.target.value)}
             />
           </label>
-          <div className="field__label">Role colour</div>
+          <div className="field__label">{tr('Role colour')}</div>
           <div className="color-swatches">
             <button
               className={`color-swatch color-swatch--none ${color === 0 ? 'is-active' : ''}`}
-              aria-label="Default colour"
+              aria-label={tr('Default colour')}
               disabled={!editable}
               onClick={() => setColor(0)}
             />
@@ -467,7 +484,7 @@ function RoleEditor(props: {
                 key={c}
                 className={`color-swatch ${color === c ? 'is-active' : ''}`}
                 style={{ background: hex(c) }}
-                aria-label={`Colour ${hex(c)}`}
+                aria-label={tr('Colour {hex}', { hex: hex(c) })}
                 disabled={!editable}
                 onClick={() => setColor(c)}
               />
@@ -475,18 +492,18 @@ function RoleEditor(props: {
             <input
               type="color"
               className="color-input"
-              aria-label="Custom colour"
+              aria-label={tr('Custom colour')}
               value={hex(color || 0x99aab5)}
               disabled={!editable}
               onChange={(e) => setColor(parseInt(e.target.value.slice(1), 16))}
             />
           </div>
-          <div className="field__label">Role icon</div>
+          <div className="field__label">{tr('Role icon')}</div>
           <div className="role-icon-field">
             <button
               className="role-icon-field__pick"
               disabled={!editable}
-              aria-label={icon ? `Role icon ${icon}, change` : 'Choose a role icon'}
+              aria-label={icon ? tr('Role icon {emoji}, change', { emoji: icon }) : tr('Choose a role icon')}
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
                 setIconPicker({ x: r.left, y: r.bottom + 6 });
@@ -496,10 +513,10 @@ function RoleEditor(props: {
             </button>
             {icon && editable && (
               <button className="btn btn--link btn--small" onClick={() => setIcon(null)}>
-                Remove
+                {tr('Remove')}
               </button>
             )}
-            <span className="muted small">Shown next to the names of people with this role.</span>
+            <span className="muted small">{tr('Shown next to the names of people with this role.')}</span>
           </div>
           {iconPicker && (
             <Popover x={iconPicker.x} y={iconPicker.y} onClose={() => setIconPicker(null)}>
@@ -513,15 +530,17 @@ function RoleEditor(props: {
             </Popover>
           )}
           <Toggle
-            label="Allow anyone to @mention this role"
-            help="Members can ping everyone with this role. People who may mention @everyone can always mention every role."
+            label={tr('Allow anyone to @mention this role')}
+            help={tr(
+              'Members can ping everyone with this role. People who may mention @everyone can always mention every role.',
+            )}
             checked={mentionable}
             disabled={!editable}
             onChange={setMentionable}
           />
           <Toggle
-            label="Show members with this role separately"
-            help="Online members with this role get their own group in the member list."
+            label={tr('Show members with this role separately')}
+            help={tr('Online members with this role get their own group in the member list.')}
             checked={hoist}
             disabled={!editable}
             onChange={setHoist}
@@ -530,12 +549,12 @@ function RoleEditor(props: {
       )}
       {role.everyone && (
         <p className="muted small">
-          @everyone applies to every member of the community. Use it for the defaults.
+          {tr('@everyone applies to every member of the community. Use it for the defaults.')}
         </p>
       )}
       {PERMISSION_GROUPS.map(([group, bits]) => (
         <div key={group} className="perm-group">
-          <div className="perm-group__title">{group} permissions</div>
+          <div className="perm-group__title">{tr(GROUP_TITLES[group] ?? group)}</div>
           {bits.map((bit) => {
             const info = infoOf(bit);
             return (
@@ -560,17 +579,17 @@ function RoleEditor(props: {
               .run({
                 a: 'createRole',
                 communityId: community.id,
-                name: `${role.name} (copy)`.slice(0, 64),
+                name: tr('{name} (copy)', { name: role.name }).slice(0, 64),
                 color: role.color,
                 permissions: role.permissions,
                 mentionable: role.mentionable,
                 hoist: role.hoist,
                 icon: role.icon,
               })
-              .then((id) => id && s.notify(`Made a copy of ${role.name}.`))
+              .then((id) => id && s.notify(tr('Made a copy of {name}.', { name: role.name })))
           }
         >
-          Duplicate role
+          {tr('Duplicate role')}
         </button>
       )}
       {!role.everyone && editable && (
@@ -579,9 +598,9 @@ function RoleEditor(props: {
           onClick={() =>
             s.setModal({
               kind: 'confirm',
-              title: `Delete ${role.name}`,
-              body: 'Members with this role lose it. This cannot be undone.',
-              action: 'Delete role',
+              title: tr('Delete {name}', { name: role.name }),
+              body: tr('Members with this role lose it. This cannot be undone.'),
+              action: tr('Delete role'),
               run: async () => {
                 await s.run({ a: 'deleteRole', communityId: community.id, roleId: role.id });
                 s.setModal({ kind: 'community-settings', communityId: community.id, tab: 'roles' });
@@ -589,7 +608,7 @@ function RoleEditor(props: {
             })
           }
         >
-          Delete role
+          {tr('Delete role')}
         </button>
       )}
       {dirty && editable && (
@@ -654,29 +673,30 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
     }
     setBusy(false);
     setPicked(new Set());
-    const verb = give ? 'Gave' : 'Took';
-    const what = `${verb} ${role.name} ${give ? 'to' : 'from'} ${done} of ${targets.length} ${targets.length === 1 ? 'member' : 'members'}.`;
+    const what = give
+      ? trn('Gave {role} to {done} of {count} members.', targets.length, { role: role.name, done })
+      : trn('Took {role} from {done} of {count} members.', targets.length, { role: role.name, done });
     s.notify(what, done === targets.length ? 'info' : 'error');
   };
   return (
     <div className="settings-page">
-      <h2>Members — {community.members.length}</h2>
+      <h2>{tr('Members — {count}', { count: community.members.length })}</h2>
       <input
         className="search"
-        placeholder="Search members"
+        placeholder={tr('Search members')}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
       {picked.size > 0 && assignable.length > 0 && (
-        <div className="bulk-bar" role="toolbar" aria-label="Change roles of selected members">
-          <strong>{picked.size} selected</strong>
+        <div className="bulk-bar" role="toolbar" aria-label={tr('Change roles of selected members')}>
+          <strong>{tr('{count} selected', { count: picked.size })}</strong>
           <select
-            aria-label="Give a role to the selected members"
+            aria-label={tr('Give a role to the selected members')}
             value=""
             disabled={busy}
             onChange={(e) => e.target.value && void bulk(e.target.value, true)}
           >
-            <option value="">Give role…</option>
+            <option value="">{tr('Give role…')}</option>
             {assignable.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.name}
@@ -684,12 +704,12 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
             ))}
           </select>
           <select
-            aria-label="Remove a role from the selected members"
+            aria-label={tr('Remove a role from the selected members')}
             value=""
             disabled={busy}
             onChange={(e) => e.target.value && void bulk(e.target.value, false)}
           >
-            <option value="">Remove role…</option>
+            <option value="">{tr('Remove role…')}</option>
             {assignable.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.name}
@@ -697,7 +717,7 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
             ))}
           </select>
           <button className="btn btn--link btn--small" disabled={busy} onClick={() => setPicked(new Set())}>
-            Clear
+            {tr('Clear')}
           </button>
         </div>
       )}
@@ -711,7 +731,7 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
                 <input
                   type="checkbox"
                   className="member-table__pick"
-                  aria-label={`Select ${m.name}`}
+                  aria-label={tr('Select {name}', { name: m.name })}
                   disabled={!canRoles}
                   checked={picked.has(m.riverId)}
                   onChange={(e) => {
@@ -741,7 +761,7 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
                         {canRoles && assignable.some((a) => a.id === r.id) && (
                           <button
                             className="role-chip__x"
-                            aria-label={`Remove ${r.name} from ${m.name}`}
+                            aria-label={tr('Remove {role} from {name}', { role: r.name, name: m.name })}
                             onClick={() =>
                               void s.run({
                                 a: 'setMemberRoles',
@@ -759,7 +779,7 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
                   {canRoles && assignable.some((r) => !m.roles.includes(r.id)) && (
                     <select
                       className="role-add"
-                      aria-label={`Add role to ${m.name}`}
+                      aria-label={tr('Add role to {name}', { name: m.name })}
                       value=""
                       onChange={(e) => {
                         if (!e.target.value) return;
@@ -771,7 +791,7 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
                         });
                       }}
                     >
-                      <option value="">+ Role</option>
+                      <option value="">{tr('+ Role')}</option>
                       {assignable
                         .filter((r) => !m.roles.includes(r.id))
                         .map((r) => (
@@ -790,9 +810,11 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
                     onClick={() =>
                       s.setModal({
                         kind: 'confirm',
-                        title: `Kick ${m.name}`,
-                        body: `${m.name} will be removed. They can rejoin with a new invite.`,
-                        action: 'Kick',
+                        title: tr('Kick {name}', { name: m.name }),
+                        body: tr('{name} will be removed. They can rejoin with a new invite.', {
+                          name: m.name,
+                        }),
+                        action: tr('Kick'),
                         run: async () => {
                           await s.run({ a: 'kick', communityId: community.id, riverId: m.riverId });
                           s.setModal({
@@ -804,7 +826,7 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
                       })
                     }
                   >
-                    Kick
+                    {tr('Kick')}
                   </button>
                 )}
                 {m.riverId !== me && outranks && can(perms, Permission.BAN_MEMBERS) && (
@@ -820,7 +842,7 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
                       })
                     }
                   >
-                    Ban
+                    {tr('Ban')}
                   </button>
                 )}
               </div>
@@ -842,9 +864,9 @@ function Bans({ community }: { community: CommunityView }): ReactElement {
   useEffect(load, [community.id]);
   return (
     <div className="settings-page">
-      <h2>Bans</h2>
-      {bans === null && <p className="muted">Loading…</p>}
-      {bans?.length === 0 && <p className="muted">Nobody is banned.</p>}
+      <h2>{tr('Bans')}</h2>
+      {bans === null && <p className="muted">{tr('Loading…')}</p>}
+      {bans?.length === 0 && <p className="muted">{tr('Nobody is banned.')}</p>}
       <div className="member-table">
         {bans?.map((b) => (
           <div key={b.riverId} className="member-table__row">
@@ -852,9 +874,9 @@ function Bans({ community }: { community: CommunityView }): ReactElement {
             <div className="member-table__who">
               <strong>{b.name}</strong>
               <span className="muted small">
-                Banned on {b.bannedOn}
+                {tr('Banned on {date}', { date: b.bannedOn })}
                 {b.until
-                  ? ` · until ${new Date(b.until).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`
+                  ? ` · ${tr('until {time}', { time: new Date(b.until).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) })}`
                   : ''}
               </span>
             </div>
@@ -864,7 +886,7 @@ function Bans({ community }: { community: CommunityView }): ReactElement {
                 void s.run({ a: 'unban', communityId: community.id, riverId: b.riverId }).then(load)
               }
             >
-              Revoke ban
+              {tr('Revoke ban')}
             </button>
           </div>
         ))}
@@ -898,31 +920,32 @@ function AuditLog({ community }: { community: CommunityView }): ReactElement {
   const actors = [...new Map((entries ?? []).map((e) => [e.actor, e.actorName])).entries()];
   return (
     <div className="settings-page">
-      <h2>Audit log</h2>
+      <h2>{tr('Audit log')}</h2>
       <p className="muted small">
-        Changes to roles, channels and settings, and moderation, for the last 90 days. The server keeps only
-        IDs; names are filled in on your computer.
+        {tr(
+          'Changes to roles, channels and settings, and moderation, for the last 90 days. The server keeps only IDs; names are filled in on your computer.',
+        )}
       </p>
       {entries && entries.length > 0 && (
         <div className="audit-filter">
           <select
-            aria-label="Kind of change"
+            aria-label={tr('Kind of change')}
             value={filter.group ?? ''}
             onChange={(e) => setFilter({ ...filter, group: e.target.value || null })}
           >
-            <option value="">Everything</option>
+            <option value="">{tr('Everything')}</option>
             {AUDIT_GROUPS.map((g) => (
               <option key={g.id} value={g.id}>
-                {g.label}
+                {tr(g.label)}
               </option>
             ))}
           </select>
           <select
-            aria-label="Who"
+            aria-label={tr('Who')}
             value={filter.actor ?? ''}
             onChange={(e) => setFilter({ ...filter, actor: e.target.value || null })}
           >
-            <option value="">Anyone</option>
+            <option value="">{tr('Anyone')}</option>
             {actors.map(([id, name]) => (
               <option key={id} value={id}>
                 {name}
@@ -931,8 +954,8 @@ function AuditLog({ community }: { community: CommunityView }): ReactElement {
           </select>
           <input
             className="search"
-            placeholder="Search"
-            aria-label="Search the audit log"
+            placeholder={tr('Search')}
+            aria-label={tr('Search the audit log')}
             value={filter.text}
             onChange={(e) => setFilter({ ...filter, text: e.target.value })}
           />
@@ -942,16 +965,18 @@ function AuditLog({ community }: { community: CommunityView }): ReactElement {
             onClick={() =>
               void navigator.clipboard
                 .writeText(auditText(shown ?? []))
-                .then(() => s.notify(`Copied ${shown?.length ?? 0} entries.`))
+                .then(() => s.notify(trn('Copied {count} entries.', shown?.length ?? 0)))
             }
           >
-            Copy
+            {tr('Copy')}
           </button>
         </div>
       )}
-      {entries === null && <p className="muted">Loading…</p>}
-      {entries?.length === 0 && <p className="muted">Nothing has happened yet.</p>}
-      {entries && entries.length > 0 && shown?.length === 0 && <p className="muted">Nothing matches.</p>}
+      {entries === null && <p className="muted">{tr('Loading…')}</p>}
+      {entries?.length === 0 && <p className="muted">{tr('Nothing has happened yet.')}</p>}
+      {entries && entries.length > 0 && shown?.length === 0 && (
+        <p className="muted">{tr('Nothing matches.')}</p>
+      )}
       <ol className="audit">
         {shown?.map((e) => {
           const actor = community.members.find((m) => m.riverId === e.actor);
@@ -970,7 +995,7 @@ function AuditLog({ community }: { community: CommunityView }): ReactElement {
       </ol>
       {entries && entries.length > 0 && more && (
         <button className="btn btn--ghost btn--small" onClick={() => load(entries.at(-1)!)}>
-          Load older
+          {tr('Load older')}
         </button>
       )}
     </div>

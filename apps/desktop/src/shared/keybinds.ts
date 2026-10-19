@@ -1,3 +1,5 @@
+import { msg } from './i18n/index.ts';
+
 /**
  * Customisable keyboard shortcuts (1.0.22). A combo is written like
  * "Ctrl+Shift+KeyM": modifiers in a fixed order, then a KeyboardEvent.code.
@@ -16,27 +18,27 @@ export const DEFAULT_KEYBINDS: Keybinds = {
 };
 
 export const KEYBIND_LABELS: Record<KeybindAction, string> = {
-  toggleMute: 'Mute / unmute',
-  toggleDeafen: 'Deafen / undeafen',
-  toggleCamera: 'Camera on / off',
-  leaveVoice: 'Leave voice',
+  toggleMute: msg('Mute / unmute'),
+  toggleDeafen: msg('Deafen / undeafen'),
+  toggleCamera: msg('Camera on / off'),
+  leaveVoice: msg('Leave voice'),
 };
 
 /** Shortcuts River already uses; a custom one that equals these would clash. */
 export const BUILT_IN: Array<[string, string]> = [
-  ['Ctrl+KeyK', 'Quick switcher'],
-  ['Ctrl+Slash', 'Keyboard shortcuts'],
-  ['Ctrl+KeyF', 'Search'],
-  ['Ctrl+Equal', 'Bigger interface'],
-  ['Ctrl+Minus', 'Smaller interface'],
-  ['Ctrl+Digit0', 'Normal size'],
-  ['Alt+ArrowUp', 'Previous channel'],
-  ['Alt+ArrowDown', 'Next channel'],
-  ['Alt+ArrowLeft', 'Back'],
-  ['Alt+ArrowRight', 'Forward'],
-  ['Ctrl+Alt+ArrowUp', 'Previous community'],
-  ['Ctrl+Alt+ArrowDown', 'Next community'],
-  ['Escape', 'Mark as read / close'],
+  ['Ctrl+KeyK', msg('Quick switcher')],
+  ['Ctrl+Slash', msg('Keyboard shortcuts')],
+  ['Ctrl+KeyF', msg('Search')],
+  ['Ctrl+Equal', msg('Bigger interface')],
+  ['Ctrl+Minus', msg('Smaller interface')],
+  ['Ctrl+Digit0', msg('Normal size')],
+  ['Alt+ArrowUp', msg('Previous channel')],
+  ['Alt+ArrowDown', msg('Next channel')],
+  ['Alt+ArrowLeft', msg('Back')],
+  ['Alt+ArrowRight', msg('Forward')],
+  ['Ctrl+Alt+ArrowUp', msg('Previous community')],
+  ['Ctrl+Alt+ArrowDown', msg('Next community')],
+  ['Escape', msg('Mark as read / close')],
 ];
 
 const MODIFIER_CODES = new Set([
@@ -89,7 +91,7 @@ export function clashOf(combo: string, binds: Keybinds, self: KeybindAction): st
 
 /** "Ctrl+Shift+M" for people, from "Ctrl+Shift+KeyM". */
 export function comboLabel(combo: string, mac = false): string {
-  if (!combo) return 'Not set';
+  if (!combo) return msg('Not set');
   return combo
     .split('+')
     .map((p) =>

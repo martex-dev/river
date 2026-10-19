@@ -14,6 +14,7 @@ import { QrScanner } from '../components/QrScanner.tsx';
 import { JoinCommunityCard } from '../components/GetStarted.tsx';
 import { isPhone } from '../../../shared/platform.ts';
 import { phonePush } from '../phone/nav.ts';
+import { tr, trn } from '../i18n.ts';
 
 type Tab = 'online' | 'all' | 'pending' | 'blocked' | 'add';
 
@@ -69,19 +70,25 @@ export function FriendsPage(): ReactElement {
     return (
       <div className="page">
         <header className="page__header">
-          <div className="eyebrow">Friends</div>
-          <h1 className="page__title">Your people</h1>
+          <div className="eyebrow">{tr('Friends')}</div>
+          <h1 className="page__title">{tr('Your people')}</h1>
           <p className="page__lead" role={account.waiting ? 'status' : undefined}>
             {account.waiting
-              ? 'Setting up your account… River keeps trying by itself, and friends can be added as soon as it is ready.'
+              ? tr(
+                  'Setting up your account… River keeps trying by itself, and friends can be added as soon as it is ready.',
+                )
               : account.needsInvite
-                ? 'Your account needs the sign-up link from whoever runs your River server — paste it in the card above.'
-                : 'Friends need an account on a River server. Join or create a community first — it only takes a moment.'}
+                ? tr(
+                    'Your account needs the sign-up link from whoever runs your River server — paste it in the card above.',
+                  )
+                : tr(
+                    'Friends need an account on a River server. Join or create a community first — it only takes a moment.',
+                  )}
           </p>
         </header>
         {!account.waiting && !account.needsInvite && (
           <button className="btn btn--primary" onClick={() => useRiver.getState().navigate('communities')}>
-            Go to Communities
+            {tr('Go to Communities')}
           </button>
         )}
       </div>
@@ -97,10 +104,10 @@ export function FriendsPage(): ReactElement {
     blocked: direct.filter((c) => c.state === 'blocked'),
   };
   const tabs: Array<[Tab, string]> = [
-    ['online', 'Online'],
-    ['all', 'All'],
-    ['pending', 'Pending'],
-    ['blocked', 'Blocked'],
+    ['online', tr('Online')],
+    ['all', tr('All')],
+    ['pending', tr('Pending')],
+    ['blocked', tr('Blocked')],
   ];
   const shown =
     tab === 'add' ? [] : lists[tab].filter((c) => c.name.toLowerCase().includes(query.trim().toLowerCase()));
@@ -111,13 +118,13 @@ export function FriendsPage(): ReactElement {
   return (
     <div className="page friends">
       <header className="page__header">
-        <div className="eyebrow">Friends</div>
-        <h1 className="page__title">Your people</h1>
+        <div className="eyebrow">{tr('Friends')}</div>
+        <h1 className="page__title">{tr('Your people')}</h1>
         <p className="page__lead">
-          River never uploads an address book. Add people with a link, or from a community.
+          {tr('River never uploads an address book. Add people with a link, or from a community.')}
         </p>
       </header>
-      <nav className="friends__tabs" role="tablist" aria-label="Friends">
+      <nav className="friends__tabs" role="tablist" aria-label={tr('Friends')}>
         {tabs.map(([id, label]) => (
           <button
             key={id}
@@ -140,7 +147,7 @@ export function FriendsPage(): ReactElement {
           className={`friends__tab friends__tab--add ${tab === 'add' ? 'is-active' : ''}`}
           onClick={() => setTab('add')}
         >
-          Add friend
+          {tr('Add friend')}
         </button>
       </nav>
 
@@ -157,19 +164,19 @@ export function FriendsPage(): ReactElement {
         <>
           <input
             className="search friends__search"
-            placeholder="Search"
-            aria-label="Search friends"
+            placeholder={tr('Search')}
+            aria-label={tr('Search friends')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           <h2 className="contacts__title">
             {tab === 'online'
-              ? 'Online'
+              ? tr('Online')
               : tab === 'all'
-                ? 'All friends'
+                ? tr('All friends')
                 : tab === 'pending'
-                  ? 'Requests'
-                  : 'Blocked'}{' '}
+                  ? tr('Requests')
+                  : tr('Blocked')}{' '}
             — {shown.length}
           </h2>
           {shown.length === 0 ? (
@@ -189,17 +196,17 @@ export function FriendsPage(): ReactElement {
 
 function EmptyFriends({ tab, onAdd }: { tab: Exclude<Tab, 'add'>; onAdd(): void }): ReactElement {
   const text = {
-    online: 'No friends are online right now.',
-    all: 'No friends yet.',
-    pending: 'No friend requests right now.',
-    blocked: "You haven't blocked anyone.",
+    online: tr('No friends are online right now.'),
+    all: tr('No friends yet.'),
+    pending: tr('No friend requests right now.'),
+    blocked: tr("You haven't blocked anyone."),
   }[tab];
   return (
     <div className="friends__empty">
       <p className="muted">{text}</p>
       {(tab === 'all' || tab === 'online') && (
         <button className="btn btn--primary btn--small" onClick={onAdd}>
-          Add a friend
+          {tr('Add a friend')}
         </button>
       )}
     </div>
@@ -221,14 +228,14 @@ function FriendRow(props: {
   };
   const status =
     c.state === 'request'
-      ? 'Wants to be friends'
+      ? tr('Wants to be friends')
       : c.awaitingReply
-        ? 'Request sent — waiting for them to accept'
+        ? tr('Request sent — waiting for them to accept')
         : c.state === 'blocked'
-          ? 'Blocked'
+          ? tr('Blocked')
           : presence.online
-            ? 'Online'
-            : 'Offline';
+            ? tr('Online')
+            : tr('Offline');
   return (
     <div className={`friend-row ${presence.online && c.state === 'accepted' ? 'is-online' : ''}`}>
       <Avatar
@@ -242,7 +249,7 @@ function FriendRow(props: {
         <strong>
           {c.name}{' '}
           {c.verified && (
-            <span className="dm-row__verified" title="Safety number verified">
+            <span className="dm-row__verified" title={tr('Safety number verified')}>
               ✓
             </span>
           )}
@@ -250,34 +257,39 @@ function FriendRow(props: {
         <span className="muted small">
           {status}
           {presence.mutual.length > 0 &&
-            ` · ${presence.mutual.length === 1 ? presence.mutual[0] : `${presence.mutual.length} mutual communities`}`}
+            ` · ${presence.mutual.length === 1 ? presence.mutual[0] : trn('{count} mutual communities', presence.mutual.length)}`}
         </span>
-        {c.keyChanged && <span className="chip contact-card__warn">Safety number changed</span>}
+        {c.keyChanged && <span className="chip contact-card__warn">{tr('Safety number changed')}</span>}
       </span>
       <span className="friend-row__actions">
         {c.state === 'accepted' && c.awaitingReply && (
           <>
             <button className="btn btn--ghost btn--small" onClick={open}>
-              Open chat
+              {tr('Open chat')}
             </button>
             <button
               className="btn btn--link btn--small"
               onClick={() => void dm.run({ a: 'removeConversation', peer: c.riverId })}
             >
-              Cancel request
+              {tr('Cancel request')}
             </button>
           </>
         )}
         {c.state === 'accepted' && !c.awaitingReply && (
           <>
-            <button className="icon-btn" aria-label={`Message ${c.name}`} title="Message" onClick={open}>
+            <button
+              className="icon-btn"
+              aria-label={tr('Message {name}', { name: c.name })}
+              title={tr('Message')}
+              onClick={open}
+            >
               💬
             </button>
             <InviteToCommunity peer={c.riverId} name={c.name} />
             <button
               className="icon-btn"
-              aria-label={`Call ${c.name}`}
-              title="Voice call"
+              aria-label={tr('Call {name}', { name: c.name })}
+              title={tr('Voice call')}
               disabled={callBusy}
               onClick={() => {
                 open();
@@ -294,16 +306,16 @@ function FriendRow(props: {
               className="btn btn--primary btn--small"
               onClick={() => void dm.run({ a: 'accept', peer: c.riverId })}
             >
-              Accept
+              {tr('Accept')}
             </button>
             <button className="btn btn--ghost btn--small" onClick={open}>
-              Read message
+              {tr('Read message')}
             </button>
             <button
               className="btn btn--link btn--small"
               onClick={() => void dm.run({ a: 'removeConversation', peer: c.riverId })}
             >
-              Ignore
+              {tr('Ignore')}
             </button>
           </>
         )}
@@ -312,7 +324,7 @@ function FriendRow(props: {
             className="btn btn--ghost btn--small"
             onClick={() => void dm.run({ a: 'unblock', peer: c.riverId })}
           >
-            Unblock
+            {tr('Unblock')}
           </button>
         )}
       </span>
@@ -330,7 +342,7 @@ function AddFriend(props: {
 }): ReactElement {
   const notify = useCommunity((s) => s.notify);
   const [handle, setHandle] = useState('');
-  const [message, setMessage] = useState(GREETING);
+  const [message, setMessage] = useState(() => tr(GREETING));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -339,7 +351,7 @@ function AddFriend(props: {
   const myLink = friendLink(props.serverUrl, props.myId);
 
   const request = async (riverId: string): Promise<void> => {
-    const result = await addFriend(riverId, message.trim() || GREETING);
+    const result = await addFriend(riverId, message.trim() || tr(GREETING));
     setBusy(false);
     const name = useDm.getState().conversations.find((c) => c.riverId === riverId)?.name;
     if (result === 'failed' || result === 'blocked') return setError(addFriendMessage(result, name));
@@ -360,7 +372,7 @@ function AddFriend(props: {
     if (link) {
       if (link.riverId === props.myId) {
         setBusy(false);
-        return setError("That's you!");
+        return setError(tr("That's you!"));
       }
       riverId = link.riverId;
     } else {
@@ -371,7 +383,7 @@ function AddFriend(props: {
       }
       if (found.value.riverId === props.myId) {
         setBusy(false);
-        return setError("That's you!");
+        return setError(tr("That's you!"));
       }
       riverId = found.value.riverId;
     }
@@ -381,8 +393,8 @@ function AddFriend(props: {
   /** A friend's QR code (2.9): their friend link, then the request goes out at once. */
   const scanned = (text: string): true | string => {
     const link = parseFriend(text);
-    if (!link) return 'That QR code is not a River friend code.';
-    if (link.riverId === props.myId) return "That's your own code.";
+    if (!link) return tr('That QR code is not a River friend code.');
+    if (link.riverId === props.myId) return tr("That's your own code.");
     setScanning(false);
     setBusy(true);
     setError(null);
@@ -393,9 +405,9 @@ function AddFriend(props: {
   return (
     <div className="friends__add">
       <form className="glass card" onSubmit={(e) => void submit(e)}>
-        <h2 className="card__title">Add a friend</h2>
+        <h2 className="card__title">{tr('Add a friend')}</h2>
         <p className="muted small">
-          Type their username — like <span className="mono">@alex</span>. They get your message as a request.
+          {tr('Type their username — like @alex. They get your message as a request.')}
         </p>
         <label className="textfield username-field">
           <span className="username-field__at" aria-hidden="true">
@@ -407,41 +419,47 @@ function AddFriend(props: {
               setHandle(e.target.value);
               setError(null);
             }}
-            placeholder="username"
+            placeholder={tr('username')}
             autoCapitalize="none"
             spellCheck={false}
-            aria-label="Friend's username"
+            aria-label={tr("Friend's username")}
             aria-invalid={error ? true : undefined}
           />
         </label>
         {error && <p className="field__error">{error}</p>}
         <label className="textfield">
-          <span className="field__label">Message</span>
+          <span className="field__label">{tr('Message')}</span>
           <input value={message} maxLength={200} onChange={(e) => setMessage(e.target.value)} />
         </label>
         <div className="button-row">
           <button className="btn btn--primary" disabled={busy || handle.trim() === ''}>
-            {busy ? 'Sending…' : 'Send friend request'}
+            {busy ? tr('Sending…') : tr('Send friend request')}
           </button>
           <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => setScanning(true)}>
-            📷 Scan QR code
+            📷 {tr('Scan QR code')}
           </button>
         </div>
       </form>
       {scanning && (
         <QrScanner
-          title="Scan a friend's QR code"
-          hint="Point the camera at the QR code in their River: Friends → Add friend → Show QR code."
+          title={tr("Scan a friend's QR code")}
+          hint={tr('Point the camera at the QR code in their River: Friends → Add friend → Show QR code.')}
           onResult={scanned}
           onClose={() => setScanning(false)}
         />
       )}
       <div className="glass card" id="my-friend-link">
-        <h2 className="card__title">You are {props.myUsername ? `@${props.myUsername}` : 'on River'}</h2>
+        <h2 className="card__title">
+          {props.myUsername
+            ? tr('You are @{username}', { username: props.myUsername })
+            : tr('You are on River')}
+        </h2>
         <p className="muted small">
           {props.myUsername
-            ? 'Share your username and people can add you. Or send them your link.'
-            : 'Choose a username in Settings → Account so people can add you by name. You can still share your link.'}
+            ? tr('Share your username and people can add you. Or send them your link.')
+            : tr(
+                'Choose a username in Settings → Account so people can add you by name. You can still share your link.',
+              )}
         </p>
         <code className="invite-box__link">{myLink}</code>
         <div className="button-row">
@@ -454,16 +472,18 @@ function AddFriend(props: {
               })
             }
           >
-            {copied ? 'Copied ✓' : 'Copy friend link'}
+            {copied ? tr('Copied ✓') : tr('Copy friend link')}
           </button>
           <button className="btn btn--ghost btn--small" onClick={() => setShowQr(!showQr)}>
-            {showQr ? 'Hide QR code' : 'Show QR code'}
+            {showQr ? tr('Hide QR code') : tr('Show QR code')}
           </button>
         </div>
         {showQr && (
           <div className="friend-qr">
-            <QrCode value={myLink} size={200} label="Your friend link as a QR code" />
-            <p className="muted small">Your friend scans this in River to send you a friend request.</p>
+            <QrCode value={myLink} size={200} label={tr('Your friend link as a QR code')} />
+            <p className="muted small">
+              {tr('Your friend scans this in River to send you a friend request.')}
+            </p>
           </div>
         )}
       </div>
@@ -486,22 +506,26 @@ function InviteToCommunity(props: { peer: string; name: string }): ReactElement 
       useCommunity.getState().notify(res.message);
       return;
     }
-    const ok = await useDm
-      .getState()
-      .run({ a: 'send', peer: props.peer, text: `Join me in ${community}: ${res.value}` });
+    const ok = await useDm.getState().run({
+      a: 'send',
+      peer: props.peer,
+      text: tr('Join me in {community}: {link}', { community, link: res.value }),
+    });
     if (ok) {
       play('send');
       setSent(community);
-      useCommunity.getState().notify(`Invite to ${community} sent to ${props.name}`);
+      useCommunity
+        .getState()
+        .notify(tr('Invite to {community} sent to {name}', { community, name: props.name }));
     }
   };
   return (
     <span className="invite-to">
       <button
         className="icon-btn"
-        aria-label={`Invite ${props.name} to a community`}
+        aria-label={tr('Invite {name} to a community', { name: props.name })}
         aria-expanded={open}
-        title={sent ? `Invited to ${sent}` : 'Invite to a community'}
+        title={sent ? tr('Invited to {community}', { community: sent }) : tr('Invite to a community')}
         onClick={() => setOpen((v) => !v)}
       >
         ➕

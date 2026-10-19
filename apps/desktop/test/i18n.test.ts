@@ -15,6 +15,8 @@ import {
   type Language,
 } from '../src/shared/i18n/index.ts';
 import { DEFAULT_SETTINGS, settingsSchema } from '../src/shared/settings.ts';
+import { PERMISSION_INFO } from '@river/protocol/permissions';
+import { PERMISSION_TEXTS } from '../src/renderer/src/community/permission-texts.ts';
 
 /**
  * Every text River routes through tr()/t() (or marks with msg()) and every counted text
@@ -214,6 +216,13 @@ describe('languages', () => {
       expect(typeof forms).toBe('object');
       for (const form of Object.values(forms as object) as string[])
         expect(placeholders(form)).toEqual(placeholders(key));
+    }
+  });
+
+  it('translates every permission name and help (they live in @river/protocol)', () => {
+    for (const p of PERMISSION_INFO) {
+      expect(PERMISSION_TEXTS, p.key).toContain(p.label);
+      expect(PERMISSION_TEXTS, p.key).toContain(p.help);
     }
   });
 

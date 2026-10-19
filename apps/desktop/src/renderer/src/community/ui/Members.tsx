@@ -8,6 +8,7 @@ import { useDm } from '../../dm/store.ts';
 import { useCommunity } from '../store.ts';
 import { phoneShellActive } from '../../phone/mode.ts';
 import { Avatar, CrownIcon, CustomStatus, Popover, XIcon, can, hex, presenceOf } from './common.tsx';
+import { msg, tr } from '../../i18n.ts';
 
 export function MemberList({ community, me }: { community: CommunityView; me: string }): ReactElement {
   const [card, setCard] = useState<{ member: MemberView; x: number; y: number } | null>(null);
@@ -23,18 +24,18 @@ export function MemberList({ community, me }: { community: CommunityView; me: st
     if (members.length) groups.push({ key: role.id, title: role.name, members });
   }
   const rest = online.filter((m) => !placed.has(m.riverId)).sort(byName);
-  if (rest.length) groups.push({ key: 'online', title: 'Online', members: rest });
-  if (offline.length) groups.push({ key: 'offline', title: 'Offline', members: offline });
+  if (rest.length) groups.push({ key: 'online', title: tr('Online'), members: rest });
+  if (offline.length) groups.push({ key: 'offline', title: tr('Offline'), members: offline });
 
   return (
-    <aside className="community__members" aria-label="Members">
+    <aside className="community__members" aria-label={tr('Members')}>
       {phoneShellActive() && (
         // On a phone the list covers the channel: a way back to it (Back closes it too).
         <header className="pins__head members__head">
-          <strong>Members · {community.members.length}</strong>
+          <strong>{tr('Members · {count}', { count: community.members.length })}</strong>
           <button
             className="icon-btn"
-            aria-label="Close members"
+            aria-label={tr('Close members')}
             data-phone-back=""
             onClick={() => useCommunity.setState({ showMembers: false })}
           >
@@ -76,7 +77,7 @@ export function MemberList({ community, me }: { community: CommunityView; me: st
                 <CustomStatus member={m} />
               </span>
               {m.owner && (
-                <span className="member__crown" title="Community owner">
+                <span className="member__crown" title={tr('Community owner')}>
                   <CrownIcon size={14} />
                 </span>
               )}
@@ -137,12 +138,19 @@ export function ProfileCard(props: {
     }
     s.setModal({
       kind: 'confirm',
-      title: `${kind === 'kick' ? 'Kick' : 'Ban'} ${member.name}`,
+      title:
+        kind === 'kick' ? tr('Kick {name}', { name: member.name }) : tr('Ban {name}', { name: member.name }),
       body:
         kind === 'kick'
-          ? `${member.name} will be removed from ${community.name}. They can rejoin with a new invite.`
-          : `${member.name} will be removed from ${community.name} and cannot rejoin until unbanned.`,
-      action: kind === 'kick' ? 'Kick' : 'Ban',
+          ? tr('{name} will be removed from {community}. They can rejoin with a new invite.', {
+              name: member.name,
+              community: community.name,
+            })
+          : tr('{name} will be removed from {community} and cannot rejoin until unbanned.', {
+              name: member.name,
+              community: community.name,
+            }),
+      action: kind === 'kick' ? tr('Kick') : tr('Ban'),
       run: async () => {
         await s.run({ a: kind, communityId: community.id, riverId: member.riverId });
       },
@@ -182,30 +190,36 @@ export function ProfileCard(props: {
         )}
         {member.timeoutUntil && (
           <div className="chip chip--error profile-card__timeout">
-            Timed out until{' '}
-            {new Date(member.timeoutUntil).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+            {tr('Timed out until {time}', {
+              time: new Date(member.timeoutUntil).toLocaleString([], {
+                dateStyle: 'short',
+                timeStyle: 'short',
+              }),
+            })}
           </div>
         )}
         <button
           className="btn btn--link profile-card__id mono small"
-          title="Copy River ID"
+          title={tr('Copy River ID')}
           onClick={() =>
             void navigator.clipboard
               .writeText(member.riverId)
-              .then(() => useCommunity.getState().notify('River ID copied.'))
+              .then(() => useCommunity.getState().notify(tr('River ID copied.')))
           }
         >
-          {member.riverId.slice(0, 8)}… · Copy ID
+          {member.riverId.slice(0, 8)}… · {tr('Copy ID')}
         </button>
         {member.joinedOn && (
           <div className="muted small profile-card__since">
-            Member of {community.name} since{' '}
-            {new Date(`${member.joinedOn}T12:00:00`).toLocaleDateString([], { dateStyle: 'medium' })}
+            {tr('Member of {community} since {date}', {
+              community: community.name,
+              date: new Date(`${member.joinedOn}T12:00:00`).toLocaleDateString([], { dateStyle: 'medium' }),
+            })}
           </div>
         )}
         {member.bio && (
           <>
-            <div className="profile-card__section">About me</div>
+            <div className="profile-card__section">{tr('About me')}</div>
             <p className="profile-card__bio">{member.bio}</p>
           </>
         )}
@@ -215,7 +229,7 @@ export function ProfileCard(props: {
             can(perms, Permission.BAN_MEMBERS)) && (
             <ModNotes community={community} riverId={member.riverId} />
           )}
-        <div className="profile-card__section">Roles</div>
+        <div className="profile-card__section">{tr('Roles')}</div>
         <div className="role-chips">
           {roles.map((r) => (
             <span key={r.id} className="role-chip">
@@ -227,7 +241,7 @@ export function ProfileCard(props: {
               {member.roleExpiry?.[r.id] && (
                 <span
                   className="role-chip__until"
-                  title={`Until ${new Date(member.roleExpiry[r.id]!).toLocaleString()}`}
+                  title={tr('Until {time}', { time: new Date(member.roleExpiry[r.id]!).toLocaleString() })}
                 >
                   ⏳
                 </span>
@@ -235,7 +249,7 @@ export function ProfileCard(props: {
               {canRoles && assignable.some((a) => a.id === r.id) && (
                 <button
                   className="role-chip__x"
-                  aria-label={`Remove ${r.name}`}
+                  aria-label={tr('Remove {name}', { name: r.name })}
                   onClick={() => setRoles(member.roles.filter((id) => id !== r.id))}
                 >
                   ×
@@ -246,24 +260,24 @@ export function ProfileCard(props: {
           {canRoles && assignable.some((r) => !member.roles.includes(r.id)) && (
             <button
               className="role-chip role-chip--add"
-              aria-label="Add role"
+              aria-label={tr('Add role')}
               onClick={() => setAdding(!adding)}
             >
               +
             </button>
           )}
-          {roles.length === 0 && !canRoles && <span className="muted small">No roles</span>}
+          {roles.length === 0 && !canRoles && <span className="muted small">{tr('No roles')}</span>}
         </div>
         {adding && (
           <div className="role-picker">
             <label className="role-picker__for">
-              <span className="muted small">For</span>
+              <span className="muted small">{tr('For')}</span>
               <select value={giveFor} onChange={(e) => setGiveFor(Number(e.target.value))}>
-                <option value={0}>Good</option>
-                <option value={3600}>1 hour</option>
-                <option value={86_400}>1 day</option>
-                <option value={604_800}>1 week</option>
-                <option value={2_592_000}>30 days</option>
+                <option value={0}>{tr('Good')}</option>
+                <option value={3600}>{tr('1 hour')}</option>
+                <option value={86_400}>{tr('1 day')}</option>
+                <option value={604_800}>{tr('1 week')}</option>
+                <option value={2_592_000}>{tr('30 days')}</option>
               </select>
             </label>
             {assignable
@@ -296,14 +310,14 @@ export function ProfileCard(props: {
         )}
         {!isMe && s.call && voiceChannel === s.call.channelId && (
           <>
-            <div className="profile-card__section">User volume</div>
+            <div className="profile-card__section">{tr('User volume')}</div>
             <input
               type="range"
               className="slider"
               min={0}
               max={200}
               value={Math.round(volume * 100)}
-              aria-label={`Volume for ${member.name}`}
+              aria-label={tr('Volume for {name}', { name: member.name })}
               aria-valuetext={`${Math.round(volume * 100)}%`}
               onChange={(e) =>
                 void updateSettings({
@@ -327,7 +341,7 @@ export function ProfileCard(props: {
                 void useDm.getState().open(member.riverId, member.name);
               }}
             >
-              Message
+              {tr('Message')}
             </button>
             <FriendButton riverId={member.riverId} />
             {voiceChannel && outranks && can(perms, Permission.MUTE_MEMBERS) && (
@@ -341,7 +355,7 @@ export function ProfileCard(props: {
                   })
                 }
               >
-                {voiceState?.serverMuted ? 'Server unmute' : 'Server mute'}
+                {voiceState?.serverMuted ? tr('Server unmute') : tr('Server mute')}
               </button>
             )}
             {voiceChannel && outranks && can(perms, Permission.MUTE_MEMBERS) && (
@@ -355,7 +369,7 @@ export function ProfileCard(props: {
                   })
                 }
               >
-                {voiceState?.serverDeafened ? 'Server undeafen' : 'Server deafen'}
+                {voiceState?.serverDeafened ? tr('Server undeafen') : tr('Server deafen')}
               </button>
             )}
             {voiceChannel && outranks && can(perms, Permission.MOVE_MEMBERS) && (
@@ -363,7 +377,7 @@ export function ProfileCard(props: {
                 className="btn btn--ghost btn--small"
                 onClick={() => void s.run({ a: 'moderateVoice', riverId: member.riverId, disconnect: true })}
               >
-                Disconnect
+                {tr('Disconnect')}
               </button>
             )}
             {voiceChannel &&
@@ -377,14 +391,14 @@ export function ProfileCard(props: {
               ) && (
                 <select
                   className="role-add"
-                  aria-label={`Move ${member.name} to another voice channel`}
+                  aria-label={tr('Move {name} to another voice channel', { name: member.name })}
                   value=""
                   onChange={(e) =>
                     e.target.value &&
                     void s.run({ a: 'moderateVoice', riverId: member.riverId, moveTo: e.target.value })
                   }
                 >
-                  <option value="">Move to…</option>
+                  <option value="">{tr('Move to…')}</option>
                   {community.channels
                     .filter(
                       (ch) =>
@@ -404,12 +418,12 @@ export function ProfileCard(props: {
             )}
             {outranks && can(perms, Permission.KICK_MEMBERS) && (
               <button className="btn btn--ghost btn--small btn--danger-text" onClick={() => confirm('kick')}>
-                Kick
+                {tr('Kick')}
               </button>
             )}
             {outranks && can(perms, Permission.BAN_MEMBERS) && (
               <button className="btn btn--ghost btn--small btn--danger-text" onClick={() => confirm('ban')}>
-                Ban
+                {tr('Ban')}
               </button>
             )}
             {community.ownerId === me && member.riverId !== me && (
@@ -418,9 +432,12 @@ export function ProfileCard(props: {
                 onClick={() =>
                   s.setModal({
                     kind: 'confirm',
-                    title: `Make ${member.name} the owner?`,
-                    body: `${member.name} will own ${community.name} and can do everything, including deleting it. You become an ordinary member with the roles you have. Only they can hand it back.`,
-                    action: 'Transfer ownership',
+                    title: tr('Make {name} the owner?', { name: member.name }),
+                    body: tr(
+                      '{name} will own {community} and can do everything, including deleting it. You become an ordinary member with the roles you have. Only they can hand it back.',
+                      { name: member.name, community: community.name },
+                    ),
+                    action: tr('Transfer ownership'),
                     run: async () => {
                       await s.run({
                         a: 'transferOwnership',
@@ -431,7 +448,7 @@ export function ProfileCard(props: {
                   })
                 }
               >
-                Transfer ownership
+                {tr('Transfer ownership')}
               </button>
             )}
           </div>
@@ -449,35 +466,35 @@ function FriendButton({ riverId }: { riverId: string }): ReactElement | null {
   if (state === 'blocked') return null;
   if (state === 'friend')
     return (
-      <span className="chip chip--online" title="You are friends">
-        Friends ✓
+      <span className="chip chip--online" title={tr('You are friends')}>
+        {tr('Friends ✓')}
       </span>
     );
-  if (state === 'request') return <span className="chip">Wants to be friends</span>;
-  if (state === 'sent' || sent) return <span className="chip">Request sent ✓</span>;
+  if (state === 'request') return <span className="chip">{tr('Wants to be friends')}</span>;
+  if (state === 'sent' || sent) return <span className="chip">{tr('Request sent ✓')}</span>;
   return (
     <button
       className="btn btn--ghost btn--small"
       onClick={() => {
         setSent(true);
         void sendFriendRequest(riverId).then((ok) => {
-          if (ok) useCommunity.getState().notify('Friend request sent');
+          if (ok) useCommunity.getState().notify(tr('Friend request sent'));
           else setSent(false);
         });
       }}
     >
-      Add friend
+      {tr('Add friend')}
     </button>
   );
 }
 
 const TIMEOUTS: Array<[string, number]> = [
-  ['60 seconds', 60_000],
-  ['5 minutes', 5 * 60_000],
-  ['10 minutes', 10 * 60_000],
-  ['1 hour', 60 * 60_000],
-  ['1 day', 24 * 60 * 60_000],
-  ['1 week', 7 * 24 * 60 * 60_000],
+  [msg('60 seconds'), 60_000],
+  [msg('5 minutes'), 5 * 60_000],
+  [msg('10 minutes'), 10 * 60_000],
+  [msg('1 hour'), 60 * 60_000],
+  [msg('1 day'), 24 * 60 * 60_000],
+  [msg('1 week'), 7 * 24 * 60 * 60_000],
 ];
 
 /** Time someone out for a while, or end their timeout early. */
@@ -494,13 +511,17 @@ function TimeoutButton(props: {
       .run({ a: 'timeout', communityId: props.community.id, riverId: props.member.riverId, until })
       .then((r) => {
         if (r !== null)
-          s.notify(until ? `${props.member.name} is timed out` : `Timeout ended for ${props.member.name}`);
+          s.notify(
+            until
+              ? tr('{name} is timed out', { name: props.member.name })
+              : tr('Timeout ended for {name}', { name: props.member.name }),
+          );
       });
   };
   if (props.member.timeoutUntil)
     return (
       <button className="btn btn--ghost btn--small" onClick={() => run(null)}>
-        End timeout
+        {tr('End timeout')}
       </button>
     );
   return (
@@ -510,10 +531,10 @@ function TimeoutButton(props: {
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        Time out
+        {tr('Time out')}
       </button>
       {open && (
-        <span className="timeout-picker__menu" role="menu" aria-label="Timeout length">
+        <span className="timeout-picker__menu" role="menu" aria-label={tr('Timeout length')}>
           {TIMEOUTS.map(([label, ms]) => (
             <button
               key={label}
@@ -521,7 +542,7 @@ function TimeoutButton(props: {
               className="role-picker__item"
               onClick={() => run(new Date(Date.now() + ms).toISOString())}
             >
-              {label}
+              {tr(label)}
             </button>
           ))}
         </span>
@@ -550,8 +571,8 @@ function ModNotes({ community, riverId }: { community: CommunityView; riverId: s
   };
   return (
     <div className="mod-notes">
-      <div className="profile-card__section">Moderator notes · only moderators see these</div>
-      {notes === null && <p className="muted small">Loading…</p>}
+      <div className="profile-card__section">{tr('Moderator notes · only moderators see these')}</div>
+      {notes === null && <p className="muted small">{tr('Loading…')}</p>}
       {notes?.map((n) => (
         <div key={n.id} className="mod-notes__note">
           <span className="mod-notes__text">{n.text}</span>
@@ -559,10 +580,10 @@ function ModNotes({ community, riverId }: { community: CommunityView; riverId: s
             {n.authorName} · {new Date(n.createdAt).toLocaleDateString()}
             <button
               className="btn btn--link btn--small"
-              aria-label="Remove note"
+              aria-label={tr('Remove note')}
               onClick={() => void s.run({ a: 'deleteNote', noteId: n.id }).then(load)}
             >
-              Remove
+              {tr('Remove')}
             </button>
           </span>
         </div>
@@ -577,8 +598,8 @@ function ModNotes({ community, riverId }: { community: CommunityView; riverId: s
         <input
           value={text}
           maxLength={1000}
-          placeholder="Add a note"
-          aria-label="Add a moderator note"
+          placeholder={tr('Add a note')}
+          aria-label={tr('Add a moderator note')}
           onChange={(e) => setText(e.target.value)}
         />
       </form>

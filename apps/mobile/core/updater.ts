@@ -16,6 +16,10 @@ import {
 import type { UpdateStatus } from '../../desktop/src/shared/ipc.ts';
 import type { Logger } from '../../desktop/src/main/logger.ts';
 import { RELEASE_DOWNLOAD_BASE, RELEASE_REPO } from '../../desktop/src/main/updater/verify-download.ts';
+import { fill, type Vars } from '../../desktop/src/shared/i18n/index.ts';
+
+/** Says a message in River's language (main.ts passes it); English without it. */
+type Say = (text: string, vars?: Vars) => string;
 
 /**
  * River for Android updates itself from GitHub Releases, with the desktop's
@@ -145,13 +149,10 @@ export function pickNewestRelease(list: unknown, channel: ReleaseChannel, curren
   return best;
 }
 
-export function reinstallMessage(version: string): string {
-  return (
-    `River ${version} is signed with a different key than the River installed on this phone ` +
-    '(early Android builds were signed with one-off preview keys), so Android cannot install it as an update. ' +
-    'To get it, uninstall River and install the new version from the download page. ' +
-    'Uninstalling deletes River’s data on this phone — your identity, messages and settings — ' +
-    'unless you make a backup first in Settings → Backup.'
+export function reinstallMessage(version: string, t: Say = fill): string {
+  return t(
+    'River {version} is signed with a different key than the River installed on this phone (early Android builds were signed with one-off preview keys), so Android cannot install it as an update. To get it, uninstall River and install the new version from the download page. Uninstalling deletes River’s data on this phone — your identity, messages and settings — unless you make a backup first in Settings → Backup.',
+    { version },
   );
 }
 
@@ -189,6 +190,8 @@ export interface AndroidUpdaterDeps {
   progressMs?: number;
   /** How long "installing" waits for Android's answer before Install can be tapped again. */
   installWaitMs?: number;
+  /** Messages in River's language; English without it. */
+  t?: Say;
 }
 
 /**
@@ -257,7 +260,11 @@ export class AndroidUpdateService {
         return this.status;
       }
       if (this.mismatched === version) {
-        this.setStatus({ state: 'reinstall-needed', version, message: reinstallMessage(version) });
+        this.setStatus({
+          state: 'reinstall-needed',
+          version,
+          message: reinstallMessage(version, this.deps.t),
+        });
         return this.status;
       }
       const device = await this.deps.ask<DeviceAnswer | null>('update.device', {});
@@ -463,7 +470,7 @@ export class AndroidUpdateService {
     this.mismatched = version;
     if (this.verified?.version === version) this.verified = null;
     this.discard(path);
-    this.setStatus({ state: 'reinstall-needed', version, message: reinstallMessage(version) });
+    this.setStatus({ state: 'reinstall-needed', version, message: reinstallMessage(version, this.deps.t) });
   }
 
   private discard(path: string): void {
@@ -478,7 +485,7 @@ export class AndroidUpdateService {
     const code = err instanceof UpdateFailure ? err.code : fallback;
     const raw = err instanceof Error ? err.message : String(err);
     this.deps.log.error(`Update ${code}: ${raw}`);
-    this.setStatus({ state: 'error', message: friendlyMessage(code, raw), code });
+    this.setStatus({ state: 'error', message: friendlyMessage(code, raw, this.deps.t), code });
   }
 
   private setStatus(status: UpdateStatus): void {
@@ -491,21 +498,31 @@ export class AndroidUpdateService {
   }
 }
 
-function friendlyMessage(code: string, raw: string): string {
+function friendlyMessage(code: string, raw: string, t: Say = fill): string {
   switch (code) {
     case 'manifest-unverified':
-      return 'River found an update whose signature did not verify, so it was not downloaded. Your current version is unchanged.';
+      return t(
+        'River found an update whose signature did not verify, so it was not downloaded. Your current version is unchanged.',
+      );
     case 'verification-failed':
-      return 'An update was downloaded but did not match River’s signed release, so it was not installed. Your current version is unchanged.';
+      return t(
+        'An update was downloaded but did not match River’s signed release, so it was not installed. Your current version is unchanged.',
+      );
     case 'no-apk':
-      return 'The newest River release has no download for this phone’s processor. Your current version is unchanged.';
+      return t(
+        'The newest River release has no download for this phone’s processor. Your current version is unchanged.',
+      );
     case 'download-failed':
-      return 'The update download failed. River will try again later.';
+      return t('The update download failed. River will try again later.');
     case 'install-failed':
-      return `Android did not install the update${raw && !/^Android did not/.test(raw) ? ` (${raw})` : ''}. Your current version is unchanged.`;
+      return raw && !/^Android did not/.test(raw)
+        ? t('Android did not install the update ({reason}). Your current version is unchanged.', {
+            reason: raw,
+          })
+        : t('Android did not install the update. Your current version is unchanged.');
     default:
       return /net|host|timeout|timed out|connect|resolve|HTTP/i.test(raw)
-        ? 'Could not reach the update server. River will try again later.'
-        : 'Checking for updates failed. River will try again later.';
+        ? t('Could not reach the update server. River will try again later.')
+        : t('Checking for updates failed. River will try again later.');
   }
 }
