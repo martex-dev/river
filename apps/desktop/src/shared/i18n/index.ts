@@ -11,6 +11,8 @@ import { PT_BR } from './locales/pt-BR.ts';
 import { RU } from './locales/ru.ts';
 import { TR } from './locales/tr.ts';
 import { UK } from './locales/uk.ts';
+// The community screens' texts, every language side by side (community sweep).
+import { COMMUNITY } from './locales/community.ts';
 
 export * from './languages.ts';
 export type { Dictionary, PluralForms } from './types.ts';
@@ -25,16 +27,16 @@ export { EN_PLURALS } from './locales/en.ts';
  */
 export const DICTIONARIES: Record<Language, Dictionary> = {
   en: EN_PLURALS,
-  bg: BG,
-  de: DE,
-  es: ES,
-  fr: FR,
-  it: IT,
-  pl: PL,
-  'pt-BR': PT_BR,
-  ru: RU,
-  tr: TR,
-  uk: UK,
+  bg: { ...BG, ...COMMUNITY.bg },
+  de: { ...DE, ...COMMUNITY.de },
+  es: { ...ES, ...COMMUNITY.es },
+  fr: { ...FR, ...COMMUNITY.fr },
+  it: { ...IT, ...COMMUNITY.it },
+  pl: { ...PL, ...COMMUNITY.pl },
+  'pt-BR': { ...PT_BR, ...COMMUNITY['pt-BR'] },
+  ru: { ...RU, ...COMMUNITY.ru },
+  tr: { ...TR, ...COMMUNITY.tr },
+  uk: { ...UK, ...COMMUNITY.uk },
 };
 
 export type Vars = Record<string, string | number>;

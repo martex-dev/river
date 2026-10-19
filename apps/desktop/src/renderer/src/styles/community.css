@@ -2135,6 +2135,15 @@ input.switch:disabled {
 .role-row__main.is-active {
   background: var(--surface-hover);
 }
+/* A role out of your reach (2.20.2): its title says why. */
+.role-row__lock {
+  flex: none;
+  font-size: 11px;
+  opacity: 0.8;
+}
+.role-picker__note {
+  margin: 2px 6px 6px;
+}
 .role-row__main.has-overwrite::after {
   content: '•';
   color: var(--accent-text);

@@ -15,6 +15,8 @@ import type { AuditView, CommunityView, MemberView, RoleView } from '../../../..
 import { COMMUNITY_ICONS } from '../../../../shared/templates.ts';
 import { useCommunity, type CommunityTab } from '../store.ts';
 import { communityTabs } from '../settings-tabs.ts';
+import { roleOrderChanges, roleReach, type RoleReach } from '../../../../shared/role-order.ts';
+import { OUT_OF_REACH_NOTE, reachText } from '../role-reach.ts';
 import { EmojiSettings } from './EmojiSettings.tsx';
 import {
   ArrowDownIcon,
@@ -257,7 +259,13 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
   );
   const role = community.roles.find((r) => r.id === selected) ?? community.roles.find((r) => r.everyone)!;
   const isOwner = community.ownerId === me;
-  const editable = (r: RoleView): boolean => isOwner || r.everyone || r.position < community.myRank;
+  // In reach (2.20.2): below your highest role and carrying nothing you lack, as the server checks.
+  const reach = (r: RoleView): RoleReach =>
+    isOwner ? { ok: true } : roleReach(r, { myRank: community.myRank, permissions: community.permissions });
+  const editable = (r: RoleView): boolean => reach(r).ok;
+  const others = community.roles.filter((x) => !x.everyone);
+  const canMove = (r: RoleView, direction: 1 | -1): boolean =>
+    roleOrderChanges(others, community.myRank, { roleId: r.id, direction }, community.permissions).length > 0;
 
   const create = async (): Promise<void> => {
     const id = await s.run({
@@ -283,9 +291,8 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
           Members get every permission from all their roles. Higher roles can manage lower ones. The owner can
           do everything. Drag roles to reorder them.
         </p>
-        {community.roles.map((r, i) => {
-          const others = community.roles.filter((x) => !x.everyone);
-          const idx = others.findIndex((x) => x.id === r.id);
+        {community.roles.map((r) => {
+          const out = reach(r);
           return (
             <div
               key={r.id}
@@ -361,7 +368,17 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
                   className="role-chip__dot"
                   style={{ background: r.color ? hex(r.color) : 'var(--text-faint)' }}
                 />
-                <span>{r.name}</span>
+                <span className="role-row__name">{r.name}</span>
+                {!out.ok && (
+                  <span
+                    className="role-row__lock"
+                    role="img"
+                    aria-label={tr('Out of your reach')}
+                    title={reachText(out)}
+                  >
+                    🔒
+                  </span>
+                )}
                 <span className="muted small">
                   {community.members.filter((m) => r.everyone || m.roles.includes(r.id)).length}
                 </span>
@@ -371,7 +388,7 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
                   <button
                     className="icon-btn"
                     aria-label={`Move ${r.name} up`}
-                    disabled={idx === 0 || (!isOwner && (others[idx - 1]?.position ?? 0) >= community.myRank)}
+                    disabled={!canMove(r, 1)}
                     onClick={() =>
                       void s.run({ a: 'moveRole', communityId: community.id, roleId: r.id, direction: 1 })
                     }
@@ -381,7 +398,7 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
                   <button
                     className="icon-btn"
                     aria-label={`Move ${r.name} down`}
-                    disabled={idx === others.length - 1 || i === community.roles.length - 1}
+                    disabled={!canMove(r, -1)}
                     onClick={() =>
                       void s.run({ a: 'moveRole', communityId: community.id, roleId: r.id, direction: -1 })
                     }
@@ -394,13 +411,7 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
           );
         })}
       </div>
-      <RoleEditor
-        key={role.id}
-        community={community}
-        role={role}
-        editable={editable(role)}
-        isOwner={isOwner}
-      />
+      <RoleEditor key={role.id} community={community} role={role} reach={reach(role)} isOwner={isOwner} />
     </div>
   );
 }
@@ -408,10 +419,11 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
 function RoleEditor(props: {
   community: CommunityView;
   role: RoleView;
-  editable: boolean;
+  reach: RoleReach;
   isOwner: boolean;
 }): ReactElement {
-  const { community, role, editable } = props;
+  const { community, role } = props;
+  const editable = props.reach.ok;
   const s = useCommunity();
   const [name, setName] = useState(role.name);
   const [color, setColor] = useState(role.color);
@@ -442,7 +454,11 @@ function RoleEditor(props: {
   return (
     <div className="role-editor">
       <h3>Edit role — {role.name}</h3>
-      {!editable && <p className="field__error">You can only edit roles below your highest role.</p>}
+      {!props.reach.ok && (
+        <p className="field__error" role="note">
+          {reachText(props.reach)}
+        </p>
+      )}
       {!role.everyone && (
         <>
           <label className="textfield">
@@ -624,8 +640,9 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
   const isOwner = community.ownerId === me;
   // Below your highest role, and carrying nothing you lack (the server refuses the rest, 2.20).
   const assignable = community.roles.filter(
-    (r) => !r.everyone && (isOwner || r.position < community.myRank) && (r.permissions & ~perms) === 0,
+    (r) => !r.everyone && (isOwner || roleReach(r, { myRank: community.myRank, permissions: perms }).ok),
   );
+  const unreachable = community.roles.filter((r) => !r.everyone).length - assignable.length;
   const members = community.members
     .filter((m) => m.name.toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => b.rank - a.rank || a.name.localeCompare(b.name));
@@ -667,6 +684,11 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
+      {can(perms, Permission.MANAGE_ROLES) && unreachable > 0 && (
+        <p className="muted small" role="note">
+          {tr(OUT_OF_REACH_NOTE)}
+        </p>
+      )}
       {picked.size > 0 && assignable.length > 0 && (
         <div className="bulk-bar" role="toolbar" aria-label="Change roles of selected members">
           <strong>{picked.size} selected</strong>

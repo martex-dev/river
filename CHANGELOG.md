@@ -15,6 +15,18 @@ All notable changes to River are documented here. The format follows
   and success texts (Kick, Delete, "18+", a full voice channel, report states)
   use the theme's readable colours. In high contrast, the focus ring is the
   theme's focus colour instead of a pale yellow lost on light themes.
+- Community settings → Roles follows the "roles in reach" rule of 2.20.2: a
+  role below yours that has a permission you lack (Ban members, say) showed as
+  editable, movable and deletable, and saving it failed with an error from the
+  server. It is now locked (🔒), the editor names the permissions you lack, and
+  Move up/down and drag and drop move roles around it instead of failing.
+  Where roles are given (the member list, profile cards), a note says why some
+  roles are not offered.
+- Rules & roles: a manager below a self-assignable role offered by someone
+  higher could not save the rules or the welcome note at all ("You can only
+  offer roles below your highest role"). Roles offered already stay offered;
+  new ones are offered only within your reach, and the list says why a role
+  cannot be offered.
 
 ## [2.21.2] - 2026-10-19
 

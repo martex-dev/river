@@ -574,10 +574,12 @@ export async function registerCommunityRoutes(
         if (!role || id === model.everyoneRoleId) throw bad('Unknown role');
         if (role.permissions & SELF_ROLE_FORBIDDEN)
           throw bad('Roles members give themselves cannot moderate or manage anything');
+        // Roles offered already stay offered when someone else edits the rest (the rules, the
+        // welcome note), also ones above that person: the editor sends the whole list back.
+        if (model.selfRoles.includes(id)) continue;
         if (role.position >= top) throw forbidden('You can only offer roles below your highest role');
         // Members would give it to themselves: only a role you could give them yourself (2.20).
-        // Roles offered already stay offered when someone else edits the rest.
-        if (!model.selfRoles.includes(id)) checkRoleInReach(model, me(request), role, 'offer');
+        checkRoleInReach(model, me(request), role, 'offer');
       }
       await db
         .updateTable('communities')
