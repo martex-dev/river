@@ -97,6 +97,11 @@ html[data-msg='bubbles'] .chat__messages .msg__body {
 html[data-msg='bubbles'][data-own='right'] .chat__messages .msg--mine .msg__body {
   transform-origin: 100% 100%;
 }
+@keyframes bubble-grow {
+  from {
+    transform: scale(0.86) translateY(6px);
+  }
+}
 @keyframes bubble-in {
   from {
     opacity: 0;
@@ -335,7 +340,9 @@ html[data-calm='on'] .typing__dots i {
   flex-direction: column;
   min-width: 0;
   max-width: 82%;
-  animation: bubble-in 320ms var(--ease-spring) both;
+  /* Grows in without fading: the preview's text is always fully readable (accessibility checks
+     may look at it mid-animation). */
+  animation: bubble-grow 320ms var(--ease-spring) both;
   transform-origin: 0 100%;
 }
 .lp__name {
