@@ -1,4 +1,5 @@
 import { haptic } from './gestures.ts';
+import { tr } from '../i18n.ts';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 
 /**
@@ -97,7 +98,7 @@ export function VoiceRecorder(props: {
     } catch {
       starting.current = false;
       if (mounted.current)
-        setError('River needs your microphone to record. Allow it in your system settings.');
+        setError(tr('River needs your microphone to record. Allow it in your system settings.'));
       return;
     }
     starting.current = false;
@@ -111,7 +112,7 @@ export function VoiceRecorder(props: {
       r = new MediaRecorder(stream, { mimeType: format.mime, audioBitsPerSecond: 32_000 });
     } catch {
       for (const t of stream.getTracks()) t.stop();
-      setError('River could not record on this device.');
+      setError(tr('River could not record on this device.'));
       return;
     }
     chunks.current = [];
@@ -135,7 +136,7 @@ export function VoiceRecorder(props: {
       r.start(1000);
     } catch {
       for (const t of stream.getTracks()) t.stop();
-      setError('River could not record on this device.');
+      setError(tr('River could not record on this device.'));
       return;
     }
     haptic('select');
@@ -154,14 +155,19 @@ export function VoiceRecorder(props: {
       <div className="voice-rec" role="status" aria-live="polite">
         <span className="voice-rec__dot" aria-hidden="true" />
         <span className="voice-rec__time">{formatDuration((now - recording.startedAt) / 1000)}</span>
-        <span className="muted small voice-rec__hint">Recording</span>
-        <button type="button" className="icon-btn" aria-label="Cancel recording" onClick={() => stop(false)}>
+        <span className="muted small voice-rec__hint">{tr('Recording')}</span>
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label={tr('Cancel recording')}
+          onClick={() => stop(false)}
+        >
           ✕
         </button>
         <button
           type="button"
           className="voice-rec__send"
-          aria-label="Send voice message"
+          aria-label={tr('Send voice message')}
           onClick={() => stop(true)}
         >
           ➤
@@ -175,8 +181,8 @@ export function VoiceRecorder(props: {
       <button
         type="button"
         className="icon-btn composer__mic"
-        aria-label="Record a voice message"
-        title={error ?? 'Record a voice message'}
+        aria-label={tr('Record a voice message')}
+        title={error ?? tr('Record a voice message')}
         disabled={props.disabled}
         onClick={() => void start()}
       >
@@ -207,7 +213,7 @@ export function VoiceNote(props: { url: string; name: string }): ReactElement {
       <button
         type="button"
         className="voice-note__play"
-        aria-label={playing ? 'Pause voice message' : 'Play voice message'}
+        aria-label={playing ? tr('Pause voice message') : tr('Play voice message')}
         onClick={() => {
           const el = audio.current;
           if (!el) return;
@@ -223,8 +229,11 @@ export function VoiceNote(props: { url: string; name: string }): ReactElement {
         min={0}
         max={1000}
         value={Math.round(progress * 1000)}
-        aria-label="Position"
-        aria-valuetext={`${formatDuration(time)} of ${formatDuration(duration)}`}
+        aria-label={tr('Position')}
+        aria-valuetext={tr('{time} of {duration}', {
+          time: formatDuration(time),
+          duration: formatDuration(duration),
+        })}
         style={{ ['--progress' as string]: `${progress * 100}%` }}
         onChange={(e) => {
           const el = audio.current;
@@ -237,8 +246,8 @@ export function VoiceNote(props: { url: string; name: string }): ReactElement {
       <button
         type="button"
         className="voice-note__speed"
-        aria-label={`Playback speed ${speed}×`}
-        title="Playback speed"
+        aria-label={tr('Playback speed {speed}×', { speed })}
+        title={tr('Playback speed')}
         onClick={() => {
           const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]!;
           setSpeed(next);

@@ -5,16 +5,17 @@ import { play } from '../sound.ts';
 import { useCommunity } from '../store.ts';
 import { Modal } from './common.tsx';
 import { useNow } from './Events.tsx';
+import { msg, tr, trn } from '../../i18n.ts';
 
 /** "3 h left", "12 min left", "Poll closed". */
 export function timeLeft(endsAt: string, now: number): string {
   const ms = Date.parse(endsAt) - now;
-  if (ms <= 0) return 'Poll closed';
+  if (ms <= 0) return tr('Poll closed');
   const mins = Math.ceil(ms / 60_000);
-  if (mins < 60) return `${mins} min left`;
+  if (mins < 60) return trn('{count} min left', mins);
   const hours = Math.round(mins / 60);
-  if (hours < 48) return `${hours} h left`;
-  return `${Math.round(hours / 24)} days left`;
+  if (hours < 48) return trn('{count} h left', hours);
+  return trn('{count} days left', Math.round(hours / 24));
 }
 
 /** A poll in a channel message. */
@@ -72,9 +73,9 @@ export function PollCard({
     onReact(voteEmoji(option), on);
   };
   return (
-    <div className="poll" role="group" aria-label={`Poll: ${poll.question}`}>
+    <div className="poll" role="group" aria-label={tr('Poll: {question}', { question: poll.question })}>
       <div className="poll__question">{poll.question}</div>
-      <div className="muted small">{poll.multi ? 'Pick as many as you like' : 'Pick one'}</div>
+      <div className="muted small">{poll.multi ? tr('Pick as many as you like') : tr('Pick one')}</div>
       <ul className="poll__options">
         {poll.options.map((label, i) => {
           const count = t.counts[i] ?? 0;
@@ -102,19 +103,19 @@ export function PollCard({
         })}
       </ul>
       <div className="muted small">
-        {t.voters} {t.voters === 1 ? 'vote' : 'votes'} · {timeLeft(poll.endsAt, now)}
+        {trn('{count} votes', t.voters)} · {timeLeft(poll.endsAt, now)}
       </div>
     </div>
   );
 }
 
 const DURATIONS = [
-  { label: '1 hour', ms: 3600_000 },
-  { label: '4 hours', ms: 4 * 3600_000 },
-  { label: '8 hours', ms: 8 * 3600_000 },
-  { label: '24 hours', ms: 24 * 3600_000 },
-  { label: '3 days', ms: 3 * 24 * 3600_000 },
-  { label: '1 week', ms: 7 * 24 * 3600_000 },
+  { label: msg('1 hour'), ms: 3600_000 },
+  { label: msg('4 hours'), ms: 4 * 3600_000 },
+  { label: msg('8 hours'), ms: 8 * 3600_000 },
+  { label: msg('24 hours'), ms: 24 * 3600_000 },
+  { label: msg('3 days'), ms: 3 * 24 * 3600_000 },
+  { label: msg('1 week'), ms: 7 * 24 * 3600_000 },
 ];
 
 export function CreatePollDialog({
@@ -156,7 +157,7 @@ export function CreatePollDialog({
     }
   };
   return (
-    <Modal title="Create a poll" onClose={onClose}>
+    <Modal title={tr('Create a poll')} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -164,22 +165,22 @@ export function CreatePollDialog({
         }}
       >
         <label className="textfield">
-          <span className="field__label">Question</span>
+          <span className="field__label">{tr('Question')}</span>
           <input
             autoFocus
             maxLength={POLL_LIMITS.question}
-            placeholder="What should we play tonight?"
+            placeholder={tr('What should we play tonight?')}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
           />
         </label>
-        <div className="field__label">Answers</div>
+        <div className="field__label">{tr('Answers')}</div>
         {options.map((o, i) => (
           <div key={i} className="poll-form__option">
             <input
-              aria-label={`Answer ${i + 1}`}
+              aria-label={tr('Answer {number}', { number: i + 1 })}
               maxLength={POLL_LIMITS.option}
-              placeholder={`Answer ${i + 1}`}
+              placeholder={tr('Answer {number}', { number: i + 1 })}
               value={o}
               onChange={(e) => setOptions(options.map((x, j) => (j === i ? e.target.value : x)))}
             />
@@ -187,7 +188,7 @@ export function CreatePollDialog({
               <button
                 type="button"
                 className="icon-btn"
-                aria-label={`Remove answer ${i + 1}`}
+                aria-label={tr('Remove answer {number}', { number: i + 1 })}
                 onClick={() => setOptions(options.filter((_, j) => j !== i))}
               >
                 ×
@@ -197,32 +198,32 @@ export function CreatePollDialog({
         ))}
         {options.length < POLL_LIMITS.maxOptions && (
           <button type="button" className="btn btn--link" onClick={() => setOptions([...options, ''])}>
-            + Add another answer
+            + {tr('Add another answer')}
           </button>
         )}
         <div className="poll-form__row">
           <label className="textfield">
-            <span className="field__label">Open for</span>
+            <span className="field__label">{tr('Open for')}</span>
             <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
               {DURATIONS.map((d) => (
                 <option key={d.ms} value={d.ms}>
-                  {d.label}
+                  {tr(d.label)}
                 </option>
               ))}
             </select>
           </label>
           <label className="poll-form__multi">
-            <input type="checkbox" checked={multi} onChange={(e) => setMulti(e.target.checked)} /> Allow more
-            than one answer
+            <input type="checkbox" checked={multi} onChange={(e) => setMulti(e.target.checked)} />{' '}
+            {tr('Allow more than one answer')}
           </label>
         </div>
-        <p className="muted small">Questions, answers and votes are end-to-end encrypted.</p>
+        <p className="muted small">{tr('Questions, answers and votes are end-to-end encrypted.')}</p>
         <div className="modal__foot">
           <button type="button" className="btn btn--link" onClick={onClose}>
-            Cancel
+            {tr('Cancel')}
           </button>
           <button className="btn btn--primary" disabled={!ready || busy}>
-            Post poll
+            {tr('Post poll')}
           </button>
         </div>
       </form>

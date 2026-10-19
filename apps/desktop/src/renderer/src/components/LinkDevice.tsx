@@ -5,6 +5,7 @@ import { useRiver } from '../store.ts';
 import { ArrowIcon, CheckIcon } from './Icons.tsx';
 import { QrCode } from './QrCode.tsx';
 import { QrScanner } from './QrScanner.tsx';
+import { rich, tr } from '../i18n.ts';
 
 /** Live link progress from the client core. */
 function useLinkProgress(): LinkProgress {
@@ -32,7 +33,7 @@ export function LinkThisDevice(props: {
   const phone = useRiver((r) => isPhone(r.info?.platform));
   const progress = useLinkProgress();
   const [code, setCode] = useState(props.initialCode ?? '');
-  const [name, setName] = useState(phone ? 'My phone' : 'My computer');
+  const [name, setName] = useState(phone ? tr('My phone') : tr('My computer'));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -70,7 +71,7 @@ export function LinkThisDevice(props: {
   };
   /** The QR code your other device shows (2.14): read with this device's camera, then "Is this you?". */
   const scanned = (text: string): true | string => {
-    if (!/^river:\/\/link\?/i.test(text.trim())) return 'That QR code is not a River link code.';
+    if (!/^river:\/\/link\?/i.test(text.trim())) return tr('That QR code is not a River link code.');
     setScanning(false);
     setCode(text.trim());
     void join(text);
@@ -81,15 +82,22 @@ export function LinkThisDevice(props: {
     return (
       <div className="lock__form" role="alertdialog" aria-labelledby="link-review">
         <h1 className="onboarding__title" id="link-review">
-          Is this you?
+          {tr('Is this you?')}
         </h1>
         <p className="lock__text">
-          This device is about to join the River account of <strong>{progress.displayName}</strong> on{' '}
-          <strong>{progress.server}</strong> (River ID {progress.riverId.slice(0, 8)}…).
+          {rich(
+            tr('This device is about to join the River account of {name} on {server} (River ID {id}…).'),
+            {
+              name: <strong>{progress.displayName}</strong>,
+              server: <strong>{progress.server}</strong>,
+              id: progress.riverId.slice(0, 8),
+            },
+          )}
         </p>
         <p className="muted small">
-          Only continue if it is your own account. If someone sent you this code, cancel: they would see
-          everything you send from this device.
+          {tr(
+            'Only continue if it is your own account. If someone sent you this code, cancel: they would see everything you send from this device.',
+          )}
         </p>
         {error && (
           <p className="field__error" role="alert">
@@ -98,7 +106,7 @@ export function LinkThisDevice(props: {
         )}
         <div className="button-row">
           <button className="btn btn--ghost" onClick={() => void window.river.account.link.cancel()}>
-            Cancel
+            {tr('Cancel')}
           </button>
           <button
             className="btn btn--primary"
@@ -111,7 +119,7 @@ export function LinkThisDevice(props: {
               });
             }}
           >
-            Yes, link this device <ArrowIcon size={16} />
+            {tr('Yes, link this device')} <ArrowIcon size={16} />
           </button>
         </div>
       </div>
@@ -122,12 +130,12 @@ export function LinkThisDevice(props: {
     return (
       <div className="lock__form" role="status" aria-live="polite">
         <h1 className="onboarding__title">
-          {progress.state === 'linked' ? 'Linked' : 'Waiting for your other device…'}
+          {progress.state === 'linked' ? tr('Linked') : tr('Waiting for your other device…')}
         </h1>
         <p className="lock__text">
           {progress.state === 'linked'
-            ? 'This device now has your account, your communities and your conversations from here on.'
-            : 'Confirm on the device that shows the code. Keep River open on both.'}
+            ? tr('This device now has your account, your communities and your conversations from here on.')
+            : tr('Confirm on the device that shows the code. Keep River open on both.')}
         </p>
         {progress.state === 'joining' && (
           <button
@@ -137,7 +145,7 @@ export function LinkThisDevice(props: {
               props.onBack();
             }}
           >
-            Cancel
+            {tr('Cancel')}
           </button>
         )}
       </div>
@@ -146,24 +154,31 @@ export function LinkThisDevice(props: {
 
   return (
     <form className="lock__form" onSubmit={submit}>
-      <h1 className="onboarding__title">Link this device</h1>
+      <h1 className="onboarding__title">{tr('Link this device')}</h1>
       <p className="lock__text">
-        On a device where you already use River, open <strong>Settings → Account → Devices</strong> and choose{' '}
-        <strong>Link a new device</strong>. Scan the QR code it shows, or type its code.
+        {rich(
+          tr(
+            'On a device where you already use River, open {where} and choose {what}. Scan the QR code it shows, or type its code.',
+          ),
+          {
+            where: <strong>{tr('Settings → Account → Devices')}</strong>,
+            what: <strong>{tr('Link a new device')}</strong>,
+          },
+        )}
       </p>
       <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => setScanning(true)}>
-        📷 Scan the QR code
+        📷 {tr('Scan the QR code')}
       </button>
       {scanning && (
         <QrScanner
-          title="Scan your other device's QR code"
-          hint="On your other device: Settings → Account → Devices → Link a new device."
+          title={tr("Scan your other device's QR code")}
+          hint={tr('On your other device: Settings → Account → Devices → Link a new device.')}
           onResult={scanned}
           onClose={() => setScanning(false)}
         />
       )}
       <label className="textfield">
-        <span className="field__label">Link code</span>
+        <span className="field__label">{tr('Link code')}</span>
         <input
           type="text"
           autoFocus
@@ -175,13 +190,17 @@ export function LinkThisDevice(props: {
         />
       </label>
       <label className="textfield">
-        <span className="field__label">Name for this device</span>
+        <span className="field__label">{tr('Name for this device')}</span>
         <input type="text" maxLength={64} value={name} onChange={(e) => setName(e.target.value)} />
       </label>
       {linkServer && (
         <p className="card card--note small" role="note">
-          This code links to an account on <strong>{linkServer}</strong>. Only continue if you created it
-          yourself on your own device just now — never with a code someone sent you.
+          {rich(
+            tr(
+              'This code links to an account on {server}. Only continue if you created it yourself on your own device just now — never with a code someone sent you.',
+            ),
+            { server: <strong>{linkServer}</strong> },
+          )}
         </p>
       )}
       {failure && (
@@ -190,15 +209,16 @@ export function LinkThisDevice(props: {
         </p>
       )}
       <p className="muted small">
-        Your identity is handed over encrypted, from your other device to this one. The server cannot read it.
-        Messages from before linking stay on your other device.
+        {tr(
+          'Your identity is handed over encrypted, from your other device to this one. The server cannot read it. Messages from before linking stay on your other device.',
+        )}
       </p>
       <div className="button-row">
         <button type="button" className="btn btn--ghost" onClick={props.onBack}>
-          Back
+          {tr('Back')}
         </button>
         <button type="submit" className="btn btn--primary" disabled={busy || code.trim().length < 16}>
-          Link <ArrowIcon size={16} />
+          {tr('Link')} <ArrowIcon size={16} />
         </button>
       </div>
     </form>
@@ -258,8 +278,10 @@ export function DevicesPanel(): ReactElement {
   const remove = async (d: LinkedDevice): Promise<void> => {
     if (
       !window.confirm(
-        `Remove ${d.name ?? `device ${d.deviceId}`}? Your server signs it out at once and stops delivering to it. ` +
-          'It keeps what it already received; if it was lost or stolen, also leave and rejoin communities you care about.',
+        tr(
+          'Remove {name}? Your server signs it out at once and stops delivering to it. It keeps what it already received; if it was lost or stolen, also leave and rejoin communities you care about.',
+          { name: d.name ?? tr('device {id}', { id: d.deviceId }) },
+        ),
       )
     )
       return;
@@ -271,11 +293,12 @@ export function DevicesPanel(): ReactElement {
   return (
     <section className="card devices" aria-labelledby="devices-title">
       <h3 id="devices-title" className="card__title">
-        Devices
+        {tr('Devices')}
       </h3>
       <p className="muted small">
-        Use the same account on your phone and your computers. Each device has its own keys; your messages
-        reach all of them.
+        {tr(
+          'Use the same account on your phone and your computers. Each device has its own keys; your messages reach all of them.',
+        )}
       </p>
       {devices && (
         <ul className="devices__list">
@@ -284,14 +307,14 @@ export function DevicesPanel(): ReactElement {
               <span>
                 <strong>
                   {d.current
-                    ? `This device${d.name ? ` · ${d.name}` : ''}`
-                    : (d.name ?? `Device ${d.deviceId}`)}
+                    ? `${tr('This device')}${d.name ? ` · ${d.name}` : ''}`
+                    : (d.name ?? tr('Device {id}', { id: d.deviceId }))}
                 </strong>
-                <span className="muted small"> · linked {when(d.addedAt)}</span>
+                <span className="muted small"> · {tr('linked {when}', { when: when(d.addedAt) })}</span>
               </span>
               {!d.current && (
                 <button className="btn btn--ghost btn--small" onClick={() => void remove(d)}>
-                  Remove
+                  {tr('Remove')}
                 </button>
               )}
             </li>
@@ -302,35 +325,42 @@ export function DevicesPanel(): ReactElement {
       {progress.state === 'offering' && (
         <div className="devices__offer" role="status" aria-live="polite">
           <p>
-            On the new device, choose “I already use River — link this device” and scan this QR code (or point
-            a phone’s camera app at it). Or type the code below.
+            {tr(
+              'On the new device, choose “I already use River — link this device” and scan this QR code (or point a phone’s camera app at it). Or type the code below.',
+            )}
           </p>
-          <QrCode value={progress.code} label="Link code as a QR code" />
-          <p className="devices__code mono" aria-label="Link code">
+          <QrCode value={progress.code} label={tr('Link code as a QR code')} />
+          <p className="devices__code mono" aria-label={tr('Link code')}>
             {progress.shortCode}
           </p>
           <p className="muted small">
-            Or send yourself the whole link:{' '}
+            {tr('Or send yourself the whole link:')}{' '}
             <button
               className="btn btn--link"
               onClick={() => {
                 void navigator.clipboard?.writeText(progress.code).then(() => setCopied(true));
               }}
             >
-              {copied ? 'Copied' : 'Copy link'}
+              {copied ? tr('Copied') : tr('Copy link')}
             </button>
           </p>
-          <p className="muted small">The code works once, for ten minutes. Never give it to anyone else.</p>
+          <p className="muted small">
+            {tr('The code works once, for ten minutes. Never give it to anyone else.')}
+          </p>
           <button className="btn btn--ghost" onClick={() => void window.river.account.link.cancel()}>
-            Cancel
+            {tr('Cancel')}
           </button>
         </div>
       )}
       {progress.state === 'request' && (
         <div className="devices__offer" role="alertdialog" aria-labelledby="link-request">
           <p id="link-request">
-            Link <strong>{progress.deviceName}</strong> to your account? It will be able to read your new
-            messages and act as you.
+            {rich(
+              tr('Link {name} to your account? It will be able to read your new messages and act as you.'),
+              {
+                name: <strong>{progress.deviceName}</strong>,
+              },
+            )}
           </p>
           <div className="button-row">
             <button
@@ -338,10 +368,10 @@ export function DevicesPanel(): ReactElement {
               disabled={busy === 'confirm'}
               onClick={() => void window.river.account.link.cancel()}
             >
-              Don’t link
+              {tr('Don’t link')}
             </button>
             <button className="btn btn--primary" disabled={busy !== null} onClick={() => void confirm()}>
-              <CheckIcon size={16} /> Link it
+              <CheckIcon size={16} /> {tr('Link it')}
             </button>
           </div>
         </div>
@@ -349,12 +379,12 @@ export function DevicesPanel(): ReactElement {
       {/* Only on the device that added the new one, never on the new device itself. */}
       {progress.state === 'linked' && progress.deviceName && (
         <p className="muted small" role="status">
-          Linked {progress.deviceName}. It is setting itself up.
+          {tr('Linked {name}. It is setting itself up.', { name: progress.deviceName })}
         </p>
       )}
       {progress.state !== 'offering' && progress.state !== 'request' && (
         <button className="btn" disabled={busy !== null} onClick={() => void start()}>
-          Link a new device
+          {tr('Link a new device')}
         </button>
       )}
       {failure && (

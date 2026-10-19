@@ -8,6 +8,12 @@ import {
   silenced,
 } from '../../../shared/notify-rules.ts';
 import type { Settings } from '../../../shared/settings.ts';
+import { resolveLanguage, systemLanguage, translate, type Language } from '../../../shared/i18n/index.ts';
+
+/** The language banners speak: River's own setting. */
+function langOf(ctx: BannerContext): Language {
+  return resolveLanguage(ctx.settings?.appearance.language, systemLanguage());
+}
 
 /**
  * In-app banners (2.17): while River is open and in front, a message in another chat or channel
@@ -50,10 +56,12 @@ export function dmBanner(event: DmEvent, ctx: BannerContext, now = Date.now()): 
   const mention = mentionsYou(chat, m);
   if (!shouldAlert(chat, mention)) return null;
   const preview = prefs.preview;
+  const lang = langOf(ctx);
   return {
     id: `dm:${m.id}`,
     title: preview === 'none' ? 'River' : event.senderName,
-    body: preview === 'full' ? clip(m.text || 'Sent a file') : 'New message',
+    body:
+      preview === 'full' ? clip(m.text || translate(lang, 'Sent a file')) : translate(lang, 'New message'),
     mention,
     open: { kind: 'chat', peer: m.peer },
   };
@@ -76,10 +84,16 @@ export function channelBanner(
   if (!shouldAlert(notify, mention)) return null;
   const preview = prefs.preview;
   const where = place.channelName ? ` · #${place.channelName}` : '';
+  const lang = langOf(ctx);
   return {
     id: `channel:${m.id}`,
     title: preview === 'none' ? 'River' : `${m.senderName}${where}`,
-    body: preview === 'full' ? clip(m.text || 'Sent a file') : mention ? 'You were mentioned' : 'New message',
+    body:
+      preview === 'full'
+        ? clip(m.text || translate(lang, 'Sent a file'))
+        : mention
+          ? translate(lang, 'You were mentioned')
+          : translate(lang, 'New message'),
     mention,
     open: { kind: 'channel', communityId: m.communityId, channelId: m.channelId },
   };

@@ -1,4 +1,5 @@
 import type { NotifySound } from './notify-sounds.ts';
+import { msg } from './i18n/index.ts';
 import type { Settings } from './settings.ts';
 
 /**
@@ -153,12 +154,12 @@ export function withOverride(
 }
 
 export const MUTE_CHOICES: Array<{ label: string; ms: number | null }> = [
-  { label: 'For 15 minutes', ms: 15 * 60_000 },
-  { label: 'For 1 hour', ms: 3600_000 },
-  { label: 'For 8 hours', ms: 8 * 3600_000 },
-  { label: 'For 1 day', ms: 24 * 3600_000 },
-  { label: 'For 1 week', ms: 7 * 24 * 3600_000 },
-  { label: 'Until I turn it back on', ms: null },
+  { label: msg('For 15 minutes'), ms: 15 * 60_000 },
+  { label: msg('For 1 hour'), ms: 3600_000 },
+  { label: msg('For 8 hours'), ms: 8 * 3600_000 },
+  { label: msg('For 1 day'), ms: 24 * 3600_000 },
+  { label: msg('For 1 week'), ms: 7 * 24 * 3600_000 },
+  { label: msg('Until I turn it back on'), ms: null },
 ];
 
 export function muteUntil(ms: number | null, now = Date.now()): string {

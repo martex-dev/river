@@ -1,3 +1,4 @@
+import { tr, trn } from '../i18n.ts';
 import { create } from 'zustand';
 import { Permission } from '@river/protocol/permissions';
 import type {
@@ -260,7 +261,7 @@ function nameOfPerson(communities: CommunityView[], id: string): string {
     const m = c.members.find((x) => x.riverId === id);
     if (m) return m.name;
   }
-  return 'Someone';
+  return tr('Someone');
 }
 
 export const useCommunity = create<CommunityState>((set, get) => ({
@@ -426,7 +427,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         // Only celebrate a comeback the user could have noticed.
         if (event.state === 'online' && was !== 'online' && away > 3000 && get().loaded) {
           play('success');
-          get().notify('Back online');
+          get().notify(tr('Back online'));
         }
         return;
       }
@@ -477,7 +478,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
             const allowed = !notify || (!notify.muted && notify.level !== 'nothing');
             if (!quiet && allowed && alertForReply(m.threadId, m.mine, viewing)) {
               playNotifySound(notify?.sound, 'message');
-              get().notify(`${m.senderName} replied in a thread you follow.`);
+              get().notify(tr('{name} replied in a thread you follow.', { name: m.senderName }));
             }
           }
           return;
@@ -493,10 +494,10 @@ export const useCommunity = create<CommunityState>((set, get) => ({
           );
           if (added.length) {
             const community = get().communities.find((c) => c.id === m.communityId);
-            const who = community?.members.find((x) => x.riverId === added[0]!.user)?.name ?? 'Someone';
-            const emoji = added[0]!.emoji.startsWith('<') ? 'an emoji' : added[0]!.emoji;
+            const who = community?.members.find((x) => x.riverId === added[0]!.user)?.name ?? tr('Someone');
+            const emoji = added[0]!.emoji.startsWith('<') ? tr('an emoji') : added[0]!.emoji;
             play('reaction');
-            get().notify(`${who} reacted ${emoji} to your message.`);
+            get().notify(tr('{name} reacted {emoji} to your message.', { name: who, emoji }));
           }
         }
         if (list) {
@@ -591,17 +592,17 @@ export const useCommunity = create<CommunityState>((set, get) => ({
             !call.serverMuted &&
             get().communities.some((c) => c.channels.some((ch) => ch.id === event.channelId && ch.stage))
           )
-            get().notify('You can speak now.');
+            get().notify(tr('You can speak now.'));
           const deafenedNow = event.states[me]?.serverDeafened ?? false;
           if (deafenedNow !== call.serverDeafened)
-            get().notify(deafenedNow ? 'A moderator deafened you.' : 'A moderator undeafened you.');
+            get().notify(deafenedNow ? tr('A moderator deafened you.') : tr('A moderator undeafened you.'));
           call.setServerDeafened(deafenedNow);
           call.updateParticipants(event.participants);
         }
         return;
       }
       case 'serverMoved':
-        get().notify('Your server moved to a new address. River followed it automatically.');
+        get().notify(tr('Your server moved to a new address. River followed it automatically.'));
         return;
       case 'voiceRefused': {
         const call = get().call;
@@ -612,7 +613,9 @@ export const useCommunity = create<CommunityState>((set, get) => ({
         }
         play('error');
         get().notify(
-          event.reason === 'full' ? 'That voice channel is full.' : "You can't join that voice channel.",
+          event.reason === 'full'
+            ? tr('That voice channel is full.')
+            : tr("You can't join that voice channel."),
           'error',
         );
         return;
@@ -644,20 +647,25 @@ export const useCommunity = create<CommunityState>((set, get) => ({
           const dest = get()
             .communities.flatMap((c) => c.channels)
             .find((ch) => ch.id === event.moveTo);
-          get().notify(`A moderator moved you to ${dest ? dest.name : 'another voice channel'}.`);
+          get().notify(
+            dest
+              ? tr('A moderator moved you to {name}.', { name: dest.name })
+              : tr('A moderator moved you to another voice channel.'),
+          );
           void get().joinVoice(event.moveTo, call.me);
           return;
         }
         play('disconnected');
-        get().notify('You were disconnected from the voice channel.');
+        get().notify(tr('You were disconnected from the voice channel.'));
         return;
       }
       case 'removed': {
         const c = get().communities.find((x) => x.id === event.communityId);
-        const name = c?.name ?? 'a community';
-        if (event.reason === 'kicked') get().notify(`You were removed from ${name}.`, 'error');
-        if (event.reason === 'banned') get().notify(`You were banned from ${name}.`, 'error');
-        if (event.reason === 'deleted') get().notify(`${name} was deleted by its owner.`, 'error');
+        const name = c?.name ?? tr('a community');
+        if (event.reason === 'kicked') get().notify(tr('You were removed from {name}.', { name }), 'error');
+        if (event.reason === 'banned') get().notify(tr('You were banned from {name}.', { name }), 'error');
+        if (event.reason === 'deleted')
+          get().notify(tr('{name} was deleted by its owner.', { name }), 'error');
         const call = get().call;
         if (call && c?.channels.some((ch) => ch.id === call.channelId)) void get().leaveVoice();
         return;
@@ -700,13 +708,15 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       }
       case 'refused':
         get().notify(
-          event.reason === 'slow_down' ? 'Slow down a little.' : "You don't have permission to do that.",
+          event.reason === 'slow_down'
+            ? tr('Slow down a little.')
+            : tr("You don't have permission to do that."),
           'error',
         );
         return;
       case 'eventStarting':
         play('success');
-        get().notify(`${event.name} is starting now.`);
+        get().notify(tr('{name} is starting now.', { name: event.name }));
         return;
       case 'signal': {
         const call = get().call;
@@ -728,7 +738,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
     const res = await window.river.community.action({ a: 'saveMessage', channelId, messageId, on });
     if (!res.ok) return get().notify(res.message, 'error');
     await get().loadSaved();
-    if (on) get().notify('Saved. Find it under 🔖 Saved messages.');
+    if (on) get().notify(tr('Saved. Find it under 🔖 Saved messages.'));
   },
   emojis: {},
   loadEmojis: async (communityId) => {
@@ -743,7 +753,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
   openMessage: (communityId, channelId, messageId) => {
     const c = get().communities.find((x) => x.id === communityId);
     if (!c || !c.channels.some((ch) => ch.id === channelId)) {
-      get().notify("You can't see that message: it's in a community or channel you're not in.", 'error');
+      get().notify(tr("You can't see that message: it's in a community or channel you're not in."), 'error');
       return false;
     }
     useRiver.getState().navigate('communities');
@@ -836,7 +846,7 @@ export const useCommunity = create<CommunityState>((set, get) => ({
       (target.permissions & Permission.MOVE_MEMBERS) === 0
     ) {
       play('error');
-      get().notify('That voice channel is full.', 'error');
+      get().notify(tr('That voice channel is full.'), 'error');
       return;
     }
     const token = { cancelled: false };
@@ -996,8 +1006,8 @@ async function joinVoiceNow(channelId: string, me: string, token: { cancelled: b
         call: null,
         callError:
           (err as Error).name === 'NotAllowedError'
-            ? 'River could not use your microphone. Allow microphone access in your system settings.'
-            : (err as Error).message || 'Could not join the voice channel.',
+            ? tr('River could not use your microphone. Allow microphone access in your system settings.')
+            : (err as Error).message || tr('Could not join the voice channel.'),
       });
     return;
   }
@@ -1061,7 +1071,7 @@ export function typingNames(channelId: string, community: CommunityView | undefi
   const now = Date.now();
   return Object.entries(entries)
     .filter(([id, at]) => id !== me && now - at < TYPING_MS)
-    .map(([id]) => community?.members.find((m) => m.riverId === id)?.name ?? 'Someone');
+    .map(([id]) => community?.members.find((m) => m.riverId === id)?.name ?? tr('Someone'));
 }
 
 // Message links (in any message, DM or post) open the message here.
@@ -1092,6 +1102,6 @@ setInterval(() => {
   if (Date.now() - aloneSince >= minutes * 60_000) {
     aloneSince = null;
     void s.leaveVoice();
-    s.notify(`You left voice after ${minutes} minutes alone.`);
+    s.notify(trn('You left voice after {count} minutes alone.', minutes));
   }
 }, 15_000);

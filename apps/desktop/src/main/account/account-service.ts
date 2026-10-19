@@ -24,7 +24,7 @@ import { ApiError, NetworkError, type RequestJson } from '../http.ts';
 import type { IdentityService } from '../identity/identity-service.ts';
 import type { Logger } from '../logger.ts';
 import type { LocalDatabase } from '../storage/database.ts';
-import { msg } from '../../shared/i18n/index.ts';
+import { fill, msg, type Vars } from '../../shared/i18n/index.ts';
 
 interface AccountRow {
   server_url: string;
@@ -775,11 +775,16 @@ export class UserFacingError extends Error {
   readonly unreachable: boolean;
   /** The server's error code when it refused (e.g. 'signup_invite_only'). */
   readonly code: string | undefined;
-  constructor(message: string, options: { unreachable?: boolean; code?: string } = {}) {
-    super(message);
+  /** The sentence before its details are filled in, and the details: IPC says it in River's language. */
+  readonly text: string;
+  readonly vars: Vars | undefined;
+  constructor(text: string, options: { unreachable?: boolean; code?: string; vars?: Vars } = {}) {
+    super(fill(text, options.vars));
     this.name = 'UserFacingError';
     this.unreachable = options.unreachable ?? false;
     this.code = options.code;
+    this.text = text;
+    this.vars = options.vars;
   }
 }
 

@@ -31,12 +31,12 @@ export function resolveLanguage(setting: string | undefined, system = systemLang
 
 /** The language River speaks right now. */
 export function currentLanguage(): Language {
-  return resolveLanguage(useRiver.getState().settings?.appearance.language);
+  return resolveLanguage(useRiver.getState().settings?.appearance?.language);
 }
 
 /** The language River speaks, in a component; re-renders when it changes. */
 export function useLanguage(): Language {
-  return resolveLanguage(useRiver((r) => r.settings?.appearance.language));
+  return resolveLanguage(useRiver((r) => r.settings?.appearance?.language));
 }
 
 /** Translate in a component; re-renders when the language changes. */

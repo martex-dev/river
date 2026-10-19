@@ -16,6 +16,7 @@ import {
 import { useRiver } from '../../store.ts';
 import { useCommunity } from '../store.ts';
 import { MenuItem, Modal, PlusIcon, Popover, hex, initials } from './common.tsx';
+import { tr, trn } from '../../i18n.ts';
 
 type Drag = { kind: 'community' | 'folder'; id: string };
 type Drop = { key: string; place: DropPlace } | null;
@@ -148,7 +149,7 @@ export function CommunityRail(props: {
   };
 
   return (
-    <nav className="community__servers" aria-label="Your communities">
+    <nav className="community__servers" aria-label={tr('Your communities')}>
       {props.top}
       {props.top && <div className="rail-separator" aria-hidden="true" />}
       {entries.map((e) => {
@@ -174,7 +175,13 @@ export function CommunityRail(props: {
               <button
                 className="community__server rail-folder__button"
                 title={f.name}
-                aria-label={`Folder ${f.name}, ${e.communities.length} communities, ${f.open ? 'open' : 'closed'}`}
+                aria-label={
+                  f.open
+                    ? trn('Folder {name}, {count} communities, open', e.communities.length, { name: f.name })
+                    : trn('Folder {name}, {count} communities, closed', e.communities.length, {
+                        name: f.name,
+                      })
+                }
                 aria-expanded={f.open}
                 draggable
                 onDragStart={(ev) => {
@@ -214,8 +221,8 @@ export function CommunityRail(props: {
       <div className="community__server-wrap">
         <button
           className="community__server community__server--add"
-          title="Create or join a community"
-          aria-label="Create or join a community"
+          title={tr('Create or join a community')}
+          aria-label={tr('Create or join a community')}
           onClick={props.onAdd}
         >
           <PlusIcon size={22} />
@@ -231,7 +238,7 @@ export function CommunityRail(props: {
               setFolderMenu(null);
             }}
           >
-            Folder settings
+            {tr('Folder settings')}
           </MenuItem>
           <MenuItem
             onClick={() => {
@@ -240,7 +247,7 @@ export function CommunityRail(props: {
               setFolderMenu(null);
             }}
           >
-            Mark folder as read
+            {tr('Mark folder as read')}
           </MenuItem>
           <MenuItem
             onClick={() => {
@@ -248,7 +255,7 @@ export function CommunityRail(props: {
               setFolderMenu(null);
             }}
           >
-            Ungroup
+            {tr('Ungroup')}
           </MenuItem>
         </Popover>
       )}
@@ -274,19 +281,19 @@ function FolderSettings(props: {
   const [name, setName] = useState(props.folder.name);
   const [color, setColor] = useState(props.folder.color);
   return (
-    <Modal title="Folder settings" onClose={props.onClose}>
+    <Modal title={tr('Folder settings')} onClose={props.onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          props.onSave({ name: name.trim().slice(0, 40) || 'Folder', color });
+          props.onSave({ name: name.trim().slice(0, 40) || tr('Folder'), color });
         }}
       >
         <label className="textfield">
-          <span className="field__label">Folder name</span>
+          <span className="field__label">{tr('Folder name')}</span>
           <input autoFocus value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />
         </label>
         <fieldset className="field">
-          <legend className="field__label">Colour</legend>
+          <legend className="field__label">{tr('Colour')}</legend>
           <div className="swatches">
             {FOLDER_COLORS.map((c) => (
               <button
@@ -294,7 +301,7 @@ function FolderSettings(props: {
                 key={c}
                 className={`swatch ${c === color ? 'is-selected' : ''}`}
                 style={{ background: hex(c) }}
-                aria-label={`Colour ${hex(c)}`}
+                aria-label={tr('Colour {hex}', { hex: hex(c) })}
                 aria-pressed={c === color}
                 onClick={() => setColor(c)}
               />
@@ -303,9 +310,9 @@ function FolderSettings(props: {
         </fieldset>
         <div className="modal__foot">
           <button type="button" className="btn btn--link" onClick={props.onClose}>
-            Cancel
+            {tr('Cancel')}
           </button>
-          <button className="btn btn--primary">Save</button>
+          <button className="btn btn--primary">{tr('Save')}</button>
         </div>
       </form>
     </Modal>

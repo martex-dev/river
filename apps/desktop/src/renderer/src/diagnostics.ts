@@ -1,4 +1,5 @@
 import type { DiagnosticCheck } from '../../shared/ipc.ts';
+import { tr } from './i18n.ts';
 
 /**
  * Connection check, renderer half: what kind of network this is for calls,
@@ -97,35 +98,36 @@ export async function runNetworkDiagnostics(turnAvailable: boolean): Promise<Dia
   try {
     const { kind } = classifyNat(await gatherCandidates());
     const relay = turnAvailable
-      ? ' Your server offers a relay, so calls still connect.'
-      : ' Your server offers no relay, so calls with some people may not connect.';
+      ? tr('Your server offers a relay, so calls still connect.')
+      : tr('Your server offers no relay, so calls with some people may not connect.');
+    const label = tr('Network for calls');
     checks.push(
       kind === 'open'
-        ? { id: 'network', label: 'Network for calls', status: 'ok', detail: 'direct calls work' }
+        ? { id: 'network', label, status: 'ok', detail: tr('direct calls work') }
         : kind === 'strict'
           ? {
               id: 'network',
-              label: 'Network for calls',
+              label,
               status: turnAvailable ? 'ok' : 'warn',
-              detail: 'strict network (symmetric NAT)',
-              advice: `Direct calls fail with people on similar networks (mobile data, some routers).${relay}`,
+              detail: tr('strict network (symmetric NAT)'),
+              advice: `${tr('Direct calls fail with people on similar networks (mobile data, some routers).')} ${relay}`,
             }
           : kind === 'blocked'
             ? {
                 id: 'network',
-                label: 'Network for calls',
+                label,
                 status: turnAvailable ? 'warn' : 'fail',
-                detail: 'call traffic (UDP) is blocked',
-                advice: `A firewall, VPN or school/work network blocks calls.${relay}`,
+                detail: tr('call traffic (UDP) is blocked'),
+                advice: `${tr('A firewall, VPN or school/work network blocks calls.')} ${relay}`,
               }
-            : { id: 'network', label: 'Network for calls', status: 'warn', detail: 'could not be tested' },
+            : { id: 'network', label, status: 'warn', detail: tr('could not be tested') },
     );
   } catch (err) {
     checks.push({
       id: 'network',
-      label: 'Network for calls',
+      label: tr('Network for calls'),
       status: 'warn',
-      detail: `could not be tested (${(err as Error).message})`,
+      detail: tr('could not be tested ({reason})', { reason: (err as Error).message }),
     });
   }
   try {
@@ -134,23 +136,23 @@ export async function runNetworkDiagnostics(turnAvailable: boolean): Promise<Dia
     const speakers = devices.filter((d) => d.kind === 'audiooutput').length;
     checks.push(
       mics > 0
-        ? { id: 'mic', label: 'Microphone', status: 'ok', detail: `${mics} found` }
+        ? { id: 'mic', label: tr('Microphone'), status: 'ok', detail: tr('{count} found', { count: mics }) }
         : {
             id: 'mic',
-            label: 'Microphone',
+            label: tr('Microphone'),
             status: 'fail',
-            detail: 'none found',
-            advice: 'Plug one in, or allow microphone access for apps in your system privacy settings.',
+            detail: tr('none found'),
+            advice: tr('Plug one in, or allow microphone access for apps in your system privacy settings.'),
           },
     );
     checks.push({
       id: 'speakers',
-      label: 'Speakers',
+      label: tr('Speakers'),
       status: 'ok',
-      detail: speakers > 0 ? `${speakers} found` : 'system default',
+      detail: speakers > 0 ? tr('{count} found', { count: speakers }) : tr('system default'),
     });
   } catch {
-    checks.push({ id: 'mic', label: 'Microphone', status: 'warn', detail: 'could not be checked' });
+    checks.push({ id: 'mic', label: tr('Microphone'), status: 'warn', detail: tr('could not be checked') });
   }
   return checks;
 }

@@ -3,21 +3,22 @@ import type { DesignSettings } from '../../../shared/design.ts';
 import { contrast, isHex, rotateHue } from './color.ts';
 import { setPrefs } from './editor.ts';
 import { resolveDesign } from './engine.ts';
+import { msg, tr } from '../i18n.ts';
 
 /** Quick accents, like Telegram's: one tap recolours buttons, your bubbles, links and highlights. */
 export const ACCENTS: ReadonlyArray<readonly [string, string]> = [
-  ['#3390ec', 'Blue'],
-  ['#5865f2', 'Blurple'],
-  ['#8e5cf7', 'Violet'],
-  ['#e05297', 'Pink'],
-  ['#e5484d', 'Red'],
-  ['#f2762e', 'Orange'],
-  ['#e8b100', 'Gold'],
-  ['#3fb950', 'Green'],
-  ['#12b5a5', 'Teal'],
-  ['#22a7d8', 'Sky'],
-  ['#6b7280', 'Graphite'],
-  ['#c2a27a', 'Sand'],
+  ['#3390ec', msg('Blue')],
+  ['#5865f2', msg('Blurple')],
+  ['#8e5cf7', msg('Violet')],
+  ['#e05297', msg('Pink')],
+  ['#e5484d', msg('Red')],
+  ['#f2762e', msg('Orange')],
+  ['#e8b100', msg('Gold')],
+  ['#3fb950', msg('Green')],
+  ['#12b5a5', msg('Teal')],
+  ['#22a7d8', msg('Sky')],
+  ['#6b7280', msg('Graphite')],
+  ['#c2a27a', msg('Sand')],
 ];
 
 /** The second accent that goes with a chosen one (kept if the person picked their own). */
@@ -53,12 +54,12 @@ export function AccentPicker({ design }: { design: DesignSettings }): ReactEleme
   const custom = !!chosen && !ACCENTS.some(([hex]) => hex === chosen);
   return (
     <div className="accent-picker">
-      <div className="accent-picker__row" role="radiogroup" aria-label="Accent colour">
+      <div className="accent-picker__row" role="radiogroup" aria-label={tr('Accent colour')}>
         <button
           role="radio"
           aria-checked={!chosen}
-          aria-label="Theme accent"
-          title="The theme’s own accent"
+          aria-label={tr('Theme accent')}
+          title={tr('The theme’s own accent')}
           className={`accent-swatch accent-swatch--theme ${!chosen ? 'is-selected' : ''}`}
           onClick={() => pick(null)}
         />
@@ -67,8 +68,8 @@ export function AccentPicker({ design }: { design: DesignSettings }): ReactEleme
             key={hex}
             role="radio"
             aria-checked={chosen === hex}
-            aria-label={`${name} accent`}
-            title={name}
+            aria-label={tr('{name} accent', { name: tr(name) })}
+            title={tr(name)}
             className={`accent-swatch ${chosen === hex ? 'is-selected' : ''}`}
             style={{ background: hex }}
             onClick={() => pick(hex)}
@@ -76,12 +77,12 @@ export function AccentPicker({ design }: { design: DesignSettings }): ReactEleme
         ))}
         <label
           className={`accent-swatch accent-swatch--any ${custom ? 'is-selected' : ''}`}
-          title="Any colour"
+          title={tr('Any colour')}
           style={custom ? { background: chosen } : undefined}
         >
           <input
             type="color"
-            aria-label="Any accent colour"
+            aria-label={tr('Any accent colour')}
             value={chosen && isHex(chosen) ? chosen : fill}
             onChange={(e) => pick(e.target.value)}
           />
@@ -91,8 +92,11 @@ export function AccentPicker({ design }: { design: DesignSettings }): ReactEleme
         <span className="accent-picker__sample" style={{ background: fill, color: ink }}>
           Aa
         </span>
-        Text on the accent: {ratio.toFixed(1)}:1 {ratio >= 4.5 ? '— readable (WCAG AA)' : ''}
-        {chosen && fill.toLowerCase() !== chosen ? ' · River adjusted the shade so text reads on it.' : ''}
+        {tr('Text on the accent: {ratio}:1', { ratio: ratio.toFixed(1) })}{' '}
+        {ratio >= 4.5 ? `— ${tr('readable (WCAG AA)')}` : ''}
+        {chosen && fill.toLowerCase() !== chosen
+          ? ` · ${tr('River adjusted the shade so text reads on it.')}`
+          : ''}
       </p>
     </div>
   );

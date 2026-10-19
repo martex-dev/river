@@ -5,6 +5,7 @@ import type { CommunityView } from '../../../../shared/ipc.ts';
 import { clockDateTime, clockTime } from '../../time.ts';
 import { useCommunity } from '../store.ts';
 import { Modal, can, memberOf } from './common.tsx';
+import { msg, tr, trn } from '../../i18n.ts';
 
 /** "live", "upcoming" or "past" at this moment. */
 export function eventPhase(
@@ -19,14 +20,15 @@ export function eventPhase(
 export function whenLabel(e: Pick<EventView, 'startsAt' | 'endsAt'>, now = Date.now()): string {
   const start = new Date(e.startsAt);
   const phase = eventPhase(e, now);
-  if (phase === 'live') return `Happening now · until ${clockTime(e.endsAt)}`;
-  if (phase === 'past') return `Ended ${clockDateTime(e.endsAt)}`;
+  if (phase === 'live') return tr('Happening now · until {time}', { time: clockTime(e.endsAt) });
+  if (phase === 'past') return tr('Ended {when}', { when: clockDateTime(e.endsAt) });
   const mins = Math.round((start.getTime() - now) / 60_000);
-  if (mins < 60) return `Starts in ${Math.max(1, mins)} min`;
+  if (mins < 60) return trn('Starts in {count} min', Math.max(1, mins));
   const today = new Date(now);
   const tomorrow = new Date(now + 86_400_000);
-  if (start.toDateString() === today.toDateString()) return `Today at ${clockTime(start)}`;
-  if (start.toDateString() === tomorrow.toDateString()) return `Tomorrow at ${clockTime(start)}`;
+  if (start.toDateString() === today.toDateString()) return tr('Today at {time}', { time: clockTime(start) });
+  if (start.toDateString() === tomorrow.toDateString())
+    return tr('Tomorrow at {time}', { time: clockTime(start) });
   return `${start.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}, ${clockTime(start)}`;
 }
 
@@ -50,6 +52,12 @@ export function useEvents(communityId: string): EventView[] | null {
   return events;
 }
 
+const PHASE_LABEL = {
+  live: msg('Happening now'),
+  upcoming: msg('Upcoming'),
+  past: msg('Past week'),
+} as const;
+
 export function EventsDialog({ community, me }: { community: CommunityView; me: string }): ReactElement {
   const s = useCommunity();
   const events = useEvents(community.id);
@@ -70,33 +78,33 @@ export function EventsDialog({ community, me }: { community: CommunityView; me: 
     items: (events ?? []).filter((e) => eventPhase(e, now) === phase),
   }));
   return (
-    <Modal title="Events" onClose={() => s.setModal(null)} wide>
+    <Modal title={tr('Events')} onClose={() => s.setModal(null)} wide>
       <div className="events__head">
-        <h2>Events in {community.name}</h2>
+        <h2>{tr('Events in {name}', { name: community.name })}</h2>
         {manage && (
           <button className="btn btn--primary" onClick={() => setEditing('new')}>
-            Create event
+            {tr('Create event')}
           </button>
         )}
       </div>
-      {events === null && <p className="muted">Loading…</p>}
+      {events === null && <p className="muted">{tr('Loading…')}</p>}
       {events?.length === 0 && (
         <div className="empty">
-          <p>No events yet.</p>
+          <p>{tr('No events yet.')}</p>
           <p className="muted small">
             {manage
-              ? 'Plan a game night, a study session or a call: everyone here can see it and say they are interested.'
-              : 'When someone plans one, it shows up here.'}
+              ? tr(
+                  'Plan a game night, a study session or a call: everyone here can see it and say they are interested.',
+                )
+              : tr('When someone plans one, it shows up here.')}
           </p>
         </div>
       )}
       {groups.map(
         (g) =>
           g.items.length > 0 && (
-            <section key={g.phase} aria-label={g.phase}>
-              <h3 className="events__group">
-                {g.phase === 'live' ? 'Happening now' : g.phase === 'upcoming' ? 'Upcoming' : 'Past week'}
-              </h3>
+            <section key={g.phase} aria-label={tr(PHASE_LABEL[g.phase])}>
+              <h3 className="events__group">{tr(PHASE_LABEL[g.phase])}</h3>
               {g.items.map((e) => (
                 <EventCard
                   key={e.id}
@@ -129,15 +137,17 @@ function EventCard(props: {
   return (
     <article className={`event-card ${e.canceled ? 'is-canceled' : ''} event-card--${phase}`}>
       <div className="event-card__when">
-        {phase === 'live' && !e.canceled && <span className="live-badge">LIVE</span>}
-        {e.canceled ? <strong>Cancelled</strong> : whenLabel(e)}
+        {phase === 'live' && !e.canceled && <span className="live-badge">{tr('LIVE')}</span>}
+        {e.canceled ? <strong>{tr('Cancelled')}</strong> : whenLabel(e)}
       </div>
       <h4 className="event-card__name">{e.name}</h4>
       {e.description && <p className="event-card__desc">{e.description}</p>}
       <div className="event-card__meta muted small">
         {channel ? `🔊 ${channel.name}` : e.place ? `📍 ${e.place}` : null}
         <span>
-          {e.interested.length} interested · by {memberOf(community, e.createdBy)?.name ?? 'someone'}
+          {trn('{count} interested · by {name}', e.interested.length, {
+            name: memberOf(community, e.createdBy)?.name ?? tr('someone'),
+          })}
         </span>
       </div>
       <div className="event-card__actions">
@@ -147,7 +157,7 @@ function EventCard(props: {
             aria-pressed={interested}
             onClick={() => void s.run({ a: 'eventInterest', eventId: e.id, on: !interested })}
           >
-            {interested ? '★ Interested' : '☆ Interested'}
+            {interested ? `★ ${tr('Interested')}` : `☆ ${tr('Interested')}`}
           </button>
         )}
         {channel && phase === 'live' && !e.canceled && (
@@ -159,28 +169,28 @@ function EventCard(props: {
               void s.joinVoice(channel.id, props.me);
             }}
           >
-            Join voice
+            {tr('Join voice')}
           </button>
         )}
         {props.manage && (
           <>
             <button className="btn btn--link" onClick={props.onEdit}>
-              Edit
+              {tr('Edit')}
             </button>
             <button
               className="btn btn--link"
               onClick={() => void s.run({ a: 'updateEvent', eventId: e.id, canceled: !e.canceled })}
             >
-              {e.canceled ? 'Restore' : 'Cancel event'}
+              {e.canceled ? tr('Restore') : tr('Cancel event')}
             </button>
             <button
               className="btn btn--link btn--danger"
               onClick={() =>
                 s.setModal({
                   kind: 'confirm',
-                  title: `Delete ${e.name}`,
-                  body: 'The event disappears for everyone. This cannot be undone.',
-                  action: 'Delete event',
+                  title: tr('Delete {name}', { name: e.name }),
+                  body: tr('The event disappears for everyone. This cannot be undone.'),
+                  action: tr('Delete event'),
                   run: async () => {
                     await s.run({ a: 'deleteEvent', eventId: e.id });
                     s.setModal({ kind: 'events', communityId: community.id });
@@ -188,7 +198,7 @@ function EventCard(props: {
                 })
               }
             >
-              Delete
+              {tr('Delete')}
             </button>
           </>
         )}
@@ -205,11 +215,11 @@ export function toLocalInput(iso: string): string {
 }
 
 const DURATIONS = [
-  { label: '30 minutes', ms: 30 * 60_000 },
-  { label: '1 hour', ms: 3600_000 },
-  { label: '2 hours', ms: 2 * 3600_000 },
-  { label: '3 hours', ms: 3 * 3600_000 },
-  { label: 'All day', ms: 24 * 3600_000 },
+  { label: msg('30 minutes'), ms: 30 * 60_000 },
+  { label: msg('1 hour'), ms: 3600_000 },
+  { label: msg('2 hours'), ms: 2 * 3600_000 },
+  { label: msg('3 hours'), ms: 3 * 3600_000 },
+  { label: msg('All day'), ms: 24 * 3600_000 },
 ];
 
 /** "1 hour 30 minutes", "2 days" — for a length that is not one of the usual choices. */
@@ -218,10 +228,12 @@ export function durationLabel(ms: number): string {
   const days = Math.floor(minutes / 1440);
   const hours = Math.floor((minutes % 1440) / 60);
   const mins = minutes % 60;
-  const part = (n: number, unit: string): string => (n ? `${n} ${unit}${n === 1 ? '' : 's'}` : '');
-  return (
-    [part(days, 'day'), part(hours, 'hour'), part(mins, 'minute')].filter(Boolean).join(' ') || '0 minutes'
-  );
+  const parts = [
+    days ? trn('{count} days', days) : '',
+    hours ? trn('{count} hours', hours) : '',
+    mins ? trn('{count} minutes', mins) : '',
+  ];
+  return parts.filter(Boolean).join(' ') || trn('{count} minutes', 0);
 }
 
 export function EventForm(props: {
@@ -288,7 +300,7 @@ export function EventForm(props: {
     else s.notify(res.message, 'error');
   };
   return (
-    <Modal title={e ? 'Edit event' : 'Create event'} onClose={props.onClose}>
+    <Modal title={e ? tr('Edit event') : tr('Create event')} onClose={props.onClose}>
       <form
         onSubmit={(ev) => {
           ev.preventDefault();
@@ -296,7 +308,7 @@ export function EventForm(props: {
         }}
       >
         <label className="textfield">
-          <span className="field__label">Event name</span>
+          <span className="field__label">{tr('Event name')}</span>
           <input
             autoFocus
             required
@@ -306,7 +318,7 @@ export function EventForm(props: {
           />
         </label>
         <label className="textfield">
-          <span className="field__label">Description</span>
+          <span className="field__label">{tr('Description')}</span>
           <textarea
             maxLength={1000}
             rows={3}
@@ -316,7 +328,7 @@ export function EventForm(props: {
         </label>
         <div className="event-form__row">
           <label className="textfield">
-            <span className="field__label">Starts</span>
+            <span className="field__label">{tr('Starts')}</span>
             <input
               type="datetime-local"
               required
@@ -324,50 +336,52 @@ export function EventForm(props: {
               onChange={(ev) => setStart(ev.target.value)}
               aria-invalid={!valid}
             />
-            {!valid && <span className="field__error">Choose a date and time.</span>}
+            {!valid && <span className="field__error">{tr('Choose a date and time.')}</span>}
           </label>
           <label className="textfield">
-            <span className="field__label">Lasts</span>
+            <span className="field__label">{tr('Lasts')}</span>
             <select value={duration} onChange={(ev) => setDuration(Number(ev.target.value))}>
               {durations.map((d) => (
                 <option key={d.ms} value={d.ms}>
-                  {d.label}
+                  {tr(d.label)}
                 </option>
               ))}
             </select>
           </label>
         </div>
         <label className="textfield">
-          <span className="field__label">Where</span>
+          <span className="field__label">{tr('Where')}</span>
           <select value={where} onChange={(ev) => setWhere(ev.target.value)}>
             {voice.map((c) => (
               <option key={c.id} value={c.id}>
                 🔊 {c.name}
               </option>
             ))}
-            <option value="place">Somewhere else…</option>
+            <option value="place">{tr('Somewhere else…')}</option>
           </select>
         </label>
         {where === 'place' && (
           <label className="textfield">
-            <span className="field__label">Place</span>
+            <span className="field__label">{tr('Place')}</span>
             <input
               maxLength={200}
-              placeholder="Our usual café, a game server…"
+              placeholder={tr('Our usual café, a game server…')}
               value={place}
               onChange={(ev) => setPlace(ev.target.value)}
             />
           </label>
         )}
         <p className="muted small">
-          Name, description and place are end-to-end encrypted; the server only sees when it starts and ends.
+          {tr(
+            'Name, description and place are end-to-end encrypted; the server only sees when it starts and ends.',
+          )}
         </p>
         <div className="modal__foot">
           <button type="button" className="btn btn--link" onClick={props.onClose}>
-            Back
+            {tr('Back')}
           </button>
           <button className="btn btn--primary" disabled={busy || !name.trim() || !valid}>
-            {e ? 'Save' : 'Create event'}
+            {e ? tr('Save') : tr('Create event')}
           </button>
         </div>
       </form>

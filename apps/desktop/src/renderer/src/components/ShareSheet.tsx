@@ -5,6 +5,7 @@ import { Modal } from '../community/ui/common.tsx';
 import { useCommunity } from '../community/store.ts';
 import { useDm } from '../dm/store.ts';
 import { useRiver } from '../store.ts';
+import { tr, trn } from '../i18n.ts';
 
 /**
  * "Share → River" on phones: another app hands River text or files, River asks
@@ -61,7 +62,7 @@ export function toIncoming(content: SharedContent): Incoming {
       .filter((f) => f && f.data instanceof Uint8Array)
       .map(
         (f) =>
-          new File([f.data as BlobPart], String(f.name).slice(0, 200) || 'shared file', {
+          new File([f.data as BlobPart], String(f.name).slice(0, 200) || tr('shared file'), {
             type: String(f.type),
           }),
       ),
@@ -105,7 +106,7 @@ export function ShareSheet(): ReactElement | null {
       .map((c) => ({
         key: `d:${c.riverId}`,
         label: c.name,
-        detail: 'Direct message',
+        detail: tr('Direct message'),
       }));
     const channels = communities.flatMap((community) =>
       community.channels
@@ -118,10 +119,21 @@ export function ShareSheet(): ReactElement | null {
   }, [conversations, communities, query]);
 
   if (!incoming) return null;
-  const what =
-    incoming.files.length > 0
-      ? `${incoming.files.length} ${incoming.files.length === 1 ? 'file' : 'files'}${incoming.text ? ' and text' : ''}`
-      : 'text';
+  const n = incoming.files.length;
+  const sharing =
+    n > 0 && incoming.text
+      ? trn(
+          'Sharing {count} files and text. Pick a conversation; it opens with this in the message box, and nothing is sent until you press Send.',
+          n,
+        )
+      : n > 0
+        ? trn(
+            'Sharing {count} files. Pick a conversation; it opens with this in the message box, and nothing is sent until you press Send.',
+            n,
+          )
+        : tr(
+            'Sharing text. Pick a conversation; it opens with this in the message box, and nothing is sent until you press Send.',
+          );
 
   const pick = (key: string): void => {
     useShare.getState().sendTo(key);
@@ -141,15 +153,12 @@ export function ShareSheet(): ReactElement | null {
   };
 
   return (
-    <Modal title="Send to…" onClose={() => useShare.getState().cancel()}>
-      <p className="muted small">
-        Sharing {what}. Pick a conversation; it opens with this in the message box, and nothing is sent until
-        you press Send.
-      </p>
+    <Modal title={tr('Send to…')} onClose={() => useShare.getState().cancel()}>
+      <p className="muted small">{sharing}</p>
       <input
         className="input"
-        placeholder="Search"
-        aria-label="Search conversations and channels"
+        placeholder={tr('Search')}
+        aria-label={tr('Search conversations and channels')}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
@@ -162,7 +171,7 @@ export function ShareSheet(): ReactElement | null {
             </button>
           </li>
         ))}
-        {targets.length === 0 && <li className="muted small">Nothing matches.</li>}
+        {targets.length === 0 && <li className="muted small">{tr('Nothing matches.')}</li>}
       </ul>
     </Modal>
   );

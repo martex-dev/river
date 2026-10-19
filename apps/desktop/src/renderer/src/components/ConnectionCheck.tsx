@@ -2,12 +2,15 @@ import { useState, type ReactElement } from 'react';
 import type { DiagnosticCheck } from '../../../shared/ipc.ts';
 import { runNetworkDiagnostics } from '../diagnostics.ts';
 import { uiStartup } from '../startup.ts';
+import { msg, tr } from '../i18n.ts';
 
 /**
  * Settings → System → Connection check: one button that tells people (and
  * whoever helps them) why River cannot connect or why calls fail, in plain
  * words, with a report they can copy. Nothing in it is content or secret.
  */
+const STATUS_WORD = { ok: msg('ok'), warn: msg('warning'), fail: msg('failed') } as const;
+
 export function ConnectionCheck(): ReactElement {
   const [checks, setChecks] = useState<DiagnosticCheck[] | null>(null);
   const [running, setRunning] = useState(false);
@@ -25,11 +28,13 @@ export function ConnectionCheck(): ReactElement {
       const ui = uiStartup.summary();
       setChecks([
         ...main,
-        ...(ui ? [{ id: 'startup-ui', label: 'Start-up (window)', status: 'ok' as const, detail: ui }] : []),
+        ...(ui
+          ? [{ id: 'startup-ui', label: tr('Start-up (window)'), status: 'ok' as const, detail: ui }]
+          : []),
         ...(await runNetworkDiagnostics(turn)),
       ]);
     } catch (err) {
-      setChecks([{ id: 'error', label: 'Check', status: 'fail', detail: (err as Error).message }]);
+      setChecks([{ id: 'error', label: tr('Check'), status: 'fail', detail: (err as Error).message }]);
     } finally {
       setRunning(false);
     }
@@ -37,7 +42,7 @@ export function ConnectionCheck(): ReactElement {
 
   const report = (): string =>
     [
-      'River connection check',
+      tr('River connection check'),
       ...(checks ?? []).map(
         (c) =>
           `${{ ok: 'OK  ', warn: 'WARN', fail: 'FAIL' }[c.status]} ${c.label}: ${c.detail}${c.advice ? `\n     ${c.advice}` : ''}`,
@@ -47,14 +52,14 @@ export function ConnectionCheck(): ReactElement {
   return (
     <section className="conn-check" aria-labelledby="conn-check-title">
       <h3 id="conn-check-title" className="field__label">
-        Connection check
+        {tr('Connection check')}
       </h3>
       <p className="muted small">
-        Can’t connect, or a call won’t work? Run this and send the report to whoever helps you.
+        {tr('Can’t connect, or a call won’t work? Run this and send the report to whoever helps you.')}
       </p>
       <div className="linkrow">
         <button className="btn" onClick={() => void run()} disabled={running}>
-          {running ? 'Checking…' : checks ? 'Check again' : 'Run connection check'}
+          {running ? tr('Checking…') : checks ? tr('Check again') : tr('Run connection check')}
         </button>
         {checks && (
           <button
@@ -65,18 +70,18 @@ export function ConnectionCheck(): ReactElement {
               })
             }
           >
-            {copied ? 'Copied' : 'Copy report'}
+            {copied ? tr('Copied') : tr('Copy report')}
           </button>
         )}
         <button className="btn btn--link" onClick={() => void window.river.diagnostics.openLogs()}>
-          Open log folder
+          {tr('Open log folder')}
         </button>
       </div>
       {checks && (
         <ul className="conn-check__list" aria-live="polite">
           {checks.map((c) => (
             <li key={c.id} className={`conn-check__item conn-check__item--${c.status}`}>
-              <span className="conn-check__mark" aria-label={c.status}>
+              <span className="conn-check__mark" aria-label={tr(STATUS_WORD[c.status])}>
                 {c.status === 'ok' ? '✓' : c.status === 'warn' ? '!' : '✕'}
               </span>
               <span>

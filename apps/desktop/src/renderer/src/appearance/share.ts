@@ -1,3 +1,4 @@
+import { msg } from '../../../shared/i18n/index.ts';
 import {
   MAX_THEME_CODE,
   sharedThemeSchema,
@@ -45,7 +46,7 @@ export function themeCode(design: DesignSettings, name: string): string {
   const shared: SharedTheme = {
     kind: 'river-theme',
     v: 1,
-    name: name.trim().slice(0, 48) || (themeById(base)?.name ?? 'Shared theme'),
+    name: name.trim().slice(0, 48) || (themeById(base)?.name ?? msg('Shared theme')),
     base,
     colors,
   };
@@ -57,20 +58,24 @@ export type ThemeCodeResult = { ok: true; theme: SharedTheme } | { ok: false; er
 /** Reads a pasted theme code (alone, or anywhere in a pasted message or link). */
 export function parseThemeCode(text: string): ThemeCodeResult {
   const at = text.indexOf(THEME_CODE_PREFIX);
-  if (at < 0) return { ok: false, error: 'That is not a River theme code (it starts with river-theme:).' };
+  if (at < 0)
+    return { ok: false, error: msg('That is not a River theme code (it starts with river-theme:).') };
   const code = /^[A-Za-z0-9_-]*/.exec(text.slice(at + THEME_CODE_PREFIX.length))![0];
   if (!code || code.length > MAX_THEME_CODE)
-    return { ok: false, error: 'That theme code is incomplete or too long.' };
+    return { ok: false, error: msg('That theme code is incomplete or too long.') };
   let parsed: unknown;
   try {
     parsed = JSON.parse(fromBase64Url(code));
   } catch {
-    return { ok: false, error: 'That theme code is damaged. Ask for it again.' };
+    return { ok: false, error: msg('That theme code is damaged. Ask for it again.') };
   }
   const result = sharedThemeSchema.safeParse(parsed);
-  if (!result.success) return { ok: false, error: 'That theme code is damaged or from a newer River.' };
+  if (!result.success) return { ok: false, error: msg('That theme code is damaged or from a newer River.') };
   if (!themeById(result.data.base))
-    return { ok: false, error: 'That theme is based on a theme this River does not have. Update River.' };
+    return {
+      ok: false,
+      error: msg('That theme is based on a theme this River does not have. Update River.'),
+    };
   return { ok: true, theme: result.data };
 }
 

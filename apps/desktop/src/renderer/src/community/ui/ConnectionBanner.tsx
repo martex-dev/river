@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { useCommunity } from '../store.ts';
+import { tr } from '../../i18n.ts';
 
 /** Banners wait this long so a quick blip doesn't flash on screen. */
 const GRACE_MS = 1500;
@@ -27,18 +28,18 @@ export function ConnectionBanner(): ReactElement | null {
       <span className="connection-banner__dot" aria-hidden="true" />
       <span>
         {connection === 'connecting'
-          ? 'Reconnecting…'
+          ? tr('Reconnecting…')
           : seconds > 0
-            ? `You're offline. Trying again in ${seconds}s.`
-            : "You're offline. Trying again…"}{' '}
-        <span className="muted small">Messages you send will wait and go out when you're back.</span>
+            ? tr("You're offline. Trying again in {seconds}s.", { seconds })
+            : tr("You're offline. Trying again…")}{' '}
+        <span className="muted small">{tr("Messages you send will wait and go out when you're back.")}</span>
       </span>
       {connection === 'offline' && (
         <button
           className="btn btn--ghost btn--small"
           onClick={() => void window.river.community.action({ a: 'reconnect' })}
         >
-          Retry now
+          {tr('Retry now')}
         </button>
       )}
     </div>

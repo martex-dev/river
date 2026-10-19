@@ -10,6 +10,7 @@ import {
 import { isHex } from './color.ts';
 import { pct, Slider } from './controls.tsx';
 import { preparePhoto } from './photo.ts';
+import { tr } from '../i18n.ts';
 import {
   GRADIENT_NAMES,
   PATTERN_NAMES,
@@ -28,19 +29,19 @@ interface Option {
 function options(current: Wallpaper): Option[] {
   const base = { ...DEFAULT_WALLPAPER, ...current };
   return [
-    { id: 'none', name: 'No wallpaper', value: { ...base, kind: 'none' } },
+    { id: 'none', name: tr('No wallpaper'), value: { ...base, kind: 'none' } },
     ...WALLPAPER_PATTERNS.map((pattern) => ({
       id: `pattern:${pattern}`,
-      name: `${PATTERN_NAMES[pattern]} doodles`,
+      name: tr('{name} doodles', { name: tr(PATTERN_NAMES[pattern]) }),
       value: { ...base, kind: 'pattern' as const, pattern },
     })),
     ...WALLPAPER_GRADIENTS.map((gradient) => ({
       id: `gradient:${gradient}`,
-      name: `${GRADIENT_NAMES[gradient]} gradient`,
+      name: tr('{name} gradient', { name: tr(GRADIENT_NAMES[gradient]) }),
       value: { ...base, kind: 'gradient' as const, gradient },
     })),
-    { id: 'solid', name: 'One colour', value: { ...base, kind: 'solid' } },
-    { id: 'photo', name: 'My photo', value: { ...base, kind: 'photo' } },
+    { id: 'solid', name: tr('One colour'), value: { ...base, kind: 'solid' } },
+    { id: 'photo', name: tr('My photo'), value: { ...base, kind: 'photo' } },
   ];
 }
 
@@ -72,11 +73,11 @@ export function WallpaperPicker(props: {
     setError(null);
     if (!f) return;
     if (props.photosLeft !== undefined && props.photosLeft <= 0 && !w.photo)
-      return setError('You have many chat photos already. Remove one from another chat first.');
+      return setError(tr('You have many chat photos already. Remove one from another chat first.'));
     setBusy(true);
     preparePhoto(f)
       .then((url) => set({ kind: 'photo', photo: url }))
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'That picture could not be read.'))
+      .catch((e: unknown) => setError(tr(e instanceof Error ? e.message : 'That picture could not be read.')))
       .finally(() => setBusy(false));
   };
   const swatch = (o: Option): string =>
@@ -84,7 +85,7 @@ export function WallpaperPicker(props: {
   const solidShown = c ? readableBehindText(w.color ?? c.base, c) : null;
   return (
     <div className="wp-picker">
-      <div className="wp-grid" role="radiogroup" aria-label="Wallpaper">
+      <div className="wp-grid" role="radiogroup" aria-label={tr('Wallpaper')}>
         {all.map((o) => (
           <button
             key={o.id}
@@ -117,15 +118,15 @@ export function WallpaperPicker(props: {
       {w.kind === 'pattern' && (
         <>
           <div className="design-row">
-            <span className="design-row__label">Colours under the doodles</span>
-            <div className="wp-chips" role="radiogroup" aria-label="Colours under the doodles">
+            <span className="design-row__label">{tr('Colours under the doodles')}</span>
+            <div className="wp-chips" role="radiogroup" aria-label={tr('Colours under the doodles')}>
               {WALLPAPER_GRADIENTS.map((g) => (
                 <button
                   key={g}
                   role="radio"
                   aria-checked={w.gradient === g}
-                  aria-label={GRADIENT_NAMES[g]}
-                  title={GRADIENT_NAMES[g]}
+                  aria-label={tr(GRADIENT_NAMES[g])}
+                  title={tr(GRADIENT_NAMES[g])}
                   className={`wp-chip ${w.gradient === g ? 'is-selected' : ''}`}
                   style={{
                     background: c
@@ -138,25 +139,25 @@ export function WallpaperPicker(props: {
             </div>
           </div>
           <div className="design-row">
-            <span className="design-row__label">Doodle colour</span>
+            <span className="design-row__label">{tr('Doodle colour')}</span>
             <span className="design-actions">
               <input
                 type="color"
-                aria-label="Doodle colour"
+                aria-label={tr('Doodle colour')}
                 value={w.color && isHex(w.color) ? w.color : (c?.accent ?? '#5865f2')}
                 onChange={(e) => set({ color: e.target.value })}
               />
               {w.color ? (
                 <button className="btn btn--link btn--small" onClick={() => set({ color: null })}>
-                  Use the accent
+                  {tr('Use the accent')}
                 </button>
               ) : (
-                <span className="muted small">the accent</span>
+                <span className="muted small">{tr('the accent')}</span>
               )}
             </span>
           </div>
           <Slider
-            label="Doodle strength"
+            label={tr('Doodle strength')}
             value={w.strength}
             min={0}
             max={1}
@@ -168,16 +169,16 @@ export function WallpaperPicker(props: {
       )}
       {w.kind === 'solid' && (
         <div className="design-row">
-          <span className="design-row__label">Colour</span>
+          <span className="design-row__label">{tr('Colour')}</span>
           <span className="design-actions">
             <input
               type="color"
-              aria-label="Wallpaper colour"
+              aria-label={tr('Wallpaper colour')}
               value={w.color && isHex(w.color) ? w.color : (c?.base ?? '#202225')}
               onChange={(e) => set({ color: e.target.value })}
             />
             {w.color && solidShown && solidShown !== w.color.toLowerCase() && (
-              <span className="muted small">Softened so text stays readable.</span>
+              <span className="muted small">{tr('Softened so text stays readable.')}</span>
             )}
           </span>
         </div>
@@ -190,12 +191,12 @@ export function WallpaperPicker(props: {
               disabled={busy}
               onClick={() => file.current?.click()}
             >
-              {busy ? 'Preparing…' : photo ? 'Choose another photo…' : 'Choose a photo…'}
+              {busy ? tr('Preparing…') : photo ? tr('Choose another photo…') : tr('Choose a photo…')}
             </button>
-            <span className="muted small">Stays on this device and is never uploaded.</span>
+            <span className="muted small">{tr('Stays on this device and is never uploaded.')}</span>
           </div>
           <Slider
-            label="Blur photo"
+            label={tr('Blur photo')}
             value={w.blur}
             min={0}
             max={24}
@@ -204,7 +205,7 @@ export function WallpaperPicker(props: {
             onChange={(blur) => set({ blur })}
           />
           <Slider
-            label="Dim photo"
+            label={tr('Dim photo')}
             value={w.dim}
             min={0.15}
             max={0.85}
@@ -212,7 +213,7 @@ export function WallpaperPicker(props: {
             format={pct}
             onChange={(dim) => set({ dim })}
           />
-          <p className="muted small">Messages get a backing over a photo, so they stay readable.</p>
+          <p className="muted small">{tr('Messages get a backing over a photo, so they stay readable.')}</p>
         </>
       )}
       {error && (

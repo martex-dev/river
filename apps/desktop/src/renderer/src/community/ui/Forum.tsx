@@ -4,6 +4,7 @@ import type { ChannelView, ChatMessage, CommunityView } from '../../../../shared
 import { relativeTime } from '../../time.ts';
 import { useCommunity } from '../store.ts';
 import { Avatar, MenuItem, Modal, Popover, can, hex } from './common.tsx';
+import { tr } from '../../i18n.ts';
 
 type Sort = 'activity' | 'newest';
 
@@ -85,7 +86,8 @@ export function ForumChannel(props: { community: CommunityView; channel: Channel
       useCommunity.setState({ pendingJump: null });
       const rootId = find();
       if (rootId) void useCommunity.getState().showThread(channel.id, rootId);
-      else useCommunity.getState().notify('Open the post to find that message; it could not be shown here.');
+      else
+        useCommunity.getState().notify(tr('Open the post to find that message; it could not be shown here.'));
     })();
     return () => {
       cancelled = true;
@@ -103,23 +105,23 @@ export function ForumChannel(props: { community: CommunityView; channel: Channel
       <div className="forum__bar">
         <input
           className="search"
-          placeholder="Search posts"
-          aria-label="Search posts"
+          placeholder={tr('Search posts')}
+          aria-label={tr('Search posts')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <select aria-label="Sort posts" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-          <option value="activity">Latest activity</option>
-          <option value="newest">Newest posts</option>
+        <select aria-label={tr('Sort posts')} value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+          <option value="activity">{tr('Latest activity')}</option>
+          <option value="newest">{tr('Newest posts')}</option>
         </select>
         {canPost && (
           <button className="btn btn--primary btn--small" onClick={() => setWriting(true)}>
-            New post
+            {tr('New post')}
           </button>
         )}
       </div>
       {channel.tags.length > 0 && (
-        <div className="forum__tags" role="group" aria-label="Filter by tag">
+        <div className="forum__tags" role="group" aria-label={tr('Filter by tag')}>
           {channel.tags.map((t) => (
             <button
               key={t}
@@ -137,12 +139,12 @@ export function ForumChannel(props: { community: CommunityView; channel: Channel
           <div className="forum__empty">
             <p className="muted">
               {messages.length === 0
-                ? 'No posts yet. Start the first conversation!'
-                : 'No posts match. Try another search or tag.'}
+                ? tr('No posts yet. Start the first conversation!')
+                : tr('No posts match. Try another search or tag.')}
             </p>
             {canPost && messages.length === 0 && (
               <button className="btn btn--primary" onClick={() => setWriting(true)}>
-                New post
+                {tr('New post')}
               </button>
             )}
           </div>
@@ -162,11 +164,11 @@ export function ForumChannel(props: { community: CommunityView; channel: Channel
             >
               <span className="forum-post__title">
                 {m.pinned && (
-                  <span aria-label="Pinned" title="Pinned">
+                  <span aria-label={tr('Pinned')} title={tr('Pinned')}>
                     📌{' '}
                   </span>
                 )}
-                {m.thread?.name ?? m.text.split('\n')[0]?.slice(0, 100) ?? 'Post'}
+                {m.thread?.name ?? m.text.split('\n')[0]?.slice(0, 100) ?? tr('Post')}
               </span>
               {(m.tags ?? []).length > 0 && (
                 <span className="forum-post__tags">
@@ -184,7 +186,7 @@ export function ForumChannel(props: { community: CommunityView; channel: Channel
                 <span className="muted">
                   · 💬 {m.thread?.count ?? 0} · {relativeTime(m.thread?.lastAt ?? m.sentAt)}
                 </span>
-                {m.thread?.archived && <span className="muted">· closed</span>}
+                {m.thread?.archived && <span className="muted">· {tr('closed')}</span>}
               </span>
             </button>
           );
@@ -198,7 +200,7 @@ export function ForumChannel(props: { community: CommunityView; channel: Channel
               void useCommunity.getState().run({ a: 'pin', messageId: menu.m.id, pinned: !menu.m.pinned });
             }}
           >
-            {menu.m.pinned ? 'Unpin post' : 'Pin post'}
+            {menu.m.pinned ? tr('Unpin post') : tr('Pin post')}
           </MenuItem>
           {menu.m.thread && (
             <MenuItem
@@ -212,7 +214,7 @@ export function ForumChannel(props: { community: CommunityView; channel: Channel
                 });
               }}
             >
-              {menu.m.thread.archived ? 'Reopen post' : 'Close post'}
+              {menu.m.thread.archived ? tr('Reopen post') : tr('Close post')}
             </MenuItem>
           )}
         </Popover>
@@ -250,7 +252,7 @@ function NewPostDialog(props: {
     }
   };
   return (
-    <Modal title={`New post in ${props.channel.name}`} onClose={props.onClose}>
+    <Modal title={tr('New post in {name}', { name: props.channel.name })} onClose={props.onClose}>
       <form
         className="create-channel"
         onSubmit={(e) => {
@@ -259,16 +261,16 @@ function NewPostDialog(props: {
         }}
       >
         <label className="textfield">
-          <span className="field__label">Title</span>
+          <span className="field__label">{tr('Title')}</span>
           <input autoFocus value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} />
         </label>
         <label className="textfield">
-          <span className="field__label">Message</span>
+          <span className="field__label">{tr('Message')}</span>
           <textarea value={text} rows={5} maxLength={4000} onChange={(e) => setText(e.target.value)} />
         </label>
         {props.channel.tags.length > 0 && (
           <fieldset className="forum__tags">
-            <legend className="field__label">Tags (up to 5)</legend>
+            <legend className="field__label">{tr('Tags (up to 5)')}</legend>
             {props.channel.tags.map((t) => (
               <button
                 key={t}
@@ -286,10 +288,10 @@ function NewPostDialog(props: {
         )}
         <div className="modal__foot">
           <button type="button" className="btn btn--link" onClick={props.onClose}>
-            Cancel
+            {tr('Cancel')}
           </button>
           <button className="btn btn--primary" disabled={!title.trim() || !text.trim() || busy}>
-            Post
+            {tr('Post')}
           </button>
         </div>
       </form>
@@ -304,7 +306,7 @@ export function ForumSettings({ channel }: { channel: ChannelView }): ReactEleme
   const save = (tags: string[]): void => void s.run({ a: 'updateChannel', channelId: channel.id, tags });
   return (
     <div className="forum-settings">
-      <div className="field__label">Post tags</div>
+      <div className="field__label">{tr('Post tags')}</div>
       <div className="forum__tags">
         {channel.tags.map((t) => (
           <span key={t} className="chip forum__tag">
@@ -312,7 +314,7 @@ export function ForumSettings({ channel }: { channel: ChannelView }): ReactEleme
             <button
               type="button"
               className="forum__tag-x"
-              aria-label={`Remove tag ${t}`}
+              aria-label={tr('Remove tag {name}', { name: t })}
               onClick={() => save(channel.tags.filter((x) => x !== t))}
             >
               ×
@@ -333,12 +335,12 @@ export function ForumSettings({ channel }: { channel: ChannelView }): ReactEleme
         <input
           value={draft}
           maxLength={24}
-          placeholder="Add a tag (e.g. Question)"
-          aria-label="New tag"
+          placeholder={tr('Add a tag (e.g. Question)')}
+          aria-label={tr('New tag')}
           onChange={(e) => setDraft(e.target.value)}
         />
         <button className="btn btn--small" disabled={!draft.trim() || channel.tags.length >= 20}>
-          Add
+          {tr('Add')}
         </button>
       </form>
     </div>

@@ -8,7 +8,7 @@ import {
   setBoostOutput,
   type BoostChain,
 } from '../peer-audio.ts';
-import { tr } from '../../i18n.ts';
+import { tr, trn } from '../../i18n.ts';
 import { SCREEN_QUALITIES, saveQuality, savedQuality, type ScreenQuality } from '../screen-quality.ts';
 import { StagePanel } from './Stage.tsx';
 import { MeetingBar, useMeetingView, useSpeakerFocus } from './Meeting.tsx';
@@ -78,12 +78,15 @@ export function VoiceChannel(props: {
     view,
   );
   const focused = focus && shownTiles.some((t) => t.id === focus) ? focus : auto;
-  const note = encryptionNote({
-    inCall: inThisCall,
-    others: remotes.length,
-    relayed: remotes.filter((r) => r.relayed).length,
-    large: inThisCall && call.largeRoom,
-  });
+  const note = encryptionNote(
+    {
+      inCall: inThisCall,
+      others: remotes.length,
+      relayed: remotes.filter((r) => r.relayed).length,
+      large: inThisCall && call.largeRoom,
+    },
+    tr,
+  );
 
   return (
     <div className="voice">
@@ -93,7 +96,7 @@ export function VoiceChannel(props: {
         </span>
         <strong>{channel.name}</strong>
         <span className="chat__topic">
-          {participants.length} in channel · {note}
+          {trn('{count} in channel', participants.length)} · {note}
         </span>
       </header>
 
@@ -118,20 +121,23 @@ export function VoiceChannel(props: {
           <h2>{channel.name}</h2>
           <p className="muted">
             {participants.length
-              ? `${participants.map((id) => nameOf(community, id)).join(', ')} ${participants.length === 1 ? 'is' : 'are'} here.`
-              : 'Nobody is here yet.'}
-            {channel.userLimit > 0 && ` ${participants.length} of ${channel.userLimit} places taken.`}
+              ? trn('{names} are here.', participants.length, {
+                  names: participants.map((id) => nameOf(community, id)).join(', '),
+                })
+              : tr('Nobody is here yet.')}
+            {channel.userLimit > 0 &&
+              ` ${tr('{taken} of {limit} places taken.', { taken: participants.length, limit: channel.userLimit })}`}
           </p>
           {canConnect && full ? (
             <button className="btn btn--primary" disabled>
-              Channel is full
+              {tr('Channel is full')}
             </button>
           ) : canConnect ? (
             <button className="btn btn--primary" onClick={() => void s.joinVoice(channel.id, me)}>
-              Join voice
+              {tr('Join voice')}
             </button>
           ) : (
-            <p className="muted small">You do not have permission to connect to this channel.</p>
+            <p className="muted small">{tr('You do not have permission to connect to this channel.')}</p>
           )}
           {s.callError && <p className="field__error">{s.callError}</p>}
         </div>
@@ -160,7 +166,7 @@ export function VoiceChannel(props: {
               t.self ? (
                 <Tile
                   key={t.id}
-                  label={`${meMember?.name ?? 'You'} (you)`}
+                  label={`${meMember?.name ?? tr('You')} ${tr('(you)')}`}
                   id={me}
                   avatar={meMember?.avatar ?? null}
                   muted={!call.transmitting}
@@ -207,12 +213,12 @@ export function VoiceChannel(props: {
             <button
               className={`round-btn ${call.localTrack('camera') ? 'round-btn--on' : ''}`}
               aria-label={call.localTrack('camera') ? tr('Camera off') : tr('Camera on')}
-              title={call.localTrack('camera') ? 'Turn camera off' : 'Turn camera on'}
+              title={call.localTrack('camera') ? tr('Turn camera off') : tr('Turn camera on')}
               disabled={!canStream}
               onClick={() =>
                 void call
                   .setCamera(!call.localTrack('camera'))
-                  .catch(() => s.notify('Could not start your camera.', 'error'))
+                  .catch(() => s.notify(tr('Could not start your camera.'), 'error'))
               }
             >
               <CameraIcon />
@@ -223,7 +229,7 @@ export function VoiceChannel(props: {
               <button
                 className={`round-btn ${call.localTrack('screen') ? 'round-btn--on' : ''}`}
                 aria-label={call.localTrack('screen') ? tr('Stop sharing') : tr('Share screen')}
-                title={call.localTrack('screen') ? 'Stop sharing' : 'Share your screen'}
+                title={call.localTrack('screen') ? tr('Stop sharing') : tr('Share your screen')}
                 disabled={!canStream}
                 onClick={() => {
                   if (call.localTrack('screen')) {
@@ -241,12 +247,12 @@ export function VoiceChannel(props: {
             {channel.prioritySpeakers?.includes(me) && (
               <button
                 className={`round-btn ${call.priority ? 'round-btn--on' : ''}`}
-                aria-label={call.priority ? 'Priority speaker on' : 'Priority speaker off'}
+                aria-label={call.priority ? tr('Priority speaker on') : tr('Priority speaker off')}
                 aria-pressed={call.priority}
                 title={
                   call.priority
-                    ? 'Priority speaker is on: others are turned down while you talk. Click to turn off.'
-                    : 'Priority speaker: turn others down while you talk'
+                    ? tr('Priority speaker is on: others are turned down while you talk. Click to turn off.')
+                    : tr('Priority speaker: turn others down while you talk')
                 }
                 onClick={() => call.setPriority(!call.priority)}
               >
@@ -256,7 +262,7 @@ export function VoiceChannel(props: {
             <button
               className="round-btn round-btn--danger"
               aria-label={tr('Leave')}
-              title="Disconnect"
+              title={tr('Disconnect')}
               onClick={() => void s.leaveVoice()}
             >
               <PhoneOffIcon />
@@ -266,33 +272,34 @@ export function VoiceChannel(props: {
       )}
 
       {picker && call && (
-        <div className="picker" role="dialog" aria-label="Choose what to share">
+        <div className="picker" role="dialog" aria-label={tr('Choose what to share')}>
           <div className="picker__card glass">
-            <h2 className="card__title">Share your screen</h2>
+            <h2 className="card__title">{tr('Share your screen')}</h2>
             {picker.length === 0 && (
               <p className="muted">
-                River could not find any screen or window to share. On Linux with Wayland, screen sharing
-                needs PipeWire and the desktop portal.
+                {tr(
+                  'River could not find any screen or window to share. On Linux with Wayland, screen sharing needs PipeWire and the desktop portal.',
+                )}
               </p>
             )}
-            <div className="segmented picker__quality" role="radiogroup" aria-label="Quality">
+            <div className="segmented picker__quality" role="radiogroup" aria-label={tr('Quality')}>
               {SCREEN_QUALITIES.map((q) => (
                 <button
                   key={q.id}
                   role="radio"
                   aria-checked={quality === q.id}
-                  title={q.hint}
+                  title={tr(q.hint)}
                   className={`segmented__item ${quality === q.id ? 'is-active' : ''}`}
                   onClick={() => {
                     setQuality(q.id);
                     saveQuality(q.id);
                   }}
                 >
-                  {q.label}
+                  {tr(q.label)}
                 </button>
               ))}
             </div>
-            <p className="muted small">{SCREEN_QUALITIES.find((q) => q.id === quality)?.hint}</p>
+            <p className="muted small">{tr(SCREEN_QUALITIES.find((q) => q.id === quality)?.hint ?? '')}</p>
             <div className="picker__grid">
               {picker.map((src) => (
                 <button
@@ -316,7 +323,7 @@ export function VoiceChannel(props: {
               ))}
             </div>
             <button className="btn btn--ghost" onClick={() => setPicker(null)}>
-              Cancel
+              {tr('Cancel')}
             </button>
           </div>
         </div>
@@ -345,8 +352,8 @@ export function SpeakerButton(props: { initial: boolean; call: object }): ReactE
     <button
       className={`round-btn ${on ? 'round-btn--on' : ''}`}
       aria-pressed={on}
-      aria-label={on ? 'Speaker on' : 'Speaker off'}
-      title={on ? 'Playing through the loudspeaker' : 'Playing through the earpiece, or your headset'}
+      aria-label={on ? tr('Speaker on') : tr('Speaker off')}
+      title={on ? tr('Playing through the loudspeaker') : tr('Playing through the earpiece, or your headset')}
       onClick={() => {
         const next = !on;
         setOn(next);
@@ -409,7 +416,7 @@ function Tile(props: {
         <div className="tile__avatar">
           <Avatar
             id={props.id}
-            name={props.label.replace(' (you)', '')}
+            name={props.label.replace(` ${tr('(you)')}`, '')}
             avatar={props.avatar}
             size={84}
             speaking={props.speaking}
@@ -421,9 +428,9 @@ function Tile(props: {
         {props.deafened && <HeadphonesOffIcon size={14} />}
         {props.speaking && <SpeakingWaves />}
         {props.label}
-        {props.muted ? ' · muted' : ''}
+        {props.muted ? ` · ${tr('muted')}` : ''}
       </span>
-      {props.screen && <span className="live-badge tile__live">LIVE</span>}
+      {props.screen && <span className="live-badge tile__live">{tr('LIVE')}</span>}
       {props.hand && <HandBadge />}
     </div>
   );
@@ -432,7 +439,7 @@ function Tile(props: {
 /** ✋ on the tile of someone whose hand is up (2.13). */
 function HandBadge(): ReactElement {
   return (
-    <span className="tile__hand" title="Hand raised" role="img" aria-label="Hand raised">
+    <span className="tile__hand" title={tr('Hand raised')} role="img" aria-label={tr('Hand raised')}>
       ✋
     </span>
   );
@@ -460,12 +467,12 @@ function useLinkStats(call: VoiceCall | null): Record<string, LinkStats> {
 function LinkBars({ link }: { link: LinkStats | undefined }): ReactElement | null {
   if (!link) return null;
   const q = linkQuality(link);
-  const text = describeLink(link);
+  const text = describeLink(link, tr);
   return (
     <span
       className={`link-bars link-bars--${q ?? link.path}`}
       title={text}
-      aria-label={`Connection: ${text}`}
+      aria-label={tr('Connection: {text}', { text })}
       role="img"
     >
       {link.path === 'server' ? (
@@ -509,7 +516,7 @@ function RemoteTile(props: {
 }): ReactElement {
   const { peer, community } = props;
   const member = memberOf(community, peer.id);
-  const label = member?.name ?? 'Someone';
+  const label = member?.name ?? tr('Someone');
   const state = community.voiceStates[peer.id];
   // Relayed voice works while the direct connection is still being set up.
   // A join takes a moment to connect (the server carries voice after 1.5 s if the direct way is
@@ -530,7 +537,9 @@ function RemoteTile(props: {
         props.onClick();
       }}
       title={
-        peer.screenOn ? 'Alt+click (or click in fullscreen) to point at something on their screen' : undefined
+        peer.screenOn
+          ? tr('Alt+click (or click in fullscreen) to point at something on their screen')
+          : undefined
       }
     >
       {peer.screenOn && peer.screen ? (
@@ -548,17 +557,17 @@ function RemoteTile(props: {
         {(state?.deafened || state?.serverDeafened) && <HeadphonesOffIcon size={14} />}
         {props.speaking && <SpeakingWaves />}
         {label}
-        {peer.muted ? ' · muted' : ''}
-        {peer.relayed ? ' · via server' : ''}
+        {peer.muted ? ` · ${tr('muted')}` : ''}
+        {peer.relayed ? ` · ${tr('via server')}` : ''}
         {/* What matters is whether their voice reaches you: a direct connection does not care that
             their link to the server blipped; relayed voice does. */}
         {connecting
-          ? ` · ${peer.reconnecting ? 'reconnecting…' : 'connecting…'}`
+          ? ` · ${peer.reconnecting ? tr('reconnecting…') : tr('connecting…')}`
           : peer.relayed && state?.reconnecting
-            ? ' · reconnecting…'
+            ? ` · ${tr('reconnecting…')}`
             : ''}
       </span>
-      {peer.screenOn && <span className="live-badge tile__live">LIVE</span>}
+      {peer.screenOn && <span className="live-badge tile__live">{tr('LIVE')}</span>}
       {peer.hand ? <HandBadge /> : null}
     </div>
   );
@@ -669,7 +678,13 @@ function tileControls(label: string, speaking: boolean, focused: boolean, onClic
     role: 'button',
     tabIndex: 0,
     'aria-pressed': focused,
-    'aria-label': `${label}${speaking ? ', speaking' : ''}. ${focused ? 'Shown large' : 'Show large'}; double-click for fullscreen.`,
+    'aria-label': speaking
+      ? focused
+        ? tr('{name}, speaking. Shown large; double-click for fullscreen.', { name: label })
+        : tr('{name}, speaking. Show large; double-click for fullscreen.', { name: label })
+      : focused
+        ? tr('{name}. Shown large; double-click for fullscreen.', { name: label })
+        : tr('{name}. Show large; double-click for fullscreen.', { name: label }),
     onClick,
     onDoubleClick: (e: MouseEvent<HTMLElement>) => fullscreen(e.currentTarget),
     onKeyDown: (e: KeyboardEvent<HTMLElement>) => {

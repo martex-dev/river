@@ -6,6 +6,19 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Languages: the rest of River now speaks all eleven languages: Messages, the
+  community chat, Appearance (themes, accents, wallpapers, effects), one-to-one
+  and group calls, linking a device and the setup cards, phone reachability,
+  community events, forums, polls, threads, the member rail, voice channels,
+  stages and meetings, the emoji and GIF pickers, forwarding, saved messages,
+  notification menus and sounds, slash commands, keyboard shortcuts, voice
+  messages, saved replies and tags, the connection check, audit-log summaries,
+  errors with names or numbers in them, backup errors, default names, the taskbar
+  unread badge, the "River could not start" dialog (in the system's language) and
+  Android's "River restarted its core" notice.
+
 ## [2.21.4] - 2026-10-19
 
 **Most of River in your language: Friends, Feed, Files, Admin, community settings, Settings, errors, and the phone's own notifications and call screens.**

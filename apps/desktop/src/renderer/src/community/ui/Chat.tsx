@@ -8,7 +8,7 @@ import { newSince } from '../../components/unread.ts';
 import { isPhone } from '../../../../shared/platform.ts';
 import { attempt } from '../attempt.ts';
 import { useSharedFiles, useSharedText } from '../../components/ShareSheet.tsx';
-import { tr } from '../../i18n.ts';
+import { msg, rich, tr, trn } from '../../i18n.ts';
 import { MediaGallery } from './MediaGallery.tsx';
 import { setFollowing } from '../thread-follow.ts';
 import { muteLength, parseSlash, slashText, suggestCommands, type ParsedSlash } from '../slash.ts';
@@ -145,7 +145,7 @@ export function TextChannel(props: {
     // A different channel starts quiet: its history is not "new".
     const before = lastShown.current?.channelId === channel.id ? lastShown.current.message : undefined;
     lastShown.current = { channelId: channel.id, message: newest };
-    const text = announcement(before, newest);
+    const text = announcement(before, newest, tr, trn);
     if (text) setSpoken(text);
   }, [channel.id, newest]);
   const [atBottom, setAtBottom] = useState(true);
@@ -174,8 +174,9 @@ export function TextChannel(props: {
   const typingNow = phone ? typingNames(channel.id, community, me) : [];
   const canAttach = can(channel.permissions, Permission.ATTACH_FILES | Permission.SEND_MESSAGES);
   const addFiles = (files: Iterable<File>): void => {
-    if (!canAttach) return s.notify('You cannot attach files in this channel.', 'error');
-    if (add(files) > 0) s.notify(`You can attach up to ${MAX_PENDING} files to one message.`, 'error');
+    if (!canAttach) return s.notify(tr('You cannot attach files in this channel.'), 'error');
+    if (add(files) > 0)
+      s.notify(tr('You can attach up to {count} files to one message.', { count: MAX_PENDING }), 'error');
   };
   // Shared from another app ("Share → River" on phones) into this channel.
   useSharedFiles(`c:${channel.id}`, addFiles);
@@ -246,7 +247,7 @@ export function TextChannel(props: {
         const found = (useCommunity.getState().messages[channel.id] ?? []).some((x) => x.id === target);
         useCommunity.setState({ pendingJump: null });
         if (found) window.setTimeout(() => jumpTo(target), 80);
-        else useCommunity.getState().notify('That message is too far back to show.');
+        else useCommunity.getState().notify(tr('That message is too far back to show.'));
       })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -273,19 +274,19 @@ export function TextChannel(props: {
       {dragging && (
         <div className="drop-zone" aria-hidden="true">
           <div className="drop-zone__card">
-            <strong>Upload to #{channel.name}</strong>
-            <span className="muted small">Files are encrypted on your device before upload.</span>
+            <strong>{tr('Upload to #{name}', { name: channel.name })}</strong>
+            <span className="muted small">{tr('Files are encrypted on your device before upload.')}</span>
           </div>
         </div>
       )}
       {phone && (
         <header className="chat__head pchat-head">
-          <button className="pchat-head__back" aria-label="Back" onClick={() => phonePop()}>
+          <button className="pchat-head__back" aria-label={tr('Back')} onClick={() => phonePop()}>
             <BackIcon size={26} />
           </button>
           <button
             className="pchat-head__who"
-            aria-label={`${channel.name}, member list`}
+            aria-label={tr('{name}, member list', { name: channel.name })}
             onClick={() => useCommunity.setState({ showMembers: !s.showMembers })}
           >
             <span className="pchat-head__glyph" aria-hidden="true">
@@ -295,24 +296,24 @@ export function TextChannel(props: {
               <strong>{channel.name}</strong>
               <span className={`pchat-head__status ${typingNow.length ? 'is-live' : ''}`}>
                 {typingNow.length === 1
-                  ? `${typingNow[0]} is typing…`
+                  ? tr('{name} is typing…', { name: typingNow[0]! })
                   : typingNow.length > 1
-                    ? `${typingNow.length} people are typing…`
-                    : `${community.name} · ${community.members.length} ${community.members.length === 1 ? 'member' : 'members'}`}
+                    ? trn('{count} people are typing…', typingNow.length)
+                    : `${community.name} · ${trn('{count} members', community.members.length)}`}
               </span>
             </span>
           </button>
           <span className="pchat-head__actions">
             <button
               className={`pchat-head__icon ${s.showSearch ? 'is-on' : ''}`}
-              aria-label="Search"
+              aria-label={tr('Search')}
               onClick={() => togglePanel('search')}
             >
               <SearchIcon size={22} />
             </button>
             <button
               className="pchat-head__icon"
-              aria-label="Channel options"
+              aria-label={tr('Channel options')}
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
                 setHeadMenu({ x: r.right - 220, y: r.bottom + 4 });
@@ -332,7 +333,7 @@ export function TextChannel(props: {
               togglePanel('pins');
             }}
           >
-            Pinned messages
+            {tr('Pinned messages')}
           </MenuItem>
           <MenuItem
             icon={<span aria-hidden="true">🔖</span>}
@@ -341,7 +342,7 @@ export function TextChannel(props: {
               togglePanel('saved');
             }}
           >
-            Saved messages
+            {tr('Saved messages')}
           </MenuItem>
           <MenuItem
             icon={<UsersIcon size={16} />}
@@ -350,7 +351,7 @@ export function TextChannel(props: {
               useCommunity.setState({ showMembers: !s.showMembers });
             }}
           >
-            Member list
+            {tr('Member list')}
           </MenuItem>
           {can(community.permissions, Permission.CREATE_INVITE) && (
             <MenuItem
@@ -360,7 +361,7 @@ export function TextChannel(props: {
                 s.setModal({ kind: 'invite', communityId: community.id });
               }}
             >
-              Invite people
+              {tr('Invite people')}
             </MenuItem>
           )}
           {channel.media && (
@@ -370,7 +371,7 @@ export function TextChannel(props: {
                 setView(view === 'gallery' ? 'chat' : 'gallery');
               }}
             >
-              {view === 'gallery' ? '💬 Show as chat' : '🖼️ Show as gallery'}
+              {view === 'gallery' ? `💬 ${tr('Show as chat')}` : `🖼️ ${tr('Show as gallery')}`}
             </MenuItem>
           )}
           <MenuItem
@@ -379,7 +380,7 @@ export function TextChannel(props: {
               setWallpaperOpen(true);
             }}
           >
-            🎨 Wallpaper
+            🎨 {tr('Wallpaper')}
           </MenuItem>
         </Popover>
       )}
@@ -405,8 +406,8 @@ export function TextChannel(props: {
             {channel.media && (
               <button
                 className={`icon-btn ${view === 'gallery' ? 'is-on' : ''}`}
-                aria-label={view === 'gallery' ? 'Show as chat' : 'Show as gallery'}
-                title={view === 'gallery' ? 'Show as chat' : 'Show as gallery'}
+                aria-label={view === 'gallery' ? tr('Show as chat') : tr('Show as gallery')}
+                title={view === 'gallery' ? tr('Show as chat') : tr('Show as gallery')}
                 onClick={() => setView(view === 'gallery' ? 'chat' : 'gallery')}
               >
                 {view === 'gallery' ? '💬' : '🖼️'}
@@ -415,8 +416,8 @@ export function TextChannel(props: {
             {can(community.permissions, Permission.CREATE_INVITE) && (
               <button
                 className="icon-btn"
-                aria-label="Invite people"
-                title="Invite people"
+                aria-label={tr('Invite people')}
+                title={tr('Invite people')}
                 onClick={() => s.setModal({ kind: 'invite', communityId: community.id })}
               >
                 <UserPlusIcon size={18} />
@@ -424,40 +425,40 @@ export function TextChannel(props: {
             )}
             <button
               className={`icon-btn ${s.showSearch ? 'is-on' : ''}`}
-              aria-label="Search"
-              title="Search this community"
+              aria-label={tr('Search')}
+              title={tr('Search this community')}
               onClick={() => togglePanel('search')}
             >
               🔍
             </button>
             <button
               className={`icon-btn ${s.showSaved ? 'is-on' : ''}`}
-              aria-label="Saved messages"
-              title="Saved messages"
+              aria-label={tr('Saved messages')}
+              title={tr('Saved messages')}
               onClick={() => togglePanel('saved')}
             >
               🔖
             </button>
             <button
               className={`icon-btn ${s.showPins ? 'is-on' : ''}`}
-              aria-label="Pinned messages"
-              title="Pinned messages"
+              aria-label={tr('Pinned messages')}
+              title={tr('Pinned messages')}
               onClick={() => togglePanel('pins')}
             >
               <PinIcon size={18} />
             </button>
             <button
               className={`icon-btn ${s.showMembers ? 'is-on' : ''}`}
-              aria-label="Member list"
-              title="Show member list"
+              aria-label={tr('Member list')}
+              title={tr('Show member list')}
               onClick={() => useCommunity.setState({ showMembers: !s.showMembers })}
             >
               <UsersIcon size={18} />
             </button>
             <button
               className="icon-btn"
-              aria-label="Channel wallpaper"
-              title="Wallpaper for this channel"
+              aria-label={tr('Channel wallpaper')}
+              title={tr('Wallpaper for this channel')}
               onClick={() => setWallpaperOpen(true)}
             >
               <span aria-hidden="true">🎨</span>
@@ -471,12 +472,13 @@ export function TextChannel(props: {
       {firstNew && (
         <div className="chat__new-bar" role="status">
           <button className="chat__new-bar-jump" onClick={() => jumpTo(firstNew.id)}>
-            {newCount} new {newCount === 1 ? 'message' : 'messages'} since{' '}
             {/* Unread since an earlier day: that day too, not only a time that reads like today's. */}
-            {isToday(dividerAfter!) ? timeOf(dividerAfter!) : clockDateTime(dividerAfter!)}
+            {trn('{count} new messages since {when}', newCount, {
+              when: isToday(dividerAfter!) ? timeOf(dividerAfter!) : clockDateTime(dividerAfter!),
+            })}
           </button>
           <button className="chat__new-bar-read" onClick={() => useCommunity.setState({ divider: null })}>
-            Mark as read
+            {tr('Mark as read')}
           </button>
         </div>
       )}
@@ -541,9 +543,10 @@ export function TextChannel(props: {
             <div className="chat__welcome-icon">
               <HashIcon size={34} />
             </div>
-            <h2>Welcome to #{channel.name}!</h2>
+            <h2>{tr('Welcome to #{name}!', { name: channel.name })}</h2>
             <p className="muted">
-              This is the start of the #{channel.name} channel.{channel.topic ? ` ${channel.topic}` : ''}
+              {tr('This is the start of the #{name} channel.', { name: channel.name })}
+              {channel.topic ? ` ${channel.topic}` : ''}
             </p>
             {loaded && messages.length === 0 && <WelcomeActions community={community} channel={channel} />}
           </div>
@@ -566,7 +569,7 @@ export function TextChannel(props: {
                   </div>
                 )}
                 {m.id === firstNew?.id && (
-                  <div className="chat__new" role="separator" aria-label="New messages">
+                  <div className="chat__new" role="separator" aria-label={tr('New messages')}>
                     <span>{tr('New')}</span>
                   </div>
                 )}
@@ -746,11 +749,11 @@ function MessageView(props: {
   const stamp = phone ? (
     <span className="msg__stamp">
       {m.pinned && (
-        <span className="msg__stamp-flag" role="img" aria-label="Pinned">
+        <span className="msg__stamp-flag" role="img" aria-label={tr('Pinned')}>
           📌
         </span>
       )}
-      {m.editedAt && <span className="msg__stamp-edited">edited</span>}
+      {m.editedAt && <span className="msg__stamp-edited">{tr('edited')}</span>}
       <time dateTime={m.sentAt}>{timeOf(m.sentAt)}</time>
     </span>
   ) : null;
@@ -770,9 +773,11 @@ function MessageView(props: {
     else
       s.setModal({
         kind: 'confirm',
-        title: 'Delete message',
-        body: 'Are you sure you want to delete this message? (Tip: hold Shift while clicking delete to skip this.)',
-        action: 'Delete',
+        title: tr('Delete message'),
+        body: tr(
+          'Are you sure you want to delete this message? (Tip: hold Shift while clicking delete to skip this.)',
+        ),
+        action: tr('Delete'),
         run: go,
       });
   };
@@ -809,7 +814,7 @@ function MessageView(props: {
   const { onClickCapture: guardClick, ...touch } = gestures;
   /** Starts a thread on this message and opens it — only once it exists. */
   const createThread = (): void => {
-    const name = (m.text.split('\n')[0] ?? '').slice(0, 40).trim() || 'Thread';
+    const name = (m.text.split('\n')[0] ?? '').slice(0, 40).trim() || tr('Thread');
     void attempt({ a: 'createThread', channelId: channel.id, messageId: m.id, name }).then((ok) => {
       if (!ok) return;
       setFollowing(m.id, true);
@@ -845,7 +850,7 @@ function MessageView(props: {
               <span className="msg__reply-text">{replyPreview(props.replied)}</span>
             </>
           ) : (
-            <span className="muted">Original message was deleted or is older</span>
+            <span className="muted">{tr('Original message was deleted or is older')}</span>
           )}
         </button>
       ) : null}
@@ -854,7 +859,7 @@ function MessageView(props: {
           <input
             type="checkbox"
             className="msg__select"
-            aria-label={`Select message from ${m.senderName}`}
+            aria-label={tr('Select message from {name}', { name: m.senderName })}
             checked={selected}
             readOnly
           />
@@ -868,7 +873,7 @@ function MessageView(props: {
             <button
               type="button"
               className="msg__avatar-btn"
-              aria-label={`${m.senderName}'s profile`}
+              aria-label={tr('Profile of {name}', { name: m.senderName })}
               onClick={openProfile}
             >
               <Avatar id={m.webhook ?? m.sender} name={m.senderName} avatar={member?.avatar} size={38} />
@@ -889,26 +894,28 @@ function MessageView(props: {
               {m.webhook && (
                 <span
                   className="tag-badge"
-                  title={`Posted through a webhook made by ${memberOf(community, m.sender)?.name ?? 'someone who left'}`}
+                  title={tr('Posted through a webhook made by {name}', {
+                    name: memberOf(community, m.sender)?.name ?? tr('someone who left'),
+                  })}
                 >
-                  WEBHOOK
+                  {tr('WEBHOOK')}
                 </span>
               )}
               {member?.roleIcon && (
-                <span className="role-icon" title="Role icon" aria-hidden="true">
+                <span className="role-icon" title={tr('Role icon')} aria-hidden="true">
                   {member.roleIcon}
                 </span>
               )}
               <time
                 className="muted small msg__time"
                 dateTime={m.sentAt}
-                title={`${fullWhen(m.sentAt)} · click to copy a link to this message`}
+                title={`${fullWhen(m.sentAt)} · ${tr('click to copy a link to this message')}`}
                 onClick={copyLink}
               >
                 {messageWhen(m.sentAt)}
               </time>
               {m.pinned && (
-                <span className="msg__pinned" title="Pinned">
+                <span className="msg__pinned" title={tr('Pinned')}>
                   <PinIcon size={12} />
                 </span>
               )}
@@ -920,9 +927,9 @@ function MessageView(props: {
             <div className={`msg__text ${jumbo ? 'msg__text--jumbo' : ''}`}>
               {filtered && !canManage && !revealed ? (
                 <span className="msg__filtered muted">
-                  Hidden by this community&apos;s word filter.{' '}
+                  {tr("Hidden by this community's word filter.")}{' '}
                   <button className="btn btn--link btn--small" onClick={() => setRevealed(true)}>
-                    Show anyway
+                    {tr('Show anyway')}
                   </button>
                 </span>
               ) : (
@@ -935,9 +942,9 @@ function MessageView(props: {
               {filtered && canManage && (
                 <span
                   className="chip msg__filter-chip"
-                  title={`Contains “${filtered}”, which the word filter hides`}
+                  title={tr('Contains “{word}”, which the word filter hides', { word: filtered })}
                 >
-                  filtered word
+                  {tr('filtered word')}
                 </span>
               )}
               {long && (
@@ -963,11 +970,9 @@ function MessageView(props: {
             <button className="thread-summary" onClick={() => void s.showThread(channel.id, m.id)}>
               <span aria-hidden="true">🧵</span>
               <strong>{m.thread.name}</strong>
-              <span>
-                {m.thread.count} {m.thread.count === 1 ? 'reply' : 'replies'}
-              </span>
+              <span>{trn('{count} replies', m.thread.count)}</span>
               {m.thread.lastAt && <span className="muted small">· {timeOf(m.thread.lastAt)}</span>}
-              {m.thread.archived && <span className="chip">Archived</span>}
+              {m.thread.archived && <span className="chip">{tr('Archived')}</span>}
             </button>
           )}
           {reactions.length > 0 && (
@@ -976,7 +981,7 @@ function MessageView(props: {
                 <button
                   key={r.tag}
                   className={`reaction ${r.mine ? 'is-mine' : ''}`}
-                  title={r.users.map((u) => memberOf(community, u)?.name ?? 'Someone').join(', ')}
+                  title={r.users.map((u) => memberOf(community, u)?.name ?? tr('Someone')).join(', ')}
                   onClick={() => react(r.emoji, !r.mine)}
                   onContextMenu={(e) => {
                     e.preventDefault();
@@ -995,7 +1000,7 @@ function MessageView(props: {
               {canReact && (
                 <button
                   className="reaction reaction--add"
-                  aria-label="Add reaction"
+                  aria-label={tr('Add reaction')}
                   onClick={(e) => setPicker(nearButton(e.currentTarget, EMOJI_PICKER))}
                 >
                   <SmileIcon size={15} />
@@ -1006,13 +1011,13 @@ function MessageView(props: {
         </div>
       </div>
       {!editing && !phone && (
-        <div className="msg__actions" role="toolbar" aria-label="Message actions">
+        <div className="msg__actions" role="toolbar" aria-label={tr('Message actions')}>
           {canReact &&
             QUICK_REACTIONS.slice(0, 3).map((e) => (
               <button
                 key={e}
                 className="msg__action msg__action--emoji"
-                title={`React ${e}`}
+                title={tr('React {emoji}', { emoji: e })}
                 onClick={() => react(e, true)}
               >
                 {e}
@@ -1021,8 +1026,8 @@ function MessageView(props: {
           {canReact && (
             <button
               className="msg__action"
-              aria-label="Add reaction"
-              title="Add reaction"
+              aria-label={tr('Add reaction')}
+              title={tr('Add reaction')}
               onClick={(e) => setPicker(nearButton(e.currentTarget, EMOJI_PICKER))}
             >
               <SmileIcon size={17} />
@@ -1031,8 +1036,8 @@ function MessageView(props: {
           {can(channel.permissions, Permission.SEND_MESSAGES) && (
             <button
               className="msg__action"
-              aria-label="Reply"
-              title="Reply"
+              aria-label={tr('Reply')}
+              title={tr('Reply')}
               onClick={() => {
                 useCommunity.setState({ replyTo: m });
                 document.querySelector<HTMLTextAreaElement>('.chat__composer textarea')?.focus();
@@ -1044,8 +1049,8 @@ function MessageView(props: {
           {can(channel.permissions, Permission.SEND_MESSAGES) && !m.threadId && (
             <button
               className="msg__action"
-              aria-label={m.thread ? 'Open thread' : 'Create thread'}
-              title={m.thread ? 'Open thread' : 'Create thread'}
+              aria-label={m.thread ? tr('Open thread') : tr('Create thread')}
+              title={m.thread ? tr('Open thread') : tr('Create thread')}
               onClick={() => {
                 if (m.thread) return void s.showThread(channel.id, m.id);
                 createThread();
@@ -1057,8 +1062,8 @@ function MessageView(props: {
           {m.mine && !m.poll && (
             <button
               className="msg__action"
-              aria-label="Edit"
-              title="Edit"
+              aria-label={tr('Edit')}
+              title={tr('Edit')}
               onClick={() => useCommunity.setState({ editing: m.id })}
             >
               <EditIcon size={17} />
@@ -1067,7 +1072,7 @@ function MessageView(props: {
           {canPin && (
             <button
               className="msg__action"
-              aria-label={m.pinned ? 'Unpin' : 'Pin'}
+              aria-label={m.pinned ? tr('Unpin') : tr('Pin')}
               title={m.pinned ? tr('Unpin message') : tr('Pin message')}
               onClick={() => void s.run({ a: 'pin', messageId: m.id, pinned: !m.pinned })}
             >
@@ -1077,8 +1082,8 @@ function MessageView(props: {
           {(m.mine || canManage) && (
             <button
               className="msg__action msg__action--danger"
-              aria-label="Delete"
-              title="Delete"
+              aria-label={tr('Delete')}
+              title={tr('Delete')}
               onClick={(e) => remove(e.shiftKey)}
             >
               <TrashIcon size={17} />
@@ -1089,13 +1094,13 @@ function MessageView(props: {
       {menu && (
         <Popover x={menu.x} y={menu.y} onClose={() => setMenu(null)} className="menu">
           {phone && canReact && (
-            <div className="menu__reactions" role="group" aria-label="React">
+            <div className="menu__reactions" role="group" aria-label={tr('React')}>
               {QUICK_REACTIONS.map((e) => (
                 <button
                   key={e}
                   role="menuitem"
                   className={`menu__reaction ${reactions.some((r) => r.emoji === e && r.mine) ? 'is-mine' : ''}`}
-                  aria-label={`React ${e}`}
+                  aria-label={tr('React {emoji}', { emoji: e })}
                   onClick={() => {
                     setMenu(null);
                     react(e, !reactions.find((r) => r.emoji === e)?.mine);
@@ -1283,7 +1288,7 @@ function MessageView(props: {
           onClose={() => setReactionsAt(null)}
           className="reactions-pop"
         >
-          <div role="list" aria-label="Who reacted">
+          <div role="list" aria-label={tr('Who reacted')}>
             {reactions.map((r) => (
               <div key={r.tag} role="listitem" className="reactions-pop__row">
                 <span className="reactions-pop__emoji" aria-hidden="true">
@@ -1291,7 +1296,7 @@ function MessageView(props: {
                 </span>
                 <span className="reactions-pop__count">{r.count}</span>
                 <span className="reactions-pop__names">
-                  {r.users.map((u) => memberOf(community, u)?.name ?? 'Someone').join(', ')}
+                  {r.users.map((u) => memberOf(community, u)?.name ?? tr('Someone')).join(', ')}
                 </span>
               </div>
             ))}
@@ -1482,7 +1487,7 @@ ${shared}`
           key: `s:${c.name}`,
           insert: c.name,
           symbol: '/' as const,
-          hint: c.help,
+          hint: tr(c.help),
           label: `/${c.name}${c.args ? ` ${c.args}` : ''}`,
         }))
       : []),
@@ -1555,7 +1560,9 @@ ${shared}`
         // Failed: the error is shown and the command stays in the box.
         if (!ok) return true;
         s.notify(
-          cmd.arg ? `Your nickname here is now ${cmd.arg.slice(0, 64)}.` : 'Back to your River name here.',
+          cmd.arg
+            ? tr('Your nickname here is now {name}.', { name: cmd.arg.slice(0, 64) })
+            : tr('Back to your River name here.'),
         );
         return done();
       }
@@ -1563,7 +1570,7 @@ ${shared}`
         await useRiver.getState().updateSettings({
           presence: { customText: cmd.arg.slice(0, 128), customEmoji: '', customUntil: null },
         });
-        s.notify(cmd.arg ? 'Custom status set.' : 'Custom status cleared.');
+        s.notify(cmd.arg ? tr('Custom status set.') : tr('Custom status cleared.'));
         return done();
       case 'online':
       case 'idle':
@@ -1572,10 +1579,12 @@ ${shared}`
         await useRiver.getState().updateSettings({ presence: { status: cmd.command } });
         s.notify(
           cmd.command === 'dnd'
-            ? 'Do Not Disturb is on.'
+            ? tr('Do Not Disturb is on.')
             : cmd.command === 'invisible'
-              ? 'You appear offline.'
-              : `You are ${cmd.command === 'idle' ? 'Idle' : 'Online'}.`,
+              ? tr('You appear offline.')
+              : cmd.command === 'idle'
+                ? tr('You are Idle.')
+                : tr('You are Online.'),
         );
         return done();
       case 'mute':
@@ -1584,7 +1593,7 @@ ${shared}`
         if (!settings) return done();
         const ms = cmd.command === 'unmute' ? 0 : muteLength(cmd.arg);
         if (ms === undefined) {
-          s.notify('Try /mute 15m, /mute 1h or /mute 8h.', 'error');
+          s.notify(tr('Try /mute 15m, /mute 1h or /mute 8h.'), 'error');
           return true;
         }
         await useRiver.getState().updateSettings({
@@ -1594,7 +1603,11 @@ ${shared}`
             }),
           },
         });
-        s.notify(cmd.command === 'unmute' ? `#${channel.name} is unmuted.` : `#${channel.name} is muted.`);
+        s.notify(
+          cmd.command === 'unmute'
+            ? tr('#{name} is unmuted.', { name: channel.name })
+            : tr('#{name} is muted.', { name: channel.name }),
+        );
         return done();
       }
       default:
@@ -1621,7 +1634,9 @@ ${shared}`
       findFiltered(raw, community.filter.words)
     ) {
       s.notify(
-        `This community does not allow “${findFiltered(raw, community.filter.words)}”. Edit your message to send it.`,
+        tr('This community does not allow “{word}”. Edit your message to send it.', {
+          word: findFiltered(raw, community.filter.words) ?? '',
+        }),
         'error',
       );
       return;
@@ -1647,8 +1662,8 @@ ${shared}`
         setUploading(null);
         // Cancelled: everything stays in the box to send later.
         if (err instanceof UploadCancelled)
-          s.notify('Upload cancelled. Your message and files are still here.');
-        else s.notify((err as Error).message || 'Upload failed.', 'error');
+          s.notify(tr('Upload cancelled. Your message and files are still here.'));
+        else s.notify((err as Error).message || tr('Upload failed.'), 'error');
         return;
       } finally {
         uploadAbort.current = null;
@@ -1699,7 +1714,7 @@ ${shared}`
       );
     } catch (err) {
       setUploading(null);
-      s.notify((err as Error).message || 'Upload failed.', 'error');
+      s.notify((err as Error).message || tr('Upload failed.'), 'error');
       return;
     }
     setUploading(null);
@@ -1718,10 +1733,12 @@ ${shared}`
       <div className="chat__composer chat__composer--locked">
         <span className="muted">
           {timeout
-            ? `You're timed out until ${new Date(timeout).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}. You can still read.`
+            ? tr("You're timed out until {when}. You can still read.", {
+                when: new Date(timeout).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+              })
             : channel.announcement
-              ? 'This is an announcement channel: only people who manage messages post here.'
-              : 'You do not have permission to send messages in this channel.'}
+              ? tr('This is an announcement channel: only people who manage messages post here.')
+              : tr('You do not have permission to send messages in this channel.')}
         </span>
       </div>
     );
@@ -1736,11 +1753,11 @@ ${shared}`
     <div className="chat__composer-wrap">
       {slowed && (
         <div className="composer-note" role="note">
-          🐢 Slowmode is on: one message every {formatSlowmode(channel.slowmode)}.
+          🐢 {tr('Slowmode is on: one message every {time}.', { time: formatSlowmode(channel.slowmode) })}
         </div>
       )}
       {suggestions.length > 0 && (
-        <div className="mention-menu" role="listbox" aria-label="Suggestions">
+        <div className="mention-menu" role="listbox" aria-label={tr('Suggestions')}>
           {suggestions.map((choice, i) => (
             <button
               key={choice.key}
@@ -1798,14 +1815,12 @@ ${shared}`
           <button
             type="button"
             className="reply-bar__jump"
-            title="Show the message"
+            title={tr('Show the message')}
             onClick={() =>
               useCommunity.setState({ pendingJump: { channelId: replyTo.channelId, messageId: replyTo.id } })
             }
           >
-            <span>
-              Replying to <strong>{replyTo.senderName}</strong>
-            </span>
+            <span>{rich(tr('Replying to {name}'), { name: <strong>{replyTo.senderName}</strong> })}</span>
             <span className="reply-bar__preview">{replyPreview(replyTo)}</span>
           </button>
           {!replyTo.mine && (
@@ -1815,17 +1830,17 @@ ${shared}`
               aria-pressed={replyPing}
               title={
                 replyPing
-                  ? `${replyTo.senderName} will be notified`
-                  : `${replyTo.senderName} won't be notified`
+                  ? tr('{name} will be notified', { name: replyTo.senderName })
+                  : tr("{name} won't be notified", { name: replyTo.senderName })
               }
               onClick={() => setPingOffFor(replyPing ? replyTo.id : null)}
             >
-              @ {replyPing ? 'ON' : 'OFF'}
+              @ {replyPing ? tr('ON') : tr('OFF')}
             </button>
           )}
           <button
             className="icon-btn"
-            aria-label="Cancel reply"
+            aria-label={tr('Cancel reply')}
             onClick={() => useCommunity.setState({ replyTo: null })}
           >
             <XIcon size={14} />
@@ -1843,8 +1858,10 @@ ${shared}`
       )}
       {uploading && (
         <div className="upload-progress" role="status">
-          Encrypting and uploading{' '}
-          {uploading.done + 1 > uploading.total ? uploading.total : uploading.done + 1} of {uploading.total}…
+          {tr('Encrypting and uploading {done} of {total}…', {
+            done: uploading.done + 1 > uploading.total ? uploading.total : uploading.done + 1,
+            total: uploading.total,
+          })}
           <span
             className="upload-progress__bar"
             style={{ width: `${(uploading.done / uploading.total) * 100}%` }}
@@ -1854,7 +1871,7 @@ ${shared}`
             className="btn btn--link btn--small"
             onClick={() => uploadAbort.current?.abort()}
           >
-            Cancel
+            {tr('Cancel')}
           </button>
         </div>
       )}
@@ -1871,7 +1888,7 @@ ${shared}`
           <button
             type="button"
             className="icon-btn composer__attach"
-            aria-label="Attach a file or create a poll"
+            aria-label={tr('Attach a file or create a poll')}
             onClick={(e) => {
               const r = e.currentTarget.getBoundingClientRect();
               setAttachMenu({ x: r.left, y: r.top - 110 });
@@ -1883,8 +1900,8 @@ ${shared}`
           <button
             type="button"
             className="icon-btn composer__poll"
-            aria-label="Create a poll"
-            title="Create a poll"
+            aria-label={tr('Create a poll')}
+            title={tr('Create a poll')}
             onClick={() => setPolling(true)}
           >
             📊
@@ -1900,7 +1917,7 @@ ${shared}`
                   fileRef.current?.click();
                 }}
               >
-                Photo or file
+                {tr('Photo or file')}
               </MenuItem>
             )}
             <MenuItem
@@ -1910,7 +1927,7 @@ ${shared}`
                 setPolling(true);
               }}
             >
-              Poll
+              {tr('Poll')}
             </MenuItem>
           </Popover>
         )}
@@ -1922,8 +1939,8 @@ ${shared}`
               <button
                 type="button"
                 className="icon-btn composer__attach"
-                aria-label="Attach files"
-                title="Attach files"
+                aria-label={tr('Attach files')}
+                title={tr('Attach files')}
                 onClick={() => fileRef.current?.click()}
               >
                 <PlusIcon size={20} />
@@ -1953,7 +1970,7 @@ ${shared}`
           rows={Math.min(8, Math.max(1, text.split('\n').length))}
           value={text}
           maxLength={4000}
-          placeholder={phone ? 'Message' : `Message #${channel.name}`}
+          placeholder={phone ? tr('Message') : tr('Message #{name}', { name: channel.name })}
           onChange={(e) => {
             setText(e.target.value);
             const now = Date.now();
@@ -2001,8 +2018,8 @@ ${shared}`
         <button
           type="button"
           className="icon-btn"
-          aria-label="Emoji"
-          title="Emoji"
+          aria-label={tr('Emoji')}
+          title={tr('Emoji')}
           onClick={(e) =>
             setPicker(
               phone
@@ -2030,7 +2047,7 @@ ${shared}`
         )}
         {phone ? (
           (text.trim() !== '' || props.pending.length > 0) && (
-            <button className="composer__send" aria-label="Send" disabled={!!uploading}>
+            <button className="composer__send" aria-label={tr('Send')} disabled={!!uploading}>
               <SendIcon size={22} />
             </button>
           )
@@ -2039,7 +2056,7 @@ ${shared}`
             className="btn btn--primary"
             disabled={(text.trim() === '' && props.pending.length === 0) || !!uploading}
           >
-            Send
+            {tr('Send')}
           </button>
         )}
       </form>
@@ -2101,18 +2118,18 @@ function PinsPanel(props: {
   return (
     <div className="pins">
       <header className="pins__head">
-        <PinIcon size={16} /> <strong>Pinned messages</strong>
+        <PinIcon size={16} /> <strong>{tr('Pinned messages')}</strong>
         <button
           className="icon-btn"
-          aria-label="Close pinned messages"
+          aria-label={tr('Close pinned messages')}
           data-phone-back=""
           onClick={() => useCommunity.setState({ showPins: false })}
         >
           <XIcon size={14} />
         </button>
       </header>
-      {pins === null && <p className="muted small">Loading…</p>}
-      {pins?.length === 0 && <p className="muted small">This channel has no pinned messages yet.</p>}
+      {pins === null && <p className="muted small">{tr('Loading…')}</p>}
+      {pins?.length === 0 && <p className="muted small">{tr('This channel has no pinned messages yet.')}</p>}
       {pins?.map((m) => (
         <button key={m.id} className="pins__item" onClick={() => props.onJump(m.id)}>
           <Avatar
@@ -2135,15 +2152,15 @@ function PinsPanel(props: {
 }
 
 const SEARCH_HINTS: Array<[string, string]> = [
-  ['from:', 'from a person'],
-  ['in:', 'in a channel'],
-  ['has:image', 'with a picture'],
-  ['has:file', 'with a file'],
-  ['has:link', 'with a link'],
-  ['mentions:me', 'mentioning you'],
-  ['pinned:true', 'pinned'],
-  ['before:', 'before a date (YYYY-MM-DD)'],
-  ['after:', 'after a date'],
+  ['from:', msg('from a person')],
+  ['in:', msg('in a channel')],
+  ['has:image', msg('with a picture')],
+  ['has:file', msg('with a file')],
+  ['has:link', msg('with a link')],
+  ['mentions:me', msg('mentioning you')],
+  ['pinned:true', msg('pinned')],
+  ['before:', msg('before a date (YYYY-MM-DD)')],
+  ['after:', msg('after a date')],
 ];
 
 function SearchPanel(props: { community: CommunityView; onJump(id: string): void }): ReactElement {
@@ -2156,7 +2173,7 @@ function SearchPanel(props: { community: CommunityView; onJump(id: string): void
   const inputRef = useRef<HTMLInputElement>(null);
   const searchSeq = useRef(0);
   const channelName = (id: string): string =>
-    props.community.channels.find((c) => c.id === id)?.name ?? 'channel';
+    props.community.channels.find((c) => c.id === id)?.name ?? tr('channel');
   const parsed = parseSearch(query);
   const search = async (q: string): Promise<ChatMessage[] | null> => {
     if (!hasCriteria(parseSearch(q))) return null;
@@ -2188,7 +2205,7 @@ function SearchPanel(props: { community: CommunityView; onJump(id: string): void
     if (answer === null) return;
     const first = answer.filter((m) => m.channelId === here.id).at(-1);
     if (first) open(first);
-    else s.notify(`No messages in #${here.name} on that day.`);
+    else s.notify(tr('No messages in #{name} on that day.', { name: here.name }));
   };
   const addHint = (hint: string): void => {
     const next = `${query.trim()} ${hint}`.trimStart();
@@ -2198,10 +2215,10 @@ function SearchPanel(props: { community: CommunityView; onJump(id: string): void
   return (
     <div className="pins search-panel">
       <header className="pins__head">
-        <strong>Search {props.community.name}</strong>
+        <strong>{tr('Search {name}', { name: props.community.name })}</strong>
         <button
           className="icon-btn"
-          aria-label="Close search"
+          aria-label={tr('Close search')}
           data-phone-back=""
           onClick={() => useCommunity.setState({ showSearch: false })}
         >
@@ -2218,17 +2235,17 @@ function SearchPanel(props: { community: CommunityView; onJump(id: string): void
           ref={inputRef}
           autoFocus
           className="search"
-          placeholder="Search — try from:name has:image"
-          aria-label="Search messages and files"
+          placeholder={tr('Search — try from:name has:image')}
+          aria-label={tr('Search messages and files')}
           value={query}
           maxLength={100}
           onChange={(e) => setQuery(e.target.value)}
         />
       </form>
       {results === null && (
-        <div className="search-hints" aria-label="Search filters">
+        <div className="search-hints" aria-label={tr('Search filters')}>
           {SEARCH_HINTS.map(([hint, label]) => (
-            <button key={hint} className="chip" title={label} onClick={() => addHint(hint)}>
+            <button key={hint} className="chip" title={tr(label)} onClick={() => addHint(hint)}>
               {hint}
             </button>
           ))}
@@ -2236,21 +2253,21 @@ function SearchPanel(props: { community: CommunityView; onJump(id: string): void
       )}
       <div className="search-date">
         <label className="muted small" htmlFor="jump-date">
-          Jump to a date in this channel
+          {tr('Jump to a date in this channel')}
         </label>
         <input id="jump-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         <button className="btn btn--small" disabled={!date || busy} onClick={() => void jumpToDate()}>
-          Go
+          {tr('Go')}
         </button>
       </div>
       <p className="muted small">
-        Searched on this device — the server cannot read your messages, so it cannot search them.
+        {tr('Searched on this device — the server cannot read your messages, so it cannot search them.')}
       </p>
-      {busy && <p className="muted small">Decrypting and searching…</p>}
-      {results?.length === 0 && !busy && <p className="muted small">No results.</p>}
+      {busy && <p className="muted small">{tr('Decrypting and searching…')}</p>}
+      {results?.length === 0 && !busy && <p className="muted small">{tr('No results.')}</p>}
       {results && results.length > 0 && !busy && (
         <p className="muted small">
-          {results.length === 100 ? 'The 100 newest results' : `${results.length} results`}
+          {results.length === 100 ? tr('The 100 newest results') : trn('{count} results', results.length)}
         </p>
       )}
       {results?.map((m) => (
@@ -2289,17 +2306,21 @@ function SelectionBar({ channelId }: { channelId: string }): ReactElement | null
   if (!selecting) return null;
   const n = selecting.ids.length;
   return (
-    <div className="selection-bar" role="toolbar" aria-label="Selected messages">
+    <div className="selection-bar" role="toolbar" aria-label={tr('Selected messages')}>
       <span>
-        <strong>{n}</strong> selected · {phoneShellActive() ? 'tap' : 'click'} messages to add or remove (up
-        to 100)
+        {rich(
+          phoneShellActive()
+            ? tr('{count} selected · tap messages to add or remove (up to 100)')
+            : tr('{count} selected · click messages to add or remove (up to 100)'),
+          { count: <strong>{n}</strong> },
+        )}
       </span>
       <button
         className="btn btn--link btn--small"
         data-phone-back=""
         onClick={() => useCommunity.setState({ selecting: null })}
       >
-        Cancel
+        {tr('Cancel')}
       </button>
       <button
         className="btn btn--danger btn--small"
@@ -2307,20 +2328,20 @@ function SelectionBar({ channelId }: { channelId: string }): ReactElement | null
         onClick={() =>
           s.setModal({
             kind: 'confirm',
-            title: `Delete ${n} message${n === 1 ? '' : 's'}?`,
-            body: 'They are removed for everyone, with their threads. This cannot be undone.',
-            action: 'Delete',
+            title: trn('Delete {count} messages?', n),
+            body: tr('They are removed for everyone, with their threads. This cannot be undone.'),
+            action: tr('Delete'),
             run: async () => {
               const res = await s.run({ a: 'bulkDelete', channelId, messageIds: selecting.ids });
               if (res !== null) {
                 useCommunity.setState({ selecting: null });
-                s.notify(`Deleted ${n} message${n === 1 ? '' : 's'}.`);
+                s.notify(trn('Deleted {count} messages.', n));
               }
             },
           })
         }
       >
-        Delete {n}
+        {tr('Delete {count}', { count: n })}
       </button>
     </div>
   );
@@ -2338,7 +2359,9 @@ function WelcomeActions(props: { community: CommunityView; channel: ChannelView 
   return (
     <div className="chat__welcome-actions">
       {alone && (
-        <p className="muted small">It's just you here for now — invite a few friends to get started.</p>
+        <p className="muted small">
+          {tr("It's just you here for now — invite a few friends to get started.")}
+        </p>
       )}
       <div className="button-row">
         {alone && canInvite && (
@@ -2346,7 +2369,7 @@ function WelcomeActions(props: { community: CommunityView; channel: ChannelView 
             className="btn btn--primary btn--small"
             onClick={() => s.setModal({ kind: 'invite', communityId: community.id })}
           >
-            Invite friends
+            {tr('Invite friends')}
           </button>
         )}
         {canWave && (
@@ -2366,7 +2389,7 @@ function WelcomeActions(props: { community: CommunityView; channel: ChannelView 
             <span className="wave-btn__hand" aria-hidden="true">
               👋
             </span>{' '}
-            Wave to say hi
+            {tr('Wave to say hi')}
           </button>
         )}
       </div>
@@ -2412,9 +2435,9 @@ function suggest(
           key: 's:everyone',
           insert: 'everyone',
           symbol: '@',
-          hint: 'Notify everyone who can see this channel',
+          hint: tr('Notify everyone who can see this channel'),
         },
-        { key: 's:here', insert: 'here', symbol: '@', hint: 'Notify everyone online right now' },
+        { key: 's:here', insert: 'here', symbol: '@', hint: tr('Notify everyone online right now') },
       ]
     : [];
   const roles: Suggestion[] = community.roles
@@ -2423,14 +2446,14 @@ function suggest(
       key: `r:${r.id}`,
       insert: r.name,
       symbol: '@',
-      hint: 'Role',
+      hint: tr('Role'),
       color: r.color || undefined,
     }));
   const members: Suggestion[] = community.members.map((m) => ({
     key: `m:${m.riverId}`,
     insert: m.name,
     symbol: '@',
-    hint: m.online ? '' : 'Offline',
+    hint: m.online ? '' : tr('Offline'),
     member: { riverId: m.riverId, name: m.name, avatar: m.avatar },
   }));
   return [...special, ...members, ...roles]
@@ -2469,28 +2492,30 @@ function OutgoingMessage(props: { item: Outgoing; community: CommunityView; me: 
     <div className={`msg msg--mine msg--outgoing msg--${item.status}`} aria-live="polite">
       <div className="msg__row">
         <div className="msg__gutter">
-          <Avatar id={props.me} name={member?.name ?? 'You'} avatar={member?.avatar} size={38} />
+          <Avatar id={props.me} name={member?.name ?? tr('You')} avatar={member?.avatar} size={38} />
         </div>
         <div className="msg__body">
           <div className="msg__meta">
-            <strong className="msg__author">{member?.name ?? 'You'}</strong>
+            <strong className="msg__author">{member?.name ?? tr('You')}</strong>
             <span className="msg__status">
               {item.status === 'sending'
                 ? tr('Sending…')
                 : item.status === 'waiting'
-                  ? 'Waiting for connection — it will send when you are back online'
+                  ? tr('Waiting for connection — it will send when you are back online')
                   : tr('Not sent')}
             </span>
           </div>
-          <div className="msg__text">{item.text || `📎 ${item.attachments?.length ?? 0} file(s)`}</div>
+          <div className="msg__text">
+            {item.text || `📎 ${trn('{count} files', item.attachments?.length ?? 0)}`}
+          </div>
           {item.status === 'failed' && (
             <div className="msg__failed" role="alert">
-              <span>{item.error ?? 'Something went wrong.'}</span>
+              <span>{item.error ?? tr('Something went wrong.')}</span>
               <button className="btn btn--link btn--small" onClick={() => outbox.retry(item.localId)}>
-                Retry
+                {tr('Retry')}
               </button>
               <button className="btn btn--link btn--small" onClick={() => outbox.discard(item.localId)}>
-                Delete
+                {tr('Delete')}
               </button>
             </div>
           )}
@@ -2508,7 +2533,7 @@ export function typingText(names: string[]): string {
 }
 
 function formatSlowmode(seconds: number): string {
-  if (seconds < 60) return `${seconds} seconds`;
-  if (seconds < 3600) return `${Math.round(seconds / 60)} minute${seconds >= 120 ? 's' : ''}`;
-  return `${Math.round(seconds / 3600)} hour${seconds >= 7200 ? 's' : ''}`;
+  if (seconds < 60) return trn('{count} seconds', seconds);
+  if (seconds < 3600) return trn('{count} minutes', Math.round(seconds / 60));
+  return trn('{count} hours', Math.round(seconds / 3600));
 }

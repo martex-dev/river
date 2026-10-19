@@ -18,8 +18,8 @@ import { NotifyMenuSection } from '../community/ui/NotifyMenu.tsx';
 import { ForwardDialog } from '../community/ui/Forward.tsx';
 import { readDraft, saveDraft, useDraft } from '../community/drafts.ts';
 import { quoteOf } from '../dm/quote.ts';
-import { clockTime, dateLocale, dayLabel, fullWhen } from '../time.ts';
-import { msg, tr, trn } from '../i18n.ts';
+import { clockTime, dateLocale, dayLabel, fullWhen, timerText } from '../time.ts';
+import { msg, rich, tr, trn } from '../i18n.ts';
 import { ChatSkeleton, EditActions, HistoryFailed, typingText } from '../community/ui/Chat.tsx';
 import {
   EMOJI_PICKER,
@@ -42,7 +42,6 @@ import {
 } from 'react';
 import {
   TIMER_CHOICES,
-  timerLabel,
   type ConversationView,
   type DirectMessageView,
   type ScheduledView,
@@ -157,11 +156,12 @@ export function MessagesPage(): ReactElement {
     return (
       <div className="page">
         <header className="page__header">
-          <div className="eyebrow">Messages</div>
-          <h1 className="page__title">Private conversations</h1>
+          <div className="eyebrow">{tr('Messages')}</div>
+          <h1 className="page__title">{tr('Private conversations')}</h1>
           <p className="page__lead">
-            Direct messages need an account on a River server. Join a community with an invite link, or create
-            an account in Settings → Server.
+            {tr(
+              'Direct messages need an account on a River server. Join a community with an invite link, or create an account in Settings → Server.',
+            )}
           </p>
         </header>
       </div>
@@ -181,13 +181,14 @@ export function MessagesPage(): ReactElement {
         ) : (
           <div className="dms__empty">
             <div className="dms__empty-icon">💬</div>
-            <h2>Your messages</h2>
+            <h2>{tr('Your messages')}</h2>
             <p className="muted">
-              Messages are end-to-end encrypted with the Signal protocol. Only you and the person you talk to
-              can read them.
+              {tr(
+                'Messages are end-to-end encrypted with the Signal protocol. Only you and the person you talk to can read them.',
+              )}
             </p>
             <button className="btn btn--primary" onClick={() => setComposing(true)}>
-              New message
+              {tr('New message')}
             </button>
           </div>
         )}
@@ -240,17 +241,17 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
         <input
           className="search dms__search"
           placeholder={tr('Find a conversation')}
-          aria-label="Find a conversation or message"
+          aria-label={tr('Find a conversation or message')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
       </div>
-      <div className="home-sidebar__scroll" aria-label="Conversations">
+      <div className="home-sidebar__scroll" aria-label={tr('Conversations')}>
         {nav}
         {found.length > 0 && (
           <>
             <div className="channel-group__head">
-              <span>Messages — {found.length}</span>
+              <span>{tr('Messages — {count}', { count: found.length })}</span>
             </div>
             {found.map((m) => {
               const conv = dm.conversations.find((c) => c.riverId === m.peer);
@@ -262,7 +263,7 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
                       <time className="muted small">{shortWhen(m.sentAt)}</time>
                     </span>
                     <span className="dm-row__last muted small">
-                      {m.mine ? 'You: ' : conv?.kind === 'group' ? `${m.senderName}: ` : ''}
+                      {m.mine ? tr('You: ') : conv?.kind === 'group' ? `${m.senderName}: ` : ''}
                       {m.text ? (
                         <Highlight text={m.text} query={query} max={120} />
                       ) : (
@@ -278,7 +279,7 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
         {requests.length > 0 && (
           <>
             <div className="channel-group__head">
-              <span>Message requests — {requests.length}</span>
+              <span>{tr('Message requests — {count}', { count: requests.length })}</span>
             </div>
             {requests.map((c) => (
               <ConversationRow key={c.riverId} c={c} />
@@ -288,18 +289,23 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
         <div className="channel-group__head home-sidebar__dm-head">
           {archiveOpen ? (
             <button className="btn btn--link" onClick={() => setArchiveOpen(false)}>
-              ← Archived chats
+              ← {tr('Archived chats')}
             </button>
           ) : (
-            <span>Direct messages</span>
+            <span>{tr('Direct messages')}</span>
           )}
-          <button className="icon-btn" aria-label="New message" title="New message" onClick={onNew}>
+          <button
+            className="icon-btn"
+            aria-label={tr('New message')}
+            title={tr('New message')}
+            onClick={onNew}
+          >
             <PlusIcon size={16} />
           </button>
         </div>
         {!archiveOpen && (
           <div className="chat-filters-row">
-            <div className="chat-filters" role="radiogroup" aria-label="Show conversations">
+            <div className="chat-filters" role="radiogroup" aria-label={tr('Show conversations')}>
               {[
                 ...CHAT_FILTERS.map((f) => ({ ...f, label: tr(f.label) })),
                 ...folders.map((f) => ({ id: `folder:${f.id}`, label: f.name })),
@@ -318,8 +324,8 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
             {activeFolder ? (
               <button
                 className="icon-btn chat-filters__edit"
-                aria-label={`Edit folder ${activeFolder.name}`}
-                title="Edit this folder"
+                aria-label={tr('Edit folder {name}', { name: activeFolder.name })}
+                title={tr('Edit this folder')}
                 onClick={() => setEditingFolder(activeFolder)}
               >
                 ✎
@@ -328,8 +334,8 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
               folders.length < MAX_FOLDERS && (
                 <button
                   className="icon-btn chat-filters__edit"
-                  aria-label="New chat folder"
-                  title="New chat folder"
+                  aria-label={tr('New chat folder')}
+                  title={tr('New chat folder')}
                   onClick={() => setEditingFolder('new')}
                 >
                   ＋
@@ -364,9 +370,9 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
             </span>
             <span className="dm-row__text">
               <span className="dm-row__top">
-                <strong>Note to self</strong>
+                <strong>{tr('Note to self')}</strong>
               </span>
-              <span className="dm-row__last muted small">Notes, links and files for yourself</span>
+              <span className="dm-row__last muted small">{tr('Notes, links and files for yourself')}</span>
             </span>
           </button>
         )}
@@ -377,7 +383,7 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
             </span>
             <span className="dm-row__text">
               <span className="dm-row__top">
-                <strong>Archived chats</strong>
+                <strong>{tr('Archived chats')}</strong>
               </span>
               <span className="dm-row__last muted small">
                 {archived
@@ -392,10 +398,10 @@ export function ConversationList({ onNew, nav }: { onNew(): void; nav?: ReactNod
         {chats.length === 0 && (
           <p className="muted small dms__hint">
             {archiveOpen
-              ? 'No archived chats.'
+              ? tr('No archived chats.')
               : filter === 'all'
-                ? 'No conversations yet.'
-                : 'Nothing here.'}
+                ? tr('No conversations yet.')
+                : tr('Nothing here.')}
           </p>
         )}
         {chats.map((c) => (
@@ -455,12 +461,12 @@ function ContactSheet(props: {
   // Not before they accepted your request.
   const canCall = c.state === 'accepted' && !c.awaitingReply && !callBusy;
   return (
-    <Modal title="Profile" onClose={props.onClose}>
+    <Modal title={tr('Profile')} onClose={props.onClose}>
       <div className="contact-sheet">
         <ConvAvatar c={c} size={96} />
         <h2 className="contact-sheet__name">{c.name}</h2>
         <span className={`chip dm-lock ${c.verified ? 'is-verified' : ''}`}>
-          {c.verified ? '✓ Verified' : '🔒 End-to-end encrypted'}
+          {c.verified ? `✓ ${tr('Verified')}` : `🔒 ${tr('End-to-end encrypted')}`}
         </span>
         {bio && <p className="contact-sheet__bio">{bio}</p>}
         <div className="contact-sheet__actions">
@@ -473,7 +479,7 @@ function ContactSheet(props: {
             }}
           >
             <PhoneIcon size={20} />
-            <span>Call</span>
+            <span>{tr('Call')}</span>
           </button>
           <button
             className="contact-sheet__action"
@@ -484,21 +490,21 @@ function ContactSheet(props: {
             }}
           >
             <CameraIcon size={20} />
-            <span>Video</span>
+            <span>{tr('Video')}</span>
           </button>
           <button className="contact-sheet__action" onClick={props.onSearch}>
             <span aria-hidden="true">🔍</span>
-            <span>Search</span>
+            <span>{tr('Search')}</span>
           </button>
           <button className="contact-sheet__action" onClick={props.onMedia}>
             <span aria-hidden="true">🖼</span>
-            <span>Media</span>
+            <span>{tr('Media')}</span>
           </button>
         </div>
       </div>
       {common.length > 0 && (
         <>
-          <div className="field__label">Groups in common · {common.length}</div>
+          <div className="field__label">{tr('Groups in common · {count}', { count: common.length })}</div>
           <ul className="contact-sheet__groups">
             {common.map((g) => (
               <li key={g.riverId}>
@@ -519,17 +525,17 @@ function ContactSheet(props: {
           </ul>
         </>
       )}
-      <div className="field__label">River ID</div>
+      <div className="field__label">{tr('River ID')}</div>
       <button className="btn btn--link contact-sheet__id mono small" onClick={() => copyText(c.riverId)}>
         {c.riverId}
       </button>
       <div className="button-row">
         <button className="btn btn--ghost" onClick={props.onSafety}>
-          View safety number
+          {tr('View safety number')}
         </button>
         {c.state === 'blocked' ? (
           <button className="btn btn--ghost" onClick={() => void dm.run({ a: 'unblock', peer: c.riverId })}>
-            Unblock
+            {tr('Unblock')}
           </button>
         ) : (
           <button
@@ -539,7 +545,7 @@ function ContactSheet(props: {
               void dm.run({ a: 'block', peer: c.riverId });
             }}
           >
-            Block
+            {tr('Block')}
           </button>
         )}
       </div>
@@ -576,18 +582,18 @@ export function FolderDialog(props: {
     if (r.ok) props.onSaved(r.value, null);
   };
   return (
-    <Modal title={props.folder ? 'Edit folder' : 'New chat folder'} onClose={props.onClose}>
+    <Modal title={props.folder ? tr('Edit folder') : tr('New chat folder')} onClose={props.onClose}>
       <label className="textfield">
-        <span className="field__label">Name</span>
+        <span className="field__label">{tr('Name')}</span>
         <input
           autoFocus
           maxLength={24}
-          placeholder="Family, Work, Gaming…"
+          placeholder={tr('Family, Work, Gaming…')}
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
       </label>
-      <div className="field__label">Chats in this folder</div>
+      <div className="field__label">{tr('Chats in this folder')}</div>
       <ul className="folder-pick">
         {props.conversations.map((c) => (
           <li key={c.riverId}>
@@ -605,18 +611,18 @@ export function FolderDialog(props: {
           </li>
         ))}
       </ul>
-      <p className="muted small">Folders are kept on this device only.</p>
+      <p className="muted small">{tr('Folders are kept on this device only.')}</p>
       <div className="button-row">
         {props.folder && (
           <button className="btn btn--danger" onClick={() => void remove()}>
-            Delete folder
+            {tr('Delete folder')}
           </button>
         )}
         <button className="btn btn--ghost" onClick={props.onClose}>
-          Cancel
+          {tr('Cancel')}
         </button>
         <button className="btn btn--primary" disabled={busy || !name.trim()} onClick={() => void save()}>
-          Save
+          {tr('Save')}
         </button>
       </div>
     </Modal>
@@ -630,7 +636,7 @@ async function replyPrivately(m: DirectMessageView, group: string): Promise<void
     const opened = await dm.run({ a: 'open', peer: m.sender, name: m.senderName });
     if (!opened) return;
   }
-  saveDraft(`d:${m.sender}`, quoteOf(m.text, `A message in ${group}`));
+  saveDraft(`d:${m.sender}`, quoteOf(m.text, tr('A message in {name}', { name: group })));
   openDm(m.sender);
 }
 
@@ -640,9 +646,9 @@ export function copyText(text: string): void {
     ?.writeText(text)
     .then(() => {
       play('success');
-      useCommunity.getState().notify('Copied');
+      useCommunity.getState().notify(tr('Copied'));
     })
-    .catch(() => useCommunity.getState().notify('River could not copy that.', 'error'));
+    .catch(() => useCommunity.getState().notify(tr('River could not copy that.'), 'error'));
 }
 
 type ChatFilter = 'all' | 'unread' | 'people' | 'groups';
@@ -698,7 +704,7 @@ const ConversationRow = memo(function ConversationRow({ c }: { c: ConversationVi
           <span className="dm-row__top">
             <strong title={c.name}>{c.name}</strong>
             {c.verified && (
-              <span className="dm-row__verified" title="Verified">
+              <span className="dm-row__verified" title={tr('Verified')}>
                 ✓
               </span>
             )}
@@ -706,20 +712,20 @@ const ConversationRow = memo(function ConversationRow({ c }: { c: ConversationVi
           </span>
           <span className="dm-row__last muted small">
             {typing ? (
-              <em>typing…</em>
+              <em>{tr('typing…')}</em>
             ) : c.state === 'blocked' ? (
-              'Blocked'
+              tr('Blocked')
             ) : c.state === 'left' ? (
-              'You left this group'
+              tr('You left this group')
             ) : c.last ? (
-              `${c.last.mine ? 'You: ' : ''}${c.last.text}`
+              `${c.last.mine ? tr('You: ') : ''}${c.last.text}`
             ) : (
-              'No messages yet'
+              tr('No messages yet')
             )}
           </span>
         </span>
         {c.pinned && (
-          <span className="dm-row__pin" title="Pinned" aria-label="Pinned">
+          <span className="dm-row__pin" title={tr('Pinned')} aria-label={tr('Pinned')}>
             📌
           </span>
         )}
@@ -728,7 +734,7 @@ const ConversationRow = memo(function ConversationRow({ c }: { c: ConversationVi
             {c.unread}
           </span>
         ) : (
-          c.markedUnread && <span className="dm-row__dot" aria-label="Marked unread" />
+          c.markedUnread && <span className="dm-row__dot" aria-label={tr('Marked unread')} />
         )}
       </button>
       {menu && (
@@ -739,7 +745,7 @@ const ConversationRow = memo(function ConversationRow({ c }: { c: ConversationVi
               chatFlags(c.riverId, { pinned: !c.pinned });
             }}
           >
-            {c.pinned ? 'Unpin' : 'Pin to top'}
+            {c.pinned ? tr('Unpin') : tr('Pin to top')}
           </MenuItem>
           <MenuItem
             onClick={() => {
@@ -750,7 +756,7 @@ const ConversationRow = memo(function ConversationRow({ c }: { c: ConversationVi
               } else chatFlags(c.riverId, { markedUnread: true });
             }}
           >
-            {c.unread > 0 || c.markedUnread ? 'Mark as read' : 'Mark as unread'}
+            {c.unread > 0 || c.markedUnread ? tr('Mark as read') : tr('Mark as unread')}
           </MenuItem>
           <MenuItem
             onClick={() => {
@@ -758,7 +764,7 @@ const ConversationRow = memo(function ConversationRow({ c }: { c: ConversationVi
               chatFlags(c.riverId, { archived: !c.archived });
             }}
           >
-            {c.archived ? 'Unarchive' : 'Archive'}
+            {c.archived ? tr('Unarchive') : tr('Archive')}
           </MenuItem>
         </Popover>
       )}
@@ -955,10 +961,10 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
           {!!c.timer && (
             <button
               className="chip dm-timer"
-              title={tr('Messages disappear after {time}', { time: timerLabel(c.timer) })}
+              title={tr('Messages disappear after {time}', { time: timerText(c.timer) })}
               onClick={() => setTimerOpen(true)}
             >
-              ⏱ {timerLabel(c.timer)}
+              ⏱ {timerText(c.timer)}
             </button>
           )}
           <span className="chat__head-actions">
@@ -1026,7 +1032,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                   setSearching(true);
                 }}
               >
-                🔍 Search in this conversation
+                🔍 {tr('Search in this conversation')}
               </MenuItem>
               <MenuItem
                 onClick={() => {
@@ -1034,7 +1040,8 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                   setShowPins(true);
                 }}
               >
-                📌 Pinned messages{pinned.length ? ` · ${pinned.length}` : ''}
+                📌 {tr('Pinned messages')}
+                {pinned.length ? ` · ${pinned.length}` : ''}
               </MenuItem>
               {c.kind === 'direct' && !c.self && (
                 <MenuItem
@@ -1043,7 +1050,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                     setProfileOpen(true);
                   }}
                 >
-                  Profile
+                  {tr('Profile')}
                 </MenuItem>
               )}
             </>
@@ -1056,7 +1063,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                   setShowMembers(true);
                 }}
               >
-                Members
+                {tr('Members')}
               </MenuItem>
               {c.isAdmin && (
                 <MenuItem
@@ -1065,7 +1072,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                     setRenaming(c.name);
                   }}
                 >
-                  Rename group
+                  {tr('Rename group')}
                 </MenuItem>
               )}
               {c.isAdmin && (
@@ -1075,7 +1082,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                     setMenu(null);
                   }}
                 >
-                  Change icon
+                  {tr('Change icon')}
                 </MenuItem>
               )}
               {c.isAdmin && (
@@ -1085,7 +1092,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                     setAdding(true);
                   }}
                 >
-                  Add people
+                  {tr('Add people')}
                 </MenuItem>
               )}
               {c.state !== 'left' && (
@@ -1095,16 +1102,16 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                     setMenu(null);
                     setModal({
                       kind: 'confirm',
-                      title: `Leave ${c.name}`,
-                      body: 'You will stop receiving messages from this group.',
-                      action: 'Leave group',
+                      title: tr('Leave {name}', { name: c.name }),
+                      body: tr('You will stop receiving messages from this group.'),
+                      action: tr('Leave group'),
                       run: async () => {
                         await dm.run({ a: 'leaveGroup', peer: c.riverId });
                       },
                     });
                   }}
                 >
-                  Leave group
+                  {tr('Leave group')}
                 </MenuItem>
               )}
             </>
@@ -1116,17 +1123,17 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                   props.onSafety();
                 }}
               >
-                View safety number
+                {tr('View safety number')}
               </MenuItem>
               <MenuItem
                 onClick={() => {
                   setMenu(null);
                   void navigator.clipboard
                     .writeText(c.riverId)
-                    .then(() => (play('success'), notify('River ID copied')));
+                    .then(() => (play('success'), notify(tr('River ID copied'))));
                 }}
               >
-                Copy River ID
+                {tr('Copy River ID')}
               </MenuItem>
             </>
           )}
@@ -1137,7 +1144,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                 void dm.run({ a: 'unblock', peer: c.riverId });
               }}
             >
-              Unblock
+              {tr('Unblock')}
             </MenuItem>
           ) : (
             <MenuItem
@@ -1147,7 +1154,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                 void dm.run({ a: 'block', peer: c.riverId });
               }}
             >
-              Block
+              {tr('Block')}
             </MenuItem>
           )}
           <MenuItem
@@ -1158,7 +1165,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
               confirmRemove();
             }}
           >
-            Delete conversation
+            {tr('Delete conversation')}
           </MenuItem>
           <MenuItem
             onClick={() => {
@@ -1166,7 +1173,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
               setMediaOpen(true);
             }}
           >
-            Shared media, files and links
+            {tr('Shared media, files and links')}
           </MenuItem>
           {(c.kind === 'group' ? c.state !== 'left' : c.state === 'accepted') && (
             <MenuItem
@@ -1175,7 +1182,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                 setPolling(true);
               }}
             >
-              📊 Create a poll
+              📊 {tr('Create a poll')}
             </MenuItem>
           )}
           {(c.kind === 'group' ? c.state !== 'left' : c.state === 'accepted') && (
@@ -1185,7 +1192,8 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                 setTimerOpen(true);
               }}
             >
-              Disappearing messages{c.timer ? ` · ${timerLabel(c.timer)}` : ''}
+              {tr('Disappearing messages')}
+              {c.timer ? ` · ${timerText(c.timer)}` : ''}
             </MenuItem>
           )}
           <MenuItem
@@ -1194,7 +1202,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
               setWallpaperOpen(true);
             }}
           >
-            🖼️ Wallpaper
+            🖼️ {tr('Wallpaper')}
           </MenuItem>
           <NotifyMenuSection id={c.riverId} kind="conversation" onDone={() => setMenu(null)} />
         </Popover>
@@ -1239,10 +1247,10 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
       {showPins && (
         <div className="pins dm-pins">
           <header className="pins__head">
-            <strong>Pinned messages</strong>
+            <strong>{tr('Pinned messages')}</strong>
             <button
               className="icon-btn"
-              aria-label="Close pinned messages"
+              aria-label={tr('Close pinned messages')}
               data-phone-back=""
               onClick={() => setShowPins(false)}
             >
@@ -1252,8 +1260,8 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
           {pinned.length === 0 && (
             <p className="muted small">
               {phone
-                ? 'Nothing pinned yet. Long-press a message and choose Pin.'
-                : 'Nothing pinned yet. Hover a message and press 📌.'}
+                ? tr('Nothing pinned yet. Long-press a message and choose Pin.')
+                : tr('Nothing pinned yet. Hover a message and press 📌.')}
             </p>
           )}
           {pinned.map((m) => (
@@ -1269,7 +1277,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
               <span>
                 <strong>{m.senderName}</strong>{' '}
                 <span className="muted small">{new Date(m.sentAt).toLocaleDateString()}</span>
-                <span className="pins__text">{m.text.slice(0, 160) || 'A file'}</span>
+                <span className="pins__text">{m.text.slice(0, 160) || tr('A file')}</span>
               </span>
             </button>
           ))}
@@ -1291,7 +1299,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
         </Popover>
       )}
       {renaming !== null && (
-        <Modal title="Rename group" onClose={() => setRenaming(null)}>
+        <Modal title={tr('Rename group')} onClose={() => setRenaming(null)}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -1302,7 +1310,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
             }}
           >
             <label className="textfield">
-              <span className="field__label">Group name</span>
+              <span className="field__label">{tr('Group name')}</span>
               <input
                 autoFocus
                 value={renaming}
@@ -1312,7 +1320,7 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
             </label>
             <div className="modal__foot">
               <button className="btn btn--primary" disabled={!renaming.trim()}>
-                Save
+                {tr('Save')}
               </button>
             </div>
           </form>
@@ -1320,9 +1328,9 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
       )}
       {adding && (
         <PeoplePicker
-          title={`Add people to ${c.name}`}
+          title={tr('Add people to {name}', { name: c.name })}
           exclude={c.members.map((m) => m.riverId)}
-          action="Add"
+          action={tr('Add')}
           onClose={() => setAdding(false)}
           onPick={async (ids) => {
             if (await dm.attempt({ a: 'addGroupMembers', peer: c.riverId, members: ids })) setAdding(false);
@@ -1332,28 +1340,30 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
       {c.verifiedChanged && (
         <div className="dm-banner dm-banner--warn" role="alert">
           <span>
-            <strong>{c.name}’s safety number changed after you verified it.</strong> River sends them nothing
-            until you compare the new safety number and verify again.
+            <strong>{tr('{name}’s safety number changed after you verified it.', { name: c.name })}</strong>{' '}
+            {tr('River sends them nothing until you compare the new safety number and verify again.')}
           </span>
           <button className="btn btn--ghost btn--small" onClick={props.onSafety}>
-            Verify
+            {tr('Verify')}
           </button>
         </div>
       )}
       {c.keyChanged && !c.verifiedChanged && (
         <div className="dm-banner dm-banner--warn" role="alert">
           <span>
-            <strong>Your safety number with {c.name} changed.</strong> This happens when they reinstall River
-            or change devices — or if someone is intercepting. Compare safety numbers to be sure.
+            <strong>{tr('Your safety number with {name} changed.', { name: c.name })}</strong>{' '}
+            {tr(
+              'This happens when they reinstall River or change devices — or if someone is intercepting. Compare safety numbers to be sure.',
+            )}
           </span>
           <button className="btn btn--ghost btn--small" onClick={props.onSafety}>
-            Verify
+            {tr('Verify')}
           </button>
           <button
             className="btn btn--link"
             onClick={() => void dm.run({ a: 'acknowledgeKeyChange', peer: c.riverId })}
           >
-            Dismiss
+            {tr('Dismiss')}
           </button>
         </div>
       )}
@@ -1391,7 +1401,12 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
             <ConvAvatar c={c} size={72} />
             <h2>{c.name}</h2>
             <p className="muted">
-              This is the beginning of your conversation with {c.name}. Messages are end-to-end encrypted.
+              {tr(
+                'This is the beginning of your conversation with {name}. Messages are end-to-end encrypted.',
+                {
+                  name: c.name,
+                },
+              )}
             </p>
           </div>
           {shown.map((m, i) => {
@@ -1417,10 +1432,19 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
                 )}
                 {m.notice ? (
                   <div className="chat__notice" role="note">
-                    ⏱ {m.mine ? 'You' : m.senderName}{' '}
+                    ⏱{' '}
                     {m.notice.timer
-                      ? `set messages to disappear after ${timerLabel(m.notice.timer)}.`
-                      : 'turned off disappearing messages.'}
+                      ? m.mine
+                        ? tr('You set messages to disappear after {time}.', {
+                            time: timerText(m.notice.timer),
+                          })
+                        : tr('{name} set messages to disappear after {time}.', {
+                            name: m.senderName,
+                            time: timerText(m.notice.timer),
+                          })
+                      : m.mine
+                        ? tr('You turned off disappearing messages.')
+                        : tr('{name} turned off disappearing messages.', { name: m.senderName })}
                   </div>
                 ) : (
                   <DmMessage
@@ -1445,8 +1469,8 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
       {!atBottom && (
         <button
           className="chat__jump-latest"
-          aria-label="Jump to the latest message"
-          title="Jump to the latest message"
+          aria-label={tr('Jump to the latest message')}
+          title={tr('Jump to the latest message')}
           onClick={() => {
             const el = scrollRef.current;
             if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
@@ -1457,47 +1481,47 @@ export function Conversation(props: { conversation: ConversationView; onSafety()
       )}
       {c.state === 'left' ? (
         <div className="chat__composer chat__composer--locked">
-          <span className="muted">You are no longer in this group.</span>
+          <span className="muted">{tr('You are no longer in this group.')}</span>
         </div>
       ) : c.state === 'request' ? (
         <div className="dm-request">
           <p>
-            {c.kind === 'group' ? (
-              <>
-                You were added to <strong>{c.name}</strong>. Others will not see your name until you accept.
-              </>
-            ) : (
-              <>
-                <strong>{c.name}</strong> wants to message you. They will not know you have seen their
-                messages until you accept.
-              </>
-            )}
+            {c.kind === 'group'
+              ? rich(tr('You were added to {name}. Others will not see your name until you accept.'), {
+                  name: <strong>{c.name}</strong>,
+                })
+              : rich(
+                  tr(
+                    '{name} wants to message you. They will not know you have seen their messages until you accept.',
+                  ),
+                  { name: <strong>{c.name}</strong> },
+                )}
           </p>
           <div className="button-row">
             <button
               className="btn btn--primary"
               onClick={() => void dm.run({ a: 'accept', peer: c.riverId })}
             >
-              Accept
+              {tr('Accept')}
             </button>
             {c.kind === 'direct' && (
               <button
                 className="btn btn--ghost btn--danger-text"
                 onClick={() => void dm.run({ a: 'block', peer: c.riverId })}
               >
-                Block
+                {tr('Block')}
               </button>
             )}
             <button className="btn btn--ghost" onClick={confirmRemove}>
-              Delete
+              {tr('Delete')}
             </button>
           </div>
         </div>
       ) : c.state === 'blocked' ? (
         <div className="chat__composer chat__composer--locked">
-          <span className="muted">You blocked {c.name}. </span>
+          <span className="muted">{tr('You blocked {name}.', { name: c.name })} </span>
           <button className="btn btn--link" onClick={() => void dm.run({ a: 'unblock', peer: c.riverId })}>
-            Unblock
+            {tr('Unblock')}
           </button>
         </div>
       ) : (
@@ -1618,16 +1642,16 @@ function Stamp({ m }: { m: DirectMessageView }): ReactElement {
   return (
     <span className="msg__stamp">
       {m.pinned && (
-        <span className="msg__stamp-flag" role="img" aria-label="Pinned">
+        <span className="msg__stamp-flag" role="img" aria-label={tr('Pinned')}>
           📌
         </span>
       )}
       {m.expiresAt && (
-        <span className="msg__stamp-flag" role="img" aria-label="Disappearing message">
+        <span className="msg__stamp-flag" role="img" aria-label={tr('Disappearing message')}>
           ⏱
         </span>
       )}
-      {m.editedAt && <span className="msg__stamp-edited">edited</span>}
+      {m.editedAt && <span className="msg__stamp-edited">{tr('edited')}</span>}
       <time dateTime={m.sentAt}>{timeOf(m.sentAt)}</time>
       {m.mine && <Ticks status={m.status} />}
     </span>
@@ -1635,7 +1659,7 @@ function Stamp({ m }: { m: DirectMessageView }): ReactElement {
 }
 
 function Ticks({ status }: { status: DirectMessageView['status'] }): ReactElement | null {
-  const label = STATUS_LABEL[status];
+  const label = STATUS_LABEL[status] ? tr(STATUS_LABEL[status]) : '';
   if (!label) return null;
   return (
     <span className={`msg__ticks msg__ticks--${status}`} role="img" aria-label={label}>
@@ -1653,11 +1677,11 @@ function Ticks({ status }: { status: DirectMessageView['status'] }): ReactElemen
 }
 
 const STATUS_LABEL: Record<DirectMessageView['status'], string> = {
-  sending: 'Sending…',
-  sent: 'Sent',
-  delivered: 'Delivered',
-  read: 'Read',
-  failed: 'Not sent',
+  sending: msg('Sending…'),
+  sent: msg('Sent'),
+  delivered: msg('Delivered'),
+  read: msg('Read'),
+  failed: msg('Not sent'),
   received: '',
 };
 
@@ -1761,8 +1785,8 @@ function EffectReplay({ effect }: { effect: MessageEffect }): ReactElement | nul
     <button
       type="button"
       className="msg__effect"
-      aria-label={`Play the ${label.name.toLowerCase()} effect again`}
-      title={`Sent with ${label.name.toLowerCase()}`}
+      aria-label={tr(label.again)}
+      title={tr(label.sentWith)}
       onClick={(e) => {
         e.stopPropagation();
         playEffect(effect);
@@ -1834,13 +1858,13 @@ function DmMessage(props: {
   const remove = (forEveryone: boolean): void => {
     useCommunity.getState().setModal({
       kind: 'confirm',
-      title: forEveryone ? 'Delete for everyone' : 'Delete for me',
+      title: forEveryone ? tr('Delete for everyone') : tr('Delete for me'),
       body: forEveryone
         ? c.kind === 'group'
-          ? `This message will be deleted on your devices and for everyone in ${c.name}.`
-          : `This message will be deleted on your devices and on ${c.name}'s.`
-        : 'This message will be deleted on this device only.',
-      action: 'Delete',
+          ? tr('This message will be deleted on your devices and for everyone in {name}.', { name: c.name })
+          : tr("This message will be deleted on your devices and on {name}'s.", { name: c.name })
+        : tr('This message will be deleted on this device only.'),
+      action: tr('Delete'),
       run: async () => {
         await dm.run({ a: 'delete', peer: c.riverId, id: m.id, forEveryone });
       },
@@ -1854,7 +1878,7 @@ function DmMessage(props: {
       <button
         type="button"
         className="msg__reply"
-        title="Show the message this replies to"
+        title={tr('Show the message this replies to')}
         onClick={() => jumpToDmMessage(c.riverId, replied)}
       >
         <ReplyIcon size={13} />
@@ -1864,7 +1888,7 @@ function DmMessage(props: {
     ) : (
       <div className="msg__reply">
         <ReplyIcon size={13} />
-        <span className="muted">Original message not available</span>
+        <span className="muted">{tr('Original message not available')}</span>
       </div>
     )
   ) : null;
@@ -1922,15 +1946,15 @@ function DmMessage(props: {
                 {timeOf(m.sentAt)}
               </time>
               {m.pinned && (
-                <span className="msg__pinned" title="Pinned" aria-label="Pinned">
+                <span className="msg__pinned" title={tr('Pinned')} aria-label={tr('Pinned')}>
                   📌
                 </span>
               )}
               {m.expiresAt && (
                 <span
                   className="msg__expires"
-                  title={`Disappears ${new Date(m.expiresAt).toLocaleString()}`}
-                  aria-label="Disappearing message"
+                  title={tr('Disappears {when}', { when: new Date(m.expiresAt).toLocaleString() })}
+                  aria-label={tr('Disappearing message')}
                 >
                   ⏱
                 </span>
@@ -1941,7 +1965,7 @@ function DmMessage(props: {
             <DmEditBox m={m} />
           ) : m.deleted ? (
             <div className="msg__text muted">
-              <em>This message was deleted.</em>
+              <em>{tr('This message was deleted.')}</em>
               {phone && <Stamp m={m} />}
             </div>
           ) : (
@@ -1953,7 +1977,7 @@ function DmMessage(props: {
                   me={props.myName}
                 />
               )}
-              {m.editedAt && !phone && <span className="msg__edited"> (edited)</span>}
+              {m.editedAt && !phone && <span className="msg__edited"> {tr('(edited)')}</span>}
               {m.effect && <EffectReplay effect={m.effect} />}
               {phone && !!m.text && <Stamp m={m} />}
             </div>
@@ -1991,17 +2015,17 @@ function DmMessage(props: {
             </div>
           )}
           {m.mine && (props.last || m.status === 'failed') && (!phone || m.status === 'failed') && (
-            <div className={`dm-status dm-status--${m.status}`}>{STATUS_LABEL[m.status]}</div>
+            <div className={`dm-status dm-status--${m.status}`}>{tr(STATUS_LABEL[m.status])}</div>
           )}
         </div>
       </div>
       {!phone && !m.deleted && !editing && c.state === 'accepted' && (
-        <div className="msg__actions" role="toolbar" aria-label="Message actions">
+        <div className="msg__actions" role="toolbar" aria-label={tr('Message actions')}>
           {QUICK_REACTIONS.slice(0, 3).map((e) => (
             <button
               key={e}
               className="msg__action msg__action--emoji"
-              title={`React ${e}`}
+              title={tr('React {emoji}', { emoji: e })}
               onClick={() => react(e, true)}
             >
               {e}
@@ -2009,20 +2033,24 @@ function DmMessage(props: {
           ))}
           <button
             className="msg__action"
-            aria-label="Add reaction"
+            aria-label={tr('Add reaction')}
             title={tr('Add reaction')}
             onClick={(e) => setPicker(nearButton(e.currentTarget, EMOJI_PICKER))}
           >
             <SmileIcon size={17} />
           </button>
-          <button className="msg__action" aria-label="Reply" onClick={() => useDm.setState({ replyTo: m })}>
+          <button
+            className="msg__action"
+            aria-label={tr('Reply')}
+            onClick={() => useDm.setState({ replyTo: m })}
+          >
             <ReplyIcon size={17} />
           </button>
           {!m.deleted && (
             <button
               className="msg__action"
-              aria-label={m.pinned ? 'Unpin' : 'Pin'}
-              title={m.pinned ? 'Unpin' : 'Pin for everyone in this conversation'}
+              aria-label={m.pinned ? tr('Unpin') : tr('Pin')}
+              title={m.pinned ? tr('Unpin') : tr('Pin for everyone in this conversation')}
               onClick={() => void dm.run({ a: 'pin', peer: c.riverId, id: m.id, pinned: !m.pinned })}
             >
               <span aria-hidden="true">📌</span>
@@ -2031,8 +2059,8 @@ function DmMessage(props: {
           {m.text && (
             <button
               className="msg__action"
-              aria-label="Forward"
-              title="Forward"
+              aria-label={tr('Forward')}
+              title={tr('Forward')}
               onClick={() => setForwarding(true)}
             >
               <span aria-hidden="true">↪</span>
@@ -2041,7 +2069,7 @@ function DmMessage(props: {
           {m.mine && (
             <button
               className="msg__action"
-              aria-label="Edit"
+              aria-label={tr('Edit')}
               onClick={() => useDm.setState({ editing: m.id })}
             >
               <EditIcon size={17} />
@@ -2049,8 +2077,8 @@ function DmMessage(props: {
           )}
           <button
             className="msg__action msg__action--danger"
-            aria-label={m.mine ? 'Delete for everyone' : 'Delete for me'}
-            title={m.mine ? 'Delete for everyone' : 'Delete for me'}
+            aria-label={m.mine ? tr('Delete for everyone') : tr('Delete for me')}
+            title={m.mine ? tr('Delete for everyone') : tr('Delete for me')}
             onClick={() => remove(m.mine)}
           >
             <TrashIcon size={17} />
@@ -2074,13 +2102,13 @@ function DmMessage(props: {
       {menu && (
         <Popover x={menu.x} y={menu.y} onClose={() => setMenu(null)} className="menu">
           {phone && canReply && (
-            <div className="menu__reactions" role="group" aria-label="React">
+            <div className="menu__reactions" role="group" aria-label={tr('React')}>
               {QUICK_REACTIONS.map((e) => (
                 <button
                   key={e}
                   role="menuitem"
                   className={`menu__reaction ${m.reactions.some((r) => r.emoji === e && r.mine) ? 'is-mine' : ''}`}
-                  aria-label={`React ${e}`}
+                  aria-label={tr('React {emoji}', { emoji: e })}
                   onClick={() => {
                     setMenu(null);
                     react(e, !m.reactions.find((r) => r.emoji === e)?.mine);
@@ -2092,7 +2120,7 @@ function DmMessage(props: {
               <button
                 role="menuitem"
                 className="menu__reaction menu__reaction--more"
-                aria-label="More reactions"
+                aria-label={tr('More reactions')}
                 onClick={() => {
                   setPicker({ x: 8, y: Math.max(8, menu.y - 160) });
                   setMenu(null);
@@ -2110,7 +2138,7 @@ function DmMessage(props: {
                 useDm.setState({ replyTo: m });
               }}
             >
-              Reply
+              {tr('Reply')}
             </MenuItem>
           )}
           {m.text && (
@@ -2120,7 +2148,7 @@ function DmMessage(props: {
                 copyText(m.text);
               }}
             >
-              Copy text
+              {tr('Copy text')}
             </MenuItem>
           )}
           {m.text && (
@@ -2130,7 +2158,7 @@ function DmMessage(props: {
                 setForwarding(true);
               }}
             >
-              Forward
+              {tr('Forward')}
             </MenuItem>
           )}
           {c.self && (
@@ -2141,7 +2169,7 @@ function DmMessage(props: {
                 setTagging(true);
               }}
             >
-              {myTags?.length ? 'Edit tags…' : 'Add tags…'}
+              {myTags?.length ? tr('Edit tags…') : tr('Add tags…')}
             </MenuItem>
           )}
           {c.kind === 'group' && !m.mine && !m.deleted && (
@@ -2151,7 +2179,7 @@ function DmMessage(props: {
                 void replyPrivately(m, c.name);
               }}
             >
-              Reply privately
+              {tr('Reply privately')}
             </MenuItem>
           )}
           {c.state === 'accepted' && (
@@ -2161,7 +2189,7 @@ function DmMessage(props: {
                 void dm.run({ a: 'pin', peer: c.riverId, id: m.id, pinned: !m.pinned });
               }}
             >
-              {m.pinned ? 'Unpin' : 'Pin'}
+              {m.pinned ? tr('Unpin') : tr('Pin')}
             </MenuItem>
           )}
           {m.mine && c.state === 'accepted' && (
@@ -2172,7 +2200,7 @@ function DmMessage(props: {
                 useDm.setState({ editing: m.id });
               }}
             >
-              Edit
+              {tr('Edit')}
             </MenuItem>
           )}
           <MenuItem
@@ -2181,7 +2209,7 @@ function DmMessage(props: {
               useSelection.getState().start(c.riverId, m.id);
             }}
           >
-            Select
+            {tr('Select')}
           </MenuItem>
           <MenuItem
             danger
@@ -2191,7 +2219,7 @@ function DmMessage(props: {
               remove(false);
             }}
           >
-            Delete for me
+            {tr('Delete for me')}
           </MenuItem>
           {m.mine && (
             <MenuItem
@@ -2202,7 +2230,7 @@ function DmMessage(props: {
                 remove(true);
               }}
             >
-              Delete for everyone
+              {tr('Delete for everyone')}
             </MenuItem>
           )}
         </Popover>
@@ -2225,16 +2253,16 @@ function SharedMedia(props: { messages: DirectMessageView[]; onClose(): void }):
   const files = all.filter(({ a }) => !/^(image|video|audio)\//.test(a.mime));
   const links = live.flatMap((m) => (m.text.match(LINK_RE) ?? []).map((url) => ({ url, m })));
   const tabs: Array<[MediaTab, string, number]> = [
-    ['photos', 'Photos', photos.length],
-    ['videos', 'Videos', videos.length],
-    ['files', 'Files', files.length],
-    ['voice', 'Voice', voice.length],
-    ['links', 'Links', links.length],
+    ['photos', tr('Photos'), photos.length],
+    ['videos', tr('Videos'), videos.length],
+    ['files', tr('Files'), files.length],
+    ['voice', tr('Voice'), voice.length],
+    ['links', tr('Links'), links.length],
   ];
   const list = { photos, videos, files, voice }[tab as 'photos'] ?? [];
   return (
-    <Modal title="Shared in this conversation" onClose={props.onClose} wide>
-      <div className="shared-media__tabs" role="radiogroup" aria-label="Show">
+    <Modal title={tr('Shared in this conversation')} onClose={props.onClose} wide>
+      <div className="shared-media__tabs" role="radiogroup" aria-label={tr('Show')}>
         {tabs.map(([id, label, n]) => (
           <button
             key={id}
@@ -2263,7 +2291,7 @@ function SharedMedia(props: { messages: DirectMessageView[]; onClose(): void }):
             ))}
           </ul>
         ) : (
-          <p className="muted small">No links yet.</p>
+          <p className="muted small">{tr('No links yet.')}</p>
         )
       ) : list.length ? (
         <div className={tab === 'photos' ? 'shared-media__grid' : 'shared-media__list'}>
@@ -2272,9 +2300,9 @@ function SharedMedia(props: { messages: DirectMessageView[]; onClose(): void }):
           ))}
         </div>
       ) : (
-        <p className="muted small">Nothing here yet.</p>
+        <p className="muted small">{tr('Nothing here yet.')}</p>
       )}
-      <p className="muted small">From the latest messages kept on this device.</p>
+      <p className="muted small">{tr('From the latest messages kept on this device.')}</p>
     </Modal>
   );
 }
@@ -2303,31 +2331,32 @@ function ScheduleDialog(props: {
   tomorrow9.setDate(tomorrow9.getDate() + 1);
   tomorrow9.setHours(9, 0, 0, 0);
   return (
-    <Modal title="Schedule message" onClose={props.onClose}>
+    <Modal title={tr('Schedule message')} onClose={props.onClose}>
       <div className="schedule-quick">
-        {quick('In 1 hour', new Date(opened + 3600_000))}
-        {quick('In 3 hours', new Date(opened + 3 * 3600_000))}
-        {quick('Tomorrow 9:00', tomorrow9)}
+        {quick(tr('In 1 hour'), new Date(opened + 3600_000))}
+        {quick(tr('In 3 hours'), new Date(opened + 3 * 3600_000))}
+        {quick(tr('Tomorrow 9:00'), tomorrow9)}
       </div>
       <label className="textfield">
-        <span className="field__label">Send at</span>
+        <span className="field__label">{tr('Send at')}</span>
         <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
       </label>
-      <Toggle checked={silent} onChange={setSilent} label="Send without sound" />
+      <Toggle checked={silent} onChange={setSilent} label={tr('Send without sound')} />
       <p className="muted small">
-        River keeps the message encrypted on this device and sends it at that time — this device has to be on
-        and online then. River's server never holds it.
+        {tr(
+          "River keeps the message encrypted on this device and sends it at that time — this device has to be on and online then. River's server never holds it.",
+        )}
       </p>
       <div className="button-row">
         <button className="btn btn--ghost" onClick={props.onClose}>
-          Cancel
+          {tr('Cancel')}
         </button>
         <button
           className="btn btn--primary"
           disabled={!valid}
           onClick={() => props.onSchedule(at.toISOString(), silent)}
         >
-          Schedule
+          {tr('Schedule')}
         </button>
       </div>
     </Modal>
@@ -2352,19 +2381,24 @@ function ScheduledBar(props: { peer: string }): ReactElement | null {
   return (
     <>
       <button className="scheduled-bar" onClick={() => setOpen(true)}>
-        🕓 {items.length} scheduled {items.length === 1 ? 'message' : 'messages'} · next{' '}
-        {new Date(items[0]!.sendAt).toLocaleString()}
+        🕓{' '}
+        {trn('{count} scheduled messages · next {when}', items.length, {
+          when: new Date(items[0]!.sendAt).toLocaleString(),
+        })}
       </button>
       {open && (
-        <Modal title="Scheduled messages" onClose={() => setOpen(false)}>
+        <Modal title={tr('Scheduled messages')} onClose={() => setOpen(false)}>
           <ul className="scheduled-list">
             {items.map((x) => (
               <li key={x.id} className="scheduled-item">
                 <span className="scheduled-item__text">
                   <strong>{new Date(x.sendAt).toLocaleString()}</strong>
-                  {x.silent && <span className="muted small"> · without sound</span>}
+                  {x.silent && <span className="muted small"> · {tr('without sound')}</span>}
                   {x.failed && (
-                    <span className="field__error small"> · not sent yet (offline), trying again</span>
+                    <span className="field__error small">
+                      {' '}
+                      · {tr('not sent yet (offline), trying again')}
+                    </span>
                   )}
                   <span className="muted small">{x.text || x.attachments.map((a) => a.name).join(', ')}</span>
                 </span>
@@ -2373,13 +2407,13 @@ function ScheduledBar(props: { peer: string }): ReactElement | null {
                     className="btn btn--ghost btn--small"
                     onClick={() => void window.river.dm.action({ a: 'sendScheduledNow', id: x.id })}
                   >
-                    Send now
+                    {tr('Send now')}
                   </button>
                   <button
                     className="btn btn--danger btn--small"
                     onClick={() => void window.river.dm.action({ a: 'cancelScheduled', id: x.id })}
                   >
-                    Cancel
+                    {tr('Cancel')}
                   </button>
                 </span>
               </li>
@@ -2403,13 +2437,13 @@ function TimerDialog(props: { conversation: ConversationView; onClose(): void })
     else props.onClose();
   };
   return (
-    <Modal title="Disappearing messages" onClose={props.onClose}>
+    <Modal title={tr('Disappearing messages')} onClose={props.onClose}>
       <p className="muted small">
-        New messages in this conversation are deleted from every device in it after the time you choose — for
-        everyone in the conversation. They can still be copied or photographed before they disappear. Both of
-        you need River 2.4 or newer.
+        {tr(
+          'New messages in this conversation are deleted from every device in it after the time you choose — for everyone in the conversation. They can still be copied or photographed before they disappear. Both of you need River 2.4 or newer.',
+        )}
       </p>
-      <div className="timer-choices" role="radiogroup" aria-label="Delete messages after">
+      <div className="timer-choices" role="radiogroup" aria-label={tr('Delete messages after')}>
         {TIMER_CHOICES.map((seconds) => (
           <button
             key={seconds}
@@ -2419,7 +2453,7 @@ function TimerDialog(props: { conversation: ConversationView; onClose(): void })
             className={`timer-choice ${(c.timer ?? 0) === seconds ? 'is-active' : ''}`}
             onClick={() => void set(seconds)}
           >
-            {timerLabel(seconds)}
+            {timerText(seconds)}
           </button>
         ))}
       </div>
@@ -2442,23 +2476,23 @@ function SelectionToolbar(props: {
     .join('\n');
   const c = props.conversation;
   return (
-    <div className="selection-bar" role="toolbar" aria-label="Selected messages">
-      <strong>{ids.length} selected</strong>
+    <div className="selection-bar" role="toolbar" aria-label={tr('Selected messages')}>
+      <strong>{tr('{count} selected', { count: ids.length })}</strong>
       <span className="selection-bar__actions">
         <button className="btn btn--ghost btn--small" disabled={!text} onClick={() => copyText(text)}>
-          Copy
+          {tr('Copy')}
         </button>
         <button className="btn btn--ghost btn--small" disabled={!text} onClick={() => setForwarding(true)}>
-          Forward
+          {tr('Forward')}
         </button>
         <button
           className="btn btn--danger btn--small"
           onClick={() =>
             useCommunity.getState().setModal({
               kind: 'confirm',
-              title: `Delete ${chosen.length} ${chosen.length === 1 ? 'message' : 'messages'} for me`,
-              body: 'They are deleted on this device only.',
-              action: 'Delete',
+              title: trn('Delete {count} messages for me', chosen.length),
+              body: tr('They are deleted on this device only.'),
+              action: tr('Delete'),
               run: async () => {
                 for (const m of chosen) {
                   await window.river.dm.action({
@@ -2473,14 +2507,14 @@ function SelectionToolbar(props: {
             })
           }
         >
-          Delete
+          {tr('Delete')}
         </button>
         <button
           className="btn btn--primary btn--small"
           data-phone-back=""
           onClick={() => useSelection.getState().clear()}
         >
-          Done
+          {tr('Done')}
         </button>
       </span>
       {forwarding && (
@@ -2530,7 +2564,7 @@ function ConversationSearch(props: { peer: string; onClose(): void }): ReactElem
       (m) => Date.parse(m.sentAt) >= start.getTime() && !m.notice,
     );
     if (!first) {
-      useCommunity.getState().notify('No messages from that day on.');
+      useCommunity.getState().notify(tr('No messages from that day on.'));
       return;
     }
     whenShown(first.id);
@@ -2540,8 +2574,8 @@ function ConversationSearch(props: { peer: string; onClose(): void }): ReactElem
       <input
         className="search"
         autoFocus
-        placeholder="Search in this conversation"
-        aria-label="Search in this conversation"
+        placeholder={tr('Search in this conversation')}
+        aria-label={tr('Search in this conversation')}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
@@ -2552,8 +2586,8 @@ function ConversationSearch(props: { peer: string; onClose(): void }): ReactElem
       <input
         type="date"
         className="conv-search__date"
-        aria-label="Jump to a date"
-        title="Jump to a date"
+        aria-label={tr('Jump to a date')}
+        title={tr('Jump to a date')}
         value={date}
         max={localDay(new Date())}
         onChange={(e) => {
@@ -2561,12 +2595,12 @@ function ConversationSearch(props: { peer: string; onClose(): void }): ReactElem
           if (e.target.value) void jumpToDate(e.target.value);
         }}
       />
-      <button className="icon-btn" aria-label="Close search" data-phone-back="" onClick={props.onClose}>
+      <button className="icon-btn" aria-label={tr('Close search')} data-phone-back="" onClick={props.onClose}>
         <XIcon size={16} />
       </button>
       {query.trim().length >= 2 && (
         <ul className="conv-search__results">
-          {shown.length === 0 && <li className="muted small">No messages found.</li>}
+          {shown.length === 0 && <li className="muted small">{tr('No messages found.')}</li>}
           {shown.map((m) => (
             <li key={m.id}>
               <button className="conv-search__result" onClick={() => jump(m)}>
@@ -2608,7 +2642,7 @@ function DmEditBox({ m }: { m: DirectMessageView }): ReactElement {
         value={text}
         maxLength={4000}
         rows={Math.min(8, text.split('\n').length)}
-        aria-label="Edit message"
+        aria-label={tr('Edit message')}
         onChange={(e) => setText(e.target.value)}
         // The caret at the end of the message, not before its first letter.
         onFocus={(e) => e.currentTarget.setSelectionRange(text.length, text.length)}
@@ -2627,7 +2661,7 @@ function DmEditBox({ m }: { m: DirectMessageView }): ReactElement {
       {phone ? (
         <EditActions onCancel={close} onSave={() => void save()} />
       ) : (
-        <span className="muted small">escape to cancel • enter to save</span>
+        <span className="muted small">{tr('escape to cancel • enter to save')}</span>
       )}
     </div>
   );
@@ -2712,7 +2746,7 @@ ${shared}`
         attachments = await uploadAll(files, (done) => setUploading({ done, total: files.length }), 'dm');
       } catch (err) {
         setUploading(null);
-        useCommunity.getState().notify((err as Error).message || 'Upload failed.', 'error');
+        useCommunity.getState().notify((err as Error).message || tr('Upload failed.'), 'error');
         return;
       }
     }
@@ -2732,7 +2766,9 @@ ${shared}`
       if (!queued) restore(value, replyTo);
       else {
         props.onPending([]);
-        useCommunity.getState().notify(`Scheduled for ${new Date(options.sendAt).toLocaleString()}`);
+        useCommunity
+          .getState()
+          .notify(tr('Scheduled for {when}', { when: new Date(options.sendAt).toLocaleString() }));
       }
       return;
     }
@@ -2778,7 +2814,7 @@ ${shared}`
       attachments = await uploadAll(files, (done) => setUploading({ done, total: 1 }), 'dm');
     } catch (err) {
       setUploading(null);
-      useCommunity.getState().notify((err as Error).message || 'Upload failed.', 'error');
+      useCommunity.getState().notify((err as Error).message || tr('Upload failed.'), 'error');
       return;
     }
     useDm.setState({ replyTo: null });
@@ -2806,7 +2842,7 @@ ${shared}`
               void send({ silent: true });
             }}
           >
-            🔕 Send without sound
+            🔕 {tr('Send without sound')}
           </MenuItem>
           <MenuItem
             onClick={() => {
@@ -2814,7 +2850,7 @@ ${shared}`
               setScheduling(true);
             }}
           >
-            🕓 Schedule message…
+            🕓 {tr('Schedule message…')}
           </MenuItem>
           {MESSAGE_EFFECTS.map((effect) => (
             <MenuItem
@@ -2824,7 +2860,7 @@ ${shared}`
                 void send({ effect });
               }}
             >
-              {EFFECT_LABELS[effect].emoji} Send with {EFFECT_LABELS[effect].name.toLowerCase()}
+              {EFFECT_LABELS[effect].emoji} {tr(EFFECT_LABELS[effect].sendWith)}
             </MenuItem>
           ))}
         </Popover>
@@ -2858,17 +2894,19 @@ ${shared}`
           <button
             type="button"
             className="reply-bar__jump"
-            title="Show the message"
+            title={tr('Show the message')}
             onClick={() => jumpToDmMessage(c.riverId, replyTo)}
           >
             <span>
-              Replying to <strong>{replyTo.mine ? 'yourself' : replyTo.senderName || c.name}</strong>
+              {rich(tr('Replying to {name}'), {
+                name: <strong>{replyTo.mine ? tr('yourself') : replyTo.senderName || c.name}</strong>,
+              })}
             </span>
             <span className="reply-bar__preview">{replyPreview(replyTo)}</span>
           </button>
           <button
             className="icon-btn"
-            aria-label="Cancel reply"
+            aria-label={tr('Cancel reply')}
             onClick={() => useDm.setState({ replyTo: null })}
           >
             <XIcon size={14} />
@@ -2883,7 +2921,10 @@ ${shared}`
       )}
       {uploading && (
         <div className="upload-progress" role="status">
-          Encrypting and uploading {Math.min(uploading.done + 1, uploading.total)} of {uploading.total}…
+          {tr('Encrypting and uploading {done} of {total}…', {
+            done: Math.min(uploading.done + 1, uploading.total),
+            total: uploading.total,
+          })}
           <span
             className="upload-progress__bar"
             style={{ width: `${(uploading.done / uploading.total) * 100}%` }}
@@ -2977,8 +3018,8 @@ ${shared}`
         <button
           type="button"
           className="icon-btn"
-          aria-label="Emoji"
-          title={phone ? undefined : 'Emoji'}
+          aria-label={tr('Emoji')}
+          title={phone ? undefined : tr('Emoji')}
           onClick={(e) =>
             setPicker(
               phone
@@ -2994,8 +3035,8 @@ ${shared}`
           <button
             type="button"
             className="icon-btn composer__replies"
-            aria-label="Saved replies"
-            title={phone ? undefined : 'Saved replies (or type /)'}
+            aria-label={tr('Saved replies')}
+            title={phone ? undefined : tr('Saved replies (or type /)')}
             onClick={(e) => setRepliesMenu(nearButton(e.currentTarget, { width: 340, height: 360 }))}
           >
             {/* On a phone a line icon like its neighbours (an emoji there looked greyed out). */}
@@ -3015,8 +3056,8 @@ ${shared}`
           <button
             type="button"
             className="icon-btn"
-            aria-label="More ways to send"
-            title="Send later, without sound or with an effect"
+            aria-label={tr('More ways to send')}
+            title={tr('Send later, without sound or with an effect')}
             onClick={(e) => setLater({ x: e.clientX - 200, y: e.clientY - 110 })}
           >
             ⏰
@@ -3028,7 +3069,7 @@ ${shared}`
           (!!text.trim() || props.pending.length > 0) && (
             <button
               className="composer__send"
-              aria-label="Send"
+              aria-label={tr('Send')}
               disabled={!!uploading}
               onContextMenu={(e) => {
                 e.preventDefault();
@@ -3043,7 +3084,7 @@ ${shared}`
             className="btn btn--primary"
             disabled={(!text.trim() && !props.pending.length) || !!uploading}
           >
-            Send
+            {tr('Send')}
           </button>
         )}
       </form>
@@ -3106,13 +3147,13 @@ export function NewMessage({ onClose }: { onClose(): void }): ReactElement {
   if (grouping) {
     return (
       <PeoplePicker
-        title="New group"
+        title={tr('New group')}
         exclude={myId ? [myId] : []}
-        action="Create group"
+        action={tr('Create group')}
         withName
         onClose={onClose}
         onPick={async (ids, name) => {
-          const g = await dm.run({ a: 'createGroup', name: name ?? 'Group', members: ids });
+          const g = await dm.run({ a: 'createGroup', name: name ?? tr('Group'), members: ids });
           if (g) {
             dm.select(g.riverId);
             onClose();
@@ -3123,16 +3164,16 @@ export function NewMessage({ onClose }: { onClose(): void }): ReactElement {
   }
 
   return (
-    <Modal title="New message" onClose={onClose}>
+    <Modal title={tr('New message')} onClose={onClose}>
       <button className="btn btn--ghost btn--small new-group-btn" onClick={() => setGrouping(true)}>
-        👥 New group
+        👥 {tr('New group')}
       </button>
       <label className="textfield">
-        <span className="field__label">Find someone, or paste their River ID</span>
+        <span className="field__label">{tr('Find someone, or paste their River ID')}</span>
         <input
           autoFocus
           value={query}
-          placeholder="Name or River ID"
+          placeholder={tr('Name or River ID')}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && isId) void start(query.trim());
@@ -3141,7 +3182,7 @@ export function NewMessage({ onClose }: { onClose(): void }): ReactElement {
       </label>
       {isId && (
         <button className="btn btn--primary" disabled={busy} onClick={() => void start(query.trim())}>
-          {busy ? 'Setting up encryption…' : 'Message this River ID'}
+          {busy ? tr('Setting up encryption…') : tr('Message this River ID')}
         </button>
       )}
       <div className="people-list">
@@ -3155,14 +3196,15 @@ export function NewMessage({ onClose }: { onClose(): void }): ReactElement {
             <Avatar id={p.riverId} name={p.name} avatar={p.avatar} size={32} />
             <span className="dm-row__text">
               <strong>{p.name}</strong>
-              <span className="muted small">from {p.where}</span>
+              <span className="muted small">{tr('from {place}', { place: p.where })}</span>
             </span>
           </button>
         ))}
         {!isId && shown.length === 0 && (
           <p className="muted small">
-            Nobody found. People you share a community with appear here; anyone else can give you their River
-            ID.
+            {tr(
+              'Nobody found. People you share a community with appear here; anyone else can give you their River ID.',
+            )}
           </p>
         )}
       </div>
@@ -3181,14 +3223,16 @@ export function SafetyNumber({ peer, onClose }: { peer: string; onClose(): void 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [peer]);
   return (
-    <Modal title="Safety number" onClose={onClose}>
+    <Modal title={tr('Safety number')} onClose={onClose}>
       {!data ? (
-        <p className="muted">Loading…</p>
+        <p className="muted">{tr('Loading…')}</p>
       ) : (
         <div className="safety">
           <p className="muted small">
-            Compare these numbers with {data.theirName} in person or on a call. If they match on both devices,
-            nobody is intercepting your messages.
+            {tr(
+              'Compare these numbers with {name} in person or on a call. If they match on both devices, nobody is intercepting your messages.',
+              { name: data.theirName },
+            )}
           </p>
           <div className="safety__digits">
             {(data.digits.match(/.{5}/g) ?? []).map((group, i) => (
@@ -3196,8 +3240,8 @@ export function SafetyNumber({ peer, onClose }: { peer: string; onClose(): void 
             ))}
           </div>
           <Toggle
-            label="Mark as verified"
-            help="If their safety number changes later, River stops sending until you verify again."
+            label={tr('Mark as verified')}
+            help={tr('If their safety number changes later, River stops sending until you verify again.')}
             checked={data.verified}
             onChange={(v) => {
               // Shows verified only once River has recorded it.
@@ -3222,7 +3266,12 @@ function useKnownPeople(): Array<{ riverId: string; name: string; avatar: string
     const seen = new Map<string, { riverId: string; name: string; avatar: string | null; where: string }>();
     for (const c of conversations) {
       if (c.kind === 'direct' && c.state === 'accepted') {
-        seen.set(c.riverId, { riverId: c.riverId, name: c.name, avatar: c.avatar, where: 'your contacts' });
+        seen.set(c.riverId, {
+          riverId: c.riverId,
+          name: c.name,
+          avatar: c.avatar,
+          where: tr('your contacts'),
+        });
       }
     }
     for (const c of communities) {
@@ -3256,19 +3305,19 @@ function PeoplePicker(props: {
     <Modal title={props.title} onClose={props.onClose}>
       {props.withName && (
         <label className="textfield">
-          <span className="field__label">Group name</span>
+          <span className="field__label">{tr('Group name')}</span>
           <input
             autoFocus
             value={name}
             maxLength={64}
-            placeholder="e.g. Weekend trip"
+            placeholder={tr('e.g. Weekend trip')}
             onChange={(e) => setName(e.target.value)}
           />
         </label>
       )}
       <input
         className="search"
-        placeholder="Search people"
+        placeholder={tr('Search people')}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
@@ -3279,18 +3328,18 @@ function PeoplePicker(props: {
             <Avatar id={p.riverId} name={p.name} avatar={p.avatar} size={30} />
             <span className="dm-row__text">
               <strong>{p.name}</strong>
-              <span className="muted small">from {p.where}</span>
+              <span className="muted small">{tr('from {place}', { place: p.where })}</span>
             </span>
           </label>
         ))}
         {shown.length === 0 && (
           <p className="muted small">
-            Nobody to add yet — people from your communities and contacts appear here.
+            {tr('Nobody to add yet — people from your communities and contacts appear here.')}
           </p>
         )}
       </div>
       <div className="modal__foot">
-        <span className="muted small">{picked.length} selected</span>
+        <span className="muted small">{tr('{count} selected', { count: picked.length })}</span>
         <button
           className="btn btn--primary"
           disabled={busy || picked.length === 0 || (props.withName && !name.trim())}
@@ -3299,7 +3348,7 @@ function PeoplePicker(props: {
             void props.onPick(picked, name.trim() || undefined).finally(() => setBusy(false));
           }}
         >
-          {busy ? 'Setting up encryption…' : props.action}
+          {busy ? tr('Setting up encryption…') : props.action}
         </button>
       </div>
     </Modal>
@@ -3325,8 +3374,8 @@ function GroupMembers({ c, onClose }: { c: ConversationView; onClose(): void }):
   return (
     <div className="group-members">
       <header className="pins__head">
-        <strong>Members — {c.members.length}</strong>
-        <button className="icon-btn" aria-label="Close members" data-phone-back="" onClick={onClose}>
+        <strong>{tr('Members — {count}', { count: c.members.length })}</strong>
+        <button className="icon-btn" aria-label={tr('Close members')} data-phone-back="" onClick={onClose}>
           <XIcon size={14} />
         </button>
       </header>
@@ -3335,15 +3384,15 @@ function GroupMembers({ c, onClose }: { c: ConversationView; onClose(): void }):
           <Avatar id={m.riverId} name={m.name} avatar={m.avatar} size={28} />
           <span className="group-members__name">
             {m.name}
-            {m.riverId === myId ? ' (you)' : ''}
+            {m.riverId === myId ? ` ${tr('(you)')}` : ''}
           </span>
-          {m.admin && <span className="chip">admin</span>}
+          {m.admin && <span className="chip">{tr('admin')}</span>}
           {c.isAdmin && m.riverId !== myId && c.state !== 'left' && (
             <button
               className="btn btn--link btn--danger-text"
               onClick={() => void dm.run({ a: 'removeGroupMember', peer: c.riverId, member: m.riverId })}
             >
-              Remove
+              {tr('Remove')}
             </button>
           )}
         </div>
@@ -3355,7 +3404,7 @@ function GroupMembers({ c, onClose }: { c: ConversationView; onClose(): void }):
 function typingName(c: ConversationView): string {
   if (c.kind !== 'group') return c.name;
   const who = useDm.getState().typingWho[c.riverId];
-  return c.members.find((m) => m.riverId === who)?.name ?? 'Someone';
+  return c.members.find((m) => m.riverId === who)?.name ?? tr('Someone');
 }
 
 /** An invite someone sent you: one click joins (you are asked nothing else). */
@@ -3366,7 +3415,7 @@ function InviteCard({ text }: { text: string }): ReactElement | null {
   if (!link) return null;
   return (
     <div className="invite-card">
-      <span>🏠 Invitation to a River community</span>
+      <span>🏠 {tr('Invitation to a River community')}</span>
       <button
         className="btn btn--primary btn--small"
         disabled={state === 'joining'}
@@ -3378,7 +3427,7 @@ function InviteCard({ text }: { text: string }): ReactElement | null {
           });
         }}
       >
-        {state === 'joining' ? 'Joining…' : 'Join community'}
+        {state === 'joining' ? tr('Joining…') : tr('Join community')}
       </button>
       {error && (
         <span className="small" role="alert">

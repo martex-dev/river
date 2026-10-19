@@ -1,3 +1,4 @@
+import { msg } from '../../../shared/i18n/index.ts';
 /**
  * Built-in slash commands (1.0.25). Pure: parsing and text commands here;
  * the composer runs the ones that act (poll, nick, status, mute).
@@ -9,21 +10,21 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
-  { name: 'shrug', args: '[message]', help: 'Adds ¯\\_(ツ)_/¯' },
-  { name: 'tableflip', args: '[message]', help: 'Adds (╯°□°)╯︵ ┻━┻' },
-  { name: 'unflip', args: '[message]', help: 'Adds ┬─┬ノ( º _ ºノ)' },
-  { name: 'lenny', args: '[message]', help: 'Adds ( ͡° ͜ʖ ͡°)' },
-  { name: 'me', args: 'action', help: 'Shows your message as an action' },
-  { name: 'spoiler', args: 'message', help: 'Hides your message until clicked' },
-  { name: 'poll', args: '', help: 'Starts a poll' },
-  { name: 'nick', args: '[nickname]', help: 'Changes your nickname here (empty: back to your name)' },
-  { name: 'status', args: '[text]', help: 'Sets your custom status (empty: clears it)' },
-  { name: 'online', args: '', help: 'Shows you as Online' },
-  { name: 'idle', args: '', help: 'Shows you as Idle' },
-  { name: 'dnd', args: '', help: 'Do Not Disturb: no notifications or sounds' },
-  { name: 'invisible', args: '', help: 'Appear offline' },
-  { name: 'mute', args: '[15m|1h|8h|24h]', help: 'Mutes this channel (no length: until you unmute)' },
-  { name: 'unmute', args: '', help: 'Unmutes this channel' },
+  { name: 'shrug', args: '[message]', help: msg('Adds ¯\\_(ツ)_/¯') },
+  { name: 'tableflip', args: '[message]', help: msg('Adds (╯°□°)╯︵ ┻━┻') },
+  { name: 'unflip', args: '[message]', help: msg('Adds ┬─┬ノ( º _ ºノ)') },
+  { name: 'lenny', args: '[message]', help: msg('Adds ( ͡° ͜ʖ ͡°)') },
+  { name: 'me', args: 'action', help: msg('Shows your message as an action') },
+  { name: 'spoiler', args: 'message', help: msg('Hides your message until clicked') },
+  { name: 'poll', args: '', help: msg('Starts a poll') },
+  { name: 'nick', args: '[nickname]', help: msg('Changes your nickname here (empty: back to your name)') },
+  { name: 'status', args: '[text]', help: msg('Sets your custom status (empty: clears it)') },
+  { name: 'online', args: '', help: msg('Shows you as Online') },
+  { name: 'idle', args: '', help: msg('Shows you as Idle') },
+  { name: 'dnd', args: '', help: msg('Do Not Disturb: no notifications or sounds') },
+  { name: 'invisible', args: '', help: msg('Appear offline') },
+  { name: 'mute', args: '[15m|1h|8h|24h]', help: msg('Mutes this channel (no length: until you unmute)') },
+  { name: 'unmute', args: '', help: msg('Unmutes this channel') },
 ];
 
 export interface ParsedSlash {

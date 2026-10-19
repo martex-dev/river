@@ -244,6 +244,7 @@ async function start(): Promise<void> {
     idleSeconds: () => (foreground ? 0 : (Date.now() - lastActive) / 1000),
   });
   const community = new CommunityService({
+    language: lang,
     db: () => storage.db(),
     account,
     identity,
@@ -373,6 +374,7 @@ async function start(): Promise<void> {
     log,
   });
   const dm = new DmService({
+    language: lang,
     db: () => storage.db(),
     identity,
     account,
@@ -636,6 +638,7 @@ async function start(): Promise<void> {
         homeServerEnabled: homeAccount.enabled(),
         version: app.getVersion(),
         platform: PLATFORM,
+        t,
       }),
     openLogs: async () => undefined,
   });

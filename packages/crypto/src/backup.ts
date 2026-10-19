@@ -14,10 +14,23 @@ import { BYTEWORDS } from './bytewords.ts';
 export const RECOVERY_SECRET_BYTES = 16;
 const MAGIC = Buffer.from('RIVERBK1', 'ascii');
 
+/**
+ * A backup problem to show people. `text` is the sentence before its details are filled in
+ * ("… has {expected} words …") and `vars` the details, so the app can say it in its language;
+ * `message` is the English sentence, filled in.
+ */
 export class BackupError extends Error {
-  constructor(message: string) {
-    super(message);
+  readonly text: string;
+  readonly vars: Record<string, string | number> | undefined;
+  constructor(text: string, vars?: Record<string, string | number>) {
+    super(
+      vars
+        ? text.replace(/\{(\w+)\}/g, (all, k: string) => (Object.hasOwn(vars, k) ? String(vars[k]) : all))
+        : text,
+    );
     this.name = 'BackupError';
+    this.text = text;
+    this.vars = vars;
   }
 }
 
@@ -39,13 +52,14 @@ export function parseRecoveryPhrase(phrase: string): Uint8Array {
     .split(/[\s,.-]+/)
     .filter(Boolean);
   if (words.length !== RECOVERY_SECRET_BYTES + 2) {
-    throw new BackupError(
-      `The recovery phrase has ${RECOVERY_SECRET_BYTES + 2} words; you entered ${words.length}.`,
-    );
+    throw new BackupError('The recovery phrase has {expected} words; you entered {count}.', {
+      expected: RECOVERY_SECRET_BYTES + 2,
+      count: words.length,
+    });
   }
   const bytes = words.map((w) => {
     const i = BYTEWORDS.indexOf(w);
-    if (i < 0) throw new BackupError(`"${w}" is not a recovery word. Check the spelling.`);
+    if (i < 0) throw new BackupError('"{word}" is not a recovery word. Check the spelling.', { word: w });
     return i;
   });
   const secret = Uint8Array.from(bytes.slice(0, RECOVERY_SECRET_BYTES));

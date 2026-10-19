@@ -219,12 +219,12 @@ export function ChannelList(props: { community: CommunityView; me: string }): Re
             return (['text', 'voice'] as const).map((kind) => (
               <div key={kind} className="channel-group">
                 <div className="channel-group__head">
-                  <span>{kind === 'text' ? 'Text channels' : 'Voice channels'}</span>
+                  <span>{kind === 'text' ? tr('Text channels') : tr('Voice channels')}</span>
                   {manage && (
                     <button
                       className="channel-group__add"
-                      title={`Create ${kind} channel`}
-                      aria-label={`Create ${kind} channel`}
+                      title={kind === 'text' ? tr('Create text channel') : tr('Create voice channel')}
+                      aria-label={kind === 'text' ? tr('Create text channel') : tr('Create voice channel')}
                       onClick={() =>
                         s.setModal({ kind: 'create-channel', communityId: community.id, channelKind: kind })
                       }
@@ -242,7 +242,7 @@ export function ChannelList(props: { community: CommunityView; me: string }): Re
               {g.channels.map(row)}
               {drag?.type === 'channel' && (
                 <div className={`channel-drop ${marker('loose', '') ? 'is-over' : ''}`} {...dnd('loose', '')}>
-                  Drop here to remove from its category
+                  {tr('Drop here to remove from its category')}
                 </div>
               )}
             </div>
@@ -264,7 +264,7 @@ export function ChannelList(props: { community: CommunityView; me: string }): Re
             key={k.id}
             className={`channel-group category ${drag?.id === k.id ? 'is-dragging' : ''}`}
             role="group"
-            aria-label={`Category ${k.name}`}
+            aria-label={tr('Category {name}', { name: k.name })}
           >
             <div
               className={`channel-group__head category__head ${marker('category', k.id)}`}
@@ -341,8 +341,8 @@ export function ChannelList(props: { community: CommunityView; me: string }): Re
                 <span className="category__tools">
                   <button
                     className="channel-group__add"
-                    title="Create channel"
-                    aria-label={`Create channel in ${k.name}`}
+                    title={tr('Create channel')}
+                    aria-label={tr('Create channel in {name}', { name: k.name })}
                     onClick={() =>
                       s.setModal({
                         kind: 'create-channel',
@@ -356,8 +356,8 @@ export function ChannelList(props: { community: CommunityView; me: string }): Re
                   </button>
                   <button
                     className="channel-group__add"
-                    title="Edit category"
-                    aria-label={`Edit category ${k.name}`}
+                    title={tr('Edit category')}
+                    aria-label={tr('Edit category {name}', { name: k.name })}
                     onClick={() =>
                       s.setModal({ kind: 'category', communityId: community.id, categoryId: k.id })
                     }

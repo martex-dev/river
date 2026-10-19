@@ -7,6 +7,7 @@ import { useActiveDesign } from './use-design.ts';
 import { useLook, useWallpaperLayers, wallpaperProps, type WallpaperProps } from './use-wallpaper.ts';
 import { withChatWallpaper } from './wallpaper.ts';
 import { WallpaperPicker } from './WallpaperPicker.tsx';
+import { tr } from '../i18n.ts';
 
 /**
  * Per-chat wallpapers (2.18): the props for a chat's messages area. A chat without a wallpaper
@@ -42,10 +43,14 @@ export function ChatWallpaperDialog(props: { chatKey: string; name: string; onCl
     props.onClose();
   };
   return (
-    <Modal title={`Wallpaper for ${props.name}`} onClose={props.onClose} className="wp-dialog">
+    <Modal
+      title={tr('Wallpaper for {name}', { name: props.name })}
+      onClose={props.onClose}
+      className="wp-dialog"
+    >
       <div className="wp-dialog__preview" {...preview} aria-hidden="true">
-        <span className="wp-dialog__bubble">Hi! How do I look? 🌊</span>
-        <span className="wp-dialog__bubble wp-dialog__bubble--mine">Lovely.</span>
+        <span className="wp-dialog__bubble">{tr('Hi! How do I look? 🌊')}</span>
+        <span className="wp-dialog__bubble wp-dialog__bubble--mine">{tr('Lovely.')}</span>
       </div>
       <WallpaperPicker
         value={draft}
@@ -55,19 +60,19 @@ export function ChatWallpaperDialog(props: { chatKey: string; name: string; onCl
         photosLeft={MAX_WALLPAPER_PHOTOS - chatPhotoCount(design.chatWallpapers ?? {}, props.chatKey)}
       />
       <p className="muted small">
-        Only on this device. The other people in this chat see their own wallpaper.
+        {tr('Only on this device. The other people in this chat see their own wallpaper.')}
       </p>
       <div className="modal__foot">
         {own && (
           <button className="btn btn--ghost" onClick={() => save(null)}>
-            Use the app’s wallpaper
+            {tr('Use the app’s wallpaper')}
           </button>
         )}
         <button className="btn btn--ghost" onClick={props.onClose}>
-          Cancel
+          {tr('Cancel')}
         </button>
         <button className="btn btn--primary" onClick={() => save(draft)}>
-          Set wallpaper
+          {tr('Set wallpaper')}
         </button>
       </div>
     </Modal>

@@ -77,7 +77,7 @@ export function memberOf(community: CommunityView | null | undefined, id: string
 }
 
 export function nameOf(community: CommunityView | null | undefined, id: string): string {
-  return memberOf(community, id)?.name ?? 'Someone';
+  return memberOf(community, id)?.name ?? tr('Someone');
 }
 
 // ---- avatar --------------------------------------------------------------------------------------
@@ -377,7 +377,7 @@ export function Modal(props: {
           {props.title && (
             <header className="modal__head">
               <h2>{props.title}</h2>
-              <button className="icon-btn" aria-label="Close" onClick={props.onClose}>
+              <button className="icon-btn" aria-label={tr('Close')} onClick={props.onClose}>
                 <XIcon />
               </button>
             </header>
@@ -600,22 +600,26 @@ export function EmojiPicker(props: {
   const customShown = results ? customMatches : group === -2 ? custom : [];
   const heading = results
     ? results.length + customMatches.length
-      ? `Results for “${query}”`
-      : `No emoji match “${query}”`
+      ? tr('Results for “{query}”', { query })
+      : tr('No emoji match “{query}”', { query })
     : group === -2
-      ? 'This community'
+      ? tr('This community')
       : group === -1
-        ? 'Recently used'
+        ? tr('Recently used')
         : group === -3
-          ? `Favourites — ${phoneShellActive() ? 'long-press' : 'right-click'} to remove`
-          : (index?.groups[group]?.name ?? 'Loading…');
+          ? phoneShellActive()
+            ? tr('Favourites — long-press to remove')
+            : tr('Favourites — right-click to remove')
+          : index?.groups[group]
+            ? tr(index.groups[group].name)
+            : tr('Loading…');
   const first = customMatches[0] ? customEmojiText(customMatches[0]) : results?.[0]?.emoji;
   return (
     <div className="emoji-picker">
       <input
         className="emoji-picker__search"
-        placeholder="Search emoji"
-        aria-label="Search emoji"
+        placeholder={tr('Search emoji')}
+        aria-label={tr('Search emoji')}
         value={query}
         autoFocus
         onChange={(e) => setQuery(e.target.value)}
@@ -627,13 +631,13 @@ export function EmojiPicker(props: {
         }}
       />
       {!query && (
-        <div className="emoji-picker__tabs" role="tablist" aria-label="Emoji categories">
+        <div className="emoji-picker__tabs" role="tablist" aria-label={tr('Emoji categories')}>
           {favorites.length > 0 && (
             <button
               role="tab"
               aria-selected={group === -3}
               className={`emoji-picker__tab ${group === -3 ? 'is-active' : ''}`}
-              title="Favourites"
+              title={tr('Favourites')}
               onClick={() => setGroup(-3)}
             >
               ⭐
@@ -644,7 +648,7 @@ export function EmojiPicker(props: {
               role="tab"
               aria-selected={group === -2}
               className={`emoji-picker__tab ${group === -2 ? 'is-active' : ''}`}
-              title="This community"
+              title={tr('This community')}
               onClick={() => setGroup(-2)}
             >
               <img className="custom-emoji" src={custom[0]!.image} alt="" />
@@ -655,7 +659,7 @@ export function EmojiPicker(props: {
               role="tab"
               aria-selected={group === -1}
               className={`emoji-picker__tab ${group === -1 ? 'is-active' : ''}`}
-              title="Recently used"
+              title={tr('Recently used')}
               onClick={() => setGroup(-1)}
             >
               🕘
@@ -667,7 +671,7 @@ export function EmojiPicker(props: {
               role="tab"
               aria-selected={i === group}
               className={`emoji-picker__tab ${i === group ? 'is-active' : ''}`}
-              title={g.name}
+              title={tr(g.name)}
               onClick={() => setGroup(i)}
             >
               {g.icon}
@@ -681,7 +685,11 @@ export function EmojiPicker(props: {
           <button
             key={e.id}
             className="emoji-picker__emoji"
-            title={`:${e.name}: — right-click to ${favorites.includes(customEmojiText(e)) ? 'unfavourite' : 'favourite'}`}
+            title={
+              favorites.includes(customEmojiText(e))
+                ? tr('{name} — right-click to unfavourite', { name: `:${e.name}:` })
+                : tr('{name} — right-click to favourite', { name: `:${e.name}:` })
+            }
             aria-label={`:${e.name}:`}
             onClick={() => pick(customEmojiText(e))}
             onContextMenu={(ev) => favorite(ev, customEmojiText(e))}
@@ -693,8 +701,12 @@ export function EmojiPicker(props: {
           <button
             key={e.emoji}
             className="emoji-picker__emoji"
-            title={`${e.label} — right-click to ${favorites.includes(e.emoji) ? 'unfavourite' : 'favourite'}`}
-            aria-label={`${e.label}${favorites.includes(e.emoji) ? ', favourite' : ''}`}
+            title={
+              favorites.includes(e.emoji)
+                ? tr('{name} — right-click to unfavourite', { name: e.label })
+                : tr('{name} — right-click to favourite', { name: e.label })
+            }
+            aria-label={favorites.includes(e.emoji) ? tr('{name}, favourite', { name: e.label }) : e.label}
             onClick={() => pick(e.emoji)}
             onContextMenu={(ev) => favorite(ev, e.emoji)}
           >
@@ -815,7 +827,7 @@ function CodeBlock({ raw }: { raw: string }): ReactElement {
       <button
         type="button"
         className="md-codeblock__copy"
-        aria-label="Copy code"
+        aria-label={tr('Copy code')}
         onClick={() =>
           void navigator.clipboard.writeText(code).then(() => {
             setCopied(true);
@@ -823,7 +835,7 @@ function CodeBlock({ raw }: { raw: string }): ReactElement {
           })
         }
       >
-        {copied ? 'Copied' : 'Copy'}
+        {copied ? tr('Copied') : tr('Copy')}
       </button>
     </div>
   );
@@ -958,7 +970,7 @@ function Spoiler({ children }: { children: ReactNode }): ReactElement {
       className={`md-spoiler ${shown ? 'is-shown' : ''}`}
       role={shown ? undefined : 'button'}
       tabIndex={shown ? undefined : 0}
-      aria-label={shown ? undefined : 'Spoiler, press to reveal'}
+      aria-label={shown ? undefined : tr('Spoiler, press to reveal')}
       onClick={() => setShown(true)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {

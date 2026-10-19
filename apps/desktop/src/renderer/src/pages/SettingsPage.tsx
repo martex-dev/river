@@ -1176,7 +1176,7 @@ function SystemPanel({ settings }: { settings: Settings }): ReactElement {
             label={tr('Stay connected')}
             hint={`${tr(
               'New messages and calls notify you even when River is closed. Android shows a quiet “River is connected” notification while it runs, and it uses some battery. River does not use Google’s push service.',
-            )} ${BATTERY_WHY}`}
+            )} ${tr(BATTERY_WHY)}`}
             checked={settings.system.background}
             onChange={(v) =>
               void updateSettings({ system: { background: v, backgroundAsked: true } }).then(async () => {
@@ -1302,10 +1302,10 @@ function NotificationsPanel({ settings }: { settings: Settings }): ReactElement 
           <button
             key={tone}
             className="chip chip--button"
-            aria-label={`Play the ${NOTIFY_SOUND_LABELS[tone]} sound`}
+            aria-label={tr('Play the {sound} sound', { sound: tr(NOTIFY_SOUND_LABELS[tone]) })}
             onClick={() => playNotifySound(tone, 'message', true)}
           >
-            ▶ {NOTIFY_SOUND_LABELS[tone]}
+            ▶ {tr(NOTIFY_SOUND_LABELS[tone])}
           </button>
         ))}
       </div>

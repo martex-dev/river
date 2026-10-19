@@ -22,6 +22,7 @@ import { useDm } from './store.ts';
 import type { ScreenSource } from '../../../shared/ipc.ts';
 import { useEffect, useState } from 'react';
 import { callClock } from './call-clock.ts';
+import { tr, trn } from '../i18n.ts';
 
 /** The running time of a call, ticking every second. */
 function CallTimer(props: { since: number }): ReactElement {
@@ -64,14 +65,16 @@ export function IncomingCall(): ReactElement | null {
   if (!incoming) return null;
   // A group call (2.18): the group's name, who rang, and how many people the group has.
   const g = incoming.group;
-  const caller = conv?.name ?? group?.members.find((m) => m.riverId === incoming.peer)?.name ?? 'Someone';
-  const name = g ? (group?.name ?? g.name) : (conv?.name ?? 'Someone');
+  const caller = conv?.name ?? group?.members.find((m) => m.riverId === incoming.peer)?.name ?? tr('Someone');
+  const name = g ? (group?.name ?? g.name) : (conv?.name ?? tr('Someone'));
   const [from, to] = callColours(name);
   return (
     <div
       className={`incoming-call ${phone ? 'incoming-call--full' : ''}`}
       role="alertdialog"
-      aria-label={g ? `Incoming group call in ${name}` : `Incoming call from ${name}`}
+      aria-label={
+        g ? tr('Incoming group call in {name}', { name }) : tr('Incoming call from {name}', { name })
+      }
       style={{ '--call-from': from, '--call-to': to } as React.CSSProperties}
     >
       {!g && conv?.avatar && (
@@ -80,8 +83,12 @@ export function IncomingCall(): ReactElement | null {
       <div className="incoming-call__card">
         <span className="incoming-call__kind">
           {g
-            ? `Group ${incoming.video ? 'video ' : ''}call · ${g.people} people`
-            : `River ${incoming.video ? 'video' : 'voice'} call`}
+            ? incoming.video
+              ? trn('Group video call · {count} people', g.people)
+              : trn('Group call · {count} people', g.people)
+            : incoming.video
+              ? tr('River video call')
+              : tr('River voice call')}
         </span>
         <div className="incoming-call__avatar">
           <span className="incoming-call__ring" aria-hidden="true" />
@@ -95,43 +102,45 @@ export function IncomingCall(): ReactElement | null {
         </div>
         <strong className="incoming-call__name">{name}</strong>
         <span className="incoming-call__status">
-          {g ? `${caller} is calling… · end-to-end encrypted` : 'Ringing… · end-to-end encrypted'}
+          {g
+            ? tr('{name} is calling… · end-to-end encrypted', { name: caller })
+            : tr('Ringing… · end-to-end encrypted')}
         </span>
         <div className="incoming-call__actions">
           <div className="incoming-call__action">
             <button
               className="call-action call-action--decline"
-              aria-label="Decline"
-              title="Decline"
+              aria-label={tr('Decline')}
+              title={tr('Decline')}
               onClick={declineDmCall}
             >
               <PhoneOffIcon size={30} />
             </button>
-            <span aria-hidden="true">Decline</span>
+            <span aria-hidden="true">{tr('Decline')}</span>
           </div>
           {incoming.video && (
             <div className="incoming-call__action">
               <button
                 className="call-action call-action--answer call-action--nudge"
-                aria-label="Accept with video"
-                title="Answer with video"
+                aria-label={tr('Accept with video')}
+                title={tr('Answer with video')}
                 onClick={() => void acceptDmCall(true)}
               >
                 <CameraIcon size={30} />
               </button>
-              <span aria-hidden="true">Video</span>
+              <span aria-hidden="true">{tr('Video')}</span>
             </div>
           )}
           <div className="incoming-call__action">
             <button
               className={`call-action call-action--answer ${incoming.video ? '' : 'call-action--nudge'}`}
-              aria-label="Accept"
-              title={incoming.video ? 'Answer with voice only' : 'Answer'}
+              aria-label={tr('Accept')}
+              title={incoming.video ? tr('Answer with voice only') : tr('Answer')}
               onClick={() => void acceptDmCall(false)}
             >
               <PhoneIcon size={30} />
             </button>
-            <span aria-hidden="true">{incoming.video ? 'Voice' : 'Answer'}</span>
+            <span aria-hidden="true">{incoming.video ? tr('Voice') : tr('Answer')}</span>
           </div>
         </div>
       </div>
@@ -184,8 +193,10 @@ export function CallPill(): ReactElement | null {
         useDm.getState().select(active.peer);
       }}
     >
-      <span className="call-pill__dot" /> {active.state === 'ringing' ? 'Calling' : 'In call with'}{' '}
-      {name ?? '…'}
+      <span className="call-pill__dot" />{' '}
+      {active.state === 'ringing'
+        ? tr('Calling {name}', { name: name ?? '…' })
+        : tr('In call with {name}', { name: name ?? '…' })}
       {active.connectedAt && (
         <>
           {' · '}
@@ -212,7 +223,7 @@ function GroupCallPill(): ReactElement | null {
         useDm.getState().select(groupId);
       }}
     >
-      <span className="call-pill__dot" /> In a call in {callName(active)}
+      <span className="call-pill__dot" /> {tr('In a call in {name}', { name: callName(active) })}
       {active.connectedAt && (
         <>
           {' · '}
@@ -254,22 +265,22 @@ function CallPanel({
   // server (not merely the relay being on).
   const status =
     active.state === 'ringing'
-      ? 'Ringing…'
+      ? tr('Ringing…')
       : active.state === 'connecting'
-        ? 'Connecting…'
+        ? tr('Connecting…')
         : remote?.state === 'connected'
-          ? 'Connected · encrypted directly between your devices'
+          ? tr('Connected · encrypted directly between your devices')
           : remote?.relayed && remote.relayFlowing
-            ? 'Connected · through your server, end-to-end encrypted'
-            : 'Reconnecting…';
+            ? tr('Connected · through your server, end-to-end encrypted')
+            : tr('Reconnecting…');
   return (
     <div className={`dm-call ${full ? 'dm-call--full' : ''}`}>
       {full && (
         <div className="dm-call__top">
           <button
             className="dm-call__min"
-            aria-label="Back to the conversation"
-            title="Back to the conversation"
+            aria-label={tr('Back to the conversation')}
+            title={tr('Back to the conversation')}
             onClick={() => setMinimized(true)}
           >
             ⌄
@@ -286,11 +297,11 @@ function CallPanel({
           ) : call.localTrack('camera') ? (
             <Video track={call.localTrack('camera')} mirrored />
           ) : (
-            <Avatar id={me?.riverId ?? 'me'} name={me?.displayName ?? 'You'} size={72} />
+            <Avatar id={me?.riverId ?? 'me'} name={me?.displayName ?? tr('You')} size={72} />
           )}
           <span className="tile__label">
             {!call.transmitting && <MicOffIcon size={14} />}
-            {me?.displayName ?? 'You'} (you)
+            {me?.displayName ?? tr('You')} {tr('(you)')}
           </span>
         </div>
         <div
@@ -302,7 +313,7 @@ function CallPanel({
             const at = pointOnVideo(e);
             if (at) call.pointAt(c.riverId, at.x, at.y);
           }}
-          title={remote?.screenOn ? 'Click to point at something on their screen' : undefined}
+          title={remote?.screenOn ? tr('Click to point at something on their screen') : undefined}
         >
           {remote?.screenOn && remote.screen ? (
             <Video stream={remote.screen} />
@@ -337,7 +348,7 @@ function CallPanel({
           <>
             {' · '}
             <button className="btn btn--link" onClick={() => setMinimized(false)}>
-              Full screen
+              {tr('Full screen')}
             </button>
           </>
         )}
@@ -345,25 +356,25 @@ function CallPanel({
       <div className="voice__controls">
         <button
           className={`round-btn ${s.selfMuted ? 'round-btn--off' : ''}`}
-          aria-label={s.selfMuted ? 'Unmute' : 'Mute'}
+          aria-label={s.selfMuted ? tr('Unmute') : tr('Mute')}
           onClick={s.toggleMute}
         >
           {s.selfMuted ? <MicOffIcon /> : <MicIcon />}
         </button>
         <button
           className={`round-btn ${s.selfDeafened ? 'round-btn--off' : ''}`}
-          aria-label={s.selfDeafened ? 'Undeafen' : 'Deafen'}
+          aria-label={s.selfDeafened ? tr('Undeafen') : tr('Deafen')}
           onClick={s.toggleDeafen}
         >
           {s.selfDeafened ? <HeadphonesOffIcon /> : <HeadphonesIcon />}
         </button>
         <button
           className={`round-btn ${call.localTrack('camera') ? 'round-btn--on' : ''}`}
-          aria-label={call.localTrack('camera') ? 'Camera off' : 'Camera on'}
+          aria-label={call.localTrack('camera') ? tr('Camera off') : tr('Camera on')}
           onClick={() =>
             void call
               .setCamera(!call.localTrack('camera'))
-              .catch(() => s.notify('Could not start your camera.', 'error'))
+              .catch(() => s.notify(tr('Could not start your camera.'), 'error'))
           }
         >
           <CameraIcon />
@@ -371,8 +382,8 @@ function CallPanel({
         {!phone && document.pictureInPictureEnabled && (remote?.cameraOn || remote?.screenOn) && (
           <button
             className="round-btn"
-            aria-label="Picture in picture"
-            title="Keep their video in a small window on top"
+            aria-label={tr('Picture in picture')}
+            title={tr('Keep their video in a small window on top')}
             onClick={() => {
               if (document.pictureInPictureElement)
                 void document.exitPictureInPicture().catch(() => undefined);
@@ -380,7 +391,7 @@ function CallPanel({
                 void document
                   .querySelector<HTMLVideoElement>('.dm-call [data-remote] video')
                   ?.requestPictureInPicture()
-                  .catch(() => s.notify('Picture in picture is not available here.', 'error'));
+                  .catch(() => s.notify(tr('Picture in picture is not available here.'), 'error'));
             }}
           >
             ⧉
@@ -393,7 +404,7 @@ function CallPanel({
         {!phone && (
           <button
             className={`round-btn ${call.localTrack('screen') ? 'round-btn--on' : ''}`}
-            aria-label={call.localTrack('screen') ? 'Stop sharing' : 'Share screen'}
+            aria-label={call.localTrack('screen') ? tr('Stop sharing') : tr('Share screen')}
             onClick={() => {
               if (call.localTrack('screen')) void call.setScreen(false);
               else void window.river.voice.screenSources().then(setPicker);
@@ -404,19 +415,19 @@ function CallPanel({
         )}
         <button
           className="round-btn round-btn--danger"
-          aria-label="Hang up"
-          title="Hang up"
+          aria-label={tr('Hang up')}
+          title={tr('Hang up')}
           onClick={() => void endDmCall()}
         >
           <PhoneOffIcon />
         </button>
       </div>
       {picker && (
-        <div className="picker" role="dialog" aria-label="Choose what to share">
+        <div className="picker" role="dialog" aria-label={tr('Choose what to share')}>
           <div className="picker__card glass">
-            <h2 className="card__title">Share your screen</h2>
+            <h2 className="card__title">{tr('Share your screen')}</h2>
             {picker.length === 0 && (
-              <p className="muted">River could not find any screen or window to share.</p>
+              <p className="muted">{tr('River could not find any screen or window to share.')}</p>
             )}
             <div className="picker__grid">
               {picker.map((src) => (
@@ -437,7 +448,7 @@ function CallPanel({
               ))}
             </div>
             <button className="btn btn--ghost" onClick={() => setPicker(null)}>
-              Cancel
+              {tr('Cancel')}
             </button>
           </div>
         </div>
@@ -452,8 +463,8 @@ function TheirVolume(props: { peer: string; name: string }): ReactElement {
   const voice = useRiver((r) => r.settings?.voice);
   const update = useRiver((r) => r.updateSettings);
   return (
-    <label className="dm-call__volume" title={`Volume for ${props.name}`}>
-      <span className="sr-only">Volume for {props.name}</span>
+    <label className="dm-call__volume" title={tr('Volume for {name}', { name: props.name })}>
+      <span className="sr-only">{tr('Volume for {name}', { name: props.name })}</span>
       <input
         type="range"
         className="slider"

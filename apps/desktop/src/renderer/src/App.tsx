@@ -240,7 +240,7 @@ export function App(): ReactElement {
       <StayConnectedPrompt />
       {loadError && (
         <div className="glass card card--error" role="alert">
-          River could not load its settings: {loadError}
+          {tr('River could not load its settings: {error}', { error: loadError })}
         </div>
       )}
     </div>
@@ -302,7 +302,7 @@ export function App(): ReactElement {
             {section === 'calls' && <CallsPage />}
             {section === 'files' && <FilesPage />}
             {section === 'admin' && (
-              <Suspense fallback={<p className="muted">Loading…</p>}>
+              <Suspense fallback={<p className="muted">{tr('Loading…')}</p>}>
                 <AdminPage />
               </Suspense>
             )}
@@ -328,30 +328,33 @@ function ConnectionPill(): ReactElement {
   const account = useRiver((r) => r.account);
   if (account.state === 'registered') {
     return (
-      <span className={`topbar__pill is-${account.connection}`} title="Your River connection">
+      <span className={`topbar__pill is-${account.connection}`} title={tr('Your River connection')}>
         <span
           className={`status-dot status-dot--${account.connection === 'online' ? 'active' : account.connection === 'error' ? 'warning' : 'inactive'}`}
         />
         {account.missing
-          ? 'Your account needs to be set up again — Settings → Account'
+          ? tr('Your account needs to be set up again — Settings → Account')
           : account.connection === 'online'
-            ? 'Online'
+            ? tr('Online')
             : account.connection === 'connecting'
-              ? 'Connecting…'
-              : 'Offline — messages wait and send by themselves'}
+              ? tr('Connecting…')
+              : tr('Offline — messages wait and send by themselves')}
       </span>
     );
   }
   if (account.waiting) {
     return (
-      <span className="topbar__pill" title="River creates your account as soon as its server is reachable">
-        <span className="status-dot status-dot--warning" /> Setting up your account…
+      <span
+        className="topbar__pill"
+        title={tr('River creates your account as soon as its server is reachable')}
+      >
+        <span className="status-dot status-dot--warning" /> {tr('Setting up your account…')}
       </span>
     );
   }
   return (
-    <span className="topbar__pill" title="No River account yet">
-      <LockIcon size={13} /> Local only · no account yet
+    <span className="topbar__pill" title={tr('No River account yet')}>
+      <LockIcon size={13} /> {tr('Local only · no account yet')}
     </span>
   );
 }
@@ -375,7 +378,7 @@ function HomeButton(): ReactElement {
       <button
         className={`community__server rail-home ${active ? 'is-active' : ''}`}
         aria-label={tr('Home')}
-        title="Home — friends and direct messages"
+        title={tr('Home — friends and direct messages')}
         aria-current={active ? 'page' : undefined}
         onClick={() => {
           if (!active) navigate(useDm.getState().selected ? 'messages' : 'contacts');
@@ -402,8 +405,8 @@ function AdminButton(): ReactElement {
       <span className="community__pill" aria-hidden="true" />
       <button
         className={`community__server rail-admin ${active ? 'is-active' : ''}`}
-        aria-label="Admin"
-        title="Admin — everyone on your River"
+        aria-label={tr('Admin')}
+        title={tr('Admin — everyone on your River')}
         aria-current={active ? 'page' : undefined}
         onClick={() => navigate('admin')}
       >

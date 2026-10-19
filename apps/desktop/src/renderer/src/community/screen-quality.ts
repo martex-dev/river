@@ -1,10 +1,11 @@
+import { msg } from '../../../shared/i18n/index.ts';
 /** Screen sharing quality (1.0.25): what to favour, as capture constraints. */
 export type ScreenQuality = 'detail' | 'balanced' | 'motion';
 
 export const SCREEN_QUALITIES: Array<{ id: ScreenQuality; label: string; hint: string }> = [
-  { id: 'detail', label: 'Sharp text', hint: 'Up to 1080p, 15 fps — documents and code' },
-  { id: 'balanced', label: 'Balanced', hint: 'Up to 720p, 30 fps — most things' },
-  { id: 'motion', label: 'Smooth motion', hint: 'Up to 1080p, 60 fps — games and video' },
+  { id: 'detail', label: msg('Sharp text'), hint: msg('Up to 1080p, 15 fps — documents and code') },
+  { id: 'balanced', label: msg('Balanced'), hint: msg('Up to 720p, 30 fps — most things') },
+  { id: 'motion', label: msg('Smooth motion'), hint: msg('Up to 1080p, 60 fps — games and video') },
 ];
 
 export function screenConstraints(q: ScreenQuality): {

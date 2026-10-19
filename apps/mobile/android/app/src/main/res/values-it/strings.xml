@@ -44,6 +44,7 @@
     <string name="service_title">River è connesso</string>
     <string name="service_text">I nuovi messaggi arrivano anche con River chiuso. Disattiva in Impostazioni → Sistema.</string>
     <string name="installer_could_not_open">Impossibile aprire il programma di installazione di Android</string>
+    <string name="core_restarted">River ha riavviato il suo nucleo. Riprova.</string>
     <plurals name="new_messages_count">
         <item quantity="one">%d nuovo messaggio</item>
         <item quantity="many">%d di nuovi messaggi</item>

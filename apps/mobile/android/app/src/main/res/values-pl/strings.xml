@@ -44,6 +44,7 @@
     <string name="service_title">River jest połączony</string>
     <string name="service_text">Nowe wiadomości docierają, gdy River jest zamknięty. Wyłącz w Ustawienia → System.</string>
     <string name="installer_could_not_open">Nie udało się otworzyć instalatora Androida</string>
+    <string name="core_restarted">River ponownie uruchomił swój rdzeń. Spróbuj jeszcze raz.</string>
     <plurals name="new_messages_count">
         <item quantity="one">%d nowa wiadomość</item>
         <item quantity="few">%d nowe wiadomości</item>

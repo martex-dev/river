@@ -48,6 +48,7 @@
     <string name="service_title">River is connected</string>
     <string name="service_text">New messages arrive while River is closed. Turn off in Settings → System.</string>
     <string name="installer_could_not_open">Android\'s installer could not open</string>
+    <string name="core_restarted">River restarted its core. Try again.</string>
     <plurals name="new_messages_count">
         <item quantity="one">%d new message</item>
         <item quantity="other">%d new messages</item>

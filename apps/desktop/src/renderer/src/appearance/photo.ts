@@ -1,3 +1,4 @@
+import { msg } from '../../../shared/i18n/index.ts';
 /**
  * Wallpaper photos (2.18), all on this device: a chosen photo is shrunk once (at most 1600 px,
  * JPEG) before it is kept in the settings, and blurred copies are drawn on demand in memory.
@@ -20,7 +21,7 @@ function load(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('That picture could not be read.'));
+    img.onerror = () => reject(new Error(msg('That picture could not be read.')));
     img.src = src;
   });
 }
@@ -30,7 +31,7 @@ function canvas(width: number, height: number): [HTMLCanvasElement, CanvasRender
   c.width = width;
   c.height = height;
   const ctx = c.getContext('2d');
-  if (!ctx) throw new Error('This device cannot prepare pictures.');
+  if (!ctx) throw new Error(msg('This device cannot prepare pictures.'));
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   return [c, ctx];
@@ -38,8 +39,9 @@ function canvas(width: number, height: number): [HTMLCanvasElement, CanvasRender
 
 /** A photo the person picked, made ready to keep: shrunk and saved as JPEG (a few hundred KB). */
 export async function preparePhoto(file: File): Promise<string> {
-  if (!/^image\/(png|jpeg|webp)$/.test(file.type)) throw new Error('Choose a PNG, JPEG or WebP picture.');
-  if (file.size > PHOTO_MAX_INPUT) throw new Error('That picture is larger than 20 MB.');
+  if (!/^image\/(png|jpeg|webp)$/.test(file.type))
+    throw new Error(msg('Choose a PNG, JPEG or WebP picture.'));
+  if (file.size > PHOTO_MAX_INPUT) throw new Error(msg('That picture is larger than 20 MB.'));
   const url = URL.createObjectURL(file);
   try {
     const img = await load(url);
@@ -50,7 +52,7 @@ export async function preparePhoto(file: File): Promise<string> {
       const out = c.toDataURL('image/jpeg', quality);
       if (KEPT.test(out) && out.length < 1_400_000) return out;
     }
-    throw new Error('That picture is too detailed to keep. Choose another.');
+    throw new Error(msg('That picture is too detailed to keep. Choose another.'));
   } finally {
     URL.revokeObjectURL(url);
   }

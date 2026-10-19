@@ -7,6 +7,7 @@ import { useOutbox } from '../outbox.ts';
 import { play } from '../sound.ts';
 import { useCommunity } from '../store.ts';
 import { Modal, Toggle, can } from './common.tsx';
+import { tr } from '../../i18n.ts';
 
 interface Destination {
   key: string;
@@ -69,7 +70,7 @@ export function ForwardDialog(props: {
       .map((c) => ({
         key: `d:${c.riverId}`,
         label: c.name,
-        where: c.kind === 'group' ? 'Group' : 'Direct message',
+        where: c.kind === 'group' ? tr('Group') : tr('Direct message'),
         send: async (text: string) => !!(await useDm.getState().run({ a: 'send', peer: c.riverId, text })),
       }));
     return [...people, ...channels];
@@ -85,34 +86,34 @@ export function ForwardDialog(props: {
     setBusy(false);
     if (ok) {
       play('send');
-      useCommunity.getState().notify(`Forwarded to ${d.label}.`);
+      useCommunity.getState().notify(tr('Forwarded to {name}.', { name: d.label }));
       props.onClose();
     }
   };
 
   return (
-    <Modal title="Forward message" onClose={props.onClose}>
+    <Modal title={tr('Forward message')} onClose={props.onClose}>
       <blockquote className="forward__preview">{props.text.slice(0, 300)}</blockquote>
       <Toggle
-        label="Show sender’s name"
+        label={tr('Show sender’s name')}
         help={
           showSender
-            ? `Starts with “Forwarded from ${props.from.name}”.`
-            : 'Sent as if you wrote it, without saying who it came from.'
+            ? tr('Starts with “Forwarded from {name}”.', { name: props.from.name })
+            : tr('Sent as if you wrote it, without saying who it came from.')
         }
         checked={showSender}
         onChange={setShowSender}
       />
       <label className="textfield">
-        <span className="field__label">Send to</span>
+        <span className="field__label">{tr('Send to')}</span>
         <input
           autoFocus={!phone}
-          placeholder="Search channels and people"
+          placeholder={tr('Search channels and people')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
       </label>
-      <ul className="forward__list" aria-label="Destinations">
+      <ul className="forward__list" aria-label={tr('Destinations')}>
         {shown.map((d) => (
           <li key={d.key}>
             <button className="forward__item" disabled={busy} onClick={() => void send(d)}>
@@ -121,7 +122,7 @@ export function ForwardDialog(props: {
             </button>
           </li>
         ))}
-        {shown.length === 0 && <li className="muted small">Nothing matches “{query}”.</li>}
+        {shown.length === 0 && <li className="muted small">{tr('Nothing matches “{query}”.', { query })}</li>}
       </ul>
     </Modal>
   );
