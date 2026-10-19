@@ -69,7 +69,7 @@ import { announcement } from '../announce.ts';
 import { useOutbox, type Outgoing } from '../outbox.ts';
 import { useDraft } from '../drafts.ts';
 import { play } from '../sound.ts';
-import { canLoadOlder, typingNames, useCommunity } from '../store.ts';
+import { canLoadOlder, togglePanel, typingNames, useCommunity } from '../store.ts';
 import {
   AttachmentList,
   MAX_PENDING,
@@ -105,6 +105,7 @@ import {
   can,
   hex,
   memberOf,
+  usePanelLayer,
   type MentionRefs,
 } from './common.tsx';
 
@@ -305,7 +306,7 @@ export function TextChannel(props: {
             <button
               className={`pchat-head__icon ${s.showSearch ? 'is-on' : ''}`}
               aria-label="Search"
-              onClick={() => useCommunity.setState({ showSearch: !s.showSearch })}
+              onClick={() => togglePanel('search')}
             >
               <SearchIcon size={22} />
             </button>
@@ -328,7 +329,7 @@ export function TextChannel(props: {
             icon={<PinIcon size={16} />}
             onClick={() => {
               setHeadMenu(null);
-              useCommunity.setState({ showPins: !s.showPins, showSaved: false });
+              togglePanel('pins');
             }}
           >
             Pinned messages
@@ -337,7 +338,7 @@ export function TextChannel(props: {
             icon={<span aria-hidden="true">🔖</span>}
             onClick={() => {
               setHeadMenu(null);
-              useCommunity.setState({ showSaved: !s.showSaved, showPins: false });
+              togglePanel('saved');
             }}
           >
             Saved messages
@@ -425,7 +426,7 @@ export function TextChannel(props: {
               className={`icon-btn ${s.showSearch ? 'is-on' : ''}`}
               aria-label="Search"
               title="Search this community"
-              onClick={() => useCommunity.setState({ showSearch: !s.showSearch })}
+              onClick={() => togglePanel('search')}
             >
               🔍
             </button>
@@ -433,7 +434,7 @@ export function TextChannel(props: {
               className={`icon-btn ${s.showSaved ? 'is-on' : ''}`}
               aria-label="Saved messages"
               title="Saved messages"
-              onClick={() => useCommunity.setState({ showSaved: !s.showSaved, showPins: false })}
+              onClick={() => togglePanel('saved')}
             >
               🔖
             </button>
@@ -441,7 +442,7 @@ export function TextChannel(props: {
               className={`icon-btn ${s.showPins ? 'is-on' : ''}`}
               aria-label="Pinned messages"
               title="Pinned messages"
-              onClick={() => useCommunity.setState({ showPins: !s.showPins })}
+              onClick={() => togglePanel('pins')}
             >
               <PinIcon size={18} />
             </button>
@@ -2077,6 +2078,7 @@ function PinsPanel(props: {
   onJump(id: string): void;
 }): ReactElement {
   const s = useCommunity();
+  usePanelLayer(() => useCommunity.setState({ showPins: false }));
   const [pins, setPins] = useState<ChatMessage[] | null>(null);
   // Asked again when a pin changes in the loaded messages, not on every new message.
   const pinned = useCommunity((x) =>
@@ -2146,6 +2148,7 @@ const SEARCH_HINTS: Array<[string, string]> = [
 
 function SearchPanel(props: { community: CommunityView; onJump(id: string): void }): ReactElement {
   const s = useCommunity();
+  usePanelLayer(() => useCommunity.setState({ showSearch: false }));
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ChatMessage[] | null>(null);
   const [busy, setBusy] = useState(false);

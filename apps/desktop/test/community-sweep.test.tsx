@@ -9,6 +9,7 @@ import { CommunitySettings } from '../src/renderer/src/community/ui/CommunitySet
 import { ProfileCard } from '../src/renderer/src/community/ui/Members.tsx';
 import { OnboardingSettings } from '../src/renderer/src/community/ui/Onboarding.tsx';
 import { Modals } from '../src/renderer/src/pages/CommunitiesPage.tsx';
+import { TextChannel } from '../src/renderer/src/community/ui/Chat.tsx';
 import { RichText } from '../src/renderer/src/community/ui/common.tsx';
 import { ChannelSettings, channelName } from '../src/renderer/src/community/ui/Dialogs.tsx';
 
@@ -308,5 +309,59 @@ describe('#channel mentions', () => {
       expect.objectContaining({ a: 'updateChannel', channelId: 'ch', name: 'game-night' }),
     );
     expect((screen.getByLabelText('Channel name') as HTMLInputElement).value).toBe('game-night');
+  });
+});
+
+describe('panels over a channel', () => {
+  const open = async (): Promise<void> => {
+    const c = community({ permissions: ALL_PERMISSIONS, myRank: Infinity, ownerId: 'me' });
+    action.mockImplementation(async (a: { a: string }) =>
+      a.a === 'historyPage'
+        ? { ok: true, value: { messages: [], before: null } }
+        : { ok: true, value: a.a === 'pins' ? [] : null },
+    );
+    (window as unknown as { river: { links: unknown } }).river.links = { preview: vi.fn() };
+    useCommunity.setState({
+      communities: [c],
+      messages: { ch: [] },
+      emojis: {},
+      typing: {},
+      showPins: false,
+      showSearch: false,
+      showSaved: false,
+      saved: [],
+    } as never);
+    await act(async () => {
+      render(<TextChannel community={c} channel={c.channels[0]!} me="me" />);
+    });
+  };
+  const shown = () => {
+    const s = useCommunity.getState();
+    return { pins: s.showPins, search: s.showSearch, saved: s.showSaved };
+  };
+
+  it('show one at a time: they sit in the same place', async () => {
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(shown()).toEqual({ pins: false, search: true, saved: false });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Pinned messages' })));
+    expect(shown()).toEqual({ pins: true, search: false, saved: false });
+    expect(document.querySelectorAll('.pins')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Saved messages' }));
+    expect(shown()).toEqual({ pins: false, search: false, saved: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Saved messages' }));
+    expect(shown()).toEqual({ pins: false, search: false, saved: false });
+  });
+
+  it('close with Escape, and focus goes back to the button that opened them', async () => {
+    await open();
+    const button = screen.getByRole('button', { name: 'Search' });
+    button.focus();
+    fireEvent.click(button);
+    const input = screen.getByRole('textbox', { name: 'Search messages and files' });
+    expect(document.activeElement).toBe(input);
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(shown().search).toBe(false);
+    expect(document.activeElement).toBe(button);
   });
 });

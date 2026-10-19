@@ -229,6 +229,24 @@ export function useOverlayLayer(onClose: () => void): void {
 }
 
 /**
+ * A panel over a channel (pinned messages, search, saved messages): Escape closes it like any
+ * overlay, and focus goes back to what opened it instead of being lost with the panel.
+ */
+export function usePanelLayer(onClose: () => void): void {
+  useOverlayLayer(onClose);
+  const [opener] = useState(() =>
+    typeof document === 'undefined' ? null : (document.activeElement as HTMLElement | null),
+  );
+  useEffect(
+    () => () => {
+      const active = document.activeElement;
+      if (opener?.isConnected && (!active || active === document.body)) opener.focus();
+    },
+    [opener],
+  );
+}
+
+/**
  * Dialogs, menus and pickers render into <body> (2.10.12): not inside a message, whose swipe
  * transform would move them and whose touch gestures would also fire under them, and above
  * everything else on screen (a full-screen call too). Open ones are registered here so a panel
