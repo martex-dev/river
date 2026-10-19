@@ -81,6 +81,7 @@ export function CommunitySettings(props: {
                     run: async () => {
                       await s.run({ a: 'deleteCommunity', communityId: community.id });
                     },
+                    back: { kind: 'community-settings', communityId: community.id, tab },
                   })
                 }
               >
@@ -349,12 +350,9 @@ function Roles({ community, me }: { community: CommunityView; me: string }): Rea
                           action: 'Delete role',
                           run: async () => {
                             await s.run({ a: 'deleteRole', communityId: community.id, roleId: r.id });
-                            s.setModal({
-                              kind: 'community-settings',
-                              communityId: community.id,
-                              tab: 'roles',
-                            });
                           },
+                          back: { kind: 'community-settings', communityId: community.id, tab: 'roles' },
+                          then: { kind: 'community-settings', communityId: community.id, tab: 'roles' },
                         });
                       }}
                     >
@@ -600,8 +598,9 @@ function RoleEditor(props: {
               action: 'Delete role',
               run: async () => {
                 await s.run({ a: 'deleteRole', communityId: community.id, roleId: role.id });
-                s.setModal({ kind: 'community-settings', communityId: community.id, tab: 'roles' });
               },
+              back: { kind: 'community-settings', communityId: community.id, tab: 'roles' },
+              then: { kind: 'community-settings', communityId: community.id, tab: 'roles' },
             })
           }
         >
@@ -817,12 +816,9 @@ function Members({ community, me }: { community: CommunityView; me: string }): R
                         action: 'Kick',
                         run: async () => {
                           await s.run({ a: 'kick', communityId: community.id, riverId: m.riverId });
-                          s.setModal({
-                            kind: 'community-settings',
-                            communityId: community.id,
-                            tab: 'members',
-                          });
                         },
+                        back: { kind: 'community-settings', communityId: community.id, tab: 'members' },
+                        then: { kind: 'community-settings', communityId: community.id, tab: 'members' },
                       })
                     }
                   >

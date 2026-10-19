@@ -8,6 +8,7 @@ import { useCommunity } from '../src/renderer/src/community/store.ts';
 import { CommunitySettings } from '../src/renderer/src/community/ui/CommunitySettings.tsx';
 import { ProfileCard } from '../src/renderer/src/community/ui/Members.tsx';
 import { OnboardingSettings } from '../src/renderer/src/community/ui/Onboarding.tsx';
+import { Modals } from '../src/renderer/src/pages/CommunitiesPage.tsx';
 
 /** Regression tests for the communities sweep (desktop, after 2.21.2). */
 
@@ -201,5 +202,74 @@ describe('self-assignable roles', () => {
     const files = screen.getByText('files').closest('label') as HTMLElement;
     expect((within(files).getByRole('checkbox') as HTMLInputElement).disabled).toBe(true);
     expect(files.textContent).toContain('has permissions you do not have');
+  });
+});
+
+describe('removing things for everyone', () => {
+  const settings = (tab: 'invites' | 'emoji') =>
+    ({ kind: 'community-settings', communityId: 'c', tab }) as const;
+  const owned = (extra: Partial<CommunityView> = {}): CommunityView =>
+    community({ permissions: ALL_PERMISSIONS, myRank: Infinity, ownerId: 'me', ...extra });
+
+  it('asks before revoking an invite, and Cancel goes back to the Invites tab', async () => {
+    action.mockImplementation(async (a: { a: string }) =>
+      a.a === 'invites'
+        ? {
+            ok: true,
+            value: [
+              {
+                id: 'inv',
+                createdBy: 'me',
+                createdByName: 'me',
+                createdAt: null,
+                expiresAt: '2030-01-01T00:00:00.000Z',
+                uses: 1,
+                maxUses: 100,
+                joined: [],
+              },
+            ],
+          }
+        : { ok: true, value: null },
+    );
+    useCommunity.setState({ communities: [owned()], modal: settings('invites') });
+    render(<Modals me="me" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Revoke' }));
+    expect(action).not.toHaveBeenCalledWith(expect.objectContaining({ a: 'revokeInvite' }));
+    expect(useCommunity.getState().modal).toMatchObject({ kind: 'confirm', back: settings('invites') });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(useCommunity.getState().modal).toEqual(settings('invites'));
+    // Confirmed: revoked, and back on the tab with the list.
+    fireEvent.click(await screen.findByRole('button', { name: 'Revoke' }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Revoke invite' })));
+    expect(action).toHaveBeenCalledWith({ a: 'revokeInvite', communityId: 'c', inviteId: 'inv' });
+    expect(useCommunity.getState().modal).toEqual(settings('invites'));
+  });
+
+  it('asks before removing a custom emoji', async () => {
+    useCommunity.setState({
+      communities: [owned()],
+      emojis: { c: [{ id: 'e1', name: 'party', image: 'data:image/png;base64,AA==' }] },
+      modal: settings('emoji'),
+    });
+    render(<Modals me="me" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove :party:' }));
+    expect(action).not.toHaveBeenCalledWith(expect.objectContaining({ a: 'deleteEmoji' }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Remove emoji' })));
+    expect(action).toHaveBeenCalledWith({ a: 'deleteEmoji', emojiId: 'e1' });
+    expect(useCommunity.getState().modal).toEqual(settings('emoji'));
+  });
+
+  it('a deleted category closes its settings; Cancel keeps them open', async () => {
+    const c = owned({ categories: [{ id: 'k', name: 'Games', position: 0, overwrites: [] }] } as never);
+    const category = { kind: 'category', communityId: 'c', categoryId: 'k' } as const;
+    useCommunity.setState({ communities: [c], modal: category });
+    render(<Modals me="me" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete category' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(useCommunity.getState().modal).toEqual(category);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete category' }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Delete category' })));
+    expect(action).toHaveBeenCalledWith({ a: 'deleteCategory', communityId: 'c', categoryId: 'k' });
+    expect(useCommunity.getState().modal).toBeNull();
   });
 });

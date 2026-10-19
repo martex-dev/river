@@ -27,6 +27,12 @@ All notable changes to River are documented here. The format follows
   offer roles below your highest role"). Roles offered already stay offered;
   new ones are offered only within your reach, and the list says why a role
   cannot be offered.
+- Community settings: revoking an invite and removing a custom emoji, sticker
+  or soundboard sound happened at the first click, for everyone. Each now asks
+  first. Cancel on any confirmation asked from settings (delete a role, kick,
+  delete a webhook, delete a channel or category) goes back to where you were
+  instead of closing settings altogether, and after deleting a role or kicking
+  someone you are back on the same tab.
 
 ## [2.21.2] - 2026-10-19
 

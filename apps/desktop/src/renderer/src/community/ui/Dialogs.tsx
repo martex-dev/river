@@ -15,12 +15,14 @@ import { useRiver } from '../../store.ts';
 export function ConfirmDialog({ modal }: { modal: Extract<ModalState, { kind: 'confirm' }> }): ReactElement {
   const s = useCommunity();
   const [busy, setBusy] = useState(false);
+  // Asked from a settings tab: Cancel goes back to it rather than closing everything.
+  const back = (): void => s.setModal(modal.back ?? null);
   return (
-    <Modal title={modal.title} onClose={() => s.setModal(null)}>
+    <Modal title={modal.title} onClose={back}>
       <p className="modal__text">{modal.body}</p>
       <div className="modal__foot">
-        <button className="btn btn--link" onClick={() => s.setModal(null)}>
-          Cancel
+        <button className="btn btn--link" onClick={back}>
+          {tr('Cancel')}
         </button>
         <button
           className="btn btn--danger"
@@ -31,7 +33,7 @@ export function ConfirmDialog({ modal }: { modal: Extract<ModalState, { kind: 'c
             const before = useCommunity.getState().modal;
             void modal.run().finally(() => {
               // Close unless the action opened another dialog.
-              if (useCommunity.getState().modal === before) s.setModal(null);
+              if (useCommunity.getState().modal === before) s.setModal(modal.then ?? null);
             });
           }}
         >
@@ -334,6 +336,8 @@ export function CategoryDialog(props: { community: CommunityView; categoryId?: s
                     categoryId: existing.id,
                   });
                 },
+                // Cancel keeps the category's settings open; once deleted there is nothing to show.
+                back: { kind: 'category', communityId: props.community.id, categoryId: existing.id },
               })
             }
           >
@@ -516,6 +520,7 @@ export function ChannelSettings(props: { community: CommunityView; channel: Chan
                 run: async () => {
                   await s.run({ a: 'deleteChannel', channelId: channel.id });
                 },
+                back: { kind: 'channel-settings', channelId: channel.id },
               })
             }
           >

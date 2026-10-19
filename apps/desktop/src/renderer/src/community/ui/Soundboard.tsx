@@ -4,6 +4,7 @@ import { SOUND_DATA_URL, SOUND_MAX_BYTES, type SoundView } from '../../../../sha
 import type { CommunityView } from '../../../../shared/ipc.ts';
 import { useRiver } from '../../store.ts';
 import { useCommunity } from '../store.ts';
+import { tr } from '../../i18n.ts';
 import { EmojiPicker, Popover, can } from './common.tsx';
 import { playLocally } from '../soundboard-player.ts';
 
@@ -347,7 +348,20 @@ export function SoundSettings({ community }: { community: CommunityView }): Reac
               <button
                 className="btn btn--link btn--danger"
                 aria-label={`Remove ${sound.name}`}
-                onClick={() => void s.run({ a: 'deleteSound', soundId: sound.id }).then(() => reload())}
+                onClick={() =>
+                  s.setModal({
+                    kind: 'confirm',
+                    title: tr('Remove the sound {name}?', { name: sound.name }),
+                    body: tr('Nobody here can play it any more. This cannot be undone.'),
+                    action: tr('Remove sound'),
+                    run: async () => {
+                      await s.run({ a: 'deleteSound', soundId: sound.id });
+                      reload();
+                    },
+                    back: { kind: 'community-settings', communityId: community.id, tab: 'sounds' },
+                    then: { kind: 'community-settings', communityId: community.id, tab: 'sounds' },
+                  })
+                }
               >
                 Remove
               </button>

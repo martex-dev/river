@@ -3,6 +3,7 @@ import { Permission } from '@river/protocol/permissions';
 import type { CommunityView } from '../../../../shared/ipc.ts';
 import { StickerIcon } from '../../phone/icons.tsx';
 import { useCommunity } from '../store.ts';
+import { tr } from '../../i18n.ts';
 import { Popover, StillPicture, can, holdStill } from './common.tsx';
 
 const MAX_SIDE = 320;
@@ -346,7 +347,20 @@ export function StickerSettings({ community }: { community: CommunityView }): Re
                 className="btn btn--link btn--danger btn--small"
                 aria-label={`Remove sticker ${x.name}`}
                 onClick={() =>
-                  void s.run({ a: 'deleteSticker', stickerId: x.id }).then(() => s.loadStickers(community.id))
+                  s.setModal({
+                    kind: 'confirm',
+                    title: tr('Remove the sticker {name}?', { name: x.name }),
+                    body: tr(
+                      'It disappears for everyone here, also from messages that already use it. This cannot be undone.',
+                    ),
+                    action: tr('Remove sticker'),
+                    run: async () => {
+                      await s.run({ a: 'deleteSticker', stickerId: x.id });
+                      await s.loadStickers(community.id);
+                    },
+                    back: { kind: 'community-settings', communityId: community.id, tab: 'stickers' },
+                    then: { kind: 'community-settings', communityId: community.id, tab: 'stickers' },
+                  })
                 }
               >
                 Remove

@@ -53,7 +53,17 @@ export type Modal =
   | { kind: 'report'; communityId: string; message: ChatMessage }
   | { kind: 'pick-roles'; communityId: string }
   | { kind: 'ban'; communityId: string; riverId: string; name: string; then?: Modal }
-  | { kind: 'confirm'; title: string; body: string; action: string; run: () => Promise<void> };
+  | {
+      kind: 'confirm';
+      title: string;
+      body: string;
+      action: string;
+      run: () => Promise<void>;
+      /** The dialog it was asked from (a settings tab): back to it on Cancel… */
+      back?: Modal;
+      /** …and where to go once done (nowhere when the thing it was about is gone). */
+      then?: Modal;
+    };
 
 export type CommunityTab =
   | 'overview'
