@@ -112,6 +112,32 @@ const TEXTS: Record<string, Record<Lang, string>> = {
     uk: 'вона у вас є',
   },
 
+  // Threads
+  'Rename thread': {
+    bg: 'Преименувай нишката',
+    de: 'Thread umbenennen',
+    es: 'Renombrar hilo',
+    fr: 'Renommer le fil',
+    it: 'Rinomina thread',
+    pl: 'Zmień nazwę wątku',
+    'pt-BR': 'Renomear tópico',
+    ru: 'Переименовать ветку',
+    tr: 'Konuyu yeniden adlandır',
+    uk: 'Перейменувати гілку',
+  },
+  'Rename thread {name}': {
+    bg: 'Преименувай нишката {name}',
+    de: 'Thread {name} umbenennen',
+    es: 'Renombrar el hilo {name}',
+    fr: 'Renommer le fil {name}',
+    it: 'Rinomina il thread {name}',
+    pl: 'Zmień nazwę wątku {name}',
+    'pt-BR': 'Renomear o tópico {name}',
+    ru: 'Переименовать ветку {name}',
+    tr: '{name} konusunu yeniden adlandır',
+    uk: 'Перейменувати гілку {name}',
+  },
+
   // Removing things for everyone asks first
   Revoke: {
     bg: 'Отмени',

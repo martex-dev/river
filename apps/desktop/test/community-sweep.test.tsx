@@ -10,6 +10,7 @@ import { ProfileCard } from '../src/renderer/src/community/ui/Members.tsx';
 import { OnboardingSettings } from '../src/renderer/src/community/ui/Onboarding.tsx';
 import { Modals } from '../src/renderer/src/pages/CommunitiesPage.tsx';
 import { TextChannel } from '../src/renderer/src/community/ui/Chat.tsx';
+import { ThreadPanel } from '../src/renderer/src/community/ui/Thread.tsx';
 import { RichText } from '../src/renderer/src/community/ui/common.tsx';
 import { ChannelSettings, channelName } from '../src/renderer/src/community/ui/Dialogs.tsx';
 
@@ -410,5 +411,39 @@ describe('@mentions before punctuation', () => {
     expect(document.querySelector('.mention--role')?.getAttribute('title')).toBe(
       'Plain — a role · 2 members',
     );
+  });
+});
+
+describe('threads', () => {
+  it('can be renamed from the keyboard, not only by double-clicking the name', async () => {
+    const c = community();
+    const root = {
+      id: 'root',
+      communityId: 'c',
+      channelId: 'ch',
+      sender: 'me',
+      senderName: 'me',
+      text: 'root',
+      sentAt: '2026-10-16T10:00:00.000Z',
+      reactions: [],
+      attachments: [],
+      mine: true,
+      threadId: null,
+      thread: { name: 'Plans', count: 0, lastAt: null, archived: false, creator: 'me' },
+    };
+    useCommunity.setState({ communities: [c], messages: { ch: [root] }, threads: { root: [] } } as never);
+    render(<ThreadPanel community={c} channel={c.channels[0]!} rootId="root" me="me" />);
+    const name = screen.getByRole('button', { name: 'Rename thread Plans' });
+    name.focus();
+    fireEvent.click(name);
+    const box = screen.getByRole('textbox', { name: 'Thread name' });
+    fireEvent.change(box, { target: { value: 'Weekend plans' } });
+    await act(async () => fireEvent.submit(box.closest('form')!));
+    expect(action).toHaveBeenCalledWith({
+      a: 'updateThread',
+      channelId: 'ch',
+      messageId: 'root',
+      name: 'Weekend plans',
+    });
   });
 });

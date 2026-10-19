@@ -3894,7 +3894,21 @@ input.switch:disabled {
   white-space: nowrap;
 }
 .thread-panel__name.is-editable {
+  min-width: 0;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
   cursor: text;
+}
+.thread-panel__name.is-editable:hover {
+  background: var(--surface-hover);
+}
+.thread-panel__name.is-editable:focus-visible {
+  outline: 2px solid var(--focus);
 }
 .thread-panel__rename input {
   width: 100%;

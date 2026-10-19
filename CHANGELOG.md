@@ -41,6 +41,8 @@ All notable changes to River are documented here. The format follows
 - An @mention followed by punctuation ("@Leo," "@Sam Rivera!" "@Moderators.")
   was not highlighted, though it notified the person. It is now, and a role
   mention's details (on hover) are in your language.
+- A thread's name could be renamed only by double-clicking it, so not with the
+  keyboard. It is a button now (click or Enter renames).
 - Pinned messages, search and saved messages in a channel opened on top of one
   another in the same place (two lists drawn over each other). One shows at a
   time now, Escape closes it, and focus goes back to the button that opened it.
