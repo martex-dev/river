@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.21.3] - 2026-10-19
+
+**Communities on computers: ten fixes — readable mentions in light themes, roles that match what the server allows, confirmations before removing things.**
+
 ### Fixed
 
 - Communities in light themes: @mentions, #channel links and mentions of you
