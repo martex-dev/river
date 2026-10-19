@@ -2065,6 +2065,10 @@ export async function registerCommunityRoutes(
         throw forbidden('You can only time out members below you');
       const req = parse(timeoutRequestSchema, request.body);
       const now = deps.now().getTime();
+      // Administrators are never restricted by a timeout: one would only claim a protection (an
+      // "until" on their profile, a moderator told it worked) that is not there. Ending one stays.
+      if (req.until !== null && model.can(target, Permission.ADMINISTRATOR))
+        throw bad('Administrators cannot be timed out; take away their administrator role first');
       if (req.until !== null) {
         const until = Date.parse(req.until);
         if (until <= now) throw bad('A timeout must end in the future');

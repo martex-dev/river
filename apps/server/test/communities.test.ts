@@ -1410,6 +1410,15 @@ describe('communities', () => {
       expect(
         await status(a, 'POST', `/v1/channels/${text}/messages`, member.token, { id: id(), body: sealed() }),
       ).toBe(201);
+
+      // An administrator would not be restricted at all: refused, not "timed out" in name only.
+      const admins = await role(a, owner.token, cid, Permission.ADMINISTRATOR);
+      await assign(a, owner.token, cid, member.riverId, [admins.rid]);
+      expect(await status(a, 'PUT', url(member.riverId), owner.token, { until: soon })).toBe(400);
+      expect(
+        (await fetchCommunity(a, owner.token, cid)).members.find((m) => m.riverId === member.riverId),
+      ).toMatchObject({ timeoutUntil: null });
+      expect(await status(a, 'PUT', url(member.riverId), owner.token, { until: null })).toBe(200);
     });
 
     it('a timeout also stops editing, reacting, threads and pins (2.20)', async () => {

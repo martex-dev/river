@@ -143,6 +143,12 @@ export function ProfileCard(props: {
   );
   const unreachable = community.roles.some((r) => !r.everyone && !assignable.includes(r));
   const roles = community.roles.filter((r) => member.roles.includes(r.id));
+  // Owners and administrators are never restricted by a timeout (the server refuses one).
+  const admin =
+    member.owner ||
+    community.roles.some(
+      (r) => (r.everyone || member.roles.includes(r.id)) && can(r.permissions, Permission.ADMINISTRATOR),
+    );
   const voiceChannel = Object.entries(community.voice).find(([, ids]) => ids.includes(member.riverId))?.[0];
   const voiceState = community.voiceStates[member.riverId];
   const volume = settings?.voice.userVolumes[member.riverId] ?? 1;
@@ -202,7 +208,7 @@ export function ProfileCard(props: {
             <CustomStatus member={member} />
           </div>
         )}
-        {member.timeoutUntil && (
+        {member.timeoutUntil && !admin && (
           <div className="chip chip--error profile-card__timeout">
             Timed out until{' '}
             {new Date(member.timeoutUntil).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
@@ -426,7 +432,7 @@ export function ProfileCard(props: {
                     ))}
                 </select>
               )}
-            {outranks && can(perms, Permission.MODERATE_MEMBERS) && (
+            {outranks && can(perms, Permission.MODERATE_MEMBERS) && (!admin || member.timeoutUntil) && (
               <TimeoutButton community={community} member={member} onDone={props.onDone} />
             )}
             {outranks && can(perms, Permission.KICK_MEMBERS) && (

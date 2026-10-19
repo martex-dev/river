@@ -365,3 +365,26 @@ describe('panels over a channel', () => {
     expect(document.activeElement).toBe(button);
   });
 });
+
+describe('timeouts', () => {
+  it('are not offered for administrators, whom they would not restrict', () => {
+    const c = community({
+      permissions: ALL_PERMISSIONS,
+      myRank: Infinity,
+      ownerId: 'me',
+      members: [
+        member('me', { owner: true, rank: Infinity }),
+        member('ada', { roles: ['top'], rank: 5 }),
+        member('sam', { rank: 0 }),
+      ],
+    });
+    const { unmount } = render(
+      <ProfileCard community={c} member={c.members[1]!} me="me" onDone={() => undefined} />,
+    );
+    expect(screen.queryByRole('button', { name: 'Time out' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Kick' })).toBeTruthy();
+    unmount();
+    render(<ProfileCard community={c} member={c.members[2]!} me="me" onDone={() => undefined} />);
+    expect(screen.getByRole('button', { name: 'Time out' })).toBeTruthy();
+  });
+});

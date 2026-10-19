@@ -41,6 +41,10 @@ All notable changes to River are documented here. The format follows
 - Pinned messages, search and saved messages in a channel opened on top of one
   another in the same place (two lists drawn over each other). One shows at a
   time now, Escape closes it, and focus goes back to the button that opened it.
+- Timing out an administrator "worked" (the moderator was told so and the
+  profile said "Timed out until …") but restricted nothing, as administrators
+  are never timed out. The server now refuses it with a reason, and River no
+  longer offers Time out for administrators (an old timeout can still be ended).
 
 ## [2.21.2] - 2026-10-19
 
