@@ -6,6 +6,10 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.21.5] - 2026-10-19
+
+**All of River in eleven languages.**
+
 ### Changed
 
 - Languages: the rest of River now speaks all eleven languages: Messages, the
