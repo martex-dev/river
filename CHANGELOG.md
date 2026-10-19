@@ -6,6 +6,16 @@ All notable changes to River are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Communities in light themes: @mentions, #channel links and mentions of you
+  were a fixed pale lilac or yellow made for dark themes and nearly vanished on
+  light ones. They now use the theme's colours (at least 4.5:1 on every theme),
+  role mentions stay readable whatever the role's colour, and danger, warning
+  and success texts (Kick, Delete, "18+", a full voice channel, report states)
+  use the theme's readable colours. In high contrast, the focus ring is the
+  theme's focus colour instead of a pale yellow lost on light themes.
+
 ## [2.21.2] - 2026-10-19
 
 **Messages are told apart by who sent them, so nobody can take over someone else's message.**

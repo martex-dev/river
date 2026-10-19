@@ -45,6 +45,7 @@ import { ForwardDialog } from './Forward.tsx';
 import { phoneShellActive } from '../../phone/mode.ts';
 import { useRiver } from '../../store.ts';
 import { burst } from '../../appearance/delight.tsx';
+import { inkOn } from '../../appearance/color.ts';
 import { ChatWallpaperDialog, useChatWallpaper } from '../../appearance/ChatWallpaper.tsx';
 import { channelKey } from '../../appearance/wallpaper.ts';
 import { phonePop } from '../../phone/nav.ts';
@@ -58,6 +59,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactElement,
 } from 'react';
 import { Permission } from '@river/protocol/permissions';
@@ -1767,15 +1769,20 @@ ${shared}`
               ) : (
                 <span
                   className="mention-menu__dot"
-                  style={choice.color ? { background: hex(choice.color) } : undefined}
+                  style={
+                    choice.color
+                      ? { background: hex(choice.color), color: inkOn(hex(choice.color)) }
+                      : undefined
+                  }
                   aria-hidden="true"
                 >
                   {choice.symbol}
                 </span>
               )}
               <span
-                className="mention-menu__label"
-                style={choice.color ? { color: hex(choice.color) } : undefined}
+                className={`mention-menu__label ${choice.color ? 'mention-menu__label--role' : ''}`}
+                // Tinted by the role, readable on light and dark themes alike (as role mentions are).
+                style={choice.color ? ({ '--role': hex(choice.color) } as CSSProperties) : undefined}
               >
                 {choice.symbol === ':' ? choice.label : `${choice.symbol}${choice.insert}`}
               </span>
