@@ -73,6 +73,7 @@ import { LaunchHealth } from './updater/launch-health.ts';
 import { runSelfTest, selfTestPath } from './self-test.ts';
 import { runMainDiagnostics } from './diagnostics.ts';
 import { PresenceTracker } from './presence.ts';
+import { StartupTimings } from '../shared/startup-timings.ts';
 import { ProxyAgent, activeProxy, chromiumProxyConfig, isLoopbackHost } from './proxy.ts';
 import { checkProxy } from './proxy-check.ts';
 import {
@@ -174,7 +175,10 @@ async function startupFailed(err: unknown): Promise<void> {
 }
 
 async function start(): Promise<void> {
+  // Milliseconds since this process started (Node's clock starts with it).
+  const startup = new StartupTimings();
   await app.whenReady();
+  startup.mark('ready');
 
   const log = createFileLogger(join(app.getPath('userData'), 'logs'));
   log.info(`River ${app.getVersion()} starting on ${process.platform}-${process.arch}`);
@@ -199,9 +203,14 @@ async function start(): Promise<void> {
       }),
     );
   };
-  await applyProxy().catch((err: unknown) =>
-    log.error(`Proxy settings not applied: ${(err as Error).message}`),
-  );
+  // Without a proxy, Chromium's sessions already use the system's settings (their default) and
+  // nothing has connected yet: setting that again cost up to most of a second at every start.
+  if (activeProxy(settings.get().privacy.proxy)) {
+    await applyProxy().catch((err: unknown) =>
+      log.error(`Proxy settings not applied: ${(err as Error).message}`),
+    );
+  }
+  startup.mark('network');
   /**
    * With a proxy, calls never send UDP outside it (Chromium's disable_non_proxied_udp): no direct
    * peer-to-peer media, so the other people in a call do not see this computer's address. Calls then
@@ -222,6 +231,7 @@ async function start(): Promise<void> {
     appVersion: app.getVersion(),
   });
   storage.start();
+  startup.mark('data');
   const identity = new IdentityService(() => storage.db());
   // Set once hosting exists (below); the account asks it for links people can open.
   let publicAddress: () => string | null = () => null;
@@ -600,6 +610,7 @@ async function start(): Promise<void> {
         homeServerEnabled: homeAccount.enabled(),
         version: app.getVersion(),
         platform: `${process.platform}-${process.arch}${gpuState.disabled ? ' (graphics acceleration off)' : ''}`,
+        startup: () => startup.summary(),
       }),
     openLogs: async () => {
       const { shell } = await import('electron');
@@ -608,6 +619,11 @@ async function start(): Promise<void> {
   });
 
   const window = createWindow();
+  startup.mark('window');
+  window.once('ready-to-show', () => {
+    startup.mark('painted');
+    log.info(`Start-up: ${startup.summary()}`);
+  });
   // The page that held a shared screen is gone (crashed, reloaded, navigated): so is the capture.
   window.webContents.on('render-process-gone', endShare);
   window.webContents.on('did-start-navigation', (details) => {

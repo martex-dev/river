@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from 'react';
 import type { DiagnosticCheck } from '../../../shared/ipc.ts';
 import { runNetworkDiagnostics } from '../diagnostics.ts';
+import { uiStartup } from '../startup.ts';
 
 /**
  * Settings → System → Connection check: one button that tells people (and
@@ -21,7 +22,12 @@ export function ConnectionCheck(): ReactElement {
         window.river.voice.iceServers().catch(() => []),
       ]);
       const turn = ice.some((s) => s.urls.some((u) => u.startsWith('turn')));
-      setChecks([...main, ...(await runNetworkDiagnostics(turn))]);
+      const ui = uiStartup.summary();
+      setChecks([
+        ...main,
+        ...(ui ? [{ id: 'startup-ui', label: 'Start-up (window)', status: 'ok' as const, detail: ui }] : []),
+        ...(await runNetworkDiagnostics(turn)),
+      ]);
     } catch (err) {
       setChecks([{ id: 'error', label: 'Check', status: 'fail', detail: (err as Error).message }]);
     } finally {

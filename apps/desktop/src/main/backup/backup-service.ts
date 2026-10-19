@@ -210,6 +210,9 @@ export class BackupService {
           ).run(...keys.map((k) => decode(row[k]!)));
         }
       }
+      // Messages from a backup made before per-sender message IDs: each keeps its own ID as its
+      // wire ID (with the sender it already has), as the local migration does.
+      db.prepare('UPDATE OR IGNORE dm_messages SET msg_id = id WHERE msg_id IS NULL').run();
       for (const s of data.signal ?? []) {
         if (typeof s.id !== 'string' || !backedUpSignal(s.kind, s.id)) continue;
         db.prepare('INSERT OR REPLACE INTO signal_store (kind, id, value) VALUES (?, ?, ?)').run(

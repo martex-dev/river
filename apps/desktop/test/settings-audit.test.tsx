@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BackupPanel } from '../src/renderer/src/components/BackupPanel.tsx';
 import { DevicesPanel } from '../src/renderer/src/components/LinkDevice.tsx';
 import { LockScreen } from '../src/renderer/src/components/LockScreen.tsx';
+// Lazily loaded by Settings → Appearance; loaded here first so the test does not wait on a transform.
+import '../src/renderer/src/appearance/AppearanceCenter.tsx';
 import { MissingAccount, SettingsOverlay } from '../src/renderer/src/pages/SettingsPage.tsx';
 import { useRiver } from '../src/renderer/src/store.ts';
 import type { AccountStatus, AppInfo, LinkProgress } from '../src/shared/ipc.ts';
@@ -182,10 +184,11 @@ describe('Settings overlay', () => {
     expect(screen.queryByText('Nothing private')).toBeNull();
   });
 
-  it('offers interface size only on computers, with no keyboard hint on phones', () => {
+  it('offers interface size only on computers, with no keyboard hint on phones', async () => {
     useRiver.setState({ settingsTab: 'appearance', info: info('android') });
     const { unmount } = render(<SettingsOverlay />);
-    fireEvent.click(screen.getByRole('tab', { name: 'General' }));
+    // The appearance centre loads when first opened (the import above has it ready).
+    fireEvent.click(await screen.findByRole('tab', { name: 'General' }, { timeout: 5000 }));
     expect(screen.getByText('Message text size')).toBeTruthy();
     expect(screen.queryByLabelText('Interface size')).toBeNull();
     expect(screen.queryByText(/Ctrl\+=/)).toBeNull();
