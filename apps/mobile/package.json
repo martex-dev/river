@@ -14,7 +14,7 @@
     "sync:ios": "npm run build && node -e \"require('node:fs').cpSync('dist/core','ios/RiverNative/core',{recursive:true})\" && cap sync ios"
   },
   "dependencies": {
-    "@capacitor/android": "8.5.2",
+    "@capacitor/android": "8.5.3",
     "@capacitor/core": "8.5.2",
     "@capacitor/ios": "8.5.2",
     "buffer": "6.0.3"
