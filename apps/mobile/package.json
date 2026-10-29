@@ -20,7 +20,7 @@
     "buffer": "6.0.3"
   },
   "devDependencies": {
-    "@capacitor/cli": "8.5.2",
+    "@capacitor/cli": "8.5.3",
     "@river/crypto": "*",
     "@river/desktop": "*",
     "@river/protocol": "*",
